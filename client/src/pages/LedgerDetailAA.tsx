@@ -2122,22 +2122,6 @@ export default function LedgerDetailAA({
     }
     return s;
   }, [selectedTagPauseHistory]);
-  // 所有重启标记日期集合（绿色）
-  const resumeMarkDatesSet: Set<string> = useMemo(() => {
-    const s = new Set<string>();
-    for (const item of selectedTagPauseHistory) {
-      if (!item.resumeDate) continue;
-      const [y, m, d] = item.resumeDate.split('-').map(Number);
-      if (!y || !m || !d) continue;
-      let cur = new Date(y, m - 1, d);
-      for (let i = 0; i < 30; i++) {
-        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-        if (!isNonTradingDateStr(ds)) { s.add(ds); break; }
-        cur.setDate(cur.getDate() + 1);
-      }
-    }
-    return s;
-  }, [selectedTagPauseHistory]);
 
   // IE 股票标签是例外：普通成员点击交易日进入自己的持仓界面；其他标签仅能通过照片标记查看附件。
   // 管理员保留单日维护快览。
@@ -2748,14 +2732,11 @@ export default function LedgerDetailAA({
                       const dayDateStr2 = getDateStr(day);
                       // 暂停标志显示在「暂停标志日」(暂停日，非交易日则顺延到下一交易日)那一格，即使该格本身是非交易日也强制显示蓝标
                       const isPauseDay = pauseMarkDatesSet.has(dayDateStr2);
-                      const isResumeDay = resumeMarkDatesSet.has(dayDateStr2);
                       const isPausedAfter = false; // 暂停后不再灰色，管理员可继续登记
                       const cellBg = isPauseDay ? '#1565C0'
-                        : isResumeDay ? '#1B5E20'
                         : isNonTrading ? '#F0F0F0'
                         : todayMark ? '#FFF3E0' : '#F9F9F9';
                       const cellBorder = isPauseDay ? '1.5px solid #1565C0'
-                        : isResumeDay ? '1.5px solid #1B5E20'
                         : isNonTrading ? '1px solid #E0E0E0'
                         : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                       const dayNumColor = isNonTrading
@@ -2796,10 +2777,6 @@ export default function LedgerDetailAA({
                                 <span style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1.1, color: '#FFFFFF', maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center', marginTop: '1px' }}>{cellValue}</span>
                               )}
                             </>
-                          ) : isResumeDay ? (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polygon points="5,3 19,12 5,21" fill="#FFFFFF" />
-                            </svg>
                           ) : (
                             <>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
