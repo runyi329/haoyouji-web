@@ -3789,11 +3789,14 @@ export default function LedgerDetailAA({
                           const displayedDividend = Math.round(distributedDividend);
                           const displayedReturn = Math.round(referenceReturn);
                           const isOverDistributed = displayedDividend > 0 && displayedDividend > displayedReturn;
-                          const dividendTextColor = isOverDistributed ? '#1565C0' : distributedDividend > 0 ? '#D32F2F' : '#BDBDBD';
+                          const isDividendRecovery = distributedDividend < 0;
+                          const dividendTextColor = isOverDistributed ? '#1565C0' : distributedDividend > 0 ? '#D32F2F' : isDividendRecovery ? '#388E3C' : '#BDBDBD';
                           const dividendProgressPercent = referenceReturn > 0
                             ? Math.min(100, Math.max(0, (distributedDividend / referenceReturn) * 100))
                             : isOverDistributed ? 100 : 0;
-                          const dividendProgressLabel = referenceReturn > 0
+                          const dividendProgressLabel = isDividendRecovery
+                            ? `累计分红回填 ${Math.abs(distributedDividend).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，当前回报 ${referenceReturn.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
+                            : referenceReturn > 0
                             ? `累计已分红 ${distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，当前回报 ${referenceReturn.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，${isOverDistributed ? '已超额分配' : `已分配 ${Math.max(0, (distributedDividend / referenceReturn) * 100).toFixed(0)}%`}`
                             : isOverDistributed
                               ? `累计已分红 ${distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，当前回报 ${referenceReturn.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，已超额分配`
@@ -3801,15 +3804,15 @@ export default function LedgerDetailAA({
                           return (
                             <>
                               <div style={{ fontSize: 13, lineHeight: 1, color: dividendTextColor, whiteSpace: 'normal', wordBreak: 'break-all' }}>
-                                {distributedDividend > 0 ? (
+                                {distributedDividend !== 0 ? (
                                   <span
                                     onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
-                                    title={isOverDistributed ? '已超额分红，点击查看待补回金额' : '点击查看分红记录'}
+                                    title={isDividendRecovery ? '已回填扣回，点击查看分红记录' : isOverDistributed ? '已超额分红，点击查看待补回金额' : '点击查看分红记录'}
                                     style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: dividendTextColor, textUnderlineOffset: '2px' }}
-                                  >{distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
+                                  >{distributedDividend < 0 ? '-' : ''}{Math.abs(distributedDividend).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
                                 ) : '--'}
                               </div>
-                              {(referenceReturn > 0 || isOverDistributed) && (
+                              {!isDividendRecovery && (referenceReturn > 0 || isOverDistributed) && (
                                 <div
                                   role="progressbar"
                                   aria-label={dividendProgressLabel}
@@ -3952,9 +3955,9 @@ export default function LedgerDetailAA({
                           type="button"
                           onClick={() => setShowPausedTagDetails(true)}
                           className="px-1 text-center flex items-center justify-center"
-                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pausedSummaryDividend > 0 ? '#D32F2F' : '#BDBDBD', cursor: 'pointer', fontSize: 13, fontWeight: pausedSummaryDividend > 0 ? 600 : 400 }}
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pausedSummaryDividend > 0 ? '#D32F2F' : pausedSummaryDividend < 0 ? '#388E3C' : '#BDBDBD', cursor: 'pointer', fontSize: 13, fontWeight: pausedSummaryDividend !== 0 ? 600 : 400 }}
                         >
-                          {pausedSummaryDividend > 0 ? formatNumber(pausedSummaryDividend) : '--'}
+                          {pausedSummaryDividend !== 0 ? `${pausedSummaryDividend < 0 ? '-' : ''}${formatNumber(pausedSummaryDividend)}` : '--'}
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
@@ -4026,8 +4029,8 @@ export default function LedgerDetailAA({
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 分红 */}
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : totalDividend < 0 ? '#388E3C' : '#BDBDBD' }}>
+                        {totalDividend !== 0 ? `${totalDividend < 0 ? '-' : ''}${Math.abs(totalDividend).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
@@ -5974,14 +5977,14 @@ export default function LedgerDetailAA({
               {(() => {
                 const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
                 const perTag = allTagsStats.perTagDetail ?? [];
-                const fmt = (n: number) => (n >= 0 ? '+' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmt = (n: number) => (n > 0 ? '+' : n < 0 ? '-' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                 if (showAllModeHelp === 'value') {
                   const value = allTagsStats.totalMargin + overviewTotalPnlRef.current - totalDividend;
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 押金总和 + 盈亏总和 − 已分红总金额</div>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 押金总和 + 盈亏总和 − 分红净额</div>
                       <div className="font-semibold text-gray-900">① 押金净额
                         <span className="ml-2 font-mono text-red-600">{formatSignedMarginCny(allTagsStats.totalMargin)}</span>
                         <span className="ml-1 text-xs font-normal text-gray-400">(存入与转出平移后的净额)</span>
@@ -5990,16 +5993,16 @@ export default function LedgerDetailAA({
                         <span className="ml-2 font-mono" style={{ color: overviewTotalPnlRef.current >= 0 ? '#D32F2F' : '#388E3C' }}>{fmt(overviewTotalPnlRef.current)}</span>
                         <span className="ml-1 text-xs font-normal text-gray-400">(全部标签客户盈亏加总)</span>
                       </div>
-                      <div className="font-semibold text-gray-900">③ 已分红总金额
-                        <span className="ml-2 font-mono text-gray-700">−{fmtAbs(totalDividend)}</span>
-                        <span className="ml-1 text-xs font-normal text-gray-400">(历史已分配给客户的分红，已包含在盈亏中故需扣除)</span>
+                      <div className="font-semibold text-gray-900">③ 分红净额
+                        <span className="ml-2 font-mono" style={{ color: totalDividend > 0 ? '#D32F2F' : totalDividend < 0 ? '#388E3C' : '#424242' }}>{fmt(totalDividend)}</span>
+                        <span className="ml-1 text-xs font-normal text-gray-400">(正数为已付分红，负数为钱包回填扣回)</span>
                       </div>
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-gray-900">价値</span>
                           <span className={`text-lg font-bold ${value >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(value)}</span>
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">{formatSignedMarginCny(allTagsStats.totalMargin)} + ({fmt(overviewTotalPnlRef.current)}) − {fmtAbs(totalDividend)} = {fmt(value)}</div>
+                        <div className="text-xs text-gray-400 mt-1">{formatSignedMarginCny(allTagsStats.totalMargin)} + ({fmt(overviewTotalPnlRef.current)}) − ({fmt(totalDividend)}) = {fmt(value)}</div>
                       </div>
                     </>
                   );
