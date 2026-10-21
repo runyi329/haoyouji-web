@@ -2308,6 +2308,9 @@ function projectMemberProfitShareTrades(
         : (trade.quantity > 0 ? trade.fee * (matchedQuantity / trade.quantity) * rate : 0);
       projected.push({
         ...trade,
+        // 受益人视角使用独立行 ID；定向平仓仍指向服务端真实开仓 ID，
+        // 因此必须保留稳定来源键，避免已平仓位被错误回补到梯形报价。
+        sourceEntryId: getStoredEntryId(trade),
         id: `beneficiary-${trade.id}-${snapshot.openingEntryId}-${snapshot.beneficiaryUserId}`,
         quantity: matchedQuantity,
         fee: allocatedFee,
