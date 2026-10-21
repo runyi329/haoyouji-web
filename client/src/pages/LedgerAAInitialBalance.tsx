@@ -953,6 +953,42 @@ export default function LedgerAAInitialBalance() {
     return { totalCNY, validCount, unpricedCoins };
   };
 
+  // 非股票标签的保证金统一以“实际权益 × 20%”为应交口径；已有逐笔押金按实时人民币估值净额抵扣。
+  // 优先用初始金额和比例重新推算，避免历史 targetAmount 为 0 或尚未回写时给出错误的补足建议。
+  const getMarginRequirement = (entry: TagEntry) => {
+    const amount = Number(entry.amount);
+    const ratio = Number(entry.ratio);
+    const targetAmount = Number(entry.targetAmount);
+    const hasAmount = String(entry.amount ?? '').trim() !== '' && Number.isFinite(amount) && amount >= 0;
+    const hasRatio = String(entry.ratio ?? '').trim() !== '' && Number.isFinite(ratio) && ratio >= 0;
+    const hasTargetAmount = String(entry.targetAmount ?? '').trim() !== '' && Number.isFinite(targetAmount) && targetAmount >= 0;
+    const actualEquityCny = hasAmount && hasRatio
+      ? amount * ratio / 100
+      : hasTargetAmount
+        ? targetAmount
+        : null;
+    if (actualEquityCny === null) return null;
+    return {
+      actualEquityCny,
+      requiredCny: actualEquityCny * 0.2,
+    };
+  };
+
+  const getWalletMarginAssetCnyRate = (assetCode: string) => {
+    const normalizedAssetCode = normalizeMarginCoin(assetCode);
+    if (normalizedAssetCode === 'CNY') return 1;
+    const price = cryptoPrices[normalizedAssetCode] ?? (normalizedAssetCode === 'USDT' ? CNY_RATE_FALLBACK : 0);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  };
+
+  const formatWalletMarginInputAmount = (amount: number, assetCode: string) => {
+    const maximumFractionDigits = normalizeMarginCoin(assetCode) === 'CNY' ? 2 : 8;
+    const factor = 10 ** maximumFractionDigits;
+    // 始终向下取整，自动填入的数量绝不因四舍五入超过钱包可用或本次待补额。
+    const floored = Math.floor((amount + 1e-12) * factor) / factor;
+    return floored > 0 ? String(Number(floored.toFixed(maximumFractionDigits))) : '';
+  };
+
   const updateMarginEntry = (userId: number, tagName: string, index: number, patch: Partial<MarginEntry>) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
     // 空押金的首行也使用稳定ID，首次输入时不会因 key 变化重建 input 并丢失手机焦点。
@@ -985,6 +1021,24 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, { margins: current.margins.filter((_, itemIndex) => itemIndex !== index) });
   };
 
+  const getWalletMarginDraftPlan = () => {
+    if (!walletMarginDraft) return null;
+    const entry = editState[walletMarginDraft.userId]?.[walletMarginDraft.tagName];
+    if (!entry) return null;
+    const requirement = getMarginRequirement(entry);
+    if (!requirement) return null;
+    const marginSummary = summarizeMargins(entry.margins);
+    const outstandingCny = Math.max(0, requirement.requiredCny - marginSummary.totalCNY);
+    const assetCode = normalizeMarginCoin(walletMarginDraft.assetCode);
+    const assetCnyRate = getWalletMarginAssetCnyRate(assetCode);
+    return {
+      ...requirement,
+      paidCny: marginSummary.totalCNY,
+      outstandingCny,
+      assetCnyRate,
+    };
+  };
+
   const openWalletMargin = (userId: number, tagName: string) => {
     setWalletMarginDraft({ userId, tagName, assetCode: 'CNY', amount: '' });
   };
@@ -1002,6 +1056,20 @@ export default function LedgerAAInitialBalance() {
     if (Number(walletMarginDraft.amount) - selectedWalletMarginAsset.available > 0.00000001) {
       toast.error(`冻结数量不能超过可用余额 ${formatWalletMarginAssetBalance(selectedWalletMarginAsset.available, selectedWalletMarginAsset.assetCode)}`);
       return;
+    }
+    // 当前标签填写了实际权益时，冻结金额不得超过“实际权益 × 20% − 已交净额”。
+    // 未能核算（如股票批次尚无完整报价）时仍保留原有钱包可用余额安全校验，不伪造人民币上限。
+    const smartPlan = getWalletMarginDraftPlan();
+    if (smartPlan) {
+      if (smartPlan.outstandingCny <= 0.005) {
+        toast.error('该标签已完成 20% 保证金，无需继续冻结');
+        return;
+      }
+      const inputCny = Number(walletMarginDraft.amount) * Number(smartPlan.assetCnyRate || 0);
+      if (smartPlan.assetCnyRate && inputCny - smartPlan.outstandingCny > 0.005) {
+        toast.error(`本次最多补足 ¥${smartPlan.outstandingCny.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}，请减少冻结金额`);
+        return;
+      }
     }
     if (isLocalHotPreview) {
       toast.info('热预览仅展示钱包冻结流程，不会操作真实资金');
@@ -1084,6 +1152,21 @@ export default function LedgerAAInitialBalance() {
       ? entry.margins
       : ledgerId === 37 ? [] : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: '' })];
     const summary = summarizeMargins(entry.margins);
+    const marginRequirement = ledgerId === 37 ? getMarginRequirement(entry) : null;
+    const outstandingMarginCny = marginRequirement
+      ? Math.max(0, marginRequirement.requiredCny - summary.totalCNY)
+      : null;
+    const isWalletMarginEditing = ledgerId === 37 && walletMarginDraft?.userId === userId && walletMarginDraft.tagName === tagName;
+    const selectedMarginAssetCnyRate = selectedWalletMarginAsset
+      ? getWalletMarginAssetCnyRate(selectedWalletMarginAsset.assetCode)
+      : null;
+    const quickFillMarginAmount = marginRequirement && selectedWalletMarginAsset && selectedMarginAssetCnyRate && outstandingMarginCny !== null
+      ? Math.min(selectedWalletMarginAsset.available, outstandingMarginCny / selectedMarginAssetCnyRate)
+      : 0;
+    const quickFillMarginCny = quickFillMarginAmount > 0 && selectedMarginAssetCnyRate
+      ? quickFillMarginAmount * selectedMarginAssetCnyRate
+      : 0;
+    const formatCny = (value: number) => `${value < 0 ? '−' : ''}¥${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`;
     const formatRecordedAt = (value: string) => {
       if (!value) return '历史记录';
       const date = new Date(value);
@@ -1281,15 +1364,17 @@ export default function LedgerAAInitialBalance() {
             </button>
           )}
           <span className="text-xs px-2 py-0.5 rounded-full text-right" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>
-            {summary.validCount}笔 · 净额 ≈ ¥{formatSignedMarginAmount(summary.totalCNY, 0)}
+            {marginRequirement
+              ? `应交 ${formatCny(marginRequirement.requiredCny)} · 已交 ${formatCny(summary.totalCNY)} · ${outstandingMarginCny && outstandingMarginCny > 0.005 ? `待补 ${formatCny(outstandingMarginCny)}` : '已足额'}`
+              : `${summary.validCount}笔 · 净额 ≈ ¥${formatSignedMarginAmount(summary.totalCNY, 0)}`}
           </span>
         </div>
         {ledgerId === 37 ? (
-          <div className="pl-10 text-xs" style={{ color: '#78909C' }}>新保证金从全局钱包冻结：总额不变、可用额减少；解冻后恢复可用。历史手工保证金可逐笔迁入钱包并冻结，暂停后可按原币种解冻。</div>
+          <div className="pl-10 text-xs" style={{ color: '#78909C' }}>{marginRequirement ? '应交保证金按实际权益的 20% 自动核算；已交按本标签逐笔保证金的人民币净值抵扣。' : '填写初始金额、比例或实际权益后，会自动核算应交保证金。'}</div>
         ) : (
           <div className="pl-10 text-xs" style={{ color: '#9E9E9E' }}>正数为存入，负数为转出或平移；每笔流水与备注均会保留。</div>
         )}
-        {ledgerId === 37 && walletMarginDraft?.userId === userId && walletMarginDraft.tagName === tagName && (
+        {isWalletMarginEditing && walletMarginDraft && (
           <div className="ml-10 rounded-lg p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #CDE1F7' }}>
             <div className="text-xs font-medium" style={{ color: '#1565C0' }}>从全局钱包冻结保证金</div>
             <div className="grid grid-cols-[92px_1fr] gap-2">
@@ -1304,6 +1389,38 @@ export default function LedgerAAInitialBalance() {
               </select>
               <input type="text" inputMode="decimal" disabled={!selectedWalletMarginAsset} value={walletMarginDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginDraft({ ...walletMarginDraft, amount: event.target.value })} placeholder={selectedWalletMarginAsset ? `冻结数量（可用 ${formatWalletMarginAssetBalance(selectedWalletMarginAsset.available, selectedWalletMarginAsset.assetCode)}）` : '暂无可冻结余额'} className="h-8 min-w-0 rounded-lg border bg-white px-2 text-right text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: '#B8D7F3' }} />
             </div>
+            {marginRequirement && outstandingMarginCny !== null ? (
+              <div className="rounded-lg p-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D8E8F7' }}>
+                <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: '#607D8B' }}>
+                  <span>实际权益 {formatCny(marginRequirement.actualEquityCny)} × 20%</span>
+                  <span style={{ color: outstandingMarginCny > 0.005 ? '#C62828' : '#2E7D32', fontWeight: 600 }}>{outstandingMarginCny > 0.005 ? `待补 ${formatCny(outstandingMarginCny)}` : '已足额'}</span>
+                </div>
+                <div className="mt-1 grid grid-cols-3 divide-x text-center text-[10px]" style={{ color: '#78909C' }}>
+                  <div className="px-1"><div>应交</div><div className="mt-0.5 font-semibold tabular-nums" style={{ color: '#1565C0' }}>{formatCny(marginRequirement.requiredCny)}</div></div>
+                  <div className="px-1"><div>已交</div><div className="mt-0.5 font-semibold tabular-nums" style={{ color: summary.totalCNY < 0 ? '#C62828' : '#424242' }}>{formatCny(summary.totalCNY)}</div></div>
+                  <div className="px-1"><div>本次可补</div><div className="mt-0.5 font-semibold tabular-nums" style={{ color: '#1565C0' }}>{quickFillMarginCny > 0 ? formatCny(quickFillMarginCny) : '—'}</div></div>
+                </div>
+                {outstandingMarginCny > 0.005 && selectedWalletMarginAsset && selectedMarginAssetCnyRate ? (
+                  <button
+                    type="button"
+                    disabled={quickFillMarginAmount <= 0}
+                    onClick={() => setWalletMarginDraft({ ...walletMarginDraft, amount: formatWalletMarginInputAmount(quickFillMarginAmount, selectedWalletMarginAsset.assetCode) })}
+                    className="mt-2 h-7 w-full rounded-lg px-2 text-[11px] font-semibold disabled:opacity-50"
+                    style={{ backgroundColor: '#EAF3FF', color: '#1565C0', border: '1px solid #B8D7F3' }}
+                  >
+                    {quickFillMarginAmount > 0
+                      ? quickFillMarginCny + 0.005 < outstandingMarginCny
+                        ? `一键填入 ${formatWalletMarginAssetBalance(quickFillMarginAmount, selectedWalletMarginAsset.assetCode)}（钱包余额不足）`
+                        : `一键填入待补 ${formatWalletMarginAssetBalance(quickFillMarginAmount, selectedWalletMarginAsset.assetCode)}`
+                      : '当前币种无可用余额'}
+                  </button>
+                ) : outstandingMarginCny > 0.005 ? (
+                  <div className="mt-2 text-[10px]" style={{ color: '#B26A00' }}>当前币种暂无可靠人民币估值，请切换人民币后使用一键补足，或手动输入冻结数量。</div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="text-[10px]" style={{ color: '#78909C' }}>填写初始金额、比例或实际权益后，会自动显示 20% 应交、已交和待补金额。</div>
+            )}
             {walletMarginContext.isError ? (
               <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: '#C62828' }}><span>钱包余额读取失败</span><button type="button" onClick={() => walletMarginContext.refetch()} className="font-medium underline">重试</button></div>
             ) : walletMarginContext.isLoading ? (
