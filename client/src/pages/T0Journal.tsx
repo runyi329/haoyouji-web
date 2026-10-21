@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowDownLeft,
@@ -2519,13 +2519,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [, setRelatedUserQuickPickerOpen] = useState(false);
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
+  // 手机输入时先保持输入框与既有结果稳定，再延后切换服务端关键词，避免下拉列表反复卸载、重建。
+  const deferredRelatedUserSearch = useDeferredValue(relatedUserSearch.trim());
   // 管理员的“用户视角预览”只影响当前T+0页面读取范围，不改变登录会话身份。
   const [previewUserId, setPreviewUserId] = useState<number | null>(null);
   const [previewMemberPickerOpen, setPreviewMemberPickerOpen] = useState(false);
   const [previewMemberSearch, setPreviewMemberSearch] = useState("");
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
+  const deferredProfitShareRecipientSearch = useDeferredValue(profitShareRecipientSearch.trim());
   const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
+  // T+0 顶部提示已静默；收益分配保存失败必须留在弹窗内，避免看起来“点了没反应”。
+  const [profitShareSaveError, setProfitShareSaveError] = useState<string | null>(null);
   const [entryProfitShareEditTarget, setEntryProfitShareEditTarget] = useState<PreviewTrade | null>(null);
   const [profitShareSnapshots, setProfitShareSnapshots] = useState<ProfitShareSnapshot[]>([]);
   const [directoryManagerKind, setDirectoryManagerKind] = useState<JournalDirectoryKind | null>(null);
@@ -3003,19 +3008,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const relatedUserSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
-    { ledgerId: 52, query: relatedUserSearch.trim() },
+    { ledgerId: 52, query: deferredRelatedUserSearch },
     {
-      enabled: canManage && relatedUserPickerOpen && relatedUserSearch.trim().length > 0,
+      enabled: canManage && relatedUserPickerOpen && deferredRelatedUserSearch.length > 0,
       staleTime: 30_000,
+      // 移动端弹出键盘、切换输入焦点不能触发同关键词重查并闪掉结果。
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      // 切换关键词时保留上一组结果的容器，待新结果回来后再原位替换。
+      placeholderData: (previousData) => previousData,
     },
   );
   const profitShareRecipientSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
-    { ledgerId: 52, query: profitShareRecipientSearch.trim() },
+    { ledgerId: 52, query: deferredProfitShareRecipientSearch },
     {
-      enabled: canManage && Boolean(profitShareSource) && profitShareRecipientSearch.trim().length > 0,
+      enabled: canManage && Boolean(profitShareSource) && deferredProfitShareRecipientSearch.length > 0,
       staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      placeholderData: (previousData) => previousData,
     },
   );
+  const relatedUserSearchDataMayNotMatch = relatedUserSearch.trim() !== deferredRelatedUserSearch || relatedUserSearchQuery.isPlaceholderData;
+  const profitShareRecipientSearchDataMayNotMatch = profitShareRecipientSearch.trim() !== deferredProfitShareRecipientSearch || profitShareRecipientSearchQuery.isPlaceholderData;
+  const relatedUserSearchUpdating = relatedUserSearchDataMayNotMatch || relatedUserSearchQuery.isFetching;
+  const profitShareRecipientSearchUpdating = profitShareRecipientSearchDataMayNotMatch || profitShareRecipientSearchQuery.isFetching;
   const profitShareRules = useMemo<ProfitShareRule[]>(() => {
     const rows = (t0JournalQuery.data as any)?.profitShareRules;
     return Array.isArray(rows) ? rows.map((rule: any) => ({
@@ -5713,6 +5730,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           ? current
           : { ...current, relatedFundId: id, relatedFundName: name });
       }
+      setProfitShareSaveError(null);
       setProfitShareSource(null);
       setProfitShareAllocations([]);
       setProfitShareRecipientSearch("");
@@ -5722,11 +5740,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? `收益分配已保存，已同步${syncedActiveOpeningCount}笔进行中订单与后续新订单`
         : "收益分配已保存；后续新订单将采用新清单，已平历史保持不变");
     },
-    onError: (error) => t0Toast.error(error.message || "收益分配保存失败"),
+    onError: (error) => {
+      const message = error.message || "收益分配保存失败";
+      setProfitShareSaveError(message);
+      t0Toast.error(message);
+    },
   });
 
   const updateOpeningProfitShareMutation = trpc.ledger.t0UpdateOpeningProfitShare.useMutation({
     onSuccess: () => {
+      setProfitShareSaveError(null);
       setProfitShareSource(null);
       setEntryProfitShareEditTarget(null);
       setProfitShareAllocations([]);
@@ -5734,7 +5757,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       void t0JournalQuery.refetch();
       t0Toast.success("本单剩余仓位与后续新订单的收益分配已保存；已平历史保持不变");
     },
-    onError: (error) => t0Toast.error(error.message || "本单收益分配保存失败"),
+    onError: (error) => {
+      const message = error.message || "本单收益分配保存失败";
+      setProfitShareSaveError(message);
+      t0Toast.error(message);
+    },
   });
 
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
@@ -6089,6 +6116,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setDirectoryRenameTarget(null);
     setDirectoryDeleteTarget(null);
     setEntryProfitShareEditTarget(null);
+    setProfitShareSaveError(null);
     setProfitShareSource(source);
     setProfitShareAllocations(currentRules.length > 0
       ? currentRules.map((rule) => ({
@@ -6128,6 +6156,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setDirectoryRenameTarget(null);
     setDirectoryDeleteTarget(null);
     setEntryProfitShareEditTarget(opening);
+    setProfitShareSaveError(null);
     setProfitShareSource(source);
     setProfitShareAllocations(draft);
     setProfitShareRecipientSearch("");
@@ -6135,6 +6164,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   const closeProfitShareManager = () => {
     if (setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending) return;
+    setProfitShareSaveError(null);
     setProfitShareSource(null);
     setEntryProfitShareEditTarget(null);
     setProfitShareAllocations([]);
@@ -6142,27 +6172,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
 
   const submitProfitShareRule = () => {
+    const showProfitShareSaveError = (message: string) => {
+      setProfitShareSaveError(message);
+      t0Toast.error(message);
+    };
+    setProfitShareSaveError(null);
     if (!profitShareSource || profitShareAllocations.length === 0) {
-      t0Toast.error("请设置完整的收益分配清单");
+      showProfitShareSaveError("请设置完整的收益分配清单");
       return;
     }
     const allocations = profitShareAllocations.map((allocation) => ({
       beneficiaryUserId: Number(allocation.user.id),
       percentage: Number(allocation.percentage),
     }));
-    if (allocations.some((allocation) => !Number.isInteger(allocation.beneficiaryUserId) || !Number.isFinite(allocation.percentage) || allocation.percentage <= 0 || allocation.percentage > 100)) {
-      t0Toast.error("每位分配人的比例必须大于0%且不超过100%");
+    if (allocations.some((allocation) => !Number.isInteger(allocation.beneficiaryUserId) || !Number.isInteger(allocation.percentage) || allocation.percentage <= 0 || allocation.percentage > 100)) {
+      showProfitShareSaveError("每位分配人的比例必须为1–100的整数");
       return;
     }
     const totalPercentage = allocations.reduce((total, allocation) => total + allocation.percentage, 0);
     if (Math.abs(totalPercentage - 100) > 0.00001) {
-      t0Toast.error(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
+      showProfitShareSaveError(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
       return;
     }
     if (entryProfitShareEditTarget) {
       const entryId = Number(getStoredEntryId(entryProfitShareEditTarget));
       if (!Number.isInteger(entryId) || entryId <= 0) {
-        t0Toast.error("未能识别当前持仓单，请关闭后重新打开编辑");
+        showProfitShareSaveError("未能识别当前持仓单，请关闭后重新打开编辑");
         return;
       }
       updateOpeningProfitShareMutation.mutate({ ledgerId: 52, entryId, allocations });
@@ -7777,7 +7812,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   data-ladder-price={row.price}
                   className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
                 >
-                {row.longReminder ? <ReminderPlaceholderCell reminder={row.longReminder} side="long" readOnly={isMemberView} onActivate={() => openReopenReminderEntrySheet(row.longReminder!, isIndividualLadderView ? 'individual' : 'integrated')} /> : <LadderCell
+                {row.longReminder ? <ReminderPlaceholderCell reminder={row.longReminder} side="long" readOnly={!canManage} onActivate={() => openReopenReminderEntrySheet(row.longReminder!, isIndividualLadderView ? 'individual' : 'integrated')} /> : <LadderCell
                   bucket={row.long}
                   side="long"
                   markPrice={markPrice}
@@ -7851,7 +7886,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     })() : formatLadderPrice(row.price)}
                   </span>
                 </div>
-                {row.shortReminder ? <ReminderPlaceholderCell reminder={row.shortReminder} side="short" readOnly={isMemberView} onActivate={() => openReopenReminderEntrySheet(row.shortReminder!, isIndividualLadderView ? "individual" : "integrated")} /> : <LadderCell
+                {row.shortReminder ? <ReminderPlaceholderCell reminder={row.shortReminder} side="short" readOnly={!canManage} onActivate={() => openReopenReminderEntrySheet(row.shortReminder!, isIndividualLadderView ? "individual" : "integrated")} /> : <LadderCell
                   bucket={row.short}
                   side="short"
                   markPrice={markPrice}
@@ -9121,10 +9156,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                    </div>
 	                    {relatedUserSearch.trim().length === 0 ? (
 	                      <div className="px-3 py-4 text-center text-xs text-slate-400">输入用户名或昵称，添加此前未在本账本订单出现过的用户</div>
-	                    ) : relatedUserSearchQuery.isFetching ? (
-	                      <div className="px-3 py-4 text-center text-xs text-slate-400">正在搜索全局用户…</div>
 	                    ) : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? (
-	                      <div className="max-h-56 overflow-y-auto py-1">
+	                      <div className="max-h-56 overflow-y-auto py-1" aria-busy={relatedUserSearchUpdating}>
+	                        {relatedUserSearchUpdating && <div role="status" className="px-3 pb-1 text-[10px] text-indigo-500">正在更新搜索结果…</div>}
 	                        {(relatedUserSearchQuery.data as any[]).map((candidate) => {
 	                          const user: PreviewRelatedUser = {
 	                            id: String(candidate.id),
@@ -9137,8 +9171,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                            <button
 	                              key={user.id}
 	                              type="button"
+	                              disabled={relatedUserSearchDataMayNotMatch}
 	                              onClick={() => selectRelatedUser(user)}
-	                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
+	                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50 disabled:opacity-55"
 	                            >
 	                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
 	                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
@@ -9148,6 +9183,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                          );
 	                        })}
 	                      </div>
+	                    ) : relatedUserSearchUpdating ? (
+	                      <div role="status" className="px-3 py-4 text-center text-xs text-slate-400">正在搜索全局用户…</div>
 	                    ) : (
 	                      <div className="px-3 py-4 text-center text-xs text-slate-400">未找到匹配的全局用户</div>
 	                    )}
@@ -9425,6 +9462,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="text-xs font-semibold text-slate-700">收益分配人（全局用户）</div>
                 <div className={`text-xs font-semibold tabular-nums ${profitShareDraftTotal === 100 ? "text-emerald-600" : "text-rose-600"}`}>合计 {profitShareDraftTotal}% / 100%</div>
               </div>
+              {profitShareDraftTotal !== 100 && <div role="status" aria-live="polite" className="mt-1 text-[11px] leading-5 text-rose-600">当前合计 {profitShareDraftTotal}%；请调整或移除分配人，使合计恰好为 100% 后再保存。</div>}
               <div className="mt-2 overflow-hidden rounded border border-slate-200">
                 {profitShareAllocations.map((allocation, index) => {
                   return <div key={allocation.user.id} className={`flex items-center gap-2 px-3 py-2.5 ${index > 0 ? "border-t border-slate-100" : ""}`}>
@@ -9434,10 +9472,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <div className="text-[10px] text-slate-400">{allocation.user.username ? `@${allocation.user.username}` : "收益分配人"}</div>
                     </div>
                     <div className="flex w-[76px] items-center rounded border border-slate-200 px-2 focus-within:border-indigo-500">
-                      <input type="number" inputMode="numeric" min={1} max={100} step={1} value={allocation.percentage} onChange={(event) => setProfitShareAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: event.target.value } : item))} className="h-9 min-w-0 flex-1 text-right text-sm font-semibold tabular-nums text-slate-800 outline-none" />
+                      <input type="number" inputMode="numeric" min={1} max={100} step={1} value={allocation.percentage} onChange={(event) => { setProfitShareSaveError(null); setProfitShareAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: event.target.value } : item)); }} className="h-9 min-w-0 flex-1 text-right text-sm font-semibold tabular-nums text-slate-800 outline-none" />
                       <span className="text-xs text-slate-500">%</span>
                     </div>
-                    <button type="button" onClick={() => setProfitShareAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="text-xs font-semibold text-rose-600">移除</button>
+                    <button type="button" onClick={() => { setProfitShareSaveError(null); setProfitShareAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index)); }} className="text-xs font-semibold text-rose-600">移除</button>
                   </div>;
                 })}
               </div>
@@ -9449,22 +9487,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <input value={profitShareRecipientSearch} onChange={(event) => setProfitShareRecipientSearch(event.target.value)} placeholder="搜索并添加分配人" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
               </div>
               {profitShareRecipientSearch.trim().length === 0 ? <div className="px-3 py-2.5 text-xs text-slate-400">仅可搜索引用全局已有用户；添加后请在上方调整整数比例。</div>
-                : profitShareRecipientSearchQuery.isFetching ? <div className="px-3 py-2.5 text-xs text-slate-400">正在搜索用户…</div>
-                  : Array.isArray(profitShareRecipientSearchQuery.data) && profitShareRecipientSearchQuery.data.length > 0 ? <div className="max-h-40 overflow-y-auto border-t border-slate-100 py-1">
+                : Array.isArray(profitShareRecipientSearchQuery.data) && profitShareRecipientSearchQuery.data.length > 0 ? <div className="max-h-40 overflow-y-auto border-t border-slate-100 py-1" aria-busy={profitShareRecipientSearchUpdating}>
+                    {profitShareRecipientSearchUpdating && <div role="status" className="px-3 pb-1 text-[10px] text-indigo-500">正在更新搜索结果…</div>}
                     {(profitShareRecipientSearchQuery.data as any[]).map((candidate) => {
                       const candidateUser: PreviewRelatedUser = { id: String(candidate.id), name: String(candidate.name || candidate.username || `用户#${candidate.id}`), username: candidate.username ? String(candidate.username) : undefined };
                       const alreadyAdded = profitShareAllocations.some((allocation) => allocation.user.id === candidateUser.id);
-                      return <button key={candidateUser.id} type="button" disabled={alreadyAdded || profitShareAllocations.length >= 20} onClick={() => { setProfitShareAllocations((current) => [...current, { user: candidateUser, percentage: "1" }]); setProfitShareRecipientSearch(""); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left disabled:opacity-40 active:bg-indigo-50">
+                      return <button key={candidateUser.id} type="button" disabled={profitShareRecipientSearchDataMayNotMatch || alreadyAdded || profitShareAllocations.length >= 20} onClick={() => { setProfitShareSaveError(null); setProfitShareAllocations((current) => [...current, { user: candidateUser, percentage: "1" }]); setProfitShareRecipientSearch(""); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left disabled:opacity-40 active:bg-indigo-50">
                         <UserRound className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{candidateUser.name}</span>{candidateUser.username && <span className="max-w-[35%] truncate text-xs text-slate-400">@{candidateUser.username}</span>}
                       </button>;
                     })}
-                  </div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
+                  </div> : profitShareRecipientSearchUpdating ? <div role="status" className="px-3 py-2.5 text-xs text-slate-400">正在搜索用户…</div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
             </div>
 
             {entryProfitShareEditTarget ? <div className="mt-3 text-[11px] leading-5 text-indigo-700">点击下方“保存本单与后续新单”即刻生效，无需再点击持仓编辑页底部“保存修改”。</div> : activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">保存后，本项目仍有剩余仓位的订单与后续新订单都会采用新清单；已全部平仓的历史订单保持原快照。</div>}
+            {profitShareSaveError && <div role="alert" className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700"><span className="font-semibold">尚未保存：</span>{profitShareSaveError}</div>}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button type="button" onClick={closeProfitShareManager} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700">取消</button>
-              <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{entryProfitShareEditTarget ? "保存本单与后续新单" : "保存并同步进行中订单"}</button>
+              <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending ? "正在保存…" : entryProfitShareEditTarget ? "保存本单与后续新单" : "保存并返回订单"}</button>
             </div>
           </div>
         </div>
@@ -11068,25 +11107,13 @@ function ReminderPlaceholderCell({
   readOnly?: boolean;
   onActivate: () => void;
 }) {
-  const activationTapAtRef = useRef(0);
-  const activatedAtRef = useRef(0);
-  const activate = () => {
-    const now = Date.now();
-    if (now - activationTapAtRef.current > 700) {
-      activationTapAtRef.current = now;
-      return;
-    }
-    activationTapAtRef.current = 0;
-    activatedAtRef.current = now;
-    onActivate();
-  };
   const content = (
     <div className="min-w-0">
       <div className="text-xs font-bold text-sky-700">持续提醒</div>
       <div className="mt-0.5 truncate text-[10px] font-medium text-slate-600">
         {reminder.relatedUserName || "未关联用户"} · {formatQuantity(reminder.defaultQuantity)} E
       </div>
-      <div className="mt-0.5 text-[9px] text-slate-500">待补位 · 双击录入</div>
+      <div className="mt-0.5 text-[9px] text-slate-500">待补位 · 点击录入</div>
     </div>
   );
   const sideClass = side === "long" ? "border-l-4 border-l-sky-500" : "border-r-4 border-r-sky-500";
@@ -11097,20 +11124,10 @@ function ReminderPlaceholderCell({
   return (
     <button
       type="button"
-      onClick={activate}
-      onDoubleClick={() => {
-        // 浏览器原生双击会先触发第二次 click；若移动端双击识别已经打开表单，
-        // 此处只清空计时，不重复执行状态切换。
-        if (Date.now() - activatedAtRef.current < 250) {
-          activationTapAtRef.current = 0;
-          return;
-        }
-        activationTapAtRef.current = 0;
-        activatedAtRef.current = Date.now();
-        onActivate();
-      }}
-      title="双击录入新的开仓订单；保存后本提醒自动转为正常订单"
-      aria-label="双击录入持续提醒订单"
+      // 待补开位只打开预填的开仓表单，不会直接创建订单或写入账本，因此移动端单击直达。
+      onClick={onActivate}
+      title="点击录入新的开仓订单；保存后本提醒自动转为正常订单"
+      aria-label="点击录入持续提醒订单"
       className={`min-h-[52px] w-full border border-dashed border-sky-400 bg-sky-50/70 px-2 py-1.5 text-left transition active:brightness-95 ${sideClass}`}
       style={{ touchAction: "manipulation" }}
     >
