@@ -2534,6 +2534,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [directoryRenameDraft, setDirectoryRenameDraft] = useState("");
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [partialOpeningAttributionDraft, setPartialOpeningAttributionDraft] = useState<PartialOpeningAttributionDraft | null>(null);
+  const [partialOpeningAttributionScope, setPartialOpeningAttributionScope] = useState<"history" | "future" | null>(null);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   // 平仓必须以服务端事务提交为准；失败时保留二次确认页，不能让界面误以为已成交。
   const [closeSaveError, setCloseSaveError] = useState<string | null>(null);
@@ -5557,6 +5558,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setEditingOriginalTrade(trade);
     setEntryProfitShareEditTarget(null);
     setPartialOpeningAttributionDraft(null);
+    setPartialOpeningAttributionScope(null);
     residualReassignRequestIdRef.current = null;
     residualReassignRequestFingerprintRef.current = null;
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
@@ -5979,6 +5981,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       residualReassignRequestIdRef.current = null;
       residualReassignRequestFingerprintRef.current = null;
       setPartialOpeningAttributionDraft(null);
+      setPartialOpeningAttributionScope(null);
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
       setEntryProfitShareEditTarget(null);
@@ -5999,6 +6002,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       residualReassignRequestIdRef.current = null;
       residualReassignRequestFingerprintRef.current = null;
       setPartialOpeningAttributionDraft(null);
+      setPartialOpeningAttributionScope(null);
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
       setEntryProfitShareEditTarget(null);
@@ -6451,6 +6455,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           showSaveValidationError("请先单独保存锁定或止盈设置，再调整账户或项目归属");
           return;
         }
+        setPartialOpeningAttributionScope(null);
         setPartialOpeningAttributionDraft({
           entryId,
           remainingQuantity: normalizeEthQuantity(String(editingRemainingQuantity)),
@@ -9226,8 +9231,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <button
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-                onClick={() => submitPartialOpeningAttribution("history")}
-                className="w-full rounded-xl border-2 border-indigo-200 bg-indigo-50/50 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45"
+                onClick={() => setPartialOpeningAttributionScope("history")}
+                aria-pressed={partialOpeningAttributionScope === "history"}
+                className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "history" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-indigo-900">同步修改已平历史</span>
@@ -9238,8 +9244,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <button
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-                onClick={() => submitPartialOpeningAttribution("future")}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45"
+                onClick={() => setPartialOpeningAttributionScope("future")}
+                aria-pressed={partialOpeningAttributionScope === "future"}
+                className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "future" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-slate-800">仅影响之后的剩余仓位</span>
@@ -9248,14 +9255,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <p className="mt-1.5 text-[11px] leading-5 text-slate-600">已平历史完全不动；剩余仓位会生成一张继承原成本价的新订单，并使用当前选择的账户和项目。</p>
               </button>
             </div>
-            <button
-              type="button"
-              disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-              onClick={() => setPartialOpeningAttributionDraft(null)}
-              className="mt-3 h-11 w-full rounded-lg text-sm font-semibold text-slate-500 active:bg-slate-50 disabled:opacity-45"
-            >
-              取消
-            </button>
+            <div className="mt-4 flex gap-2.5">
+              <button
+                type="button"
+                disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
+                onClick={() => {
+                  setPartialOpeningAttributionScope(null);
+                  setPartialOpeningAttributionDraft(null);
+                }}
+                className="h-12 flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-45"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={!partialOpeningAttributionScope || reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
+                onClick={() => partialOpeningAttributionScope && submitPartialOpeningAttribution(partialOpeningAttributionScope)}
+                className="h-12 flex-[1.45] rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending
+                  ? "正在执行…"
+                  : partialOpeningAttributionScope === "history"
+                    ? "确定同步历史"
+                    : partialOpeningAttributionScope === "future"
+                      ? "确定仅影响后续"
+                      : "请选择一项"}
+              </button>
+            </div>
           </div>
         </div>
       )}
