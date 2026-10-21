@@ -528,6 +528,29 @@ function quantityToCents(value: unknown): number {
   return Number(integerPart) * 100 + Number(fractionalPart.slice(0, 2).padEnd(2, "0"));
 }
 
+/** 将 DECIMAL(36,18) 金额按 ETH 整数分（1/100 ETH）精确拆为前段与余段，二者逐位相加等于原金额。 */
+function splitDecimalAmountByQuantity(value: unknown, firstQuantityCents: number, totalQuantityCents: number): [string, string] {
+  if (!Number.isInteger(firstQuantityCents) || !Number.isInteger(totalQuantityCents) || firstQuantityCents < 0 || totalQuantityCents <= 0 || firstQuantityCents > totalQuantityCents) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "手续费拆分数量无效" });
+  }
+  const raw = String(value ?? "0").trim();
+  const match = /^(-?)(\d+)(?:\.(\d{0,18}))?$/.exec(raw);
+  if (!match) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "开仓手续费数据无效" });
+  const [, sign, integerPart, fractionPart = ""] = match;
+  const scale = 10n ** 18n;
+  const units = (BigInt(integerPart) * scale + BigInt(fractionPart.padEnd(18, "0"))) * (sign === "-" ? -1n : 1n);
+  const firstUnits = units * BigInt(firstQuantityCents) / BigInt(totalQuantityCents);
+  const secondUnits = units - firstUnits;
+  const format = (amount: bigint) => {
+    const negative = amount < 0n;
+    const absolute = negative ? -amount : amount;
+    const whole = absolute / scale;
+    const fraction = String(absolute % scale).padStart(18, "0");
+    return `${negative ? "-" : ""}${whole}.${fraction}`;
+  };
+  return [format(firstUnits), format(secondUnits)];
+}
+
 function priceKey(value: unknown): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "";
@@ -756,6 +779,16 @@ function mapEntry(row: any) {
       ? String(toNumber(row.target_opening_entry_id ?? row.targetOpeningEntryId))
       : undefined,
     note: row.note ? String(row.note) : undefined,
+    // 仅供历史卡片恢复原始开仓数量；仓位/FIFO 永远使用上面的 quantity。
+    originalQuantityBeforeReassignment: row.original_quantity_before_reassignment === null || row.original_quantity_before_reassignment === undefined
+      ? undefined
+      : toNumber(row.original_quantity_before_reassignment),
+    reassignedQuantity: row.reassigned_quantity === null || row.reassigned_quantity === undefined
+      ? undefined
+      : toNumber(row.reassigned_quantity),
+    successorOpeningEntryId: toNumber(row.successor_opening_entry_id) > 0
+      ? String(toNumber(row.successor_opening_entry_id))
+      : undefined,
     createdAt: isoTime(row.trade_time || row.created_at),
     // 自动成交/止盈可能补写 trade_time；前端仅用落库时间对系统动作排序，不改变交易时间展示。
     recordedAt: row.created_at ? isoTime(row.created_at) : undefined,
@@ -1262,6 +1295,37 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_journal_audit_entry (ledger_id, user_id, entry_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：编辑与删除审计快照'
+    `);
+
+    // 部分平仓后的账户／用户／项目调整，不能覆写原开仓和已平历史。
+    // 原单只保留已经发生的部分；新开仓单承接剩余仓位并使用新归属。
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_position_reassignments (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_opening_entry_id BIGINT UNSIGNED NOT NULL,
+        successor_opening_entry_id BIGINT UNSIGNED NOT NULL,
+        original_quantity DECIMAL(36,18) NOT NULL,
+        original_fee_usdt DECIMAL(36,18) NOT NULL DEFAULT 0,
+        historical_closed_quantity DECIMAL(36,18) NOT NULL,
+        reassigned_quantity DECIMAL(36,18) NOT NULL,
+        source_account_id BIGINT UNSIGNED NOT NULL,
+        source_related_user_id BIGINT UNSIGNED DEFAULT NULL,
+        source_related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        target_account_id BIGINT UNSIGNED NOT NULL,
+        target_related_user_id BIGINT UNSIGNED DEFAULT NULL,
+        target_related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        client_request_id VARCHAR(80) NOT NULL,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_position_reassignment_source (ledger_id, user_id, source_opening_entry_id),
+        UNIQUE KEY uq_t0_position_reassignment_successor (ledger_id, user_id, successor_opening_entry_id),
+        UNIQUE KEY uq_t0_position_reassignment_request (ledger_id, user_id, client_request_id),
+        KEY idx_t0_position_reassignment_source (ledger_id, user_id, source_opening_entry_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：部分平仓后剩余仓位的独立归属转入审计'
     `);
 
     await db.execute(`
@@ -1891,11 +1955,16 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
               CASE WHEN deleted_user.id IS NULL THEN u.username ELSE NULL END AS related_username,
               CASE WHEN deleted_user.id IS NULL THEN u.avatar ELSE NULL END AS related_user_avatar,
               CASE WHEN deleted_user.id IS NULL THEN 0 ELSE 1 END AS related_user_hidden,
-              e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.note, e.trade_time, e.created_at
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.note, e.trade_time, e.created_at,
+              reassignment.original_quantity AS original_quantity_before_reassignment,
+              reassignment.reassigned_quantity, reassignment.successor_opening_entry_id
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
          LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
+         LEFT JOIN ledger52_t0_journal_position_reassignments reassignment
+           ON reassignment.ledger_id = e.ledger_id AND reassignment.user_id = e.user_id
+          AND reassignment.source_opening_entry_id = e.id
          LEFT JOIN ledger52_t0_journal_deleted_dimensions deleted_user
            ON deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
           AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
@@ -5553,6 +5622,311 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   }
 }
 
+/**
+ * 将已部分平仓开仓单的“尚余部分”转入新的账户／关联用户／项目。
+ *
+ * 这不是编辑旧开仓：旧开仓会缩为已平的经济数量、保留原有账户和历史快照；
+ * 剩余部分会创建一张继承成本价的新开仓单，之后所有平仓、止盈和提醒均只作用于新单。
+ * 因此历史平仓、共享收益和分佣快照均不被改写，也不会因 FIFO 作用域变化而回补仓位。
+ */
+export async function reassignLedger52T0JournalOpeningRemaining(input: {
+  actorUserId: number;
+  entryId: number;
+  expectedRemainingQuantity: string;
+  accountId?: number;
+  accountName?: string;
+  relatedUserId?: number;
+  relatedFundId?: number;
+  relatedFundName?: string;
+  clientRequestId: string;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const expectedRemainingQuantity = requireValidEthQuantity(input.expectedRemainingQuantity);
+  const requestId = String(input.clientRequestId || "").trim();
+  // 原流水 client_request_id 为 VARCHAR(64)，承接订单固定加 "reassign:" 前缀。
+  if (!requestId || requestId.length > 55) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "剩余仓位转入请求标识无效，请刷新后重试" });
+  }
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+
+    // 同一个确认请求的网络重试只返回第一次已创建的承接订单，绝不再次拆分仓位。
+    const [priorRequestRows] = await tx.execute(
+      `SELECT source_opening_entry_id, successor_opening_entry_id, reassigned_quantity
+         FROM ledger52_t0_journal_position_reassignments
+        WHERE ledger_id = ? AND user_id = ? AND client_request_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestId],
+    );
+    const priorRequest = asRows(priorRequestRows)[0];
+    if (priorRequest) {
+      await tx.commit();
+      return {
+        sourceEntryId: String(priorRequest.source_opening_entry_id),
+        successorEntryId: String(priorRequest.successor_opening_entry_id),
+        reassignedQuantity: toNumber(priorRequest.reassigned_quantity),
+        alreadyApplied: true,
+      };
+    }
+
+    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: true });
+    const before = lockedEntry.entry;
+    if (!lockedEntry.hasDependentClose || lockedEntry.remainingCents <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "仅已部分平仓且仍有剩余仓位的开仓单可以调整后续归属" });
+    }
+    if (quantityToCents(expectedRemainingQuantity) !== lockedEntry.remainingCents) {
+      throw new TRPCError({ code: "CONFLICT", message: "这笔订单的剩余数量刚刚变化，请刷新后重新确认" });
+    }
+    const [previousTransferRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_position_reassignments
+        WHERE ledger_id = ? AND user_id = ? AND source_opening_entry_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
+    if (asRows(previousTransferRows)[0]) {
+      throw new TRPCError({ code: "CONFLICT", message: "该开仓的剩余仓位已转入新订单，请在新订单中继续管理" });
+    }
+
+    let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
+    const requestedAccountName = input.accountName === undefined
+      ? ""
+      : normalizeJournalDirectoryName(input.accountName, "账户名称");
+    if (requestedAccountName) {
+      const [accountResult] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_accounts (ledger_id, user_id, name, is_active, last_used_at)
+         VALUES (?, ?, ?, 1, NOW(3))
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+      );
+      accountId = toNumber((accountResult as any).insertId);
+      if (accountId <= 0) {
+        const [accountRows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_accounts
+            WHERE ledger_id = ? AND user_id = ? AND name = ? LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+        );
+        accountId = toNumber(asRows(accountRows)[0]?.id);
+      }
+    }
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "下单账户信息无效，请重新选择或新建" });
+    }
+    const [accountRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_accounts
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+        LIMIT 1 FOR UPDATE`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (!asRows(accountRows)[0]) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "目标下单账户不存在、已停用或无权选择" });
+    }
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_accounts SET last_used_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+
+    const relatedUserId = Number(input.relatedUserId || 0);
+    if (!Number.isInteger(relatedUserId) || relatedUserId < 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "关联用户信息无效" });
+    }
+    if (relatedUserId > 0) await assertExistingGlobalUser(tx, relatedUserId, "关联用户");
+    const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
+      actorUserId: input.actorUserId,
+      relatedUserId,
+      relatedFundId: input.relatedFundId,
+      relatedFundName: input.relatedFundName,
+      required: relatedUserId > 0,
+    });
+    const targetFundId = relatedFund?.id ?? 0;
+    if (
+      accountId === toNumber(before.account_id)
+      && relatedUserId === toNumber(before.related_user_id)
+      && targetFundId === toNumber(before.related_fund_id)
+    ) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "账户、关联用户和项目均未变化，无需转入剩余仓位" });
+    }
+
+    const originalQuantityCents = quantityToCents(before.quantity);
+    const remainingCents = lockedEntry.remainingCents;
+    const historicalClosedCents = originalQuantityCents - remainingCents;
+    if (historicalClosedCents <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "尚未发生平仓的订单可直接编辑，无需转入剩余仓位" });
+    }
+    const historicalQuantity = (historicalClosedCents / 100).toFixed(2);
+    const remainingQuantity = (remainingCents / 100).toFixed(2);
+    const originalQuantity = (originalQuantityCents / 100).toFixed(2);
+    const originalFee = String(before.fee_usdt ?? "0");
+    const [historicalFee, remainingFee] = splitDecimalAmountByQuantity(
+      before.fee_usdt,
+      historicalClosedCents,
+      originalQuantityCents,
+    );
+    // 旧流水若没有 target_opening_entry_id，无法在未来准确区分它消耗的是本单还是同档其他单。
+    // 在这种历史数据完成逐笔校正前拒绝迁移，宁可不放开，也不能留下“回撤后回补仓位”的后门。
+    const legacyArchivePrice = archivePriceForAction(String(before.action) as T0JournalAction, before.price);
+    const legacyClosingAction: T0JournalAction = actionSide(String(before.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
+    const [legacyUnboundCloseRows] = await tx.execute(
+      `SELECT id
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+          AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
+          AND action = ? AND COALESCE(target_opening_entry_id, 0) = 0
+          AND target_price = ? AND (created_at > ? OR (created_at = ? AND id > ?))
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1 FOR UPDATE`,
+      [
+        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, toNumber(before.account_id), String(before.symbol || "ETH"),
+        toNumber(before.related_user_id), toNumber(before.related_fund_id), legacyClosingAction, legacyArchivePrice,
+        before.created_at, before.created_at, input.entryId,
+      ],
+    );
+    if (asRows(legacyUnboundCloseRows)[0]) {
+      throw new TRPCError({ code: "CONFLICT", message: "本单包含旧式未逐笔绑定的历史平仓；为保护历史数量，请先处理该平仓后再调整后续归属" });
+    }
+    const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const sourcePlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId], true);
+    const pendingSourcePlans = (sourcePlansByEntryId.get(input.entryId) ?? [])
+      .filter((plan) => plan.status === "pending")
+      .map((plan) => ({
+        price: String(plan.trigger_price),
+        quantity: String(plan.quantity),
+        sharedIncomeAllocations: (plan.shared_income_allocations ?? []).map((allocation) => ({
+          recipientUserId: toNumber(allocation.recipientUserId),
+          amount: toNumber(allocation.amount),
+        })).filter((allocation) => allocation.recipientUserId > 0 && allocation.amount > 0),
+      }));
+
+    // 先使原单的经济数量恰等于历史已平量；既有平仓仍以原单为来源，手续费比例也不变。
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_entries
+          SET quantity = ?, fee_usdt = ?, take_profit_enabled = 0,
+              take_profit_price = NULL, take_profit_quantity = NULL, updated_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [historicalQuantity, historicalFee, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_entry_profit_shares
+          SET matched_quantity = ?
+        WHERE ledger_id = ? AND user_id = ? AND entry_id = ? AND opening_entry_id = ?`,
+      [historicalQuantity, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, input.entryId],
+    );
+    // 历史已触发止盈不动；只有未触发的计划从旧单移除并复制给承接单。
+    await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId, plans: [] });
+    await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId });
+
+    const successorRequestId = `reassign:${requestId}`;
+    const [successorInsert] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entries
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, keep_reopen_reminder, execution_status, take_profit_enabled, take_profit_price, take_profit_quantity, action, quantity, price, fee_usdt, target_price, target_opening_entry_id, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'filled', 0, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        accountId,
+        relatedUserId > 0 ? relatedUserId : null,
+        targetFundId > 0 ? targetFundId : null,
+        String(before.symbol || "ETH"),
+        before.instrument_type ?? null,
+        before.option_direction ?? null,
+        before.option_expiry_date ?? null,
+        before.option_premium ?? null,
+        before.option_premium_currency ?? null,
+        before.grid_direction ?? null,
+        before.grid_range_min ?? null,
+        before.grid_range_max ?? null,
+        before.grid_leverage ?? null,
+        before.grid_count ?? null,
+        toNumber(before.is_locked),
+        toNumber(before.is_counterparty),
+        toNumber(before.keep_reopen_reminder),
+        String(before.action),
+        remainingQuantity,
+        String(before.price),
+        remainingFee,
+        before.target_price ?? null,
+        before.note ?? null,
+        successorRequestId,
+        input.actorUserId,
+      ],
+    );
+    const successorEntryId = toNumber((successorInsert as any).insertId);
+    if (successorEntryId <= 0) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "剩余仓位承接订单创建失败" });
+
+    await writeOpeningProfitShareSnapshot(tx, {
+      actorUserId: input.actorUserId,
+      entryId: successorEntryId,
+      sourceUserId: relatedUserId,
+      relatedFundId: targetFundId,
+      quantity: remainingQuantity,
+    });
+    if (pendingSourcePlans.length > 0) {
+      await validateTakeProfitSharedIncomePlans(tx, {
+        actorUserId: input.actorUserId,
+        sourceUserId: relatedUserId,
+        action: String(before.action) as T0JournalAction,
+        openingPrice: String(before.price),
+        openingQuantity: remainingQuantity,
+        plans: pendingSourcePlans,
+      });
+      await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: successorEntryId, plans: pendingSourcePlans });
+      await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: successorEntryId });
+    }
+    const [migrationInsert] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_position_reassignments
+        (ledger_id, user_id, source_opening_entry_id, successor_opening_entry_id, original_quantity, original_fee_usdt, historical_closed_quantity, reassigned_quantity, source_account_id, source_related_user_id, source_related_fund_id, target_account_id, target_related_user_id, target_related_fund_id, client_request_id, operator_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, successorEntryId,
+        originalQuantity, originalFee, historicalQuantity, remainingQuantity,
+        toNumber(before.account_id), toNumber(before.related_user_id) || null, toNumber(before.related_fund_id) || null,
+        accountId, relatedUserId || null, targetFundId || null, requestId, input.actorUserId,
+      ],
+    );
+    if (toNumber((migrationInsert as any).insertId) <= 0) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "剩余仓位转入审计记录失败" });
+    }
+    const [afterSourceRows] = await tx.execute(
+      `SELECT * FROM ledger52_t0_journal_entries
+        WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+      [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const afterSource = asRows(afterSourceRows)[0];
+    if (!afterSource) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "剩余仓位转入后原订单读取失败" });
+    await writeEntryAudit(tx, {
+      actorUserId: input.actorUserId,
+      entryId: input.entryId,
+      operation: "update",
+      before: beforeForAudit,
+      after: {
+        ...await buildEntryAuditSnapshot(tx, input.actorUserId, afterSource),
+        position_reassignment: {
+          successor_opening_entry_id: successorEntryId,
+          historical_closed_quantity: historicalQuantity,
+          reassigned_quantity: remainingQuantity,
+        },
+      },
+    });
+    await tx.commit();
+    if (pendingSourcePlans.length > 0) activateLedger52T0PendingOrderScan();
+    else void refreshLedger52T0PendingOrderScanState();
+    return {
+      sourceEntryId: String(input.entryId),
+      successorEntryId: String(successorEntryId),
+      reassignedQuantity: Number(remainingQuantity),
+      alreadyApplied: false,
+    };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
 export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: number; entryId: number }) {
   const connection = await getDbTransactionConnection();
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
@@ -5603,7 +5977,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     const [rows] = await tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count, e.action,
-              e.is_locked, e.is_counterparty, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+              e.is_locked, e.is_counterparty, e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -5618,6 +5992,19 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     if (isOpeningAction(action)) {
       // 复用开仓依赖校验，防止回撤开仓后遗留无法匹配的平仓流水。
       before = (await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId)).entry;
+    } else {
+      const targetOpeningEntryId = toNumber(before.target_opening_entry_id);
+      if (targetOpeningEntryId > 0) {
+        const [migrationRows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_position_reassignments
+            WHERE ledger_id = ? AND user_id = ? AND source_opening_entry_id = ?
+            LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, targetOpeningEntryId],
+        );
+        if (asRows(migrationRows)[0]) {
+          throw new TRPCError({ code: "CONFLICT", message: "该历史平仓对应的剩余仓位已转入新订单；为保持历史与仓位一致，不能单独回撤" });
+        }
+      }
     }
 
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
@@ -5715,6 +6102,17 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     if (!asRows(accountRows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: "原下单账户已不存在，无法恢复" });
 
     if (!isOpeningAction(action)) {
+      if (targetOpeningEntryId > 0) {
+        const [migrationRows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_position_reassignments
+            WHERE ledger_id = ? AND user_id = ? AND source_opening_entry_id = ?
+            LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, targetOpeningEntryId],
+        );
+        if (asRows(migrationRows)[0]) {
+          throw new TRPCError({ code: "CONFLICT", message: "该历史平仓对应的剩余仓位已转入新订单；不能恢复，以免改变已固定的历史与仓位" });
+        }
+      }
       const targetPrice = archivedTargetPrice(action, snapshot.target_price);
       if (!targetPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少对应开仓档位，无法恢复" });
       const [positionRows] = await tx.execute(

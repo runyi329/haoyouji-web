@@ -11982,6 +11982,38 @@ ${klinesSummary}
         });
       }),
 
+    t0ReassignOpeningRemaining: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        entryId: z.number().int().positive(),
+        expectedRemainingQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '剩余数量格式无效').refine((value) => Number(value) > 0, '剩余数量必须大于0'),
+        accountId: z.number().int().positive().optional(),
+        accountName: z.string().trim().min(1).max(80).optional(),
+        relatedUserId: z.number().int().positive().optional(),
+        relatedFundId: z.number().int().positive().optional(),
+        relatedFundName: z.string().trim().min(1).max(80).optional(),
+        clientRequestId: z.string().trim().min(8).max(55),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.reassignLedger52T0JournalOpeningRemaining({
+          actorUserId: ctx.user.id,
+          entryId: input.entryId,
+          expectedRemainingQuantity: input.expectedRemainingQuantity,
+          accountId: input.accountId,
+          accountName: input.accountName,
+          relatedUserId: input.relatedUserId,
+          relatedFundId: input.relatedFundId,
+          relatedFundName: input.relatedFundName,
+          clientRequestId: input.clientRequestId,
+        });
+      }),
+
     t0UpdateOpeningProfitShare: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),

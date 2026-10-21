@@ -570,6 +570,11 @@ type PreviewTrade = {
   targetPrice?: number;
   /** 新平仓指定的真实开仓流水；缺失时仅兼容旧历史 FIFO。 */
   targetOpeningEntryId?: string;
+  /** 剩余仓位转入后，原开仓在历史卡上保留的初始数量；不参与任何仓位计算。 */
+  originalQuantityBeforeReassignment?: number;
+  /** 从原开仓独立转入新订单的数量；仅用于历史说明。 */
+  reassignedQuantity?: number;
+  successorOpeningEntryId?: string;
   note?: string;
   clientRequestId?: string;
   isSyncing?: boolean;
@@ -716,6 +721,15 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     targetOpeningEntryId: (entry.targetOpeningEntryId ?? entry.target_opening_entry_id) === undefined || (entry.targetOpeningEntryId ?? entry.target_opening_entry_id) === null
       ? undefined
       : String(entry.targetOpeningEntryId ?? entry.target_opening_entry_id),
+    originalQuantityBeforeReassignment: entry.originalQuantityBeforeReassignment === undefined || entry.originalQuantityBeforeReassignment === null
+      ? undefined
+      : Number(entry.originalQuantityBeforeReassignment),
+    reassignedQuantity: entry.reassignedQuantity === undefined || entry.reassignedQuantity === null
+      ? undefined
+      : Number(entry.reassignedQuantity),
+    successorOpeningEntryId: entry.successorOpeningEntryId === undefined || entry.successorOpeningEntryId === null
+      ? undefined
+      : String(entry.successorOpeningEntryId),
     note: entry.note || undefined,
   };
 }
@@ -2588,6 +2602,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const saveEntryCommitLockRef = useRef(false);
   // 二次确认页发生网络不确定错误时，重试必须沿用首次请求标识，才能由服务端幂等键回放同一笔平仓。
   const closeCommitRequestIdRef = useRef<string | null>(null);
+  // 剩余仓位转入同样是真实账本写入；同步锁覆盖 React pending 状态尚未刷新的双击窗口。
+  const residualReassignCommitLockRef = useRef(false);
+  // 服务端已提交但响应丢失时，按同一归属草稿重试必须复用请求 ID，不能再次新建承接单。
+  const residualReassignRequestIdRef = useRef<string | null>(null);
+  const residualReassignRequestFingerprintRef = useRef<string | null>(null);
   const [hydratedTopFilterStorageKey, setHydratedTopFilterStorageKey] = useState<string | null>(null);
   // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
   const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
@@ -5111,6 +5130,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ))
     ),
   );
+  // 原开仓历史字段仍只读；此标记仅用于启用“后续归属”的独立保存路径。
+  const hasPartialAttributionDraftChange = Boolean(
+    isPartiallyClosedOpeningEdit
+    && editingOriginalTrade
+    && (
+      entryForm.accountId !== editingOriginalTrade.accountId
+      || (!entryForm.accountId && entryForm.accountName.trim() !== (editingOriginalTrade.accountName ?? getTradeAccountName(editingOriginalTrade)).trim())
+      || (entryForm.relatedUserId || "") !== (editingOriginalTrade.relatedUserId || "")
+      || (entryForm.relatedFundId === "legacy" ? "" : entryForm.relatedFundId || "") !== (editingOriginalTrade.relatedFundId || "")
+      || (!entryForm.relatedFundId && entryForm.relatedFundName.trim() !== (editingOriginalTrade.relatedFundName ?? "").trim())
+    ),
+  );
   const isOptionOpeningEntry = isOptionEntryContext;
   const isTakeProfitAvailable = ACTIONS[entryForm.action].opening
     && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
@@ -5515,6 +5546,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setClosingSourceTrade(null);
     setEditingOriginalTrade(trade);
     setEntryProfitShareEditTarget(null);
+    residualReassignRequestIdRef.current = null;
+    residualReassignRequestFingerprintRef.current = null;
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
     const closedQuantity = linkedClosings.reduce((total, allocation) => total + allocation.quantity, 0);
@@ -5927,6 +5960,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             : "开仓记录已修改");
     },
     onError: (error) => t0Toast.error(error.message || "开仓记录修改失败"),
+  });
+
+  const reassignOpeningRemainingMutation = trpc.ledger.t0ReassignOpeningRemaining.useMutation({
+    onSuccess: (data: any) => {
+      residualReassignCommitLockRef.current = false;
+      residualReassignRequestIdRef.current = null;
+      residualReassignRequestFingerprintRef.current = null;
+      setClosingSourceTrade(null);
+      setEditingOriginalTrade(null);
+      setEntryProfitShareEditTarget(null);
+      setShowEntrySheet(false);
+      if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+      void t0JournalQuery.refetch();
+      t0Toast.success(`剩余 ${formatQuantity(Number(data.reassignedQuantity || 0))} ETH 已转入新订单；已平历史保持不变`);
+    },
+    onError: (error) => {
+      residualReassignCommitLockRef.current = false;
+      t0Toast.error(error.message || "剩余仓位转入失败，请检查后重新确认");
+    },
   });
 
   const deleteOpeningEntryMutation = trpc.ledger.t0DeleteOpeningEntry.useMutation({
@@ -6352,6 +6404,61 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         t0Toast.error("请选择现货、合约、期权或网格");
         return;
       }
+      const partialAttributionChange = Boolean(
+        isPartiallyClosedOpeningEdit
+        && editingOriginalTrade
+        && (
+          (hasPersistedAccountId ? Number(entryForm.accountId) : 0) !== Number(editingOriginalTrade.accountId)
+          || (!hasPersistedAccountId && normalizedAccountName !== (editingOriginalTrade.accountName ?? getTradeAccountName(editingOriginalTrade)).trim())
+          || Number(normalizedRelatedUserId || 0) !== Number(editingOriginalTrade.relatedUserId || 0)
+          || Number(normalizedRelatedFundId || 0) !== Number(editingOriginalTrade.relatedFundId || 0)
+          || (!normalizedRelatedFundId && Boolean(normalizedRelatedFundName) && normalizedRelatedFundName !== (editingOriginalTrade.relatedFundName ?? "").trim())
+        ),
+      );
+      if (partialAttributionChange && editingOriginalTrade && editingRemainingQuantity !== null) {
+        if (hasPartialOpeningMarkerChange || hasPartialTakeProfitChange) {
+          showSaveValidationError("请先单独保存锁定或止盈设置，再调整剩余仓位的账户、用户或项目");
+          return;
+        }
+        const confirmed = window.confirm(
+          `已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH 的历史流水、收益、共享和分佣不会改变。\n\n剩余 ${formatQuantity(editingRemainingQuantity)} ETH 将生成一张继承原成本价的新订单，并从此使用当前选择的账户、用户和项目。是否确认？`,
+        );
+        if (!confirmed) return;
+        if (residualReassignCommitLockRef.current) return;
+        residualReassignCommitLockRef.current = true;
+        const requestFingerprint = [
+          entryId,
+          normalizeEthQuantity(String(editingRemainingQuantity)),
+          hasPersistedAccountId ? entryForm.accountId : normalizedAccountName,
+          Number(normalizedRelatedUserId || 0),
+          Number(normalizedRelatedFundId || 0),
+          normalizedRelatedFundName,
+        ].join("|");
+        if (residualReassignRequestFingerprintRef.current !== requestFingerprint) {
+          residualReassignRequestFingerprintRef.current = requestFingerprint;
+          residualReassignRequestIdRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `t0r-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+        }
+        const requestId = residualReassignRequestIdRef.current;
+        if (!requestId) {
+          residualReassignCommitLockRef.current = false;
+          t0Toast.error("转入请求创建失败，请重新确认");
+          return;
+        }
+        reassignOpeningRemainingMutation.mutate({
+          ledgerId: 52,
+          entryId,
+          expectedRemainingQuantity: normalizeEthQuantity(String(editingRemainingQuantity)),
+          accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
+          accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
+          relatedUserId: normalizedRelatedUserId || undefined,
+          relatedFundId: normalizedRelatedFundId || undefined,
+          relatedFundName: normalizedRelatedFundName || undefined,
+          clientRequestId: requestId,
+        });
+        return;
+      }
       const safeDependentEdit = getSafeDependentOpeningEdit({
         form: entryForm,
         original: editingOriginalTrade,
@@ -6749,6 +6856,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const showFullOpeningContext = hasSystemGeneratedSettlementNote(opening.note);
     const closedQuantity = group.closings.reduce((total, allocation) => total + allocation.quantity, 0);
     const remainingQuantity = Math.max(0, opening.quantity - closedQuantity);
+    // 转入后原单的 quantity 仅保留已平部分，以保证 FIFO 不会回补；历史卡仍展示当时的初始数量。
+    const historicalOpeningQuantity = opening.originalQuantityBeforeReassignment ?? opening.quantity;
+    const reassignedQuantity = opening.reassignedQuantity ?? 0;
     const groupTone = isLong
       ? "border-rose-200 border-l-rose-500"
       : "border-emerald-200 border-l-emerald-500";
@@ -6760,14 +6870,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
             <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
-              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)}E</span>
+              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(historicalOpeningQuantity)}E</span>
               {opening.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
               {opening.isCounterpartyView && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-violet-700"><Repeat2 className="h-3 w-3" strokeWidth={2.4} />反向</span>}
               <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{opening.instrumentType === "option" && opening.optionPremium !== undefined && opening.optionPremiumCurrency ? formatOptionQuote(opening.optionPremium, opening.optionPremiumCurrency) : formatPrice(opening.price)}</span>
               {opening.instrumentType === "option" && <span className="shrink-0 text-violet-700">行权{formatPrice(opening.price)}</span>}
             </div>
             <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
-              {closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
+              {reassignedQuantity > 0
+                ? `已平 ${formatQuantity(closedQuantity)} · 已转入 ${formatQuantity(reassignedQuantity)}`
+                : closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
             </span>
             </div>
           <div className={getHistoryContextLayoutClass(showFullOpeningContext)}>
@@ -6845,6 +6957,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
   const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
   const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
+  const historicalOpeningQuantity = trade.originalQuantityBeforeReassignment ?? trade.quantity;
+  const reassignedQuantity = trade.reassignedQuantity ?? 0;
+  const historicalOpeningValue = historicalOpeningQuantity * trade.price;
   const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
   const floatingPnl = trade.isPending || trade.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(
     ACTIONS[trade.action].side,
@@ -6883,7 +6998,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         >
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-5">
                               <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
-                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(historicalOpeningQuantity)} ETH</span>
                               <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
                               {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 rounded bg-sky-50 px-1 py-0.5 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span>}
                               {takeProfitMarkerLabel && <span className="inline-flex shrink-0 items-center gap-0.5 text-sm font-semibold text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} />{takeProfitMarkerLabel}</span>}
@@ -6907,7 +7022,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       <div className="mt-1.5 flex min-w-0 items-end justify-between gap-2 text-[10px] font-medium">
         {!isExpanded && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1 leading-4">
           {linkedClosedQuantity > 0.0000001 && <>
-            <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+            <span className="shrink-0 tabular-nums text-slate-600">{reassignedQuantity > 0 ? `已平 ${formatQuantity(linkedClosedQuantity)} · 已转入 ${formatQuantity(reassignedQuantity)}` : `已平 ${formatQuantity(linkedClosedQuantity)} · 剩 ${formatQuantity(remainingQuantity)} ETH`}</span>
           </>}
           {!isMemberView && <span title={getTradeAccountName(trade)} className="inline-flex shrink-0 items-baseline gap-0.5 whitespace-nowrap"><span className="text-slate-400">账户</span><span className="text-slate-600">{getTradeAccountName(trade)}</span></span>}
           <span title={getTradeRelatedUserName(trade)} className="inline-flex shrink-0 items-baseline gap-0.5 whitespace-nowrap"><span className="text-slate-400">用户</span><span className="text-slate-600">{getTradeRelatedUserName(trade)}</span></span>
@@ -6948,7 +7063,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
             <div className="min-w-0">
               <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
-              <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(openingValue)} U`}</div>
+              <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(trade.originalQuantityBeforeReassignment !== undefined ? historicalOpeningValue : openingValue)} U`}</div>
             </div>
             <div className="min-w-0 text-center">
               <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
@@ -8305,9 +8420,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     </div>
                     <div className="mt-1 text-[11px] leading-4 text-indigo-700/80">
                       {isFullyClosedOpeningEdit && editingOriginalTrade
-                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH 已全部平仓；关联历史不可编辑。`
+                        ? `原始 ${formatQuantity(editingOriginalTrade.originalQuantityBeforeReassignment ?? editingOriginalTrade.quantity)} ETH 已全部平仓或已完成剩余仓位转入；关联历史不可编辑。`
                         : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
-                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定、止盈或收益分配。`
+                        ? `原始 ${formatQuantity(editingOriginalTrade.originalQuantityBeforeReassignment ?? editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定、止盈、收益分配，或转入新的账户、用户和项目。`
                         : isEditingPendingOpening
                           ? "挂单按钮已选中；取消选中后，点击底部“保存修改”才会按当前成交价确认成交。"
                           : isPendingFillConfirmationQueued
@@ -8394,7 +8509,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
                       <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
                         <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
-                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量由剩余仓位决定。锁定与止盈都只作用于剩余 {formatQuantity(editingRemainingQuantity)} ETH，不影响已平部分。</span>
+                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量由剩余仓位决定。锁定与止盈只作用于剩余部分；调整账户、用户或项目时，系统会新建承接订单，已平历史不变。</span>
                       </div>
                     )}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
@@ -8841,10 +8956,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </>
                 ) : <>
                 <div className="grid grid-cols-[minmax(6.75rem,0.7fr)_minmax(0,1.3fr)] items-start gap-3">
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
-                        disabled={isAccountSelectionLocked || hasDependentCloseOpeningEdit}
+                        disabled={isAccountSelectionLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                         value={entryForm.accountId}
                         onChange={(event) => {
                           if (event.target.value === "__manage_accounts__") {
@@ -8862,7 +8977,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     ) : null}
                     {!entryForm.accountId && (
                       <input
-                        disabled={isAccountSelectionLocked || hasDependentCloseOpeningEdit}
+                        disabled={isAccountSelectionLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                         value={entryForm.accountName}
                         onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
                         placeholder="新账户名称"
@@ -8871,10 +8986,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
-                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || hasDependentCloseOpeningEdit ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit) ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
                       <select
-                        disabled={isCloseAssociationLocked || hasDependentCloseOpeningEdit}
+                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                         value={entryForm.relatedUserId}
                         onChange={(event) => {
                           const userId = event.target.value;
@@ -8900,7 +9015,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </select>
                       <button
                         type="button"
-                        disabled={isCloseAssociationLocked || hasDependentCloseOpeningEdit}
+                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
 	                        aria-label="搜索并添加未在订单中出现过的关联用户"
 	                        title="搜索全局用户并添加"
 	                        onClick={() => {
@@ -8975,13 +9090,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                )}
 
                 <div className="-mt-1 grid grid-cols-[minmax(6.75rem,0.7fr)_minmax(0,1.3fr)] gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>{hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
+                  <span>{isPartiallyClosedOpeningEdit ? "已平部分永久保留原归属；可重新选择账户、用户和项目，保存后仅把剩余仓位转入新订单。" : hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
-                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{isEditingEntry && !isClosingEntry && !entryForm.isPending && entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && <button type="button" onClick={openEntryProfitShareManager} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">本单分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && (!isEditingEntry || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{isEditingEntry && !isPartiallyClosedOpeningEdit && !isClosingEntry && !entryForm.isPending && entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && <button type="button" onClick={openEntryProfitShareManager} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">本单分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
                   <select
-                    disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry || hasDependentCloseOpeningEdit}
+                    disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                     value={entryForm.relatedFundId}
                     onChange={(event) => {
                       if (event.target.value === "__manage_related_funds__") {
@@ -8999,7 +9114,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </select>
                   {entryForm.relatedUserId && entryForm.relatedFundId === "" && (
                     <input
-                      disabled={isCloseReview || isClosingEntry || hasDependentCloseOpeningEdit}
+                      disabled={isCloseReview || isClosingEntry || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                       value={entryForm.relatedFundName}
                       onChange={(event) => setEntryForm((current) => ({ ...current, relatedFundName: event.target.value }))}
                       placeholder="新专项款名称，例如：10月拼单"
@@ -9034,7 +9149,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>}
               {!isCloseReview && (
                 <button
-                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
+                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || reassignOpeningRemainingMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange && !hasPartialAttributionDraftChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={() => handleSaveEntry(isPendingFillConfirmationQueued)}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
