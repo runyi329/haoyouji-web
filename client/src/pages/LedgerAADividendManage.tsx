@@ -154,6 +154,82 @@ export default function LedgerAADividendManage() {
     }
     return byUser;
   }, [dividendAvailabilityData]);
+  // 负数分红必须引用成员全局钱包。快捷录入固定扣人民币；弹窗则按管理员选定币种读取。
+  const recoveryDraft = useMemo(() => {
+    const modalAmount = Number(addForm.amount);
+    if (ledgerId === 37 && addForm.targetUserId > 0 && Number.isFinite(modalAmount) && modalAmount < 0) {
+      return { source: 'modal' as const, targetUserId: addForm.targetUserId, tagName: addForm.tagName, assetCode: addForm.assetCode, amount: Math.abs(modalAmount) };
+    }
+    const quickRecoveryAmount = Number(quickAmount);
+    if (ledgerId === 37 && quickAdd && Number.isFinite(quickRecoveryAmount) && quickRecoveryAmount < 0) {
+      return { source: 'quick' as const, targetUserId: quickAdd.userId, tagName: quickAdd.tagName, assetCode: 'CNY', amount: Math.abs(quickRecoveryAmount) };
+    }
+    return null;
+  }, [ledgerId, addForm.targetUserId, addForm.tagName, addForm.assetCode, addForm.amount, quickAdd, quickAmount]);
+  const recoveryWalletQuery = trpc.adminGetLedger37DividendRecoveryWalletBalance.useQuery(
+    {
+      ledgerId: 37,
+      // 查询未启用时的占位值不会发往服务端；保持输入结构合法，避免产生无效请求。
+      targetUserId: recoveryDraft?.targetUserId || 1,
+      assetCode: recoveryDraft?.assetCode || 'CNY',
+    },
+    {
+      enabled: ledgerId === 37 && canManageDividends && !!recoveryDraft?.targetUserId,
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const recoveryWalletMatches = !!recoveryDraft
+    && Number(recoveryWalletQuery.data?.userId) === recoveryDraft.targetUserId
+    && String(recoveryWalletQuery.data?.assetCode || '').toUpperCase() === recoveryDraft.assetCode.toUpperCase();
+  const recoveryWalletAvailable = recoveryWalletMatches
+    ? Math.max(0, Number(recoveryWalletQuery.data?.available ?? 0))
+    : 0;
+  const recoveryAmountExceedsWallet = !!recoveryDraft
+    && recoveryWalletMatches
+    && recoveryDraft.amount > recoveryWalletAvailable + 1e-8;
+  const recoveryOutstandingCny = recoveryDraft?.assetCode === 'CNY' && recoveryDraft.tagName
+    ? Math.max(0, -Number(availabilityByUserTag.get(recoveryDraft.targetUserId)?.get(recoveryDraft.tagName)?.availableDividend ?? 0))
+    : 0;
+  const formatRecoveryQuantity = (value: number, assetCode: string) => Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: assetCode === 'CNY' ? 2 : 8,
+  });
+  const recoveryWalletLabel = (assetCode: string, amount: number) => assetCode === 'CNY'
+    ? `¥${formatRecoveryQuantity(amount, assetCode)}`
+    : `${formatRecoveryQuantity(amount, assetCode)} ${assetCode}`;
+  const fillRecoveryFromWallet = () => {
+    if (!recoveryDraft) return;
+    if (!recoveryWalletMatches || recoveryWalletQuery.isFetching) {
+      toast.error('正在读取成员钱包可用余额，请稍候');
+      return;
+    }
+    if (recoveryDraft.assetCode !== 'CNY' || !(recoveryOutstandingCny > 0)) {
+      toast.error('当前标签没有可一键回填的人民币欠额');
+      return;
+    }
+    const fillAmount = Math.min(recoveryOutstandingCny, recoveryWalletAvailable);
+    if (!(fillAmount > 0)) {
+      toast.error('成员人民币钱包没有可扣回余额');
+      return;
+    }
+    const text = `-${fillAmount.toFixed(2).replace(/\.00$/, '')}`;
+    if (recoveryDraft.source === 'quick') setQuickAmount(text);
+    else setAddForm(form => ({ ...form, amount: text }));
+  };
+  const validateRecoveryWallet = (targetUserId: number, assetCode: string, amount: number) => {
+    const requestedAmount = Math.abs(amount);
+    if (!recoveryWalletMatches
+      || Number(recoveryWalletQuery.data?.userId) !== targetUserId
+      || String(recoveryWalletQuery.data?.assetCode || '').toUpperCase() !== assetCode.toUpperCase()) {
+      toast.error('正在读取该成员的钱包可用余额，请稍候');
+      return false;
+    }
+    if (requestedAmount > recoveryWalletAvailable + 1e-8) {
+      toast.error(`${assetCode} 钱包可用余额仅 ${recoveryWalletLabel(assetCode, recoveryWalletAvailable)}，不能超额扣回`);
+      return false;
+    }
+    return true;
+  };
   const selectableMemberTags = useMemo(() => {
     const tagNames = new Set(selectedMemberTags);
     for (const tagName of Array.from(availabilityByUserTag.get(addForm.targetUserId)?.keys() ?? [])) tagNames.add(tagName);
@@ -309,7 +385,7 @@ export default function LedgerAADividendManage() {
       setQuickAmount('');
       setQuickNote('');
       setQuickAdd(null);
-      await Promise.all([refetchDividends(), refetchDividendAvailability()]);
+      await Promise.all([refetchDividends(), refetchDividendAvailability(), recoveryWalletQuery.refetch()]);
     },
     onError: (err) => toast.error(err.message || '分红回填失败'),
   });
@@ -371,6 +447,7 @@ export default function LedgerAADividendManage() {
     if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
     if (ledgerId === 37 && amount < 0) {
       if (!addForm.note.trim()) return toast.error('负数回填必须填写回填原因');
+      if (!validateRecoveryWallet(addForm.targetUserId, addForm.assetCode, amount)) return;
       setRecoveryConfirmation({
         targetUserId: addForm.targetUserId,
         tagName: addForm.tagName,
@@ -419,6 +496,7 @@ export default function LedgerAADividendManage() {
     if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
     if (ledgerId === 37 && amount < 0) {
       if (!quickNote.trim()) return toast.error('负数回填必须填写回填原因');
+      if (!validateRecoveryWallet(quickAdd.userId, 'CNY', amount)) return;
       setRecoveryConfirmation({
         targetUserId: quickAdd.userId,
         tagName: quickAdd.tagName,
@@ -437,6 +515,55 @@ export default function LedgerAADividendManage() {
       amount,
       note: quickNote || undefined,
     });
+  };
+
+  const renderRecoveryWalletReference = (source: 'modal' | 'quick') => {
+    if (!recoveryDraft || recoveryDraft.source !== source) return null;
+    const assetCode = recoveryDraft.assetCode;
+    const isCnyRecovery = assetCode === 'CNY';
+    const oneClickAmount = isCnyRecovery ? Math.min(recoveryOutstandingCny, recoveryWalletAvailable) : 0;
+    const canSettleAll = isCnyRecovery && recoveryOutstandingCny > 0 && recoveryWalletAvailable + 1e-8 >= recoveryOutstandingCny;
+    const member = dividendMembers.find((item: any) => Number(item.userId) === recoveryDraft.targetUserId);
+    return (
+      <div className="mt-2 rounded-xl border px-3 py-2.5" style={{ borderColor: recoveryAmountExceedsWallet ? '#FFCDD2' : '#DDEBFA', backgroundColor: recoveryAmountExceedsWallet ? '#FFF8F8' : '#F8FBFF' }}>
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-medium" style={{ color: '#1565C0' }}>引用{assetCode === 'CNY' ? '人民币' : assetCode}钱包扣回</span>
+          <button
+            type="button"
+            onClick={() => setWalletSnapshotUser({ id: recoveryDraft.targetUserId, name: member?.displayName || `用户${recoveryDraft.targetUserId}`, username: member?.username })}
+            className="font-medium underline"
+            style={{ color: '#1565C0' }}
+          >
+            查看钱包
+          </button>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
+          <span style={{ color: '#78909C' }}>当前可用余额</span>
+          <span className="font-semibold tabular-nums" style={{ color: recoveryWalletMatches ? '#1A1A1A' : '#78909C' }}>
+            {recoveryWalletQuery.isFetching ? '读取中…' : recoveryWalletMatches ? recoveryWalletLabel(assetCode, recoveryWalletAvailable) : '待读取'}
+          </span>
+        </div>
+        {isCnyRecovery && recoveryOutstandingCny > 0 && recoveryWalletMatches && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5" style={{ backgroundColor: '#FFFFFF' }}>
+            <span className="text-[11px]" style={{ color: '#795548' }}>本标签待回填 {recoveryWalletLabel('CNY', recoveryOutstandingCny)}</span>
+            <button
+              type="button"
+              onClick={fillRecoveryFromWallet}
+              disabled={!(oneClickAmount > 0)}
+              className="flex-shrink-0 text-[11px] font-semibold underline disabled:opacity-40"
+              style={{ color: '#B71C1C' }}
+            >
+              {canSettleAll ? `一键还清 ${recoveryWalletLabel('CNY', recoveryOutstandingCny)}` : `填入可扣回 ${recoveryWalletLabel('CNY', oneClickAmount)}`}
+            </button>
+          </div>
+        )}
+        {recoveryAmountExceedsWallet ? (
+          <div className="mt-2 text-[11px] leading-4" style={{ color: '#C62828' }}>本次扣回金额超过钱包可用余额，请减少金额；服务端也会在扣回时再次锁定并校验余额。</div>
+        ) : (
+          <div className="mt-2 text-[11px] leading-4" style={{ color: '#78909C' }}>可手动填写扣回金额，但不能超过当前钱包可用余额；确认时会再次按钱包实时余额校验。</div>
+        )}
+      </div>
+    );
   };
 
   // 数据加载中
@@ -850,39 +977,43 @@ export default function LedgerAADividendManage() {
                             {/* 标签操作区：快捷加一笔分红 + 标签备注 */}
                             <div className="px-6 py-2 flex items-center gap-2" style={{ borderTop: '1px solid #FAFAFA' }}>
                               {quickAdd && quickAdd.userId === userId && quickAdd.tagName === grp.tagName ? (
-                                <div className="flex-1 flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    placeholder={ledgerId === 37 ? '金额（负数扣回）' : '金额'}
-                                    value={quickAmount}
-                                    onChange={e => setQuickAmount(e.target.value)}
-                                    className="w-20 px-2 py-1.5 rounded-lg text-xs outline-none border"
-                                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
-                                    autoFocus
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder={ledgerId === 37 && Number(quickAmount) < 0 ? '回填原因（必填）' : '备注(选填)'}
-                                    value={quickNote}
-                                    onChange={e => setQuickNote(e.target.value)}
-                                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none border"
-                                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
-                                  />
-                                  <button
-                                    onClick={handleQuickAddSubmit}
-                                    disabled={addMutation.isPending || recoverDividendMutation.isPending}
-                                    className="p-1.5 rounded-lg flex-shrink-0"
-                                    style={{ backgroundColor: '#E8F5E9' }}
-                                  >
-                                    <Check className="w-3.5 h-3.5" style={{ color: '#388E3C' }} />
-                                  </button>
-                                  <button
-                                    onClick={() => { setQuickAdd(null); setQuickAmount(''); setQuickNote(''); }}
-                                    className="p-1.5 rounded-lg flex-shrink-0"
-                                    style={{ backgroundColor: '#F5F5F5' }}
-                                  >
-                                    <X className="w-3.5 h-3.5" style={{ color: '#9E9E9E' }} />
-                                  </button>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={ledgerId === 37 && Number(quickAmount) < 0 && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
+                                      placeholder={ledgerId === 37 ? '金额（负数扣回）' : '金额'}
+                                      value={quickAmount}
+                                      onChange={e => setQuickAmount(e.target.value)}
+                                      className="w-20 px-2 py-1.5 rounded-lg text-xs outline-none border"
+                                      style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                                      autoFocus
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder={ledgerId === 37 && Number(quickAmount) < 0 ? '回填原因（必填）' : '备注(选填)'}
+                                      value={quickNote}
+                                      onChange={e => setQuickNote(e.target.value)}
+                                      className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none border"
+                                      style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                                    />
+                                    <button
+                                      onClick={handleQuickAddSubmit}
+                                      disabled={addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(quickAmount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet))}
+                                      className="p-1.5 rounded-lg flex-shrink-0 disabled:opacity-40"
+                                      style={{ backgroundColor: '#E8F5E9' }}
+                                    >
+                                      <Check className="w-3.5 h-3.5" style={{ color: '#388E3C' }} />
+                                    </button>
+                                    <button
+                                      onClick={() => { setQuickAdd(null); setQuickAmount(''); setQuickNote(''); }}
+                                      className="p-1.5 rounded-lg flex-shrink-0"
+                                      style={{ backgroundColor: '#F5F5F5' }}
+                                    >
+                                      <X className="w-3.5 h-3.5" style={{ color: '#9E9E9E' }} />
+                                    </button>
+                                  </div>
+                                  {ledgerId === 37 && Number(quickAmount) < 0 && renderRecoveryWalletReference('quick')}
                                 </div>
                               ) : (
                                 <>
@@ -995,6 +1126,7 @@ export default function LedgerAADividendManage() {
                   <input
                     type="number"
                     inputMode="decimal"
+                    min={ledgerId === 37 && Number(addForm.amount) < 0 && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
                     placeholder={ledgerId === 37 ? `请输入${addForm.assetCode}数量，负数为扣回` : '请输入金额'}
                     value={addForm.amount}
                     onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
@@ -1003,6 +1135,8 @@ export default function LedgerAADividendManage() {
                   />
                 </div>
                 {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: Number(addForm.amount) < 0 ? '#C62828' : '#78909C' }}>{Number(addForm.amount) < 0 ? '负数不会作为入账保存：确认后将从成员同币种全局钱包扣回，并写入独立回填审计流水。' : '确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。'}</div>}
+                {ledgerId === 37 && Number(addForm.amount) < 0 && addForm.targetUserId > 0 && renderRecoveryWalletReference('modal')}
+                {ledgerId === 37 && Number(addForm.amount) < 0 && !addForm.targetUserId && <div className="mt-2 text-[11px]" style={{ color: '#C62828' }}>请先选择成员，系统才会引用其钱包可用余额。</div>}
               </div>
 
               {/* 备注 */}
@@ -1021,9 +1155,9 @@ export default function LedgerAADividendManage() {
               {/* 提交按钮 */}
               <button
                 onClick={handleAddSubmit}
-                disabled={addMutation.isPending || recoverDividendMutation.isPending}
+                disabled={addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(addForm.amount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet))}
                 className="w-full py-3 rounded-xl text-sm font-semibold"
-                style={{ backgroundColor: ledgerId === 37 && Number(addForm.amount) < 0 ? '#B71C1C' : '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending || recoverDividendMutation.isPending ? 0.6 : 1 }}
+                style={{ backgroundColor: ledgerId === 37 && Number(addForm.amount) < 0 ? '#B71C1C' : '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(addForm.amount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet)) ? 0.6 : 1 }}
               >
                 {addMutation.isPending || recoverDividendMutation.isPending ? '提交中...' : ledgerId === 37 && Number(addForm.amount) < 0 ? '核对扣回明细' : '确认添加'}
               </button>
@@ -1052,11 +1186,12 @@ export default function LedgerAADividendManage() {
               <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>成员</span><span className="font-medium text-right" style={{ color: '#1A1A1A' }}>{dividendMembers.find((member: any) => Number(member.userId) === recoveryConfirmation.targetUserId)?.displayName ?? `用户${recoveryConfirmation.targetUserId}`}</span></div>
               <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>标签</span><span className="font-medium text-right" style={{ color: '#1A1A1A' }}>{recoveryConfirmation.tagName}</span></div>
               <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>扣回金额</span><span className="font-semibold text-right" style={{ color: '#C62828' }}>{recoveryConfirmation.assetCode === 'CNY' ? '¥' : ''}{Number(recoveryConfirmation.assetAmount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })}{recoveryConfirmation.assetCode === 'CNY' ? '' : ` ${recoveryConfirmation.assetCode}`}</span></div>
+              <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>扣回前钱包可用</span><span className="font-semibold text-right" style={{ color: recoveryWalletMatches ? '#1A1A1A' : '#9E9E9E' }}>{recoveryWalletMatches ? recoveryWalletLabel(recoveryConfirmation.assetCode, recoveryWalletAvailable) : '正在复核…'}</span></div>
               <div className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#FAFAFA' }}>
                 <div className="text-[11px] mb-1" style={{ color: '#9E9E9E' }}>回填原因</div>
                 <div className="text-sm leading-5" style={{ color: '#424242' }}>{recoveryConfirmation.reason}</div>
               </div>
-              <div className="rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: '#FFF3E0', color: '#8D4B00' }}>如该币种可用余额不足，本次扣回将不会入账，也不会生成分红记录。</div>
+              <div className="rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: recoveryAmountExceedsWallet ? '#FFF5F5' : '#FFF3E0', color: recoveryAmountExceedsWallet ? '#C62828' : '#8D4B00' }}>{recoveryAmountExceedsWallet ? '当前输入已超过钱包可用余额，不能确认扣回。' : '确认时服务端会再次锁定可用余额；如余额变化导致不足，本次不会入账，也不会生成分红记录。'}</div>
             </div>
             <div className="flex gap-3 px-4 pb-5">
               <button
@@ -1071,9 +1206,9 @@ export default function LedgerAADividendManage() {
               <button
                 type="button"
                 onClick={() => recoverDividendMutation.mutate({ ledgerId: 37, ...recoveryConfirmation })}
-                disabled={recoverDividendMutation.isPending}
+                disabled={recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                style={{ color: '#FFFFFF', backgroundColor: '#B71C1C', opacity: recoverDividendMutation.isPending ? 0.55 : 1 }}
+                style={{ color: '#FFFFFF', backgroundColor: '#B71C1C', opacity: recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet ? 0.55 : 1 }}
               >
                 {recoverDividendMutation.isPending ? '扣回中...' : '确认扣回'}
               </button>

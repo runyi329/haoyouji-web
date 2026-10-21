@@ -34172,6 +34172,48 @@ insights 数组每项包含：
       return { success: true };
     }),
 
+  // 37号分红回填：仅胡大叔可按成员与币种读取可扣回的钱包余额。
+  // 此接口仅用于前端预校验；实际扣回时仍由事务内的行锁与可用余额校验兜底。
+  adminGetLedger37DividendRecoveryWalletBalance: protectedProcedure
+    .input(z.object({
+      ledgerId: z.literal(37),
+      targetUserId: z.number().int().positive(),
+      assetCode: z.string().trim().min(3).max(16),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可查看成员钱包余额' });
+      }
+      const targetMembership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+      if (!targetMembership || targetMembership.memberType === 'ai') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本的真实成员' });
+      }
+
+      const assetCode = normalizeLedger37WalletAsset(input.assetCode);
+      if (assetCode === 'CNY' || assetCode === 'USDT') {
+        const balance = await getLedger37FundingBalanceSummary(input.targetUserId, assetCode);
+        return {
+          userId: input.targetUserId,
+          assetCode,
+          assetName: assetCode === 'CNY' ? '人民币' : '泰达币',
+          total: String(balance.total),
+          frozen: String(balance.frozen),
+          available: String(balance.available),
+        };
+      }
+
+      const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(input.targetUserId);
+      const balance = balances.find((item: any) => String(item.assetCode || '').toUpperCase() === assetCode);
+      return {
+        userId: input.targetUserId,
+        assetCode,
+        assetName: assetCode,
+        total: String(balance?.totalBalance ?? 0),
+        frozen: String(balance?.frozenBalance ?? 0),
+        available: String(balance?.availableBalance ?? 0),
+      };
+    }),
+
   // 37号分红多发时的独立回填：客户端只提交正的扣回数量，服务端原子写入负分红并从钱包扣回。
   adminRecoverLedger37Dividend: protectedProcedure
     .input(z.object({
