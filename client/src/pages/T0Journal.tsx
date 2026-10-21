@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowDownLeft,
@@ -130,6 +130,30 @@ type T0XirrCashFlow = {
   amount: number;
   /** 当前账面净值按北京时间截至日收盘时点计入，首日与截至日均纳入持有期。 */
   atEndOfBeijingDay?: boolean;
+};
+
+/** 平仓共享与止盈预分配共用的候选人快照；耗时的历史收益与目标年化只在打开分配面板时计算。 */
+type SharedIncomeCandidate = {
+  userId: string;
+  name: string;
+  username?: string;
+  remainingQuantity: number;
+  longQuantity: number;
+  shortQuantity: number;
+  cumulativeDepositAmount: number;
+  hasPrincipal: boolean;
+  holdingNetPnl: number;
+  closedNetPnl: number;
+  receivedSharedIncome: number;
+  receivedSharedIncomeCount: number;
+  contributedSharedIncome: number;
+  contributedSharedIncomeOrderCount: number;
+  realizedCashFlows: T0XirrCashFlow[];
+  realizedTerminalValue: number;
+  heldDays: number;
+  settlementAgeDays: number | null;
+  annualizedReference: number | null;
+  annualizedTargetTopUps: Array<{ targetRate: number; topUp: number | null }>;
 };
 
 function getT0CalendarDateUtc(value: string) {
@@ -1559,6 +1583,8 @@ function buildClosingProfitShareDistribution(input: {
   closing: PreviewTrade;
   displayedNetPnl: number;
   sharedIncomeReductions?: ReadonlyMap<string, SharedIncomeReduction>;
+  /** 同一批交易已建立的FIFO映射；预分配候选统计可复用它，避免每笔平仓重复扫描全历史。 */
+  allocationsByOpening?: ReadonlyMap<string, LinkedClosingAllocation[]>;
 }): ProfitShareDistributionItem[] {
   const { trades, snapshots, closing, displayedNetPnl, sharedIncomeReductions } = input;
   const closingEntryId = getStoredEntryId(closing);
@@ -1572,7 +1598,7 @@ function buildClosingProfitShareDistribution(input: {
     snapshotsByOpeningId.set(snapshot.openingEntryId, rows);
   }
 
-  const allocationsByOpening = buildOpeningClosingAllocations(trades);
+  const allocationsByOpening = input.allocationsByOpening ?? buildOpeningClosingAllocations(trades);
   const totals = new Map<number, { name: string; netPnl: number; percentages: Set<number> }>();
   const handledOpeningIds = new Set<string>();
   for (const opening of trades) {
@@ -2320,9 +2346,13 @@ function buildLinkedJournalGroups(trades: PreviewTrade[]): LinkedJournalGroup[] 
     });
 }
 
-function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
+function calculateSummary(
+  buckets: PositionBucket[],
+  markPrice: number | null,
+  trades: PreviewTrade[],
+  realizedDetails: ReadonlyMap<string, RecentJournalTradeDetail> = buildRecentJournalTradeDetails(trades),
+) {
   // 期权自动到期时 price 仍保留行权价供 FIFO 匹配，故累计收益必须复用历史明细中的权利金/结算价公式。
-  const realizedDetails = buildRecentJournalTradeDetails(trades);
   const calculateSide = (side: PositionSide) => {
     const active = buckets.filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001);
     const all = buckets.filter((bucket) => bucket.side === side);
@@ -2458,6 +2488,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [takeProfitAllocationPlanIndex, setTakeProfitAllocationPlanIndex] = useState<number | null>(null);
   const [takeProfitSharedIncomeDrafts, setTakeProfitSharedIncomeDrafts] = useState<Record<string, string>>({});
   const [takeProfitSharedIncomeTargetSelections, setTakeProfitSharedIncomeTargetSelections] = useState<Record<string, number>>({});
+  /** 分配面板仅在打开当刻固定参考行情；后续实时行情只刷新报价表，不阻塞候选人与年化计算。 */
+  const [sharedIncomePreviewMarkPrice, setSharedIncomePreviewMarkPrice] = useState<number | null>(null);
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
   const [showSettledOpeningHistory, setShowSettledOpeningHistory] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
@@ -3420,13 +3452,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => buildRecentJournalTradeDetails(journalScopeTrades),
     [journalScopeTrades],
   );
-  const getHistoricalTradeDetail = (trade: PreviewTrade) => (
+  const getHistoricalTradeDetail = useCallback((trade: PreviewTrade) => (
     scopedRecentJournalTradeDetails.get(trade.id)
     ?? scopedRecentJournalTradeDetails.get(getDetailEntryId(trade))
     ?? (isHistoryUserPerspective
       ? historyPerspectiveTradeDetails.get(getDetailEntryId(trade))
       : recentJournalTradeDetails.get(getDetailEntryId(trade)))
-  );
+  ), [historyPerspectiveTradeDetails, isHistoryUserPerspective, recentJournalTradeDetails, scopedRecentJournalTradeDetails]);
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountHidden
     ? "未关联账户"
     : trade.accountName
@@ -3452,7 +3484,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
    * 管理员仅在明确筛选单一用户时，才显示该用户的实际可得；不能把订单关联用户
    * 或当前登录管理员自动误当作受益人。点击总净利润可展开全部分佣明细。
   */
-  const resolveMemberPayout = (
+  const resolveMemberPayout = useCallback((
     trade: PreviewTrade,
     displayedNetPnlInput: number | undefined,
     viewerUserId: number,
@@ -3488,8 +3520,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     const allocation = allocations.find((item) => item.beneficiaryUserId === viewerUserId);
     return { netPnl: (allocation?.netPnl ?? 0) + sharedIncomeAmount, isProfitShared: true };
-  };
-  const resolveDisplayedPayout = (trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
+  }, [profitShareSnapshots, sharedIncomeReductionsByClosingEntryId]);
+  const resolveDisplayedPayout = useCallback((trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
     const selectedAdminBeneficiaryUserId = !isMemberView
       && relatedUserFilterIds.length === 1
@@ -3514,11 +3546,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     const allocation = allocations.find((item) => item.beneficiaryUserId === selectedAdminBeneficiaryUserId);
     return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
-  };
-  const resolveViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+  }, [isMemberView, profitShareSnapshots, relatedUserFilterIds, resolveMemberPayout, sharedIncomeReductionsByClosingEntryId, trades, viewerProfitShareBeneficiaryUserId]);
+  const resolveViewerPayout = useCallback((trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
     return resolveDisplayedPayout(trade, detail?.netPnl);
-  };
-  const resolveHistoryViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+  }, [resolveDisplayedPayout]);
+  const resolveHistoryViewerPayout = useCallback((trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
     if (isHistoryUserPerspective) {
       return resolveMemberPayout(
         trade,
@@ -3528,7 +3560,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       );
     }
     return resolveViewerPayout(trade, detail);
-  };
+  }, [historyPerspectiveTargetUserId, historyPerspectiveTrades, isHistoryUserPerspective, resolveMemberPayout, resolveViewerPayout]);
   // “盈利”严格使用列表当前展示的净收益：成员端及管理员的用户呈现均按该用户实际可得收益；
   // 管理员完整视角则按订单总净收益。开仓没有已实现收益，不纳入此筛选。
   const profitableRecentJournalTrades = useMemo(() => recentJournalTrades.filter((trade) => {
@@ -3576,7 +3608,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || !isEligibleSharedIncomeInstrument(entryForm.instrumentType)
       || !Number.isFinite(closeQuantity) || closeQuantity <= 0 || !Number.isFinite(closePrice) || closePrice <= 0
       || !Number.isInteger(sourceUserId) || sourceUserId <= 0) {
-	      return { sourceNetPnl: 0, shareableAmount: 0, candidates: [] as Array<{ userId: string; name: string; username?: string; remainingQuantity: number; longQuantity: number; shortQuantity: number; cumulativeDepositAmount: number; hasPrincipal: boolean; holdingNetPnl: number; closedNetPnl: number; receivedSharedIncome: number; receivedSharedIncomeCount: number; contributedSharedIncome: number; contributedSharedIncomeOrderCount: number; realizedCashFlows: T0XirrCashFlow[]; realizedTerminalValue: number; heldDays: number; settlementAgeDays: number | null; annualizedReference: number | null }> };
+      return { sourceNetPnl: 0, shareableAmount: 0, candidates: [] as SharedIncomeCandidate[] };
     }
     // 与最终提交一致：管理员反向展示下的“平空/平多”仅是视觉方向，FIFO 与盈亏必须使用原始流水方向。
     const previewAction: TradeAction = isTakeProfitAllocationPreview
@@ -3663,6 +3695,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           closing: allocation.trade,
           displayedNetPnl: netPnl,
           sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
+          allocationsByOpening: historicalClosingAllocations,
         });
         if (distributions.length === 0) {
           const regularNetPnl = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
@@ -3687,7 +3720,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const now = Date.now();
     for (const opening of trades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType) || opening.isPending || !opening.relatedUserId || opening.relatedUserId === String(sourceUserId) || opening.relatedUserId === String(managerUserId)) continue;
-      const closingQuantity = (buildOpeningClosingAllocations(trades).get(opening.id) || []).reduce((total, allocation) => total + allocation.quantity, 0);
+      // 历史候选统计与结算日期已经使用同一份 FIFO；不能为每一笔开仓再次全量重算。
+      const closingQuantity = (historicalClosingAllocations.get(opening.id) || []).reduce((total, allocation) => total + allocation.quantity, 0);
       const remainingQuantity = Math.max(0, opening.quantity - closingQuantity);
       if (remainingQuantity <= 0.000001) continue;
       const current = candidateByUser.get(opening.relatedUserId) || {
@@ -3701,7 +3735,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         basis: 0,
         unrealizedPnl: 0,
       };
-      const markPrice = lastMarkPrice ?? opening.price;
+      const markPrice = sharedIncomePreviewMarkPrice ?? opening.price;
       const gross = ACTIONS[opening.action].side === "long"
         ? (markPrice - opening.price) * remainingQuantity
         : (opening.price - markPrice) * remainingQuantity;
@@ -3785,6 +3819,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         heldDays,
         settlementAgeDays,
         annualizedReference,
+        annualizedTargetTopUps: [3.65, 1, 0.52, 1.04].map((targetRate) => ({
+          targetRate,
+          topUp: calculateT0XirrTargetTopUp(realizedCashFlows, currentNetValue, targetRate),
+        })),
       };
 	    }).sort((left, right) => right.receivedSharedIncomeCount - left.receivedSharedIncomeCount || Number(right.hasPrincipal) - Number(left.hasPrincipal) || (left.annualizedReference ?? Number.POSITIVE_INFINITY) - (right.annualizedReference ?? Number.POSITIVE_INFINITY) || right.heldDays - left.heldDays);
     return {
@@ -3792,7 +3830,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
     };
-	  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, lastMarkPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, takeProfitAllocationPlanIndex, trades]);
+  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
   const sharedIncomeAllocatedTotal = useMemo(() => Object.values(sharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0), [sharedIncomeDrafts]);
   const sharedIncomeSaveAllocations = useMemo(() => Object.entries(sharedIncomeDrafts)
     .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: (Number(amount) || 0).toFixed(2) }))
@@ -3808,12 +3846,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       Object.fromEntries((plan.sharedIncomeAllocations ?? []).map((allocation) => [String(allocation.recipientUserId), allocation.amount])),
     );
     setTakeProfitSharedIncomeTargetSelections({});
+    setSharedIncomePreviewMarkPrice(markPrice);
     setTakeProfitAllocationPlanIndex(planIndex);
   };
   const closeTakeProfitAllocationPanel = () => {
     setTakeProfitAllocationPlanIndex(null);
     setTakeProfitSharedIncomeDrafts({});
     setTakeProfitSharedIncomeTargetSelections({});
+    setSharedIncomePreviewMarkPrice(null);
   };
   const saveTakeProfitAllocationPlan = () => {
     if (takeProfitAllocationPlanIndex === null) return;
@@ -3855,10 +3895,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             || `用户#${candidate.userId}`;
           const currentSharedIncomeDraft = Number(input.drafts[candidate.userId] ?? 0);
           const currentSharedIncomeAmount = Number.isFinite(currentSharedIncomeDraft) ? Math.max(0, currentSharedIncomeDraft) : 0;
-          const displayedRealizedAnnualized = calculateT0Xirr([
-            ...candidate.realizedCashFlows,
-            { occurredOn: getBeijingDateInputValue(), amount: candidate.realizedTerminalValue + currentSharedIncomeAmount, atEndOfBeijingDay: true },
-          ]);
+          // 空草案直接复用打开面板时算好的基准年化；输入金额时只重算当前这一位用户。
+          const displayedRealizedAnnualized = currentSharedIncomeAmount > 0
+            ? calculateT0Xirr([
+              ...candidate.realizedCashFlows,
+              { occurredOn: getBeijingDateInputValue(), amount: candidate.realizedTerminalValue + currentSharedIncomeAmount, atEndOfBeijingDay: true },
+            ])
+            : candidate.annualizedReference;
           const allocationReservedForOthers = Math.max(0, input.allocatedTotal - currentSharedIncomeAmount);
           const availableForCandidate = Math.max(0, sharedIncomeClosePreview.shareableAmount - allocationReservedForOthers);
           const selectedTargetRate = input.targetSelections[candidate.userId];
@@ -3870,10 +3913,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           const canAllocateOrderPoolOnePercent = orderPoolOnePercentShareAmount > 0.004 && orderPoolOnePercentShareAmount <= availableForCandidate + 0.004;
           const orderPoolTwoPercentShareAmount = sharedIncomeClosePreview.shareableAmount * 0.02;
           const canAllocateOrderPoolTwoPercent = orderPoolTwoPercentShareAmount > 0.004 && orderPoolTwoPercentShareAmount <= availableForCandidate + 0.004;
-          const annualizedTargetOptions = [3.65, 1, 0.52, 1.04].map((targetRate) => ({
-            targetRate,
-            topUp: calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, targetRate),
-          }));
+          const annualizedTargetOptions = candidate.annualizedTargetTopUps;
           const settlementAgeDays = currentSharedIncomeAmount > 0 ? 0 : candidate.settlementAgeDays;
           const settlementEnergyCells = settlementAgeDays === null ? 0 : Math.min(10, settlementAgeDays);
           const settlementEnergyTone = settlementAgeDays === null || settlementAgeDays >= 8
@@ -4266,14 +4306,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const entryArchiveStep = isIndividualQuoteDetail || (!ACTIONS[entryForm.action].opening && closingSourceTrade)
     ? POSITION_ARCHIVE_STEP
     : entrySheetArchiveStepRef.current;
-  const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedFilledTrades), [buckets, markPrice, selectedFilledTrades]);
+  // 已实现收益不随500ms行情更新变化；在交易集合改变时一次性完成FIFO，行情刷新仅重算浮盈。
+  const selectedFilledRecentJournalDetails = useMemo(
+    () => buildRecentJournalTradeDetails(selectedFilledTrades),
+    [selectedFilledTrades],
+  );
+  const summary = useMemo(
+    () => calculateSummary(buckets, markPrice, selectedFilledTrades, selectedFilledRecentJournalDetails),
+    [buckets, markPrice, selectedFilledRecentJournalDetails, selectedFilledTrades],
+  );
   // 首屏、分方向累计与历史逐笔明细统一使用已扣开仓、平仓手续费的净收益口径。
   const totalNetProfitDetails = useMemo(() => {
-    const detailsByEntryId = buildRecentJournalTradeDetails(selectedFilledTrades);
     const rawDetails = selectedFilledTrades
       .filter((trade) => trade.symbol === "ETH" && !ACTIONS[trade.action].opening)
       .map((trade) => {
-        const detail = detailsByEntryId.get(trade.id);
+        const detail = selectedFilledRecentJournalDetails.get(trade.id);
         return detail?.netPnl === undefined ? null : {
           trade,
           quantity: trade.quantity,
@@ -4286,7 +4333,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const payout = resolveDisplayedPayout(item.trade, item.netPnl);
       return payout ? { ...item, netPnl: payout.netPnl } : item;
     });
-  }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
+  }, [isMemberView, profitShareSnapshots, resolveDisplayedPayout, selectedFilledRecentJournalDetails, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
   const totalNetProfit = totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0);
   const payoutSharedIncomeTransfers = useMemo(() => {
     const targetUserId = Number(payoutTargetRelatedUserId);
@@ -4907,9 +4954,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => entryScopedTrades.filter((trade) => !trade.isPending),
     [entryScopedTrades],
   );
+  const entryScopedRecentJournalDetails = useMemo(
+    () => buildRecentJournalTradeDetails(entryScopedFilledTrades),
+    [entryScopedFilledTrades],
+  );
   const entryScopedSummary = useMemo(
-    () => calculateSummary(entryScopedBuckets, markPrice, entryScopedFilledTrades),
-    [entryScopedBuckets, markPrice, entryScopedFilledTrades],
+    () => calculateSummary(entryScopedBuckets, markPrice, entryScopedFilledTrades, entryScopedRecentJournalDetails),
+    [entryScopedBuckets, entryScopedFilledTrades, entryScopedRecentJournalDetails, markPrice],
   );
   const entrySideSummary = entrySide === "long" ? entryScopedSummary.long : entryScopedSummary.short;
   const isOptionEntryContext = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "option";
@@ -5356,7 +5407,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     // 数量预填必须取这张主单本身尚未关联平仓的剩余量，不能误用同价位汇总仓量。
-    const sourceClosingAllocations = buildOpeningClosingAllocations(selectedFilledTrades).get(trade.id) ?? [];
+    const sourceClosingAllocations = ladderOpeningClosingAllocations.get(trade.id) ?? [];
     const sourceClosedQuantity = sourceClosingAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
     const sourceRemainingQuantity = Math.max(0, trade.quantity - sourceClosedQuantity);
     const closableQuantity = Math.min(target.remainingQuantity, sourceRemainingQuantity);
@@ -6316,6 +6367,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       if (closeConfirmationStep === "input") {
         setCloseSaveError(null);
+        setSharedIncomePreviewMarkPrice(markPrice);
         setCloseConfirmationStep("review");
         return;
       }
