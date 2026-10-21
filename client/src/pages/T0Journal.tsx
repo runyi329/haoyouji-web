@@ -568,6 +568,8 @@ type PreviewTrade = {
   /** 服务端落库时间，仅用于系统自动动作的历史排序；交易时间仍按 createdAt 展示。 */
   recordedAt?: string;
   targetPrice?: number;
+  /** 新平仓指定的真实开仓流水；缺失时仅兼容旧历史 FIFO。 */
+  targetOpeningEntryId?: string;
   note?: string;
   clientRequestId?: string;
   isSyncing?: boolean;
@@ -711,6 +713,9 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     createdAt: String(entry.createdAt),
     recordedAt: entry.recordedAt ? String(entry.recordedAt) : undefined,
     targetPrice: entry.targetPrice === undefined || entry.targetPrice === null ? undefined : Number(entry.targetPrice),
+    targetOpeningEntryId: (entry.targetOpeningEntryId ?? entry.target_opening_entry_id) === undefined || (entry.targetOpeningEntryId ?? entry.target_opening_entry_id) === null
+      ? undefined
+      : String(entry.targetOpeningEntryId ?? entry.target_opening_entry_id),
     note: entry.note || undefined,
   };
 }
@@ -861,6 +866,8 @@ type EntryForm = {
   price: string;
   note: string;
   targetPrice?: number;
+  /** 从逐笔开仓卡进入平仓时保存真实流水 ID，跨二次确认保持不变。 */
+  targetOpeningEntryId?: string;
   editingEntryId?: string;
 };
 
@@ -1866,7 +1873,7 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
  * 这是价格簿现有平仓可用量口径的逐笔展开：一笔平仓若跨越多张主单，会在各主单下显示实际分配量。
  */
 function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
-  const openingQueues = new Map<string, Array<{ entryId: string; remainingQuantity: number }>>();
+  const openingQueues = new Map<string, Array<{ entryId: string; storedEntryId: string; remainingQuantity: number }>>();
   const allocations = new Map<string, LinkedClosingAllocation[]>();
   const sourceOpeningById = new Map<string, PreviewTrade>();
   const sourceClosingById = new Map<string, PreviewTrade[]>();
@@ -1929,12 +1936,29 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
     if (config.opening) {
       const queue = openingQueues.get(scopeKey) ?? [];
       const directQuantity = directlyClosedByOpeningId.get(trade.id) ?? 0;
-      queue.push({ entryId: trade.id, remainingQuantity: Math.max(0, trade.quantity - directQuantity) });
+      queue.push({
+        entryId: trade.id,
+        storedEntryId: getStoredEntryId(trade),
+        remainingQuantity: Math.max(0, trade.quantity - directQuantity),
+      });
       openingQueues.set(scopeKey, queue);
       continue;
     }
 
     if (directlyLinkedClosingIds.has(trade.id)) continue;
+    const targetOpeningEntryId = trade.targetOpeningEntryId;
+    if (targetOpeningEntryId) {
+      // 新平仓已经在服务端验证来源；读侧绝不在来源缺失时借用 FIFO 的其他开仓卡。
+      const opening = (openingQueues.get(scopeKey) ?? [])
+        .find((item) => item.storedEntryId === targetOpeningEntryId);
+      if (!opening || opening.remainingQuantity <= 0.0000001) continue;
+      const allocatedQuantity = Math.min(opening.remainingQuantity, trade.quantity);
+      opening.remainingQuantity -= allocatedQuantity;
+      const linkedRows = allocations.get(opening.entryId) ?? [];
+      linkedRows.push({ trade, quantity: allocatedQuantity });
+      allocations.set(opening.entryId, linkedRows);
+      continue;
+    }
     let remainingToAllocate = trade.quantity;
     const queue = openingQueues.get(scopeKey) ?? [];
     for (const opening of queue) {
@@ -2037,8 +2061,28 @@ function projectAdminCounterpartyTrades(rawTrades: PreviewTrade[]): PreviewTrade
     }
     const slices = slicesByClosingId.get(trade.id);
     if (!slices || slices.length === 0) return [trade];
+    // 只有同一笔平仓同时关联普通与反向展示开仓时，才需要拆成不同展示方向的片段。
+    // 普通订单跨多张开仓的 FIFO 只是来源匹配，账本主流水仍必须保留原始完整数量，
+    // 不能把一笔“平 50”在普通历史中误显示成两笔“平 25”。
+    const quantitiesByPresentation = new Map<boolean, number>();
+    for (const slice of slices) {
+      quantitiesByPresentation.set(
+        slice.isCounterparty,
+        (quantitiesByPresentation.get(slice.isCounterparty) ?? 0) + slice.quantity,
+      );
+    }
     const allocatedQuantity = slices.reduce((total, slice) => total + slice.quantity, 0);
-    const projected = slices.map((slice, index) => {
+    const unmatchedQuantity = Math.max(0, trade.quantity - allocatedQuantity);
+    if (unmatchedQuantity > 0.0000001) {
+      quantitiesByPresentation.set(false, (quantitiesByPresentation.get(false) ?? 0) + unmatchedQuantity);
+    }
+    const presentationSlices = [false, true]
+      .map((isCounterparty) => ({ isCounterparty, quantity: quantitiesByPresentation.get(isCounterparty) ?? 0 }))
+      .filter((slice) => slice.quantity > 0.0000001);
+    if (presentationSlices.length === 1) {
+      return presentationSlices[0].isCounterparty ? [asAdminCounterpartyTrade(trade)] : [trade];
+    }
+    return presentationSlices.map((slice, index) => {
       const ratio = trade.quantity > 0 ? slice.quantity / trade.quantity : 0;
       const sliceTrade: PreviewTrade = {
         ...trade,
@@ -2049,17 +2093,6 @@ function projectAdminCounterpartyTrades(rawTrades: PreviewTrade[]): PreviewTrade
       };
       return slice.isCounterparty ? asAdminCounterpartyTrade(sliceTrade) : sliceTrade;
     });
-    const unmatchedQuantity = Math.max(0, trade.quantity - allocatedQuantity);
-    if (unmatchedQuantity > 0.0000001) {
-      projected.push({
-        ...trade,
-        id: `fifo-${trade.id}-unmatched`,
-        sourceEntryId: trade.id,
-        quantity: unmatchedQuantity,
-        fee: trade.quantity > 0 ? trade.fee * (unmatchedQuantity / trade.quantity) : 0,
-      });
-    }
-    return projected;
   });
 }
 
@@ -2530,7 +2563,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [recoverableEntries, setRecoverableEntries] = useState<RecoverableTrade[]>([]);
   const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
-  /** 当前由哪张开仓主单发起平仓；仅用于详情页精确提示与重选，不改变后端 FIFO 核算。 */
+  /** 当前由哪张开仓主单发起平仓；其真实 ID 会随提交写入，禁止同档其他主单被混扣。 */
   const [closingSourceTrade, setClosingSourceTrade] = useState<PreviewTrade | null>(null);
   /** 编辑已有开仓时保留原始快照，用于识别不影响 FIFO 的“仅反向展示切换”。 */
   const [editingOriginalTrade, setEditingOriginalTrade] = useState<PreviewTrade | null>(null);
@@ -2550,6 +2583,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const totalProfitAttributionExportRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
   const activeTopFilterStorageKeyRef = useRef<string | null>(null);
+  // React 的 pending 状态要等下一次 render 才会禁用按钮；此锁在同一事件循环内立即生效，
+  // 仅覆盖真正写入账本的提交段，不能阻碍“参数确认 → 二次确认”的正常流程。
+  const saveEntryCommitLockRef = useRef(false);
+  // 二次确认页发生网络不确定错误时，重试必须沿用首次请求标识，才能由服务端幂等键回放同一笔平仓。
+  const closeCommitRequestIdRef = useRef<string | null>(null);
   const [hydratedTopFilterStorageKey, setHydratedTopFilterStorageKey] = useState<string | null>(null);
   // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
   const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
@@ -3645,6 +3683,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       fee: closeQuantity * closePrice * OKX_VIP2_TAKER_FEE_RATE,
       createdAt: new Date(takeProfitPreviewTimestamp).toISOString(),
       targetPrice: isTakeProfitAllocationPreview ? openingArchivePrice : entryForm.targetPrice,
+      targetOpeningEntryId: isTakeProfitAllocationPreview
+        ? "take-profit-shared-income-opening-preview"
+        : entryForm.targetOpeningEntryId,
     };
     const allTrades = [
       ...trades.filter((trade) => !trade.isSyncing && (!isTakeProfitAllocationPreview || getStoredEntryId(trade) !== entryForm.editingEntryId)),
@@ -4919,17 +4960,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
   const entryScopedTrades = useMemo(() => {
     const matchingSide = (trade: PreviewTrade) => ACTIONS[trade.action].side === entrySide;
+    const matchesClosingSourceScope = (trade: PreviewTrade) => !closingSourceTrade || (
+      trade.accountId === closingSourceTrade.accountId
+      && (trade.relatedUserId ?? "") === (closingSourceTrade.relatedUserId ?? "")
+      && (trade.relatedFundId ?? "") === (closingSourceTrade.relatedFundId ?? "")
+    );
     const targetPrice = entryForm.targetPrice;
-    if (targetPrice === undefined) return selectedTrades.filter(matchingSide);
+    if (targetPrice === undefined) return selectedTrades.filter((trade) => matchingSide(trade) && matchesClosingSourceScope(trade));
 
     if (entryArchiveStep === POSITION_ARCHIVE_STEP) {
-      return selectedTrades.filter((trade) => matchingSide(trade)
+      return selectedTrades.filter((trade) => matchingSide(trade) && matchesClosingSourceScope(trade)
         && priceKey(archivePriceForTrade(trade)) === priceKey(targetPrice));
     }
 
     // 宽档详情按每张开仓主单的实际成交价归类，并投影其真实 FIFO 平仓分配。
     // 这样 25/50/100U 的展示合并不会误把已经平掉的十美元档重新显示为未平仓。
-    const openings = selectedTrades.filter((trade) => matchingSide(trade)
+    const openings = selectedTrades.filter((trade) => matchingSide(trade) && matchesClosingSourceScope(trade)
       && ACTIONS[trade.action].opening
       && !trade.isPending
       && priceKey(archivePriceForTrade(trade, entryArchiveStep)) === priceKey(targetPrice));
@@ -4943,7 +4989,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ));
     return [...openings, ...scopedClosings]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations]);
+  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations, closingSourceTrade]);
   const entryScopedBuckets = useMemo(() => {
     const source = entryArchiveStep === POSITION_ARCHIVE_STEP ? buckets : integratedDisplayBuckets;
     return source.filter((bucket) => bucket.side === entrySide && (
@@ -5450,6 +5496,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       price: markPrice ? markPrice.toFixed(2) : "",
       note: "",
       targetPrice: target.price,
+      targetOpeningEntryId: getStoredEntryId(trade),
     });
     setShowEntrySheet(true);
   };
@@ -5644,6 +5691,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
+      saveEntryCommitLockRef.current = false;
+      closeCommitRequestIdRef.current = null;
       const account: PreviewAccount = {
         id: String(data.account.id),
         name: String(data.account.name),
@@ -5695,6 +5744,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         createdAt: String(data.entry.createdAt),
         recordedAt: data.entry.recordedAt ? String(data.entry.recordedAt) : undefined,
         targetPrice: data.entry.targetPrice === undefined || data.entry.targetPrice === null ? undefined : Number(data.entry.targetPrice),
+        targetOpeningEntryId: data.entry.targetOpeningEntryId === undefined || data.entry.targetOpeningEntryId === null
+          ? undefined
+          : String(data.entry.targetOpeningEntryId),
         note: data.entry.note || undefined,
         clientRequestId: variables.clientRequestId,
       };
@@ -5758,6 +5810,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             : "速记已保存");
     },
     onError: (error, variables: any) => {
+      // 失败后允许修正或重试；平仓的 request ID 刻意保留，避免“服务端已写入但响应丢失”时生成第二笔流水。
+      saveEntryCommitLockRef.current = false;
       setTrades((current) => current.filter((trade) => trade.clientRequestId !== variables.clientRequestId));
       if (!variables.accountId) {
         setAccounts((current) => current.filter((account) => account.id !== `pending-account-${variables.clientRequestId}`));
@@ -6253,6 +6307,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : entryForm.targetPrice === undefined
         ? undefined
         : archivePriceForSide(selectedAction.side, entryForm.targetPrice);
+    const targetOpeningEntryId = !selectedAction.opening && /^\d+$/.test(entryForm.targetOpeningEntryId ?? "")
+      ? Number(entryForm.targetOpeningEntryId)
+      : undefined;
+    if (!selectedAction.opening && entryForm.targetOpeningEntryId && !targetOpeningEntryId) {
+      showSaveValidationError("所选开仓订单无效，请返回报价卡后重新平仓");
+      return;
+    }
     if (!hasPersistedAccountId && !normalizedAccountName) {
       showSaveValidationError("请在最后选择或新建下单账户");
       return;
@@ -6365,7 +6426,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         t0Toast.error(`该价格档位最多可平 ${formatQuantity(target.remainingQuantity)} ETH`);
         return;
       }
+      if (targetOpeningEntryId) {
+        const targetOpening = closeScopeTrades.find((trade) => (
+          ACTIONS[trade.action].opening
+          && getStoredEntryId(trade) === String(targetOpeningEntryId)
+          && ACTIONS[trade.action].side === side
+          && priceKey(archivePriceForTrade(trade)) === priceKey(archiveTargetPrice)
+        ));
+        if (!targetOpening) {
+          showSaveValidationError("所选开仓订单已变化，请刷新后重新平仓");
+          return;
+        }
+        const sourceAllocations = buildOpeningClosingAllocations(closeScopeTrades).get(targetOpening.id) ?? [];
+        const sourceClosedQuantity = sourceAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
+        const sourceRemainingQuantity = Math.max(0, targetOpening.quantity - sourceClosedQuantity);
+        if (quantity - sourceRemainingQuantity > 0.0000001) {
+          showSaveValidationError(`该笔订单最多可平 ${formatQuantity(sourceRemainingQuantity)} ETH`);
+          return;
+        }
+      }
       if (closeConfirmationStep === "input") {
+        closeCommitRequestIdRef.current = null;
         setCloseSaveError(null);
         setSharedIncomePreviewMarkPrice(markPrice);
         setCloseConfirmationStep("review");
@@ -6373,9 +6454,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
     }
 
-    const clientRequestId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    if (saveEntryCommitLockRef.current) return;
+    saveEntryCommitLockRef.current = true;
+    const createClientRequestId = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
-      : `t0-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      : `t0-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`);
+    // 只有二次确认后的平仓会保留同一 ID 以支持不确定网络错误后的安全重试；开仓仍为每次新的明确操作生成 ID。
+    const clientRequestId = !selectedAction.opening && closeConfirmationStep === "review"
+      ? (closeCommitRequestIdRef.current ?? createClientRequestId())
+      : createClientRequestId();
+    if (!selectedAction.opening && closeConfirmationStep === "review") {
+      closeCommitRequestIdRef.current = clientRequestId;
+    }
     const accountId = entryForm.accountId || `pending-account-${clientRequestId}`;
     if (!entryForm.accountId) {
       setAccounts((current) => [{ id: accountId, name: normalizedAccountName }, ...current]);
@@ -6424,6 +6514,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       fee,
       createdAt: new Date().toISOString(),
       targetPrice: archiveTargetPrice,
+      targetOpeningEntryId: selectedAction.opening ? undefined : entryForm.targetOpeningEntryId,
       note: entryForm.note.trim() || undefined,
       clientRequestId,
       isSyncing: true,
@@ -6472,6 +6563,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       quantity: normalizedQuantity,
       price: effectivePriceInput,
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
+      targetOpeningEntryId,
       note: entryForm.note.trim() || undefined,
       sharedIncomeAllocations: !selectedAction.opening && sharedIncomeSaveAllocations.length > 0 ? sharedIncomeSaveAllocations : undefined,
       clientRequestId,
@@ -8165,6 +8257,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 )}
 
+                {!isEditingEntry && isClosingEntry && (
+                  <section className="space-y-1.5 rounded border border-slate-200 bg-slate-50/70 p-2.5">
+                    <div className="flex items-center justify-between gap-2 px-0.5">
+                      <span className="text-xs font-semibold text-slate-800">本档逐笔订单</span>
+                      <span className="text-[10px] text-slate-500">点哪张的{ACTIONS[entryForm.action].label}，只平哪张</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {activeOpenedTradeRows.map(renderOpenedTradeRow)}
+                    </div>
+                  </section>
+                )}
               {isClosingEntry && closingSourceTrade && (
                 <div className="flex items-center justify-between gap-3 rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
                   <div className="min-w-0">
@@ -8185,7 +8288,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               )}
               </div>
 
-              {!isEditingEntry && <div className="space-y-1.5">
+              {!isEditingEntry && !isClosingEntry && <div className="space-y-1.5">
                   {activeOpenedTradeRows.length === 0 && (
                     <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前档位没有未平仓主单</div>
                   )}

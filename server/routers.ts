@@ -11818,6 +11818,7 @@ ${klinesSummary}
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         targetPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
+        targetOpeningEntryId: z.number().int().positive().optional(),
         note: z.string().trim().max(500).optional(),
         sharedIncomeAllocations: z.array(z.object({
           recipientUserId: z.number().int().positive(),
@@ -11871,6 +11872,7 @@ ${klinesSummary}
           quantity: input.quantity,
           price: input.price,
           targetPrice: input.targetPrice,
+          targetOpeningEntryId: input.targetOpeningEntryId,
           note: input.note,
           sharedIncomeAllocations: input.sharedIncomeAllocations,
           clientRequestId: input.clientRequestId,
