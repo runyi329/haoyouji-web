@@ -1328,6 +1328,28 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         COMMENT='52号账本T+0：部分平仓后剩余仓位的独立归属转入审计'
     `);
 
+    // “同步已平历史”只更正账户与项目归属，不改变用户名、数量、成交价、手续费或任何收益金额。
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_historical_attribution_updates (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_opening_entry_id BIGINT UNSIGNED NOT NULL,
+        previous_account_id BIGINT UNSIGNED NOT NULL,
+        previous_related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        target_account_id BIGINT UNSIGNED NOT NULL,
+        target_related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        affected_closing_count INT UNSIGNED NOT NULL DEFAULT 0,
+        client_request_id VARCHAR(55) NOT NULL,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_historical_attribution_request (ledger_id, user_id, client_request_id),
+        KEY idx_t0_historical_attribution_source (ledger_id, user_id, source_opening_entry_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：部分平仓订单的历史账户与项目归属更正审计'
+    `);
+
     await db.execute(`
       CREATE TABLE IF NOT EXISTS ledger52_t0_journal_dimension_audits (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -5919,6 +5941,230 @@ export async function reassignLedger52T0JournalOpeningRemaining(input: {
       reassignedQuantity: Number(remainingQuantity),
       alreadyApplied: false,
     };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+/**
+ * 更正一张部分平仓订单的历史账户与项目归属。
+ * 用户、开平数量、成交价、手续费、共享金额和分佣比例均保持原值；
+ * 为使逐笔关联持续有效，原开仓及其明确绑定到该开仓的平仓会同步更新这两个显示/归属维度。
+ */
+export async function updateLedger52T0JournalPartialOpeningHistoricalAttribution(input: {
+  actorUserId: number;
+  entryId: number;
+  expectedRemainingQuantity: string;
+  accountId?: number;
+  accountName?: string;
+  relatedFundId?: number;
+  relatedFundName?: string;
+  clientRequestId: string;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const expectedRemainingQuantity = requireValidEthQuantity(input.expectedRemainingQuantity);
+  const requestId = String(input.clientRequestId || "").trim();
+  if (!requestId || requestId.length > 55) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "历史归属更正请求标识无效，请刷新后重试" });
+  }
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [priorRequestRows] = await tx.execute(
+      `SELECT source_opening_entry_id, affected_closing_count
+         FROM ledger52_t0_journal_historical_attribution_updates
+        WHERE ledger_id = ? AND user_id = ? AND client_request_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestId],
+    );
+    const priorRequest = asRows(priorRequestRows)[0];
+    if (priorRequest) {
+      await tx.commit();
+      return {
+        sourceEntryId: String(priorRequest.source_opening_entry_id),
+        affectedClosingCount: toNumber(priorRequest.affected_closing_count),
+        alreadyApplied: true,
+      };
+    }
+
+    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: true });
+    const before = lockedEntry.entry;
+    if (!lockedEntry.hasDependentClose || lockedEntry.remainingCents <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "仅已部分平仓且仍有剩余仓位的开仓单可以同步更正历史归属" });
+    }
+    if (quantityToCents(expectedRemainingQuantity) !== lockedEntry.remainingCents) {
+      throw new TRPCError({ code: "CONFLICT", message: "这笔订单的剩余数量刚刚变化，请刷新后重新确认" });
+    }
+    const [migrationRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_position_reassignments
+        WHERE ledger_id = ? AND user_id = ? AND source_opening_entry_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
+    if (asRows(migrationRows)[0]) {
+      throw new TRPCError({ code: "CONFLICT", message: "该订单的剩余仓位已转入新订单，请在承接订单中继续管理" });
+    }
+
+    let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
+    const requestedAccountName = input.accountName === undefined
+      ? ""
+      : normalizeJournalDirectoryName(input.accountName, "账户名称");
+    if (requestedAccountName) {
+      const [accountResult] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_accounts (ledger_id, user_id, name, is_active, last_used_at)
+         VALUES (?, ?, ?, 1, NOW(3))
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+      );
+      accountId = toNumber((accountResult as any).insertId);
+      if (accountId <= 0) {
+        const [accountRows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_accounts
+            WHERE ledger_id = ? AND user_id = ? AND name = ? LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+        );
+        accountId = toNumber(asRows(accountRows)[0]?.id);
+      }
+    }
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "下单账户信息无效，请重新选择或新建" });
+    }
+    const [accountRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_accounts
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+        LIMIT 1 FOR UPDATE`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (!asRows(accountRows)[0]) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "目标下单账户不存在、已停用或无权选择" });
+    }
+    const sourceUserId = toNumber(before.related_user_id);
+    const sourceFundId = toNumber(before.related_fund_id);
+    const effectiveRelatedFundId = input.relatedFundId ?? (sourceFundId > 0 ? sourceFundId : undefined);
+    const effectiveRelatedFundName = input.relatedFundName;
+    const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
+      actorUserId: input.actorUserId,
+      relatedUserId: sourceUserId,
+      relatedFundId: effectiveRelatedFundId,
+      relatedFundName: effectiveRelatedFundName,
+      // 历史本来就是“未区分项目”时，仅改账户不应被强制创建项目；已有项目仍必须完整保留。
+      required: sourceUserId > 0 && (sourceFundId > 0 || Boolean(effectiveRelatedFundId || effectiveRelatedFundName)),
+    });
+    const targetFundId = relatedFund?.id ?? 0;
+    if (accountId === toNumber(before.account_id) && targetFundId === toNumber(before.related_fund_id)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "账户和项目均未变化，无需同步历史归属" });
+    }
+
+    const legacyArchivePrice = archivePriceForAction(String(before.action) as T0JournalAction, before.price);
+    const legacyClosingAction: T0JournalAction = actionSide(String(before.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
+    const [legacyUnboundCloseRows] = await tx.execute(
+      `SELECT id
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+          AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
+          AND action = ? AND COALESCE(target_opening_entry_id, 0) = 0
+          AND target_price = ? AND (created_at > ? OR (created_at = ? AND id > ?))
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1 FOR UPDATE`,
+      [
+        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, toNumber(before.account_id), String(before.symbol || "ETH"),
+        sourceUserId, toNumber(before.related_fund_id), legacyClosingAction, legacyArchivePrice,
+        before.created_at, before.created_at, input.entryId,
+      ],
+    );
+    if (asRows(legacyUnboundCloseRows)[0]) {
+      throw new TRPCError({ code: "CONFLICT", message: "本单包含旧式未逐笔绑定的历史平仓；为保护平仓数据，不能同步更正历史归属" });
+    }
+    const [closingRowsResult] = await tx.execute(
+      `SELECT * FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND user_id = ? AND target_opening_entry_id = ?
+          AND action IN ('closeLong', 'closeShort')
+        ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
+    const closingRows = asRows(closingRowsResult);
+    if (closingRows.length === 0) {
+      throw new TRPCError({ code: "CONFLICT", message: "未找到可安全同步的逐笔关联平仓，请刷新后重试" });
+    }
+    const changedEntryIds = [input.entryId, ...closingRows.map((row) => toNumber(row.id)).filter((id) => id > 0)];
+    const auditBeforeByEntryId = new Map<number, any>();
+    auditBeforeByEntryId.set(input.entryId, await buildEntryAuditSnapshot(tx, input.actorUserId, before));
+    for (const closing of closingRows) {
+      const closingId = toNumber(closing.id);
+      auditBeforeByEntryId.set(closingId, await buildEntryAuditSnapshot(tx, input.actorUserId, closing));
+    }
+
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_entries
+          SET account_id = ?, related_fund_id = ?, updated_at = NOW(3)
+        WHERE ledger_id = ? AND user_id = ? AND id IN (${changedEntryIds.map(() => "?").join(", ")})`,
+      [accountId, targetFundId || null, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...changedEntryIds],
+    );
+    // 只将“项目”这个归属标签同步至既有快照；收益比例、受益人、数量和金额均不重算、不修改。
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_entry_profit_shares
+          SET related_fund_id = ?
+        WHERE ledger_id = ? AND user_id = ? AND opening_entry_id = ?
+          AND entry_id IN (${changedEntryIds.map(() => "?").join(", ")})`,
+      [targetFundId || null, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, ...changedEntryIds],
+    );
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_reopen_reminders
+          SET account_id = ?, related_fund_id = ?, updated_at = NOW(3)
+        WHERE ledger_id = ? AND user_id = ? AND source_opening_entry_id = ? AND status = 'active'`,
+      [accountId, targetFundId || null, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_accounts SET last_used_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const [afterRowsResult] = await tx.execute(
+      `SELECT * FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND user_id = ? AND id IN (${changedEntryIds.map(() => "?").join(", ")})
+        FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...changedEntryIds],
+    );
+    const afterByEntryId = new Map(asRows(afterRowsResult).map((row) => [toNumber(row.id), row]));
+    for (const changedEntryId of changedEntryIds) {
+      const after = afterByEntryId.get(changedEntryId);
+      const beforeSnapshot = auditBeforeByEntryId.get(changedEntryId);
+      if (!after || !beforeSnapshot) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "历史归属更正审计读取失败" });
+      await writeEntryAudit(tx, {
+        actorUserId: input.actorUserId,
+        entryId: changedEntryId,
+        operation: "update",
+        before: beforeSnapshot,
+        after: {
+          ...await buildEntryAuditSnapshot(tx, input.actorUserId, after),
+          historical_attribution_update: {
+            scope: "account_and_fund_only",
+            historical_values_unchanged: true,
+          },
+        },
+      });
+    }
+    const [auditInsert] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_historical_attribution_updates
+        (ledger_id, user_id, source_opening_entry_id, previous_account_id, previous_related_fund_id, target_account_id, target_related_fund_id, affected_closing_count, client_request_id, operator_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId,
+        toNumber(before.account_id), toNumber(before.related_fund_id) || null,
+        accountId, targetFundId || null, closingRows.length, requestId, input.actorUserId,
+      ],
+    );
+    if (toNumber((auditInsert as any).insertId) <= 0) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "历史归属更正审计写入失败" });
+    }
+    await tx.commit();
+    void refreshLedger52T0PendingOrderScanState();
+    return { sourceEntryId: String(input.entryId), affectedClosingCount: closingRows.length, alreadyApplied: false };
   } catch (error) {
     try { await tx.rollback(); } catch {}
     throw error;
