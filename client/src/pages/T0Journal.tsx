@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowDownLeft,
@@ -2519,15 +2519,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [, setRelatedUserQuickPickerOpen] = useState(false);
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
-  // 手机输入时先保持输入框与既有结果稳定，再延后切换服务端关键词，避免下拉列表反复卸载、重建。
-  const deferredRelatedUserSearch = useDeferredValue(relatedUserSearch.trim());
+  // 实时行情会持续触发页面渲染，不能依赖React低优先级延后值；固定短防抖保证停止输入后必定发起搜索。
+  const [debouncedRelatedUserSearch, setDebouncedRelatedUserSearch] = useState("");
   // 管理员的“用户视角预览”只影响当前T+0页面读取范围，不改变登录会话身份。
   const [previewUserId, setPreviewUserId] = useState<number | null>(null);
   const [previewMemberPickerOpen, setPreviewMemberPickerOpen] = useState(false);
   const [previewMemberSearch, setPreviewMemberSearch] = useState("");
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
-  const deferredProfitShareRecipientSearch = useDeferredValue(profitShareRecipientSearch.trim());
+  const [debouncedProfitShareRecipientSearch, setDebouncedProfitShareRecipientSearch] = useState("");
   const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
   // T+0 顶部提示已静默；收益分配保存失败必须留在弹窗内，避免看起来“点了没反应”。
   const [profitShareSaveError, setProfitShareSaveError] = useState<string | null>(null);
@@ -2660,6 +2660,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     price: "",
     note: "",
   });
+
+  useEffect(() => {
+    const keyword = relatedUserSearch.trim();
+    if (!keyword) {
+      setDebouncedRelatedUserSearch("");
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedRelatedUserSearch(keyword), 180);
+    return () => window.clearTimeout(timer);
+  }, [relatedUserSearch]);
+
+  useEffect(() => {
+    const keyword = profitShareRecipientSearch.trim();
+    if (!keyword) {
+      setDebouncedProfitShareRecipientSearch("");
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedProfitShareRecipientSearch(keyword), 180);
+    return () => window.clearTimeout(timer);
+  }, [profitShareRecipientSearch]);
 
   const viewAsUserId = searchParams.get("viewAs") || (typeof window !== "undefined" ? window.sessionStorage.getItem("view-as-user-id") : null);
   const { data: me, isLoading: meLoading } = trpc.auth.me.useQuery(undefined, { retry: false });
@@ -3008,9 +3028,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const relatedUserSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
-    { ledgerId: 52, query: deferredRelatedUserSearch },
+    { ledgerId: 52, query: debouncedRelatedUserSearch },
     {
-      enabled: canManage && relatedUserPickerOpen && deferredRelatedUserSearch.length > 0,
+      enabled: canManage && relatedUserPickerOpen && debouncedRelatedUserSearch.length > 0,
       staleTime: 30_000,
       // 移动端弹出键盘、切换输入焦点不能触发同关键词重查并闪掉结果。
       refetchOnWindowFocus: false,
@@ -3020,17 +3040,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const profitShareRecipientSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
-    { ledgerId: 52, query: deferredProfitShareRecipientSearch },
+    { ledgerId: 52, query: debouncedProfitShareRecipientSearch },
     {
-      enabled: canManage && Boolean(profitShareSource) && deferredProfitShareRecipientSearch.length > 0,
+      enabled: canManage && Boolean(profitShareSource) && debouncedProfitShareRecipientSearch.length > 0,
       staleTime: 30_000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       placeholderData: (previousData) => previousData,
     },
   );
-  const relatedUserSearchDataMayNotMatch = relatedUserSearch.trim() !== deferredRelatedUserSearch || relatedUserSearchQuery.isPlaceholderData;
-  const profitShareRecipientSearchDataMayNotMatch = profitShareRecipientSearch.trim() !== deferredProfitShareRecipientSearch || profitShareRecipientSearchQuery.isPlaceholderData;
+  const relatedUserSearchDataMayNotMatch = relatedUserSearch.trim() !== debouncedRelatedUserSearch || relatedUserSearchQuery.isPlaceholderData;
+  const profitShareRecipientSearchDataMayNotMatch = profitShareRecipientSearch.trim() !== debouncedProfitShareRecipientSearch || profitShareRecipientSearchQuery.isPlaceholderData;
   const relatedUserSearchUpdating = relatedUserSearchDataMayNotMatch || relatedUserSearchQuery.isFetching;
   const profitShareRecipientSearchUpdating = profitShareRecipientSearchDataMayNotMatch || profitShareRecipientSearchQuery.isFetching;
   const profitShareRules = useMemo<ProfitShareRule[]>(() => {
