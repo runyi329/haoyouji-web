@@ -22,6 +22,7 @@ import * as dbReferrerStats from "./db-referrer-stats";
 import * as dbAnalytics from "./db-analytics";
 import { getInformationCollectionDashboard, recordInformationCollectionVisit } from "./information-collection";
 import { isInformationCollectionOwner } from "@shared/informationCollection";
+import { ensureFunderSharedNoteTables, getFunderSharedNoteAuditEvents, synchronizeFunderSharedNotes } from "./funder-shared-notes";
 import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
@@ -25470,6 +25471,11 @@ ${klinesSummary}
           : (input.principalLentOut === undefined
             ? (existingOrder?.principal_lent_out === 1 || existingOrder?.principal_lent_out === true)
             : input.principalLentOut);
+        // 52号账本共享备注由 funderUpdatePublicNote 的逐条事务接口专管。
+        // 兼容旧前端携带的整个表单，同时杜绝普通订单保存将备注 JSON 整段覆盖。
+        if (input.ledgerId === 52 && input.publicNote !== undefined) {
+          (input as { publicNote?: string }).publicNote = undefined;
+        }
         // 动态构建 UPDATE，直接使用 mysql2 连接执行带占位符的原始 SQL
         const updateCols: string[] = [];
         const updateVals: any[] = [];
@@ -26232,6 +26238,9 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        if (input.ledgerId === 52) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "52号账本请使用共享备注接口保存" });
+        }
         // 公开备注影响所有可见用户：仅订单所有者或账本管理员可以修改。
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
@@ -26253,91 +26262,190 @@ ${klinesSummary}
         `);
         return { success: true };
       }),
-    // 资金方订单共享备注更新：管理员可管理全部，普通成员仅可管理自己的条目。
+    // 融资订单共享备注审计：仅管理员可查看，并按主订单／参与者个人视图隔离。
+    funderGetSharedNoteAudit: protectedProcedure
+      .input(
+        z.object({
+          orderId: z.number().int().positive(),
+          ledgerId: z.number().int().positive(),
+          participantUserId: z.number().int().positive().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const permissionUser = ctx.realUser ?? ctx.user;
+        const roleRows = (await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${permissionUser.id} LIMIT 1`
+        )) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== "owner" && role !== "admin") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "仅管理员可查看共享备注审计",
+          });
+        }
+        const conn = await getDbConnection();
+        if (!conn)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "数据库连接失败",
+          });
+        const events = await getFunderSharedNoteAuditEvents({
+          conn: conn as any,
+          ledgerId: input.ledgerId,
+          orderId: input.orderId,
+          scopeUserId: input.participantUserId,
+          limit: 100,
+        });
+        return { events };
+      }),
+
+    // 资金方订单共享备注更新：用独立备注表、软删除和不可覆盖事件审计取代整段 JSON 覆盖。
     funderUpdatePublicNote: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        ledgerId: z.number(),
-        publicNote: z.string(),
-        participantUserId: z.number().optional(),
-      }))
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          ledgerId: z.number().int().positive(),
+          publicNote: z.string().max(60000),
+          participantUserId: z.number().int().positive().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any;
+        const permissionUser = ctx.realUser ?? ctx.user;
+        const roleRows = (await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${permissionUser.id} LIMIT 1`
+        )) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        const isManager = role === 'owner' || role === 'admin';
+        if (!role)
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权限" });
+        const isManager = role === "owner" || role === "admin";
         await ensureFunderParticipantSnapshotColumns();
-        const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
-        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
-        const conn = await mysql.createConnection({
-          host: parsedUrl.hostname,
-          port: parseInt(parsedUrl.port) || 3306,
-          user: decodeURIComponent(parsedUrl.username),
-          password: decodeURIComponent(parsedUrl.password),
-          database: parsedUrl.pathname.replace(/^\//, ''),
-        });
+        const conn = await getDbTransactionConnection();
+        if (!conn)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "数据库连接失败",
+          });
+        const transaction = conn as any;
         try {
+          // MySQL DDL 会隐式提交，因此必须在业务事务开始前保证新表存在。
+          await ensureFunderSharedNoteTables(transaction);
+          await transaction.beginTransaction();
+          let result: { notes: any[]; publicNote: string };
           if (input.participantUserId) {
-            if (!isManager && input.participantUserId !== ctx.user.id) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改其他参与者备注' });
+            if (
+              !isManager &&
+              Number(input.participantUserId) !== Number(ctx.user.id)
+            ) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "无权修改其他参与者备注",
+              });
             }
-            const [participantRows] = await conn.execute(
+            const [participantRows] = (await transaction.execute(
               `SELECT p.id, p.note, p.order_snapshot, o.status AS order_status
-               FROM ledger_order_participants p
-               INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
-               WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' AND o.deleted_at IS NULL
-               LIMIT 1`,
+                 FROM ledger_order_participants p
+                 INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+                WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ?
+                  AND p.role <> 'inactive' AND o.deleted_at IS NULL
+                LIMIT 1 FOR UPDATE`,
               [input.id, input.ledgerId, input.participantUserId]
-            ) as any;
-            if (!Array.isArray(participantRows) || participantRows.length === 0) {
-              throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
-            }
-            const participant = participantRows[0];
-            const snapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
-            const isSettledOrder = input.ledgerId === 52 && (participant.order_status === 'settled' || participant.order_status === 'completed');
-            const existingNote = snapshot.public_note ?? participant.note ?? null;
-            if (!isManager && isSettledOrder && !areFunderSettledNotesAppendOnly(existingNote, input.publicNote)) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
-            }
-            if (!isManager && !canFunderMemberManageOnlyOwnNotes(existingNote, input.publicNote, ctx.user.id)) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '仅可修改或删除自己的共享备注' });
-            }
-            snapshot.public_note = input.publicNote || null;
-            await conn.execute(
-              'UPDATE ledger_order_participants SET note = ?, order_snapshot = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
-              [input.publicNote || null, JSON.stringify(snapshot), input.id, input.ledgerId, input.participantUserId]
+            )) as any;
+            const participant = Array.isArray(participantRows)
+              ? participantRows[0]
+              : null;
+            if (!participant)
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "参与关系不存在",
+              });
+            const snapshot =
+              parseFunderParticipantSnapshot(participant.order_snapshot) || {};
+            const existingNote = String(
+              snapshot.public_note ?? participant.note ?? ""
+            );
+            result = await synchronizeFunderSharedNotes({
+              conn: transaction,
+              ctx,
+              ledgerId: input.ledgerId,
+              orderId: input.id,
+              scopeUserId: input.participantUserId,
+              legacyRaw: existingNote,
+              incomingRaw: input.publicNote,
+              isManager,
+              isSettled:
+                input.ledgerId === 52 &&
+                (participant.order_status === "settled" ||
+                  participant.order_status === "completed"),
+            });
+            snapshot.public_note = result.publicNote || null;
+            await transaction.execute(
+              `UPDATE ledger_order_participants
+                  SET note = ?, order_snapshot = ?, updated_at = NOW()
+                WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
+              [
+                result.publicNote || null,
+                JSON.stringify(snapshot),
+                participant.id,
+                input.id,
+                input.ledgerId,
+                input.participantUserId,
+              ]
             );
           } else {
-            const [orderRows] = await conn.execute(
-              'SELECT user_id, public_note, status FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+            const [orderRows] = (await transaction.execute(
+              `SELECT user_id, public_note, status
+                 FROM ledger_orders
+                WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL
+                LIMIT 1 FOR UPDATE`,
               [input.id, input.ledgerId]
-            ) as any;
-            const orderOwnerId = Array.isArray(orderRows) && orderRows.length > 0 ? Number(orderRows[0].user_id) : 0;
-            if (!orderOwnerId) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
-            if (!isManager && orderOwnerId !== ctx.user.id) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改该订单备注' });
+            )) as any;
+            const order = Array.isArray(orderRows) ? orderRows[0] : null;
+            if (!order)
+              throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+            if (!isManager && Number(order.user_id) !== Number(ctx.user.id)) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "无权修改该订单备注",
+              });
             }
-            const order = orderRows[0];
-            const isSettledOrder = input.ledgerId === 52 && (order.status === 'settled' || order.status === 'completed');
-            if (!isManager && isSettledOrder && !areFunderSettledNotesAppendOnly(order.public_note, input.publicNote)) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
-            }
-            if (!isManager && !canFunderMemberManageOnlyOwnNotes(order.public_note, input.publicNote, ctx.user.id)) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '仅可修改或删除自己的共享备注' });
-            }
-            await conn.execute(
-              'UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?',
-              [input.publicNote || null, input.id, input.ledgerId]
+            result = await synchronizeFunderSharedNotes({
+              conn: transaction,
+              ctx,
+              ledgerId: input.ledgerId,
+              orderId: input.id,
+              legacyRaw: String(order.public_note || ""),
+              incomingRaw: input.publicNote,
+              isManager,
+              isSettled:
+                input.ledgerId === 52 &&
+                (order.status === "settled" || order.status === "completed"),
+            });
+            await transaction.execute(
+              "UPDATE ledger_orders SET public_note = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ?",
+              [result.publicNote || null, input.id, input.ledgerId]
             );
           }
+          await transaction.commit();
+          return { success: true, ...result };
+        } catch (error: any) {
+          try {
+            await transaction.rollback();
+          } catch {}
+          if (error instanceof TRPCError) throw error;
+          console.error(
+            "[funderUpdatePublicNote] failed:",
+            error?.message || error
+          );
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "共享备注保存失败，请稍后重试",
+          });
         } finally {
-          await conn.end();
+          if (typeof transaction.release === "function") transaction.release();
+          else await transaction.end?.().catch(() => {});
         }
-        return { success: true };
       }),
 
     // ========== Deribit 期权数据接口 ==========
@@ -27008,6 +27116,11 @@ ${klinesSummary}
           ...snapshotBase,
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
+        // 52号账本的共享备注已拆为独立记录，参与者整份快照只能保留现有值，
+        // 不能随着其他字段保存而重新覆盖或删除备注。
+        if (input.ledgerId === 52) {
+          mergedSnapshot.public_note = snapshotBase.public_note ?? persistedSnapshot.public_note ?? null;
+        }
         // 冻结估值只能由专门的结清接口写入或撤销；普通编辑不能让结清后的价格、汇率、日期恢复为实时值。
         if (persistedSnapshot.settlement_snapshot) {
           mergedSnapshot.settlement_snapshot = persistedSnapshot.settlement_snapshot;

@@ -102,6 +102,25 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
   if (viewAsUserId && /^\d+$/.test(viewAsUserId)) {
     headers.set('x-view-as-user-id', viewAsUserId);
   }
+  // 备注等关键写操作需要关联到当前浏览器访问会话。该 UUID 仅用作审计线索，
+  // 不参与认证或授权；服务端仍会校验其归属的真实登录用户。
+  try {
+    let sessionOwnerId: string | null = null;
+    if (token) {
+      const payloadPart = token.split('.')[1];
+      const encodedPayload = payloadPart ? payloadPart.replace(/-/g, '+').replace(/_/g, '/') : '';
+      const payload = encodedPayload ? JSON.parse(atob(encodedPayload.padEnd(Math.ceil(encodedPayload.length / 4) * 4, '='))) : null;
+      const userId = Number(payload?.userId ?? payload?.sub ?? 0);
+      if (Number.isInteger(userId) && userId > 0) sessionOwnerId = String(userId);
+    }
+    if (!sessionOwnerId && viewAsUserId && /^\d+$/.test(viewAsUserId)) sessionOwnerId = viewAsUserId;
+    const informationSession = sessionOwnerId
+      ? sessionStorage.getItem(`haoyouji-information-collection-session:${sessionOwnerId}`)
+      : null;
+    if (informationSession && /^[A-Za-z0-9-]{12,96}$/.test(informationSession)) {
+      headers.set('x-information-collection-session', informationSession);
+    }
+  } catch (e) {}
   // 牙伴多门店：注入当前选中门店 tenant_id（首页切店时写入 localStorage）
   // 后端据此隔离顾客等业务数据；未设置时后端回退到用户的默认门店
   try {

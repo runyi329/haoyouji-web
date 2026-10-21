@@ -1422,14 +1422,17 @@ function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, 
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
+  const updateFunderNote = trpc.ledger.funderUpdatePublicNote.useMutation();
   const canEdit = (note: FNoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
   const saveNotes = async (newNotes: FNoteItem[]) => {
     setSaving(true);
     try {
       const raw = JSON.stringify(newNotes);
-      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw });
-      setNotes(newNotes);
-      onSaved(raw);
+      const canonical = ledgerId === 52
+        ? (await updateFunderNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw })).publicNote || ''
+        : (await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw }), raw);
+      setNotes(parseFNotes(canonical));
+      onSaved(canonical);
     } finally { setSaving(false); }
   };
   const handleSaveEdit = async (idx: number) => {

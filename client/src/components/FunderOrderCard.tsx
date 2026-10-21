@@ -343,7 +343,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (v: s
 }
 
 // ===== 订单共享备注组件 =====
-interface NoteItem { text: string; time: string; userId?: number; userName?: string; userAvatar?: string; }
+interface NoteItem { id?: string; text: string; time: string; userId?: number; userName?: string; userAvatar?: string; version?: number; }
 export function parseNotes(raw: string): NoteItem[] {
   if (!raw) return [];
   try { const p = JSON.parse(raw); if (Array.isArray(p)) return p as NoteItem[]; } catch {}
@@ -386,6 +386,7 @@ export function NoteAvatar({ name, avatar }: { name?: string; avatar?: string })
 export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData, participantUserId, isSettled = false }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[]; participantUserId?: number; isSettled?: boolean }) {
   const [notes, setNotes] = useState<NoteItem[]>(() => parseNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -395,6 +396,10 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     setEditValue('');
   }, [initialNote, participantUserId]);
   const updateNote = trpc.ledger.funderUpdatePublicNote.useMutation();
+  const noteAuditQuery = trpc.ledger.funderGetSharedNoteAudit.useQuery(
+    { orderId, ledgerId, participantUserId },
+    { enabled: Boolean(isAdmin && showAudit), staleTime: 0 },
+  );
   // 管理员可以管理所有共享备注；普通成员仅可管理自己写入且带有作者标识的备注。
   // 无作者标识的历史备注保守视为他人内容，避免普通成员误删。
   const canManageNote = (note: NoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
@@ -403,14 +408,16 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     setSaving(true);
     try {
       const raw = JSON.stringify(newNotes);
-      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw, participantUserId });
-      setNotes(newNotes);
-      onSaved(raw);
+      const saved = await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw, participantUserId });
+      const canonical = saved.publicNote || '';
+      setNotes(parseNotes(canonical));
+      onSaved(canonical);
+      if (isAdmin) void noteAuditQuery.refetch();
     } finally { setSaving(false); }
   };
   const handleSaveEdit = async (idx: number) => {
     if (!canModifyNote(notes[idx]) || !editValue.trim()) return;
-    await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n));
+    await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim() } : n));
     setEditingIdx(null);
   };
   const handleAddNote = () => {
@@ -419,7 +426,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
   };
   const handleSaveNew = async (idx: number) => {
     if (!editValue.trim()) { setNotes(notes.filter((_, i) => i !== idx)); setEditingIdx(null); return; }
-    await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n));
+    await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim() } : n));
     setEditingIdx(null);
   };
   const handleDelete = async (idx: number) => {
@@ -439,7 +446,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
         <div className="mt-1.5">
           {notes.length === 0 && <div style={{ color: '#C0C8D8' }} className="py-1">暂无共享备注</div>}
           {notes.map((note, idx) => (
-            <div key={idx}>
+            <div key={note.id || idx}>
               {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
               {editingIdx === idx ? (
                 <div className="flex items-center gap-1 py-0.5">
@@ -500,6 +507,36 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
               <span style={{ fontSize: '11px' }}>添加共享备注</span>
             </button>
           </div>
+          {isAdmin && (
+            <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid #E8EFFF' }}>
+              <button type="button" onClick={() => setShowAudit(v => !v)} className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {showAudit ? '收起备注审计' : '查看备注审计'}
+              </button>
+              {showAudit && (
+                <div className="mt-1.5 space-y-1.5 rounded-lg px-2 py-1.5" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  {noteAuditQuery.isLoading && <div className="py-1 text-center text-[11px] text-slate-400">加载中...</div>}
+                  {!noteAuditQuery.isLoading && (!noteAuditQuery.data?.events || noteAuditQuery.data.events.length === 0) && <div className="py-1 text-center text-[11px] text-slate-400">此功能启用后的新增、编辑和删除会记录在这里。</div>}
+                  {noteAuditQuery.data?.events?.map((event: any) => {
+                    const labels: Record<string, string> = { legacy_import: '导入历史备注', create: '新增备注', update: '编辑备注', soft_delete: '删除备注' };
+                    const actor = event.isViewingAs && event.actorUserId !== event.effectiveUserId
+                      ? `实际操作：${event.actorName}（代入 ${event.effectiveName}）`
+                      : `操作人：${event.actorName}`;
+                    return <div key={event.id} className="border-b pb-1.5 last:border-0 last:pb-0" style={{ borderColor: '#E2E8F0' }}>
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-medium" style={{ color: '#334155' }}>{labels[event.action] || event.action}</span>
+                        <span className="shrink-0 text-slate-400">{formatNoteTime(String(event.occurredAt || ''))}</span>
+                      </div>
+                      <div className="mt-0.5 break-all text-[11px] text-slate-500">{event.action === 'soft_delete' ? event.beforeBody : (event.afterBody || event.beforeBody || '')}</div>
+                      <div className="mt-0.5 text-[10px] text-slate-400">{actor}</div>
+                      {event.deviceSummary && <div className="mt-0.5 text-[10px] text-slate-400">设备：{event.deviceSummary}</div>}
+                      {event.observedIp && <div className="mt-0.5 text-[10px] text-amber-600">请求地址（未验证）：{event.observedIp}</div>}
+                    </div>;
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

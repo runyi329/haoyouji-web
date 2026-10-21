@@ -1340,6 +1340,9 @@ export function FunderOrderCardV2Silver({
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
   const [noteEditValue, setNoteEditValue] = useState('');
   const noteEditValueRef = useRef('');
+  const canManageNoteItem = (note: ReturnType<typeof parseNotes>[number]) => Boolean(
+    isAdmin || (currentUser && note.userId && Number(note.userId) === Number(currentUser.id))
+  );
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDeleteConfirmIdx, setNoteDeleteConfirmIdx] = useState<number | null>(null);
   // 当order.public_note从服务器加载完成后同步更新noteItems
@@ -1352,9 +1355,10 @@ export function FunderOrderCardV2Silver({
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
-      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _v2ParticipantUserId });
-      setNoteItems(newItems);
-      order.public_note = raw;
+      const saved = await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _v2ParticipantUserId });
+      const canonical = saved.publicNote || '';
+      setNoteItems(parseNotes(canonical));
+      order.public_note = canonical;
       toast.success('备注已保存');
     } catch (e: any) {
       toast.error('备注保存失败：' + (e?.message || '未知错误'));
@@ -3073,7 +3077,7 @@ export function FunderOrderCardV2Silver({
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         if (!noteEditValue.trim()) return;
-                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim() } : n));
                         setNoteEditingIdx(null);
                       }
                       if (e.key === 'Escape') { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }
@@ -3084,7 +3088,7 @@ export function FunderOrderCardV2Silver({
                   <button
                     onClick={() => {
                       if (!noteEditValue.trim()) return;
-                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim() } : n));
                       setNoteEditingIdx(null);
                     }}
                     disabled={noteSaving}
@@ -3127,7 +3131,7 @@ export function FunderOrderCardV2Silver({
                     >
                       <Copy className="w-3 h-3" />
                     </button>
-                    {!isSettledCard && <>
+                    {!isSettledCard && canManageNoteItem(note) && <>
                     {/* 编辑图标 */}
                     <button
                       type="button"
@@ -3276,9 +3280,10 @@ export function FunderLenderCardSilver({
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
-      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _lnParticipantUserId });
-      setNoteItems(newItems);
-      order.public_note = raw;
+      const saved = await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _lnParticipantUserId });
+      const canonical = saved.publicNote || '';
+      setNoteItems(parseNotes(canonical));
+      order.public_note = canonical;
       toast.success('备注已保存');
     } catch (e: any) {
       toast.error('备注保存失败：' + (e?.message || '未知错误'));
@@ -4430,7 +4435,7 @@ export function FunderLenderCardSilver({
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         if (!noteEditValue.trim()) return;
-                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim() } : n));
                         setNoteEditingIdx(null);
                       }
                       if (e.key === 'Escape') { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }
@@ -4441,7 +4446,7 @@ export function FunderLenderCardSilver({
                   <button
                     onClick={() => {
                       if (!noteEditValue.trim()) return;
-                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim() } : n));
                       setNoteEditingIdx(null);
                     }}
                     disabled={noteSaving}
