@@ -5645,6 +5645,91 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
 }
 
 /**
+ * 历史平仓上线前没有保存 target_opening_entry_id，只能按当时的同账户/用户/项目/价格档 FIFO 还原。
+ * 仅返回“整笔数量都唯一落在当前开仓”的旧平仓；一笔平仓跨两张开仓时没有一对一字段可安全保存，必须拒绝。
+ */
+async function findUnambiguousLegacyClosingIdsForOpening(tx: any, input: {
+  actorUserId: number;
+  opening: any;
+  openingEntryId: number;
+}): Promise<number[]> {
+  const openingAction = String(input.opening.action) as T0JournalAction;
+  if (!isOpeningAction(openingAction)) return [];
+  const openingInstrumentType = String(input.opening.instrument_type || "");
+  if (openingInstrumentType !== "spot" && openingInstrumentType !== "contract") {
+    throw new TRPCError({ code: "CONFLICT", message: "旧期权或网格平仓不能自动补写逐笔关联，请保留历史原状" });
+  }
+  const closingAction: T0JournalAction = actionSide(openingAction) === "long" ? "closeLong" : "closeShort";
+  const archiveKey = priceKey(archivePriceForAction(openingAction, input.opening.price));
+  const [scopeRowsResult] = await tx.execute(
+    `SELECT id, action, execution_status, instrument_type, quantity, price, target_price, target_opening_entry_id, created_at
+       FROM ledger52_t0_journal_entries
+      WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+        AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
+      ORDER BY created_at ASC, id ASC FOR UPDATE`,
+    [
+      LEDGER_52_T0_JOURNAL_ID,
+      input.actorUserId,
+      toNumber(input.opening.account_id),
+      String(input.opening.symbol || "ETH"),
+      toNumber(input.opening.related_user_id),
+      toNumber(input.opening.related_fund_id),
+    ],
+  );
+  const openingQueue: Array<{ entryId: number; remainingCents: number }> = [];
+  const matchedLegacyClosingIds: number[] = [];
+  for (const row of asRows(scopeRowsResult)) {
+    if (String(row.execution_status ?? "filled") !== "filled") continue;
+    const rowAction = String(row.action) as T0JournalAction;
+    if (rowAction === openingAction && priceKey(archivePriceForAction(rowAction, row.price)) === archiveKey) {
+      openingQueue.push({ entryId: toNumber(row.id), remainingCents: quantityToCents(row.quantity) });
+      continue;
+    }
+    if (rowAction !== closingAction || row.target_price === null || row.target_price === undefined) continue;
+    if (priceKey(archivedTargetPrice(rowAction, row.target_price, row.price)) !== archiveKey) continue;
+    const rowInstrumentType = String(row.instrument_type || "");
+    const explicitOpeningId = toNumber(row.target_opening_entry_id);
+    // 旧平仓常见 instrument_type 为空；若它明确写了另一产品类型却未绑定来源，则不可安全猜测其消耗的仓位。
+    if (explicitOpeningId === 0 && rowInstrumentType && rowInstrumentType !== openingInstrumentType) {
+      throw new TRPCError({ code: "CONFLICT", message: `旧平仓 #${toNumber(row.id)} 的产品类型与当前开仓不一致，不能自动补写关联` });
+    }
+    const closeCents = quantityToCents(row.quantity);
+    let remainingCloseCents = closeCents;
+    let matchedCurrentOpeningCents = 0;
+    const candidates = explicitOpeningId > 0
+      ? openingQueue.filter((queued) => queued.entryId === explicitOpeningId)
+      : openingQueue;
+    const positiveCandidates = candidates.filter((queued) => queued.remainingCents > 0);
+    for (const queuedOpening of candidates) {
+      if (remainingCloseCents <= 0) break;
+      if (queuedOpening.remainingCents <= 0) continue;
+      const allocatedCents = Math.min(queuedOpening.remainingCents, remainingCloseCents);
+      queuedOpening.remainingCents -= allocatedCents;
+      remainingCloseCents -= allocatedCents;
+      if (queuedOpening.entryId === input.openingEntryId) matchedCurrentOpeningCents += allocatedCents;
+    }
+    if (explicitOpeningId > 0 && remainingCloseCents > 0) {
+      throw new TRPCError({ code: "CONFLICT", message: `已绑定平仓 #${toNumber(row.id)} 的来源数量不足，不能继续自动校正` });
+    }
+    if (explicitOpeningId !== 0 || matchedCurrentOpeningCents <= 0) continue;
+    if (positiveCandidates.length !== 1 || positiveCandidates[0]?.entryId !== input.openingEntryId) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `旧平仓 #${toNumber(row.id)} 发生时存在多张同档未平开仓，不能自动补写关联`,
+      });
+    }
+    if (matchedCurrentOpeningCents !== closeCents) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `旧平仓 #${toNumber(row.id)} 跨越多张同档开仓，无法安全同步历史归属`,
+      });
+    }
+    matchedLegacyClosingIds.push(toNumber(row.id));
+  }
+  return matchedLegacyClosingIds.filter((id) => id > 0);
+}
+
+/**
  * 将已部分平仓开仓单的“尚余部分”转入新的账户／关联用户／项目。
  *
  * 这不是编辑旧开仓：旧开仓会缩为已平的经济数量、保留原有账户和历史快照；
@@ -5787,27 +5872,58 @@ export async function reassignLedger52T0JournalOpeningRemaining(input: {
       historicalClosedCents,
       originalQuantityCents,
     );
-    // 旧流水若没有 target_opening_entry_id，无法在未来准确区分它消耗的是本单还是同档其他单。
-    // 在这种历史数据完成逐笔校正前拒绝迁移，宁可不放开，也不能留下“回撤后回补仓位”的后门。
-    const legacyArchivePrice = archivePriceForAction(String(before.action) as T0JournalAction, before.price);
-    const legacyClosingAction: T0JournalAction = actionSide(String(before.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
-    const [legacyUnboundCloseRows] = await tx.execute(
-      `SELECT id
-         FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
-          AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
-          AND action = ? AND COALESCE(target_opening_entry_id, 0) = 0
-          AND target_price = ? AND (created_at > ? OR (created_at = ? AND id > ?))
-        ORDER BY created_at ASC, id ASC
-        LIMIT 1 FOR UPDATE`,
-      [
-        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, toNumber(before.account_id), String(before.symbol || "ETH"),
-        toNumber(before.related_user_id), toNumber(before.related_fund_id), legacyClosingAction, legacyArchivePrice,
-        before.created_at, before.created_at, input.entryId,
-      ],
-    );
-    if (asRows(legacyUnboundCloseRows)[0]) {
-      throw new TRPCError({ code: "CONFLICT", message: "本单包含旧式未逐笔绑定的历史平仓；为保护历史数量，请先处理该平仓后再调整后续归属" });
+    // 对唯一完整匹配本单的旧FIFO平仓，先补写来源关联，避免转入后历史平仓被误回补为可用仓位。
+    // 一笔旧平仓跨多张开仓时，解析器会直接拒绝，绝不猜测或强行拆分历史流水。
+    const legacyClosingIds = await findUnambiguousLegacyClosingIdsForOpening(tx, {
+      actorUserId: input.actorUserId,
+      opening: before,
+      openingEntryId: input.entryId,
+    });
+    const legacyClosingBeforeById = new Map<number, any>();
+    if (legacyClosingIds.length > 0) {
+      const [legacyClosingRowsResult] = await tx.execute(
+        `SELECT * FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND target_opening_entry_id IS NULL
+            AND id IN (${legacyClosingIds.map(() => "?").join(", ")}) FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...legacyClosingIds],
+      );
+      const legacyClosingRows = asRows(legacyClosingRowsResult);
+      if (legacyClosingRows.length !== legacyClosingIds.length) {
+        throw new TRPCError({ code: "CONFLICT", message: "旧平仓关联刚刚变化，请刷新后重新确认" });
+      }
+      for (const closing of legacyClosingRows) {
+        legacyClosingBeforeById.set(toNumber(closing.id), await buildEntryAuditSnapshot(tx, input.actorUserId, closing));
+      }
+      const [legacyBindingResult] = await tx.execute(
+        `UPDATE ledger52_t0_journal_entries
+            SET target_opening_entry_id = ?, updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND target_opening_entry_id IS NULL
+            AND id IN (${legacyClosingIds.map(() => "?").join(", ")})`,
+        [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...legacyClosingIds],
+      );
+      if (toNumber((legacyBindingResult as any).affectedRows) !== legacyClosingIds.length) {
+        throw new TRPCError({ code: "CONFLICT", message: "旧平仓关联刚刚变化，请刷新后重新确认" });
+      }
+      const [legacyClosingAfterRowsResult] = await tx.execute(
+        `SELECT * FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND id IN (${legacyClosingIds.map(() => "?").join(", ")}) FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...legacyClosingIds],
+      );
+      for (const afterClosing of asRows(legacyClosingAfterRowsResult)) {
+        const closingId = toNumber(afterClosing.id);
+        const beforeClosing = legacyClosingBeforeById.get(closingId);
+        if (!beforeClosing) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "旧平仓关联审计读取失败" });
+        await writeEntryAudit(tx, {
+          actorUserId: input.actorUserId,
+          entryId: closingId,
+          operation: "update",
+          before: beforeClosing,
+          after: {
+            ...await buildEntryAuditSnapshot(tx, input.actorUserId, afterClosing),
+            legacy_fifo_binding: { source_opening_entry_id: input.entryId, uniquely_matched: true },
+          },
+        });
+      }
     }
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
     const sourcePlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId], true);
@@ -6060,32 +6176,22 @@ export async function updateLedger52T0JournalPartialOpeningHistoricalAttribution
       throw new TRPCError({ code: "BAD_REQUEST", message: "账户和项目均未变化，无需同步历史归属" });
     }
 
-    const legacyArchivePrice = archivePriceForAction(String(before.action) as T0JournalAction, before.price);
-    const legacyClosingAction: T0JournalAction = actionSide(String(before.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
-    const [legacyUnboundCloseRows] = await tx.execute(
-      `SELECT id
-         FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
-          AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
-          AND action = ? AND COALESCE(target_opening_entry_id, 0) = 0
-          AND target_price = ? AND (created_at > ? OR (created_at = ? AND id > ?))
-        ORDER BY created_at ASC, id ASC
-        LIMIT 1 FOR UPDATE`,
-      [
-        LEDGER_52_T0_JOURNAL_ID, input.actorUserId, toNumber(before.account_id), String(before.symbol || "ETH"),
-        sourceUserId, toNumber(before.related_fund_id), legacyClosingAction, legacyArchivePrice,
-        before.created_at, before.created_at, input.entryId,
-      ],
-    );
-    if (asRows(legacyUnboundCloseRows)[0]) {
-      throw new TRPCError({ code: "CONFLICT", message: "本单包含旧式未逐笔绑定的历史平仓；为保护平仓数据，不能同步更正历史归属" });
-    }
+    // 历史流水若能由FIFO唯一完整地归属到本开仓，则在本次管理员明确确认时补写关联；
+    // 跨多张开仓的旧平仓仍会被解析器拒绝，绝不猜测或拆写一条历史流水。
+    const legacyClosingIds = await findUnambiguousLegacyClosingIdsForOpening(tx, {
+      actorUserId: input.actorUserId,
+      opening: before,
+      openingEntryId: input.entryId,
+    });
+    const legacyClosingClause = legacyClosingIds.length > 0
+      ? ` OR id IN (${legacyClosingIds.map(() => "?").join(", ")})`
+      : "";
     const [closingRowsResult] = await tx.execute(
       `SELECT * FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND user_id = ? AND target_opening_entry_id = ?
-          AND action IN ('closeLong', 'closeShort')
+        WHERE ledger_id = ? AND user_id = ?
+          AND ((target_opening_entry_id = ? AND action IN ('closeLong', 'closeShort'))${legacyClosingClause})
         ORDER BY trade_time ASC, id ASC FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, ...legacyClosingIds],
     );
     const closingRows = asRows(closingRowsResult);
     if (closingRows.length === 0) {
@@ -6097,6 +6203,19 @@ export async function updateLedger52T0JournalPartialOpeningHistoricalAttribution
     for (const closing of closingRows) {
       const closingId = toNumber(closing.id);
       auditBeforeByEntryId.set(closingId, await buildEntryAuditSnapshot(tx, input.actorUserId, closing));
+    }
+
+    if (legacyClosingIds.length > 0) {
+      const [legacyBindingResult] = await tx.execute(
+        `UPDATE ledger52_t0_journal_entries
+            SET target_opening_entry_id = ?, updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND target_opening_entry_id IS NULL
+            AND id IN (${legacyClosingIds.map(() => "?").join(", ")})`,
+        [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...legacyClosingIds],
+      );
+      if (toNumber((legacyBindingResult as any).affectedRows) !== legacyClosingIds.length) {
+        throw new TRPCError({ code: "CONFLICT", message: "旧平仓关联刚刚变化，请刷新后重新确认" });
+      }
     }
 
     await tx.execute(
@@ -6131,6 +6250,7 @@ export async function updateLedger52T0JournalPartialOpeningHistoricalAttribution
       [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...changedEntryIds],
     );
     const afterByEntryId = new Map(asRows(afterRowsResult).map((row) => [toNumber(row.id), row]));
+    const legacyClosingIdSet = new Set(legacyClosingIds);
     for (const changedEntryId of changedEntryIds) {
       const after = afterByEntryId.get(changedEntryId);
       const beforeSnapshot = auditBeforeByEntryId.get(changedEntryId);
@@ -6146,6 +6266,9 @@ export async function updateLedger52T0JournalPartialOpeningHistoricalAttribution
             scope: "account_and_fund_only",
             historical_values_unchanged: true,
           },
+          ...(legacyClosingIdSet.has(changedEntryId) ? {
+            legacy_fifo_binding: { source_opening_entry_id: input.entryId, uniquely_matched: true },
+          } : {}),
         },
       });
     }

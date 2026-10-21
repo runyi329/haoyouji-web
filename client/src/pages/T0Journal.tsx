@@ -2535,6 +2535,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [partialOpeningAttributionDraft, setPartialOpeningAttributionDraft] = useState<PartialOpeningAttributionDraft | null>(null);
   const [partialOpeningAttributionScope, setPartialOpeningAttributionScope] = useState<"history" | "future" | null>(null);
+  const [partialOpeningAttributionError, setPartialOpeningAttributionError] = useState<string | null>(null);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   // 平仓必须以服务端事务提交为准；失败时保留二次确认页，不能让界面误以为已成交。
   const [closeSaveError, setCloseSaveError] = useState<string | null>(null);
@@ -5559,6 +5560,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setEntryProfitShareEditTarget(null);
     setPartialOpeningAttributionDraft(null);
     setPartialOpeningAttributionScope(null);
+    setPartialOpeningAttributionError(null);
     residualReassignRequestIdRef.current = null;
     residualReassignRequestFingerprintRef.current = null;
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
@@ -5982,6 +5984,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       residualReassignRequestFingerprintRef.current = null;
       setPartialOpeningAttributionDraft(null);
       setPartialOpeningAttributionScope(null);
+      setPartialOpeningAttributionError(null);
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
       setEntryProfitShareEditTarget(null);
@@ -5992,6 +5995,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
     onError: (error) => {
       residualReassignCommitLockRef.current = false;
+      setPartialOpeningAttributionError(error.message || "剩余仓位转入失败，请检查后重新确认");
       t0Toast.error(error.message || "剩余仓位转入失败，请检查后重新确认");
     },
   });
@@ -6003,6 +6007,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       residualReassignRequestFingerprintRef.current = null;
       setPartialOpeningAttributionDraft(null);
       setPartialOpeningAttributionScope(null);
+      setPartialOpeningAttributionError(null);
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
       setEntryProfitShareEditTarget(null);
@@ -6013,6 +6018,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
     onError: (error) => {
       residualReassignCommitLockRef.current = false;
+      setPartialOpeningAttributionError(error.message || "历史账户与项目更正失败，请检查后重试");
       t0Toast.error(error.message || "历史账户与项目更正失败，请检查后重试");
     },
   });
@@ -6456,6 +6462,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           return;
         }
         setPartialOpeningAttributionScope(null);
+        setPartialOpeningAttributionError(null);
         setPartialOpeningAttributionDraft({
           entryId,
           remainingQuantity: normalizeEthQuantity(String(editingRemainingQuantity)),
@@ -6688,6 +6695,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const submitPartialOpeningAttribution = (scope: "history" | "future") => {
     const draft = partialOpeningAttributionDraft;
     if (!draft || residualReassignCommitLockRef.current) return;
+    setPartialOpeningAttributionError(null);
     residualReassignCommitLockRef.current = true;
     const requestFingerprint = [
       scope,
@@ -9227,11 +9235,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="w-full max-w-md rounded-t-2xl bg-white px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 shadow-2xl sm:rounded-2xl">
             <div className="text-lg font-semibold text-slate-900">本次账户和项目怎么生效？</div>
             <p className="mt-1 text-xs leading-5 text-slate-500">关联用户名固定不变。请选择是否同步修改已平部分的账户和项目。</p>
+            {partialOpeningAttributionError && (
+              <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                <span className="font-semibold">未执行：</span>{partialOpeningAttributionError}
+              </div>
+            )}
             <div className="mt-4 space-y-2.5">
               <button
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-                onClick={() => setPartialOpeningAttributionScope("history")}
+                onClick={() => {
+                  setPartialOpeningAttributionError(null);
+                  setPartialOpeningAttributionScope("history");
+                }}
                 aria-pressed={partialOpeningAttributionScope === "history"}
                 className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "history" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
               >
@@ -9244,7 +9260,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <button
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-                onClick={() => setPartialOpeningAttributionScope("future")}
+                onClick={() => {
+                  setPartialOpeningAttributionError(null);
+                  setPartialOpeningAttributionScope("future");
+                }}
                 aria-pressed={partialOpeningAttributionScope === "future"}
                 className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "future" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
               >
@@ -9260,6 +9279,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
                 onClick={() => {
+                  setPartialOpeningAttributionError(null);
                   setPartialOpeningAttributionScope(null);
                   setPartialOpeningAttributionDraft(null);
                 }}
