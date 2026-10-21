@@ -1211,6 +1211,7 @@ export default function LedgerAAInitialBalance() {
                 ? (marginEntry.reversalStatus === 'reversed' ? '钱包解冻 · 已冲正' : '钱包解冻')
                 : `${marginEntry.migratedFrom === 'manual' ? '历史手工迁入 · ' : '钱包'}${isReleased ? '解冻' : '冻结'}`;
             const shownAmount = isReversalRecord ? originalFrozenAmount : (isReleased ? originalFrozenAmount : remainingFrozenAmount);
+            const marginAssetCode = normalizeMarginCoin(marginEntry.coin);
             return (
               <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: isReleased && !isReversalRecord ? '#FAFAFA' : '#F2F8FF', border: `1px solid ${isReleased && !isReversalRecord ? '#F0F0F0' : '#CDE1F7'}` }}>
                 <div className="flex items-center gap-1.5">
@@ -1219,10 +1220,10 @@ export default function LedgerAAInitialBalance() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>{entryLabel} · {normalizeMarginCoin(marginEntry.coin)}</span>
-                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased && !isReversalRecord ? '#78909C' : '#1565C0' }}>{isReleaseRecord ? '−' : '+'}{shownAmount}</span>
+                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>{entryLabel} · {marginAssetCode}</span>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased && !isReversalRecord ? '#78909C' : '#1565C0' }}>{isReleaseRecord ? '−' : '+'}{formatWalletMarginAssetBalance(Number(shownAmount), marginAssetCode)}</span>
                     </div>
-                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}{marginEntry.reversalStatus === 'reversed' ? ' · 已有冲正' : ''}{marginEntry.migrationNo ? ` · 迁移单 ${marginEntry.migrationNo}` : ''}</div>
+                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${formatWalletMarginAssetBalance(releasedFromThisHold, marginAssetCode)}` : ''}{marginEntry.reversalStatus === 'reversed' ? ' · 已有冲正' : ''}{marginEntry.migrationNo ? ` · 迁移单 ${marginEntry.migrationNo}` : ''}</div>
                   </div>
                   {isOriginalFreeze && !isReleased && (
                     <button type="button" onClick={() => openWalletMarginRelease(marginEntry.holdId, normalizeMarginCoin(marginEntry.coin), remainingFrozenAmount)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
@@ -1239,8 +1240,12 @@ export default function LedgerAAInitialBalance() {
                   <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #B8D7F3' }}>
                     <div className="text-[10px]" style={{ color: '#78909C' }}>本笔当前冻结 {formatWalletMarginAssetBalance(Number(remainingFrozenAmount), walletMarginReleaseDraft.assetCode)}；减少后立即回到该成员同币种可用余额。</div>
                     <div className="mt-1.5 flex items-center gap-1.5">
-                      <input type="text" inputMode="decimal" value={walletMarginReleaseDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: event.target.value })} placeholder="减少数量" className="h-7 min-w-0 flex-1 rounded-lg border px-2 text-right text-xs outline-none" style={{ borderColor: '#B8D7F3' }} />
-                      <button type="button" onClick={() => setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: walletMarginReleaseDraft.maxAmount })} className="h-7 rounded-lg px-2 text-[10px] font-medium" style={{ backgroundColor: '#EAF3FF', color: '#1565C0' }}>全部</button>
+                      <input type="text" inputMode="decimal" value={walletMarginReleaseDraft.amount} onChange={(event) => {
+                        const value = event.target.value;
+                        const maxDecimals = normalizeMarginCoin(walletMarginReleaseDraft.assetCode) === 'CNY' ? 2 : 8;
+                        if (new RegExp(`^\\d*\\.?\\d{0,${maxDecimals}}$`).test(value)) setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: value });
+                      }} placeholder="减少数量" className="h-7 min-w-0 flex-1 rounded-lg border px-2 text-right text-xs outline-none" style={{ borderColor: '#B8D7F3' }} />
+                      <button type="button" onClick={() => setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: formatWalletMarginInputAmount(Number(walletMarginReleaseDraft.maxAmount), walletMarginReleaseDraft.assetCode) })} className="h-7 rounded-lg px-2 text-[10px] font-medium" style={{ backgroundColor: '#EAF3FF', color: '#1565C0' }}>全部</button>
                     </div>
                     <div className="mt-1.5 flex justify-end gap-2"><button type="button" onClick={() => setWalletMarginReleaseDraft(null)} className="h-7 px-2 text-[10px]" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitWalletMarginRelease} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2.5 text-[10px] font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认减少</button></div>
                   </div>
