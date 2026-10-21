@@ -1350,7 +1350,6 @@ export async function recoverLedger37Dividend(params: {
   const reason = String(params.reason || '').trim().slice(0, 255);
   const requestId = String(params.requestId || '').trim();
   if (!tagName) throw new Error('标签名称不能为空');
-  if (!reason) throw new Error('请填写回填原因');
   if (!(Number(assetAmount) > 0)) throw new Error('回填扣回数量必须大于零');
   if (!/^[A-Za-z0-9_-]{16,96}$/.test(requestId)) throw new Error('回填请求无效，请刷新后重试');
 
@@ -1420,7 +1419,7 @@ export async function recoverLedger37Dividend(params: {
         userId: params.userId,
         assetCode,
         amount: `-${assetAmount}`,
-        note: `股票分红回填扣回 · ${tagName} · ${reason}`,
+        note: `股票分红回填扣回 · ${tagName}${reason ? ` · ${reason}` : ''}`,
         requestId: `${requestId}_ASSET`,
         actorUserId: params.actorUserId,
         sourceLedgerId: LEDGER_37_ID,

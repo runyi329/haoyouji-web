@@ -2417,6 +2417,233 @@ async function requireLedger52PayoutManager(userId: number, userRole: string | u
   }
 }
 
+
+/**
+ * 37号分红统一口径：按成员 × 标签计算累计回报、已分红和当前可分红。
+ * 供管理页展示及批量分红/补差在执行瞬间复算，避免前端快照被直接用于资金操作。
+ */
+async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: number; systemRole?: unknown }) {
+  const db = await getLedgerDb();
+  if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  const [memberRows, balancesMapRaw, categoryResult, recordResult, dividendResult] = await Promise.all([
+    dbLedger.getLedgerMembers(LEDGER_37_ID, params.actorUserId),
+    dbLedger.getAllMembersInitialBalances(LEDGER_37_ID),
+    db.execute(sql`
+      SELECT id, name, accounting_mode, sortOrder
+      FROM ledger_categories
+      WHERE ledgerId = ${LEDGER_37_ID} AND parentId IS NULL
+        AND (isDefault = 0 OR isDefault IS NULL)
+      ORDER BY sortOrder ASC, id ASC
+    `),
+    db.execute(sql`
+      SELECT lr.categoryId, lr.type, lr.amount, lr.description, lr.recordDate, lr.createdAt, lr.id
+      FROM ledger_records lr
+      WHERE lr.ledgerId = ${LEDGER_37_ID} AND lr.deleted_at IS NULL
+      ORDER BY lr.recordDate ASC, lr.createdAt ASC, lr.id ASC
+    `),
+    db.execute(sql`
+      SELECT user_id, tag_name, SUM(amount) AS paid_total
+      FROM dividend_records WHERE ledger_id = ${LEDGER_37_ID}
+      GROUP BY user_id, tag_name
+    `),
+  ]);
+
+  const members = (memberRows as any[]).filter((member) => member.memberType !== 'ai');
+  const balancesMap = (balancesMapRaw || {}) as Record<number, Record<string, unknown>>;
+  const categories = asRows(categoryResult).map((row: any, index: number) => ({
+    id: Number(row.id),
+    name: String(row.name),
+    accountingMode: String(row.accounting_mode || 'manual_balance'),
+    order: Number.isFinite(Number(row.sortOrder)) ? Number(row.sortOrder) : index,
+  }));
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const categoryByName = new Map(categories.map((category) => [category.name, category]));
+  const num = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const money = (value: number): number => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+  const dateOf = (value: unknown): string => {
+    if (typeof value === 'string') return value.slice(0, 10);
+    const date = value instanceof Date ? value : new Date(String(value || ''));
+    if (Number.isNaN(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(date);
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  };
+  const holidays2026 = new Set([
+    '2026-01-01','2026-01-02','2026-01-03',
+    '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
+    '2026-04-04','2026-04-05','2026-04-06', '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+    '2026-06-19','2026-06-20','2026-06-21', '2026-09-25','2026-09-26','2026-09-27',
+    '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07',
+  ]);
+  const previousTradingDay = (value: unknown): string | null => {
+    const start = dateOf(value);
+    if (!start) return null;
+    const date = new Date(`${start}T00:00:00+08:00`);
+    for (let i = 0; i < 30; i += 1) {
+      date.setUTCDate(date.getUTCDate() - 1);
+      const candidate = date.toISOString().slice(0, 10);
+      const weekday = date.getUTCDay();
+      if (weekday !== 0 && weekday !== 6 && !holidays2026.has(candidate)) return candidate;
+    }
+    return start;
+  };
+  const pauseDate = (balances: Record<string, unknown>, tagName: string): string | null => {
+    try {
+      const raw = balances[`${tagName}__pauseHistory`];
+      const history = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const last = Array.isArray(history) ? history[history.length - 1] : null;
+      if (last?.pauseDate && !last?.resumeDate) return dateOf(last.pauseDate);
+    } catch { /* Compatibility fallback below. */ }
+    return balances[`${tagName}__pauseDate`] ? dateOf(balances[`${tagName}__pauseDate`]) : null;
+  };
+
+  const daysByTag = new Map<string, Map<string, { income: number; expense: number }>>();
+  // 普通标签的暂停日是“成员 × 标签”的结算截点。现金流也必须保留日期，
+  // 以便管理员事后把暂停日回填到历史日期时，不会把暂停日之后的本金变动或取回带入该成员结算。
+  const cashFlowsByTag = new Map<string, Array<{ date: string; capitalChange: number; withdraw: number }>>();
+  for (const record of asRows(recordResult)) {
+    const category = categoryById.get(Number(record.categoryId));
+    if (!category) continue;
+    const amount = Math.abs(num(record.amount));
+    const date = dateOf(record.recordDate);
+    if (!date) continue;
+    if (String(record.type) === 'transfer') {
+      const flows = cashFlowsByTag.get(category.name) || [];
+      const description = String(record.description || '');
+      flows.push({
+        date,
+        capitalChange: description.startsWith('capital_') ? (description.startsWith('capital_add') ? amount : -amount) : 0,
+        withdraw: description.startsWith('capital_') ? 0 : amount,
+      });
+      cashFlowsByTag.set(category.name, flows);
+      continue;
+    }
+    const tagDays = daysByTag.get(category.name) || new Map<string, { income: number; expense: number }>();
+    const total = tagDays.get(date) || { income: 0, expense: 0 };
+    if (String(record.type) === 'income') total.income += amount;
+    else total.expense += amount;
+    tagDays.set(date, total);
+    daysByTag.set(category.name, tagDays);
+  }
+
+  const paidByUserTag = new Map<string, number>();
+  for (const row of asRows(dividendResult)) {
+    paidByUserTag.set(`${Number(row.user_id)}|${String(row.tag_name || '')}`, num(row.paid_total));
+  }
+  const stockPnlByUser = new Map<number, Map<string, number>>();
+  await Promise.all(members.map(async (member: any) => {
+    try {
+      const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
+      const overview = await getMyStockTagOverview({
+        ledgerId: LEDGER_37_ID,
+        userId: Number(member.userId),
+        systemRole: params.systemRole,
+      });
+      stockPnlByUser.set(Number(member.userId), new Map(
+        overview.map((item: any) => [String(item.name), num(item.summary?.totalPnl)]),
+      ));
+    } catch (error) {
+      console.warn('[adminGetLedger37DividendAvailability] 股票成员回报读取失败:', member.userId, error);
+      stockPnlByUser.set(Number(member.userId), new Map());
+    }
+  }));
+
+  const users = members.map((member: any) => {
+    const userId = Number(member.userId);
+    const balances = (balancesMap[userId] || {}) as Record<string, unknown>;
+    const stockPnl = stockPnlByUser.get(userId) || new Map<string, number>();
+    const tagNames = new Set<string>();
+    for (const key of Object.keys(balances)) {
+      if (!key.includes('__') && categoryByName.has(key)) tagNames.add(key);
+    }
+    for (const tagName of stockPnl.keys()) tagNames.add(tagName);
+    for (const paidKey of paidByUserTag.keys()) {
+      const splitAt = paidKey.indexOf('|');
+      if (Number(paidKey.slice(0, splitAt)) === userId) tagNames.add(paidKey.slice(splitAt + 1));
+    }
+    const tags = [...tagNames].map((tagName) => {
+      const category = categoryByName.get(tagName);
+      const paidDividend = paidByUserTag.get(`${userId}|${tagName}`) || 0;
+      let cumulativeReturn = 0;
+      let hasReturnData = false;
+      if (category?.accountingMode === 'stock_portfolio') {
+        if (stockPnl.has(tagName)) {
+          cumulativeReturn = stockPnl.get(tagName) || 0;
+          hasReturnData = true;
+        }
+      } else {
+        const start = previousTradingDay(balances[`${tagName}__startDate`]);
+        const pausedAt = pauseDate(balances, tagName);
+        const daily = [...(daysByTag.get(tagName)?.entries() || [])]
+          .map(([date, total]) => ({ date, balance: total.income > 0 ? total.income : total.expense }))
+          .filter((day) => day.balance > 0 && (!start || day.date >= start) && (!pausedAt || day.date <= pausedAt))
+          .sort((left, right) => left.date.localeCompare(right.date));
+        const latest = daily[daily.length - 1];
+        if (latest) {
+          // 回填暂停日时，暂停日之后即使已经存在很多日历、加减本金或取回记录，
+          // 该成员的这次结算都只使用暂停日及以前的数据。
+          const flow = (cashFlowsByTag.get(tagName) || [])
+            .filter((item) => !pausedAt || item.date <= pausedAt)
+            .reduce((total, item) => ({
+              capitalChange: total.capitalChange + item.capitalChange,
+              withdraw: total.withdraw + item.withdraw,
+            }), { capitalChange: 0, withdraw: 0 });
+          const effectiveInitial = num(balances[tagName]) + flow.capitalChange;
+          const ratio = num(balances[`${tagName}__ratio`] ?? 100) / 100;
+          cumulativeReturn = effectiveInitial > 0
+            ? (effectiveInitial - latest.balance - flow.withdraw) * ratio
+            : 0;
+          hasReturnData = true;
+        }
+      }
+      return {
+        tagName,
+        accountingMode: category?.accountingMode || 'manual_balance',
+        cumulativeReturn: money(cumulativeReturn),
+        paidDividend: money(paidDividend),
+        availableDividend: money(cumulativeReturn - paidDividend),
+        hasReturnData,
+        order: category?.order ?? Number.MAX_SAFE_INTEGER,
+      };
+    }).sort((left, right) => left.order - right.order || left.tagName.localeCompare(right.tagName, 'zh-CN'));
+    return { userId, tags };
+  });
+  return { users };
+}
+
+/** 批量分红/补差只记录逐笔执行结果，不保存或展示任何默认备注。 */
+async function ensureLedger37DividendBatchActionTable() {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  try {
+    await (conn as any).execute(`
+      CREATE TABLE IF NOT EXISTS ledger37_dividend_batch_actions (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        batch_request_id VARCHAR(96) NOT NULL,
+        action_mode VARCHAR(16) NOT NULL,
+        user_id INT NOT NULL,
+        tag_name VARCHAR(160) NOT NULL,
+        expected_cny_amount DECIMAL(18,2) NOT NULL,
+        processed_cny_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+        status VARCHAR(16) NOT NULL,
+        dividend_record_id BIGINT UNSIGNED NULL,
+        skip_reason VARCHAR(255) NULL,
+        actor_user_id INT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_ledger37_dividend_batch_action (batch_request_id, action_mode, user_id, tag_name),
+        KEY idx_ledger37_dividend_batch_created (created_at),
+        KEY idx_ledger37_dividend_batch_user (user_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号逐笔批量分红与补差审计'
+    `);
+  } finally {
+    (conn as any).release?.();
+  }
+}
+
 export const appRouter = router({
   workLog: router({
     getWorkLogs: publicProcedure
@@ -34281,6 +34508,175 @@ insights 数组每项包含：
       return { success: true, ...result };
     }),
 
+  // 37号一键分红/补差：按成员 × 标签逐笔处理，金额只由服务端实时口径决定。
+  adminExecuteLedger37DividendBatch: protectedProcedure
+    .input(z.object({
+      ledgerId: z.literal(37),
+      targetUserId: z.number().int().positive(),
+      mode: z.enum(['distribute', 'recover']),
+      requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,48}$/),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (process.env.DEV_BYPASS_AUTH === 'true') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示批量分红与补差界面，不会修改真实分红或钱包资金' });
+      }
+      if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可操作' });
+      }
+      await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+      const targetMembership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+      if (!targetMembership || targetMembership.memberType === 'ai') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本的真实成员' });
+      }
+      await ensureLedger37WalletInfrastructure();
+      // DDL 必须发生在业务事务前，避免 MySQL 隐式提交影响逐笔钱包事务。
+      await ensureLedger37DividendBatchActionTable();
+
+      const availability = await getLedger37DividendAvailabilitySnapshot({
+        actorUserId: ctx.user.id,
+        systemRole: (ctx.user as any).role,
+      });
+      const roundCny = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+      const candidates: Array<{ userId: number; tagName: string; cumulativeReturn: number; expectedAmount: number }> = [];
+      for (const member of availability.users as any[]) {
+        if (Number(member.userId) !== input.targetUserId) continue;
+        for (const tag of member.tags ?? []) {
+          // 没有回报数据时不能把零当作真实结算额，避免误发或误扣历史标签。
+          if (!tag.hasReturnData) continue;
+          const available = roundCny(Number(tag.availableDividend));
+          const expectedAmount = input.mode === 'distribute' ? available : -available;
+          if (expectedAmount > 0.005) {
+            candidates.push({
+              userId: Number(member.userId),
+              tagName: String(tag.tagName),
+              cumulativeReturn: roundCny(Number(tag.cumulativeReturn)),
+              expectedAmount: roundCny(expectedAmount),
+            });
+          }
+        }
+      }
+
+      const completed: Array<{ userId: number; tagName: string; amount: number; alreadyCompleted?: boolean }> = [];
+      const skipped: Array<{ userId: number; tagName: string; amount: number; reason: string }> = [];
+      for (let index = 0; index < candidates.length; index += 1) {
+        const candidate = candidates[index];
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [existingActionRows] = await transaction.execute(
+            `SELECT status, processed_cny_amount, skip_reason
+               FROM ledger37_dividend_batch_actions
+              WHERE batch_request_id = ? AND action_mode = ? AND user_id = ? AND tag_name = ?
+              LIMIT 1 FOR UPDATE`,
+            [input.requestId, input.mode, candidate.userId, candidate.tagName],
+          );
+          const existingAction = asRows(existingActionRows)[0];
+          if (existingAction) {
+            await transaction.commit();
+            if (String(existingAction.status) === 'completed') {
+              completed.push({ userId: candidate.userId, tagName: candidate.tagName, amount: Number(existingAction.processed_cny_amount || 0), alreadyCompleted: true });
+            } else {
+              skipped.push({ userId: candidate.userId, tagName: candidate.tagName, amount: candidate.expectedAmount, reason: String(existingAction.skip_reason || '本笔已跳过') });
+            }
+            continue;
+          }
+
+          // 锁住同一成员同一标签的全部分红记录：并发的单笔或另一轮批量操作不会造成重复分发。
+          const [paidRows] = await transaction.execute(
+            `SELECT COALESCE(SUM(amount), 0) AS paid_total
+               FROM dividend_records
+              WHERE ledger_id = ? AND user_id = ? AND tag_name = ?
+              FOR UPDATE`,
+            [LEDGER_37_ID, candidate.userId, candidate.tagName],
+          );
+          const currentPaid = Number(asRows(paidRows)[0]?.paid_total || 0);
+          const currentAvailable = roundCny(candidate.cumulativeReturn - currentPaid);
+          const currentExpected = input.mode === 'distribute' ? currentAvailable : -currentAvailable;
+          const amount = roundCny(Math.min(candidate.expectedAmount, Math.max(0, currentExpected)));
+          if (!(amount > 0.005)) {
+            const reason = input.mode === 'distribute' ? '当前已无可分红金额' : '当前已无待补差金额';
+            await transaction.execute(
+              `INSERT INTO ledger37_dividend_batch_actions
+                (batch_request_id, action_mode, user_id, tag_name, expected_cny_amount, processed_cny_amount, status, skip_reason, actor_user_id)
+               VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(18,2)), 0, 'skipped', ?, ?)`,
+              [input.requestId, input.mode, candidate.userId, candidate.tagName, candidate.expectedAmount.toFixed(2), reason, ctx.user.id],
+            );
+            await transaction.commit();
+            skipped.push({ userId: candidate.userId, tagName: candidate.tagName, amount: candidate.expectedAmount, reason });
+            continue;
+          }
+
+          const amountText = amount.toFixed(2);
+          const result = input.mode === 'distribute'
+            ? await createLedger37Dividend({
+              userId: candidate.userId,
+              tagName: candidate.tagName,
+              assetCode: 'CNY',
+              assetAmount: amountText,
+              // 批量操作未填写备注时，成员侧备注保持为空。
+              note: '',
+              actorUserId: ctx.user.id,
+              transaction,
+            })
+            : await recoverLedger37Dividend({
+              userId: candidate.userId,
+              tagName: candidate.tagName,
+              assetCode: 'CNY',
+              assetAmount: amountText,
+              // 手动回填仍要求填写原因；批量补差仅在审计表留存动作，不生成默认客户备注。
+              reason: '',
+              requestId: `L37BT${input.requestId}_${index}`,
+              actorUserId: ctx.user.id,
+              transaction,
+            });
+          const recordId = Number(result.recordId);
+          await transaction.execute(
+            `INSERT INTO ledger37_dividend_batch_actions
+              (batch_request_id, action_mode, user_id, tag_name, expected_cny_amount, processed_cny_amount, status, dividend_record_id, actor_user_id)
+             VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(18,2)), CAST(? AS DECIMAL(18,2)), 'completed', ?, ?)`,
+            [input.requestId, input.mode, candidate.userId, candidate.tagName, candidate.expectedAmount.toFixed(2), amountText, recordId, ctx.user.id],
+          );
+          await transaction.commit();
+          completed.push({ userId: candidate.userId, tagName: candidate.tagName, amount, alreadyCompleted: input.mode === 'recover' && result.alreadyCompleted });
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          const message = String(error?.message || error || '本笔处理失败');
+          // 补差钱包余额不足是预期的单笔阻断：登记跳过并继续处理其他成员与标签。
+          if (input.mode === 'recover' && /可用余额不足|余额不足|不能扣回/.test(message)) {
+            try {
+              await transaction.beginTransaction();
+              await transaction.execute(
+                `INSERT INTO ledger37_dividend_batch_actions
+                  (batch_request_id, action_mode, user_id, tag_name, expected_cny_amount, processed_cny_amount, status, skip_reason, actor_user_id)
+                 VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(18,2)), 0, 'skipped', ?, ?)`,
+                [input.requestId, input.mode, candidate.userId, candidate.tagName, candidate.expectedAmount.toFixed(2), '成员人民币钱包可用余额不足', ctx.user.id],
+              );
+              await transaction.commit();
+              skipped.push({ userId: candidate.userId, tagName: candidate.tagName, amount: candidate.expectedAmount, reason: '成员人民币钱包可用余额不足' });
+              continue;
+            } catch (auditError) {
+              try { await transaction.rollback(); } catch {}
+              throw auditError;
+            }
+          }
+          throw error;
+        } finally {
+          transaction.release?.();
+        }
+      }
+      return {
+        success: true,
+        requestId: input.requestId,
+        targetUserId: input.targetUserId,
+        mode: input.mode,
+        candidateCount: candidates.length,
+        completed,
+        skipped,
+      };
+    }),
+
   // 37号已入账分红只能撤回原记录或写入等额冲正，不允许直接改金额或备注。
   adminRevokeLedger37Dividend: protectedProcedure
     .input(z.object({
@@ -34409,201 +34805,14 @@ insights 数组每项包含：
   // 仅只读汇总；不会在读取时写钱包或创建分红记录。
   adminGetLedger37DividendAvailability: protectedProcedure
     .input(z.object({ ledgerId: z.literal(37) }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx }) => {
       if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可查看' });
       }
-      const db = await getLedgerDb();
-      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-
-      const [memberRows, balancesMapRaw, categoryResult, recordResult, dividendResult] = await Promise.all([
-        dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id),
-        dbLedger.getAllMembersInitialBalances(input.ledgerId),
-        db.execute(sql`
-          SELECT id, name, accounting_mode, sortOrder
-          FROM ledger_categories
-          WHERE ledgerId = ${input.ledgerId} AND parentId IS NULL
-            AND (isDefault = 0 OR isDefault IS NULL)
-          ORDER BY sortOrder ASC, id ASC
-        `),
-        db.execute(sql`
-          SELECT lr.categoryId, lr.type, lr.amount, lr.description, lr.recordDate, lr.createdAt, lr.id
-          FROM ledger_records lr
-          WHERE lr.ledgerId = ${input.ledgerId} AND lr.deleted_at IS NULL
-          ORDER BY lr.recordDate ASC, lr.createdAt ASC, lr.id ASC
-        `),
-        db.execute(sql`
-          SELECT user_id, tag_name, SUM(amount) AS paid_total
-          FROM dividend_records WHERE ledger_id = ${input.ledgerId}
-          GROUP BY user_id, tag_name
-        `),
-      ]);
-
-      const members = (memberRows as any[]).filter((member) => member.memberType !== 'ai');
-      const balancesMap = (balancesMapRaw || {}) as Record<number, Record<string, unknown>>;
-      const categories = asRows(categoryResult).map((row: any, index: number) => ({
-        id: Number(row.id),
-        name: String(row.name),
-        accountingMode: String(row.accounting_mode || 'manual_balance'),
-        order: Number.isFinite(Number(row.sortOrder)) ? Number(row.sortOrder) : index,
-      }));
-      const categoryById = new Map(categories.map((category) => [category.id, category]));
-      const categoryByName = new Map(categories.map((category) => [category.name, category]));
-      const num = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
-      const money = (value: number): number => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
-      const dateOf = (value: unknown): string => {
-        if (typeof value === 'string') return value.slice(0, 10);
-        const date = value instanceof Date ? value : new Date(String(value || ''));
-        if (Number.isNaN(date.getTime())) return '';
-        const parts = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
-        }).formatToParts(date);
-        const year = parts.find((part) => part.type === 'year')?.value;
-        const month = parts.find((part) => part.type === 'month')?.value;
-        const day = parts.find((part) => part.type === 'day')?.value;
-        return year && month && day ? `${year}-${month}-${day}` : '';
-      };
-      const holidays2026 = new Set([
-        '2026-01-01','2026-01-02','2026-01-03',
-        '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
-        '2026-04-04','2026-04-05','2026-04-06', '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
-        '2026-06-19','2026-06-20','2026-06-21', '2026-09-25','2026-09-26','2026-09-27',
-        '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07',
-      ]);
-      const previousTradingDay = (value: unknown): string | null => {
-        const start = dateOf(value);
-        if (!start) return null;
-        const date = new Date(`${start}T00:00:00+08:00`);
-        for (let i = 0; i < 30; i += 1) {
-          date.setUTCDate(date.getUTCDate() - 1);
-          const candidate = date.toISOString().slice(0, 10);
-          const weekday = date.getUTCDay();
-          if (weekday !== 0 && weekday !== 6 && !holidays2026.has(candidate)) return candidate;
-        }
-        return start;
-      };
-      const pauseDate = (balances: Record<string, unknown>, tagName: string): string | null => {
-        try {
-          const raw = balances[`${tagName}__pauseHistory`];
-          const history = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          const last = Array.isArray(history) ? history[history.length - 1] : null;
-          if (last?.pauseDate && !last?.resumeDate) return dateOf(last.pauseDate);
-        } catch { /* Compatibility fallback below. */ }
-        return balances[`${tagName}__pauseDate`] ? dateOf(balances[`${tagName}__pauseDate`]) : null;
-      };
-
-      const daysByTag = new Map<string, Map<string, { income: number; expense: number }>>();
-      // 普通标签的暂停日是“成员 × 标签”的结算截点。现金流也必须保留日期，
-      // 以便管理员事后把暂停日回填到历史日期时，不会把暂停日之后的本金变动或取回带入该成员结算。
-      const cashFlowsByTag = new Map<string, Array<{ date: string; capitalChange: number; withdraw: number }>>();
-      for (const record of asRows(recordResult)) {
-        const category = categoryById.get(Number(record.categoryId));
-        if (!category) continue;
-        const amount = Math.abs(num(record.amount));
-        const date = dateOf(record.recordDate);
-        if (!date) continue;
-        if (String(record.type) === 'transfer') {
-          const flows = cashFlowsByTag.get(category.name) || [];
-          const description = String(record.description || '');
-          flows.push({
-            date,
-            capitalChange: description.startsWith('capital_') ? (description.startsWith('capital_add') ? amount : -amount) : 0,
-            withdraw: description.startsWith('capital_') ? 0 : amount,
-          });
-          cashFlowsByTag.set(category.name, flows);
-          continue;
-        }
-        const tagDays = daysByTag.get(category.name) || new Map<string, { income: number; expense: number }>();
-        const total = tagDays.get(date) || { income: 0, expense: 0 };
-        if (String(record.type) === 'income') total.income += amount;
-        else total.expense += amount;
-        tagDays.set(date, total);
-        daysByTag.set(category.name, tagDays);
-      }
-
-      const paidByUserTag = new Map<string, number>();
-      for (const row of asRows(dividendResult)) {
-        paidByUserTag.set(`${Number(row.user_id)}|${String(row.tag_name || '')}`, num(row.paid_total));
-      }
-      const stockPnlByUser = new Map<number, Map<string, number>>();
-      await Promise.all(members.map(async (member: any) => {
-        try {
-          const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
-          const overview = await getMyStockTagOverview({
-            ledgerId: input.ledgerId,
-            userId: Number(member.userId),
-            systemRole: (ctx.user as any).role,
-          });
-          stockPnlByUser.set(Number(member.userId), new Map(
-            overview.map((item: any) => [String(item.name), num(item.summary?.totalPnl)]),
-          ));
-        } catch (error) {
-          console.warn('[adminGetLedger37DividendAvailability] 股票成员回报读取失败:', member.userId, error);
-          stockPnlByUser.set(Number(member.userId), new Map());
-        }
-      }));
-
-      const users = members.map((member: any) => {
-        const userId = Number(member.userId);
-        const balances = (balancesMap[userId] || {}) as Record<string, unknown>;
-        const stockPnl = stockPnlByUser.get(userId) || new Map<string, number>();
-        const tagNames = new Set<string>();
-        for (const key of Object.keys(balances)) {
-          if (!key.includes('__') && categoryByName.has(key)) tagNames.add(key);
-        }
-        for (const tagName of stockPnl.keys()) tagNames.add(tagName);
-        for (const paidKey of paidByUserTag.keys()) {
-          const splitAt = paidKey.indexOf('|');
-          if (Number(paidKey.slice(0, splitAt)) === userId) tagNames.add(paidKey.slice(splitAt + 1));
-        }
-        const tags = [...tagNames].map((tagName) => {
-          const category = categoryByName.get(tagName);
-          const paidDividend = paidByUserTag.get(`${userId}|${tagName}`) || 0;
-          let cumulativeReturn = 0;
-          let hasReturnData = false;
-          if (category?.accountingMode === 'stock_portfolio') {
-            if (stockPnl.has(tagName)) {
-              cumulativeReturn = stockPnl.get(tagName) || 0;
-              hasReturnData = true;
-            }
-          } else {
-            const start = previousTradingDay(balances[`${tagName}__startDate`]);
-            const pausedAt = pauseDate(balances, tagName);
-            const daily = [...(daysByTag.get(tagName)?.entries() || [])]
-              .map(([date, total]) => ({ date, balance: total.income > 0 ? total.income : total.expense }))
-              .filter((day) => day.balance > 0 && (!start || day.date >= start) && (!pausedAt || day.date <= pausedAt))
-              .sort((left, right) => left.date.localeCompare(right.date));
-            const latest = daily[daily.length - 1];
-            if (latest) {
-              // 回填暂停日时，暂停日之后即使已经存在很多日历、加减本金或取回记录，
-              // 该成员的这次结算都只使用暂停日及以前的数据。
-              const flow = (cashFlowsByTag.get(tagName) || [])
-                .filter((item) => !pausedAt || item.date <= pausedAt)
-                .reduce((total, item) => ({
-                  capitalChange: total.capitalChange + item.capitalChange,
-                  withdraw: total.withdraw + item.withdraw,
-                }), { capitalChange: 0, withdraw: 0 });
-              const effectiveInitial = num(balances[tagName]) + flow.capitalChange;
-              const ratio = num(balances[`${tagName}__ratio`] ?? 100) / 100;
-              cumulativeReturn = effectiveInitial > 0
-                ? (effectiveInitial - latest.balance - flow.withdraw) * ratio
-                : 0;
-              hasReturnData = true;
-            }
-          }
-          return {
-            tagName,
-            accountingMode: category?.accountingMode || 'manual_balance',
-            cumulativeReturn: money(cumulativeReturn),
-            paidDividend: money(paidDividend),
-            availableDividend: money(cumulativeReturn - paidDividend),
-            hasReturnData,
-            order: category?.order ?? Number.MAX_SAFE_INTEGER,
-          };
-        }).sort((left, right) => left.order - right.order || left.tagName.localeCompare(right.tagName, 'zh-CN'));
-        return { userId, tags };
+      return getLedger37DividendAvailabilitySnapshot({
+        actorUserId: ctx.user.id,
+        systemRole: (ctx.user as any).role,
       });
-      return { users };
     }),
 
   // 37号分红管理：胡大叔仅可从成员头像读取该成员的全局钱包快照。

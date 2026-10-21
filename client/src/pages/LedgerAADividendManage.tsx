@@ -46,6 +46,9 @@ export default function LedgerAADividendManage() {
     reason: string;
     requestId: string;
   } | null>(null);
+  // 37号批量操作始终由服务端重新计算金额；前端只展示确认清单，不提交金额。
+  const [batchConfirmation, setBatchConfirmation] = useState<{ mode: 'distribute' | 'recover'; requestId: string; targetUserId: number } | null>(null);
+  const [batchResult, setBatchResult] = useState<any | null>(null);
 
   // 管理员备注功能（标签维度）
   const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
@@ -397,6 +400,31 @@ export default function LedgerAADividendManage() {
     ...(pausedDividendMembers.length > 0 ? [{ __pausedMemberSection: true, count: pausedDividendMembers.length }] : []),
     ...(showPausedMembers ? pausedDividendMembers : []),
   ], [activeDividendMembers, pausedDividendMembers, showPausedMembers]);
+  const batchDividendItems = useMemo(() => {
+    const distribute: Array<{ userId: number; tagName: string; amount: number }> = [];
+    const recover: Array<{ userId: number; tagName: string; amount: number }> = [];
+    const unavailableByUser: Record<number, number> = {};
+    for (const member of dividendAvailabilityData?.users ?? []) {
+      const userId = Number(member.userId);
+      for (const tag of member.tags ?? []) {
+        const available = Number(tag.availableDividend || 0);
+        if (!tag.hasReturnData) {
+          if (Math.abs(available) > 0.005) unavailableByUser[userId] = (unavailableByUser[userId] ?? 0) + 1;
+          continue;
+        }
+        if (available > 0.005) distribute.push({ userId, tagName: String(tag.tagName), amount: available });
+        else if (available < -0.005) recover.push({ userId, tagName: String(tag.tagName), amount: Math.abs(available) });
+      }
+    }
+    const total = (items: Array<{ amount: number }>) => Math.round(items.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+    return {
+      distribute,
+      recover,
+      distributeTotal: total(distribute),
+      recoverTotal: total(recover),
+      unavailableByUser,
+    };
+  }, [dividendAvailabilityData]);
 
   // ── 普通成员：获取自己的分红明细 ──
   const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
@@ -435,6 +463,18 @@ export default function LedgerAADividendManage() {
       await Promise.all([refetchDividends(), refetchDividendAvailability(), recoveryWalletQuery.refetch()]);
     },
     onError: (err) => toast.error(err.message || '分红回填失败'),
+  });
+  const batchDividendMutation = trpc.adminExecuteLedger37DividendBatch.useMutation({
+    onSuccess: async (result: any) => {
+      const actionLabel = result.mode === 'recover' ? '批量补分红' : '批量提取分红';
+      const completedCount = (result.completed ?? []).filter((item: any) => !item.alreadyCompleted).length;
+      const skippedCount = (result.skipped ?? []).length;
+      toast.success(skippedCount > 0 ? `${actionLabel}完成 ${completedCount} 笔，跳过 ${skippedCount} 笔` : `${actionLabel}已完成 ${completedCount} 笔`);
+      setBatchConfirmation(null);
+      setBatchResult(result);
+      await Promise.all([refetchDividends(), refetchDividendAvailability()]);
+    },
+    onError: (err) => toast.error(err.message || '批量分红处理失败'),
   });
 
   // 删除分红（管理员）
@@ -485,6 +525,10 @@ export default function LedgerAADividendManage() {
   const buildRecoveryRequestId = () => {
     const entropy = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 14).toUpperCase()}`;
     return `L37REC${entropy}`.padEnd(16, '0');
+  };
+  const buildBatchRequestId = () => {
+    const entropy = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 16).toUpperCase()}`;
+    return `L37BATCH${entropy}`.padEnd(16, '0').slice(0, 48);
   };
 
   const handleAddSubmit = () => {
@@ -805,6 +849,11 @@ export default function LedgerAADividendManage() {
             ...(hasPausedTagSection ? [{ __pausedTagSection: true, count: pausedTagGroups.length }] : []),
             ...(!hasPausedTagSection || isPausedTagSectionExpanded ? pausedTagGroups : []),
           ];
+          const memberDistributeItems = batchDividendItems.distribute.filter((item) => item.userId === userId);
+          const memberRecoverItems = batchDividendItems.recover.filter((item) => item.userId === userId);
+          const memberDistributeTotal = Math.round(memberDistributeItems.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+          const memberRecoverTotal = Math.round(memberRecoverItems.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+          const memberUnavailableCount = batchDividendItems.unavailableByUser[userId] ?? 0;
 
           return (
             <div key={userId} className="rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
@@ -865,6 +914,23 @@ export default function LedgerAADividendManage() {
               {/* 标签分组（第一级：每个标签汇总；点开第二级：该标签下每笔明细） */}
               {isExpanded && memberTagGroups.length > 0 && (
                 <div style={{ borderTop: '1px solid #F5F5F5' }}>
+                  {ledgerId === 37 && (
+                    <div className="px-4 py-3" style={{ backgroundColor: '#FAFAFA', borderBottom: '1px solid #ECEFF1' }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>按标签结算分红</span>
+                        <span className="text-[11px]" style={{ color: '#9E9E9E' }}>每个标签独立计算</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="rounded-lg px-2.5 py-2" style={{ backgroundColor: '#FFFFFF' }}><div className="text-[10px]" style={{ color: '#9E9E9E' }}>可提分红</div><div className="mt-0.5 text-sm font-semibold" style={{ color: '#D32F2F' }}>¥{memberDistributeTotal.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div><div className="mt-0.5 text-[10px]" style={{ color: '#9E9E9E' }}>{memberDistributeItems.length} 个正差额标签</div></div>
+                        <div className="rounded-lg px-2.5 py-2" style={{ backgroundColor: '#FFFFFF' }}><div className="text-[10px]" style={{ color: '#9E9E9E' }}>待补分红</div><div className="mt-0.5 text-sm font-semibold" style={{ color: memberRecoverTotal > 0 ? '#237A39' : '#757575' }}>¥{memberRecoverTotal.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div><div className="mt-0.5 text-[10px]" style={{ color: '#9E9E9E' }}>{memberRecoverItems.length} 个负差额标签</div></div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button type="button" disabled={batchDividendMutation.isPending || memberDistributeItems.length === 0} onClick={() => setBatchConfirmation({ mode: 'distribute', requestId: buildBatchRequestId(), targetUserId: userId })} className="rounded-lg py-2 text-xs font-semibold disabled:opacity-45" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>批量提取分红{memberDistributeItems.length > 0 ? ` · ${memberDistributeItems.length}笔` : ''}</button>
+                        <button type="button" disabled={batchDividendMutation.isPending || memberRecoverItems.length === 0} onClick={() => setBatchConfirmation({ mode: 'recover', requestId: buildBatchRequestId(), targetUserId: userId })} className="rounded-lg border py-2 text-xs font-semibold disabled:opacity-45" style={{ backgroundColor: '#FFFFFF', borderColor: '#BBE0C2', color: '#237A39' }}>批量补分红{memberRecoverItems.length > 0 ? ` · ${memberRecoverItems.length}笔` : ''}</button>
+                      </div>
+                      {memberUnavailableCount > 0 && <div className="mt-2 text-[10px]" style={{ color: '#9E9E9E' }}>有 {memberUnavailableCount} 个标签暂缺回报数据，未纳入批量操作。</div>}
+                    </div>
+                  )}
                   {displayedTagRows.map((grp: any) => {
                     if (grp.__pausedTagSection) {
                       return (
@@ -1227,6 +1293,67 @@ export default function LedgerAADividendManage() {
                 {addMutation.isPending || recoverDividendMutation.isPending ? '提交中...' : addFormRequiresRecovery ? '核对扣回明细' : '确认添加'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {batchConfirmation && (() => {
+        const isRecovery = batchConfirmation.mode === 'recover';
+        const items = (isRecovery ? batchDividendItems.recover : batchDividendItems.distribute)
+          .filter((item) => item.userId === batchConfirmation.targetUserId);
+        const total = Math.round(items.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+        const actionLabel = isRecovery ? '批量补分红' : '批量提取分红';
+        const targetMember = dividendMembers.find((member: any) => Number(member.userId) === batchConfirmation.targetUserId);
+        return (
+          <div
+            className="fixed inset-0 z-[70] flex items-end justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.58)' }}
+            onClick={() => !batchDividendMutation.isPending && setBatchConfirmation(null)}
+          >
+            <div className="w-full overflow-hidden rounded-t-2xl" style={{ backgroundColor: '#FFFFFF', maxWidth: 480 }} onClick={(event) => event.stopPropagation()}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: isRecovery ? '#D7EDD9' : '#FCE4E4', backgroundColor: isRecovery ? '#F4FBF5' : '#FFF8F8' }}>
+                <div className="text-base font-semibold" style={{ color: isRecovery ? '#237A39' : '#B71C1C' }}>确认{actionLabel}</div>
+                <div className="mt-1 text-xs leading-5" style={{ color: '#757575' }}>
+                  {isRecovery
+                    ? `只处理负差额标签：逐笔从 ${targetMember?.displayName ?? `用户${batchConfirmation.targetUserId}`} 的人民币钱包扣回待补金额；任一笔余额不足会跳过。`
+                    : `只处理正差额标签：逐笔把 ${targetMember?.displayName ?? `用户${batchConfirmation.targetUserId}`} 的可提分红入账至人民币钱包。`}
+                </div>
+              </div>
+              <div className="px-4 py-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#FAFAFA' }}><div className="text-[11px]" style={{ color: '#9E9E9E' }}>逐笔数量</div><div className="mt-0.5 text-lg font-semibold" style={{ color: '#1A1A1A' }}>{items.length} 笔</div></div>
+                  <div className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#FAFAFA' }}><div className="text-[11px]" style={{ color: '#9E9E9E' }}>{isRecovery ? '拟补分红金额' : '拟提取分红金额'}</div><div className="mt-0.5 text-lg font-semibold" style={{ color: isRecovery ? '#237A39' : '#D32F2F' }}>¥{total.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div></div>
+                </div>
+                <div className="mt-3 overflow-y-auto rounded-xl border px-3" style={{ borderColor: '#F0F0F0', maxHeight: 190 }}>
+                  {items.slice(0, 8).map((item) => {
+                    const member = dividendMembers.find((candidate: any) => Number(candidate.userId) === item.userId);
+                    return <div key={`${item.userId}-${item.tagName}`} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" style={{ borderColor: '#F5F5F5' }}><div className="min-w-0"><div className="truncate text-sm" style={{ color: '#424242' }}>{member?.displayName ?? `用户${item.userId}`}</div><div className="truncate text-[11px]" style={{ color: '#9E9E9E' }}>{item.tagName}</div></div><div className="shrink-0 text-sm font-semibold" style={{ color: isRecovery ? '#237A39' : '#D32F2F' }}>¥{item.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div></div>;
+                  })}
+                  {items.length > 8 && <div className="py-2 text-center text-xs" style={{ color: '#9E9E9E' }}>另有 {items.length - 8} 笔将按相同规则逐笔处理</div>}
+                </div>
+                <div className="mt-3 rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: isRecovery ? '#F4FBF5' : '#FFF8F8', color: '#616161' }}>
+                  服务端确认时会重新计算每笔“累计回报－已分红”。金额变化、已被其他操作处理的项目会安全跳过；本次不会给成员分红备注写入默认文字。
+                </div>
+              </div>
+              <div className="flex gap-3 px-4 pb-5">
+                <button type="button" onClick={() => setBatchConfirmation(null)} disabled={batchDividendMutation.isPending} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ color: '#616161', backgroundColor: '#F5F5F5', opacity: batchDividendMutation.isPending ? 0.55 : 1 }}>取消</button>
+                <button type="button" onClick={() => batchDividendMutation.mutate({ ledgerId: 37, targetUserId: batchConfirmation.targetUserId, mode: batchConfirmation.mode, requestId: batchConfirmation.requestId })} disabled={batchDividendMutation.isPending || items.length === 0} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ color: '#FFFFFF', backgroundColor: isRecovery ? '#237A39' : '#D32F2F', opacity: batchDividendMutation.isPending || items.length === 0 ? 0.55 : 1 }}>{batchDividendMutation.isPending ? '逐笔处理中...' : `确认${actionLabel}`}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {batchResult && (
+        <div className="fixed inset-0 z-[71] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setBatchResult(null)}>
+          <div className="w-full overflow-hidden rounded-t-2xl" style={{ backgroundColor: '#FFFFFF', maxWidth: 480 }} onClick={(event) => event.stopPropagation()}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}><div className="text-base font-semibold" style={{ color: '#1A1A1A' }}>{batchResult.mode === 'recover' ? '批量补分红结果' : '批量提取分红结果'}</div></div>
+            <div className="px-4 py-4">
+              <div className="flex items-center justify-between text-sm"><span style={{ color: '#757575' }}>已完成</span><span className="font-semibold" style={{ color: '#1A1A1A' }}>{(batchResult.completed ?? []).length} 笔</span></div>
+              <div className="mt-2 flex items-center justify-between text-sm"><span style={{ color: '#757575' }}>已跳过</span><span className="font-semibold" style={{ color: (batchResult.skipped ?? []).length > 0 ? '#C62828' : '#1A1A1A' }}>{(batchResult.skipped ?? []).length} 笔</span></div>
+              {(batchResult.skipped ?? []).length > 0 && <div className="mt-3 max-h-40 overflow-y-auto rounded-xl px-3" style={{ backgroundColor: '#FFF8F8' }}>{batchResult.skipped.map((item: any) => <div key={`${item.userId}-${item.tagName}`} className="border-b py-2 last:border-b-0" style={{ borderColor: '#FBE9E7' }}><div className="flex justify-between gap-3 text-xs"><span className="truncate" style={{ color: '#424242' }}>{dividendMembers.find((member: any) => Number(member.userId) === Number(item.userId))?.displayName ?? `用户${item.userId}`} · {item.tagName}</span><span className="shrink-0" style={{ color: '#C62828' }}>¥{Number(item.amount || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span></div><div className="mt-0.5 text-[11px]" style={{ color: '#9E9E9E' }}>{item.reason}</div></div>)}</div>}
+            </div>
+            <div className="px-4 pb-5"><button type="button" onClick={() => setBatchResult(null)} className="w-full rounded-xl py-3 text-sm font-semibold" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>完成</button></div>
           </div>
         </div>
       )}
