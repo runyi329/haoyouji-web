@@ -191,12 +191,31 @@ export default function LedgerAADividendManage() {
   const recoveryOutstandingCny = recoveryDraft?.assetCode === 'CNY' && recoveryDraft.tagName
     ? Math.max(0, -Number(availabilityByUserTag.get(recoveryDraft.targetUserId)?.get(recoveryDraft.tagName)?.availableDividend ?? 0))
     : 0;
+  const recoveryAmountExceedsOutstanding = !!recoveryDraft
+    && recoveryDraft.assetCode === 'CNY'
+    && recoveryOutstandingCny > 0
+    && recoveryDraft.amount > recoveryOutstandingCny + 1e-8;
+  const addFormAvailableDividend = addForm.targetUserId > 0 && addForm.tagName
+    ? Number(availabilityByUserTag.get(addForm.targetUserId)?.get(addForm.tagName)?.availableDividend ?? 0)
+    : 0;
+  const addFormRequiresRecovery = ledgerId === 37 && Number.isFinite(addFormAvailableDividend) && addFormAvailableDividend < 0;
+  const addFormRecoveryAmountInvalid = addFormRequiresRecovery
+    && (!Number.isFinite(Number(addForm.amount)) || Number(addForm.amount) >= 0);
   const formatRecoveryQuantity = (value: number, assetCode: string) => Number(value || 0).toLocaleString('zh-CN', {
     maximumFractionDigits: assetCode === 'CNY' ? 2 : 8,
   });
   const recoveryWalletLabel = (assetCode: string, amount: number) => assetCode === 'CNY'
     ? `¥${formatRecoveryQuantity(amount, assetCode)}`
     : `${formatRecoveryQuantity(amount, assetCode)} ${assetCode}`;
+  const getTagOutstandingCny = (targetUserId: number, tagName: string) => {
+    if (ledgerId !== 37 || !targetUserId || !tagName) return 0;
+    const availableDividend = Number(availabilityByUserTag.get(targetUserId)?.get(tagName)?.availableDividend ?? 0);
+    return Number.isFinite(availableDividend) && availableDividend < 0 ? Math.abs(availableDividend) : 0;
+  };
+  const formatRecoveryInput = (amount: number) => {
+    const normalized = Math.max(0, Number(amount) || 0);
+    return `-${Number(normalized.toFixed(8)).toString()}`;
+  };
   const fillRecoveryFromWallet = () => {
     if (!recoveryDraft) return;
     if (!recoveryWalletMatches || recoveryWalletQuery.isFetching) {
@@ -216,8 +235,36 @@ export default function LedgerAADividendManage() {
     if (recoveryDraft.source === 'quick') setQuickAmount(text);
     else setAddForm(form => ({ ...form, amount: text }));
   };
-  const validateRecoveryWallet = (targetUserId: number, assetCode: string, amount: number) => {
+  const openQuickDividendAction = (targetUserId: number, tagName: string) => {
+    const outstandingCny = getTagOutstandingCny(targetUserId, tagName);
+    setQuickAdd({ userId: targetUserId, tagName });
+    // 标签已超发时，快捷入口本质上就是回填：直接带出全部待回填金额并立即读取钱包。
+    setQuickAmount(outstandingCny > 0 ? formatRecoveryInput(outstandingCny) : '');
+    setQuickNote('');
+  };
+  const selectDividendTagForAdd = (tagName: string) => {
+    const outstandingCny = getTagOutstandingCny(addForm.targetUserId, tagName);
+    setAddForm(form => ({
+      ...form,
+      tagName,
+      assetCode: outstandingCny > 0 ? 'CNY' : form.assetCode,
+      // 从一个待回填标签切换到普通标签时，不保留负数，避免误触发扣回。
+      amount: outstandingCny > 0 ? formatRecoveryInput(outstandingCny) : (Number(form.amount) < 0 ? '' : form.amount),
+    }));
+  };
+  const validateRecoveryWallet = (targetUserId: number, tagName: string, assetCode: string, amount: number) => {
     const requestedAmount = Math.abs(amount);
+    if (assetCode === 'CNY') {
+      const outstandingCny = getTagOutstandingCny(targetUserId, tagName);
+      if (!(outstandingCny > 0)) {
+        toast.error('该标签目前没有待回填金额，不能从钱包扣回');
+        return false;
+      }
+      if (requestedAmount > outstandingCny + 1e-8) {
+        toast.error(`本标签待回填仅 ${recoveryWalletLabel('CNY', outstandingCny)}，不能超额扣回`);
+        return false;
+      }
+    }
     if (!recoveryWalletMatches
       || Number(recoveryWalletQuery.data?.userId) !== targetUserId
       || String(recoveryWalletQuery.data?.assetCode || '').toUpperCase() !== assetCode.toUpperCase()) {
@@ -445,9 +492,15 @@ export default function LedgerAADividendManage() {
     if (!addForm.tagName) return toast.error("请选择标签");
     const amount = parseFloat(addForm.amount);
     if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
+    if (ledgerId === 37 && addFormRequiresRecovery && amount >= 0) {
+      return toast.error('该标签已超发，只能从成员人民币钱包回填，不能再新增分红');
+    }
+    if (ledgerId === 37 && !addFormRequiresRecovery && amount < 0) {
+      return toast.error('该标签没有待回填金额，只能新增正数分红入成员钱包');
+    }
     if (ledgerId === 37 && amount < 0) {
       if (!addForm.note.trim()) return toast.error('负数回填必须填写回填原因');
-      if (!validateRecoveryWallet(addForm.targetUserId, addForm.assetCode, amount)) return;
+      if (!validateRecoveryWallet(addForm.targetUserId, addForm.tagName, addForm.assetCode, amount)) return;
       setRecoveryConfirmation({
         targetUserId: addForm.targetUserId,
         tagName: addForm.tagName,
@@ -494,9 +547,16 @@ export default function LedgerAADividendManage() {
     if (!quickAdd) return;
     const amount = parseFloat(quickAmount);
     if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
+    const quickRequiresRecovery = getTagOutstandingCny(quickAdd.userId, quickAdd.tagName) > 0;
+    if (ledgerId === 37 && quickRequiresRecovery && amount >= 0) {
+      return toast.error('该标签已超发，只能从成员人民币钱包回填，不能再新增分红');
+    }
+    if (ledgerId === 37 && !quickRequiresRecovery && amount < 0) {
+      return toast.error('该标签没有待回填金额，只能新增正数分红入成员钱包');
+    }
     if (ledgerId === 37 && amount < 0) {
       if (!quickNote.trim()) return toast.error('负数回填必须填写回填原因');
-      if (!validateRecoveryWallet(quickAdd.userId, 'CNY', amount)) return;
+      if (!validateRecoveryWallet(quickAdd.userId, quickAdd.tagName, 'CNY', amount)) return;
       setRecoveryConfirmation({
         targetUserId: quickAdd.userId,
         tagName: quickAdd.tagName,
@@ -557,10 +617,12 @@ export default function LedgerAADividendManage() {
             </button>
           </div>
         )}
-        {recoveryAmountExceedsWallet ? (
+        {recoveryAmountExceedsOutstanding ? (
+          <div className="mt-2 text-[11px] leading-4" style={{ color: '#C62828' }}>本次扣回金额超过本标签待回填额，请减少金额。</div>
+        ) : recoveryAmountExceedsWallet ? (
           <div className="mt-2 text-[11px] leading-4" style={{ color: '#C62828' }}>本次扣回金额超过钱包可用余额，请减少金额；服务端也会在扣回时再次锁定并校验余额。</div>
         ) : (
-          <div className="mt-2 text-[11px] leading-4" style={{ color: '#78909C' }}>可手动填写扣回金额，但不能超过当前钱包可用余额；确认时会再次按钱包实时余额校验。</div>
+          <div className="mt-2 text-[11px] leading-4" style={{ color: '#78909C' }}>可手动填写部分回填金额，但不能超过本标签待回填额和当前钱包可用余额；确认时会再次按钱包实时余额校验。</div>
         )}
       </div>
     );
@@ -827,6 +889,7 @@ export default function LedgerAADividendManage() {
                     const cumulativeReturn = Number(availability?.cumulativeReturn ?? 0);
                     const paidDividend = Number(availability?.paidDividend ?? 0);
                     const availableAmount = Number(availability?.availableDividend ?? 0);
+                    const hasOutstandingRecovery = ledgerId === 37 && availableAmount < 0;
                     const tagPillBackground = grp.isPaused ? '#E3F2FD' : '#FFF3E0';
                     const tagPillColor = grp.isPaused ? '#1565C0' : '#E65100';
                     // 一条完整进度条由三项金额按绝对值比例依次分段，负值仍以其规模参与比例并保留蓝色提示。
@@ -872,7 +935,7 @@ export default function LedgerAADividendManage() {
                                   <div className="text-[13px] leading-5 font-semibold tabular-nums whitespace-nowrap" style={{ color: paidColor }}>{formatCny(paidDividend)}</div>
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="text-[11px] font-medium" style={{ color: availabilityColor }}>可分红</div>
+                                  <div className="text-[11px] font-medium" style={{ color: availabilityColor }}>{availableAmount < 0 ? '待回填' : '可分红'}</div>
                                   <div className="text-[13px] leading-5 font-semibold tabular-nums whitespace-nowrap" style={{ color: availabilityColor }}>{formatCny(availableAmount)}</div>
                                 </div>
                               </div>
@@ -981,8 +1044,9 @@ export default function LedgerAADividendManage() {
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="number"
-                                      min={ledgerId === 37 && Number(quickAmount) < 0 && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
-                                      placeholder={ledgerId === 37 ? '金额（负数扣回）' : '金额'}
+                                      min={ledgerId === 37 && hasOutstandingRecovery && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
+                                      max={ledgerId === 37 && hasOutstandingRecovery ? 0 : undefined}
+                                      placeholder={ledgerId === 37 && Number(quickAmount) < 0 ? '回填金额' : ledgerId === 37 ? '金额（负数扣回）' : '金额'}
                                       value={quickAmount}
                                       onChange={e => setQuickAmount(e.target.value)}
                                       className="w-20 px-2 py-1.5 rounded-lg text-xs outline-none border"
@@ -999,7 +1063,7 @@ export default function LedgerAADividendManage() {
                                     />
                                     <button
                                       onClick={handleQuickAddSubmit}
-                                      disabled={addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(quickAmount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet))}
+                                      disabled={addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && hasOutstandingRecovery && (!Number.isFinite(Number(quickAmount)) || Number(quickAmount) >= 0 || !recoveryWalletMatches || recoveryAmountExceedsWallet || recoveryAmountExceedsOutstanding))}
                                       className="p-1.5 rounded-lg flex-shrink-0 disabled:opacity-40"
                                       style={{ backgroundColor: '#E8F5E9' }}
                                     >
@@ -1018,11 +1082,12 @@ export default function LedgerAADividendManage() {
                               ) : (
                                 <>
                                   <button
-                                    onClick={() => { setQuickAdd({ userId, tagName: grp.tagName }); setQuickAmount(''); setQuickNote(''); }}
+                                    onClick={() => openQuickDividendAction(userId, grp.tagName)}
                                     className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                                    style={{ backgroundColor: '#FFEBEE', color: '#D32F2F' }}
+                                    style={{ backgroundColor: hasOutstandingRecovery ? '#FFF3E0' : '#FFEBEE', color: hasOutstandingRecovery ? '#B71C1C' : '#D32F2F' }}
                                   >
-                                    <Plus className="w-3.5 h-3.5" /> 加一笔
+                                    {hasOutstandingRecovery ? <RotateCcw className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                    {hasOutstandingRecovery ? '回填分红' : '加一笔'}
                                   </button>
                                   <button
                                     onClick={() => setShowNoteModal({ userId, userName: member.displayName, tagName: grp.tagName })}
@@ -1071,7 +1136,7 @@ export default function LedgerAADividendManage() {
                   {dividendMembers.map((m: any) => (
                     <button
                       key={m.userId}
-                      onClick={() => setAddForm(f => ({ ...f, targetUserId: m.userId, tagName: "" }))}
+                      onClick={() => setAddForm(f => ({ ...f, targetUserId: m.userId, tagName: '', amount: '', assetCode: 'CNY', note: '' }))}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
                       style={{
                         backgroundColor: addForm.targetUserId === m.userId ? '#D32F2F' : '#FAFAFA',
@@ -1096,7 +1161,7 @@ export default function LedgerAADividendManage() {
                       return (
                       <button
                         key={tagName}
-                        onClick={() => setAddForm(f => ({ ...f, tagName }))}
+                        onClick={() => selectDividendTagForAdd(tagName)}
                         className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
                         style={{
                           backgroundColor: addForm.tagName === tagName ? '#D32F2F' : '#FAFAFA',
@@ -1114,10 +1179,10 @@ export default function LedgerAADividendManage() {
 
               {/* 币种与金额 */}
               <div>
-                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{ledgerId === 37 ? '入账币种与数量（负数为回填扣回）' : '分红金额（¥）'}</div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{addFormRequiresRecovery ? '回填金额（从人民币钱包扣回）' : ledgerId === 37 ? '入账币种与数量（将入成员钱包）' : '分红金额（¥）'}</div>
                 <div className={ledgerId === 37 ? 'grid grid-cols-[108px_1fr] gap-2' : ''}>
                   {ledgerId === 37 && (
-                    <select value={addForm.assetCode} onChange={e => setAddForm(f => ({ ...f, assetCode: e.target.value }))} className="rounded-xl border bg-white px-2 text-sm outline-none" style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}>
+                    <select value={addForm.assetCode} disabled={addFormRequiresRecovery} onChange={e => setAddForm(f => ({ ...f, assetCode: e.target.value }))} className="rounded-xl border bg-white px-2 text-sm outline-none disabled:opacity-60" style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}>
                       <option value="CNY">人民币 CNY</option>
                       <option value="USDT">USDT</option>
                       {AI_WALLET_CRYPTO_MARKET_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
@@ -1126,17 +1191,17 @@ export default function LedgerAADividendManage() {
                   <input
                     type="number"
                     inputMode="decimal"
-                    min={ledgerId === 37 && Number(addForm.amount) < 0 && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
-                    placeholder={ledgerId === 37 ? `请输入${addForm.assetCode}数量，负数为扣回` : '请输入金额'}
+                    min={ledgerId === 37 && addFormRequiresRecovery && recoveryWalletMatches ? -recoveryWalletAvailable : undefined}
+                    max={ledgerId === 37 && addFormRequiresRecovery ? 0 : undefined}
+                    placeholder={addFormRequiresRecovery ? '回填金额（已自动带入待回填额）' : ledgerId === 37 ? `请输入${addForm.assetCode}数量` : '请输入金额'}
                     value={addForm.amount}
                     onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
                     style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
                   />
                 </div>
-                {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: Number(addForm.amount) < 0 ? '#C62828' : '#78909C' }}>{Number(addForm.amount) < 0 ? '负数不会作为入账保存：确认后将从成员同币种全局钱包扣回，并写入独立回填审计流水。' : '确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。'}</div>}
-                {ledgerId === 37 && Number(addForm.amount) < 0 && addForm.targetUserId > 0 && renderRecoveryWalletReference('modal')}
-                {ledgerId === 37 && Number(addForm.amount) < 0 && !addForm.targetUserId && <div className="mt-2 text-[11px]" style={{ color: '#C62828' }}>请先选择成员，系统才会引用其钱包可用余额。</div>}
+                {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: addFormRequiresRecovery ? '#C62828' : '#78909C' }}>{addFormRequiresRecovery ? '该标签已超发，当前只能从成员人民币钱包回填；不能再新增分红。' : '确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。'}</div>}
+                {ledgerId === 37 && addFormRequiresRecovery && addForm.targetUserId > 0 && renderRecoveryWalletReference('modal')}
               </div>
 
               {/* 备注 */}
@@ -1155,11 +1220,11 @@ export default function LedgerAADividendManage() {
               {/* 提交按钮 */}
               <button
                 onClick={handleAddSubmit}
-                disabled={addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(addForm.amount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet))}
+                disabled={addMutation.isPending || recoverDividendMutation.isPending || (addFormRequiresRecovery && (addFormRecoveryAmountInvalid || !recoveryWalletMatches || recoveryAmountExceedsWallet || recoveryAmountExceedsOutstanding))}
                 className="w-full py-3 rounded-xl text-sm font-semibold"
-                style={{ backgroundColor: ledgerId === 37 && Number(addForm.amount) < 0 ? '#B71C1C' : '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending || recoverDividendMutation.isPending || (ledgerId === 37 && Number(addForm.amount) < 0 && (!recoveryWalletMatches || recoveryAmountExceedsWallet)) ? 0.6 : 1 }}
+                style={{ backgroundColor: addFormRequiresRecovery ? '#B71C1C' : '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending || recoverDividendMutation.isPending || (addFormRequiresRecovery && (addFormRecoveryAmountInvalid || !recoveryWalletMatches || recoveryAmountExceedsWallet || recoveryAmountExceedsOutstanding)) ? 0.6 : 1 }}
               >
-                {addMutation.isPending || recoverDividendMutation.isPending ? '提交中...' : ledgerId === 37 && Number(addForm.amount) < 0 ? '核对扣回明细' : '确认添加'}
+                {addMutation.isPending || recoverDividendMutation.isPending ? '提交中...' : addFormRequiresRecovery ? '核对扣回明细' : '确认添加'}
               </button>
             </div>
           </div>
@@ -1206,9 +1271,9 @@ export default function LedgerAADividendManage() {
               <button
                 type="button"
                 onClick={() => recoverDividendMutation.mutate({ ledgerId: 37, ...recoveryConfirmation })}
-                disabled={recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet}
+                disabled={recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet || recoveryAmountExceedsOutstanding}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                style={{ color: '#FFFFFF', backgroundColor: '#B71C1C', opacity: recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet ? 0.55 : 1 }}
+                style={{ color: '#FFFFFF', backgroundColor: '#B71C1C', opacity: recoverDividendMutation.isPending || !recoveryWalletMatches || recoveryAmountExceedsWallet || recoveryAmountExceedsOutstanding ? 0.55 : 1 }}
               >
                 {recoverDividendMutation.isPending ? '扣回中...' : '确认扣回'}
               </button>
