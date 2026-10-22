@@ -8652,14 +8652,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className="text-slate-300">·</span>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                         <span className="text-slate-300">·</span>
-                        <span className="shrink-0 text-blue-600">分佣收益</span>
-                        <span className="text-slate-300">·</span>
                       </> : historyIncomeKind === "shared" ? <>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
                         <span className="text-slate-300">·</span>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
-                        <span className="text-slate-300">·</span>
-                        <span className="shrink-0 text-blue-600">共享收益</span>
                         <span className="text-slate-300">·</span>
                       </> : isSharedIncomePerspective ? <>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)}>共享收益</span>
