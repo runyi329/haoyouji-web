@@ -11771,6 +11771,8 @@ ${klinesSummary}
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
         direction: z.enum(['withdrawal', 'deposit']),
+        // 仅投入需要，数量始终由服务端按金额和此价格定点计算，客户端不可传入数量。
+        ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         note: z.string().trim().max(300).optional(),
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
@@ -11791,6 +11793,7 @@ ${klinesSummary}
           occurredOn: input.occurredOn,
           amount: input.amount,
           direction: input.direction,
+          ethReferencePrice: input.ethReferencePrice,
           note: input.note,
           maximumTotalAmount: input.maximumTotalAmount,
         });
@@ -11804,6 +11807,7 @@ ${klinesSummary}
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
         direction: z.enum(['withdrawal', 'deposit']),
+        ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         note: z.string().trim().max(300).optional(),
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
@@ -11824,6 +11828,7 @@ ${klinesSummary}
           occurredOn: input.occurredOn,
           amount: input.amount,
           direction: input.direction,
+          ethReferencePrice: input.ethReferencePrice,
           note: input.note,
           maximumTotalAmount: input.maximumTotalAmount,
         });
