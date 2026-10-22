@@ -6651,6 +6651,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       t0Toast.error(message);
     };
     if (selectedAction.opening) setOpeningSaveError(null);
+    else setCloseSaveError(null);
     const isCounterpartyClosing = !selectedAction.opening && Boolean(closingSourceTrade?.isCounterpartyView);
     // 管理员反向投影下的“平空/平多”仅是展示方向；写库仍沿用用户端原始方向，确保 FIFO 永远以真实流水核算。
     const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
@@ -6889,11 +6890,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const closeScopeBuckets = buildPositionBuckets(closeScopeTrades);
       const target = closeScopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archiveTargetPrice));
       if (!target || target.remainingQuantity <= 0) {
-        t0Toast.error("该价格档位已无可平数量");
+        showSaveValidationError("该价格档位已无可平数量");
         return;
       }
       if (quantity - target.remainingQuantity > 0.0000001) {
-        t0Toast.error(`该价格档位最多可平 ${formatQuantity(target.remainingQuantity)} ETH`);
+        showSaveValidationError(`该价格档位最多可平 ${formatQuantity(target.remainingQuantity)} ETH`);
         return;
       }
       if (targetOpeningEntryId) {
@@ -9744,7 +9745,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	            </header>
 	            <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-3 pb-28 sm:px-5">
 	              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-	                <div className="flex items-baseline justify-between gap-3"><div className="text-sm font-semibold text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</div><div className="text-[11px] tabular-nums text-slate-500">开 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} · 平 {formatPrice(Number(entryForm.price))}</div></div>
+	                <div className="flex items-baseline justify-between gap-3"><div className="text-sm font-semibold text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</div><div className="text-[11px] tabular-nums text-slate-500">开 {closingSourceTrade ? formatPrice(closingSourceTrade.price) : entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} · 平 {formatPrice(Number(entryForm.price))}</div></div>
+	                {closingSourceTrade && <div className="mt-1 text-[10px] tabular-nums text-slate-500">来源订单 #{getStoredEntryId(closingSourceTrade)} · 实际开仓价 {formatPrice(closingSourceTrade.price)} U · 归档 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} U</div>}
 	                <div className="mt-3 grid grid-cols-2 overflow-hidden rounded border border-slate-200 text-center tabular-nums"><div className="border-r border-slate-100 px-2 py-2"><div className="text-[10px] text-slate-500">本单可共享上限</div><div className="mt-0.5 text-base font-bold text-slate-900">{sharedIncomeBudget.maximum.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div><div className="px-2 py-2"><div className="text-[10px] text-slate-500">本次计划分配</div><div className="mt-0.5 text-base font-bold text-indigo-700">{sharedIncomeBudget.allocationLimit.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div></div>
 	                {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 && <div className="mt-3"><div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">本次拿出多少分配</div><div className="flex overflow-hidden rounded border border-slate-200 text-[11px] font-semibold"><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("percentage"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 px-3 ${sharedIncomeAllocationBudgetMode === "percentage" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>按比例</button><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 border-l border-slate-200 px-3 ${sharedIncomeAllocationBudgetMode === "amount" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>填金额</button></div></div><div className="mt-2 flex items-center gap-2"><div className="relative min-w-0 flex-1"><input aria-label={sharedIncomeAllocationBudgetMode === "percentage" ? "本次共享分配比例" : "本次共享分配金额"} value={sharedIncomeAllocationBudgetValue} onChange={(event) => { setSharedIncomeAllocationBudgetValue(event.target.value.replace(/[^0-9.]/g, "")); setSharedIncomeAllocationPlanError(null); }} inputMode="decimal" className="h-10 w-full rounded border border-slate-300 bg-white px-3 pr-8 text-right text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-indigo-500" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">{sharedIncomeAllocationBudgetMode === "percentage" ? "%" : "u"}</span></div>{sharedIncomeAllocationBudgetMode === "percentage" && <div className="flex shrink-0 gap-1">{[25, 50, 100].map((value) => <button key={value} type="button" onClick={() => { setSharedIncomeAllocationBudgetValue(String(value)); setSharedIncomeAllocationPlanError(null); }} className={`h-10 rounded border px-2 text-xs font-semibold ${sharedIncomeAllocationBudgetValue === String(value) ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}>{value}%</button>)}</div>}</div></div>}
 	              </section>
@@ -9766,7 +9768,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	              </> : <section className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-xs leading-5 text-slate-500">本单没有可共享的正向净收益，可直接确认平仓；收益为负或未关联用户的订单不会触发共享分配。</section>}
 	              {(sharedIncomeBudget.error || sharedIncomeAllocationPlanError || closeSaveError) && <div role="alert" className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{closeSaveError ? <><span className="font-semibold">平仓未确认：</span>{closeSaveError}</> : sharedIncomeAllocationPlanError || sharedIncomeBudget.error}</div>}
 	            </main>
-	            <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-2px_12px_rgba(15,23,42,0.06)] sm:px-5"><div className="mx-auto flex w-full max-w-2xl gap-2"><button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button><button disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button></div></footer>
+	            <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-2px_12px_rgba(15,23,42,0.06)] sm:px-5">
+	              <div className="mx-auto w-full max-w-2xl">
+	                {closeSaveError && <div role="alert" className="mb-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium leading-5 text-rose-700"><span className="font-semibold">平仓未确认：</span>{closeSaveError}</div>}
+	                <div className="flex gap-2">
+	                  <button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button>
+	                  <button disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
+	                </div>
+	              </div>
+	            </footer>
 	          </div>
 	        </div>
 	      )}
