@@ -1759,8 +1759,10 @@ function formatProfitSharePercentage(percentage: number) {
 
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
+  // 仓位扣减必须遵循账本实际写入顺序，而不是挂单的历史成交时间。否则一笔后来
+  // 才录入、但 filledAt 更早的订单会被倒插进旧平仓之前，造成逐笔报价余额错位。
   const orderedTrades = [...trades]
-    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 
   for (const trade of orderedTrades) {
     const config = ACTIONS[trade.action];
@@ -1969,9 +1971,11 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
     }
   }
 
+  // 与基础仓位桶保持相同的账本顺序，避免后来录入的订单因历史成交时间更早
+  // 而被倒插到旧平仓之前，导致逐笔报价和详情页显示不同余额。
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
-    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 
   const scopeKeyFor = (trade: PreviewTrade) => [
     ACTIONS[trade.action].side,
@@ -5276,6 +5280,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (trade.relatedUserId ?? "") === (closingSourceTrade.relatedUserId ?? "")
       && (trade.relatedFundId ?? "") === (closingSourceTrade.relatedFundId ?? "")
     );
+    // 逐笔报价点进来的平仓只展示被点中的那张开仓单。其历史平仓按全局FIFO已经
+    // 分配出的实际片段带入本地详情，不能再把同一十美元归档档的其他订单混进来。
+    if (isIndividualQuoteDetail && closingSourceTrade) {
+      const sourceOpeningId = getStoredEntryId(closingSourceTrade);
+      const sourceClosingSlices = (ladderOpeningClosingAllocations.get(closingSourceTrade.id) ?? []).map(({ trade, quantity }) => ({
+        ...trade,
+        id: `individual-source-${trade.id}-${closingSourceTrade.id}`,
+        quantity,
+        fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
+        targetOpeningEntryId: sourceOpeningId,
+      }));
+      return [closingSourceTrade, ...sourceClosingSlices];
+    }
     const targetPrice = entryForm.targetPrice;
     if (targetPrice === undefined) return selectedTrades.filter((trade) => matchingSide(trade) && matchesClosingSourceScope(trade));
 
@@ -5300,13 +5317,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ));
     return [...openings, ...scopedClosings]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations, closingSourceTrade]);
+  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations, closingSourceTrade, isIndividualQuoteDetail]);
   const entryScopedBuckets = useMemo(() => {
+    if (isIndividualQuoteDetail && closingSourceTrade) {
+      return buildPositionBuckets(entryScopedTrades.filter((trade) => !trade.isPending));
+    }
     const source = entryArchiveStep === POSITION_ARCHIVE_STEP ? buckets : integratedDisplayBuckets;
     return source.filter((bucket) => bucket.side === entrySide && (
       entryForm.targetPrice === undefined || priceKey(bucket.price) === priceKey(entryForm.targetPrice)
     ));
-  }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice]);
+  }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice, entryScopedTrades, isIndividualQuoteDetail, closingSourceTrade]);
   const entryScopedFilledTrades = useMemo(
     () => entryScopedTrades.filter((trade) => !trade.isPending),
     [entryScopedTrades],
