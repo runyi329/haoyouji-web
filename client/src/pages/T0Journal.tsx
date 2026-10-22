@@ -72,6 +72,14 @@ type SharedIncomeReduction = {
   amount: number;
   sourceNetPnl: number;
 };
+type SharedIncomeEligibility = {
+  sourceUserId: number;
+  recipientUserId: number;
+  enabled: boolean;
+  updatedAt?: string;
+};
+type SharedIncomeAllocationBudgetMode = "percentage" | "amount";
+type SharedIncomeAllocationMethod = "manual" | "principal" | "historicalProfit" | "historicalLoss";
 type T0ReopenReminder = {
   id: string;
   sourceOpeningEntryId: string;
@@ -144,6 +152,11 @@ type SharedIncomeCandidate = {
   hasPrincipal: boolean;
   holdingNetPnl: number;
   closedNetPnl: number;
+  closedLossPnl: number;
+  /** 已平正收益与既得共享收益之和，供“已获得利润”权重使用。 */
+  historicalProfit: number;
+  /** 此订单使用者对该候选人的手动平仓共享资格；未设置时默认开启。 */
+  sharedIncomeEnabled: boolean;
   receivedSharedIncome: number;
   receivedSharedIncomeCount: number;
   contributedSharedIncome: number;
@@ -2552,6 +2565,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   /** 平仓确认中的共享收益草案：仅在提交当下传入服务端，额度仍由服务端用收益快照复核。 */
   const [sharedIncomeDrafts, setSharedIncomeDrafts] = useState<Record<string, string>>({});
   const [sharedIncomeTargetSelections, setSharedIncomeTargetSelections] = useState<Record<string, number>>({});
+  /** 本次平仓仅可从正向净收益中拿出的共享预算；不改变本单服务端收益上限。 */
+  const [sharedIncomeAllocationBudgetMode, setSharedIncomeAllocationBudgetMode] = useState<SharedIncomeAllocationBudgetMode>("percentage");
+  const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("100");
+  const [sharedIncomeAllocationMethod, setSharedIncomeAllocationMethod] = useState<SharedIncomeAllocationMethod>("manual");
+  const [sharedIncomeAllocationPlanError, setSharedIncomeAllocationPlanError] = useState<string | null>(null);
+  /** 切换资格后先本地稳定呈现，再由服务端权威读模型回填；关闭时不会保留该用户的本单草案。 */
+  const [sharedIncomeEligibilityOverrides, setSharedIncomeEligibilityOverrides] = useState<Record<string, boolean>>({});
   /** 止盈每一段各自保存预分配草案；成交时再由服务端按实际订单核算。 */
   const [takeProfitAllocationPlanIndex, setTakeProfitAllocationPlanIndex] = useState<number | null>(null);
   const [takeProfitSharedIncomeDrafts, setTakeProfitSharedIncomeDrafts] = useState<Record<string, string>>({});
@@ -2751,6 +2771,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	    contributions.set(sourceUserId, { amount: Math.max(0, amount), orderCount: Math.max(0, Math.floor(orderCount)) });
 	  }
 	  return contributions;
+	}, [t0JournalQuery.data]);
+	const sharedIncomeEligibilityByPair = useMemo(() => {
+	  const settings = new Map<string, boolean>();
+	  const rows = (t0JournalQuery.data as any)?.sharedIncomeEligibilities;
+	  if (!Array.isArray(rows)) return settings;
+	  for (const row of rows) {
+	    const sourceUserId = Number(row?.sourceUserId || 0);
+	    const recipientUserId = Number(row?.recipientUserId || 0);
+	    if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || !Number.isInteger(recipientUserId) || recipientUserId <= 0) continue;
+	    settings.set(`${sourceUserId}:${recipientUserId}`, Boolean(row?.enabled));
+	  }
+	  return settings;
 	}, [t0JournalQuery.data]);
 	// 系统动态来自服务端不可变审计，仅管理员范围下发；不参与仓位、资金或收益口径计算。
   const systemActivityLogs = useMemo<T0JournalSystemActivity[]>(() => {
@@ -3181,6 +3213,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (closeConfirmationStep === "input" || !showEntrySheet) {
       setSharedIncomeDrafts({});
       setSharedIncomeTargetSelections({});
+      setSharedIncomeAllocationBudgetMode("percentage");
+      setSharedIncomeAllocationBudgetValue("100");
+      setSharedIncomeAllocationMethod("manual");
+      setSharedIncomeAllocationPlanError(null);
+      setSharedIncomeEligibilityOverrides({});
       setCloseSaveError(null);
     }
     if (!showEntrySheet) setOpeningSaveError(null);
@@ -3778,7 +3815,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     const candidateByUser = new Map<string, { userId: string; name: string; username?: string; remainingQuantity: number; longQuantity: number; shortQuantity: number; firstOpenedAt: string; basis: number; unrealizedPnl: number }>();
     const closedNetPnlByUser = new Map<string, number>();
+    const closedLossPnlByUser = new Map<string, number>();
     const lastSettlementDateByUser = new Map<string, string>();
+    const recordHistoricalPnl = (relatedUserId: string | number, amount: number) => {
+      if (!relatedUserId || !Number.isFinite(amount) || Math.abs(amount) <= 0.000001) return;
+      const userId = String(relatedUserId);
+      if (amount > 0) {
+        closedNetPnlByUser.set(userId, (closedNetPnlByUser.get(userId) || 0) + amount);
+      } else {
+        closedLossPnlByUser.set(userId, (closedLossPnlByUser.get(userId) || 0) + Math.abs(amount));
+      }
+    };
     const recordSettlementDate = (relatedUserId: string | number, settledOn: string) => {
       if (!relatedUserId || getT0CalendarDateUtc(settledOn) === null) return;
       const userId = String(relatedUserId);
@@ -3801,7 +3848,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         if (handledHistoricalClosingIds.has(closingEntryId)) continue;
         handledHistoricalClosingIds.add(closingEntryId);
         const netPnl = Number(recentJournalTradeDetails.get(allocation.trade.id)?.netPnl);
-        if (!Number.isFinite(netPnl) || netPnl <= 0.000001) continue;
+        if (!Number.isFinite(netPnl)) continue;
         const distributions = buildClosingProfitShareDistribution({
           trades,
           snapshots: profitShareSnapshots,
@@ -3812,15 +3859,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         });
         if (distributions.length === 0) {
           const regularNetPnl = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
-          if (regularNetPnl > 0.000001) {
-            closedNetPnlByUser.set(opening.relatedUserId, (closedNetPnlByUser.get(opening.relatedUserId) || 0) + regularNetPnl);
-          }
+          recordHistoricalPnl(opening.relatedUserId, regularNetPnl);
           continue;
         }
         for (const distribution of distributions) {
-          if (distribution.netPnl <= 0.000001) continue;
           const beneficiaryUserId = String(distribution.beneficiaryUserId);
-          closedNetPnlByUser.set(beneficiaryUserId, (closedNetPnlByUser.get(beneficiaryUserId) || 0) + distribution.netPnl);
+          recordHistoricalPnl(beneficiaryUserId, distribution.netPnl);
           recordSettlementDate(beneficiaryUserId, settledOn);
         }
       }
@@ -3904,8 +3948,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      const receivedSharedIncome = receivedSharedIncomeTransfers
 	        .reduce((total, transfer) => total + transfer.amount, 0);
 	      const contribution = sharedIncomeContributionsBySourceUser.get(candidate.userId) || { amount: 0, orderCount: 0 };
+	      const sharedIncomeEligibilityKey = `${sourceUserId}:${candidate.userId}`;
+	      const sharedIncomeEnabled = sharedIncomeEligibilityOverrides[sharedIncomeEligibilityKey]
+	        ?? sharedIncomeEligibilityByPair.get(sharedIncomeEligibilityKey)
+	        ?? true;
       // 已结算年化口径：只计实际投入/提现、已平订单收益及既得共享收益；当前持仓浮盈亏仅展示参考，不计入年化。
       const closedNetPnl = closedNetPnlByUser.get(candidate.userId) || 0;
+	      const closedLossPnl = closedLossPnlByUser.get(candidate.userId) || 0;
       const currentNetValue = cumulativeDepositAmount + closedNetPnl + receivedSharedIncome - cumulativeWithdrawalAmount;
       const realizedCashFlows: T0XirrCashFlow[] = [
         ...userCashFlows.map((cashFlow) => ({
@@ -3923,6 +3972,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         hasPrincipal: cumulativeDepositAmount > 0,
 	        holdingNetPnl: candidate.unrealizedPnl,
 	        closedNetPnl,
+	        closedLossPnl,
+	        historicalProfit: closedNetPnl + receivedSharedIncome,
+	        sharedIncomeEnabled,
 	        receivedSharedIncome,
 	        receivedSharedIncomeCount: receivedSharedIncomeTransfers.length,
 	        contributedSharedIncome: contribution.amount,
@@ -3937,17 +3989,86 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           topUp: calculateT0XirrTargetTopUp(realizedCashFlows, currentNetValue, targetRate),
         })),
       };
-	    }).sort((left, right) => right.receivedSharedIncomeCount - left.receivedSharedIncomeCount || Number(right.hasPrincipal) - Number(left.hasPrincipal) || (left.annualizedReference ?? Number.POSITIVE_INFINITY) - (right.annualizedReference ?? Number.POSITIVE_INFINITY) || right.heldDays - left.heldDays);
+	    }).sort((left, right) => Number(right.sharedIncomeEnabled) - Number(left.sharedIncomeEnabled) || right.receivedSharedIncomeCount - left.receivedSharedIncomeCount || Number(right.hasPrincipal) - Number(left.hasPrincipal) || (left.annualizedReference ?? Number.POSITIVE_INFINITY) - (right.annualizedReference ?? Number.POSITIVE_INFINITY) || right.heldDays - left.heldDays);
     return {
       sourceNetPnl,
       shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
     };
-  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
-  const sharedIncomeAllocatedTotal = useMemo(() => Object.values(sharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0), [sharedIncomeDrafts]);
-  const sharedIncomeSaveAllocations = useMemo(() => Object.entries(sharedIncomeDrafts)
-    .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: (Number(amount) || 0).toFixed(2) }))
-    .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0), [sharedIncomeDrafts]);
+	  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
+	  const sharedIncomeBudget = useMemo(() => {
+	    const maximum = Math.max(0, Math.floor((sharedIncomeClosePreview.shareableAmount + 1e-9) * 100) / 100);
+	    const rawValue = sharedIncomeAllocationBudgetValue.trim();
+	    const value = Number(rawValue);
+	    if (!rawValue || !Number.isFinite(value) || value < 0) {
+	      return { maximum, allocationLimit: 0, error: "请输入本次共享分配额度" };
+	    }
+	    if (sharedIncomeAllocationBudgetMode === "percentage") {
+	      if (value > 100) return { maximum, allocationLimit: 0, error: "分配比例不得超过100%" };
+	      return { maximum, allocationLimit: Math.floor((maximum * value + 1e-9)) / 100, error: null as string | null };
+	    }
+	    if (value - maximum > 0.00001) return { maximum, allocationLimit: 0, error: `分配金额不得超过本单可共享收益 ${maximum.toFixed(2)} u` };
+	    return { maximum, allocationLimit: Math.floor((value + 1e-9) * 100) / 100, error: null as string | null };
+	  }, [sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue, sharedIncomeClosePreview.shareableAmount]);
+	  const sharedIncomeEligibleCandidateIds = useMemo(() => new Set(
+	    sharedIncomeClosePreview.candidates
+	      .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
+	      .map((candidate) => candidate.userId),
+	  ), [sharedIncomeClosePreview.candidates]);
+	  const sharedIncomeAllocatedTotal = useMemo(() => Array.from(sharedIncomeEligibleCandidateIds)
+	    .reduce((total, recipientUserId) => total + (Number(sharedIncomeDrafts[recipientUserId]) || 0), 0), [sharedIncomeDrafts, sharedIncomeEligibleCandidateIds]);
+	  const sharedIncomeSaveAllocations = useMemo(() => sharedIncomeClosePreview.candidates
+	    .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
+	    .map((candidate) => ({ recipientUserId: Number(candidate.userId), amount: (Number(sharedIncomeDrafts[candidate.userId]) || 0).toFixed(2) }))
+	    .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0), [sharedIncomeClosePreview.candidates, sharedIncomeDrafts]);
+	  const applySharedIncomeAllocationMethod = (method: Exclude<SharedIncomeAllocationMethod, "manual">) => {
+	    setSharedIncomeAllocationMethod(method);
+	    setSharedIncomeAllocationPlanError(null);
+	    if (sharedIncomeBudget.error) {
+	      setSharedIncomeAllocationPlanError(sharedIncomeBudget.error);
+	      return;
+	    }
+	    const allocationLimitCents = Math.round(sharedIncomeBudget.allocationLimit * 100);
+	    const weightedCandidates = sharedIncomeClosePreview.candidates
+	      .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
+	      .map((candidate) => ({
+	        candidate,
+	        weight: method === "principal"
+	          ? candidate.cumulativeDepositAmount
+	          : method === "historicalProfit"
+	            ? candidate.historicalProfit
+	            : candidate.closedLossPnl,
+	      }))
+	      .filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+	    const totalWeight = weightedCandidates.reduce((total, item) => total + item.weight, 0);
+	    if (allocationLimitCents <= 0) {
+	      setSharedIncomeDrafts({});
+	      return;
+	    }
+	    if (weightedCandidates.length === 0 || totalWeight <= 0.000001) {
+	      setSharedIncomeAllocationPlanError(method === "principal"
+	        ? "当前没有开启且已登记本金的分配人"
+	        : method === "historicalProfit"
+	          ? "当前开启的分配人没有已获得的历史利润"
+	          : "当前开启的分配人没有已实现的历史亏损");
+	      return;
+	    }
+	    const baseAllocations = weightedCandidates.map((item) => {
+	      const exactCents = allocationLimitCents * item.weight / totalWeight;
+	      const cents = Math.floor(exactCents);
+	      return { userId: item.candidate.userId, cents, fraction: exactCents - cents };
+	    });
+	    let remainder = allocationLimitCents - baseAllocations.reduce((total, item) => total + item.cents, 0);
+	    for (const item of [...baseAllocations].sort((left, right) => right.fraction - left.fraction || left.userId.localeCompare(right.userId))) {
+	      if (remainder <= 0) break;
+	      item.cents += 1;
+	      remainder -= 1;
+	    }
+	    setSharedIncomeTargetSelections({});
+	    setSharedIncomeDrafts(Object.fromEntries(baseAllocations
+	      .filter((item) => item.cents > 0)
+	      .map((item) => [item.userId, (item.cents / 100).toFixed(2)])));
+	  };
   const takeProfitSharedIncomeAllocatedTotal = useMemo(
     () => Object.values(takeProfitSharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0),
     [takeProfitSharedIncomeDrafts],
@@ -3994,10 +4115,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     allocatedTotal: number;
     emptyMessage: string;
     footerText?: string;
+    /** 手动平仓页可按订单使用者持久化候选资格；止盈预分配沿用已保存方案，不显示此开关。 */
+    showEligibilityControls?: boolean;
+    eligibilityPendingUserId?: string | null;
+    onEligibilityChange?: (candidate: SharedIncomeCandidate, enabled: boolean) => void;
+    allocationLimit?: number;
   }) => {
     if (sharedIncomeClosePreview.candidates.length === 0) {
       return <div className="mt-2 rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">{input.emptyMessage}</div>;
     }
+    const allocationLimit = input.allocationLimit ?? sharedIncomeClosePreview.shareableAmount;
     return <>
       <div className="divide-y divide-slate-100 overflow-hidden rounded border border-slate-200">
         {sharedIncomeClosePreview.candidates.map((candidate) => {
@@ -4006,6 +4133,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             || candidate.name
             || candidate.username
             || `用户#${candidate.userId}`;
+          const candidateEligible = !input.showEligibilityControls || candidate.sharedIncomeEnabled;
+          const canAdjustCandidate = candidate.hasPrincipal && candidateEligible;
           const currentSharedIncomeDraft = Number(input.drafts[candidate.userId] ?? 0);
           const currentSharedIncomeAmount = Number.isFinite(currentSharedIncomeDraft) ? Math.max(0, currentSharedIncomeDraft) : 0;
           // 空草案直接复用打开面板时算好的基准年化；输入金额时只重算当前这一位用户。
@@ -4016,16 +4145,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             ])
             : candidate.annualizedReference;
           const allocationReservedForOthers = Math.max(0, input.allocatedTotal - currentSharedIncomeAmount);
-          const availableForCandidate = Math.max(0, sharedIncomeClosePreview.shareableAmount - allocationReservedForOthers);
+          const availableForCandidate = Math.max(0, allocationLimit - allocationReservedForOthers);
           const selectedTargetRate = input.targetSelections[candidate.userId];
           const onePercentShareAmount = candidate.cumulativeDepositAmount * 0.01;
-          const canAllocateOnePercent = onePercentShareAmount > 0.004 && onePercentShareAmount <= availableForCandidate + 0.004;
+          const canAllocateOnePercent = canAdjustCandidate && onePercentShareAmount > 0.004 && onePercentShareAmount <= availableForCandidate + 0.004;
           const twoPercentShareAmount = candidate.cumulativeDepositAmount * 0.02;
-          const canAllocateTwoPercent = twoPercentShareAmount > 0.004 && twoPercentShareAmount <= availableForCandidate + 0.004;
-          const orderPoolOnePercentShareAmount = sharedIncomeClosePreview.shareableAmount * 0.01;
-          const canAllocateOrderPoolOnePercent = orderPoolOnePercentShareAmount > 0.004 && orderPoolOnePercentShareAmount <= availableForCandidate + 0.004;
-          const orderPoolTwoPercentShareAmount = sharedIncomeClosePreview.shareableAmount * 0.02;
-          const canAllocateOrderPoolTwoPercent = orderPoolTwoPercentShareAmount > 0.004 && orderPoolTwoPercentShareAmount <= availableForCandidate + 0.004;
+          const canAllocateTwoPercent = canAdjustCandidate && twoPercentShareAmount > 0.004 && twoPercentShareAmount <= availableForCandidate + 0.004;
+          const orderPoolOnePercentShareAmount = allocationLimit * 0.01;
+          const canAllocateOrderPoolOnePercent = canAdjustCandidate && orderPoolOnePercentShareAmount > 0.004 && orderPoolOnePercentShareAmount <= availableForCandidate + 0.004;
+          const orderPoolTwoPercentShareAmount = allocationLimit * 0.02;
+          const canAllocateOrderPoolTwoPercent = canAdjustCandidate && orderPoolTwoPercentShareAmount > 0.004 && orderPoolTwoPercentShareAmount <= availableForCandidate + 0.004;
           const annualizedTargetOptions = candidate.annualizedTargetTopUps;
           const settlementAgeDays = currentSharedIncomeAmount > 0 ? 0 : candidate.settlementAgeDays;
           const settlementEnergyCells = settlementAgeDays === null ? 0 : Math.min(10, settlementAgeDays);
@@ -4036,9 +4165,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
             input.setDrafts((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
           };
-          return <div key={candidate.userId} className={`grid grid-cols-[minmax(0,1fr)_5.75rem] items-stretch gap-x-2 gap-y-1 px-2 py-2 ${candidate.hasPrincipal ? "" : "bg-slate-50/80 opacity-55"}`}>
+          return <div key={candidate.userId} className={`grid grid-cols-[minmax(0,1fr)_5.75rem] items-stretch gap-x-2 gap-y-1 px-2 py-2 ${candidate.hasPrincipal && candidateEligible ? "" : "bg-slate-100 text-slate-400 opacity-70"}`}>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] font-semibold text-slate-800">{candidateDisplayName}</div>
+              <div className="flex min-w-0 items-center gap-2"><div className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${candidateEligible ? "text-slate-800" : "text-slate-500"}`}>{candidateDisplayName}</div>{input.showEligibilityControls && <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed={candidate.sharedIncomeEnabled} aria-label={`${candidateDisplayName}${candidate.sharedIncomeEnabled ? "关闭" : "开启"}本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, !candidate.sharedIncomeEnabled)} className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-45 ${candidate.sharedIncomeEnabled ? "bg-indigo-600" : "bg-slate-400"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${candidate.sharedIncomeEnabled ? "left-[18px]" : "left-0.5"}`} /></button>}</div>
               {candidate.hasPrincipal ? <>
                 <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500">
                   <span>接受共享（{candidate.receivedSharedIncomeCount}次）<b className={candidate.receivedSharedIncome > 0 ? "ml-0.5 font-semibold text-rose-600" : "ml-0.5 font-semibold text-slate-500"}>{candidate.receivedSharedIncome > 0 ? "+" : ""}{candidate.receivedSharedIncome === 0 ? "0" : formatPrice(candidate.receivedSharedIncome)} u</b></span>
@@ -4047,7 +4176,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>付出共享（{candidate.contributedSharedIncomeOrderCount}次）<b className={candidate.contributedSharedIncome > 0 ? "ml-0.5 font-semibold text-emerald-600" : "ml-0.5 font-semibold text-slate-500"}>{candidate.contributedSharedIncome > 0 ? "-" : ""}{candidate.contributedSharedIncome === 0 ? "0" : formatPrice(candidate.contributedSharedIncome)} u</b></span></div>
                 <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 {formatPrice(candidate.cumulativeDepositAmount)} u</div>
-                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>已平仓总利润 <b className="font-semibold text-rose-600">+{formatPrice(candidate.closedNetPnl)} u</b></span><span className="text-slate-300">·</span><span>已实现年化 <b className={displayedRealizedAnnualized !== null && Number.isFinite(displayedRealizedAnnualized) ? (displayedRealizedAnnualized >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600") : "font-semibold text-slate-400"}>{displayedRealizedAnnualized === null || !Number.isFinite(displayedRealizedAnnualized) ? "--" : formatT0AnnualizedReturn(displayedRealizedAnnualized)}</b></span></div>
+                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>历史利润 <b className="font-semibold text-rose-600">+{formatPrice(candidate.historicalProfit)} u</b></span><span className="text-slate-300">·</span><span>历史亏损 <b className="font-semibold text-emerald-600">-{formatPrice(candidate.closedLossPnl)} u</b></span></div>
+                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>已实现年化 <b className={displayedRealizedAnnualized !== null && Number.isFinite(displayedRealizedAnnualized) ? (displayedRealizedAnnualized >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600") : "font-semibold text-slate-400"}>{displayedRealizedAnnualized === null || !Number.isFinite(displayedRealizedAnnualized) ? "--" : formatT0AnnualizedReturn(displayedRealizedAnnualized)}</b></span>{!candidateEligible && <><span className="text-slate-300">·</span><span className="font-medium text-slate-500">本单关闭</span></>}</div>
                 <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">持仓总盈亏 <b className={candidate.holdingNetPnl >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(candidate.holdingNetPnl)} u</b></div>
               </> : <><div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 未登记</div><div className="mt-0.5 text-[10px] text-slate-500">未投入本金，不参与共享收益分配</div></>}
             </div>
@@ -4055,7 +4185,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {candidate.hasPrincipal && <div className="grid w-full grid-cols-2 gap-1">
                 {annualizedTargetOptions.map(({ targetRate, topUp }) => {
                   const hasAlreadyReachedTarget = candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference) && candidate.annualizedReference >= targetRate - 0.000001;
-                  const isAvailable = topUp !== null && !hasAlreadyReachedTarget && topUp <= availableForCandidate + 0.004;
+                  const isAvailable = canAdjustCandidate && topUp !== null && !hasAlreadyReachedTarget && topUp <= availableForCandidate + 0.004;
                   const isSelectedTarget = selectedTargetRate === targetRate;
                   const isOtherTargetDimmed = selectedTargetRate !== undefined && !isSelectedTarget;
                   const targetLabel = `${Math.round(targetRate * 100)}%`;
@@ -4070,10 +4200,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <button type="button" disabled={!canAllocateOrderPoolOnePercent} aria-label="按本单可共享收益的1%分配" title={canAllocateOrderPoolOnePercent ? `按本单可共享收益的 1% 分配，即 ${formatPrice(orderPoolOnePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolOnePercentShareAmount)} U`} onClick={() => { if (!canAllocateOrderPoolOnePercent) return; input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; }); input.setDrafts((current) => ({ ...current, [candidate.userId]: orderPoolOnePercentShareAmount.toFixed(2) })); }} style={canAllocateOrderPoolOnePercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 1%</button>
                 <button type="button" disabled={!canAllocateOrderPoolTwoPercent} aria-label="按本单可共享收益的2%分配" title={canAllocateOrderPoolTwoPercent ? `按本单可共享收益的 2% 分配，即 ${formatPrice(orderPoolTwoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolTwoPercentShareAmount)} U`} onClick={() => { if (!canAllocateOrderPoolTwoPercent) return; input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; }); input.setDrafts((current) => ({ ...current, [candidate.userId]: orderPoolTwoPercentShareAmount.toFixed(2) })); }} style={canAllocateOrderPoolTwoPercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 2%</button>
               </div>}
-              <div className={candidate.hasPrincipal ? "absolute bottom-0 right-0 w-full" : "relative w-full"}>{candidate.hasPrincipal && (input.drafts[candidate.userId] ?? "").trim() !== "" && <button type="button" aria-label={`清零${candidate.name}本单共享收益`} title="清零本单共享收益" onClick={clearCandidate} className="absolute left-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-xl leading-none text-slate-500 active:bg-slate-100 active:text-slate-800">×</button>}<input aria-label={`${candidate.name}共享收益金额`} disabled={!candidate.hasPrincipal} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => {
+              <div className={candidate.hasPrincipal ? "absolute bottom-0 right-0 w-full" : "relative w-full"}>{candidate.hasPrincipal && candidateEligible && (input.drafts[candidate.userId] ?? "").trim() !== "" && <button type="button" aria-label={`清零${candidate.name}本单共享收益`} title="清零本单共享收益" onClick={clearCandidate} className="absolute left-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-xl leading-none text-slate-500 active:bg-slate-100 active:text-slate-800">×</button>}<input aria-label={`${candidate.name}共享收益金额`} disabled={!canAdjustCandidate} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => {
                 const nextValue = event.target.value.replace(/[^0-9.]/g, "");
                 input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
-                input.setDrafts((current) => { if (!candidate.hasPrincipal) return current; if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; } return { ...current, [candidate.userId]: nextValue }; });
+                input.setDrafts((current) => { if (!canAdjustCandidate) return current; if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; } return { ...current, [candidate.userId]: nextValue }; });
               }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pl-8 pr-2 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-300" /></div>
             </div>
             {candidate.hasPrincipal && <div className="col-start-1 mt-0.5 flex items-center gap-1.5"><span className={`shrink-0 text-[9px] font-medium ${settlementAgeDays === null || settlementAgeDays >= 8 ? "text-rose-600" : settlementAgeDays >= 4 ? "text-amber-600" : "text-emerald-600"}`}>{settlementEnergyLabel}</span><div className="flex min-w-0 flex-1 items-center gap-px" aria-label={settlementEnergyLabel}>{Array.from({ length: settlementEnergyCells }, (_, index) => <span key={index} className={`h-2 w-2 shrink-0 rounded-[1px] ${settlementEnergyTone}`} />)}</div></div>}
@@ -5190,9 +5320,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && (
       entryForm.accountId !== editingOriginalTrade.accountId
       || (!entryForm.accountId && entryForm.accountName.trim() !== (editingOriginalTrade.accountName ?? getTradeAccountName(editingOriginalTrade)).trim())
+      || (entryForm.relatedUserId || "") !== (editingOriginalTrade.relatedUserId || "")
       || (entryForm.relatedFundId === "legacy" ? "" : entryForm.relatedFundId || "") !== (editingOriginalTrade.relatedFundId || "")
       || (!entryForm.relatedFundId && entryForm.relatedFundName.trim() !== (editingOriginalTrade.relatedFundName ?? "").trim())
     ),
+  );
+  // 已发生平仓时，用户名变更只能作用于承接剩余仓位，绝不改写已平历史。
+  const partialAttributionChangesRelatedUser = Boolean(
+    partialOpeningAttributionDraft
+    && editingOriginalTrade
+    && Number(partialOpeningAttributionDraft.relatedUserId || 0) !== Number(editingOriginalTrade.relatedUserId || 0),
   );
   const isOptionOpeningEntry = isOptionEntryContext;
   const isTakeProfitAvailable = ACTIONS[entryForm.action].opening
@@ -5495,14 +5632,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: '', optionPremium: '', optionPremiumCurrency: 'USDT',
       gridDirection: reminder.side, gridRangeMin: '', gridRangeMax: '', gridLeverage: '', gridCount: '',
       isLocked: false, isCounterparty: false,
-      // 占位本身没有成交价；双击后进入与普通订单相同的录入界面，
-      // 管理员填写实际成交价即可直接开仓，也可按原有时钟按钮改为挂单。
+      // 原价待补开位须直接带入原成交价；管理员仍可改价或改为挂单。
       isPending: false,
       keepReopenReminder: true,
       reminderTemplateId: reminder.id,
       isTakeProfit: false, takeProfitPrice: '', takeProfitQuantity: '', takeProfitPlans: [],
       quantity: normalizeEthQuantity(String(reminder.defaultQuantity)),
-      price: '', note: '', targetPrice: archivePriceForAction(action, reminder.anchorPrice),
+      price: String(reminder.anchorPrice), note: '', targetPrice: archivePriceForSide(reminder.side, reminder.anchorPrice),
     });
     setShowEntrySheet(true);
   };
@@ -5787,6 +5923,42 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   });
 
+  const setSharedIncomeEligibilityMutation = trpc.ledger.t0SetSharedIncomeEligibility.useMutation({
+    onSuccess: () => {
+      void t0JournalQuery.refetch();
+    },
+  });
+  const changeSharedIncomeCandidateEligibility = useCallback((candidate: SharedIncomeCandidate, enabled: boolean) => {
+    const sourceUserId = Number(entryForm.relatedUserId);
+    const recipientUserId = Number(candidate.userId);
+    if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || !Number.isInteger(recipientUserId) || recipientUserId <= 0) {
+      setSharedIncomeAllocationPlanError("当前订单使用者或分配人无效，请返回修改后重试");
+      return;
+    }
+    const key = `${sourceUserId}:${recipientUserId}`;
+    const previousEnabled = sharedIncomeEligibilityOverrides[key]
+      ?? sharedIncomeEligibilityByPair.get(key)
+      ?? true;
+    setSharedIncomeAllocationPlanError(null);
+    setSharedIncomeEligibilityOverrides((current) => ({ ...current, [key]: enabled }));
+    if (!enabled) {
+      setSharedIncomeDrafts((current) => {
+        const { [candidate.userId]: _removed, ...rest } = current;
+        return rest;
+      });
+      setSharedIncomeTargetSelections((current) => {
+        const { [candidate.userId]: _removed, ...rest } = current;
+        return rest;
+      });
+    }
+    setSharedIncomeEligibilityMutation.mutate({ ledgerId: 52, sourceUserId, recipientUserId, enabled }, {
+      onError: (error) => {
+        setSharedIncomeEligibilityOverrides((current) => ({ ...current, [key]: previousEnabled }));
+        setSharedIncomeAllocationPlanError(error.message || "共享资格保存失败，请重新操作");
+      },
+    });
+  }, [entryForm.relatedUserId, setSharedIncomeEligibilityMutation, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
+
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
       saveEntryCommitLockRef.current = false;
@@ -6024,7 +6196,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             ? "开仓已锁定，逐笔报价将显示黑金锁标"
             : "开仓记录已修改");
     },
-    onError: (error) => t0Toast.error(error.message || "开仓记录修改失败"),
+    onError: (error) => {
+      const message = error.message || "开仓记录修改失败";
+      setOpeningSaveError(message);
+      t0Toast.error(message);
+    },
   });
 
   const reassignOpeningRemainingMutation = trpc.ledger.t0ReassignOpeningRemaining.useMutation({
@@ -6510,13 +6686,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         && (
           (hasPersistedAccountId ? Number(entryForm.accountId) : 0) !== Number(editingOriginalTrade.accountId)
           || (!hasPersistedAccountId && normalizedAccountName !== (editingOriginalTrade.accountName ?? getTradeAccountName(editingOriginalTrade)).trim())
+          || Number(normalizedRelatedUserId || 0) !== Number(editingOriginalTrade.relatedUserId || 0)
           || Number(normalizedRelatedFundId || 0) !== Number(editingOriginalTrade.relatedFundId || 0)
           || (!normalizedRelatedFundId && Boolean(normalizedRelatedFundName) && normalizedRelatedFundName !== (editingOriginalTrade.relatedFundName ?? "").trim())
         ),
       );
       if (partialAttributionChange && editingOriginalTrade && editingRemainingQuantity !== null) {
         if (hasPartialOpeningMarkerChange || hasPartialTakeProfitChange) {
-          showSaveValidationError("请先单独保存锁定或止盈设置，再调整账户或项目归属");
+          showSaveValidationError("请先单独保存锁定或止盈设置，再调整账户、用户或项目归属");
+          return;
+        }
+        if (normalizedRelatedUserId !== Number(editingOriginalTrade.relatedUserId || 0) && !normalizedRelatedFundId && !normalizedRelatedFundName) {
+          showSaveValidationError("切换关联用户后，请为新用户选择或新建项目，再保存剩余仓位");
           return;
         }
         setPartialOpeningAttributionScope(null);
@@ -6526,7 +6707,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           remainingQuantity: normalizeEthQuantity(String(editingRemainingQuantity)),
           accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
           accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
-          relatedUserId: Number(editingOriginalTrade.relatedUserId || 0) || undefined,
+          relatedUserId: normalizedRelatedUserId,
           relatedFundId: Number(normalizedRelatedFundId || 0) || undefined,
           relatedFundName: normalizedRelatedFundName || undefined,
         });
@@ -6760,6 +6941,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       draft.entryId,
       draft.remainingQuantity,
       draft.accountId ?? draft.accountName ?? "",
+      draft.relatedUserId ?? "",
       draft.relatedFundId ?? draft.relatedFundName ?? "",
     ].join("|");
     if (residualReassignRequestFingerprintRef.current !== requestFingerprint) {
@@ -6772,6 +6954,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!clientRequestId) {
       residualReassignCommitLockRef.current = false;
       t0Toast.error("归属更正请求创建失败，请重新选择");
+      return;
+    }
+    if (scope === "history" && partialAttributionChangesRelatedUser) {
+      residualReassignCommitLockRef.current = false;
+      setPartialOpeningAttributionError("已平历史的用户名不能修改；更换用户名请仅转入之后的剩余仓位");
       return;
     }
     if (scope === "history") {
@@ -8632,7 +8819,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
                       <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
                         <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
-                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；用户名、数量与成交数据固定。调整账户或项目时，可选择同步已平历史，或仅影响之后的剩余仓位。</span>
+                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量与成交数据固定。账户、项目可选同步已平历史；如更换用户名，只会转入之后的剩余仓位。</span>
                       </div>
                     )}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
@@ -9109,10 +9296,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
-                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || isPartiallyClosedOpeningEdit || hasDependentCloseOpeningEdit ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit) ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
                       <select
-                        disabled={isCloseAssociationLocked || isPartiallyClosedOpeningEdit || hasDependentCloseOpeningEdit}
+                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
                         value={entryForm.relatedUserId}
                         onChange={(event) => {
                           const userId = event.target.value;
@@ -9138,7 +9325,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </select>
                       <button
                         type="button"
-                        disabled={isCloseAssociationLocked || isPartiallyClosedOpeningEdit || hasDependentCloseOpeningEdit}
+                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
 	                        aria-label="搜索并添加未在订单中出现过的关联用户"
 	                        title="搜索全局用户并添加"
 	                        onClick={() => {
@@ -9215,7 +9402,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                )}
 
                 <div className="-mt-1 grid grid-cols-[minmax(6.75rem,0.7fr)_minmax(0,1.3fr)] gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>{isPartiallyClosedOpeningEdit ? "用户名与所有平仓数据固定；可重新选择账户和项目，保存时再选择是否同步已平历史。" : hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
+                  <span>{isPartiallyClosedOpeningEdit ? "已平历史的用户名与成交数据固定；可改账户、用户、项目。换用户名时，只会为剩余仓位生成承接订单。" : hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
@@ -9293,30 +9480,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       {canManage && partialOpeningAttributionDraft && (
         <div className="fixed inset-0 z-[72] flex items-end bg-slate-950/50 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label="选择账户和项目的生效范围">
           <div className="w-full max-w-md rounded-t-2xl bg-white px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 shadow-2xl sm:rounded-2xl">
-            <div className="text-lg font-semibold text-slate-900">本次账户和项目怎么生效？</div>
-            <p className="mt-1 text-xs leading-5 text-slate-500">关联用户名固定不变。请选择是否同步修改已平部分的账户和项目。</p>
+            <div className="text-lg font-semibold text-slate-900">本次归属怎么生效？</div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {partialAttributionChangesRelatedUser
+                ? "用户名已变更：已平历史的用户名、成交和收益固定不动；新用户名只用于承接剩余仓位。"
+                : "关联用户名固定不变。请选择是否同步修改已平部分的账户和项目。"}
+            </p>
             {partialOpeningAttributionError && (
               <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
                 <span className="font-semibold">未执行：</span>{partialOpeningAttributionError}
               </div>
             )}
             <div className="mt-4 space-y-2.5">
-              <button
-                type="button"
-                disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
-                onClick={() => {
-                  setPartialOpeningAttributionError(null);
-                  setPartialOpeningAttributionScope("history");
-                }}
-                aria-pressed={partialOpeningAttributionScope === "history"}
-                className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "history" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-indigo-900">同步修改已平历史</span>
-                  <span className="shrink-0 text-xs font-semibold text-indigo-600">推荐用于归属录错</span>
-                </div>
-                <p className="mt-1.5 text-[11px] leading-5 text-indigo-800/85">原开仓和已关联平仓的账户、项目一并更新。用户名、数量、成交价、手续费、订单收益、共享和分佣全部保持原样。</p>
-              </button>
+              {!partialAttributionChangesRelatedUser && <button
+                  type="button"
+                  disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
+                  onClick={() => {
+                    setPartialOpeningAttributionError(null);
+                    setPartialOpeningAttributionScope("history");
+                  }}
+                  aria-pressed={partialOpeningAttributionScope === "history"}
+                  className={`w-full rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:opacity-45 ${partialOpeningAttributionScope === "history" ? "border-indigo-500 bg-indigo-50/70 shadow-sm" : "border-slate-200 bg-white"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-indigo-900">同步修改已平历史</span>
+                    <span className="shrink-0 text-xs font-semibold text-indigo-600">推荐用于归属录错</span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-5 text-indigo-800/85">原开仓和已关联平仓的账户、项目一并更新。用户名、数量、成交价、手续费、订单收益、共享和分佣全部保持原样。</p>
+                </button>}
               <button
                 type="button"
                 disabled={reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending}
@@ -9331,7 +9522,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="text-sm font-semibold text-slate-800">仅影响之后的剩余仓位</span>
                   <span className="shrink-0 text-xs font-semibold text-slate-500">{formatQuantity(Number(partialOpeningAttributionDraft.remainingQuantity))} ETH</span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-5 text-slate-600">已平历史完全不动；剩余仓位会生成一张继承原成本价的新订单，并使用当前选择的账户和项目。</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-600">已平历史完全不动；剩余仓位会生成一张继承原成本价的新订单，并使用当前选择的账户、用户和项目。</p>
               </button>
             </div>
             <div className="mt-4 flex gap-2.5">
@@ -9418,48 +9609,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
 	      {canManage && showEntrySheet && isClosingEntry && isCloseReview && (
-	        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/45 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={`确认${ACTIONS[entryForm.action].label}`}>
-	          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t border border-amber-200 bg-white shadow-2xl sm:max-w-md sm:rounded">
-	            <div className="border-b border-slate-100 px-4 py-3">
-	              <div className="rounded border border-slate-200 bg-white px-3 py-2.5">
-	                <div className="flex items-baseline justify-between gap-3">
-	                  <div className="text-base font-semibold tabular-nums text-slate-900">
-	                    {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH
-	                  </div>
-	                  <div className={`shrink-0 text-sm font-semibold tabular-nums ${sharedIncomeClosePreview.sourceNetPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-	                    可分配收益 {formatSigned(sharedIncomeClosePreview.sourceNetPnl)} U
-	                  </div>
-	                </div>
-	                <div className="mt-1.5 grid grid-cols-2 gap-3 text-[11px] tabular-nums">
-	                  <div className="min-w-0 text-slate-500">开仓价 <span className="ml-1 font-semibold text-slate-800">{entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}</span></div>
-	                  <div className="min-w-0 text-right text-slate-500">平仓价 <span className="ml-1 font-semibold text-slate-800">{formatPrice(Number(entryForm.price))}</span></div>
-	                </div>
-	              </div>
-	            </div>
-	            {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <div className="px-4 py-3">
-	              {renderSharedIncomeAllocationCandidates({
-                drafts: sharedIncomeDrafts,
-                setDrafts: setSharedIncomeDrafts,
-                targetSelections: sharedIncomeTargetSelections,
-                setTargetSelections: setSharedIncomeTargetSelections,
-                allocatedTotal: sharedIncomeAllocatedTotal,
-                emptyMessage: "当前没有符合条件的其他未平仓关联用户；可直接跳过共享并确认平仓。",
-                footerText: "平仓后会以“共享”写入受益用户的交易流水；来源订单编号会保留供核对。",
-              })}
-            </div> : <div className="px-4 py-3 text-[11px] leading-5 text-slate-500">本单没有可共享的正向净收益，可直接确认平仓；收益为负或未关联用户的订单不会触发共享分配。</div>}
-            {closeSaveError && <div role="alert" className="mx-4 mb-1 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
-              <span className="font-semibold">平仓未确认：</span>{closeSaveError}。请保留当前页面修改后重新确认。
-            </div>}
-	            <div className="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
-	              <div className="grid grid-cols-2 gap-3">
-	                <button type="button" disabled={saveEntryMutation.isPending} onClick={() => setCloseConfirmationStep("input")} className="h-10 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">返回修改</button>
-	                <button type="button" disabled={saveEntryMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); }} className="h-10 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">跳过共享</button>
-	              </div>
-	              <button disabled={saveEntryMutation.isPending || sharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001} onClick={() => handleSaveEntry()} className="h-11 w-full rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">确认{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</button>
-	            </div>
-          </div>
-        </div>
-      )}
+	        <div className="fixed inset-0 z-[80] bg-white" role="dialog" aria-modal="true" aria-label={`${ACTIONS[entryForm.action].label}收益分配`}>
+	          <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white">
+	            <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+	              <button type="button" disabled={saveEntryMutation.isPending} onClick={() => setCloseConfirmationStep("input")} aria-label="返回平仓参数" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 active:scale-95 disabled:opacity-40"><ArrowLeft className="h-4 w-4" /></button>
+	              <div className="min-w-0 flex-1"><h2 className="truncate text-base font-semibold text-slate-900">平仓收益分配</h2><p className="truncate text-[10px] text-slate-500">先确定本次分配额度，再选择分配人和金额</p></div>
+	              <div className="shrink-0 text-right tabular-nums"><div className="text-[10px] text-slate-500">本次净利润</div><div className={`text-sm font-bold ${sharedIncomeClosePreview.sourceNetPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(sharedIncomeClosePreview.sourceNetPnl)} u</div></div>
+	            </header>
+	            <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-3 pb-28 sm:px-5">
+	              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+	                <div className="flex items-baseline justify-between gap-3"><div className="text-sm font-semibold text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</div><div className="text-[11px] tabular-nums text-slate-500">开 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} · 平 {formatPrice(Number(entryForm.price))}</div></div>
+	                <div className="mt-3 grid grid-cols-2 overflow-hidden rounded border border-slate-200 text-center tabular-nums"><div className="border-r border-slate-100 px-2 py-2"><div className="text-[10px] text-slate-500">本单可共享上限</div><div className="mt-0.5 text-base font-bold text-slate-900">{sharedIncomeBudget.maximum.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div><div className="px-2 py-2"><div className="text-[10px] text-slate-500">本次计划分配</div><div className="mt-0.5 text-base font-bold text-indigo-700">{sharedIncomeBudget.allocationLimit.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div></div>
+	                {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 && <div className="mt-3"><div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">本次拿出多少分配</div><div className="flex overflow-hidden rounded border border-slate-200 text-[11px] font-semibold"><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("percentage"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 px-3 ${sharedIncomeAllocationBudgetMode === "percentage" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>按比例</button><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 border-l border-slate-200 px-3 ${sharedIncomeAllocationBudgetMode === "amount" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>填金额</button></div></div><div className="mt-2 flex items-center gap-2"><div className="relative min-w-0 flex-1"><input aria-label={sharedIncomeAllocationBudgetMode === "percentage" ? "本次共享分配比例" : "本次共享分配金额"} value={sharedIncomeAllocationBudgetValue} onChange={(event) => { setSharedIncomeAllocationBudgetValue(event.target.value.replace(/[^0-9.]/g, "")); setSharedIncomeAllocationPlanError(null); }} inputMode="decimal" className="h-10 w-full rounded border border-slate-300 bg-white px-3 pr-8 text-right text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-indigo-500" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">{sharedIncomeAllocationBudgetMode === "percentage" ? "%" : "u"}</span></div>{sharedIncomeAllocationBudgetMode === "percentage" && <div className="flex shrink-0 gap-1">{[25, 50, 100].map((value) => <button key={value} type="button" onClick={() => { setSharedIncomeAllocationBudgetValue(String(value)); setSharedIncomeAllocationPlanError(null); }} className={`h-10 rounded border px-2 text-xs font-semibold ${sharedIncomeAllocationBudgetValue === String(value) ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}>{value}%</button>)}</div>}</div></div>}
+	              </section>
+	              {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <>
+	                <section className="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between gap-2"><div><div className="text-sm font-semibold text-slate-900">分配方式</div><div className="mt-0.5 text-[10px] text-slate-500">关闭资格的用户会置灰沉底，且不参与智能分配</div></div><button type="button" onClick={() => { setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 rounded border px-2.5 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "manual" ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600"}`}>手动</button></div><div className="mt-2 grid grid-cols-3 gap-1.5"><button type="button" onClick={() => applySharedIncomeAllocationMethod("principal")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "principal" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按本金比例</button><button type="button" onClick={() => applySharedIncomeAllocationMethod("historicalProfit")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "historicalProfit" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按已获利润</button><button type="button" onClick={() => applySharedIncomeAllocationMethod("historicalLoss")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "historicalLoss" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按历史亏损</button></div></section>
+	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">共享分配人</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
+	                  drafts: sharedIncomeDrafts,
+	                  setDrafts: setSharedIncomeDrafts,
+	                  targetSelections: sharedIncomeTargetSelections,
+	                  setTargetSelections: setSharedIncomeTargetSelections,
+	                  allocatedTotal: sharedIncomeAllocatedTotal,
+	                  allocationLimit: sharedIncomeBudget.allocationLimit,
+	                  showEligibilityControls: true,
+	                  eligibilityPendingUserId: setSharedIncomeEligibilityMutation.isPending ? "pending" : null,
+	                  onEligibilityChange: changeSharedIncomeCandidateEligibility,
+	                  emptyMessage: "当前没有符合条件的其他关联用户；可直接确认平仓。",
+	                  footerText: "资格开关按本单订单使用者分别保存。关闭不会改动历史共享、项目分佣或任何开平仓流水。",
+	                })}</section>
+	              </> : <section className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-xs leading-5 text-slate-500">本单没有可共享的正向净收益，可直接确认平仓；收益为负或未关联用户的订单不会触发共享分配。</section>}
+	              {(sharedIncomeBudget.error || sharedIncomeAllocationPlanError || closeSaveError) && <div role="alert" className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{closeSaveError ? <><span className="font-semibold">平仓未确认：</span>{closeSaveError}</> : sharedIncomeAllocationPlanError || sharedIncomeBudget.error}</div>}
+	            </main>
+	            <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-2px_12px_rgba(15,23,42,0.06)] sm:px-5"><div className="mx-auto flex w-full max-w-2xl gap-2"><button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button><button disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button></div></footer>
+	          </div>
+	        </div>
+	      )}
 
       {canManage && profitShareSource && (
         <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={entryProfitShareEditTarget ? "编辑本单收益分配" : "管理收益分配"}>

@@ -11998,6 +11998,29 @@ ${klinesSummary}
         });
       }),
 
+    // 平仓共享候选资格按“订单使用者 × 分配人”独立保存；不改变项目比例分佣或任何历史收益。
+    t0SetSharedIncomeEligibility: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        sourceUserId: z.number().int().positive(),
+        recipientUserId: z.number().int().positive(),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.setLedger52T0JournalSharedIncomeEligibility({
+          actorUserId: ctx.user.id,
+          sourceUserId: input.sourceUserId,
+          recipientUserId: input.recipientUserId,
+          enabled: input.enabled,
+        });
+      }),
+
     t0SearchRelatedUsers: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),

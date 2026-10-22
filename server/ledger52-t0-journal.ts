@@ -1491,6 +1491,44 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0：平仓正向净收益优先分配的共享收益；保留原订单分佣快照'
     `);
+
+    // 共享资格按“订单使用者 × 分配人”保存。未创建设置即默认允许，关闭才会落库；
+    // 不复用项目分佣规则，避免影响历史分佣快照或后续项目比例分配。
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_shared_income_eligibilities (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_user_id BIGINT UNSIGNED NOT NULL,
+        recipient_user_id BIGINT UNSIGNED NOT NULL,
+        is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+        configured_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_shared_income_eligibility_pair (ledger_id, user_id, source_user_id, recipient_user_id),
+        KEY idx_t0_shared_income_eligibility_source (ledger_id, user_id, source_user_id, is_enabled)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：指定订单使用者对分配人的共享收益资格开关'
+    `);
+
+    // 当前设置可被覆盖，故每次变更另写不可变审计；不涉及任一订单金额或收益重算。
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_shared_income_eligibility_audits (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_user_id BIGINT UNSIGNED NOT NULL,
+        recipient_user_id BIGINT UNSIGNED NOT NULL,
+        previous_is_enabled TINYINT(1) DEFAULT NULL,
+        next_is_enabled TINYINT(1) NOT NULL,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_shared_income_eligibility_audit_pair (ledger_id, user_id, source_user_id, recipient_user_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：共享收益资格开关的不可变变更审计'
+    `);
     // 历史共享收益按旧规则已经完成结算，默认值 0 使其不回溯改变既有订单收益；
     // 新规则写入 1，令读取端以“本单净收益 - 共享收益”作为原分佣的基数。
     const [sharedIncomeReductionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_shared_income_transfers LIKE 'reduces_regular_distribution'`);
@@ -2107,7 +2145,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     getTakeProfitPlansByEntryId(conn, entryIds),
   ]);
 
-	const [sharedIncomeTransferResult, sharedIncomeReductionResult, sharedIncomeContributionResult] = await Promise.all([
+	const [sharedIncomeTransferResult, sharedIncomeReductionResult, sharedIncomeContributionResult, sharedIncomeEligibilityResult] = await Promise.all([
 	  conn.execute(
     `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
             transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at,
@@ -2141,6 +2179,15 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
 	           FROM ledger52_t0_journal_shared_income_transfers
 	          WHERE ledger_id = ? AND user_id = ? AND source_user_id IS NOT NULL
 	          GROUP BY source_user_id`,
+	        [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+	      )
+	      : Promise.resolve([[]]),
+	    // 成员端不读取任何管理员分配资格设置；该设置仅用于管理员发起平仓共享时的候选人排序与校验。
+	    isAdminScope
+	      ? conn.execute(
+	        `SELECT source_user_id, recipient_user_id, is_enabled, updated_at
+	           FROM ledger52_t0_journal_shared_income_eligibilities
+	          WHERE ledger_id = ? AND user_id = ?`,
 	        [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
 	      )
 	      : Promise.resolve([[]]),
@@ -2228,6 +2275,12 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
 	      sourceUserId: toNumber(row.source_user_id),
 	      amount: toNumber(row.total_amount),
 	      orderCount: toNumber(row.order_count),
+	    })),
+	    sharedIncomeEligibilities: asRows(sharedIncomeEligibilityResult).map((row) => ({
+	      sourceUserId: toNumber(row.source_user_id),
+	      recipientUserId: toNumber(row.recipient_user_id),
+	      enabled: Boolean(toNumber(row.is_enabled)),
+	      updatedAt: isoTime(row.updated_at),
 	    })),
 	    // 仅管理员获取的非财务提示模板；成员端与所有收益/仓位计算均完全隔离。
     reopenReminders: asRows(reopenReminderResult).map((row) => ({
@@ -2673,6 +2726,67 @@ function normalizeProfitSharePercentage(value: number): number {
 async function assertExistingGlobalUser(tx: any, userId: number, label: string) {
   const [rows] = await tx.execute(`SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`, [userId]);
   if (!asRows(rows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: `${label}不存在或已失效，请重新搜索选择` });
+}
+
+/**
+ * 共享收益候选资格是“订单使用者 × 分配人”维度的未来设置。
+ * 它绝不回写项目比例规则、开平仓流水、既有分佣快照或历史共享转账。
+ */
+export async function setLedger52T0JournalSharedIncomeEligibility(input: {
+  actorUserId: number;
+  sourceUserId: number;
+  recipientUserId: number;
+  enabled: boolean;
+}) {
+  const sourceUserId = Number(input.sourceUserId);
+  const recipientUserId = Number(input.recipientUserId);
+  if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || !Number.isInteger(recipientUserId) || recipientUserId <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "共享资格的订单使用者或分配人无效" });
+  }
+  if (sourceUserId === recipientUserId || recipientUserId === input.actorUserId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "订单使用者或账本操作者不可作为本单共享分配人" });
+  }
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    await assertExistingGlobalUser(tx, sourceUserId, "订单使用者");
+    await assertExistingGlobalUser(tx, recipientUserId, "分配人");
+    const [existingRows] = await tx.execute(
+      `SELECT is_enabled
+         FROM ledger52_t0_journal_shared_income_eligibilities
+        WHERE ledger_id = ? AND user_id = ? AND source_user_id = ? AND recipient_user_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, sourceUserId, recipientUserId],
+    );
+    const previous = asRows(existingRows)[0];
+    const previousEnabled = previous === undefined ? null : Boolean(toNumber(previous.is_enabled));
+    const nextEnabled = Boolean(input.enabled);
+    if (previousEnabled !== nextEnabled) {
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_shared_income_eligibilities
+          (ledger_id, user_id, source_user_id, recipient_user_id, is_enabled, configured_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled), configured_by_user_id = VALUES(configured_by_user_id), updated_at = NOW(3)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, sourceUserId, recipientUserId, nextEnabled ? 1 : 0, input.actorUserId],
+      );
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_shared_income_eligibility_audits
+          (ledger_id, user_id, source_user_id, recipient_user_id, previous_is_enabled, next_is_enabled, operator_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, sourceUserId, recipientUserId, previousEnabled === null ? null : previousEnabled ? 1 : 0, nextEnabled ? 1 : 0, input.actorUserId],
+      );
+    }
+    await tx.commit();
+    return { sourceUserId, recipientUserId, enabled: nextEnabled };
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    await tx.release();
+  }
 }
 
 async function getActiveLedger52T0JournalProfitShareRules(tx: any, input: { actorUserId: number; relatedFundId: number; lock?: boolean }) {
@@ -3381,6 +3495,8 @@ async function writeSharedIncomeTransfers(tx: any, input: {
   closePrice: string;
   targetOpeningEntryId?: number;
   allocations?: SaveT0JournalEntryInput["sharedIncomeAllocations"];
+  /** 手动平仓必须按当前资格开关复核；已保存的止盈预分配沿用其成交时的原方案。 */
+  enforceEligibility?: boolean;
 }) {
   const allocations = normalizeSharedIncomeAllocations(input.allocations);
   if (allocations.length === 0) return;
@@ -3394,6 +3510,23 @@ async function writeSharedIncomeTransfers(tx: any, input: {
   const allocatedTotal = allocations.reduce((total, item) => total + item.amount, 0);
   if (allocatedTotal - shareableAmount > 0.00001) {
     throw new TRPCError({ code: "BAD_REQUEST", message: `共享收益合计不可超过本单可共享收益 ${shareableAmount.toFixed(2)} U` });
+  }
+  if (input.enforceEligibility !== false) {
+    const recipientIds = allocations.map((allocation) => allocation.recipientUserId);
+    const [disabledRows] = await tx.execute(
+      `SELECT recipient_user_id
+         FROM ledger52_t0_journal_shared_income_eligibilities
+        WHERE ledger_id = ? AND user_id = ? AND source_user_id = ? AND is_enabled = 0
+          AND recipient_user_id IN (${recipientIds.map(() => "?").join(", ")})
+        FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.sourceUserId, ...recipientIds],
+    );
+    const disabledRecipientIds = asRows(disabledRows)
+      .map((row) => toNumber(row.recipient_user_id))
+      .filter((recipientUserId) => recipientUserId > 0);
+    if (disabledRecipientIds.length > 0) {
+      throw new TRPCError({ code: "CONFLICT", message: "有分配人已关闭本订单使用者的共享资格，请刷新后重新分配" });
+    }
   }
   for (const allocation of allocations) {
     if (allocation.recipientUserId === input.sourceUserId || allocation.recipientUserId === input.actorUserId) {
@@ -4218,6 +4351,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
           closePrice: String(effectivePrice),
           targetOpeningEntryId: targetOpeningEntryId || undefined,
           allocations: input.sharedIncomeAllocations,
+          enforceEligibility: true,
         });
         await upsertReopenRemindersForClosedMatches(tx, {
           actorUserId: input.actorUserId,
@@ -4885,6 +5019,8 @@ export async function scanLedger52T0PendingOrders(input: {
             recipientUserId: allocation.recipientUserId,
             amount: allocation.amount.toFixed(2),
           })),
+          // 预分配已在开仓时确认；不得被后来针对手动平仓候选的开关阻断自动止盈成交。
+          enforceEligibility: false,
         });
       }
       await upsertReopenRemindersForClosedMatches(tx, {
@@ -5463,9 +5599,6 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
       }
     }
-    if (beforeForAudit.profitShareSnapshots.length > 0 && relatedUserId !== toNumber(before.related_user_id)) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓已固化收益分配快照；如需修改关联用户，请先回撤后重新录入" });
-    }
     const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
       actorUserId: input.actorUserId,
       relatedUserId,
@@ -5474,9 +5607,19 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       // 旧开仓可能在专项款功能上线前已关联用户，编辑时允许暂时保留“未区分专项款（历史）”。
       required: false,
     });
+    const relatedUserChanged = relatedUserId !== toNumber(before.related_user_id);
+    const relatedFundChanged = (relatedFund?.id ?? 0) !== toNumber(before.related_fund_id);
+    // 无任何平仓历史时，用户／项目可以纠正；只重建本开仓尚未结算的未来收益分配快照。
+    // 只要存在平仓，上方的依赖保护会拒绝普通编辑，必须改走“仅后续剩余仓位转入”。
+    const shouldRebuildOpeningProfitShareSnapshot = !lockedEntry.hasDependentClose
+      && beforeForAudit.profitShareSnapshots.length > 0
+      && (relatedUserChanged || relatedFundChanged);
+    if (shouldRebuildOpeningProfitShareSnapshot && (relatedUserId <= 0 || !relatedFund?.id)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "更正关联用户或项目时，请为目标用户选择已完成收益分配设置的项目" });
+    }
     if (hasProfitShareUpdate && (
-      relatedUserId !== toNumber(before.related_user_id)
-      || (relatedFund?.id ?? 0) !== toNumber(before.related_fund_id)
+      relatedUserChanged
+      || relatedFundChanged
     )) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "编辑本单收益分配时不可同时修改关联用户或项目" });
     }
@@ -5569,6 +5712,13 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         input.actorUserId,
       ],
     );
+    if (shouldRebuildOpeningProfitShareSnapshot) {
+      await tx.execute(
+        `DELETE FROM ledger52_t0_journal_entry_profit_shares
+          WHERE ledger_id = ? AND user_id = ? AND entry_id = ? AND opening_entry_id = ?`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, input.entryId],
+      );
+    }
     await validateTakeProfitSharedIncomePlans(tx, {
       actorUserId: input.actorUserId,
       sourceUserId: relatedUserId,
@@ -5586,6 +5736,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         before,
         remainingQuantity: normalizedQuantity,
         allocations: input.profitShareAllocations!,
+      });
+    } else if (shouldRebuildOpeningProfitShareSnapshot) {
+      await writeOpeningProfitShareSnapshot(tx, {
+        actorUserId: input.actorUserId,
+        entryId: input.entryId,
+        sourceUserId: relatedUserId,
+        relatedFundId: relatedFund!.id,
+        quantity: normalizedQuantity,
       });
     } else if (beforeForAudit.profitShareSnapshots.length > 0) {
       await tx.execute(
