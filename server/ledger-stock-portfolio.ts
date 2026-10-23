@@ -1183,6 +1183,11 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       const soldQuantity = item.closedQuantity;
       const sellValue = item.closedValue;
       return {
+        // 管理员总账户会按此稳定批次标识匹配自己的平仓份额；
+        // 成员端仍只读取自身已获配的记录，不会获得其他成员的信息。
+        lotId: item.lotId,
+        participationId: item.id,
+        allocationRatio: item.allocationRatio,
         symbol: item.symbol,
         stockName: item.stockName,
         openedAt: item.openedAt,

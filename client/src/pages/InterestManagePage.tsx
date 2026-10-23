@@ -232,7 +232,16 @@ export default function InterestManagePage() {
       const pauseDate: string | null = lid === 37
         ? (tagConfig?.margin_pause_date ?? tagConfig?.pause_date ?? null)
         : (tagConfig?.pause_date ?? null);
-      const periods = allPeriods.filter((p: any) => p.tag_name === tagName);
+      // 补录较早日期的利息分段时，必须按起息日进入原有时间线；同日保持既有排序。
+      const periods = allPeriods
+        .filter((p: any) => p.tag_name === tagName)
+        .slice()
+        .sort((left: any, right: any) => {
+          const dateCompare = String(left.start_date || '').localeCompare(String(right.start_date || ''));
+          if (dateCompare !== 0) return dateCompare;
+          const orderCompare = Number(left.sort_order || 0) - Number(right.sort_order || 0);
+          return orderCompare || Number(left.id || 0) - Number(right.id || 0);
+        });
       const operationLogs = allOperationLogs.filter((log: any) => log.tag_name === tagName);
       const legacyManualLogs = allManualLogs
         .filter((log: any) => log.tag_name === tagName)

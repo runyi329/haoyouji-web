@@ -1243,14 +1243,16 @@ async function writeFundingDividend(transaction: any, params: {
   tagName: string;
   note?: string;
   kind?: 'dividend' | 'reversal' | 'recovery';
+  /** 钱包流水用途标签；不写入客户可见的分红备注。 */
+  walletOperationLabel?: string;
 }) {
   await getFundingBalanceForUpdate(transaction, params.userId, params.assetCode);
   // 用户钱包只展示资金用途，不再暴露账本编号；标签和备注保留，便于对账。
-  const actionLabel = params.kind === 'recovery'
+  const actionLabel = params.walletOperationLabel || (params.kind === 'recovery'
     ? '股票分红回填扣回'
     : params.kind === 'reversal'
       ? '股票分红冲正'
-      : '股票分红';
+      : '股票分红');
   const visibleNote = `${actionLabel} · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
   const note = params.assetCode === "CNY" ? `[CNY]${visibleNote}` : visibleNote;
   const [insert] = await transaction.execute(
@@ -1266,6 +1268,8 @@ export async function createLedger37Dividend(params: {
   assetCode: Ledger37WalletAsset | string;
   assetAmount: string;
   note?: string;
+  /** 仅用于钱包流水用途，客户侧分红备注仍只展示 note。 */
+  walletOperationLabel?: string;
   actorUserId: number;
   transaction?: any;
 }): Promise<{ recordId: number; cnyValue: string; assetCode: Ledger37WalletAsset; assetAmount: string; walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null }> {
@@ -1291,13 +1295,20 @@ export async function createLedger37Dividend(params: {
     let walletEntryId: number | null = null;
     let walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null = null;
     if (isFundingAsset(assetCode)) {
-      walletEntryId = await writeFundingDividend(transaction, { userId: params.userId, assetCode, amount: assetAmount, tagName, note: params.note });
+      walletEntryId = await writeFundingDividend(transaction, {
+        userId: params.userId,
+        assetCode,
+        amount: assetAmount,
+        tagName,
+        note: params.note,
+        walletOperationLabel: params.walletOperationLabel,
+      });
     } else {
       const credit = await dbMultiAssetWallet.adjustMultiAssetBalance({
         userId: params.userId,
         assetCode,
         amount: assetAmount,
-        note: `股票分红 · ${tagName}${params.note ? ` · ${params.note}` : ""}`,
+        note: `${params.walletOperationLabel || '股票分红'} · ${tagName}${params.note ? ` · ${params.note}` : ""}`,
         requestId: `${requestId}_ASSET`,
         actorUserId: params.actorUserId,
         sourceLedgerId: LEDGER_37_ID,
@@ -1332,6 +1343,8 @@ export async function recoverLedger37Dividend(params: {
   assetAmount: string;
   reason: string;
   requestId: string;
+  /** 仅用于钱包流水用途，客户侧分红备注仍只展示 reason。 */
+  walletOperationLabel?: string;
   actorUserId: number;
   transaction?: any;
 }): Promise<{
@@ -1413,13 +1426,14 @@ export async function recoverLedger37Dividend(params: {
         tagName,
         note: reason,
         kind: 'recovery',
+        walletOperationLabel: params.walletOperationLabel,
       });
     } else {
       const debit = await dbMultiAssetWallet.adjustMultiAssetBalance({
         userId: params.userId,
         assetCode,
         amount: `-${assetAmount}`,
-        note: `股票分红回填扣回 · ${tagName}${reason ? ` · ${reason}` : ''}`,
+        note: `${params.walletOperationLabel || '股票分红回填扣回'} · ${tagName}${reason ? ` · ${reason}` : ''}`,
         requestId: `${requestId}_ASSET`,
         actorUserId: params.actorUserId,
         sourceLedgerId: LEDGER_37_ID,

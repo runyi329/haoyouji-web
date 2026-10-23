@@ -94,6 +94,21 @@ function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEd
   };
 }
 
+// 保证金是按业务日期形成的时间线，不应按最后一次录入的顺序展示。
+// 同一天维持原有相对顺序，未填日期的历史记录则始终排在最后，避免丢失可追溯性。
+function sortTagMarginRecordsByBusinessDate<T extends { date?: unknown }>(records: readonly T[]): T[] {
+  return records
+    .map((record, index) => ({ record, index, date: String(record.date || '').slice(0, 10) }))
+    .sort((left, right) => {
+      if (!left.date && !right.date) return left.index - right.index;
+      if (!left.date) return 1;
+      if (!right.date) return -1;
+      const dateCompare = left.date.localeCompare(right.date);
+      return dateCompare || left.index - right.index;
+    })
+    .map(({ record }) => record);
+}
+
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
   const num = typeof margin === 'number' ? margin : parseFloat(margin);
   if (isNaN(num) || num === 0) return 0;
@@ -685,7 +700,7 @@ export default function DepositManage() {
 
   const currentRightMarginRecords = useMemo(() => {
     if (savedRightMarginEdits) {
-      return parseTagMarginRecords(savedRightMarginEdits.map((entry) => entry.assetType === 'stock'
+      return sortTagMarginRecordsByBusinessDate(parseTagMarginRecords(savedRightMarginEdits.map((entry) => entry.assetType === 'stock'
         ? {
           assetType: 'stock', symbol: entry.symbol, code: entry.code, name: entry.name,
           quantity: Number(entry.quantity), referencePrice: Number(entry.referencePrice),
@@ -693,9 +708,9 @@ export default function DepositManage() {
           label: entry.label, date: entry.date,
         }
         : { assetType: 'currency', coin: entry.coin, amount: Number(entry.amount), label: entry.label, date: entry.date }
-      ));
+      )));
     }
-    return parseTagMarginRecords((rightTagConfig as any)?.margin_by_coin);
+    return sortTagMarginRecordsByBusinessDate(parseTagMarginRecords((rightTagConfig as any)?.margin_by_coin));
   }, [rightTagConfig, savedRightMarginEdits]);
   const currentRightMarginJson = useMemo(() => (
     currentRightMarginRecords.length > 0 ? JSON.stringify(currentRightMarginRecords) : undefined
@@ -844,8 +859,9 @@ export default function DepositManage() {
       if (entry.amount === '' || !Number.isFinite(amount)) continue;
       validEntries.push({ assetType: 'currency' as const, coin: entry.coin || '元', amount, label: entry.label || '', date: entry.date || todayStr });
     }
-    const marginByCoinJson = validEntries.length > 0
-      ? JSON.stringify(validEntries)
+    const chronologicalEntries = sortTagMarginRecordsByBusinessDate(validEntries);
+    const marginByCoinJson = chronologicalEntries.length > 0
+      ? JSON.stringify(chronologicalEntries)
       : undefined;
     // 保留其他配置字段，只更新 marginByCoin（余额改为自动读取，不保存 accountBalance/balanceDate）
     try {
@@ -857,10 +873,10 @@ export default function DepositManage() {
         accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
         marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
       });
-      setSavedRightMarginEdits(validEntries.map((entry) => toRightMarginEdit(entry, todayStr)));
+      setSavedRightMarginEdits(chronologicalEntries.map((entry) => toRightMarginEdit(entry, todayStr)));
       // 写入操作日志
-      const detail = validEntries.length > 0
-        ? validEntries.map((entry) => entry.assetType === 'stock'
+      const detail = chronologicalEntries.length > 0
+        ? chronologicalEntries.map((entry) => entry.assetType === 'stock'
           ? `${entry.name || entry.code} ${entry.quantity}股${entry.label ? ' (' + entry.label + ')' : ''}`
           : `${entry.coin} ${entry.amount}${entry.label ? ' (' + entry.label + ')' : ''}`).join('、')
         : '清空保证金';

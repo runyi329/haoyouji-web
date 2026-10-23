@@ -119,6 +119,15 @@ type Ledger37PauseHistoryItem = {
   resumeDate?: string;
   pauseSource?: 'tag_global';
   pausedBy?: number;
+  pauseSettlement?: {
+    settlementNo: string;
+    settledAt: string;
+    marginReleases: Array<{ assetCode: string; amount: string }>;
+    dividendDirection: 'credit' | 'recovery' | 'none';
+    dividendAmount: string;
+    dividendRecordId: number | null;
+    hasReturnData: boolean;
+  };
 };
 
 function parseLedger37InitialBalances(raw: unknown): Record<string, unknown> {
@@ -554,6 +563,8 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   migrationNo?: string;
   /** 冻结提交时同一事务固化的全局钱包余额，供客户侧说明资金来源。 */
   walletBalanceSnapshot?: Ledger37WalletBalanceSnapshot | null;
+  /** 暂停自动结算时写入标签流水的用途标识，不属于客户填写的备注。 */
+  settlementSource?: 'pause_settlement';
 }) {
   const [memberRows] = await transaction.execute(
     `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
@@ -631,6 +642,7 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
           releaseNo: params.releaseNo,
           migratedFrom: 'manual',
           migrationNo: params.migrationNo,
+          ...(params.settlementSource ? { settlementSource: params.settlementSource } : {}),
         };
       });
       if (!replacedManualEntry) {
@@ -651,6 +663,7 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
       entryKind: params.direction === 'release' ? 'release' : 'freeze',
       ...(params.releaseNo ? { releaseNo: params.releaseNo } : {}),
       ...(snapshotForRecord ? { walletBalanceSnapshot: snapshotForRecord } : {}),
+      ...(params.settlementSource ? { settlementSource: params.settlementSource } : {}),
     });
   }
   balances[key] = JSON.stringify(entries);
@@ -2303,6 +2316,23 @@ function summarizeInterestPeriod(period: { periodLabel?: string | null; principa
   return `${label}：计息基数 ¥${formatInterestAmount(Number(period.principal) || 0)}，年化 ${rate}% ，${period.startDate || '未填写'} 至 ${endDate}`;
 }
 
+// 利息分段属于按起息日排列的时间线。补录较早日期时必须重排持久化的 sort_order，
+// 同日起息日按原记录 ID 稳定排序，确保页面和后续读取不会因录入先后而错位。
+async function normalizeTagInterestPeriodSortOrder(db: any, ledgerId: number, tagName: string) {
+  const rows = await db.execute(sql`
+    SELECT id FROM tag_interest_periods
+    WHERE ledger_id = ${ledgerId} AND tag_name = ${tagName}
+    ORDER BY start_date ASC, id ASC
+  `);
+  const periods = ((rows as any)?.[0] || []) as Array<{ id: number }>;
+  for (const [index, period] of periods.entries()) {
+    await db.execute(sql`
+      UPDATE tag_interest_periods SET sort_order = ${index + 1}
+      WHERE id = ${Number(period.id)} AND ledger_id = ${ledgerId}
+    `);
+  }
+}
+
 function getLinked37InterestTagName(rawSource: unknown): string | null {
   try {
     const source = Buffer.isBuffer(rawSource)
@@ -2600,12 +2630,17 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
           hasReturnData = true;
         }
       }
+      // 分红和钱包均以分为最小结算单位。必须先分别收敛累计回报和已分红，
+      // 再计算差额；否则原始浮点尾差可能让页面显示“待补 ¥0.01”，
+      // 而实际扣款事务按分复核后又判断为零。
+      const settledCumulativeReturn = money(cumulativeReturn);
+      const settledPaidDividend = money(paidDividend);
       return {
         tagName,
         accountingMode: category?.accountingMode || 'manual_balance',
-        cumulativeReturn: money(cumulativeReturn),
-        paidDividend: money(paidDividend),
-        availableDividend: money(cumulativeReturn - paidDividend),
+        cumulativeReturn: settledCumulativeReturn,
+        paidDividend: settledPaidDividend,
+        availableDividend: money(settledCumulativeReturn - settledPaidDividend),
         hasReturnData,
         order: category?.order ?? Number.MAX_SAFE_INTEGER,
       };
@@ -2638,6 +2673,40 @@ async function ensureLedger37DividendBatchActionTable() {
         KEY idx_ledger37_dividend_batch_created (created_at),
         KEY idx_ledger37_dividend_batch_user (user_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号逐笔批量分红与补差审计'
+    `);
+  } finally {
+    (conn as any).release?.();
+  }
+}
+
+/**
+ * 个人标签暂停时的自动结算审计。
+ * 每次暂停日期只允许结算一次；重试返回同一笔结果，绝不重复解冻、入账或扣回。
+ */
+async function ensureLedger37PauseSettlementActionTable() {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  try {
+    await (conn as any).execute(`
+      CREATE TABLE IF NOT EXISTS ledger37_pause_settlement_actions (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        settlement_no VARCHAR(64) NOT NULL,
+        request_id VARCHAR(96) NOT NULL,
+        user_id INT NOT NULL,
+        tag_name VARCHAR(160) NOT NULL,
+        pause_date DATE NOT NULL,
+        status VARCHAR(16) NOT NULL,
+        margin_releases_json JSON NULL,
+        dividend_direction VARCHAR(16) NOT NULL DEFAULT 'none',
+        dividend_cny_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+        dividend_record_id BIGINT UNSIGNED NULL,
+        actor_user_id INT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_ledger37_pause_settlement_no (settlement_no),
+        UNIQUE KEY uk_ledger37_pause_settlement_request (request_id),
+        UNIQUE KEY uk_ledger37_pause_settlement_once (user_id, tag_name, pause_date),
+        KEY idx_ledger37_pause_settlement_member (user_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号个人标签暂停自动结算审计'
     `);
   } finally {
     (conn as any).release?.();
@@ -16502,6 +16571,229 @@ ${klinesSummary}
         } finally { transaction.release?.(); }
       }),
 
+    // 个人标签暂停后的自动结算：同一事务内解冻该标签钱包保证金，并按冻结后的标签回报入账或扣回。
+    // 暂停状态必须已先保存；余额不足时整笔自动结算回滚，绝不留下部分资金动作。
+    settleLedger37PausedTag: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+        pauseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,64}$/),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示暂停自动结算流程，不会操作真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本暂停自动结算仅胡大叔可操作' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        const membership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+        if (!membership || membership.memberType === 'ai') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本的真实成员' });
+        }
+        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, ctx.user.id, undefined, null))
+          .find((item: any) => String(item.name) === input.tagName && !item.isDefault);
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可结算' });
+        await ensureLedger37WalletInfrastructure();
+        // DDL 位于事务外，避免 MySQL 隐式提交破坏钱包原子性。
+        await ensureLedger37PauseSettlementActionTable();
+
+        // 回报快照只作为“本次冻结回报”的来源；事务内还会重新锁定已分红记录，避免重复结算。
+        const availability = await getLedger37DividendAvailabilitySnapshot({
+          actorUserId: ctx.user.id,
+          systemRole: (ctx.user as any).role,
+        });
+        const availabilityTag = (availability.users as any[])
+          .find((member: any) => Number(member.userId) === input.targetUserId)?.tags
+          ?.find((tag: any) => String(tag.tagName) === input.tagName);
+        const hasReturnData = Boolean(availabilityTag?.hasReturnData);
+        const cumulativeReturn = Math.round((Number(availabilityTag?.cumulativeReturn || 0) + Number.EPSILON) * 100) / 100;
+
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [memberRows] = await transaction.execute(
+            'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [LEDGER_37_ID, input.targetUserId],
+          );
+          const member = asRows(memberRows)[0];
+          if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+          const balances = parseLedger37InitialBalances(member.initial_balances);
+          let pauseHistory: Ledger37PauseHistoryItem[] = [];
+          try {
+            const raw = balances[`${input.tagName}__pauseHistory`];
+            pauseHistory = Array.isArray(raw) ? raw as Ledger37PauseHistoryItem[] : raw ? JSON.parse(String(raw)) : [];
+          } catch { pauseHistory = []; }
+          const latestIndex = pauseHistory.length - 1;
+          const latestPause = latestIndex >= 0 ? pauseHistory[latestIndex] : null;
+          const isLatestPause = Boolean(latestPause?.pauseDate
+            && !latestPause.resumeDate
+            && String(latestPause.pauseDate).slice(0, 10) === input.pauseDate);
+          if (!isLatestPause) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '请先保存当前标签的暂停日期，再执行自动结算' });
+          }
+
+          const [existingRows] = await transaction.execute(
+            `SELECT settlement_no, margin_releases_json, dividend_direction, dividend_cny_amount, dividend_record_id, created_at
+               FROM ledger37_pause_settlement_actions
+              WHERE user_id = ? AND tag_name = ? AND pause_date = ?
+              LIMIT 1 FOR UPDATE`,
+            [input.targetUserId, input.tagName, input.pauseDate],
+          );
+          const existing = asRows(existingRows)[0];
+          if (existing) {
+            let releases: Array<{ assetCode: string; amount: string }> = [];
+            try { releases = existing.margin_releases_json ? JSON.parse(String(existing.margin_releases_json)) : []; } catch { /* 历史审计字段异常不阻断幂等返回 */ }
+            await transaction.commit();
+            return {
+              success: true,
+              alreadyCompleted: true,
+              settlementNo: String(existing.settlement_no),
+              releases,
+              dividend: {
+                direction: String(existing.dividend_direction || 'none'),
+                amount: Number(existing.dividend_cny_amount || 0),
+                recordId: existing.dividend_record_id ? Number(existing.dividend_record_id) : null,
+              },
+              settledAt: existing.created_at,
+            };
+          }
+
+          const [holdRows] = await transaction.execute(
+            `SELECT id FROM ai_wallet_project_holds
+             WHERE ledger_id = ? AND user_id = ? AND tag_name = ? AND status = 'active'
+               AND amount > COALESCE(released_amount, 0)
+             ORDER BY id ASC FOR UPDATE`,
+            [LEDGER_37_ID, input.targetUserId, input.tagName],
+          );
+          const releases: Array<{ assetCode: string; amount: string }> = [];
+          for (const row of asRows(holdRows)) {
+            const release = await releaseLedger37WalletHold({ holdId: Number(row.id), actorUserId: ctx.user.id, transaction });
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: release.hold.userId,
+              tagName: release.hold.tagName,
+              holdId: release.hold.id,
+              assetCode: release.hold.assetCode,
+              amount: release.releasedAmount,
+              createdAt: release.releasedAt,
+              direction: 'release',
+              releaseNo: release.releaseNo,
+              remainingAmount: release.remainingAmount,
+              releasedAmount: release.hold.releasedAmount,
+              fullyReleased: release.fullyReleased,
+              settlementSource: 'pause_settlement',
+            });
+            releases.push({ assetCode: release.hold.assetCode, amount: release.releasedAmount });
+          }
+
+          let dividendDirection: 'credit' | 'recovery' | 'none' = 'none';
+          let dividendAmount = 0;
+          let dividendRecordId: number | null = null;
+          if (hasReturnData) {
+            const [paidRows] = await transaction.execute(
+              `SELECT COALESCE(SUM(amount), 0) AS paid_total
+                 FROM dividend_records
+                WHERE ledger_id = ? AND user_id = ? AND tag_name = ?
+                FOR UPDATE`,
+              [LEDGER_37_ID, input.targetUserId, input.tagName],
+            );
+            const paidTotal = Number(asRows(paidRows)[0]?.paid_total || 0);
+            const settledDifference = Math.round((cumulativeReturn - paidTotal + Number.EPSILON) * 100) / 100;
+            if (settledDifference > 0.005) {
+              const result = await createLedger37Dividend({
+                userId: input.targetUserId,
+                tagName: input.tagName,
+                assetCode: 'CNY',
+                assetAmount: settledDifference.toFixed(2),
+                note: '',
+                walletOperationLabel: '暂停结算分红',
+                actorUserId: ctx.user.id,
+                transaction,
+              });
+              dividendDirection = 'credit';
+              dividendAmount = settledDifference;
+              dividendRecordId = Number(result.recordId);
+            } else if (settledDifference < -0.005) {
+              const recoveryAmount = Math.abs(settledDifference);
+              const result = await recoverLedger37Dividend({
+                userId: input.targetUserId,
+                tagName: input.tagName,
+                assetCode: 'CNY',
+                assetAmount: recoveryAmount.toFixed(2),
+                reason: '',
+                requestId: `L37PS_${input.requestId}_REC`,
+                walletOperationLabel: '暂停结算分红回填扣回',
+                actorUserId: ctx.user.id,
+                transaction,
+              });
+              dividendDirection = 'recovery';
+              dividendAmount = recoveryAmount;
+              dividendRecordId = Number(result.recordId);
+            }
+          }
+
+          const settlementNo = `PS37${nanoid(18)}`;
+          const settledAt = new Date().toISOString();
+          await transaction.execute(
+            `INSERT INTO ledger37_pause_settlement_actions
+              (settlement_no, request_id, user_id, tag_name, pause_date, status, margin_releases_json, dividend_direction, dividend_cny_amount, dividend_record_id, actor_user_id)
+             VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, CAST(? AS DECIMAL(18,2)), ?, ?)`,
+            [settlementNo, input.requestId, input.targetUserId, input.tagName, input.pauseDate, JSON.stringify(releases), dividendDirection, dividendAmount.toFixed(2), dividendRecordId, ctx.user.id],
+          );
+
+          // appendLedger37WalletMarginRecord 会更新同一份 initial_balances，故在同一事务中重新读取后写入暂停结算摘要。
+          const [latestMemberRows] = await transaction.execute(
+            'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [LEDGER_37_ID, input.targetUserId],
+          );
+          const latestBalances = parseLedger37InitialBalances(asRows(latestMemberRows)[0]?.initial_balances);
+          let latestHistory: Ledger37PauseHistoryItem[] = [];
+          try {
+            const raw = latestBalances[`${input.tagName}__pauseHistory`];
+            latestHistory = Array.isArray(raw) ? raw as Ledger37PauseHistoryItem[] : raw ? JSON.parse(String(raw)) : [];
+          } catch { latestHistory = []; }
+          const latestHistoryIndex = latestHistory.length - 1;
+          if (latestHistoryIndex < 0 || latestHistory[latestHistoryIndex]?.resumeDate || String(latestHistory[latestHistoryIndex]?.pauseDate || '').slice(0, 10) !== input.pauseDate) {
+            throw new TRPCError({ code: 'CONFLICT', message: '暂停记录在结算过程中已变化，已停止并回滚自动结算' });
+          }
+          latestHistory[latestHistoryIndex] = {
+            ...latestHistory[latestHistoryIndex],
+            pauseSettlement: {
+              settlementNo,
+              settledAt,
+              marginReleases: releases,
+              dividendDirection,
+              dividendAmount: dividendAmount.toFixed(2),
+              dividendRecordId,
+              hasReturnData,
+            },
+          };
+          latestBalances[`${input.tagName}__pauseHistory`] = JSON.stringify(latestHistory);
+          await transaction.execute(
+            'UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?',
+            [JSON.stringify(latestBalances), LEDGER_37_ID, input.targetUserId],
+          );
+          await transaction.commit();
+          return {
+            success: true,
+            alreadyCompleted: false,
+            settlementNo,
+            releases,
+            dividend: { direction: dividendDirection, amount: dividendAmount, recordId: dividendRecordId },
+            settledAt,
+          };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally {
+          transaction.release?.();
+        }
+      }),
+
     // 获取标签配置
     getTagConfig: protectedProcedure
       .input(z.object({
@@ -17406,13 +17698,13 @@ ${klinesSummary}
           rows = await db.execute(
             sql`SELECT * FROM tag_interest_periods
                 WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}
-                ORDER BY sort_order ASC, start_date ASC`
+                ORDER BY start_date ASC, sort_order ASC, id ASC`
           );
         } else {
           rows = await db.execute(
             sql`SELECT * FROM tag_interest_periods
                 WHERE ledger_id = ${input.ledgerId}
-                ORDER BY tag_name ASC, sort_order ASC, start_date ASC`
+                ORDER BY tag_name ASC, start_date ASC, sort_order ASC, id ASC`
           );
         }
         return (rows as any)[0] as any[];
@@ -17449,6 +17741,7 @@ ${klinesSummary}
               VALUES (${input.ledgerId}, ${input.tagName}, ${input.periodLabel ?? null}, ${input.principal}, ${input.annualRate}, ${input.startDate}, ${input.endDate ?? null}, ${sortOrder}, ${ctx.user.id})`
         );
         const periodId = Number((insertResult as any)?.[0]?.insertId ?? (insertResult as any)?.insertId ?? 0) || null;
+        await normalizeTagInterestPeriodSortOrder(db, input.ledgerId, input.tagName);
         await writeInterestOperationLog(db, {
           ledgerId: input.ledgerId,
           tagName: input.tagName,
@@ -17496,6 +17789,7 @@ ${klinesSummary}
               manual_remark = ${input.remark ?? null}
               WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
         );
+        await normalizeTagInterestPeriodSortOrder(db, input.ledgerId, existingPeriod.tag_name);
         const isManual = Number(existingPeriod.is_manual) === 1;
         const updatedData = { ...input, isManual };
         await writeInterestOperationLog(db, {
