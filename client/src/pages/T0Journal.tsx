@@ -463,6 +463,37 @@ function persistT0TopFilters(storageKey: string | null, filters: T0PersistedTopF
   }
 }
 
+const T0_PREVIEW_MEMBER_RECENT_LIMIT = 12;
+
+function getT0PreviewMemberRecentStorageKey(managerUserId: number | null) {
+  return Number.isInteger(managerUserId) && Number(managerUserId) > 0
+    ? `t0-preview-member-recents:52:${managerUserId}`
+    : null;
+}
+
+function readT0PreviewMemberRecentIds(storageKey: string | null): number[] {
+  if (!storageKey || typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(parsed
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)))
+      .slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function persistT0PreviewMemberRecentIds(storageKey: string | null, memberIds: number[]) {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(memberIds.slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT)));
+  } catch {
+    // 私密模式或浏览器存储不可用时，当前页面的最近排序仍可正常使用。
+  }
+}
+
 function getT0InstrumentFilterSummary(selectedTypes: T0InstrumentType[]): string {
   if (selectedTypes.length === 0) return "类型全部";
   return T0_INSTRUMENT_TYPES
@@ -535,6 +566,49 @@ type PreviewRelatedUser = {
   username?: string;
   avatar?: string;
   lastUsedAt?: string | null;
+};
+
+type T0PreviewMember = {
+  id: number;
+  name: string;
+  username?: string;
+  avatar?: string;
+  /** 服务端按T+0订单、共享受益及充提现流水汇总的最近业务活动；仅用于用户视角选择排序。 */
+  lastActivityAt?: string | null;
+};
+
+/** 仅在“选择用户视角”名单打开时计算，数据口径与用户进入后的T+0只读展示一致。 */
+type T0PreviewMemberCardMetrics = {
+  longQuantity: number;
+  shortQuantity: number;
+  cumulativeDepositAmount: number;
+  /** 累计提现 ÷ 累计投入；无累计投入时不计算百分比。 */
+  cashReturnRate: number | null;
+};
+
+/** 团队总览仅获取经授权的下属成员汇总，绝不下发团队原始订单或资金流水。 */
+type T0TeamOverviewMember = {
+  userId: number;
+  parentUserId: number;
+  depth: number;
+  name: string;
+  username?: string;
+  avatar?: string;
+  cumulativeDepositAmount: number;
+  currentCumulativeIncome: number | null;
+  cumulativeWithdrawalAmount: number;
+  realizedIncomeRate: number | null;
+  annualizedReturn: number | null;
+  hasT0FinancialData: boolean;
+};
+type T0TeamOverview = {
+  enabled: boolean;
+  asOf?: string;
+  relation?: { rootUserId: number; rootIncluded: boolean; directMemberCount: number; recursiveMemberCount: number };
+  financialDefinition?: { income: string; excludes: string[]; rate: string };
+  dataCompleteness?: { isComplete: boolean; reason?: string; calculationVersion: string };
+  summary?: { cumulativeDepositAmount: number; currentCumulativeIncome: number | null; cumulativeWithdrawalAmount: number; realizedIncomeRate: number | null };
+  members?: T0TeamOverviewMember[];
 };
 
 type PreviewRelatedFund = {
@@ -2565,6 +2639,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [memberRelatedUserFilterTouched, setMemberRelatedUserFilterTouched] = useState(false);
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
+  /** 用户历史记录仅可按已授权可见的收益类别与来源筛选，不扩展订单可见范围。 */
+  const [historyIncomeKindFilterIds, setHistoryIncomeKindFilterIds] = useState<string[]>([]);
+  const [historyIncomeSourceFilterIds, setHistoryIncomeSourceFilterIds] = useState<string[]>([]);
   // 管理员筛到单个用户后，可在历史区仅切换展示口径，不改变其实际管理权限。
   const [historyPresentation, setHistoryPresentation] = useState<"admin" | "member">("admin");
   const [historyAccountFilterIds, setHistoryAccountFilterIds] = useState<string[]>([]);
@@ -2594,6 +2671,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [previewUserId, setPreviewUserId] = useState<number | null>(null);
   const [previewMemberPickerOpen, setPreviewMemberPickerOpen] = useState(false);
   const [previewMemberSearch, setPreviewMemberSearch] = useState("");
+  const [previewMemberRecentIds, setPreviewMemberRecentIds] = useState<number[]>([]);
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
   const [debouncedProfitShareRecipientSearch, setDebouncedProfitShareRecipientSearch] = useState("");
@@ -2646,11 +2724,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
   // 总收益报告独立保存所查看的明细，避免关闭个人收益账本后误切换其列表。
-  const [totalProfitDetailTab, setTotalProfitDetailTab] = useState<"income" | "order" | "commission" | "shared" | "withdrawal" | "deposit">("order");
+  const [totalProfitDetailTab, setTotalProfitDetailTab] = useState<"income" | "order" | "commission" | "shared" | "withdrawal" | "deposit" | "team">("order");
   const [showPayoutLog, setShowPayoutLog] = useState(false);
   // 个人收益账本内的三张只读明细表；登记入口仍只开放给管理员。
   const [payoutLedgerTab, setPayoutLedgerTab] = useState<"income" | "withdrawal" | "deposit">("income");
   const [showGlobalLedger, setShowGlobalLedger] = useState(false);
+  /** 仅受控团队负责人可打开；团队页只展示递归下属的汇总，不提供订单下钻。 */
   const [globalLedgerTab, setGlobalLedgerTab] = useState<"positions" | "funds" | "income" | "system">("positions");
   const [globalFundsSort, setGlobalFundsSort] = useState<{ key: "deposit" | "withdrawal" | "net"; direction: "asc" | "desc" } | null>(null);
   const [globalIncomeSort, setGlobalIncomeSort] = useState<{ key: "order" | "commission" | "shared" | "total"; direction: "asc" | "desc" } | null>(null);
@@ -2694,6 +2773,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const profitableHistoryExportRef = useRef<HTMLElement | null>(null);
   const payoutSharedContentRef = useRef<HTMLDivElement | null>(null);
   const totalProfitAttributionExportRef = useRef<HTMLDivElement | null>(null);
+  /** 手机上切换历史筛选后，将历史区标题、筛选和汇总一并定位到屏幕顶部；桌面端不改变阅读位置。 */
+  const focusHistoryOnMobile = useCallback(() => {
+    if (typeof window === "undefined" || window.innerWidth >= 768) return;
+    window.requestAnimationFrame(() => {
+      profitableHistoryExportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
   const hasInitializedJournalFiltersRef = useRef(false);
   const activeTopFilterStorageKeyRef = useRef<string | null>(null);
   // React 的 pending 状态要等下一次 render 才会禁用按钮；此锁在同一事件循环内立即生效，
@@ -2796,6 +2882,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     staleTime: 25_000,
   });
   const canUseMemberPreview = canAccess && (isLedgerAdmin || isSuperAdmin) && !Boolean(viewAsUserId);
+  const previewMemberRecentStorageKey = getT0PreviewMemberRecentStorageKey(
+    canUseMemberPreview ? Number((me as any)?.id || 0) : null,
+  );
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
     { ledgerId: 52, previewUserId: previewUserId || undefined },
     {
@@ -2813,7 +2902,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : canUseMemberPreview && queriedViewerMode !== undefined && queriedViewerMode !== "admin";
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
-	const sharedIncomeTransfers = useMemo<SharedIncomeTransfer[]>(() => {
+
+  const t0TeamOverviewQuery = trpc.ledger.t0GetTeamOverview.useQuery(
+    { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined },
+    {
+      // 预览切换期间也可开始读取目标成员的授权状态；服务端仍以 previewUserId 严格校验管理员身份。
+      enabled: canAccess && (isUserPreview || queriedViewerMode === "member"),
+      staleTime: T0_JOURNAL_STALE_TIME_MS,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const teamOverview = t0TeamOverviewQuery.data as T0TeamOverview | undefined;
+  const canViewTeamOverview = Boolean(teamOverview?.enabled);
+  const teamOverviewMembers = useMemo(() => Array.isArray(teamOverview?.members) ? teamOverview.members : [], [teamOverview?.members]);
+		const sharedIncomeTransfers = useMemo<SharedIncomeTransfer[]>(() => {
 	  const rows = (t0JournalQuery.data as any)?.sharedIncomeTransfers;
     return Array.isArray(rows) ? rows.map((item: any) => ({
       id: String(item.id),
@@ -2954,19 +3056,47 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       refetchOnWindowFocus: false,
     },
   );
-  const previewMembers = useMemo(() => Array.isArray(t0PreviewMembersQuery.data)
+  useEffect(() => {
+    setPreviewMemberRecentIds(readT0PreviewMemberRecentIds(previewMemberRecentStorageKey));
+  }, [previewMemberRecentStorageKey]);
+  const previewMembers = useMemo<T0PreviewMember[]>(() => Array.isArray(t0PreviewMembersQuery.data)
     ? t0PreviewMembersQuery.data.map((member: any) => ({
       id: Number(member.id),
       name: String(member.name || `用户#${member.id}`),
       username: member.username ? String(member.username) : undefined,
+      avatar: member.avatar ? String(member.avatar) : undefined,
+      lastActivityAt: member.lastActivityAt ? String(member.lastActivityAt) : null,
     })).filter((member) => Number.isInteger(member.id) && member.id > 0)
     : [], [t0PreviewMembersQuery.data]);
   const selectedPreviewMember = previewMembers.find((member) => member.id === previewUserId) ?? null;
   const visiblePreviewMembers = useMemo(() => {
     const keyword = previewMemberSearch.trim().toLowerCase();
-    if (!keyword) return previewMembers;
-    return previewMembers.filter((member) => `${member.name} ${member.username || ""} ${member.id}`.toLowerCase().includes(keyword));
-  }, [previewMemberSearch, previewMembers]);
+    const recentIndexByMemberId = new Map(previewMemberRecentIds.map((memberId, index) => [memberId, index]));
+    return previewMembers
+      .filter((member) => !keyword || `${member.name} ${member.username || ""} ${member.id}`.toLowerCase().includes(keyword))
+      .sort((left, right) => {
+        const leftRecentIndex = recentIndexByMemberId.get(left.id) ?? Number.POSITIVE_INFINITY;
+        const rightRecentIndex = recentIndexByMemberId.get(right.id) ?? Number.POSITIVE_INFINITY;
+        if (leftRecentIndex !== rightRecentIndex) return leftRecentIndex - rightRecentIndex;
+        const activityOrder = String(right.lastActivityAt || "").localeCompare(String(left.lastActivityAt || ""));
+        if (activityOrder !== 0) return activityOrder;
+        return left.name.localeCompare(right.name, "zh-CN") || left.id - right.id;
+      });
+  }, [previewMemberRecentIds, previewMemberSearch, previewMembers]);
+  const openPreviewMember = (member: T0PreviewMember) => {
+    const nextRecentIds = [member.id, ...previewMemberRecentIds.filter((memberId) => memberId !== member.id)]
+      .slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT);
+    persistT0PreviewMemberRecentIds(previewMemberRecentStorageKey, nextRecentIds);
+    setPreviewMemberRecentIds(nextRecentIds);
+    setPreviewUserId(member.id);
+    setPreviewMemberPickerOpen(false);
+    setPreviewMemberSearch("");
+    setShowEntrySheet(false);
+    setShowPayoutLog(false);
+    setHistoryPresentation("admin");
+    setHistoryActionMenuTradeId(null);
+    setRecentJournalPage(1);
+  };
   // 仅管理员已在顶部筛选出一位真实用户时，才允许将“历史记录”切换为该用户登录后的呈现。
   const historyPerspectiveTargetUserId = canManage
     && relatedUserFilterIds.length === 1
@@ -3600,6 +3730,84 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => filterTradesByInstrumentTypes(historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds),
     [historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds],
   );
+  /** 用户端不读取完整用户目录，类别与名字都只从已授权可见的收益投影中生成。 */
+  const historyMemberIncomeKindFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
+    if (!historyIsMemberPresentation) return [];
+    const viewerUserId = Number(payoutTargetRelatedUserId);
+    if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return [];
+    let hasOwnOrderHistory = false;
+    let hasCommissionHistory = false;
+    let hasSharedIncomeHistory = false;
+    for (const trade of historyPerspectiveTrades) {
+      if (ACTIONS[trade.action].opening) continue;
+      const sourceUserId = Number(trade.relatedUserId || 0);
+      const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
+        && sourceUserId > 0
+        && sourceUserId !== viewerUserId;
+      const hasSharedIncome = Number(trade.sharedIncomeRecipientUserId || 0) === viewerUserId
+        && Number(trade.sharedIncomeAmount || 0) > 0;
+      const isOwnOrder = sourceUserId === viewerUserId;
+      if (isOwnOrder) hasOwnOrderHistory = true;
+      if (hasCommissionRelationship) hasCommissionHistory = true;
+      if (hasSharedIncome) hasSharedIncomeHistory = true;
+    }
+    return [
+      ...(hasOwnOrderHistory ? [{ id: "order", label: "订单", summaryLabel: "订单" }] : []),
+      ...(hasCommissionHistory ? [{ id: "commission", label: "佣金", summaryLabel: "佣金" }] : []),
+      ...(hasSharedIncomeHistory ? [{ id: "shared", label: "共享", summaryLabel: "共享" }] : []),
+    ];
+  }, [historyIsMemberPresentation, historyPerspectiveTrades, payoutTargetRelatedUserId]);
+  /** 名字只列出与当前用户有明确分佣关系的来源；纯共享保持“共享”类别而不披露来源人。 */
+  const historyMemberIncomeSourceFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
+    if (!historyIsMemberPresentation) return [];
+    const viewerUserId = Number(payoutTargetRelatedUserId);
+    if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return [];
+    const commissionSources = new Map<string, T0MultiSelectOption>();
+    for (const trade of historyPerspectiveTrades) {
+      if (ACTIONS[trade.action].opening) continue;
+      const sourceUserId = Number(trade.relatedUserId || 0);
+      const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
+        && sourceUserId > 0
+        && sourceUserId !== viewerUserId;
+      if (!hasCommissionRelationship) continue;
+      const sourceName = trade.relatedUserHidden
+        ? "未关联用户"
+        : trade.relatedUserName || trade.relatedUsername || `用户#${sourceUserId}`;
+      commissionSources.set(String(sourceUserId), {
+        id: String(sourceUserId),
+        label: sourceName,
+        summaryLabel: sourceName,
+      });
+    }
+    return Array.from(commissionSources.values()).sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
+  }, [historyIsMemberPresentation, historyPerspectiveTrades, payoutTargetRelatedUserId]);
+  const historyMemberIncomeSourceScopedTrades = useMemo(() => {
+    if (!historyIsMemberPresentation || (historyIncomeKindFilterIds.length === 0 && historyIncomeSourceFilterIds.length === 0)) return historyInstrumentScopedTrades;
+    const viewerUserId = Number(payoutTargetRelatedUserId);
+    const selectedKindIds = new Set(historyIncomeKindFilterIds);
+    const selectedSourceIds = new Set(historyIncomeSourceFilterIds);
+    const allowOrder = selectedKindIds.size === 0 || selectedKindIds.has("order");
+    const allowCommission = selectedKindIds.size === 0 || selectedKindIds.has("commission");
+    const allowShared = selectedKindIds.size === 0 || selectedKindIds.has("shared");
+    return historyInstrumentScopedTrades.filter((trade) => {
+      const sourceUserId = Number(trade.relatedUserId || 0);
+      const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
+        && sourceUserId > 0
+        && sourceUserId !== viewerUserId;
+      const hasSharedIncome = Number(trade.sharedIncomeRecipientUserId || 0) === viewerUserId
+        && Number(trade.sharedIncomeAmount || 0) > 0;
+      const sourceIsSelected = selectedSourceIds.size === 0 || selectedSourceIds.has(String(sourceUserId));
+      const isOwnOrder = sourceUserId === viewerUserId;
+      // 本人订单的开仓需作为 FIFO 计算基底保留；展示层会在筛选时仅显示其平仓净收益。
+      if (isOwnOrder) return selectedSourceIds.size === 0 && allowOrder;
+      // 具名来源的分佣平仓需要保留同来源开仓作为只读 FIFO 计算基底；
+      // 后续展示层会隐藏这些开仓，只向用户展示分佣与共享结果。
+      if (hasCommissionRelationship) return sourceIsSelected && (allowCommission || (allowShared && hasSharedIncome));
+      if (ACTIONS[trade.action].opening) return false;
+      // 纯共享没有可显示的来源人，因此只有“名字”未限定时才归入共享类别。
+      return allowShared && selectedSourceIds.size === 0 && hasSharedIncome;
+    });
+  }, [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyInstrumentScopedTrades, historyIsMemberPresentation, payoutTargetRelatedUserId]);
   const historyRelatedUserFilter = useMemo(
     () => resolveT0RelatedUserFilter(
       historyRelatedUserFilterIds,
@@ -3619,7 +3827,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return entryIds;
   }, [historyRelatedUserFilter, historyRelatedUserFilterIds.length, isMemberView, profitShareSnapshots]);
   const journalScopeTrades = useMemo(
-    () => historyInstrumentScopedTrades.filter((trade) => (
+    () => historyMemberIncomeSourceScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
       && (historyIsMemberPresentation || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       // 用户呈现已在源数据层严格按本人/分层快照过滤，不能再套用管理员的用户、推荐或账户筛选。
@@ -3635,24 +3843,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [historyInstrumentScopedTrades, historyIsMemberPresentation, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+    [historyMemberIncomeSourceScopedTrades, historyIsMemberPresentation, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+  );
+  const isHistoryMemberIncomeSourceFilterActive = historyIsMemberPresentation
+    && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0);
+  // 来源筛选打开时，具名分佣的开仓只作为 FIFO 计算基底，不作为用户历史行显示。
+  const historyDisplayScopeTrades = useMemo(
+    () => isHistoryMemberIncomeSourceFilterActive
+      ? journalScopeTrades.filter((trade) => !ACTIONS[trade.action].opening)
+      : journalScopeTrades,
+    [isHistoryMemberIncomeSourceFilterActive, journalScopeTrades],
   );
   const availableJournalActions = useMemo(
-    () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
-    [journalScopeTrades],
+    () => RECENT_JOURNAL_ACTIONS.filter((action) => historyDisplayScopeTrades.some((trade) => trade.action === action)),
+    [historyDisplayScopeTrades],
   );
   const availableJournalActionKey = availableJournalActions.join("|");
   const hasSharedIncomeHistory = useMemo(
-    () => journalScopeTrades.some((trade) => Number(trade.sharedIncomeAmount || 0) > 0),
-    [journalScopeTrades],
+    () => historyDisplayScopeTrades.some((trade) => Number(trade.sharedIncomeAmount || 0) > 0),
+    [historyDisplayScopeTrades],
   );
   const recentJournalTrades = useMemo(
     () => showLinkedJournalGroups
       ? journalScopeTrades
       : showOnlySharedIncomeHistory
-        ? journalScopeTrades.filter((trade) => Number(trade.sharedIncomeAmount || 0) > 0)
-        : journalScopeTrades.filter((trade) => journalActionFilters.has(trade.action)),
-    [journalScopeTrades, journalActionFilters, showLinkedJournalGroups, showOnlySharedIncomeHistory],
+        ? historyDisplayScopeTrades.filter((trade) => Number(trade.sharedIncomeAmount || 0) > 0)
+        : historyDisplayScopeTrades.filter((trade) => journalActionFilters.has(trade.action)),
+    [historyDisplayScopeTrades, journalActionFilters, journalScopeTrades, showLinkedJournalGroups, showOnlySharedIncomeHistory],
   );
   /**
    * 同一来源平仓若同时给当前呈现用户带来分佣和共享，历史页将其拆成两行：
@@ -3664,8 +3881,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && !ACTIONS[trade.action].opening
       && sharedIncomeAmount > 0
       && Boolean(trade.profitShareBeneficiaryUserId);
-    if (!shouldSplitMixedIncome) return [trade];
-
     const commissionDisplayTrade: PreviewTrade = {
       ...trade,
       id: `history-commission-${trade.id}`,
@@ -3682,18 +3897,61 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       detailEntryId: getDetailEntryId(trade),
       historyIncomeKind: "shared",
     };
-    return showOnlySharedIncomeHistory ? [sharedDisplayTrade] : [commissionDisplayTrade, sharedDisplayTrade];
-  }), [historyIsMemberPresentation, recentJournalTrades, showOnlySharedIncomeHistory]);
+    if (!isHistoryMemberIncomeSourceFilterActive) {
+      if (!shouldSplitMixedIncome) return [trade];
+      return showOnlySharedIncomeHistory ? [sharedDisplayTrade] : [commissionDisplayTrade, sharedDisplayTrade];
+    }
+
+    // 筛选的开仓只用于上方已经完成的 FIFO 计算，不能作为用户收入历史展示。
+    if (ACTIONS[trade.action].opening) return [];
+    const viewerUserId = Number(payoutTargetRelatedUserId);
+    const sourceUserId = Number(trade.relatedUserId || 0);
+    const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
+      && sourceUserId > 0
+      && sourceUserId !== viewerUserId;
+    const selectedKindIds = new Set(historyIncomeKindFilterIds);
+    const selectedSourceIds = new Set(historyIncomeSourceFilterIds);
+    const sourceIsSelected = selectedSourceIds.size === 0 || selectedSourceIds.has(String(sourceUserId));
+    const allowOrder = selectedKindIds.size === 0 || selectedKindIds.has("order");
+    const allowCommission = selectedKindIds.size === 0 || selectedKindIds.has("commission");
+    const allowShared = selectedKindIds.size === 0 || selectedKindIds.has("shared");
+    const isOwnOrder = sourceUserId === viewerUserId;
+    if (isOwnOrder) {
+      return selectedSourceIds.size === 0 && allowOrder && !showOnlySharedIncomeHistory ? [trade] : [];
+    }
+    const showCommission = hasCommissionRelationship
+      && sourceIsSelected
+      && allowCommission
+      && !showOnlySharedIncomeHistory;
+    const showNamedShared = hasCommissionRelationship
+      && sharedIncomeAmount > 0
+      && sourceIsSelected
+      && allowShared;
+    if (hasCommissionRelationship) {
+      if (shouldSplitMixedIncome) {
+        return [
+          ...(showCommission ? [commissionDisplayTrade] : []),
+          ...(showNamedShared ? [sharedDisplayTrade] : []),
+        ];
+      }
+      return showCommission ? [trade] : [];
+    }
+    const showSharedOnly = Number(trade.sharedIncomeRecipientUserId || 0) === viewerUserId
+      && sharedIncomeAmount > 0
+      && selectedSourceIds.size === 0
+      && allowShared;
+    return showSharedOnly ? [trade] : [];
+  }), [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyIsMemberPresentation, isHistoryMemberIncomeSourceFilterActive, payoutTargetRelatedUserId, recentJournalTrades, showOnlySharedIncomeHistory]);
   const linkedJournalGroups = useMemo(
     () => buildLinkedJournalGroups(journalScopeTrades),
     [journalScopeTrades],
   );
   const hasLinkedJournalPairs = useMemo(
-    () => linkedJournalGroups.some((group) => (
+    () => !isHistoryMemberIncomeSourceFilterActive && linkedJournalGroups.some((group) => (
       (Boolean(group.opening) && group.closings.length > 0)
       || (!group.opening && Number(group.closings[0]?.trade.sharedIncomeAmount || 0) > 0)
     )),
-    [linkedJournalGroups],
+    [isHistoryMemberIncomeSourceFilterActive, linkedJournalGroups],
   );
   useEffect(() => {
     setJournalActionFilters((current) => {
@@ -3848,6 +4106,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const visibleRecentJournalTrades = showOnlyProfitableHistory
     ? profitableRecentJournalTrades
     : historyDisplayTrades;
+  /** 用户收入筛选的汇总严格复用每条历史行的“本单可得”口径，不回算或改写任何收益流水。 */
+  const historyMemberIncomeFilterSummary = useMemo(() => {
+    if (!isHistoryMemberIncomeSourceFilterActive) return null;
+    const incomeTrades = historyDisplayTrades.filter((trade) => !ACTIONS[trade.action].opening);
+    const totalNetPnl = incomeTrades.reduce((total, trade) => {
+      const detail = getHistoricalTradeDetail(trade);
+      const displayedNetPnl = resolveHistoryViewerPayout(trade, detail)?.netPnl ?? detail?.netPnl;
+      return total + (Number.isFinite(Number(displayedNetPnl)) ? Number(displayedNetPnl) : 0);
+    }, 0);
+    return { count: incomeTrades.length, totalNetPnl };
+  }, [getHistoricalTradeDetail, historyDisplayTrades, isHistoryMemberIncomeSourceFilterActive, resolveHistoryViewerPayout]);
   const recentJournalTotalPages = Math.max(1, Math.ceil(
     (showLinkedJournalGroups ? linkedJournalGroups.length : visibleRecentJournalTrades.length) / RECENT_JOURNAL_PAGE_SIZE,
   ));
@@ -4824,7 +5093,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     || historyRelatedFundFilterIds.length > 0
     || historyInstrumentTypeFilterIds.length > 0
     || historyExecutionFilter !== "all"
-    || historyHideLocked;
+    || historyHideLocked
+    || (historyIsMemberPresentation && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0));
+  const canFilterMemberHistoryIncome = historyIsMemberPresentation && historyMemberIncomeKindFilterOptions.length > 0;
   const historyInstrumentFilterSummary = getT0InstrumentFilterSummary(historyInstrumentTypeFilterIds);
   const historyExecutionFilterSummary = getT0ExecutionFilterSummary(historyExecutionFilter, historyHideLocked);
   const historyTypeStatusGridTemplateColumns = useMemo(
@@ -4844,6 +5115,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }));
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
   }, [accounts, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
+  useEffect(() => {
+    const selectableIds = new Set(historyMemberIncomeKindFilterOptions.map((option) => option.id));
+    setHistoryIncomeKindFilterIds((current) => {
+      const next = current.filter((id) => selectableIds.has(id));
+      return hasSameT0StringArrayValues(current, next) ? current : next;
+    });
+  }, [historyMemberIncomeKindFilterOptions]);
+  useEffect(() => {
+    const selectableIds = new Set(historyMemberIncomeSourceFilterOptions.map((option) => option.id));
+    setHistoryIncomeSourceFilterIds((current) => {
+      const next = current.filter((id) => selectableIds.has(id));
+      return hasSameT0StringArrayValues(current, next) ? current : next;
+    });
+  }, [historyMemberIncomeSourceFilterOptions]);
   // 成员端没有独立的历史用户筛选面板；历史记录沿用服务端的严格本人/显式分层可见范围。
   useEffect(() => {
     if (!isMemberView) return;
@@ -5208,6 +5493,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || left.name.localeCompare(right.name, "zh-CN")
     ));
   }, [canManage, markPrice, profitShareSnapshots, recentRelatedUsers, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, showGlobalLedger, trades]);
+  // 用户视角名单只在弹窗打开时计算四项概要；绝不改变全局账本开关或任何真实流水。
+  // “回款”严格读取已登记提现 ÷ 累计投入，不把未提现的订单、分佣或共享收益当作现金回款。
+  const previewMemberCardMetricsById = useMemo(() => {
+    const metricsById = new Map<number, T0PreviewMemberCardMetrics>();
+    if (!canUseMemberPreview || !previewMemberPickerOpen || previewMembers.length === 0) return metricsById;
+
+    for (const member of previewMembers) {
+      // 多空仅统计该用户本人实际下单的已成交剩余仓位；分佣受益人不会被误展示成持有整张来源订单。
+      const ownFilledTrades = rawJournalTrades.filter((trade) => (
+        !trade.isPending && Number(trade.relatedUserId || 0) === member.id
+      ));
+      const ownBuckets = buildPositionBuckets(ownFilledTrades);
+      const longQuantity = ownBuckets
+        .filter((bucket) => bucket.side === "long" && bucket.remainingQuantity > 0.0000001)
+        .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+      const shortQuantity = ownBuckets
+        .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
+        .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+      const cumulativeDepositAmount = Math.max(0, payoutDepositAmountByRelatedUser.get(String(member.id)) || 0);
+      const cumulativeWithdrawalAmount = (payoutCashFlowsByRelatedUser.get(String(member.id)) || [])
+        .filter((cashFlow) => cashFlow.direction === "withdrawal")
+        .reduce((total, cashFlow) => total + cashFlow.amount, 0);
+      metricsById.set(member.id, {
+        longQuantity,
+        shortQuantity,
+        cumulativeDepositAmount,
+        cashReturnRate: cumulativeDepositAmount > 0 ? cumulativeWithdrawalAmount / cumulativeDepositAmount : null,
+      });
+    }
+    return metricsById;
+  }, [canUseMemberPreview, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, previewMemberPickerOpen, previewMembers, rawJournalTrades]);
   const globalLedgerSummary = useMemo(() => {
     const summary = globalLedgerRows.reduce((total, row) => ({
       longQuantity: total.longQuantity + row.longQuantity,
@@ -8338,7 +8654,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 }}
                 className="h-7 shrink-0 rounded border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 active:scale-95"
               >
-                预览用户
+                选择用户
               </button>
             </>}
           </div>}
@@ -8803,6 +9119,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 setNetProfitDetail(null);
                 setShowHistoryFilters(false);
                 setRecentJournalPage(1);
+                focusHistoryOnMobile();
               }}
               className={`absolute right-4 h-6 rounded-[3px] border px-2 text-[11px] font-medium transition-colors active:scale-95 ${isHistoryUserPerspective ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/40 text-slate-600"}`}
             >
@@ -8825,6 +9142,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setShowLinkedJournalGroups(false);
                       setJournalActionFilters(new Set(availableJournalActions));
                       setRecentJournalPage(1);
+                      focusHistoryOnMobile();
                     }}
                     className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${allJournalActionsSelected && !showOnlyProfitableHistory && !showOnlySharedIncomeHistory && !showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
@@ -8842,6 +9160,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       // 进入“盈利”时必须同时覆盖平多和平空，不能继承此前单一动作的筛选。
                       setJournalActionFilters(new Set(availableJournalActions));
                       setRecentJournalPage(1);
+                      focusHistoryOnMobile();
                     }}
                     className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${showOnlyProfitableHistory ? "border-rose-600 bg-rose-700 text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
@@ -8858,6 +9177,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setJournalActionFilters(new Set(availableJournalActions));
                       setShowOnlySharedIncomeHistory((current) => !current);
                       setRecentJournalPage(1);
+                      focusHistoryOnMobile();
                     }}
                     className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${showOnlySharedIncomeHistory ? "border-blue-600 bg-blue-600 text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
@@ -8879,6 +9199,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           setShowOnlySharedIncomeHistory(false);
                           setShowLinkedJournalGroups(false);
                           selectJournalActionFilter(action);
+                          focusHistoryOnMobile();
                         }}
                         className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${selected ? ACTIONS[action].activeClass : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                       >
@@ -8895,34 +9216,43 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setJournalActionFilters(new Set(availableJournalActions));
                       setShowLinkedJournalGroups((current) => !current);
                       setRecentJournalPage(1);
+                      focusHistoryOnMobile();
                     }}
                     className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
                     关联
                   </button>}
-                  {canManage && !isHistoryUserPerspective && <button
+                  {((canManage && !isHistoryUserPerspective) || canFilterMemberHistoryIncome) && <button
                     type="button"
-                    aria-label={showHistoryFilters ? "收起并清空历史筛选" : "筛选历史记录"}
+                    aria-label={showHistoryFilters ? "收起并清空历史筛选" : historyIsMemberPresentation ? "筛选佣金、共享和名字" : "筛选历史记录"}
                     aria-expanded={showHistoryFilters}
-                    title={showHistoryFilters ? "收起并恢复全部" : "筛选历史记录"}
+                    title={showHistoryFilters ? "收起并恢复全部" : historyIsMemberPresentation ? "筛选佣金、共享和名字" : "筛选历史记录"}
                     onClick={() => {
                       if (showHistoryFilters) {
-                        // 第二次点击在收起面板的同时清空五项条件，快速回到全部历史记录。
-                        setHistoryAccountFilterIds([]);
-                        setHistoryRelatedUserFilterIds([]);
-                        setHistoryRelatedFundFilterIds([]);
-                        setHistoryInstrumentTypeFilterIds([]);
-                        setHistoryExecutionFilter("all");
-                        setHistoryHideLocked(false);
+                        if (historyIsMemberPresentation) {
+                          // 用户端只清空佣金/共享类别与名字，不能意外清空管理员顶部或成员范围条件。
+                          setHistoryIncomeKindFilterIds([]);
+                          setHistoryIncomeSourceFilterIds([]);
+                        } else {
+                          // 第二次点击在收起面板的同时清空五项条件，快速回到全部历史记录。
+                          setHistoryAccountFilterIds([]);
+                          setHistoryRelatedUserFilterIds([]);
+                          setHistoryRelatedFundFilterIds([]);
+                          setHistoryInstrumentTypeFilterIds([]);
+                          setHistoryExecutionFilter("all");
+                          setHistoryHideLocked(false);
+                        }
                         setRecentJournalPage(1);
                         setShowHistoryFilters(false);
+                        focusHistoryOnMobile();
                         return;
                       }
                       setShowHistoryFilters(true);
+                      focusHistoryOnMobile();
                     }}
-                    className={`ml-0.5 flex h-6 w-7 shrink-0 items-center justify-center rounded-[3px] border transition-colors active:scale-95 ${showHistoryFilters || hasActiveHistoryDetailFilters ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                    className={`ml-0.5 flex shrink-0 items-center justify-center rounded-[3px] border font-medium leading-none transition-colors active:scale-95 ${historyIsMemberPresentation ? "h-[22px] px-1 text-[10px]" : "h-6 w-7"} ${showHistoryFilters || hasActiveHistoryDetailFilters ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
-                    <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    {historyIsMemberPresentation ? "筛选" : <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />}
                   </button>}
                   {(showOnlyProfitableHistory || showOnlySharedIncomeHistory || showLinkedJournalGroups) && <div data-card-export-hide="true" className="ml-auto flex shrink-0 items-center">
                     <OrderCardImageDownload
@@ -8947,11 +9277,47 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>}
                 </div>
               </div>
-              {canManage && !isHistoryUserPerspective && showHistoryFilters && <div
+              {showHistoryFilters && ((canManage && !isHistoryUserPerspective) || canFilterMemberHistoryIncome) && <div
                 data-card-export-hide="true"
                 className="relative z-20 border-b border-[#c7d0d7]/70 px-4 py-2.5"
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.52), rgba(208,215,221,0.28))" }}
               >
+                {historyIsMemberPresentation ? <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <T0MultiSelect
+                      label="佣金"
+                      options={historyMemberIncomeKindFilterOptions}
+                      selectedIds={historyIncomeKindFilterIds}
+                      emptyLabel="暂无收益类别"
+                      toolbar
+                      onChange={(ids) => {
+                        setHistoryIncomeKindFilterIds(ids);
+                        setRecentJournalPage(1);
+                        focusHistoryOnMobile();
+                      }}
+                    />
+                    <T0MultiSelect
+                      label="名字"
+                      options={historyMemberIncomeSourceFilterOptions}
+                      selectedIds={historyIncomeSourceFilterIds}
+                      emptyLabel="暂无具名分佣"
+                      toolbar
+                      align="right"
+                      onChange={(ids) => {
+                        setHistoryIncomeSourceFilterIds(ids);
+                        setRecentJournalPage(1);
+                        focusHistoryOnMobile();
+                      }}
+                    />
+                  </div>
+                  {historyMemberIncomeFilterSummary && <p className="px-0.5 text-[10px] leading-4 text-slate-500">
+                    加总 <b className="font-semibold tabular-nums text-slate-700">{historyMemberIncomeFilterSummary.count} 笔</b>
+                    <span className="mx-1 text-slate-300">|</span>
+                    <b className={`font-semibold tabular-nums ${historyMemberIncomeFilterSummary.totalNetPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                      {formatSigned(historyMemberIncomeFilterSummary.totalNetPnl)} u
+                    </b>
+                  </p>}
+                </div> : <>
                 <div
                   data-t0-filter-row
                   className={`grid gap-1.5 transition-[grid-template-columns] duration-200 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
@@ -9033,6 +9399,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     }}
                   />
                 </div>
+                </>}
               </div>}
               {visibleRecentJournalTrades.length === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有历史记录</div>
@@ -9198,7 +9565,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">选择用户视角</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">按该成员实际权限重新加载整页数据；不会切换登录身份，全部编辑入口保持只读。</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">最近点入的用户优先；直接点击用户名进入该用户视角。不会切换登录身份，全部编辑入口保持只读。</p>
               </div>
               <button
                 type="button"
@@ -9217,35 +9584,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               aria-label="搜索可预览用户"
               className="mt-4 h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
             />
-            <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-              {t0PreviewMembersQuery.isLoading ? <div className="px-3 py-8 text-center text-sm text-slate-400">正在读取可预览成员…</div>
-                : t0PreviewMembersQuery.isError ? <div className="px-3 py-8 text-center text-sm text-rose-600">成员名单加载失败，请关闭后重试</div>
-                  : visiblePreviewMembers.length === 0 ? <div className="px-3 py-8 text-center text-sm text-slate-400">没有匹配的可预览成员</div>
-                    : <div className="divide-y divide-slate-100">
-                      {visiblePreviewMembers.map((member) => (
-                        <button
-                          key={member.id}
-                          type="button"
-                          onClick={() => {
-                            setPreviewUserId(member.id);
-                            setPreviewMemberPickerOpen(false);
-                            setPreviewMemberSearch("");
-                            setShowEntrySheet(false);
-                            setShowPayoutLog(false);
-                            setHistoryPresentation("admin");
-                            setHistoryActionMenuTradeId(null);
-                            setRecentJournalPage(1);
-                          }}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors active:bg-indigo-50"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-slate-800">{member.name}</span>
-                            <span className="mt-0.5 block truncate text-[11px] text-slate-500">{member.username ? member.username : `用户编号 ${member.id}`}</span>
-                          </span>
-                          <span className="shrink-0 text-xs font-semibold text-indigo-600">预览</span>
-                        </button>
-                      ))}
-                    </div>}
+            <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+              {t0PreviewMembersQuery.isLoading ? <div className="col-span-2 px-3 py-8 text-center text-sm text-slate-400">正在读取可预览成员…</div>
+                : t0PreviewMembersQuery.isError ? <div className="col-span-2 px-3 py-8 text-center text-sm text-rose-600">成员名单加载失败，请关闭后重试</div>
+                  : visiblePreviewMembers.length === 0 ? <div className="col-span-2 px-3 py-8 text-center text-sm text-slate-400">没有匹配的可预览成员</div>
+                    : visiblePreviewMembers.map((member) => {
+                      const metrics = previewMemberCardMetricsById.get(member.id);
+                      const cashReturnRate = metrics?.cashReturnRate ?? null;
+                      const cashReturnRateClass = cashReturnRate === null
+                        ? "text-slate-400"
+                        : "text-slate-700";
+                      return <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => openPreviewMember(member)}
+                        className="flex min-h-[86px] min-w-0 flex-col justify-center bg-white px-3 py-2.5 text-left transition-colors active:bg-indigo-50"
+                      >
+                        <span className="block truncate text-sm font-semibold text-slate-800">{member.name}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-slate-500">{member.username ? member.username : `用户编号 ${member.id}`}</span>
+                        <span className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-slate-100 pt-1.5 text-[10px] leading-none tabular-nums">
+                          <span title="该用户本人已成交且未平的多仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">多</span><strong className="truncate font-semibold text-rose-600">{metrics ? formatQuantity(metrics.longQuantity) : "--"}</strong></span>
+                          <span title="该用户本人已成交且未平的空仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">空</span><strong className="truncate font-semibold text-emerald-600">{metrics ? formatQuantity(metrics.shortQuantity) : "--"}</strong></span>
+                          <span title="该用户T+0累计存款" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">存</span><strong className="truncate font-semibold text-slate-700">{metrics ? formatAmount(metrics.cumulativeDepositAmount) : "--"}</strong></span>
+                          <span title="累计提现除以累计存款；仅统计已登记的提现流水" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">回款</span><strong className={`truncate font-semibold ${cashReturnRateClass}`}>{cashReturnRate === null ? "--" : formatSignedPercent(cashReturnRate)}</strong></span>
+                        </span>
+                      </button>;
+                    })}
             </div>
           </div>
         </div>
@@ -11006,21 +11370,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
             <div className="mt-3 overflow-hidden rounded border border-slate-200">
               <div className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
-                <div className="grid min-w-0 grid-cols-5 gap-1" role="tablist" aria-label="总收益报告明细切换">
+                <div className={`grid min-w-0 gap-1 ${canViewTeamOverview ? "grid-cols-6" : "grid-cols-5"}`} role="tablist" aria-label="总收益报告明细切换">
                   {[
                     { id: "order" as const, label: "已平仓" },
                     { id: "deposit" as const, label: "充值" },
                     { id: "withdrawal" as const, label: "提现" },
                     { id: "commission" as const, label: "分佣" },
                     { id: "shared" as const, label: "共享" },
+                    ...(canViewTeamOverview ? [{ id: "team" as const, label: "团队" }] : []),
                   ].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTotalProfitDetailTab === tab.id} onClick={() => {
                     setTotalProfitDetailTab(tab.id);
                     setTotalRevenueDetailPage(1);
                   }} className={`min-w-0 rounded border px-1 py-1.5 text-[11px] font-semibold leading-none whitespace-nowrap transition active:scale-95 ${activeTotalProfitDetailTab === tab.id ? "border-slate-800 bg-slate-800 text-white shadow-sm" : "border-slate-200 bg-white text-slate-500 active:bg-slate-100"}`}>{tab.label}</button>)}
                 </div>
-                <div className="mt-1 pr-0.5 text-right text-[10px] tabular-nums text-slate-400">共 {isTotalProfitActivityTab ? activeTotalProfitAttributionDetailEntries.length : totalProfitDetailCashflowLogs.length} 笔</div>
+                <div className="mt-1 pr-0.5 text-right text-[10px] tabular-nums text-slate-400">{activeTotalProfitDetailTab === "team" ? `共 ${teamOverviewMembers.length} 人` : `共 ${isTotalProfitActivityTab ? activeTotalProfitAttributionDetailEntries.length : totalProfitDetailCashflowLogs.length} 笔`}</div>
               </div>
-              {isTotalProfitActivityTab ? <>
+              {activeTotalProfitDetailTab === "team" ? <>
+                {t0TeamOverviewQuery.isLoading ? <div className="px-3 py-10 text-center text-xs text-slate-400">团队数据加载中…</div> : canViewTeamOverview ? <div className="bg-white">
+                  {!teamOverview?.dataCompleteness?.isComplete && <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">{teamOverview?.dataCompleteness?.reason || "团队累计收益正在核算中"}</div>}
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-xs font-semibold text-slate-800">成员概览</span><span className="text-[11px] text-slate-400">入金 · 收益 · 年化回报</span></div>
+                  {teamOverviewMembers.length > 0 ? <div className="divide-y divide-slate-100">{teamOverviewMembers.map((member) => <div key={member.userId} className="px-3 py-3">
+                    <div className="min-w-0 truncate text-[15px] font-semibold leading-none text-slate-800">{member.name}</div>
+                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">入金</div><div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</div></div></div>
+                  </div>)}</div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队成员</div>}
+                  <p className="border-t border-slate-100 px-3 py-2 text-[10px] leading-4 text-slate-400">仅包含52号账本成员，且至少有非期权T+0下单、入金/提现、收到分佣或收到共享记录。期权订单及其分佣、共享不纳入本总览；收益按已实现订单归属、收到分佣及已到账共享汇总，不含未平仓浮盈亏、提现和钱包余额。年化回报按逐笔入金、提现及当前非期权已实现净值计算。</p>
+                </div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队查看权限</div>}
+              </> : isTotalProfitActivityTab ? <>
                 {activeTotalProfitAttributionDetailEntries.length > 0 ? (
                   <div className="divide-y divide-slate-100">
                     {pagedTotalProfitAttributionDetailEntries.map((entry) => {
@@ -11416,6 +11791,7 @@ function T0MultiSelect({
   align = "left",
   constrainRightToFilterRow = false,
   compact = false,
+  toolbar = false,
   showSelectedLabels = false,
   singleSelect = false,
   treatSelectionAsAll = false,
@@ -11432,6 +11808,8 @@ function T0MultiSelect({
   constrainRightToFilterRow?: boolean;
   /** 历史筛选栏使用与同行状态控件一致的紧凑高度。 */
   compact?: boolean;
+  /** 历史记录工具栏使用22px按钮高度；仅用于不承载整行筛选栅格的轻量入口。 */
+  toolbar?: boolean;
   /** 对类型等短枚举项，直接展示已选名称，而非“已选 N 项”。 */
   showSelectedLabels?: boolean;
   /** 状态等枚举条件只允许选择一个值；“全部”仍通过清空选择表达。 */
@@ -11577,13 +11955,13 @@ function T0MultiSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={selectedTitle}
-        className={`flex w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white ${compact ? "h-8 px-2 text-[12px]" : "h-10 px-2.5 text-[13px]"}`}
+        className={`flex w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white ${toolbar ? "h-[22px] px-1 text-[10px]" : compact ? "h-8 px-2 text-[12px]" : "h-10 px-2.5 text-[13px]"}`}
         style={{
           textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
           boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
         }}
       >
-        {selectedIds.length === 0 && <span className={`${compact ? "text-[11px]" : "text-[12px]"} shrink-0 font-semibold tracking-wide text-slate-500`}>{label}</span>}
+        {selectedIds.length === 0 && <span className={`${toolbar ? "text-[10px]" : compact ? "text-[11px]" : "text-[12px]"} shrink-0 font-semibold tracking-wide text-slate-500`}>{label}</span>}
         <span className={`min-w-0 flex-1 truncate ${selectedIds.length === 0 ? "text-left" : "text-center"}`}>{summary}</span>
         {selectedIds.length === 0 && <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />}
       </button>

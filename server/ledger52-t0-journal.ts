@@ -1883,8 +1883,8 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
   return tablesReady;
 }
 
-/** 解析52号账本的实际所有者，用于系统超级管理员读取该账本已有的管理流水。 */
-async function getLedger52T0JournalOwnerUserId() {
+/** 解析52号账本的实际所有者，用于系统超级管理员与受控只读团队总览读取既有管理流水。 */
+export async function getLedger52T0JournalOwnerUserId() {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const [rows] = await conn.execute(
@@ -2010,10 +2010,17 @@ async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
   return null;
 }
 
-export async function getLedger52T0Journal(scope: T0JournalReadScope) {
+/**
+ * 默认读取会先保障历史部署的表结构完整；只读财务总览可显式跳过该初始化，
+ * 从而保证自身请求不会执行任何 DDL、迁移或遗留数据修复。
+ */
+export async function getLedger52T0Journal(
+  scope: T0JournalReadScope,
+  options: { skipTableEnsure?: boolean } = {},
+) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
-  await ensureLedger52T0JournalTables(conn);
+  if (!options.skipTableEnsure) await ensureLedger52T0JournalTables(conn);
 
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;

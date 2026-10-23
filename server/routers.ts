@@ -11721,6 +11721,63 @@ ${klinesSummary}
         return await journal.getLedger52T0Journal(scope);
       }),
 
+    // 团队总览是单独授予的成员财务汇总权限；推荐关系本身不自动扩大任何订单读取范围。
+    // 当前仅允许产品配置的团队负责人查看自己的递归下属汇总，管理员可用用户预览核对同一结果。
+    t0GetTeamOverview: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        previewUserId: z.number().int().positive().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const teamOverview = await import('./ledger52-t0-team-overview');
+        let rootUserId = 0;
+        let journalOwnerUserId = 0;
+        if (input.previewUserId) {
+          if (ctx.isViewingAs) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换团队预览用户' });
+          }
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可预览成员团队总览' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, input.previewUserId);
+          if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员查看团队总览' });
+          }
+          rootUserId = input.previewUserId;
+          journalOwnerUserId = managerScope.journalOwnerUserId;
+        } else if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+          const realScope = await journal.resolveLedger52T0JournalReadScope({
+            id: realUser.id,
+            role: realUser.role,
+            isViewingAs: false,
+          });
+          if (realScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看团队总览' });
+          }
+          rootUserId = ctx.user.id;
+          journalOwnerUserId = realScope.journalOwnerUserId;
+        } else {
+          const scope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          // 管理员的全局账本不出现某个人的团队视图；需通过现有用户预览进入。
+          if (scope.mode !== 'member') return { enabled: false };
+          rootUserId = scope.relatedUserId;
+          journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
+        }
+        return await teamOverview.getLedger52T0TeamOverview({ journalOwnerUserId, rootUserId });
+      }),
+
     // 管理员选择T+0用户视角时，仅展示在本账本内且拥有可见T+0订单范围的普通成员。
     t0GetPreviewMembers: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))
@@ -11743,9 +11800,36 @@ ${klinesSummary}
           `SELECT lm.userId AS id,
                   COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', lm.userId)) AS name,
                   NULLIF(u.username, '') AS username,
-                  NULLIF(u.avatar, '') AS avatar
+                  NULLIF(u.avatar, '') AS avatar,
+                  GREATEST(
+                    COALESCE(own_activity.last_activity_at, '1970-01-01 00:00:00'),
+                    COALESCE(shared_activity.last_activity_at, '1970-01-01 00:00:00'),
+                    COALESCE(payout_activity.last_activity_at, '1970-01-01 00:00:00')
+                  ) AS last_activity_at
              FROM ledger_members lm
              INNER JOIN users u ON u.id = lm.userId
+             LEFT JOIN (
+               SELECT e.related_user_id, MAX(e.trade_time) AS last_activity_at
+                 FROM ledger52_t0_journal_entries e
+                WHERE e.ledger_id = ? AND e.user_id = ? AND e.related_user_id IS NOT NULL
+                GROUP BY e.related_user_id
+             ) own_activity ON own_activity.related_user_id = lm.userId
+             LEFT JOIN (
+               SELECT shared_entry.beneficiary_user_id, MAX(e.trade_time) AS last_activity_at
+                 FROM ledger52_t0_journal_entry_profit_shares shared_entry
+                 INNER JOIN ledger52_t0_journal_entries e
+                   ON e.id = shared_entry.entry_id
+                  AND e.ledger_id = shared_entry.ledger_id
+                  AND e.user_id = shared_entry.user_id
+                WHERE shared_entry.ledger_id = ? AND shared_entry.user_id = ?
+                GROUP BY shared_entry.beneficiary_user_id
+             ) shared_activity ON shared_activity.beneficiary_user_id = lm.userId
+             LEFT JOIN (
+               SELECT payout.related_user_id, MAX(CONCAT(payout.occurred_on, ' 00:00:00')) AS last_activity_at
+                 FROM ledger52_t0_journal_payout_logs payout
+                WHERE payout.ledger_id = ? AND payout.user_id = ?
+                GROUP BY payout.related_user_id
+             ) payout_activity ON payout_activity.related_user_id = lm.userId
             WHERE lm.ledgerId = ?
               AND lm.role NOT IN ('owner', 'admin')
               AND EXISTS (
@@ -11764,16 +11848,22 @@ ${klinesSummary}
                           AND shared_entry.beneficiary_user_id = lm.userId
                      )
                    )
-              )
-            ORDER BY name ASC, lm.userId ASC
+               )
+            ORDER BY last_activity_at DESC, name ASC, lm.userId ASC
             LIMIT 300`,
-          [52, 52, managerScope.journalOwnerUserId],
+          [
+            52, managerScope.journalOwnerUserId,
+            52, managerScope.journalOwnerUserId,
+            52, managerScope.journalOwnerUserId,
+            52, 52, managerScope.journalOwnerUserId,
+          ],
         );
         return (rows as any[]).map((row) => ({
           id: Number(row.id),
           name: String(row.name || `用户#${row.id}`),
           username: row.username ? String(row.username) : undefined,
           avatar: row.avatar ? String(row.avatar) : undefined,
+          lastActivityAt: row.last_activity_at ? String(row.last_activity_at) : undefined,
         }));
       }),
 
