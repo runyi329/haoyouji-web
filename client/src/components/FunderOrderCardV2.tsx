@@ -2014,6 +2014,7 @@ export function FunderOrderCardV2Silver({
                 <OrderCardImageDownload
                   targetRef={cardExportRef}
                   currentUser={currentUser}
+                  watermarkLabel={isAdmin ? "R1" : undefined}
                   orderNo={order.order_no || order.id}
                   color={TXT_DIM}
                   outerPadding={0}
@@ -3824,6 +3825,7 @@ export function FunderLenderCardSilver({
                 <OrderCardImageDownload
                   targetRef={cardExportRef}
                   currentUser={currentUser}
+                  watermarkLabel={isAdmin ? "R1" : undefined}
                   orderNo={order.order_no || order.id}
                   color={TXT_DIM}
                   outerPadding={0}

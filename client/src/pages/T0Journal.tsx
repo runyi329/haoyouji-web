@@ -8928,6 +8928,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <OrderCardImageDownload
                       targetRef={profitableHistoryExportRef}
                       currentUser={me as any}
+                      watermarkLabel={isLedgerAdmin || isSuperAdmin ? "R1" : undefined}
                       orderNo={showLinkedJournalGroups ? "关联历史" : showOnlySharedIncomeHistory ? "共享收益历史" : "盈利历史"}
                       filenamePrefix={showLinkedJournalGroups ? "52号账本T0关联" : showOnlySharedIncomeHistory ? "52号账本T0共享收益" : "52号账本T0盈利"}
                       previewTitle={showLinkedJournalGroups ? "T+0关联历史记录图片预览" : showOnlySharedIncomeHistory ? "T+0共享收益记录图片预览" : "T+0盈利历史记录图片预览"}
@@ -8941,7 +8942,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       captureFullContent
                       exportBackground="#F8FAFC"
                       variant="bare"
-                      watermarkMode="time-only"
                       watermarkOpacity={0.045}
                     />
                   </div>}
@@ -10755,7 +10755,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {canManage && (
               <>
                 <div data-html2canvas-ignore="true" className="order-1 border-b border-slate-200">
-                  <div className="flex items-center justify-between bg-white px-3 py-2 text-[11px] text-slate-500"><span>操作面板</span><OrderCardImageDownload targetRef={payoutSharedContentRef} currentUser={me as any} orderNo={payoutTargetUserIdentity.name} filenamePrefix="T+0收益账本" previewTitle="T+0收益账本图片预览" previewHint="包含昵称、用户名与收益统计" color="#475569" outerPadding={12} captureFullContent exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" /></div>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 text-[11px] text-slate-500"><span>操作面板</span><OrderCardImageDownload targetRef={payoutSharedContentRef} currentUser={me as any} watermarkLabel={isLedgerAdmin || isSuperAdmin ? "R1" : undefined} orderNo={payoutTargetUserIdentity.name} filenamePrefix="T+0收益账本" previewTitle="T+0收益账本图片预览" previewHint="包含昵称、用户名与收益统计" color="#475569" outerPadding={12} captureFullContent exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" /></div>
                 </div>
                 <div data-html2canvas-ignore="true" className="order-4 mt-3 border-t border-slate-200 pt-3">
                   <div className="grid grid-cols-2 gap-2">
@@ -10911,6 +10911,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <OrderCardImageDownload
                   targetRef={totalProfitAttributionExportRef}
                   currentUser={me as any}
+                  watermarkLabel={isLedgerAdmin || isSuperAdmin ? "R1" : undefined}
                   orderNo={totalProfitAttribution.targetLabel}
                   filenamePrefix="T+0总收益归因"
                   previewTitle="总收益归因报告图片预览"

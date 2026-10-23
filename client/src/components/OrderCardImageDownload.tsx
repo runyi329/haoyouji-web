@@ -26,6 +26,8 @@ interface OrderCardImageDownloadProps {
   variant?: "default" | "bare";
   /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
   watermarkMode?: "user-and-time" | "time-only";
+  /** 指定水印中的保存者名称；传入时始终与截图时间一起显示。 */
+  watermarkLabel?: string;
   /** 水印文字不透明度；默认保持卡片下载的轻量水印。 */
   watermarkOpacity?: number;
   /** 导出文件名前缀，默认沿用订单图片。 */
@@ -336,6 +338,7 @@ export function OrderCardImageDownload({
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
+  watermarkLabel,
   watermarkOpacity = 0.07,
   filenamePrefix = "订单",
   previewTitle = "订单图片预览",
@@ -365,9 +368,9 @@ export function OrderCardImageDownload({
 
     setGenerating(true);
     const timestamp = formatBeijingTime(new Date());
-    const watermarkText = watermarkMode === "time-only"
-      ? timestamp
-      : `${getSaverLabel(currentUser || getStoredSnapshotUser())}｜${timestamp}`;
+    const saverLabel = String(watermarkLabel || "").trim()
+      || (watermarkMode === "time-only" ? "" : getSaverLabel(currentUser || getStoredSnapshotUser()));
+    const watermarkText = saverLabel ? `${saverLabel}｜${timestamp}` : timestamp;
     const scale = 2;
     let snapshotContainer: HTMLElement | null = null;
 

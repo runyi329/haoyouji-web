@@ -65,6 +65,15 @@ export default function InterestManagePage() {
   const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const lid = parseInt(ledgerId || '0');
+  const { data: currentUser } = trpc.auth.me.useQuery();
+  const { data: ledgerData } = trpc.ledger.getById.useQuery(
+    { ledgerId: lid },
+    { enabled: lid > 0 },
+  );
+  const isDownloadAdministrator = (ledgerData as any)?.userRole === 'owner'
+    || (ledgerData as any)?.userRole === 'admin'
+    || (currentUser as any)?.role === 'admin'
+    || (currentUser as any)?.role === 'super_admin';
   // 仅37号账本首页专属快捷入口携带来源标记；其他进入方式保持原返回设置页逻辑。
   const returnToLedgerHome = lid === 37 && new URLSearchParams(window.location.search).get('from') === 'ledger-home';
 
@@ -374,12 +383,13 @@ export default function InterestManagePage() {
                   {expandedTag === tag.tagName && (
                     <OrderCardImageDownload
                       targetRef={expandedCardRef}
+                      currentUser={currentUser}
+                      watermarkLabel={isDownloadAdministrator ? 'R1' : undefined}
                       orderNo={`利息-${tag.tagName}`}
                       color="#94A3B8"
                       outerPadding={0}
                       captureFullContent
                       variant="bare"
-                      watermarkMode="time-only"
                     />
                   )}
                   <button
