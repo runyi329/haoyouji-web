@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowDownLeft,
@@ -14,6 +14,7 @@ import {
   Lock,
   Repeat2,
   LockOpen,
+  Minus,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -80,7 +81,22 @@ type SharedIncomeEligibility = {
   updatedAt?: string;
 };
 type SharedIncomeAllocationBudgetMode = "percentage" | "amount";
-type SharedIncomeAllocationMethod = "manual" | "principal" | "historicalProfit" | "historicalLoss";
+type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap";
+const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
+  id: SharedIncomeAllocationMetric;
+  label: string;
+  category: string;
+  compactLabel: string;
+  emptyMessage: string;
+}> = [
+  { id: "principal", label: "按本金比例", category: "规模公平", compactLabel: "本金", emptyMessage: "当前开启的分配人没有已登记本金" },
+  { id: "historicalProfit", label: "按已获利润", category: "收益激励", compactLabel: "已获利润", emptyMessage: "当前开启的分配人没有已获得的历史利润" },
+  { id: "holdingLoss", label: "按持仓浮亏", category: "风险补偿", compactLabel: "持仓浮亏", emptyMessage: "当前开启的分配人没有持仓浮亏" },
+  { id: "realizedAnnualized", label: "按实现年化", category: "收益平衡", compactLabel: "已实现年化", emptyMessage: "当前开启的分配人没有可计算的已实现年化补差" },
+  { id: "externalShareContribution", label: "按对外共享贡献", category: "协作回馈", compactLabel: "贡献权重", emptyMessage: "当前开启的分配人还没有对外共享贡献记录" },
+  { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人" },
+  { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人" },
+];
 type T0ReopenReminder = {
   id: string;
   sourceOpeningEntryId: string;
@@ -168,6 +184,13 @@ type SharedIncomeCandidate = {
   settlementAgeDays: number | null;
   annualizedReference: number | null;
   annualizedTargetTopUps: Array<{ targetRate: number; topUp: number | null }>;
+};
+
+/** 分配页进入当刻固定的重型候选统计；资格开关和本次金额在其上轻量叠加。 */
+type SharedIncomeClosePreview = {
+  sourceNetPnl: number;
+  shareableAmount: number;
+  candidates: SharedIncomeCandidate[];
 };
 
 function getT0CalendarDateUtc(value: string) {
@@ -278,6 +301,11 @@ function calculateT0XirrTargetTopUp(cashFlows: T0XirrCashFlow[], currentTerminal
 }
 /** 已锁定是已成交仓位的附加状态，不与“已成交”互斥。 */
 type T0ExecutionFilter = "all" | "filled" | "pending";
+
+function hasSameT0StringArrayValues(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
@@ -2510,6 +2538,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
+  /** 仅供界面验收的直达页：使用真实读取数据模拟平仓，但永不允许写入账本。 */
+  const isCloseDistributionPreviewLink = searchParams.get("preview") === "close-distribution";
   const payoutEntryDirection = searchParams.get("payout") === "deposit"
     ? "deposit"
     : searchParams.get("payout") === "withdrawal"
@@ -2587,10 +2617,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [sharedIncomeTargetSelections, setSharedIncomeTargetSelections] = useState<Record<string, number>>({});
   /** 本次平仓仅可从正向净收益中拿出的共享预算；不改变本单服务端收益上限。 */
   const [sharedIncomeAllocationBudgetMode, setSharedIncomeAllocationBudgetMode] = useState<SharedIncomeAllocationBudgetMode>("percentage");
-  const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("100");
-  const [sharedIncomeAllocationMethod, setSharedIncomeAllocationMethod] = useState<SharedIncomeAllocationMethod>("manual");
+  const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("99");
+  /** AI分配可同时选择多个维度；空数组代表保留当前草案做手动调整。 */
+  const [sharedIncomeAllocationMetrics, setSharedIncomeAllocationMetrics] = useState<SharedIncomeAllocationMetric[]>([]);
   const [sharedIncomeAllocationPlanError, setSharedIncomeAllocationPlanError] = useState<string | null>(null);
-  /** 切换资格后先本地稳定呈现，再由服务端权威读模型回填；关闭时不会保留该用户的本单草案。 */
+  /** 切换资格后先本地稳定呈现，再由服务端权威读模型回填；AI方案会随开启用户即时重分配。 */
   const [sharedIncomeEligibilityOverrides, setSharedIncomeEligibilityOverrides] = useState<Record<string, boolean>>({});
   /** 止盈每一段各自保存预分配草案；成交时再由服务端按实际订单核算。 */
   const [takeProfitAllocationPlanIndex, setTakeProfitAllocationPlanIndex] = useState<number | null>(null);
@@ -2667,6 +2698,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const saveEntryCommitLockRef = useRef(false);
   // 二次确认页发生网络不确定错误时，重试必须沿用首次请求标识，才能由服务端幂等键回放同一笔平仓。
   const closeCommitRequestIdRef = useRef<string | null>(null);
+  // 历史 FIFO、已实现盈亏和年化计算只在进入本次分配页时执行一次。
+  // 行情刷新与账本轮询继续更新报价表，但不能阻塞正在填写的分配页。
+  const sharedIncomeClosePreviewSnapshotRef = useRef<{ key: string; preview: SharedIncomeClosePreview } | null>(null);
+  // 直达预览链接只初始化一次；退出链接后才允许下次重新选择可用模拟订单。
+  const closeDistributionPreviewLinkInitializedRef = useRef(false);
   // 剩余仓位转入同样是真实账本写入；同步锁覆盖 React pending 状态尚未刷新的双击窗口。
   const residualReassignCommitLockRef = useRef(false);
   // 服务端已提交但响应丢失时，按同一归属草稿重试必须复用请求 ID，不能再次新建承接单。
@@ -3261,14 +3297,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setSharedIncomeDrafts({});
       setSharedIncomeTargetSelections({});
       setSharedIncomeAllocationBudgetMode("percentage");
-      setSharedIncomeAllocationBudgetValue("100");
-      setSharedIncomeAllocationMethod("manual");
+      setSharedIncomeAllocationBudgetValue("99");
+      setSharedIncomeAllocationMetrics([]);
       setSharedIncomeAllocationPlanError(null);
       setSharedIncomeEligibilityOverrides({});
       setCloseSaveError(null);
     }
+    // 普通平仓离开二次确认页后，下次进入必须重新取一份账本快照；
+    // 止盈预分配有独立打开态，不能被这里的 input 状态提前清空。
+    if (!showEntrySheet || (closeConfirmationStep === "input" && takeProfitAllocationPlanIndex === null)) {
+      sharedIncomeClosePreviewSnapshotRef.current = null;
+    }
     if (!showEntrySheet) setOpeningSaveError(null);
-  }, [closeConfirmationStep, showEntrySheet]);
+  }, [closeConfirmationStep, showEntrySheet, takeProfitAllocationPlanIndex]);
 
   useEffect(() => {
     const journal = t0JournalQuery.data as any;
@@ -3364,12 +3405,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       });
       setRelatedUserFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
-        return preferred.filter((id) => {
+        const next = preferred.filter((id) => {
           if (id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id)) return true;
           const rootUserId = getT0ReferralDescendantsRootUserId(id);
           // 下线树异步返回前不能清掉 localStorage 中的选择；树到位后再剔除失效根用户。
           return Boolean(rootUserId && (!referralDataLoaded || referralDescendantsByRootUserId.has(rootUserId)));
         });
+        return hasSameT0StringArrayValues(current, next) ? current : next;
       });
       setRelatedFundFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current;
@@ -3396,9 +3438,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         // 推荐树尚未返回时也立即展示本人，避免首屏短暂显示“全部”；
         // 已保存的推荐令牌则先原样保留，待树数据到位后统一校验。
         if (!referralDataLoaded) {
-          return preferred.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
+          const next = preferred.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
             ? [currentReferralRootUserId]
             : preferred;
+          return hasSameT0StringArrayValues(current, next) ? current : next;
         }
         const selectableMemberUserIds = new Set([
           currentReferralRootUserId,
@@ -3412,9 +3455,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         });
         // 首次打开（含旧版仅保存空数组的记录）始终落在本人；用户主动选择“全部”后，
         // memberRelatedUserFilterTouched 会把空数组按明确意图保留，刷新/重开也不重置。
-        return normalized.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
+        const next = normalized.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
           ? [currentReferralRootUserId]
           : normalized;
+        return hasSameT0StringArrayValues(current, next) ? current : next;
       });
       setRelatedFundFilterIds((current) => normalizeMemberFilter(
         shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current,
@@ -3828,7 +3872,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
    * 共享收益平仓预览：所有已登记投入的关联用户都可参与；仍有未平仓位的用户额外显示持仓参考。
    * 任意正向净收益订单都可先分配共享收益，剩余部分再按该订单的既有快照结算。
    */
-  const sharedIncomeClosePreview = useMemo(() => {
+  const sharedIncomeClosePreviewBaseline = useMemo<SharedIncomeClosePreview>(() => {
     const activeTakeProfitPlan = takeProfitAllocationPlanIndex === null
       ? null
       : entryForm.takeProfitPlans[takeProfitAllocationPlanIndex] ?? null;
@@ -3839,12 +3883,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 共享收益的候选仓位、已平盈亏与 XIRR 只认可现货和合约；期权、网格一律不计入。
     const isEligibleSharedIncomeInstrument = (instrumentType: T0InstrumentType | undefined) => instrumentType === "spot" || instrumentType === "contract";
     const isManualClosePreview = closeConfirmationStep === "review" && !ACTIONS[entryForm.action].opening;
+    const previewSnapshotKey = [
+      isTakeProfitAllocationPreview ? "take-profit" : isManualClosePreview ? "manual-close" : "inactive",
+      takeProfitAllocationPlanIndex ?? "",
+      entryForm.action,
+      entryForm.accountId,
+      entryForm.editingEntryId ?? "",
+      entryForm.instrumentType ?? "",
+      entryForm.quantity,
+      entryForm.price,
+      entryForm.relatedUserId,
+      entryForm.relatedFundId,
+      entryForm.targetPrice ?? "",
+      activeTakeProfitPlan?.quantity ?? "",
+      activeTakeProfitPlan?.price ?? "",
+      closingSourceTrade ? getStoredEntryId(closingSourceTrade) : "",
+      sharedIncomePreviewMarkPrice ?? "",
+    ].join("|");
     if (!canManage || (!isManualClosePreview && !isTakeProfitAllocationPreview)
       || !isEligibleSharedIncomeInstrument(entryForm.instrumentType)
       || !Number.isFinite(closeQuantity) || closeQuantity <= 0 || !Number.isFinite(closePrice) || closePrice <= 0
       || !Number.isInteger(sourceUserId) || sourceUserId <= 0) {
       return { sourceNetPnl: 0, shareableAmount: 0, candidates: [] as SharedIncomeCandidate[] };
     }
+    const cachedSnapshot = sharedIncomeClosePreviewSnapshotRef.current;
+    if (cachedSnapshot?.key === previewSnapshotKey) return cachedSnapshot.preview;
     // 与最终提交一致：管理员反向展示下的“平空/平多”仅是视觉方向，FIFO 与盈亏必须使用原始流水方向。
     const previewAction: TradeAction = isTakeProfitAllocationPreview
       ? (entryForm.action === "openLong" ? "closeLong" : "closeShort")
@@ -4036,10 +4099,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      const receivedSharedIncome = receivedSharedIncomeTransfers
 	        .reduce((total, transfer) => total + transfer.amount, 0);
 	      const contribution = sharedIncomeContributionsBySourceUser.get(candidate.userId) || { amount: 0, orderCount: 0 };
-	      const sharedIncomeEligibilityKey = `${sourceUserId}:${candidate.userId}`;
-	      const sharedIncomeEnabled = sharedIncomeEligibilityOverrides[sharedIncomeEligibilityKey]
-	        ?? sharedIncomeEligibilityByPair.get(sharedIncomeEligibilityKey)
-	        ?? true;
       // 已结算年化口径：只计实际投入/提现、已平订单收益及既得共享收益；当前持仓浮盈亏仅展示参考，不计入年化。
       const closedNetPnl = closedNetPnlByUser.get(candidate.userId) || 0;
 	      const closedLossPnl = closedLossPnlByUser.get(candidate.userId) || 0;
@@ -4058,11 +4117,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...candidate,
         cumulativeDepositAmount,
         hasPrincipal: cumulativeDepositAmount > 0,
-	        holdingNetPnl: candidate.unrealizedPnl,
-	        closedNetPnl,
-	        closedLossPnl,
-	        historicalProfit: closedNetPnl + receivedSharedIncome,
-	        sharedIncomeEnabled,
+        holdingNetPnl: candidate.unrealizedPnl,
+        closedNetPnl,
+        closedLossPnl,
+        historicalProfit: closedNetPnl + receivedSharedIncome,
+        // 资格开关不参与本次重型快照计算；在下方依订单使用者轻量覆盖。
+        sharedIncomeEnabled: true,
 	        receivedSharedIncome,
 	        receivedSharedIncomeCount: receivedSharedIncomeTransfers.length,
 	        contributedSharedIncome: contribution.amount,
@@ -4078,12 +4138,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         })),
       };
 	    }).sort((left, right) => Number(right.sharedIncomeEnabled) - Number(left.sharedIncomeEnabled) || right.receivedSharedIncomeCount - left.receivedSharedIncomeCount || Number(right.hasPrincipal) - Number(left.hasPrincipal) || (left.annualizedReference ?? Number.POSITIVE_INFINITY) - (right.annualizedReference ?? Number.POSITIVE_INFINITY) || right.heldDays - left.heldDays);
-    return {
+    const preview = {
       sourceNetPnl,
       shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
     };
-	  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
+    sharedIncomeClosePreviewSnapshotRef.current = { key: previewSnapshotKey, preview };
+    return preview;
+  }, [canManage, closeConfirmationStep, closingSourceTrade, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
+  // 开关即时生效，但只替换候选人的一个布尔字段，不再重新扫描历史流水、FIFO 和 XIRR。
+  const sharedIncomeClosePreview = useMemo<SharedIncomeClosePreview>(() => {
+    const sourceUserId = Number(entryForm.relatedUserId);
+    if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || sharedIncomeClosePreviewBaseline.candidates.length === 0) {
+      return sharedIncomeClosePreviewBaseline;
+    }
+    return {
+      ...sharedIncomeClosePreviewBaseline,
+      candidates: sharedIncomeClosePreviewBaseline.candidates.map((candidate) => {
+        const key = `${sourceUserId}:${candidate.userId}`;
+        const sharedIncomeEnabled = sharedIncomeEligibilityOverrides[key]
+          ?? sharedIncomeEligibilityByPair.get(key)
+          ?? true;
+        return candidate.sharedIncomeEnabled === sharedIncomeEnabled
+          ? candidate
+          : { ...candidate, sharedIncomeEnabled };
+      }).sort((left, right) => Number(right.sharedIncomeEnabled) - Number(left.sharedIncomeEnabled)),
+    };
+  }, [entryForm.relatedUserId, sharedIncomeClosePreviewBaseline, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
 	  const sharedIncomeBudget = useMemo(() => {
 	    const maximum = Math.max(0, Math.floor((sharedIncomeClosePreview.shareableAmount + 1e-9) * 100) / 100);
 	    const rawValue = sharedIncomeAllocationBudgetValue.trim();
@@ -4092,12 +4173,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      return { maximum, allocationLimit: 0, error: "请输入本次共享分配额度" };
 	    }
 	    if (sharedIncomeAllocationBudgetMode === "percentage") {
-	      if (value > 100) return { maximum, allocationLimit: 0, error: "分配比例不得超过100%" };
+	      if (value < 1 || value > 100) return { maximum, allocationLimit: 0, error: "分配比例为1%至100%" };
 	      return { maximum, allocationLimit: Math.floor((maximum * value + 1e-9)) / 100, error: null as string | null };
 	    }
 	    if (value - maximum > 0.00001) return { maximum, allocationLimit: 0, error: `分配金额不得超过本单可共享收益 ${maximum.toFixed(2)} u` };
 	    return { maximum, allocationLimit: Math.floor((value + 1e-9) * 100) / 100, error: null as string | null };
 	  }, [sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue, sharedIncomeClosePreview.shareableAmount]);
+	  const sharedIncomeBudgetPercentage = sharedIncomeBudget.maximum > 0
+	    ? (sharedIncomeBudget.allocationLimit / sharedIncomeBudget.maximum) * 100
+	    : 0;
+	  const sharedIncomeBudgetSliderPercentage = Math.min(99, Math.max(1, Math.round(
+	    Number(sharedIncomeAllocationBudgetValue) || 1,
+	  )));
+	  const sharedIncomeSelectedDimensions = useMemo(() => SHARED_INCOME_ALLOCATION_DIMENSIONS
+	    .filter((dimension) => sharedIncomeAllocationMetrics.includes(dimension.id)), [sharedIncomeAllocationMetrics]);
+	  const sharedIncomeDimensionWeightPercentage = sharedIncomeSelectedDimensions.length > 0
+	    ? 100 / sharedIncomeSelectedDimensions.length
+	    : 0;
 	  const sharedIncomeEligibleCandidateIds = useMemo(() => new Set(
 	    sharedIncomeClosePreview.candidates
 	      .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
@@ -4109,53 +4201,127 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	    .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
 	    .map((candidate) => ({ recipientUserId: Number(candidate.userId), amount: (Number(sharedIncomeDrafts[candidate.userId]) || 0).toFixed(2) }))
 	    .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0), [sharedIncomeClosePreview.candidates, sharedIncomeDrafts]);
-	  const applySharedIncomeAllocationMethod = (method: Exclude<SharedIncomeAllocationMethod, "manual">) => {
-	    setSharedIncomeAllocationMethod(method);
-	    setSharedIncomeAllocationPlanError(null);
-	    if (sharedIncomeBudget.error) {
-	      setSharedIncomeAllocationPlanError(sharedIncomeBudget.error);
-	      return;
-	    }
-	    const allocationLimitCents = Math.round(sharedIncomeBudget.allocationLimit * 100);
-	    const weightedCandidates = sharedIncomeClosePreview.candidates
-	      .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
-	      .map((candidate) => ({
+	  const buildSharedIncomeAllocationPlan = useCallback((
+	    metrics: SharedIncomeAllocationMetric[],
+	    candidates: SharedIncomeCandidate[],
+	    allocationLimit: number,
+	  ): { drafts: Record<string, string>; error: string | null } => {
+	    const allocationLimitCents = Math.round(allocationLimit * 100);
+	    const selectedDimensions = SHARED_INCOME_ALLOCATION_DIMENSIONS.filter((dimension) => metrics.includes(dimension.id));
+	    if (allocationLimitCents <= 0 || selectedDimensions.length === 0) return { drafts: {}, error: null };
+	    const eligibleCandidates = candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled);
+	    // 协作回馈与两类共享补差都不能把任何有效成员排空：子池的20%均分保底，
+	    // 其余80%才按对应指标倾斜。指标完全相同则自然退化为全员均分。
+	    const getSmoothedWeights = (scoredCandidates: Array<{ candidate: SharedIncomeCandidate; score: number }>) => {
+	      if (scoredCandidates.length === 0) return [];
+	      const normalizedScores = scoredCandidates.map(({ candidate, score }) => ({ candidate, score: Math.max(0, Number.isFinite(score) ? score : 0) }));
+	      const totalScore = normalizedScores.reduce((total, item) => total + item.score, 0);
+	      if (totalScore <= 0.000001) return normalizedScores.map(({ candidate }) => ({ candidate, weight: 1 }));
+	      const equalFloorWeight = 0.2 / normalizedScores.length;
+	      return normalizedScores.map(({ candidate, score }) => ({
 	        candidate,
-	        weight: method === "principal"
+	        weight: equalFloorWeight + 0.8 * score / totalScore,
+	      }));
+	    };
+	    const getReceivedSharedIncomeGapWeights = (valueForCandidate: (candidate: SharedIncomeCandidate) => number) => {
+	      const values = eligibleCandidates.map((candidate) => ({ candidate, value: Math.max(0, valueForCandidate(candidate)) }));
+	      if (values.length === 0) return [];
+	      const maximumValue = Math.max(...values.map((item) => item.value));
+	      // 收到越少，补差分数越高；收到最多者仍通过全员保底获得本维度的一部分。
+	      return getSmoothedWeights(values.map(({ candidate, value }) => ({ candidate, score: maximumValue - value })));
+	    };
+	    const getExternalShareContributionWeights = () => {
+	      if (eligibleCandidates.length === 0) return [];
+	      const totalContributedAmount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
+	      const totalContributedOrderCount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncomeOrderCount), 0);
+	      const activeFactorCount = Number(totalContributedAmount > 0.000001) + Number(totalContributedOrderCount > 0);
+	      return getSmoothedWeights(eligibleCandidates.map((candidate) => ({
+	        candidate,
+	        score: (totalContributedAmount > 0.000001 ? candidate.contributedSharedIncome / totalContributedAmount / activeFactorCount : 0)
+	          + (totalContributedOrderCount > 0 ? candidate.contributedSharedIncomeOrderCount / totalContributedOrderCount / activeFactorCount : 0),
+	      })));
+	    };
+	    const getWeightedCandidates = (metric: SharedIncomeAllocationMetric) => {
+	      if (metric === "externalShareContribution") return getExternalShareContributionWeights();
+	      if (metric === "receivedSharedAmountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncome);
+	      if (metric === "receivedSharedCountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncomeCount);
+	      if (metric === "realizedAnnualized") {
+	        const candidatesWithAnnualizedReturn = eligibleCandidates.filter((candidate) => candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference));
+	        if (candidatesWithAnnualizedReturn.length === 0) return [];
+	        // 以所有有效人的已实现年化算术均值为目标。高于均值者在本维度权重为零；
+	        // 低于均值者按达到该均值所需的实际金额作为权重，令结果朝共同年化收敛。
+	        const averageAnnualizedReturn = candidatesWithAnnualizedReturn.reduce((total, candidate) => total + Number(candidate.annualizedReference), 0) / candidatesWithAnnualizedReturn.length;
+	        return candidatesWithAnnualizedReturn.map((candidate) => {
+	          const annualizedReference = Number(candidate.annualizedReference);
+	          const topUp = annualizedReference < averageAnnualizedReturn - 0.000001
+	            ? calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, averageAnnualizedReturn)
+	            : 0;
+	          return { candidate, weight: topUp === null ? 0 : topUp };
+	        }).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+	      }
+	      return eligibleCandidates.map((candidate) => ({
+	        candidate,
+	        weight: metric === "principal"
 	          ? candidate.cumulativeDepositAmount
-	          : method === "historicalProfit"
+	          : metric === "historicalProfit"
 	            ? candidate.historicalProfit
-	            : candidate.closedLossPnl,
-	      }))
-	      .filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
-	    const totalWeight = weightedCandidates.reduce((total, item) => total + item.weight, 0);
-	    if (allocationLimitCents <= 0) {
-	      setSharedIncomeDrafts({});
-	      return;
-	    }
-	    if (weightedCandidates.length === 0 || totalWeight <= 0.000001) {
-	      setSharedIncomeAllocationPlanError(method === "principal"
-	        ? "当前没有开启且已登记本金的分配人"
-	        : method === "historicalProfit"
-	          ? "当前开启的分配人没有已获得的历史利润"
-	          : "当前开启的分配人没有已实现的历史亏损");
-	      return;
-	    }
-	    const baseAllocations = weightedCandidates.map((item) => {
-	      const exactCents = allocationLimitCents * item.weight / totalWeight;
-	      const cents = Math.floor(exactCents);
-	      return { userId: item.candidate.userId, cents, fraction: exactCents - cents };
+	            : Math.max(0, -candidate.holdingNetPnl),
+	      })).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+	    };
+	    const weightedDimensions = selectedDimensions.map((dimension) => {
+	      const weightedCandidates = getWeightedCandidates(dimension.id);
+	      return { dimension, weightedCandidates, totalWeight: weightedCandidates.reduce((total, item) => total + item.weight, 0) };
 	    });
-	    let remainder = allocationLimitCents - baseAllocations.reduce((total, item) => total + item.cents, 0);
-	    for (const item of [...baseAllocations].sort((left, right) => right.fraction - left.fraction || left.userId.localeCompare(right.userId))) {
-	      if (remainder <= 0) break;
-	      item.cents += 1;
-	      remainder -= 1;
+	    const unavailableDimension = weightedDimensions.find(({ weightedCandidates, totalWeight }) => weightedCandidates.length === 0 || totalWeight <= 0.000001);
+	    if (unavailableDimension) return { drafts: {}, error: unavailableDimension.dimension.emptyMessage };
+	    const allocationByUserId = new Map<string, number>();
+    const baseDimensionCents = Math.floor(allocationLimitCents / weightedDimensions.length);
+    let dimensionRemainder = allocationLimitCents - baseDimensionCents * weightedDimensions.length;
+	    for (const { dimension, weightedCandidates, totalWeight } of weightedDimensions) {
+	      const receivesRemainderCent = dimensionRemainder > 0;
+	      const dimensionCents = baseDimensionCents + (receivesRemainderCent ? 1 : 0);
+	      if (receivesRemainderCent) dimensionRemainder -= 1;
+	      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap")
+	        && dimensionCents >= weightedCandidates.length;
+	      const equalMinimumCents = guaranteesMinimumCents ? 1 : 0;
+	      const distributableCents = dimensionCents - equalMinimumCents * weightedCandidates.length;
+	      const baseAllocations = weightedCandidates.map((item) => {
+	        const exactCents = distributableCents * item.weight / totalWeight;
+	        const cents = equalMinimumCents + Math.floor(exactCents);
+	        return { userId: item.candidate.userId, cents, fraction: exactCents - cents };
+	      });
+	      let recipientRemainder = dimensionCents - baseAllocations.reduce((total, item) => total + item.cents, 0);
+	      for (const item of [...baseAllocations].sort((left, right) => right.fraction - left.fraction || left.userId.localeCompare(right.userId))) {
+	        if (recipientRemainder <= 0) break;
+	        item.cents += 1;
+	        recipientRemainder -= 1;
+	      }
+	      for (const item of baseAllocations) allocationByUserId.set(item.userId, (allocationByUserId.get(item.userId) || 0) + item.cents);
 	    }
+	    return {
+	      drafts: Object.fromEntries([...allocationByUserId.entries()]
+	        .filter(([, cents]) => cents > 0)
+	        .map(([userId, cents]) => [userId, (cents / 100).toFixed(2)])),
+	      error: null,
+	    };
+	  }, []);
+	  useEffect(() => {
+	    if (sharedIncomeAllocationMetrics.length === 0 || sharedIncomeBudget.error) return;
+	    const plan = buildSharedIncomeAllocationPlan(
+	      sharedIncomeAllocationMetrics,
+	      sharedIncomeClosePreview.candidates,
+	      sharedIncomeBudget.allocationLimit,
+	    );
+	    setSharedIncomeTargetSelections((current) => Object.keys(current).length === 0 ? current : {});
+	    setSharedIncomeDrafts(plan.drafts);
+	    setSharedIncomeAllocationPlanError(plan.error);
+	  }, [buildSharedIncomeAllocationPlan, sharedIncomeAllocationMetrics, sharedIncomeBudget.allocationLimit, sharedIncomeBudget.error, sharedIncomeClosePreview.candidates]);
+	  const toggleSharedIncomeAllocationMetric = (metric: SharedIncomeAllocationMetric) => {
 	    setSharedIncomeTargetSelections({});
-	    setSharedIncomeDrafts(Object.fromEntries(baseAllocations
-	      .filter((item) => item.cents > 0)
-	      .map((item) => [item.userId, (item.cents / 100).toFixed(2)])));
+	    setSharedIncomeAllocationPlanError(null);
+	    setSharedIncomeAllocationMetrics((current) => current.includes(metric)
+	      ? current.filter((currentMetric) => currentMetric !== metric)
+	      : [...current, metric]);
 	  };
   const takeProfitSharedIncomeAllocatedTotal = useMemo(
     () => Object.values(takeProfitSharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0),
@@ -4208,14 +4374,149 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     eligibilityPendingUserId?: string | null;
     onEligibilityChange?: (candidate: SharedIncomeCandidate, enabled: boolean) => void;
     allocationLimit?: number;
+    /** AI方案下只显示姓名、当前权重与本次分配；复选维度时显示组合占比。 */
+    compactAllocationMetric?: SharedIncomeAllocationMetric | "combined";
   }) => {
     if (sharedIncomeClosePreview.candidates.length === 0) {
       return <div className="mt-2 rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">{input.emptyMessage}</div>;
     }
     const allocationLimit = input.allocationLimit ?? sharedIncomeClosePreview.shareableAmount;
+    if (input.compactAllocationMetric) {
+      const isRealizedAnnualizedMetric = input.compactAllocationMetric === "realizedAnnualized";
+      const isExternalShareContributionMetric = input.compactAllocationMetric === "externalShareContribution";
+      const isReceivedSharedAmountGapMetric = input.compactAllocationMetric === "receivedSharedAmountGap";
+      const isReceivedSharedCountGapMetric = input.compactAllocationMetric === "receivedSharedCountGap";
+      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : "组合占比";
+      const enabledCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => !input.showEligibilityControls || candidate.sharedIncomeEnabled);
+      const eligibleMetricCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal);
+      const totalContributedAmount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
+      const totalContributedOrderCount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncomeOrderCount), 0);
+      const contributionFactorCount = Number(totalContributedAmount > 0.000001) + Number(totalContributedOrderCount > 0);
+      const getExternalContributionPercentage = (candidate: SharedIncomeCandidate) => contributionFactorCount > 0
+        ? ((totalContributedAmount > 0.000001 ? candidate.contributedSharedIncome / totalContributedAmount / contributionFactorCount : 0)
+          + (totalContributedOrderCount > 0 ? candidate.contributedSharedIncomeOrderCount / totalContributedOrderCount / contributionFactorCount : 0)) * 100
+        : 0;
+      const getCompactMetricValue = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "principal"
+        ? candidate.cumulativeDepositAmount
+        : input.compactAllocationMetric === "historicalProfit"
+          ? candidate.historicalProfit
+          : input.compactAllocationMetric === "holdingLoss"
+            ? Math.max(0, -candidate.holdingNetPnl)
+            : isRealizedAnnualizedMetric
+              ? Number(candidate.annualizedReference) * 100
+              : isExternalShareContributionMetric
+                ? getExternalContributionPercentage(candidate)
+                : isReceivedSharedAmountGapMetric
+                  ? candidate.receivedSharedIncome
+                  : isReceivedSharedCountGapMetric
+                    ? candidate.receivedSharedIncomeCount
+                    : allocationLimit > 0 ? Math.max(0, Number(input.drafts[candidate.userId]) || 0) / allocationLimit * 100 : 0;
+      const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isExternalShareContributionMetric
+        ? "%"
+        : isReceivedSharedCountGapMetric ? " 次" : " u";
+      const getCandidateDisplayName = (candidate: SharedIncomeCandidate) => [candidate.name, candidate.username]
+        .find((value) => Boolean(value && /[\u3400-\u9fff]/.test(value)))
+        || candidate.name
+        || candidate.username
+        || `用户#${candidate.userId}`;
+      const disabledCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => input.showEligibilityControls && !candidate.sharedIncomeEnabled);
+      const allocatedCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal && (Number(input.drafts[candidate.userId]) || 0) > 0.004);
+      const annualizedCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal && candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference));
+      const annualizedAverage = annualizedCandidates.length > 0
+        ? annualizedCandidates.reduce((total, candidate) => total + Number(candidate.annualizedReference), 0) / annualizedCandidates.length
+        : null;
+      const allocatedMetricTotal = isRealizedAnnualizedMetric
+        ? annualizedAverage === null ? 0 : annualizedAverage * 100
+        : allocatedCandidates.reduce((total, candidate) => total + getCompactMetricValue(candidate), 0);
+      const getCompactMetricValueClassName = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "holdingLoss"
+        ? "font-semibold text-emerald-600"
+        : isExternalShareContributionMetric
+          ? "font-semibold text-blue-600"
+          : isReceivedSharedAmountGapMetric
+            ? "font-semibold text-rose-600"
+        : isRealizedAnnualizedMetric
+          ? Number(candidate.annualizedReference) < 0 ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"
+          : "font-semibold text-slate-700";
+      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : compactMetricLabel;
+      const compactSummaryValueClassName = input.compactAllocationMetric === "holdingLoss"
+        ? "font-semibold text-emerald-600"
+        : isExternalShareContributionMetric
+          ? "font-semibold text-blue-600"
+          : isReceivedSharedAmountGapMetric
+            ? "font-semibold text-rose-600"
+        : isRealizedAnnualizedMetric && annualizedAverage !== null && annualizedAverage < 0
+          ? "font-semibold text-emerald-600"
+          : isRealizedAnnualizedMetric ? "font-semibold text-rose-600" : "font-semibold text-slate-700";
+      const formatCompactMetricValue = (candidate: SharedIncomeCandidate) => isRealizedAnnualizedMetric
+        ? formatT0AnnualizedReturn(candidate.annualizedReference)
+        : isReceivedSharedCountGapMetric
+          ? `${Math.round(getCompactMetricValue(candidate))}${compactMetricUnit}`
+        : `${formatPrice(getCompactMetricValue(candidate))}${compactMetricUnit}`;
+      const formatCompactMetricSummary = () => isRealizedAnnualizedMetric
+        ? formatT0AnnualizedReturn(annualizedAverage)
+        : isReceivedSharedCountGapMetric
+          ? `${Math.round(allocatedMetricTotal)}${compactMetricUnit}`
+        : `${formatPrice(allocatedMetricTotal)}${compactMetricUnit}`;
+      const updateCompactDraft = (candidate: SharedIncomeCandidate, rawValue: string) => {
+        const nextValue = rawValue.replace(/[^0-9.]/g, "");
+        input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
+        input.setDrafts((current) => {
+          if (!candidate.hasPrincipal) return current;
+          if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; }
+          return { ...current, [candidate.userId]: nextValue };
+        });
+      };
+      const getCompactDraftAdjustment = (candidate: SharedIncomeCandidate) => {
+        const rawCurrentAmount = Number(input.drafts[candidate.userId] ?? 0);
+        const currentAmount = Number.isFinite(rawCurrentAmount) ? Math.max(0, rawCurrentAmount) : 0;
+        const currentCents = Math.round(currentAmount * 100);
+        const stepCents = currentCents > 0 ? Math.max(1, Math.round(currentCents * 0.05)) : 0;
+        const reservedForOthersCents = Math.max(0, Math.round((input.allocatedTotal - currentAmount) * 100));
+        const availableCents = Math.max(0, Math.round(allocationLimit * 100) - reservedForOthersCents);
+        return { currentCents, stepCents, availableCents };
+      };
+      const adjustCompactDraftByPercent = (candidate: SharedIncomeCandidate, direction: -1 | 1) => {
+        if (!candidate.hasPrincipal) return;
+        const { currentCents, stepCents, availableCents } = getCompactDraftAdjustment(candidate);
+        if (currentCents <= 0 || stepCents <= 0) return;
+        const nextCents = direction < 0 ? currentCents - stepCents : currentCents + stepCents;
+        if (nextCents < 0 || nextCents > availableCents) return;
+        updateCompactDraft(candidate, (nextCents / 100).toFixed(2));
+      };
+      return <>
+        <div className="overflow-hidden rounded border border-slate-200 bg-white">
+          <table className="w-full table-auto border-collapse tabular-nums">
+            <colgroup><col className="w-px" /><col className="w-px" /><col /></colgroup>
+            <thead><tr className="h-7 border-b border-slate-200 bg-slate-50 text-[9px] font-medium text-slate-500"><th className="w-px px-2 text-left font-medium">共享分配人</th><th className="w-px whitespace-nowrap px-1 text-left font-medium">{compactMetricLabel}</th><th className="px-2 text-right font-medium">分配（u）</th></tr></thead>
+            <tbody>
+              {enabledCandidates.map((candidate) => {
+                const candidateDisplayName = getCandidateDisplayName(candidate);
+                const canAdjustCandidate = candidate.hasPrincipal;
+                const canDisplayMetricValue = candidate.hasPrincipal && (!isRealizedAnnualizedMetric || (candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference)));
+                const { currentCents, stepCents, availableCents } = getCompactDraftAdjustment(candidate);
+                const canDecreaseCandidate = canAdjustCandidate && currentCents > 0 && stepCents > 0;
+                const canIncreaseCandidate = canAdjustCandidate && stepCents > 0 && currentCents + stepCents <= availableCents;
+                const adjustmentAmount = stepCents / 100;
+                return <tr key={candidate.userId} className={candidate.hasPrincipal ? "h-10 border-b border-slate-100" : "h-10 border-b border-slate-100 bg-slate-100 opacity-70"}>
+                  <td className="w-px whitespace-nowrap px-2 align-middle"><div className="flex min-w-max items-center justify-between gap-1"><span className="whitespace-nowrap text-[11px] font-semibold text-slate-800">{candidateDisplayName}</span>{input.showEligibilityControls && <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed aria-label={`${candidateDisplayName}关闭本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, false)} className="relative h-4 w-7 shrink-0 rounded-full bg-blue-600 transition disabled:opacity-45"><span className="absolute left-[14px] top-0.5 h-3 w-3 rounded-full bg-white shadow transition" /></button>}</div></td>
+                  <td className="w-px whitespace-nowrap px-1 text-left align-middle text-[10px] text-slate-500"><b className={getCompactMetricValueClassName(candidate)}>{canDisplayMetricValue ? formatCompactMetricValue(candidate) : "--"}</b></td>
+                  <td className="px-2 align-middle"><div className="grid h-8 grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded border border-slate-200 bg-white focus-within:border-blue-400"><button type="button" disabled={!canDecreaseCandidate} aria-label={`${candidateDisplayName}分配金额减少当前金额的5%`} title={canDecreaseCandidate ? `减少 ${formatPrice(adjustmentAmount)} u（当前金额的 5%）` : "请先输入分配金额"} onClick={() => adjustCompactDraftByPercent(candidate, -1)} className="flex items-center justify-center border-r border-slate-100 text-slate-500 active:bg-slate-50 disabled:text-slate-300"><Minus className="h-3.5 w-3.5" strokeWidth={2.25} /></button><input aria-label={`${candidateDisplayName}本次共享收益金额`} disabled={!canAdjustCandidate} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => updateCompactDraft(candidate, event.target.value)} inputMode="decimal" className="min-w-0 bg-white px-1 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none disabled:bg-slate-50 disabled:text-slate-300" /><button type="button" disabled={!canIncreaseCandidate} aria-label={`${candidateDisplayName}分配金额增加当前金额的5%`} title={canIncreaseCandidate ? `增加 ${formatPrice(adjustmentAmount)} u（当前金额的 5%）` : "剩余分配额度不足"} onClick={() => adjustCompactDraftByPercent(candidate, 1)} className="flex items-center justify-center border-l border-slate-100 text-blue-600 active:bg-blue-50 disabled:text-slate-300"><Plus className="h-3.5 w-3.5" strokeWidth={2.25} /></button></div></td>
+                </tr>;
+              })}
+              {enabledCandidates.some((candidate) => candidate.hasPrincipal) && <tr className="h-8 bg-slate-50 text-[10px] tabular-nums text-slate-500"><td className="w-px whitespace-nowrap px-2">共分配 <b className="font-semibold text-slate-800">{allocatedCandidates.length}</b> 人</td><td className="w-px whitespace-nowrap px-1 text-left">{compactSummaryLabel} <b className={compactSummaryValueClassName}>{formatCompactMetricSummary()}</b></td><td className="whitespace-nowrap px-2 text-right">已分 <b className="font-semibold text-rose-600">{input.allocatedTotal.toFixed(2)} u</b></td></tr>}
+              {disabledCandidates.map((candidate) => {
+                const candidateDisplayName = getCandidateDisplayName(candidate);
+                return <tr key={candidate.userId} className="h-8 border-t border-slate-100 bg-slate-100 opacity-70"><td colSpan={3} className="px-2"><div className="flex items-center gap-1"><span className="min-w-0 truncate text-[11px] font-medium text-slate-500">{candidateDisplayName}</span><button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed={false} aria-label={`${candidateDisplayName}开启本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, true)} className="relative h-4 w-7 shrink-0 rounded-full bg-slate-400 transition disabled:opacity-45"><span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow transition" /></button></div></td></tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        {input.footerText && <div className="mt-2 rounded bg-slate-50 px-2.5 py-2 text-[10px] leading-4 text-slate-500">{input.footerText}</div>}
+      </>;
+    }
     return <>
       <div className="divide-y divide-slate-100 overflow-hidden rounded border border-slate-200">
-        {sharedIncomeClosePreview.candidates.map((candidate) => {
+	        {sharedIncomeClosePreview.candidates.map((candidate) => {
           const candidateDisplayName = [candidate.name, candidate.username]
             .find((value) => Boolean(value && /[\u3400-\u9fff]/.test(value)))
             || candidate.name
@@ -4253,9 +4554,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
             input.setDrafts((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
           };
+	          if (input.showEligibilityControls && !candidate.sharedIncomeEnabled) {
+	            return <div key={candidate.userId} className="flex h-8 items-center gap-1 bg-slate-100 px-2 opacity-70">
+	              <span className="min-w-0 truncate text-[11px] font-medium text-slate-500">{candidateDisplayName}</span>
+	              <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed={false} aria-label={`${candidateDisplayName}开启本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, true)} className="relative h-4 w-7 shrink-0 rounded-full bg-slate-400 transition disabled:opacity-45"><span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow transition" /></button>
+	            </div>;
+	          }
           return <div key={candidate.userId} className={`grid grid-cols-[minmax(0,1fr)_5.75rem] items-stretch gap-x-2 gap-y-1 px-2 py-2 ${candidate.hasPrincipal && candidateEligible ? "" : "bg-slate-100 text-slate-400 opacity-70"}`}>
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2"><div className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${candidateEligible ? "text-slate-800" : "text-slate-500"}`}>{candidateDisplayName}</div>{input.showEligibilityControls && <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed={candidate.sharedIncomeEnabled} aria-label={`${candidateDisplayName}${candidate.sharedIncomeEnabled ? "关闭" : "开启"}本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, !candidate.sharedIncomeEnabled)} className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-45 ${candidate.sharedIncomeEnabled ? "bg-indigo-600" : "bg-slate-400"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${candidate.sharedIncomeEnabled ? "left-[18px]" : "left-0.5"}`} /></button>}</div>
+	              <div className="flex min-w-0 items-center gap-1"><div className={`min-w-0 truncate text-[12px] font-semibold ${candidateEligible ? "text-slate-800" : "text-slate-500"}`}>{candidateDisplayName}</div>{input.showEligibilityControls && <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed={candidate.sharedIncomeEnabled} aria-label={`${candidateDisplayName}${candidate.sharedIncomeEnabled ? "关闭" : "开启"}本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, !candidate.sharedIncomeEnabled)} className={`relative h-4 w-7 shrink-0 rounded-full transition disabled:opacity-45 ${candidate.sharedIncomeEnabled ? "bg-blue-600" : "bg-slate-400"}`}><span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition ${candidate.sharedIncomeEnabled ? "left-[14px]" : "left-0.5"}`} /></button>}</div>
               {candidate.hasPrincipal ? <>
                 <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500">
                   <span>接受共享（{candidate.receivedSharedIncomeCount}次）<b className={candidate.receivedSharedIncome > 0 ? "ml-0.5 font-semibold text-rose-600" : "ml-0.5 font-semibold text-slate-500"}>{candidate.receivedSharedIncome > 0 ? "+" : ""}{candidate.receivedSharedIncome === 0 ? "0" : formatPrice(candidate.receivedSharedIncome)} u</b></span>
@@ -4264,9 +4571,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>付出共享（{candidate.contributedSharedIncomeOrderCount}次）<b className={candidate.contributedSharedIncome > 0 ? "ml-0.5 font-semibold text-emerald-600" : "ml-0.5 font-semibold text-slate-500"}>{candidate.contributedSharedIncome > 0 ? "-" : ""}{candidate.contributedSharedIncome === 0 ? "0" : formatPrice(candidate.contributedSharedIncome)} u</b></span></div>
                 <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 {formatPrice(candidate.cumulativeDepositAmount)} u</div>
-                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>历史利润 <b className="font-semibold text-rose-600">+{formatPrice(candidate.historicalProfit)} u</b></span><span className="text-slate-300">·</span><span>历史亏损 <b className="font-semibold text-emerald-600">-{formatPrice(candidate.closedLossPnl)} u</b></span></div>
-                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>已实现年化 <b className={displayedRealizedAnnualized !== null && Number.isFinite(displayedRealizedAnnualized) ? (displayedRealizedAnnualized >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600") : "font-semibold text-slate-400"}>{displayedRealizedAnnualized === null || !Number.isFinite(displayedRealizedAnnualized) ? "--" : formatT0AnnualizedReturn(displayedRealizedAnnualized)}</b></span>{!candidateEligible && <><span className="text-slate-300">·</span><span className="font-medium text-slate-500">本单关闭</span></>}</div>
-                <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">持仓总盈亏 <b className={candidate.holdingNetPnl >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(candidate.holdingNetPnl)} u</b></div>
+	                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>历史利润 <b className="font-semibold text-rose-600">+{formatPrice(candidate.historicalProfit)} u</b></span><span className="text-slate-300">·</span><span>已实现年化 <b className={displayedRealizedAnnualized !== null && Number.isFinite(displayedRealizedAnnualized) ? (displayedRealizedAnnualized >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600") : "font-semibold text-slate-400"}>{displayedRealizedAnnualized === null || !Number.isFinite(displayedRealizedAnnualized) ? "--" : formatT0AnnualizedReturn(displayedRealizedAnnualized)}</b></span></div>
+                <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">持仓总浮盈亏 <b className={candidate.holdingNetPnl >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(candidate.holdingNetPnl)} u</b></div>
               </> : <><div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 未登记</div><div className="mt-0.5 text-[10px] text-slate-500">未投入本金，不参与共享收益分配</div></>}
             </div>
             <div className={`relative w-[92px] ${candidate.hasPrincipal ? "row-span-2 self-stretch pb-10" : "self-stretch"}`}>
@@ -4281,7 +4587,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     if (!isAvailable || topUp === null) return;
                     input.setTargetSelections((current) => ({ ...current, [candidate.userId]: targetRate }));
                     input.setDrafts((current) => topUp <= 0.004 ? (() => { const { [candidate.userId]: _removed, ...rest } = current; return rest; })() : ({ ...current, [candidate.userId]: topUp.toFixed(2) }));
-                  }} className={`h-4 rounded border text-[8px] font-semibold tabular-nums active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300 ${isSelectedTarget ? "border-indigo-600 bg-indigo-600 text-white" : isOtherTargetDimmed ? "border-slate-200 bg-slate-100 text-slate-400" : "border-indigo-200 bg-indigo-50 text-indigo-700"}`}>{targetLabel}</button>;
+                  }} className={`h-4 rounded border text-[8px] font-semibold tabular-nums active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300 ${isSelectedTarget ? "border-blue-600 bg-blue-600 text-white" : isOtherTargetDimmed ? "border-slate-200 bg-slate-100 text-slate-400" : "border-blue-200 bg-blue-50 text-blue-700"}`}>{targetLabel}</button>;
                 })}
                 <button type="button" disabled={!canAllocateOnePercent} title={canAllocateOnePercent ? `按该用户累计投入本金的 1% 分配，即 ${formatPrice(onePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(onePercentShareAmount)} U`} onClick={() => { if (!canAllocateOnePercent) return; input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; }); input.setDrafts((current) => ({ ...current, [candidate.userId]: onePercentShareAmount.toFixed(2) })); }} className="h-4 whitespace-nowrap rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">本金 1%</button>
                 <button type="button" disabled={!canAllocateTwoPercent} title={canAllocateTwoPercent ? `按该用户累计投入本金的 2% 分配，即 ${formatPrice(twoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(twoPercentShareAmount)} U`} onClick={() => { if (!canAllocateTwoPercent) return; input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; }); input.setDrafts((current) => ({ ...current, [candidate.userId]: twoPercentShareAmount.toFixed(2) })); }} className="h-4 whitespace-nowrap rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">本金 2%</button>
@@ -4292,7 +4598,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const nextValue = event.target.value.replace(/[^0-9.]/g, "");
                 input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                 input.setDrafts((current) => { if (!canAdjustCandidate) return current; if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; } return { ...current, [candidate.userId]: nextValue }; });
-              }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pl-8 pr-2 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-300" /></div>
+              }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pl-8 pr-2 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-300" /></div>
             </div>
             {candidate.hasPrincipal && <div className="col-start-1 mt-0.5 flex items-center gap-1.5"><span className={`shrink-0 text-[9px] font-medium ${settlementAgeDays === null || settlementAgeDays >= 8 ? "text-rose-600" : settlementAgeDays >= 4 ? "text-amber-600" : "text-emerald-600"}`}>{settlementEnergyLabel}</span><div className="flex min-w-0 flex-1 items-center gap-px" aria-label={settlementEnergyLabel}>{Array.from({ length: settlementEnergyCells }, (_, index) => <span key={index} className={`h-2 w-2 shrink-0 rounded-[1px] ${settlementEnergyTone}`} />)}</div></div>}
           </div>;
@@ -4731,7 +5037,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPayoutIncomePage(1);
   }, [payoutTargetRelatedUserId]);
   const globalLedgerRows = useMemo(() => {
-    if (!canManage) return [];
+    // 全局账本关闭时其重型历史分佣/FIFO汇总完全不可见；
+    // 不应随着报价行情每500毫秒刷新而占用平仓分配页的主线程。
+    if (!canManage || !showGlobalLedger) return [];
     const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
     const tradesByUserId = new Map<string, PreviewTrade[]>();
     const knownUserNames = new Map<string, { name: string; username?: string }>();
@@ -4868,7 +5176,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || right.lastActivityAt.localeCompare(left.lastActivityAt)
       || left.name.localeCompare(right.name, "zh-CN")
     ));
-  }, [canManage, markPrice, profitShareSnapshots, recentRelatedUsers, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, trades]);
+  }, [canManage, markPrice, profitShareSnapshots, recentRelatedUsers, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, showGlobalLedger, trades]);
   const globalLedgerSummary = useMemo(() => {
     const summary = globalLedgerRows.reduce((total, row) => ({
       longQuantity: total.longQuantity + row.longQuantity,
@@ -4884,6 +5192,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
   }, [globalLedgerRows]);
   const globalFundsRows = useMemo(() => {
+    if (!canManage || !showGlobalLedger) return [];
     const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
     const rowsByUserId = new Map<string, { userId: string; name: string; deposit: number; orderProfit: number; commissionProfit: number; sharedProfit: number; commissionExpense: number; sharedExpense: number; withdrawal: number }>();
     const ensureRow = (userId: string, fallbackName?: string) => {
@@ -4921,7 +5230,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || (right.orderProfit + right.commissionProfit + right.sharedProfit) - (left.orderProfit + left.commissionProfit + left.sharedProfit)
       || left.name.localeCompare(right.name, "zh-CN")
     ));
-  }, [globalLedgerRows, recentRelatedUsers, sharedIncomeTransfers, t0GlobalPayoutLogsQuery.data]);
+  }, [canManage, globalLedgerRows, recentRelatedUsers, sharedIncomeTransfers, showGlobalLedger, t0GlobalPayoutLogsQuery.data]);
   const globalFundsSummary = useMemo(() => globalFundsRows.reduce((total, row) => ({
     deposit: total.deposit + row.deposit,
     orderProfit: total.orderProfit + row.orderProfit,
@@ -5578,6 +5887,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
   const isAccountSelectionLocked = isClosingEntry || (isCloseReview && !isEditingEntry);
   const isCloseAssociationLocked = isClosingEntry || isCloseReview;
+  // 从蓝色待补开位进入时，关闭持续提醒只先形成“待取消”草稿；
+  // 必须再点底部保存，才允许服务端暂停该非财务提醒位。
+  const isReminderCancellationPending = Boolean(
+    ACTIONS[entryForm.action].opening
+    && entryForm.reminderTemplateId
+    && !entryForm.keepReopenReminder,
+  );
   // 逐笔报价的订单按分位精确排布，实时价也必须作为独立精确参考行插入；
   // 不能再先归入十美元档，否则例如 2546.03 会视觉上覆盖 2550.00 的真实订单行。
   const individualMarkLadderPrice = markPrice && Number.isFinite(markPrice) && markPrice > 0
@@ -5892,6 +6208,82 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setShowEntrySheet(true);
   };
 
+  useEffect(() => {
+    if (!isCloseDistributionPreviewLink) {
+      closeDistributionPreviewLinkInitializedRef.current = false;
+      return;
+    }
+    if (closeDistributionPreviewLinkInitializedRef.current || !canManage || trades.length === 0) return;
+    const simulatedClosePrice = 2385.65;
+    const allocationsByOpening = buildOpeningClosingAllocations(trades);
+    const previewSource = trades
+      .filter((trade) => (
+        !trade.isPending
+        && !trade.isLocked
+        && !trade.isCounterpartyView
+        && trade.action === "openShort"
+        && (trade.instrumentType === "spot" || trade.instrumentType === "contract")
+        && trade.price > simulatedClosePrice
+        && Math.abs(trade.price - 2450) <= 75
+      ))
+      .map((trade) => {
+        const closedQuantity = (allocationsByOpening.get(trade.id) ?? [])
+          .reduce((total, allocation) => total + allocation.quantity, 0);
+        return { trade, remainingQuantity: Math.max(0, trade.quantity - closedQuantity) };
+      })
+      .filter(({ remainingQuantity }) => remainingQuantity >= 5 - 0.0000001)
+      // 优先使用开仓价2,450附近、剩余正好50 ETH的空单；没有时才选择最接近的可平空单。
+      .sort((left, right) => (
+        Math.abs(left.remainingQuantity - 50) - Math.abs(right.remainingQuantity - 50)
+        || Math.abs(left.trade.price - 2450) - Math.abs(right.trade.price - 2450)
+        || left.trade.createdAt.localeCompare(right.trade.createdAt)
+      ))[0]?.trade;
+    if (!previewSource) return;
+
+    closeDistributionPreviewLinkInitializedRef.current = true;
+    const targetPrice = archivePriceForTrade(previewSource);
+    entrySheetLadderDisplayModeRef.current = "individual";
+    entrySheetArchiveStepRef.current = POSITION_ARCHIVE_STEP;
+    setEntrySide("short");
+    setClosingSourceTrade(previewSource);
+    setEditingOriginalTrade(null);
+    setEntryForm({
+      action: "closeShort",
+      accountId: previewSource.accountId,
+      accountName: getTradeAccountName(previewSource),
+      relatedUserId: previewSource.relatedUserId ?? "",
+      relatedUserName: previewSource.relatedUserName ?? previewSource.relatedUsername ?? "",
+      relatedUsername: previewSource.relatedUsername ?? "",
+      relatedFundId: previewSource.relatedFundId ?? "legacy",
+      relatedFundName: previewSource.relatedFundName ?? "",
+      instrumentType: previewSource.instrumentType,
+      optionDirection: previewSource.optionDirection ?? "long_call",
+      optionExpiryDate: previewSource.optionExpiryDate ?? "",
+      optionPremium: previewSource.optionPremium === undefined ? "" : String(previewSource.optionPremium),
+      optionPremiumCurrency: previewSource.optionPremiumCurrency ?? "USDT",
+      gridDirection: previewSource.gridDirection ?? "short",
+      gridRangeMin: previewSource.gridRangeMin === undefined ? "" : String(previewSource.gridRangeMin),
+      gridRangeMax: previewSource.gridRangeMax === undefined ? "" : String(previewSource.gridRangeMax),
+      gridLeverage: previewSource.gridLeverage === undefined ? "" : String(previewSource.gridLeverage),
+      gridCount: previewSource.gridCount === undefined ? "" : String(previewSource.gridCount),
+      isLocked: false,
+      isCounterparty: false,
+      isPending: false,
+      isTakeProfit: false,
+      takeProfitPrice: "",
+      takeProfitQuantity: "",
+      takeProfitPlans: [],
+      quantity: "5",
+      price: simulatedClosePrice.toFixed(2),
+      note: "",
+      targetPrice,
+      targetOpeningEntryId: getStoredEntryId(previewSource),
+    });
+    setSharedIncomePreviewMarkPrice(simulatedClosePrice);
+    setShowEntrySheet(true);
+    setCloseConfirmationStep("review");
+  }, [canManage, isCloseDistributionPreviewLink, trades]);
+
   const openEditOpeningTrade = (trade: PreviewTrade) => {
     if (!ACTIONS[trade.action].opening) {
       t0Toast.error("当前仅支持编辑开仓记录");
@@ -5974,8 +6366,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
       void t0JournalQuery.refetch();
+      t0Toast.success('持续提醒已取消');
     },
-    onError: (error) => t0Toast.error(error.message || '持续提醒取消失败'),
+    onError: (error) => {
+      const message = error.message || '持续提醒取消失败';
+      setOpeningSaveError(message);
+      t0Toast.error(message);
+    },
   });
 
   const renameAccountMutation = trpc.ledger.t0RenameAccount.useMutation({
@@ -6101,6 +6498,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   });
   const changeSharedIncomeCandidateEligibility = useCallback((candidate: SharedIncomeCandidate, enabled: boolean) => {
+    if (isCloseDistributionPreviewLink) {
+      setSharedIncomeAllocationPlanError("这是直达模拟预览，资格开关不会保存");
+      return;
+    }
     const sourceUserId = Number(entryForm.relatedUserId);
     const recipientUserId = Number(candidate.userId);
     if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || !Number.isInteger(recipientUserId) || recipientUserId <= 0) {
@@ -6129,7 +6530,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setSharedIncomeAllocationPlanError(error.message || "共享资格保存失败，请重新操作");
       },
     });
-  }, [entryForm.relatedUserId, setSharedIncomeEligibilityMutation, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
+  }, [entryForm.relatedUserId, isCloseDistributionPreviewLink, setSharedIncomeEligibilityMutation, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
 
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
@@ -6705,6 +7106,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
 
   const handleSaveEntry = (manualConfirmPendingFill = false) => {
+    if (isCloseDistributionPreviewLink) {
+      setCloseSaveError("这是直达模拟预览，不会写入平仓、共享或任何账本记录");
+      return;
+    }
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
     const selectedAction = ACTIONS[entryForm.action];
@@ -6715,6 +7120,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
     if (selectedAction.opening) setOpeningSaveError(null);
     else setCloseSaveError(null);
+    // 蓝色待补开位的“取消持续提醒”是一个独立的、非财务修改：
+    // 点击开关仅形成草稿；只有点击底部“保存取消提醒”才真正暂停占位。
+    // 这条分支必须先于数量、价格等开仓校验，避免管理员只想取消提醒时被录单字段拦住。
+    if (isReminderCancellationPending) {
+      const reminderId = Number(entryForm.reminderTemplateId);
+      if (!Number.isInteger(reminderId) || reminderId <= 0) {
+        showSaveValidationError("持续提醒标识无效，请关闭后重新打开该蓝色待补开位");
+        return;
+      }
+      pauseReopenReminderMutation.mutate({ ledgerId: 52, reminderId });
+      return;
+    }
     const isCounterpartyClosing = !selectedAction.opening && Boolean(closingSourceTrade?.isCounterpartyView);
     // 管理员反向投影下的“平空/平多”仅是展示方向；写库仍沿用用户端原始方向，确保 FIFO 永远以真实流水核算。
     const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
@@ -9180,22 +9597,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   type="button"
                   disabled={pauseReopenReminderMutation.isPending}
                   onClick={() => {
-                    // 从蓝色占位进入时，关闭开关就是取消这一段待补开，而非新建一笔不继承的订单。
-                    if (entryForm.reminderTemplateId && entryForm.keepReopenReminder) {
-                      pauseReopenReminderMutation.mutate({ ledgerId: 52, reminderId: Number(entryForm.reminderTemplateId) });
-                      return;
-                    }
+                    // 从蓝色占位进入时，关闭开关只形成取消草稿；
+                    // 底部“保存取消提醒”才会暂停这一段待补开，关闭页面则不做任何改动。
                     setEntryForm((current) => ({ ...current, keepReopenReminder: !current.keepReopenReminder }));
                   }}
                   className={`-mt-1 flex w-full items-center justify-between rounded border px-3 py-2 text-left text-xs transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 ${entryForm.keepReopenReminder ? 'border-sky-300 bg-sky-50 text-sky-800' : 'border-slate-200 bg-white text-slate-600'}`}
                 >
                   <span className="font-semibold">持续提醒</span>
-                  <span className="text-[11px]">{entryForm.reminderTemplateId && entryForm.keepReopenReminder
-                    ? '关闭即取消当前待补开位'
+                  <span className="text-[11px]">{entryForm.reminderTemplateId
+                    ? entryForm.keepReopenReminder
+                      ? '关闭后需保存才取消'
+                      : '已选择取消，保存后生效'
                     : entryForm.keepReopenReminder
                       ? '每次平仓后保留待补开'
                       : '平仓后从报价单移除'}</span>
                 </button>}
+                {isReminderCancellationPending && <div role="status" className="-mt-0.5 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800">
+                  已选择取消这张蓝色待补开位，尚未保存。点击底部“保存取消提醒”后才会隐藏；直接关闭本页不会改变提醒。
+                </div>}
                 {isTakeProfitAvailable && entryForm.isTakeProfit && <div className="-mt-0.5 rounded border border-amber-200 bg-amber-50/65 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900"><Target className="h-3.5 w-3.5" strokeWidth={2.4} />分段止盈</span>
@@ -9669,11 +10088,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>}
               {!isCloseReview && (
                 <button
-                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange && !hasPartialAttributionDraftChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
+                  disabled={isReminderCancellationPending
+                    ? pauseReopenReminderMutation.isPending
+                    : (isEditingEntry ? updateOpeningEntryMutation.isPending || reassignOpeningRemainingMutation.isPending || updatePartialOpeningHistoricalAttributionMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange && !hasPartialAttributionDraftChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={() => handleSaveEntry(isPendingFillConfirmationQueued)}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
-                  {isEditingEntry
+                  {isReminderCancellationPending
+                    ? (pauseReopenReminderMutation.isPending ? "正在保存取消…" : "保存取消提醒")
+                    : isEditingEntry
                     ? (updateOpeningEntryMutation.isPending ? "正在保存…" : "保存修改")
                     : isClosingEntry
                       ? `确认${ACTIONS[entryForm.action].label}参数`
@@ -9819,29 +10242,100 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      {canManage && showEntrySheet && isClosingEntry && isCloseReview && (
 	        <div className="fixed inset-0 z-[80] bg-white" role="dialog" aria-modal="true" aria-label={`${ACTIONS[entryForm.action].label}收益分配`}>
 	          <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white">
-	            <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
-	              <button type="button" disabled={saveEntryMutation.isPending} onClick={() => setCloseConfirmationStep("input")} aria-label="返回平仓参数" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 active:scale-95 disabled:opacity-40"><ArrowLeft className="h-4 w-4" /></button>
-	              <div className="min-w-0 flex-1"><h2 className="truncate text-base font-semibold text-slate-900">平仓收益分配</h2><p className="truncate text-[10px] text-slate-500">先确定本次分配额度，再选择分配人和金额</p></div>
-	              <div className="shrink-0 text-right tabular-nums"><div className="text-[10px] text-slate-500">本次净利润</div><div className={`text-sm font-bold ${sharedIncomeClosePreview.sourceNetPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(sharedIncomeClosePreview.sourceNetPnl)} u</div></div>
+	            <header className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+	              <button type="button" disabled={saveEntryMutation.isPending} onClick={() => isCloseDistributionPreviewLink ? setLocation(`/ledger/${ledgerId}/t0-journal`) : setCloseConfirmationStep("input")} aria-label={isCloseDistributionPreviewLink ? "退出模拟预览" : "返回平仓参数"} className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-700 active:scale-95 disabled:opacity-40">{isCloseDistributionPreviewLink ? <X className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}</button>
+              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><h2 className="truncate text-base font-semibold text-slate-900">平仓收益分配</h2>{isCloseDistributionPreviewLink && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">模拟预览</span>}</div></div>
 	            </header>
-	            <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-3 pb-28 sm:px-5">
-	              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-	                <div className="flex items-baseline justify-between gap-3"><div className="text-sm font-semibold text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</div><div className="text-[11px] tabular-nums text-slate-500">开 {closingSourceTrade ? formatPrice(closingSourceTrade.price) : entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} · 平 {formatPrice(Number(entryForm.price))}</div></div>
-	                {closingSourceTrade && <div className="mt-1 text-[10px] tabular-nums text-slate-500">来源订单 #{getStoredEntryId(closingSourceTrade)} · 实际开仓价 {formatPrice(closingSourceTrade.price)} U · 归档 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)} U</div>}
-	                <div className="mt-3 grid grid-cols-2 overflow-hidden rounded border border-slate-200 text-center tabular-nums"><div className="border-r border-slate-100 px-2 py-2"><div className="text-[10px] text-slate-500">本单可共享上限</div><div className="mt-0.5 text-base font-bold text-slate-900">{sharedIncomeBudget.maximum.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div><div className="px-2 py-2"><div className="text-[10px] text-slate-500">本次计划分配</div><div className="mt-0.5 text-base font-bold text-indigo-700">{sharedIncomeBudget.allocationLimit.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div></div>
-	                {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 && <div className="mt-3"><div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">本次拿出多少分配</div><div className="flex overflow-hidden rounded border border-slate-200 text-[11px] font-semibold"><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("percentage"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 px-3 ${sharedIncomeAllocationBudgetMode === "percentage" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>按比例</button><button type="button" onClick={() => { setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 border-l border-slate-200 px-3 ${sharedIncomeAllocationBudgetMode === "amount" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>填金额</button></div></div><div className="mt-2 flex items-center gap-2"><div className="relative min-w-0 flex-1"><input aria-label={sharedIncomeAllocationBudgetMode === "percentage" ? "本次共享分配比例" : "本次共享分配金额"} value={sharedIncomeAllocationBudgetValue} onChange={(event) => { setSharedIncomeAllocationBudgetValue(event.target.value.replace(/[^0-9.]/g, "")); setSharedIncomeAllocationPlanError(null); }} inputMode="decimal" className="h-10 w-full rounded border border-slate-300 bg-white px-3 pr-8 text-right text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-indigo-500" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">{sharedIncomeAllocationBudgetMode === "percentage" ? "%" : "u"}</span></div>{sharedIncomeAllocationBudgetMode === "percentage" && <div className="flex shrink-0 gap-1">{[25, 50, 100].map((value) => <button key={value} type="button" onClick={() => { setSharedIncomeAllocationBudgetValue(String(value)); setSharedIncomeAllocationPlanError(null); }} className={`h-10 rounded border px-2 text-xs font-semibold ${sharedIncomeAllocationBudgetValue === String(value) ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}>{value}%</button>)}</div>}</div></div>}
+	            <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-2 pb-28 sm:px-5">
+	              <section className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+	                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm font-semibold tabular-nums"><span className="text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</span><span className="text-slate-700">开 {closingSourceTrade ? formatPrice(closingSourceTrade.price) : entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}</span><span className="text-slate-700">平 {formatPrice(Number(entryForm.price))}</span></div>
+	                <div className="mt-2 flex overflow-hidden rounded border border-slate-200 text-center tabular-nums"><div className="min-w-0 flex-auto border-r border-slate-100 px-2 py-2"><div className="text-[10px] text-slate-500">本次利润分配</div><div className="mt-0.5 whitespace-nowrap text-base font-bold text-rose-600">{sharedIncomeBudget.maximum.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div><div className="min-w-0 flex-auto px-2 py-2"><div className="text-[10px] text-slate-500">本次计划分配</div><div className="mt-0.5 whitespace-nowrap text-base font-bold" style={{ color: "#2563EB" }}>{sharedIncomeBudget.allocationLimit.toFixed(2)} <span className="text-[10px] font-medium">u</span><span className="ml-1 text-base font-bold" style={{ color: "#111827" }}>{sharedIncomeBudgetPercentage.toFixed(2)}%</span></div></div></div>
+	                {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 && (
+	                  <div className="mt-2">
+	                    <div className="flex items-center justify-between gap-2">
+	                      <div className="text-xs font-semibold text-slate-700">本次拿出多少分配</div>
+	                      <div className="flex overflow-hidden rounded border border-slate-200 text-[11px] font-semibold">
+	                        <button
+	                          type="button"
+	                          onClick={() => {
+	                            const percentage = sharedIncomeBudget.maximum > 0
+	                              ? Math.min(99, Math.max(1, Math.round(sharedIncomeBudgetPercentage)))
+	                              : 1;
+	                            setSharedIncomeAllocationBudgetMode("percentage");
+	                            setSharedIncomeAllocationBudgetValue(String(percentage));
+	                            setSharedIncomeAllocationPlanError(null);
+	                          }}
+	                          className={`h-8 px-3 ${sharedIncomeAllocationBudgetMode === "percentage" ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}
+	                        >按比例</button>
+	                        <button
+	                          type="button"
+	                          onClick={() => {
+	                            setSharedIncomeAllocationBudgetMode("amount");
+	                            setSharedIncomeAllocationBudgetValue(sharedIncomeBudget.allocationLimit.toFixed(2));
+	                            setSharedIncomeAllocationPlanError(null);
+	                          }}
+	                          className={`h-8 border-l border-slate-200 px-3 ${sharedIncomeAllocationBudgetMode === "amount" ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}
+	                        >填金额</button>
+	                      </div>
+	                    </div>
+	                    <div className="mt-2">
+	                      {sharedIncomeAllocationBudgetMode === "percentage" ? (
+	                        <div className="rounded border border-slate-200 bg-white px-3 py-2">
+	                          <div className="flex items-center gap-2 text-[10px] font-medium tabular-nums text-slate-500">
+	                            <span>1%</span>
+	                            <input
+	                              type="range"
+	                              min="1"
+	                              max="99"
+	                              step="1"
+	                              value={sharedIncomeBudgetSliderPercentage}
+	                              aria-label="本次共享分配比例，1%至99%"
+	                              onChange={(event) => { setSharedIncomeAllocationBudgetValue(event.target.value); setSharedIncomeAllocationPlanError(null); }}
+	                              className="h-3 min-w-0 flex-1 cursor-pointer accent-blue-600"
+	                            />
+	                            <span>99%</span>
+	                          </div>
+	                          <div className="mt-2 grid grid-cols-4 gap-1.5">
+	                            {[10, 25, 30, 50].map((value) => <button key={value} type="button" onClick={() => { setSharedIncomeAllocationBudgetValue(String(value)); setSharedIncomeAllocationPlanError(null); }} className={`h-7 min-w-0 rounded border px-0.5 text-[10px] font-semibold tabular-nums active:scale-[0.98] ${sharedIncomeAllocationBudgetValue === String(value) ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}>{value}%</button>)}
+	                          </div>
+	                        </div>
+	                      ) : (
+	                        <div className="relative">
+	                          <input
+	                            aria-label="本次共享分配金额"
+	                            value={sharedIncomeAllocationBudgetValue}
+	                            onChange={(event) => { setSharedIncomeAllocationBudgetValue(event.target.value.replace(/[^0-9.]/g, "")); setSharedIncomeAllocationPlanError(null); }}
+	                            inputMode="decimal"
+                            className="h-8 w-full rounded border border-slate-300 bg-white px-3 pr-8 text-right text-[16px] font-semibold tabular-nums text-slate-900 outline-none focus:border-blue-500"
+	                          />
+	                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">u</span>
+	                        </div>
+	                      )}
+	                    </div>
+	                  </div>
+	                )}
 	              </section>
 	              {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <>
-	                <section className="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between gap-2"><div><div className="text-sm font-semibold text-slate-900">分配方式</div><div className="mt-0.5 text-[10px] text-slate-500">关闭资格的用户会置灰沉底，且不参与智能分配</div></div><button type="button" onClick={() => { setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationPlanError(null); }} className={`h-8 rounded border px-2.5 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "manual" ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600"}`}>手动</button></div><div className="mt-2 grid grid-cols-3 gap-1.5"><button type="button" onClick={() => applySharedIncomeAllocationMethod("principal")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "principal" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按本金比例</button><button type="button" onClick={() => applySharedIncomeAllocationMethod("historicalProfit")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "historicalProfit" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按已获利润</button><button type="button" onClick={() => applySharedIncomeAllocationMethod("historicalLoss")} className={`min-h-10 rounded border px-1 text-[11px] font-semibold ${sharedIncomeAllocationMethod === "historicalLoss" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700"}`}>按历史亏损</button></div></section>
-	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">共享分配人</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
+	                <section className="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+	                  <div className="flex items-center justify-between gap-2"><div className="text-sm font-semibold text-slate-900">AI 智能分配方案</div><button type="button" onClick={() => { setSharedIncomeAllocationMetrics([]); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationPlanError(null); }} className={`h-8 rounded border px-2.5 text-[11px] font-semibold ${sharedIncomeAllocationMetrics.length === 0 ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600"}`}>手动</button></div>
+	                  <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+	                    {SHARED_INCOME_ALLOCATION_DIMENSIONS.map((dimension) => {
+	                      const isSelected = sharedIncomeAllocationMetrics.includes(dimension.id);
+	                      return <button key={dimension.id} type="button" aria-pressed={isSelected} onClick={() => toggleSharedIncomeAllocationMetric(dimension.id)} className={`flex min-h-11 flex-col items-center justify-center rounded border px-1 leading-tight ${isSelected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"}`}><span className="flex items-center gap-1 text-[11px] font-semibold">{isSelected && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}{dimension.label}</span><span className={`mt-0.5 text-[9px] font-medium ${isSelected ? "text-blue-500" : "text-slate-400"}`}>{dimension.category}</span></button>;
+	                    })}
+	                  </div>
+	                  {sharedIncomeSelectedDimensions.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-4 text-slate-500"><span>已选 {sharedIncomeSelectedDimensions.length} 个维度：</span>{sharedIncomeSelectedDimensions.map((dimension, index) => <span key={dimension.id} className="whitespace-nowrap font-medium text-blue-700">{index > 0 && <span className="mr-1.5 text-slate-300">·</span>}{dimension.compactLabel} {sharedIncomeDimensionWeightPercentage.toFixed(2)}%</span>)}</div>}
+	                </section>
+	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">{sharedIncomeAllocationMetrics.length === 0 ? "共享分配人" : "共享分配清单"}</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
 	                  drafts: sharedIncomeDrafts,
 	                  setDrafts: setSharedIncomeDrafts,
 	                  targetSelections: sharedIncomeTargetSelections,
 	                  setTargetSelections: setSharedIncomeTargetSelections,
 	                  allocatedTotal: sharedIncomeAllocatedTotal,
 	                  allocationLimit: sharedIncomeBudget.allocationLimit,
+	                  compactAllocationMetric: sharedIncomeSelectedDimensions.length === 0 ? undefined : sharedIncomeSelectedDimensions.length === 1 ? sharedIncomeSelectedDimensions[0].id : "combined",
 	                  showEligibilityControls: true,
-	                  eligibilityPendingUserId: setSharedIncomeEligibilityMutation.isPending ? "pending" : null,
+	                  eligibilityPendingUserId: isCloseDistributionPreviewLink || setSharedIncomeEligibilityMutation.isPending ? "pending" : null,
 	                  onEligibilityChange: changeSharedIncomeCandidateEligibility,
 	                  emptyMessage: "当前没有符合条件的其他关联用户；可直接确认平仓。",
 	                  footerText: "资格开关按本单订单使用者分别保存。关闭不会改动历史共享、项目分佣或任何开平仓流水。",
@@ -9853,8 +10347,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	              <div className="mx-auto w-full max-w-2xl">
 	                {closeSaveError && <div role="alert" className="mb-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium leading-5 text-rose-700"><span className="font-semibold">平仓未确认：</span>{closeSaveError}</div>}
 	                <div className="flex gap-2">
-	                  <button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMethod("manual"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button>
-	                  <button disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
+	                  <button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMetrics([]); setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button>
+	                  <button disabled={isCloseDistributionPreviewLink || saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isCloseDistributionPreviewLink ? "模拟预览，不提交" : saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
 	                </div>
 	              </div>
 	            </footer>
@@ -11299,6 +11793,59 @@ function OptionUnrealizedPnlText({
   return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
+function useReliableDoubleTap(onActivate: () => void) {
+  // 统一用于所有 T 型报价格：单击仅停留，双击才进入订单详情或新开仓表单。
+  // pointer 事件比移动 Safari 的 click/dblclick 更早、更稳定，也能明确排除滚动与长按。
+  const pointerStartRef = useRef<{ pointerId: number; x: number; y: number; startedAt: number } | null>(null);
+  const previousTapAtRef = useRef(0);
+  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointerStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      startedAt: Date.now(),
+    };
+  };
+  const resetDoubleTap = () => {
+    pointerStartRef.current = null;
+    previousTapAtRef.current = 0;
+  };
+  const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const pointerStart = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!pointerStart || pointerStart.pointerId !== event.pointerId) return;
+    const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+    const heldMs = Date.now() - pointerStart.startedAt;
+    // 移动即滚动；长按不承担点击语义，以便之后可安全扩展为拖拽。
+    if (moved > 16 || heldMs > 700) {
+      previousTapAtRef.current = 0;
+      return;
+    }
+    const now = Date.now();
+    if (previousTapAtRef.current > 0 && now - previousTapAtRef.current <= 1200) {
+      previousTapAtRef.current = 0;
+      onActivate();
+      return;
+    }
+    previousTapAtRef.current = now;
+  };
+  const suppressSingleClick = (event: ReactMouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onActivate();
+    }
+  };
+  return {
+    onClick: suppressSingleClick,
+    onPointerDown: handlePointerDown,
+    onPointerUp: handlePointerUp,
+    onPointerCancel: resetDoubleTap,
+    onKeyDown: handleKeyDown,
+  };
+}
+
 function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, hasProfitSharing = false, takeProfitEnabled = false, takeProfitQuantity }: {
   bucket: PositionBucket;
   side: PositionSide;
@@ -11322,6 +11869,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
 }) {
+  const doubleTapProps = useReliableDoubleTap(onClick);
   const isLong = side === "long";
   const isOption = bucket.instrumentType === "option";
   const isGrid = bucket.instrumentType === "grid";
@@ -11490,7 +12038,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   return (
     <button
       type="button"
-      onClick={onClick}
+      {...doubleTapProps}
       aria-label="双击查看该价格档订单详情"
       title="双击查看详情"
       className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`}
@@ -11574,20 +12122,12 @@ function LadderCell({
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
 }) {
-  // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
-  // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。
-  const activationTapAtRef = useRef(0);
-  const requireDoubleActivation = (action: () => void) => () => {
-    const now = Date.now();
-    if (now - activationTapAtRef.current > 700) {
-      activationTapAtRef.current = now;
-      return;
-    }
-    activationTapAtRef.current = 0;
-    action();
-  };
+  // 空白报价格与已有订单格共用同一套双击手势：区别只在双击后的页面内容。
+  const openDoubleTapProps = useReliableDoubleTap(onOpen);
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} hasProfitSharing={hasProfitSharing} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
+    // 已有订单卡必须双击才进入详情；单击只保留，不会打开、创建、平仓或删除任何订单。
+    // 双击识别由 PositionCell 在触摸抬起时处理，以避开 Safari click 手势延迟。
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} hasProfitSharing={hasProfitSharing} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
   }
 
   const isLong = side === "long";
@@ -11597,7 +12137,7 @@ function LadderCell({
   return (
     <button
       type="button"
-      onClick={requireDoubleActivation(onOpen)}
+      {...openDoubleTapProps}
       aria-label={isLong ? "双击在该价格档位开多" : "双击在该价格档位开空"}
       title={isLong ? "双击开多" : "双击开空"}
       className="min-h-[52px] w-full transition-colors hover:bg-white/25 active:brightness-95"
