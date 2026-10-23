@@ -81,7 +81,7 @@ type SharedIncomeEligibility = {
   updatedAt?: string;
 };
 type SharedIncomeAllocationBudgetMode = "percentage" | "amount";
-type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap";
+type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap" | "withdrawalProgress";
 const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
   id: SharedIncomeAllocationMetric;
   label: string;
@@ -96,6 +96,7 @@ const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
   { id: "externalShareContribution", label: "按对外共享贡献", category: "协作回馈", compactLabel: "贡献权重", emptyMessage: "当前开启的分配人还没有对外共享贡献记录" },
   { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人" },
   { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人" },
+  { id: "withdrawalProgress", label: "按提现进度", category: "回款平衡", compactLabel: "提现占比", emptyMessage: "当前开启的分配人没有可计算的提现进度" },
 ];
 type T0ReopenReminder = {
   id: string;
@@ -166,6 +167,8 @@ type SharedIncomeCandidate = {
   longQuantity: number;
   shortQuantity: number;
   cumulativeDepositAmount: number;
+  /** 累计提现 ÷ 累计投入，保留真实比例；超过100%时显示原值，但分配权重仍设最低档。 */
+  withdrawalProgressPercentage: number | null;
   hasPrincipal: boolean;
   holdingNetPnl: number;
   closedNetPnl: number;
@@ -4094,6 +4097,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const cumulativeWithdrawalAmount = userCashFlows
         .filter((cashFlow) => cashFlow.direction === "withdrawal")
         .reduce((total, cashFlow) => total + cashFlow.amount, 0);
+	      const withdrawalProgressPercentage = cumulativeDepositAmount > 0
+	        ? Math.max(0, cumulativeWithdrawalAmount / cumulativeDepositAmount * 100)
+	        : null;
 	      const receivedSharedIncomeTransfers = sharedIncomeTransfers
 	        .filter((transfer) => transfer.recipientUserId === Number(candidate.userId));
 	      const receivedSharedIncome = receivedSharedIncomeTransfers
@@ -4113,11 +4119,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...realizedCashFlows,
         { occurredOn: getBeijingDateInputValue(), amount: currentNetValue, atEndOfBeijingDay: true },
       ]);
-      return {
-        ...candidate,
-        cumulativeDepositAmount,
-        hasPrincipal: cumulativeDepositAmount > 0,
-        holdingNetPnl: candidate.unrealizedPnl,
+	      return {
+	        ...candidate,
+	        cumulativeDepositAmount,
+	        withdrawalProgressPercentage,
+	        hasPrincipal: cumulativeDepositAmount > 0,
+	        holdingNetPnl: candidate.unrealizedPnl,
         closedNetPnl,
         closedLossPnl,
         historicalProfit: closedNetPnl + receivedSharedIncome,
@@ -4245,6 +4252,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      if (metric === "externalShareContribution") return getExternalShareContributionWeights();
 	      if (metric === "receivedSharedAmountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncome);
 	      if (metric === "receivedSharedCountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncomeCount);
+	      if (metric === "withdrawalProgress") {
+	        // 回款进度严格按用户设定的反向速度：提现占投入 1% 时权重 99，99% 时权重 1。
+	        // 0% 提现维持最高 99 档；超过100%仍保留最低 1 档，不会把任何有效分配人排空。
+	        return eligibleCandidates.map((candidate) => {
+	          const withdrawalProgressPercentage = Math.max(0, Number(candidate.withdrawalProgressPercentage) || 0);
+	          return {
+	            candidate,
+	            weight: Math.min(99, Math.max(1, 100 - withdrawalProgressPercentage)),
+	          };
+	        });
+	      }
 	      if (metric === "realizedAnnualized") {
 	        const candidatesWithAnnualizedReturn = eligibleCandidates.filter((candidate) => candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference));
 	        if (candidatesWithAnnualizedReturn.length === 0) return [];
@@ -4281,7 +4299,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      const receivesRemainderCent = dimensionRemainder > 0;
 	      const dimensionCents = baseDimensionCents + (receivesRemainderCent ? 1 : 0);
 	      if (receivesRemainderCent) dimensionRemainder -= 1;
-	      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap")
+	      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress")
 	        && dimensionCents >= weightedCandidates.length;
 	      const equalMinimumCents = guaranteesMinimumCents ? 1 : 0;
 	      const distributableCents = dimensionCents - equalMinimumCents * weightedCandidates.length;
@@ -4386,7 +4404,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const isExternalShareContributionMetric = input.compactAllocationMetric === "externalShareContribution";
       const isReceivedSharedAmountGapMetric = input.compactAllocationMetric === "receivedSharedAmountGap";
       const isReceivedSharedCountGapMetric = input.compactAllocationMetric === "receivedSharedCountGap";
-      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : "组合占比";
+      const isWithdrawalProgressMetric = input.compactAllocationMetric === "withdrawalProgress";
+      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : isWithdrawalProgressMetric ? "提现占比" : "组合占比";
       const enabledCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => !input.showEligibilityControls || candidate.sharedIncomeEnabled);
       const eligibleMetricCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal);
       const totalContributedAmount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
@@ -4410,8 +4429,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   ? candidate.receivedSharedIncome
                   : isReceivedSharedCountGapMetric
                     ? candidate.receivedSharedIncomeCount
-                    : allocationLimit > 0 ? Math.max(0, Number(input.drafts[candidate.userId]) || 0) / allocationLimit * 100 : 0;
-      const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isExternalShareContributionMetric
+                    : isWithdrawalProgressMetric
+                      ? Math.max(0, Number(candidate.withdrawalProgressPercentage) || 0)
+                      : allocationLimit > 0 ? Math.max(0, Number(input.drafts[candidate.userId]) || 0) / allocationLimit * 100 : 0;
+      const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isExternalShareContributionMetric || isWithdrawalProgressMetric
         ? "%"
         : isReceivedSharedCountGapMetric ? " 次" : " u";
       const getCandidateDisplayName = (candidate: SharedIncomeCandidate) => [candidate.name, candidate.username]
@@ -4425,26 +4446,36 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const annualizedAverage = annualizedCandidates.length > 0
         ? annualizedCandidates.reduce((total, candidate) => total + Number(candidate.annualizedReference), 0) / annualizedCandidates.length
         : null;
+      const withdrawalProgressCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal && candidate.withdrawalProgressPercentage !== null && Number.isFinite(candidate.withdrawalProgressPercentage));
+      const withdrawalProgressAverage = withdrawalProgressCandidates.length > 0
+        ? withdrawalProgressCandidates.reduce((total, candidate) => total + Number(candidate.withdrawalProgressPercentage), 0) / withdrawalProgressCandidates.length
+        : null;
       const allocatedMetricTotal = isRealizedAnnualizedMetric
         ? annualizedAverage === null ? 0 : annualizedAverage * 100
+        : isWithdrawalProgressMetric
+          ? withdrawalProgressAverage === null ? 0 : withdrawalProgressAverage
         : allocatedCandidates.reduce((total, candidate) => total + getCompactMetricValue(candidate), 0);
       const getCompactMetricValueClassName = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
         : isExternalShareContributionMetric
           ? "font-semibold text-blue-600"
-          : isReceivedSharedAmountGapMetric
-            ? "font-semibold text-rose-600"
-        : isRealizedAnnualizedMetric
+        : isReceivedSharedAmountGapMetric
+          ? "font-semibold text-rose-600"
+        : isWithdrawalProgressMetric
+          ? "font-semibold text-sky-700"
+          : isRealizedAnnualizedMetric
           ? Number(candidate.annualizedReference) < 0 ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"
           : "font-semibold text-slate-700";
-      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : compactMetricLabel;
+      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : compactMetricLabel;
       const compactSummaryValueClassName = input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
         : isExternalShareContributionMetric
           ? "font-semibold text-blue-600"
-          : isReceivedSharedAmountGapMetric
-            ? "font-semibold text-rose-600"
-        : isRealizedAnnualizedMetric && annualizedAverage !== null && annualizedAverage < 0
+        : isReceivedSharedAmountGapMetric
+          ? "font-semibold text-rose-600"
+        : isWithdrawalProgressMetric
+          ? "font-semibold text-sky-700"
+          : isRealizedAnnualizedMetric && annualizedAverage !== null && annualizedAverage < 0
           ? "font-semibold text-emerald-600"
           : isRealizedAnnualizedMetric ? "font-semibold text-rose-600" : "font-semibold text-slate-700";
       const formatCompactMetricValue = (candidate: SharedIncomeCandidate) => isRealizedAnnualizedMetric
