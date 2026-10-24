@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-24
+// 生成时间：2026-10-25
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9756,5 +9756,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-23T10:25:04Z", type: "feat", cleanMessage: "优化暂停结算与账务展示" },
     { date: "2026-10-23T11:29:23Z", type: "feat", cleanMessage: "add withdrawal progress allocation" },
     { date: "2026-10-23T11:49:13Z", type: "feat", cleanMessage: "refine download watermark identity" },
+  ],
+  "2026-10-24": [
+    { date: "2026-10-23T20:41:07Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-23T23:49:50Z", type: "feat", cleanMessage: "add controlled T0 team overview" },
+    { date: "2026-10-24T05:22:55Z", type: "fix", cleanMessage: "完善R1持仓展示与仓位统计" },
+    { date: "2026-10-24T06:17:44Z", type: "fix", cleanMessage: "unify holding quantity aggregation" },
+  ],
+  "2026-10-25": [
+    { date: "2026-10-24T16:33:55Z", type: "feat", cleanMessage: "add T0 weekly income settlement" },
   ],
 };
