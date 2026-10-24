@@ -755,6 +755,7 @@ function Router() {
         {/* GTO 德州扑克 */}
         <Route path="/ledger/:id/gto" component={GtoPoker} />
         {/* 52号账本 T+0 速记账本 */}
+        <Route path="/ledger/:id/t0-journal/total-profit" component={T0Journal} />
         <Route path="/ledger/:id/t0-journal" component={T0Journal} />
         {/* QQ 在线人数记录 */}
         <Route path="/ledger/:id/qq" component={QQOnlinePage} />

@@ -11,9 +11,11 @@ const SHARED_TRANSFER_PAGE_LIMIT = 200;
 type Action = "openLong" | "closeLong" | "openShort" | "closeShort";
 type Side = "long" | "short";
 
-type IncomeTrade = {
+export type Ledger52T0IncomeTrade = {
   id: string;
   accountId: string;
+  /** 仅供管理员结算对账展示；收益归属计算始终以 accountId 为准。 */
+  accountName?: string;
   relatedUserId: number;
   relatedFundId?: string;
   action: Action;
@@ -30,10 +32,11 @@ type IncomeTrade = {
   targetPrice?: number;
   targetOpeningEntryId?: string;
   createdAt: string;
+  filledAt?: string;
   isPending?: boolean;
 };
 
-type IncomeSnapshot = {
+export type Ledger52T0IncomeSnapshot = {
   entryId: string;
   openingEntryId: string;
   beneficiaryUserId: number;
@@ -42,13 +45,13 @@ type IncomeSnapshot = {
   matchedQuantity: number;
 };
 
-type IncomeTransfer = {
+export type Ledger52T0IncomeTransfer = {
   closingEntryId: string;
   recipientUserId: number;
   amount: number;
 };
 
-type IncomeReduction = { closingEntryId: string; amount: number; sourceNetPnl: number };
+export type Ledger52T0IncomeReduction = { closingEntryId: string; amount: number; sourceNetPnl: number };
 
 type TeamMember = {
   userId: number;
@@ -59,7 +62,32 @@ type TeamMember = {
   avatar?: string;
 };
 
-type TeamIncomeParts = { orderIncome: number; commissionIncome: number; sharedIncome: number };
+export type Ledger52T0IncomeParts = { orderIncome: number; commissionIncome: number; sharedIncome: number };
+
+/** 一笔已平仓收益在用户侧的最终归属类别。 */
+export type Ledger52T0IncomeAllocationKind = "order" | "commission" | "shared";
+
+export type Ledger52T0IncomeAllocationLine = {
+  userId: number;
+  kind: Ledger52T0IncomeAllocationKind;
+  amount: number;
+};
+
+/**
+ * 账户—用户结算桥的最小可审计单元。来源始终是一笔实际平仓；
+ * 若历史数据无法重新匹配开仓，netPnl/variance 会明确为 null，而不会伪造为零。
+ */
+export type Ledger52T0ClosingIncomeAllocation = {
+  closing: Ledger52T0IncomeTrade;
+  netPnl: number | null;
+  regularDistributable: number | null;
+  recordedSharedReduction: number;
+  appliedSharedReduction: number | null;
+  sharedTransferTotal: number;
+  allocations: Ledger52T0IncomeAllocationLine[];
+  allocatedTotal: number;
+  variance: number | null;
+};
 
 type RecentDetail = { netPnl?: number };
 type TeamXirrCashFlow = { occurredOn: string; amount: number; atEndOfBeijingDay?: boolean };
@@ -92,6 +120,21 @@ function getBeijingDateValue(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/** 团队成员起始日仅比较充值发生日与非期权订单创建日，统一回传北京时间自然日。 */
+function getCalendarDateText(value: unknown) {
+  const matched = String(value || "").match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (!matched) return null;
+  const date = `${matched[1]}-${matched[2]}-${matched[3]}`;
+  return getCalendarDateUtc(date) === null ? null : date;
+}
+
+function recordEarlierCalendarDate(target: Map<number, string>, userId: number, value: unknown) {
+  const date = getCalendarDateText(value);
+  if (userId <= 0 || !date) return;
+  const current = target.get(userId);
+  if (!current || date < current) target.set(userId, date);
 }
 
 /** 与个人收益账本相同：以北京时间自然日对每笔资金流和期末净值计算实际年化 XIRR。 */
@@ -149,7 +192,7 @@ function archivePrice(side: Side, value: number) {
   return Number((rounded * 10).toFixed(2));
 }
 
-function scopeKey(trade: IncomeTrade) {
+function scopeKey(trade: Ledger52T0IncomeTrade) {
   const action = actionInfo[trade.action];
   const sourcePrice = action.opening ? trade.price : (trade.targetPrice && trade.targetPrice > 0 ? trade.targetPrice : trade.price);
   return [
@@ -161,6 +204,7 @@ function scopeKey(trade: IncomeTrade) {
   ].join(":");
 }
 
+/** 无冻结来源快照的旧记录继续按原创建记录顺序走 FIFO。 */
 function sortByTime<T extends { createdAt: string; id: string }>(rows: T[]) {
   return [...rows].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
 }
@@ -168,7 +212,7 @@ function sortByTime<T extends { createdAt: string; id: string }>(rows: T[]) {
 /**
  * 与T+0前端历史净收益相同的双口径匹配：先严格按报价归属档位，无法匹配的旧流水再按同账户/用户/项目FIFO回补。
  */
-function buildRealizedDetails(trades: IncomeTrade[], strictArchiveMatch: boolean) {
+function buildRealizedDetails(trades: Ledger52T0IncomeTrade[], strictArchiveMatch: boolean) {
   const positions = new Map<string, { quantity: number; costBasis: number; openingFeeBasis: number }>();
   const details = new Map<string, RecentDetail>();
   for (const trade of sortByTime(trades.filter((item) => item.symbol === "ETH" && !item.isPending))) {
@@ -213,19 +257,21 @@ function buildRealizedDetails(trades: IncomeTrade[], strictArchiveMatch: boolean
   return details;
 }
 
-function buildRecentDetails(trades: IncomeTrade[]) {
+function buildRecentDetails(trades: Ledger52T0IncomeTrade[], snapshots: Ledger52T0IncomeSnapshot[] = []) {
   const strict = buildRealizedDetails(trades, true);
   const fallback = buildRealizedDetails(trades, false);
   for (const [id, detail] of fallback) {
     if (strict.get(id)?.netPnl === undefined && detail.netPnl !== undefined) strict.set(id, detail);
   }
+  // 冻结分佣快照是历史归属审计事实；仅在其完整覆盖一笔平仓时覆盖普通 FIFO 的推断结果。
+  for (const [id, detail] of buildFrozenSnapshotDetails(trades, snapshots)) strict.set(id, detail);
   return strict;
 }
 
-type Allocation = { trade: IncomeTrade; quantity: number };
+type Allocation = { trade: Ledger52T0IncomeTrade; quantity: number };
 
 /** 与逐笔报价一致：指定来源优先，历史记录才按同档位FIFO回退。 */
-function buildOpeningClosingAllocations(trades: IncomeTrade[]) {
+function buildOpeningClosingAllocations(trades: Ledger52T0IncomeTrade[]) {
   const queues = new Map<string, Array<{ id: string; remainingQuantity: number }>>();
   const allocations = new Map<string, Allocation[]>();
   for (const trade of sortByTime(trades.filter((item) => item.symbol === "ETH" && !item.isPending))) {
@@ -257,7 +303,7 @@ function buildOpeningClosingAllocations(trades: IncomeTrade[]) {
   return allocations;
 }
 
-function linkedNetPnl(opening: IncomeTrade, closing: IncomeTrade, quantity: number) {
+function linkedNetPnl(opening: Ledger52T0IncomeTrade, closing: Ledger52T0IncomeTrade, quantity: number) {
   if (opening.instrumentType === "option" && closing.instrumentType === "option"
     && opening.optionPremium !== undefined && opening.optionPremiumCurrency
     && opening.optionDirection && closing.optionSettlementPrice !== undefined && closing.optionDeliveryPrice !== undefined) {
@@ -280,38 +326,102 @@ function linkedNetPnl(opening: IncomeTrade, closing: IncomeTrade, quantity: numb
   return gross - openingFee - closingFee;
 }
 
-function regularDistributable(sourceNetPnl: number, reduction?: IncomeReduction) {
+type FrozenSnapshotOpeningLink = {
+  opening: Ledger52T0IncomeTrade;
+  snapshots: Ledger52T0IncomeSnapshot[];
+  matchedQuantity: number;
+};
+
+/**
+ * 冻结分佣快照已经记录了某笔平仓实际对应的开仓。只有快照完整覆盖平仓数量时才采用，
+ * 以避免旧记录的 createdAt / filledAt 写入时序不一致时，普通 FIFO 错配或漏配来源。
+ */
+function getFrozenSnapshotOpeningLinks(input: {
+  trades: Ledger52T0IncomeTrade[];
+  closing: Ledger52T0IncomeTrade;
+  snapshots: Ledger52T0IncomeSnapshot[];
+}) {
+  const byOpening = new Map<string, Ledger52T0IncomeSnapshot[]>();
+  for (const snapshot of input.snapshots) {
+    if (snapshot.entryId !== input.closing.id) continue;
+    const rows = byOpening.get(snapshot.openingEntryId) ?? [];
+    rows.push(snapshot);
+    byOpening.set(snapshot.openingEntryId, rows);
+  }
+  if (byOpening.size === 0) return null;
+  const openingById = new Map(input.trades
+    .filter((trade) => actionInfo[trade.action].opening && !trade.isPending)
+    .map((trade) => [trade.id, trade]));
+  const links: FrozenSnapshotOpeningLink[] = [];
+  let totalMatchedQuantity = 0;
+  for (const [openingEntryId, snapshots] of byOpening) {
+    const opening = openingById.get(openingEntryId);
+    const matchedQuantity = Math.max(...snapshots.map((snapshot) => Number(snapshot.matchedQuantity || 0)));
+    if (!opening || !Number.isFinite(matchedQuantity) || matchedQuantity <= 0) return null;
+    links.push({ opening, snapshots, matchedQuantity });
+    totalMatchedQuantity += matchedQuantity;
+  }
+  return Math.abs(totalMatchedQuantity - input.closing.quantity) <= 0.000001 ? links : null;
+}
+
+function buildFrozenSnapshotDetails(trades: Ledger52T0IncomeTrade[], snapshots: Ledger52T0IncomeSnapshot[]) {
+  const details = new Map<string, RecentDetail>();
+  for (const closing of trades) {
+    if (closing.isPending || actionInfo[closing.action].opening) continue;
+    const links = getFrozenSnapshotOpeningLinks({ trades, closing, snapshots });
+    if (!links) continue;
+    const netPnl = links.reduce((total, link) => total + linkedNetPnl(link.opening, closing, link.matchedQuantity), 0);
+    if (Number.isFinite(netPnl)) details.set(closing.id, { netPnl });
+  }
+  return details;
+}
+
+function regularDistributable(sourceNetPnl: number, reduction?: Ledger52T0IncomeReduction) {
   if (!Number.isFinite(sourceNetPnl) || sourceNetPnl <= 0) return sourceNetPnl;
   const amount = Number(reduction?.amount || 0);
   return Number.isFinite(amount) && amount > 0 ? Math.max(0, sourceNetPnl - Math.min(sourceNetPnl, amount)) : sourceNetPnl;
 }
 
 function buildProfitDistribution(input: {
-  trades: IncomeTrade[];
-  snapshots: IncomeSnapshot[];
-  closing: IncomeTrade;
+  trades: Ledger52T0IncomeTrade[];
+  snapshots: Ledger52T0IncomeSnapshot[];
+  closing: Ledger52T0IncomeTrade;
   displayedNetPnl: number;
-  reductions: ReadonlyMap<string, IncomeReduction>;
+  reductions: ReadonlyMap<string, Ledger52T0IncomeReduction>;
   allocations: ReadonlyMap<string, Allocation[]>;
 }) {
   const closingSnapshots = input.snapshots.filter((snapshot) => snapshot.entryId === input.closing.id);
   if (closingSnapshots.length === 0 || !Number.isFinite(input.displayedNetPnl)) return [] as Array<{ userId: number; amount: number }>;
-  const byOpening = new Map<string, IncomeSnapshot[]>();
+  const byOpening = new Map<string, Ledger52T0IncomeSnapshot[]>();
   for (const snapshot of closingSnapshots) {
     const rows = byOpening.get(snapshot.openingEntryId) ?? [];
     rows.push(snapshot);
     byOpening.set(snapshot.openingEntryId, rows);
   }
   const totals = new Map<number, number>();
-  for (const opening of input.trades) {
-    if (!actionInfo[opening.action].opening) continue;
-    const snapshots = byOpening.get(opening.id);
-    if (!snapshots?.length) continue;
-    const rows = (input.allocations.get(opening.id) ?? []).filter((item) => item.trade.id === input.closing.id);
-    for (const row of rows) {
-      const pnl = linkedNetPnl(opening, row.trade, row.quantity);
-      for (const snapshot of snapshots) {
+  const frozenLinks = getFrozenSnapshotOpeningLinks({
+    trades: input.trades,
+    closing: input.closing,
+    snapshots: closingSnapshots,
+  });
+  if (frozenLinks) {
+    for (const link of frozenLinks) {
+      const pnl = linkedNetPnl(link.opening, input.closing, link.matchedQuantity);
+      for (const snapshot of link.snapshots) {
         totals.set(snapshot.beneficiaryUserId, (totals.get(snapshot.beneficiaryUserId) || 0) + pnl * (snapshot.percentage / 100));
+      }
+    }
+  } else {
+    for (const opening of input.trades) {
+      if (!actionInfo[opening.action].opening) continue;
+      const snapshots = byOpening.get(opening.id);
+      if (!snapshots?.length) continue;
+      const rows = (input.allocations.get(opening.id) ?? []).filter((item) => item.trade.id === input.closing.id);
+      for (const row of rows) {
+        const pnl = linkedNetPnl(opening, row.trade, row.quantity);
+        for (const snapshot of snapshots) {
+          totals.set(snapshot.beneficiaryUserId, (totals.get(snapshot.beneficiaryUserId) || 0) + pnl * (snapshot.percentage / 100));
+        }
       }
     }
   }
@@ -329,43 +439,94 @@ function buildProfitDistribution(input: {
   return Array.from(totals.entries()).map(([userId, amount]) => ({ userId, amount: amount * scale }));
 }
 
-function calculateIncomeByUser(input: {
-  trades: IncomeTrade[];
-  snapshots: IncomeSnapshot[];
-  transfers: IncomeTransfer[];
-  reductions: IncomeReduction[];
-}) {
-  const income = new Map<number, TeamIncomeParts>();
-  const add = (userId: number, field: keyof TeamIncomeParts, amount: number) => {
+type Ledger52T0IncomeCalculationInput = {
+  trades: Ledger52T0IncomeTrade[];
+  snapshots: Ledger52T0IncomeSnapshot[];
+  transfers: Ledger52T0IncomeTransfer[];
+  reductions: Ledger52T0IncomeReduction[];
+  includeClosing?: (closing: Ledger52T0IncomeTrade) => boolean;
+};
+
+/**
+ * 统一的已实现收入归属引擎（逐笔视图）。周结算可通过 includeClosing 只计入指定时间窗的平仓，
+ * 但仍传入完整历史开仓序列，使 FIFO、分佣快照和共享扣减不因截断历史而漂移。
+ */
+export function calculateLedger52T0IncomeByClosing(input: Ledger52T0IncomeCalculationInput) {
+  const reductions = new Map(input.reductions.map((item) => [item.closingEntryId, item]));
+  const details = buildRecentDetails(input.trades, input.snapshots);
+  const openingClosingAllocations = buildOpeningClosingAllocations(input.trades);
+  const transfersByClosing = new Map<string, Ledger52T0IncomeTransfer[]>();
+  for (const transfer of input.transfers) {
+    const rows = transfersByClosing.get(transfer.closingEntryId) ?? [];
+    rows.push(transfer);
+    transfersByClosing.set(transfer.closingEntryId, rows);
+  }
+  const result: Ledger52T0ClosingIncomeAllocation[] = [];
+  for (const closing of input.trades) {
+    if (closing.isPending || actionInfo[closing.action].opening) continue;
+    if (input.includeClosing && !input.includeClosing(closing)) continue;
+    const calculatedNetPnl = details.get(closing.id)?.netPnl;
+    const netPnl = typeof calculatedNetPnl === "number" && Number.isFinite(calculatedNetPnl) ? calculatedNetPnl : null;
+    const reduction = reductions.get(closing.id);
+    const allocationLines: Ledger52T0IncomeAllocationLine[] = [];
+    let regularDistributableAmount: number | null = null;
+    if (netPnl !== null) {
+      regularDistributableAmount = regularDistributable(netPnl, reduction);
+      const distributions = buildProfitDistribution({
+        trades: input.trades,
+        snapshots: input.snapshots,
+        closing,
+        displayedNetPnl: netPnl,
+        reductions,
+        allocations: openingClosingAllocations,
+      });
+      if (distributions.length === 0) {
+        allocationLines.push({ userId: closing.relatedUserId, kind: "order", amount: regularDistributableAmount });
+      } else {
+        for (const distribution of distributions) {
+          allocationLines.push({
+            userId: distribution.userId,
+            kind: distribution.userId === closing.relatedUserId ? "order" : "commission",
+            amount: distribution.amount,
+          });
+        }
+      }
+    }
+    const sharedTransfers = transfersByClosing.get(closing.id) ?? [];
+    for (const transfer of sharedTransfers) {
+      allocationLines.push({ userId: transfer.recipientUserId, kind: "shared", amount: transfer.amount });
+    }
+    const allocatedTotal = allocationLines.reduce((total, item) => total + item.amount, 0);
+    const sharedTransferTotal = sharedTransfers.reduce((total, item) => total + item.amount, 0);
+    result.push({
+      closing,
+      netPnl,
+      regularDistributable: regularDistributableAmount,
+      recordedSharedReduction: Number(reduction?.amount || 0),
+      appliedSharedReduction: netPnl === null || regularDistributableAmount === null ? null : netPnl - regularDistributableAmount,
+      sharedTransferTotal,
+      allocations: allocationLines,
+      allocatedTotal,
+      variance: netPnl === null ? null : netPnl - allocatedTotal,
+    });
+  };
+  return result;
+}
+
+/** 统一的按用户已实现收益聚合，复用逐笔结果以保证与账户对账完全同源。 */
+export function calculateLedger52T0IncomeByUser(input: Ledger52T0IncomeCalculationInput) {
+  const income = new Map<number, Ledger52T0IncomeParts>();
+  const add = (userId: number, field: keyof Ledger52T0IncomeParts, amount: number) => {
     if (!Number.isInteger(userId) || userId <= 0 || !Number.isFinite(amount)) return;
     const current = income.get(userId) ?? { orderIncome: 0, commissionIncome: 0, sharedIncome: 0 };
     current[field] += amount;
     income.set(userId, current);
   };
-  const reductions = new Map(input.reductions.map((item) => [item.closingEntryId, item]));
-  const details = buildRecentDetails(input.trades);
-  const allocations = buildOpeningClosingAllocations(input.trades);
-  for (const closing of input.trades) {
-    if (closing.isPending || actionInfo[closing.action].opening) continue;
-    const netPnl = details.get(closing.id)?.netPnl;
-    if (!Number.isFinite(netPnl)) continue;
-    const distributions = buildProfitDistribution({
-      trades: input.trades,
-      snapshots: input.snapshots,
-      closing,
-      displayedNetPnl: netPnl,
-      reductions,
-      allocations,
-    });
-    if (distributions.length === 0) {
-      add(closing.relatedUserId, "orderIncome", regularDistributable(netPnl, reductions.get(closing.id)));
-      continue;
-    }
-    for (const distribution of distributions) {
-      add(distribution.userId, distribution.userId === closing.relatedUserId ? "orderIncome" : "commissionIncome", distribution.amount);
+  for (const closing of calculateLedger52T0IncomeByClosing(input)) {
+    for (const allocation of closing.allocations) {
+      add(allocation.userId, `${allocation.kind}Income` as keyof Ledger52T0IncomeParts, allocation.amount);
     }
   }
-  for (const transfer of input.transfers) add(transfer.recipientUserId, "sharedIncome", transfer.amount);
   return income;
 }
 
@@ -444,6 +605,15 @@ export async function getLedger52T0TeamOverview(input: {
   const nonOptionSnapshots = ((journal as any).profitShareSnapshots ?? []).filter((snapshot: any) => nonOptionEntryIds.has(String(snapshot?.openingEntryId)));
   const nonOptionTransfers = transfers.filter((transfer: any) => nonOptionEntryIds.has(String(transfer?.closingEntryId)) && Math.abs(toNumber(transfer?.amount)) > 0.000001);
   const nonOptionReductions = ((journal as any).sharedIncomeReductions ?? []).filter((row: any) => nonOptionEntryIds.has(String(row?.closingEntryId)));
+  // 成员卡不展示来源类型：只在充值与非期权订单两个时间点中取较早的自然日。
+  const firstActivityOnByUser = new Map<number, string>();
+  for (const entry of nonOptionEntries) {
+    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(entry?.relatedUserId), entry?.createdAt);
+  }
+  for (const flow of cashFlows) {
+    if (String(flow?.direction) !== "deposit" || Math.abs(toNumber(flow?.amount)) <= 0.000001) continue;
+    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(flow?.relatedUserId), flow?.occurredOn);
+  }
   // 最低准入：本人有普通T+0订单、收到普通订单分佣/共享，或有真实入金/提现流水。只有推荐关系不够。
   const t0ActivityUserIds = new Set<number>();
   for (const entry of nonOptionEntries) {
@@ -487,20 +657,20 @@ export async function getLedger52T0TeamOverview(input: {
   const members = Array.from(visibleMembersById.values());
   const memberIds = new Set(members.map((member) => member.userId));
   const incomeComplete = entries.length < ENTRY_PAGE_LIMIT && transfers.length < SHARED_TRANSFER_PAGE_LIMIT;
-  const trades: IncomeTrade[] = nonOptionEntries.map((entry: any) => ({
+  const trades: Ledger52T0IncomeTrade[] = nonOptionEntries.map((entry: any) => ({
     id: String(entry.id), accountId: String(entry.accountId), relatedUserId: toNumber(entry.relatedUserId), relatedFundId: entry.relatedFundId ? String(entry.relatedFundId) : undefined,
     action: String(entry.action) as Action, symbol: String(entry.symbol || "ETH"), instrumentType: entry.instrumentType,
     optionDirection: entry.optionDirection, optionPremium: entry.optionPremium === undefined ? undefined : toNumber(entry.optionPremium), optionPremiumCurrency: entry.optionPremiumCurrency,
     optionSettlementPrice: entry.optionSettlementPrice === undefined ? undefined : toNumber(entry.optionSettlementPrice), optionDeliveryPrice: entry.optionDeliveryPrice === undefined ? undefined : toNumber(entry.optionDeliveryPrice),
     quantity: toNumber(entry.quantity), price: toNumber(entry.price), fee: toNumber(entry.fee), targetPrice: entry.targetPrice === undefined ? undefined : toNumber(entry.targetPrice),
-    targetOpeningEntryId: entry.targetOpeningEntryId ? String(entry.targetOpeningEntryId) : undefined, createdAt: String(entry.createdAt || ""), isPending: Boolean(entry.isPending),
+    targetOpeningEntryId: entry.targetOpeningEntryId ? String(entry.targetOpeningEntryId) : undefined, createdAt: String(entry.createdAt || ""), filledAt: entry.filledAt ? String(entry.filledAt) : undefined, isPending: Boolean(entry.isPending),
   })).filter((trade) => Boolean(actionInfo[trade.action]) && trade.relatedUserId > 0);
-  const incomeByUser = incomeComplete ? calculateIncomeByUser({
+  const incomeByUser = incomeComplete ? calculateLedger52T0IncomeByUser({
     trades,
     snapshots: nonOptionSnapshots,
     transfers: nonOptionTransfers.map((transfer: any) => ({ closingEntryId: String(transfer.closingEntryId), recipientUserId: toNumber(transfer.recipientUserId), amount: toNumber(transfer.amount) })),
     reductions: nonOptionReductions.map((row: any) => ({ closingEntryId: String(row.closingEntryId), amount: toNumber(row.amount), sourceNetPnl: toNumber(row.sourceNetPnl) })),
-  }) : new Map<number, TeamIncomeParts>();
+  }) : new Map<number, Ledger52T0IncomeParts>();
   const deposits = new Map<number, number>();
   const withdrawals = new Map<number, number>();
   const investmentCashFlowsByUser = new Map<number, TeamXirrCashFlow[]>();
@@ -531,6 +701,7 @@ export async function getLedger52T0TeamOverview(input: {
     ]) : null;
     return {
       ...member,
+      firstActivityOn: firstActivityOnByUser.get(member.userId) || null,
       cumulativeDepositAmount: depositAmount,
       currentCumulativeIncome: incomeComplete ? currentCumulativeIncome : null,
       cumulativeWithdrawalAmount: withdrawalAmount,

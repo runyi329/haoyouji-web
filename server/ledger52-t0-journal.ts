@@ -2016,13 +2016,16 @@ async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
  */
 export async function getLedger52T0Journal(
   scope: T0JournalReadScope,
-  options: { skipTableEnsure?: boolean } = {},
+  options: { skipTableEnsure?: boolean; fullRead?: boolean } = {},
 ) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   if (!options.skipTableEnsure) await ensureLedger52T0JournalTables(conn);
 
   const isAdminScope = scope.mode === "admin";
+  // 常规报价页保留原有限流；周结算等后台只读归集显式请求全量历史，避免 FIFO 上下文被截断。
+  const entryLimitClause = options.fullRead ? "" : "LIMIT 2000";
+  const sharedIncomeTransferLimitClause = options.fullRead ? "" : "LIMIT 200";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
   // 普通成员只可读取本人作为订单所属人、本人被明确写入收益分配快照的订单，
@@ -2101,7 +2104,7 @@ export async function getLedger52T0Journal(
           AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
         WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : memberVisibilitySql}
         ORDER BY e.trade_time ASC, e.id ASC
-        LIMIT 2000`,
+        ${entryLimitClause}`,
       isAdminScope
         ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
         : [LEDGER_52_T0_JOURNAL_ID, ...memberVisibilityParams],
@@ -2228,7 +2231,7 @@ export async function getLedger52T0Journal(
        LEFT JOIN users recipient_user ON recipient_user.id = transfer.recipient_user_id
       WHERE transfer.ledger_id = ?${isAdminScope ? ' AND transfer.user_id = ?' : ' AND transfer.recipient_user_id = ?'}
       ORDER BY transfer.created_at DESC, transfer.id DESC
-      LIMIT 200`,
+      ${sharedIncomeTransferLimitClause}`,
     isAdminScope
       ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
       : [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
@@ -2295,7 +2298,7 @@ export async function getLedger52T0Journal(
     : [[]];
   const [payoutCashFlowResult] = isAdminScope
     ? await conn.execute(
-      `SELECT related_user_id, DATE_FORMAT(occurred_on, '%Y-%m-%d') AS occurred_on, direction, amount
+      `SELECT id, related_user_id, DATE_FORMAT(occurred_on, '%Y-%m-%d') AS occurred_on, direction, amount, created_at
          FROM ledger52_t0_journal_payout_logs
         WHERE ledger_id = ? AND user_id = ?
         ORDER BY occurred_on ASC, id ASC`,
@@ -2377,10 +2380,12 @@ export async function getLedger52T0Journal(
       relatedUsername: row.related_username ? String(row.related_username) : undefined,
     })),
     payoutCashFlows: asRows(payoutCashFlowResult).map((row) => ({
+      id: String(row.id),
       relatedUserId: toNumber(row.related_user_id),
       occurredOn: String(row.occurred_on || "").slice(0, 10),
       direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
       amount: toNumber(row.amount),
+      createdAt: isoTime(row.created_at),
     })),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)

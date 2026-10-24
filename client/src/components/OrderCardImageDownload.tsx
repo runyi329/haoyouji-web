@@ -21,6 +21,8 @@ interface OrderCardImageDownloadProps {
   captureFullContent?: boolean;
   /** 长内容截图额外保留的横向安全留白；默认16px，传0可实现四边等宽。 */
   fullContentHorizontalBleed?: number;
+  /** 长内容截图底部额外安全留白；默认16px，传0可与外侧白边严格等宽。 */
+  fullContentBottomPadding?: number;
   exportBackground?: string;
   /** 卡片页眉使用无圆形容器的纯下载箭头；其他入口保持默认样式。 */
   variant?: "default" | "bare";
@@ -150,6 +152,7 @@ function createExactSnapshotContainer(
   fullContentHorizontalBleed: number,
   exportBackground?: string,
   watermarkOpacity = 0.07,
+  fullContentBottomPadding?: number,
 ) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
@@ -160,6 +163,9 @@ function createExactSnapshotContainer(
     : 16;
   const horizontalPadding = outerPadding + (measureAfterAssets ? resolvedHorizontalBleed : 0);
   const verticalPadding = outerPadding;
+  const resolvedBottomPadding = measureAfterAssets
+    ? (Number.isFinite(fullContentBottomPadding) ? Math.max(0, Number(fullContentBottomPadding)) : 16)
+    : 0;
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
   if (exportBackground) {
@@ -222,7 +228,7 @@ function createExactSnapshotContainer(
       clonedTarget.scrollHeight,
       renderedRect.height,
       renderedContentBottom,
-    ) + (measureAfterAssets ? 16 : 0));
+    ) + resolvedBottomPadding);
 
     if (measureAfterAssets) {
       // 全内容模式固定为已测得的完整高度，但不裁切溢出内容；
@@ -335,6 +341,7 @@ export function OrderCardImageDownload({
   outerPadding = 16,
   captureFullContent = false,
   fullContentHorizontalBleed = 16,
+  fullContentBottomPadding,
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
@@ -375,7 +382,7 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, fullContentHorizontalBleed, exportBackground, watermarkOpacity);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, fullContentHorizontalBleed, exportBackground, watermarkOpacity, fullContentBottomPadding);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
       const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();

@@ -15,6 +15,7 @@ import { startPriceScanner } from "../price-scanner";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
 import { startLedger52T0ExpiredOptionScanner, startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
+import { startLedger52T0WeeklySettlementScheduler } from "../ledger52-t0-weekly-settlement";
 import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
@@ -807,6 +808,9 @@ async function startServer() {
 
     // T+0 ETH期权在到期日北京时间16:00后，仅以Deribit官方交割记录自动结算并归档。
     startLedger52T0ExpiredOptionScanner();
+
+    // T+0 周结算按北京时间周一 00:05 冻结上一完整周；只追加不可变周报，绝不改写订单或流水。
+    startLedger52T0WeeklySettlementScheduler();
 
     // 52号手工股票、37号股票标签与其股票保证金在开盘时段每5分钟更新；15:05统一固化盘尾价。
     startManualStockCloseScheduler();

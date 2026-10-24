@@ -11721,6 +11721,187 @@ ${klinesSummary}
         return await journal.getLedger52T0Journal(scope);
       }),
 
+    // 周结算中心：成员只能读取本人实时周结算及已冻结周报；管理员全局读取或预览成员时沿用T+0既有边界。
+    // 该路由只读计算与读取不可变周报，绝不触发结算写入、订单操作或资金流水操作。
+    t0GetWeeklySettlementCenter: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        previewUserId: z.number().int().positive().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const weeklySettlement = await import('./ledger52-t0-weekly-settlement');
+        let journalOwnerUserId = 0;
+        let targetUserId: number | undefined;
+        if (input.previewUserId) {
+          if (ctx.isViewingAs) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换用户预览' });
+          }
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可预览成员周结算' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, input.previewUserId);
+          if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员查看周结算' });
+          }
+          journalOwnerUserId = managerScope.journalOwnerUserId;
+          targetUserId = input.previewUserId;
+        } else if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: realUser.id,
+            role: realUser.role,
+            isViewingAs: false,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看周结算' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, ctx.user.id);
+          if (!targetMembership) throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
+          journalOwnerUserId = managerScope.journalOwnerUserId;
+          targetUserId = ctx.user.id;
+        } else {
+          const scope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (scope.mode === 'admin') {
+            journalOwnerUserId = scope.journalOwnerUserId;
+          } else {
+            journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
+            targetUserId = scope.relatedUserId;
+          }
+        }
+        return await weeklySettlement.getLedger52T0WeeklySettlementCenter({ journalOwnerUserId, targetUserId });
+      }),
+
+    // 管理员全局结算的账户—用户对账桥：按需只读，成员与登录代入视角不暴露账户及其他用户去向。
+    t0GetWeeklySettlementAccountReconciliation: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可读取全局账户结算对账' });
+        }
+        const journal = await import('./ledger52-t0-journal');
+        const weeklySettlement = await import('./ledger52-t0-weekly-settlement');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可读取账户结算对账' });
+        }
+        return await weeklySettlement.getLedger52T0WeeklySettlementAccountReconciliation({
+          journalOwnerUserId: scope.journalOwnerUserId,
+        });
+      }),
+
+    // 管理员追加式结算调整单：不改订单、分佣快照、共享流水或冻结周报；热预览和开发旁路一律拒绝写入。
+    t0CreateWeeklySettlementAdjustment: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        weekStartBjt: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '结算周格式应为 YYYY-MM-DD'),
+        type: z.enum(['source_correction', 'allocation_transfer', 'hold']),
+        accountId: z.string().trim().regex(/^\d+$/, '账户无效').optional(),
+        sourceClosingEntryId: z.string().trim().regex(/^\d+$/, '来源平仓单无效').optional(),
+        sourceNetPnlDelta: z.string().trim().regex(/^-?(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/, '补正金额最多两位小数'),
+        allocations: z.array(z.object({
+          userId: z.number().int().positive(),
+          amount: z.string().trim().regex(/^-?(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/, '用户调整金额最多两位小数'),
+        })).max(50),
+        reason: z.string().trim().min(2, '请填写调整原因').max(500),
+        clientRequestId: z.string().trim().regex(/^[A-Za-z0-9_-]{12,64}$/, '调整请求标识无效'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可查看结算调整流程，但不会保存任何调整记录' });
+        }
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可保存全局结算调整' });
+        }
+        const journal = await import('./ledger52-t0-journal');
+        const adjustments = await import('./ledger52-t0-settlement-adjustments');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可保存结算调整' });
+        }
+        return await adjustments.createLedger52T0SettlementAdjustment({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          actorUserId: ctx.user.id,
+          weekStartBjt: input.weekStartBjt,
+          type: input.type,
+          accountId: input.accountId,
+          sourceClosingEntryId: input.sourceClosingEntryId,
+          sourceNetPnlDelta: input.sourceNetPnlDelta,
+          allocations: input.allocations,
+          reason: input.reason,
+          clientRequestId: input.clientRequestId,
+        });
+      }),
+
+    // 团队总览的轻量授权探测：只验证是否显示入口，不读取团队成员、订单或资金汇总，避免拖慢总收益首屏。
+    t0CanViewTeamOverview: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        previewUserId: z.number().int().positive().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const teamOverview = await import('./ledger52-t0-team-overview');
+        let rootUserId = 0;
+        if (input.previewUserId) {
+          if (ctx.isViewingAs) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换团队预览用户' });
+          }
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可预览成员团队总览' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, input.previewUserId);
+          if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员查看团队总览' });
+          }
+          rootUserId = input.previewUserId;
+        } else if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+          const realScope = await journal.resolveLedger52T0JournalReadScope({
+            id: realUser.id,
+            role: realUser.role,
+            isViewingAs: false,
+          });
+          if (realScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看团队总览' });
+          }
+          rootUserId = ctx.user.id;
+        } else {
+          const scope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (scope.mode !== 'member') return { enabled: false };
+          rootUserId = scope.relatedUserId;
+        }
+        return { enabled: teamOverview.LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(rootUserId) };
+      }),
+
     // 团队总览是单独授予的成员财务汇总权限；推荐关系本身不自动扩大任何订单读取范围。
     // 当前仅允许产品配置的团队负责人查看自己的递归下属汇总，管理员可用用户预览核对同一结果。
     t0GetTeamOverview: protectedProcedure
