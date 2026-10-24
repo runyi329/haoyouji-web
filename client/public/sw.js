@@ -1,7 +1,7 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
 // 热预览必须立刻拿到最新界面模块；版本变化会让已打开的手机页面主动更新工作线程。
-const CACHE_VERSION = 'v2.3.3';
+const CACHE_VERSION = 'v2.3.4';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 const IS_MANUS_PREVIEW = /\.manus\.computer$/i.test(self.location.hostname);
 

@@ -77,6 +77,36 @@ const EQUITY_DISCOUNT_RATES: Record<number, number> = {
   9: 0.1333,   // 第9档：13.33%
 };
 
+// 所有持仓汇总、分组与详情必须复用同一口径，避免已撤单、模拟单或委卖单被误计入。
+const isSimulatedOrder = (order: any) => order?.isSimulated === true || Number(order?.isSimulated) === 1;
+
+const getOrderEquityDiscountRate = (order: any): number => {
+  if (order?.tierMode === 'linear') {
+    const buyPrice = parseFloat(order.limitPrice) || 0;
+    const lowPrice = parseFloat(order.allTimeLowPrice) || buyPrice;
+    return buyPrice > 0 ? Math.max(0, 1 - Math.max(0, (buyPrice - lowPrice) / buyPrice)) : 1.0;
+  }
+  return EQUITY_DISCOUNT_RATES[order?.equityTier || 0] ?? 1.0;
+};
+
+const isActualHoldingOrder = (order: any): boolean =>
+  !isSimulatedOrder(order)
+  && order?.status === 'completed'
+  && order?.sellStatus !== 'sold'
+  && order?.sellStatus !== 'selling';
+
+const matchesOrderStatusFilter = (order: any, statusFilter: string): boolean => {
+  const isGift = order?.isGift === true || order?.isGift === 1;
+  if (statusFilter === 'cancelled') return order?.status === 'cancelled';
+  if (order?.status === 'cancelled') return false;
+  if (statusFilter === 'all') return true;
+  if (statusFilter === 'pending') return order?.status === 'pending' && !isGift;
+  if (statusFilter === 'selling') return order?.sellStatus === 'selling';
+  if (statusFilter === 'sold') return order?.sellStatus === 'sold';
+  if (statusFilter === 'holding') return isActualHoldingOrder(order);
+  return true;
+};
+
 interface EditState {
   orderId: number;
   limitPrice: string;      // 买入委托价
@@ -543,23 +573,9 @@ export default function AfOrderManage() {
   //   委卖中  = sellStatus=selling（优先级高于持仓中）
   //   已卖出  = sellStatus=sold
   //   持仓中  = completed 且 sellStatus 不是 sold/selling（即 null 或 sell_cancelled）
-  const filteredOrders = (orders as any[] | undefined)?.filter((order: any) => {
-    const isGift = order.isGift === true || order.isGift === 1;
-    // 已撤销订单在所有Tab中均不显示
-    if (statusFilter === 'cancelled') return order.status === 'cancelled';
-    if (order.status === 'cancelled') return false;
-    // 赠单按自身状态独立过滤，不再嵌套在主单下
-    // 全部Tab不含已撤单（已撤单单独一个Tab）
-    if (statusFilter === 'all') return true;
-    if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'selling') return order.sellStatus === 'selling';
-    if (statusFilter === 'sold') return order.sellStatus === 'sold';
-    if (statusFilter === 'holding') {
-      // 持仓中：completed 且 sellStatus 不是 sold 也不是 selling（含正单+赠单）
-      return order.status === 'completed' && order.sellStatus !== 'sold' && order.sellStatus !== 'selling';
-    }
-    return true;
-  }) ?? [];
+  const filteredOrders = (orders as any[] | undefined)?.filter((order: any) =>
+    matchesOrderStatusFilter(order, statusFilter)
+  ) ?? [];
 
   // 搜索过滤（支持订单号、币种、用户名、昵称）
   const searchedOrders = searchQuery.trim()
@@ -1490,10 +1506,8 @@ return (
           <div className="px-4 pb-5 pt-3 space-y-2">
             {/* 持仓中各币种数量统计 */}
             {(() => {
-              // 持仓中币种：只统计已成交且未卖出的（status=completed，sellStatus != sold）
-              const holdingOrders = (orders as any[] || []).filter(
-                (o: any) => !(o as any).isSimulated && o.status === 'completed' && o.sellStatus !== 'sold'
-              );
+              // 持仓中币种：只统计真实的已成交、未卖出且未委卖订单。
+              const holdingOrders = (orders as any[] || []).filter(isActualHoldingOrder);
               if (holdingOrders.length === 0) return null;
               const COIN_ORDER_S = ['ETH', 'BTC', 'SOL'];
               const COIN_DECIMALS_S: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
@@ -1510,15 +1524,7 @@ return (
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
                 rawQty[o.coin] = (rawQty[o.coin] || 0) + qty;
-                let rate: number;
-                if (o.tierMode === 'linear') {
-                  const buyPrice = parseFloat(o.limitPrice) || 0;
-                  const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
-                  const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
-                  rate = Math.max(0, 1 - dropPct);
-                } else {
-                  rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
-                }
+                const rate = getOrderEquityDiscountRate(o);
                 effQty[o.coin] = (effQty[o.coin] || 0) + qty * rate;
                 // 加权均价：使用 limitPrice（买入挂单价）
                 const price = parseFloat(o.limitPrice) || 0;
@@ -1542,7 +1548,7 @@ return (
                   // 嵌套赠单只统计笔数（币数已在顶层独立赠单行中统计，不重复计算）
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
-                    if (g.sellStatus === 'sold') return;
+                    if (!isActualHoldingOrder(g)) return;
                     if (g.coin) giftCnt[g.coin] = (giftCnt[g.coin] || 0) + 1;
                   });
                 }
@@ -1713,9 +1719,9 @@ return (
       {/* 持仓币种档位详情弹窗 */}
       {coinDetailPopup && (() => {
         const targetCoin = coinDetailPopup;
-        // 取所有未卖出的 completed 订单（正单+独立赠单）
+        // 取所有真实持仓订单（正单+独立赠单）。
         const holdingOrders = (orders as any[] || []).filter(
-          (o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.coin === targetCoin
+          (o: any) => isActualHoldingOrder(o) && o.coin === targetCoin
         );
         // 按 limitPrice 档位分组，每个档位内再按用户分组
         // 注：顶层 orders 已包含独立赠单行（isGift=true），不需要再展开嵌套 giftOrders
@@ -1731,18 +1737,13 @@ return (
           const tier = tierMap[key];
           const qty = parseFloat(o.quantity) || 0;
           const isLinear = o.tierMode === 'linear';
-          let rate: number;
           let eqTier: number;
           if (isLinear) {
-            const buyPrice = parseFloat(o.limitPrice) || 0;
-            const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
-            const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
-            rate = Math.max(0, 1 - dropPct);
             eqTier = 0;
           } else {
             eqTier = o.equityTier || 0;
-            rate = EQUITY_DISCOUNT_RATES[eqTier] ?? 1.0;
           }
+          const rate = getOrderEquityDiscountRate(o);
           tier.rawQty += qty;
           tier.effQty += qty * rate;
           tier.orderCount += 1;
@@ -1859,7 +1860,7 @@ return (
             {([
               { key: 'all' as const, label: `全部(${(orders as any[])?.filter((o: any) => o.status !== 'cancelled').length ?? 0})` },
               { key: 'pending' as const, label: `委买(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0})` },
-              { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0})` },
+              { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter(isActualHoldingOrder).length ?? 0})` },
               { key: 'selling' as const, label: `委卖(${(orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0})` },
               { key: 'sold' as const, label: `卖出(${(orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0})` },
               { key: 'cancelled' as const, label: `撤单(${(orders as any[])?.filter((o: any) => o.status === 'cancelled').length ?? 0})` },
@@ -1930,9 +1931,9 @@ return (
                 const isOpen = expandedPersons[group.uid] ?? false;
                 const activeOrders = group.orders.filter((o: any) => o.status !== 'cancelled');
                 const normalCount = activeOrders.filter((o: any) => !(o.isGift === true || o.isGift === 1)).length;
-                const nestedGiftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
                 const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
-                const giftCount = directGiftCount + nestedGiftCount;
+                // 赠单已作为顶层订单返回，不能再次从正单的 giftOrders 嵌套汇总。
+                const giftCount = directGiftCount;
                 const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 // 计算每人的持仓币数量（排除已卖出）
                 const personCoinQty: Record<string, number> = {};
@@ -1941,35 +1942,9 @@ return (
                   if (o.sellStatus !== 'sold' && o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     personCoinQty[o.coin] = (personCoinQty[o.coin] || 0) + qty;
-                    let rate: number;
-                    if (o.tierMode === 'linear') {
-                      const buyPrice = parseFloat(o.limitPrice) || 0;
-                      const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
-                      const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
-                      rate = Math.max(0, 1 - dropPct);
-                    } else {
-                      rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
-                    }
+                    const rate = getOrderEquityDiscountRate(o);
                     personCoinEff[o.coin] = (personCoinEff[o.coin] || 0) + qty * rate;
                   }
-                  const gifts: any[] = (o.giftOrders as any[]) || [];
-                  gifts.forEach((g: any) => {
-                    if (g.sellStatus === 'sold') return;
-                    if (g.coin) {
-                      const gQty = parseFloat(g.quantity) || 0;
-                      personCoinQty[g.coin] = (personCoinQty[g.coin] || 0) + gQty;
-                      let gRate: number;
-                      if (g.tierMode === 'linear') {
-                        const gBuyPrice = parseFloat(g.limitPrice) || 0;
-                        const gLowPrice = parseFloat(g.allTimeLowPrice) || gBuyPrice;
-                        const gDropPct = gBuyPrice > 0 ? Math.max(0, (gBuyPrice - gLowPrice) / gBuyPrice) : 0;
-                        gRate = Math.max(0, 1 - gDropPct);
-                      } else {
-                        gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
-                      }
-                      personCoinEff[g.coin] = (personCoinEff[g.coin] || 0) + gQty * gRate;
-                    }
-                  });
                 });
                 const COIN_ORDER_P = ['ETH', 'BTC', 'SOL'];
                 const COIN_SHORT: Record<string, string> = { ETH: 'E', BTC: 'B', SOL: 'S' };
@@ -2108,40 +2083,26 @@ return (
               });
               return coinGroups.map(([coin, coinOrders]) => {
                 const isOpen = expandedPersons[`coin_${coin}`] ?? false;
-                // 计算总币数（正单+嵌套赠单+孤儿赠单合计）和折后权益
+                // 数据接口已将赠单作为顶层独立行返回；二次展开 giftOrders 会把历史撤单带回汇总。
+                // 再按当前Tab口径过滤一次，兼容旧客户端或嵌套历史数据。
+                const visibleCoinOrders = coinOrders.filter((order: any) =>
+                  matchesOrderStatusFilter(order, statusFilter)
+                );
+                // 计算当前币种的总币数和折后权益。
                 let allQty = 0;
                 let allEffQty = 0;
-                const orphanGiftIds = new Set<number>(); // 记录孤儿赠单ID避免重复计算
-                coinOrders.forEach((o: any) => {
-                  const isGift = o.isGift === true || o.isGift === 1;
-                  if (isGift) orphanGiftIds.add(o.id); // 这是孤儿赠单（已通过filteredOrders筛选进来）
+                visibleCoinOrders.forEach((o: any) => {
                   const qty = parseFloat(o.quantity) || 0;
-                  const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                  const rate = getOrderEquityDiscountRate(o);
                   allQty += qty;
                   allEffQty += qty * rate;
-                  if (!isGift) {
-                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
-                      if (orphanGiftIds.has(g.id)) return; // 已作为孤儿赠单统计，跳过
-                      const gQty = parseFloat(g.quantity) || 0;
-                      const gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
-                      allQty += gQty;
-                      allEffQty += gQty * gRate;
-                    });
-                  }
                 });
                 const discountPct = allQty > 0 ? (allEffQty / allQty * 100) : 100;
                 // 展平订单按时间从近到远
-                const flatOrders: any[] = [];
-                coinOrders.forEach((o: any) => {
-                  const isGift = o.isGift === true || o.isGift === 1;
-                  flatOrders.push({ ...o, _isGift: isGift });
-                  if (!isGift) {
-                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
-                      if (orphanGiftIds.has(g.id)) return; // 已作为独立行显示
-                      flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
-                    });
-                  }
-                });
+                const flatOrders = visibleCoinOrders.map((o: any) => ({
+                  ...o,
+                  _isGift: o.isGift === true || o.isGift === 1,
+                }));
                 flatOrders.sort((a, b) => {
                   const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
                   const tb = new Date(b.createdAt || b.confirmedAt || 0).getTime();
@@ -2881,4 +2842,3 @@ return (
     </div>
   );
 }
-
