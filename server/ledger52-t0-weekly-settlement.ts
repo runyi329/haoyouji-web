@@ -41,6 +41,8 @@ type SettlementMember = {
   userId: number;
   name: string;
   income: SettlementIncome;
+  /** 仅展示用的北京时间逐日归集；与本周同一批逐笔归属结果同源。旧冻结快照可不含此字段。 */
+  dailyIncomeByDate?: Record<string, SettlementIncome>;
 };
 
 type SettlementReport = {
@@ -636,6 +638,14 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
     reductions,
     includeClosing: inPeriodClosing,
   });
+  // 每日明细与周汇总必须复用同一份逐笔归属结果，不能在浏览器侧重新做FIFO或分佣推导。
+  const periodClosingIncome = calculateLedger52T0IncomeByClosing({
+    trades,
+    snapshots,
+    transfers,
+    reductions,
+    includeClosing: inPeriodClosing,
+  });
 
   const participantIds = new Set<number>();
   for (const trade of trades) {
@@ -654,6 +664,7 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
   const { names } = getNameMap(journal, userIds);
 
   const periodIncomeByUser = new Map<number, SettlementIncome>();
+  const dailyIncomeByUser = new Map<number, Map<string, SettlementIncome>>();
   const getIncome = (target: Map<number, SettlementIncome>, userId: number) => {
     const current = target.get(userId) || emptyIncome();
     target.set(userId, current);
@@ -680,13 +691,34 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
   for (const transfer of transfers) {
     if (periodClosingIds.has(transfer.closingEntryId)) getIncome(periodIncomeByUser, transfer.recipientUserId).sharedCount += 1;
   }
+  for (const closingIncome of periodClosingIncome) {
+    const occurredOn = getBeijingDateFromValue(getEffectiveTradeOccurredAt(closingIncome.closing));
+    if (!occurredOn || !isDateInWindow(occurredOn, window)) continue;
+    for (const allocation of closingIncome.allocations) {
+      const days = dailyIncomeByUser.get(allocation.userId) || new Map<string, SettlementIncome>();
+      const income = days.get(occurredOn) || emptyIncome();
+      income[allocation.kind] += allocation.amount;
+      if (allocation.kind === "order") income.orderCount += 1;
+      if (allocation.kind === "commission") income.commissionCount += 1;
+      if (allocation.kind === "shared") income.sharedCount += 1;
+      income.total = income.order + income.commission + income.shared;
+      days.set(occurredOn, income);
+      dailyIncomeByUser.set(allocation.userId, days);
+    }
+  }
 
   const members = userIds.map((userId) => {
     const income = periodIncomeByUser.get(userId) || emptyIncome();
+    const dailyIncome = dailyIncomeByUser.get(userId);
     return {
       userId,
       name: names.get(userId) || `用户#${userId}`,
       income,
+      ...(dailyIncome && dailyIncome.size > 0 ? {
+        dailyIncomeByDate: Object.fromEntries(
+          Array.from(dailyIncome.entries()).sort(([left], [right]) => left.localeCompare(right)),
+        ),
+      } : {}),
     };
   }).sort((left, right) => right.income.total - left.income.total || left.name.localeCompare(right.name, "zh-CN"));
 

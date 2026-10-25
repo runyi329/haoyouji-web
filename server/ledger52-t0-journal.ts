@@ -2452,6 +2452,204 @@ export async function getLedger52T0Journal(
   };
 }
 
+/**
+ * 团队总览的专用财务事实读取器。
+ *
+ * 该读取器只取统一收益引擎和XIRR所需的五类不可变事实，并在同一只读一致性快照中按500条分页读取。
+ * 不调用ensure表结构、不加载报价页目录/审计/行情/提醒，也绝不执行任何业务写入或DDL。
+ */
+export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwnerUserId: number }) {
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队数据库连接失败" });
+
+  const pageSize = 500;
+  const entries: Array<ReturnType<typeof mapEntry>> = [];
+  const profitShareSnapshots: T0JournalProfitShareSnapshot[] = [];
+  const sharedIncomeReductions: Array<{ closingEntryId: string; amount: number; sourceNetPnl: number }> = [];
+  const sharedIncomeTransfers: Array<{
+    id: string;
+    closingEntryId: string;
+    sourceUserId: number;
+    recipientUserId: number;
+    amount: number;
+    sourceNetPnl: number;
+    shareableAmount: number;
+    reducesRegularDistribution: boolean;
+    createdAt: string;
+  }> = [];
+  const payoutCashFlows: Array<{
+    id: string;
+    relatedUserId: number;
+    occurredOn: string;
+    direction: T0JournalPayoutDirection;
+    amount: number;
+    createdAt: string;
+  }> = [];
+  let transactionStarted = false;
+
+  try {
+    // 保证订单、分佣快照、共享和资金流水来自同一时点；只读事务不会写入或锁定业务记录。
+    await conn.query("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY");
+    transactionStarted = true;
+
+    let entryCursorTradeTime: string | null = null;
+    let entryCursorId = 0;
+    while (true) {
+      const entryCursorSql = entryCursorTradeTime === null
+        ? ""
+        : " AND (e.trade_time > ? OR (e.trade_time = ? AND e.id > ?))";
+      const entryParams: Array<string | number> = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
+      if (entryCursorTradeTime !== null) entryParams.push(entryCursorTradeTime, entryCursorTradeTime, entryCursorId);
+      const [entryResult] = await conn.execute(
+        `SELECT e.id, e.account_id, e.symbol, e.instrument_type, e.option_direction,
+                e.option_premium, e.option_premium_currency, e.option_settlement_price, e.option_delivery_price,
+                e.execution_status, e.filled_at, e.action, e.related_user_id, e.related_fund_id,
+                e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.trade_time, e.created_at,
+                DATE_FORMAT(e.trade_time, '%Y-%m-%d %H:%i:%s.%f') AS cursor_trade_time
+           FROM ledger52_t0_journal_entries e
+          WHERE e.ledger_id = ? AND e.user_id = ?${entryCursorSql}
+          ORDER BY e.trade_time ASC, e.id ASC
+          LIMIT ${pageSize}`,
+        entryParams,
+      );
+      const entryRows = asRows(entryResult);
+      if (entryRows.length === 0) break;
+      const entryIds = entryRows.map((row) => toNumber(row.id)).filter((id) => id > 0);
+      const [snapshotResult, reductionResult] = await Promise.all([
+        conn.execute(
+          `SELECT shared_entry.entry_id, shared_entry.opening_entry_id, shared_entry.source_user_id, shared_entry.related_fund_id,
+                  shared_entry.beneficiary_user_id, shared_entry.share_percentage, shared_entry.matched_quantity
+             FROM ledger52_t0_journal_entry_profit_shares shared_entry
+            WHERE shared_entry.ledger_id = ? AND shared_entry.user_id = ?
+              AND shared_entry.entry_id IN (${entryIds.map(() => "?").join(", ")})
+            ORDER BY shared_entry.entry_id ASC, shared_entry.opening_entry_id ASC, shared_entry.id ASC`,
+          [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, ...entryIds],
+        ),
+        conn.execute(
+          `SELECT closing_entry_id, COALESCE(SUM(amount), 0) AS total_amount, MAX(source_net_pnl) AS source_net_pnl
+             FROM ledger52_t0_journal_shared_income_transfers
+            WHERE ledger_id = ? AND user_id = ? AND reduces_regular_distribution = 1
+              AND closing_entry_id IN (${entryIds.map(() => "?").join(", ")})
+            GROUP BY closing_entry_id`,
+          [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, ...entryIds],
+        ),
+      ]);
+      entries.push(...entryRows.map(mapEntry));
+      profitShareSnapshots.push(...asRows(snapshotResult).map(mapProfitShareSnapshot));
+      sharedIncomeReductions.push(...asRows(reductionResult).map((row) => ({
+        closingEntryId: String(row.closing_entry_id),
+        amount: toNumber(row.total_amount),
+        sourceNetPnl: toNumber(row.source_net_pnl),
+      })));
+      if (entryRows.length < pageSize) break;
+      const finalEntry = entryRows[entryRows.length - 1];
+      entryCursorTradeTime = String(finalEntry.cursor_trade_time || "");
+      entryCursorId = toNumber(finalEntry.id);
+      if (!entryCursorTradeTime || entryCursorId <= 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队订单读取游标异常" });
+      }
+    }
+
+    let transferCursorClosingEntryId = 0;
+    let transferCursorId = 0;
+    let hasTransferCursor = false;
+    while (true) {
+      const transferCursorSql = hasTransferCursor
+        ? " AND (transfer.closing_entry_id > ? OR (transfer.closing_entry_id = ? AND transfer.id > ?))"
+        : "";
+      const transferParams: number[] = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
+      if (hasTransferCursor) transferParams.push(transferCursorClosingEntryId, transferCursorClosingEntryId, transferCursorId);
+      const [transferResult] = await conn.execute(
+        `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
+                transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at
+           FROM ledger52_t0_journal_shared_income_transfers transfer
+          WHERE transfer.ledger_id = ? AND transfer.user_id = ?${transferCursorSql}
+          ORDER BY transfer.closing_entry_id ASC, transfer.id ASC
+          LIMIT ${pageSize}`,
+        transferParams,
+      );
+      const transferRows = asRows(transferResult);
+      if (transferRows.length === 0) break;
+      sharedIncomeTransfers.push(...transferRows.map((transfer) => ({
+        id: String(transfer.id),
+        closingEntryId: String(transfer.closing_entry_id),
+        sourceUserId: toNumber(transfer.source_user_id),
+        recipientUserId: toNumber(transfer.recipient_user_id),
+        amount: toNumber(transfer.amount),
+        sourceNetPnl: toNumber(transfer.source_net_pnl),
+        shareableAmount: toNumber(transfer.manager_pool_amount),
+        reducesRegularDistribution: Boolean(toNumber(transfer.reduces_regular_distribution)),
+        createdAt: isoTime(transfer.created_at),
+      })));
+      if (transferRows.length < pageSize) break;
+      const finalTransfer = transferRows[transferRows.length - 1];
+      transferCursorClosingEntryId = toNumber(finalTransfer.closing_entry_id);
+      transferCursorId = toNumber(finalTransfer.id);
+      if (transferCursorClosingEntryId <= 0 || transferCursorId <= 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队共享读取游标异常" });
+      }
+      hasTransferCursor = true;
+    }
+
+    let payoutCursorRelatedUserId = 0;
+    let payoutCursorOccurredOn = "";
+    let payoutCursorId = 0;
+    let hasPayoutCursor = false;
+    while (true) {
+      const payoutCursorSql = hasPayoutCursor
+        ? " AND (payout.related_user_id > ? OR (payout.related_user_id = ? AND (payout.occurred_on > ? OR (payout.occurred_on = ? AND payout.id > ?))))"
+        : "";
+      const payoutParams: Array<string | number> = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
+      if (hasPayoutCursor) payoutParams.push(payoutCursorRelatedUserId, payoutCursorRelatedUserId, payoutCursorOccurredOn, payoutCursorOccurredOn, payoutCursorId);
+      const [payoutResult] = await conn.execute(
+        `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+                payout.direction, payout.amount, payout.created_at,
+                DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS cursor_occurred_on
+           FROM ledger52_t0_journal_payout_logs payout
+          WHERE payout.ledger_id = ? AND payout.user_id = ?${payoutCursorSql}
+          ORDER BY payout.related_user_id ASC, payout.occurred_on ASC, payout.id ASC
+          LIMIT ${pageSize}`,
+        payoutParams,
+      );
+      const payoutRows = asRows(payoutResult);
+      if (payoutRows.length === 0) break;
+      payoutCashFlows.push(...payoutRows.map((row) => ({
+        id: String(row.id),
+        relatedUserId: toNumber(row.related_user_id),
+        occurredOn: String(row.occurred_on || "").slice(0, 10),
+        direction: String(row.direction) === "deposit" ? "deposit" as const : "withdrawal" as const,
+        amount: toNumber(row.amount),
+        createdAt: isoTime(row.created_at),
+      })));
+      if (payoutRows.length < pageSize) break;
+      const finalPayout = payoutRows[payoutRows.length - 1];
+      payoutCursorRelatedUserId = toNumber(finalPayout.related_user_id);
+      payoutCursorOccurredOn = String(finalPayout.cursor_occurred_on || "").slice(0, 10);
+      payoutCursorId = toNumber(finalPayout.id);
+      if (payoutCursorRelatedUserId <= 0 || !payoutCursorOccurredOn || payoutCursorId <= 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队资金流水读取游标异常" });
+      }
+      hasPayoutCursor = true;
+    }
+
+    await conn.commit();
+    transactionStarted = false;
+    return { entries, profitShareSnapshots, sharedIncomeTransfers, sharedIncomeReductions, payoutCashFlows };
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        await conn.rollback();
+      } catch (rollbackError) {
+        console.error("[T+0团队] 只读快照回滚失败:", rollbackError);
+      }
+    }
+    throw error;
+  } finally {
+    const release = (conn as any).release;
+    if (typeof release === "function") release.call(conn);
+  }
+}
+
 function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {
   const ethReferencePrice = row.eth_reference_price == null ? undefined : String(row.eth_reference_price).trim() || undefined;
   const ethQuantity = row.eth_quantity == null ? undefined : String(row.eth_quantity).trim() || undefined;

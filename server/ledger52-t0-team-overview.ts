@@ -1,12 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
-import { getLedger52T0Journal, type T0JournalReadScope } from "./ledger52-t0-journal";
+import { getLedger52T0JournalTeamFinancialFacts } from "./ledger52-t0-journal";
 
 /** 首批仅由产品明确授权的团队负责人可查看其递归下属的汇总财务数据。 */
 export const LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS = new Set<number>([4952766]);
 const LEDGER_ID = 52;
-const ENTRY_PAGE_LIMIT = 2000;
-const SHARED_TRANSFER_PAGE_LIMIT = 200;
 
 type Action = "openLong" | "closeLong" | "openShort" | "closeShort";
 type Side = "long" | "short";
@@ -591,10 +589,9 @@ export async function getLedger52T0TeamOverview(input: {
   if (!LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(input.rootUserId)) return { enabled: false as const };
   const [allDescendants, journal] = await Promise.all([
     getRecursiveTeamMembers(input.rootUserId),
-    getLedger52T0Journal(
-      { mode: "admin", journalOwnerUserId: input.journalOwnerUserId } satisfies T0JournalReadScope,
-      { skipTableEnsure: true },
-    ),
+    // 团队页只在负责人实际点开时读取完整历史；专用读取器分批取收益和XIRR所需事实，
+    // 不沿用报价页首屏限流，也不加载无关目录、行情、审计或提醒。
+    getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId }),
   ]);
   const entries = Array.isArray((journal as any).entries) ? (journal as any).entries : [];
   const transfers = Array.isArray((journal as any).sharedIncomeTransfers) ? (journal as any).sharedIncomeTransfers : [];
@@ -656,7 +653,8 @@ export async function getLedger52T0TeamOverview(input: {
   }
   const members = Array.from(visibleMembersById.values());
   const memberIds = new Set(members.map((member) => member.userId));
-  const incomeComplete = entries.length < ENTRY_PAGE_LIMIT && transfers.length < SHARED_TRANSFER_PAGE_LIMIT;
+  // 上方已显式请求完整历史；若读取异常会直接返回可见错误，不能用截断结果伪造收益。
+  const incomeComplete = true;
   const trades: Ledger52T0IncomeTrade[] = nonOptionEntries.map((entry: any) => ({
     id: String(entry.id), accountId: String(entry.accountId), relatedUserId: toNumber(entry.relatedUserId), relatedFundId: entry.relatedFundId ? String(entry.relatedFundId) : undefined,
     action: String(entry.action) as Action, symbol: String(entry.symbol || "ETH"), instrumentType: entry.instrumentType,
