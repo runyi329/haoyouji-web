@@ -363,6 +363,9 @@ const JiangSettings = lazy(() => import("./pages/jiang/JiangSettings"));
 const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 const JiangOKXTrader = lazy(() => import("./pages/jiang/JiangOKXTrader"));
 const JiangSmsManage = lazy(() => import("./pages/jiang/JiangSmsManage"));
+// 米伴所有子页面必须复用同一个应用实例。过去为每个嵌套地址分别创建 inline lazy
+// 组件，会在“限时 → 康宝莱系列”等站内跳转时卸载整个米伴应用，重复发起顶栏鉴权查询。
+const MibanApp = lazy(() => import("./pages/miban/MibanApp"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // AB 意见本 - 管理者查看页面
@@ -506,15 +509,15 @@ function Router() {
           <Redirect to="/admin/rules/001" />
         </Route>
         {/* 米伴独立应用：必须在 /p/:slug 通配路由之前注册，否则会被 ProjectLanding 拦截 */}
-        {/* 天桂梨详情页：单独注册，确保直接访问多级路径时不被404拦截 */}
-        <Route path="/p/proj_hzxm2t/pear/tiangui" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/limited/herbalife-red-ginseng" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/limited/herbalife" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/limited/:productKey" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/pear/:id" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/admin/panel" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t/:rest*" component={lazy(() => import("./pages/miban/MibanApp"))} />
-        <Route path="/p/proj_hzxm2t" component={lazy(() => import("./pages/miban/MibanApp"))} />
+        {/* 所有路径均复用模块级 MibanApp，不在 Router 渲染时重新创建 lazy 组件类型。 */}
+        <Route path="/p/proj_hzxm2t/pear/tiangui" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/limited/herbalife-red-ginseng" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/limited/herbalife" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/limited/:productKey" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/pear/:id" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/admin/panel" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/:rest*" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t" component={MibanApp} />
         {/* 紫金商业联盟：项目级商城，后台入口由项目角色控制 */}
         <Route path="/p/proj_stn4q7/:rest*" component={lazy(() => import("./pages/ziding/ZidingApp"))} />
         <Route path="/p/proj_stn4q7" component={lazy(() => import("./pages/ziding/ZidingApp"))} />

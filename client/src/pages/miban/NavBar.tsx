@@ -130,12 +130,13 @@ function IdentitySwitcherNav() {
   const currentUsername = (user as any)?.username as string | undefined;
   const isAllowed = ALLOWED_IDENTITIES.includes(currentUsername ?? "");
 
-  // 三个账号都用 fullSwitchList + switchToAny，避免权限问题
-  const { data: rawList } = (mtrpc as any).mibanImpersonate.fullSwitchList.useQuery(
-    undefined,
-    { enabled: isAllowed }
-  );
-  const list: any[] = rawList ?? [];
+  // 测试身份固定且仅用于展示，不应在每次普通页面跳转时请求受保护接口。
+  // 米伴过去会因路由重挂载而预读取 fullSwitchList，移动端偶发 401 会被全局逻辑误判为登录失效。
+  const list = [
+    { username: "jiang", name: "胡", label: "管理员" },
+    { username: "hyy329", name: "h", label: "米商" },
+    { username: "yunting", name: "Y", label: "顾客" },
+  ];
   const switchToAny = (mtrpc as any).mibanImpersonate.switchToAny.useMutation();
   const [switching, setSwitching] = useState<string | null>(null);
 
