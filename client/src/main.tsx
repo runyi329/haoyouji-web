@@ -23,24 +23,19 @@ const queryClient = new QueryClient({
   },
 });
 
-// 防抖锁：防止多个 API 同时失败时触发多次跳转（如 batch 请求中多个接口同时返回 401）
+// 防抖锁：防止多个 API 同时失败时触发多次跳转（如 batch 请求中多个接口同时返回 401）。
+// 还必须先二次核验 auth.me：某个页面级接口偶发 401 不等于当前登录会话已失效。
+// 否则管理员在米伴等子项目切换路由时，会被一次背景请求错误直接带到登录页。
 let _unauthorizedRedirectTimer: ReturnType<typeof setTimeout> | null = null;
+let _sessionValidationInFlight: Promise<void> | null = null;
 
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
+const redirectToLogin = () => {
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-  if (!isUnauthorized) return;
-
-  // token 过期或失效，提示用户并跳转到登录页
   const loginUrl = getLoginUrl();
-  if (window.location.pathname === loginUrl) return;
+  if (window.location.pathname === loginUrl || _unauthorizedRedirectTimer) return;
 
-  // 防抖：已有跳转计划则不重复触发
-  if (_unauthorizedRedirectTimer) return;
-
-  console.log('[Auth] Token 失效，跳转登录页');
+  console.log('[Auth] 会话已确认失效，跳转登录页');
   toast.error('登录已过期，请重新登录', { duration: 3000 });
   _unauthorizedRedirectTimer = setTimeout(() => {
     _unauthorizedRedirectTimer = null;
@@ -52,6 +47,31 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
     window.history.pushState(null, '', loginWithFrom);
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, 1500);
+};
+
+const redirectToLoginIfUnauthorized = (error: unknown) => {
+  if (!(error instanceof TRPCClientError)) return;
+  if (typeof window === "undefined") return;
+  if (error.message !== UNAUTHED_ERR_MSG) return;
+  if (_unauthorizedRedirectTimer || _sessionValidationInFlight) return;
+
+  // protectedProcedure 可能因单次网络抖动、路由卸载时的旧请求或后台权限刷新而返回 401。
+  // auth.me 是公开接口，会准确返回当前会话用户或 null；只有明确得到 null 才能登出。
+  _sessionValidationInFlight = (async () => {
+    try {
+      const currentUser = await trpcClient.auth.me.query();
+      if (currentUser) {
+        console.warn('[Auth] 背景接口返回未授权，但当前会话仍有效；保留登录状态。');
+        return;
+      }
+      redirectToLogin();
+    } catch (validationError) {
+      // 网络错误或临时服务异常时不能把用户误登出，保留当前会话，等待后续请求恢复。
+      console.warn('[Auth] 会话二次核验未完成，暂不退出登录。', validationError);
+    } finally {
+      _sessionValidationInFlight = null;
+    }
+  })();
 };
 
 queryClient.getQueryCache().subscribe(event => {
