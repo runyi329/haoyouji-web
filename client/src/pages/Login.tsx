@@ -133,6 +133,8 @@ export default function Login() {
 
     if (token) {
       await saveToken(token);
+      // 取消先前后台请求留下的“会话失效”延迟跳转，避免其覆盖刚登录成功的会话。
+      window.dispatchEvent(new Event("haoyouji:session-restored"));
     }
 
     // 在跳转前主动写入新账号的 auth.me，避免个人中心短暂或持续显示上一位用户。

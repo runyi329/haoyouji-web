@@ -1,6 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
+import { HttpError } from "@shared/_core/errors";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -19,8 +20,23 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
+    // 缺少、过期或已失效的会话可以按匿名请求继续，使 publicProcedure 可访问。
+    // 但不能把数据库/认证服务异常伪装成未登录；否则 protectedProcedure 会返回
+    // UNAUTHORIZED，前端会把短暂服务故障误判为“登录已过期”。
+    if (
+      error instanceof HttpError &&
+      error.statusCode === 403 &&
+      (error.message === "Invalid session cookie" || error.message === "User not found")
+    ) {
+      user = null;
+    } else {
+      console.error("[Auth] Authentication context unavailable", {
+        path: opts.req.path,
+        method: opts.req.method,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error("Authentication service temporarily unavailable");
+    }
   }
 
   // 开启 DEV_BYPASS_AUTH 时自动使用测试用户；可通过 DEV_BYPASS_USER_ID

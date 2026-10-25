@@ -1,7 +1,7 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
 // 热预览必须立刻拿到最新界面模块；版本变化会让已打开的手机页面主动更新工作线程。
-const CACHE_VERSION = 'v2.3.4';
+const CACHE_VERSION = 'v2.3.5';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 const IS_MANUS_PREVIEW = /\.manus\.computer$/i.test(self.location.hostname);
 
@@ -78,24 +78,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // index.html 和 / 路径：永远走网络，绝不缓存（防止部署后旧缓存导致白屏）
-  if (NO_CACHE_PATHS.includes(url.pathname)) {
+  // SPA 任意深层地址都实际返回 index.html。此前只按 .html 后缀判断，导致
+  // /p/... 之类的导航页被误写入 Cache Storage，网络短暂失败时又回退到旧 bundle。
+  // 所有导航/HTML 请求都必须 network-only，绝不使用旧入口兜底。
+  const isNavigationRequest =
+    request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html');
+  if (isNavigationRequest || NO_CACHE_PATHS.includes(url.pathname)) {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
         .catch(() => {
-          // 网络完全断开时才用缓存兜底
-          return caches.match(request);
+          return new Response('Network unavailable', {
+            status: 503,
+            statusText: 'Service Unavailable',
+          });
         })
     );
     return;
   }
 
+  // 只有带内容哈希的构建资源和明确预缓存的图标可离线回退；业务路由、图片
+  // 和其他同源响应均只走网络，避免跨版本数据或入口被旧缓存覆盖。
+  const isCacheableStaticAsset =
+    url.pathname.startsWith('/assets/') || STATIC_CACHE_URLS.includes(url.pathname);
+
   // 静态资源：网络优先，失败时使用缓存（确保用户总是看到最新内容）
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // 只缓存成功的 GET 请求（不缓存 HTML 文件）
-        if (request.method === 'GET' && response.status === 200 && !url.pathname.endsWith('.html')) {
+        const cacheControl = response.headers.get('cache-control') || '';
+        if (
+          request.method === 'GET' &&
+          response.status === 200 &&
+          isCacheableStaticAsset &&
+          !cacheControl.includes('no-store')
+        ) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseToCache);
@@ -104,12 +120,13 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // 网络失败时，尝试从缓存读取；缓存也没有则返回 504
-        return caches.match(request).then((cached) => {
-          if (cached) return cached;
-          // 缓存和网络都失败，返回 504 而非 null（避免 Safari 白屏）
-          return new Response('Network error', { status: 504, statusText: 'Gateway Timeout' });
-        });
+        if (isCacheableStaticAsset) {
+          return caches.match(request).then((cached) => {
+            if (cached) return cached;
+            return new Response('Network error', { status: 504, statusText: 'Gateway Timeout' });
+          });
+        }
+        return new Response('Network unavailable', { status: 503, statusText: 'Service Unavailable' });
       })
   );
 });

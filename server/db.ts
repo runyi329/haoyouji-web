@@ -131,6 +131,22 @@ export async function getLedgerDb() {
 }
 
 /**
+ * getDbConnection 历史上会把共享 mysql pool 伪装为 Connection 返回。
+ * 部分旧业务在 finally 中按独占连接调用 end()，这会关闭整个 pool，继而让
+ * 并发认证请求错误地表现为“登录过期”。对池化连接屏蔽 end()，其余方法仍
+ * 委托给原 pool；需要独占连接的调用方必须使用 getDbTransactionConnection。
+ */
+function asPooledConnection(pool: mysql.Pool): mysql.Connection {
+  return new Proxy(pool, {
+    get(target, property) {
+      if (property === 'end') return async () => undefined;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as unknown as mysql.Connection;
+}
+
+/**
  * 使用独占数据库连接获取MySQL命名锁，确保同一业务键的写入串行执行。
  */
 export async function withDatabaseLock<T>(
@@ -194,10 +210,10 @@ export async function getDbConnection(forceGuest: boolean = false): Promise<mysq
   // 先调用 getDb() 确保连接已创建
   await getDb(false);
 
-  // 如果有连接池，直接使用池的 query 方法（不需要手动 release）
-  // 返回一个代理对象，将 execute 委托给连接池
+  // 如果有连接池，直接使用池的 query 方法（不需要手动 release）。
+  // 兼容旧调用点的 finally { conn.end() }，但不允许它关闭共享 pool。
   if (_pool) {
-    return _pool as unknown as mysql.Connection;
+    return asPooledConnection(_pool);
   }
 
   // 统一返回腾讯云数据库连接，不再区分游客/真实用户

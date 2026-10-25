@@ -29,6 +29,18 @@ const queryClient = new QueryClient({
 let _unauthorizedRedirectTimer: ReturnType<typeof setTimeout> | null = null;
 let _sessionValidationInFlight: Promise<void> | null = null;
 
+const cancelPendingUnauthorizedRedirect = () => {
+  if (_unauthorizedRedirectTimer) {
+    window.clearTimeout(_unauthorizedRedirectTimer);
+    _unauthorizedRedirectTimer = null;
+  }
+};
+
+// 登录成功后取消旧的“会话失效”延迟跳转，避免移动端请求竞态覆盖新会话。
+if (typeof window !== "undefined") {
+  window.addEventListener("haoyouji:session-restored", cancelPendingUnauthorizedRedirect);
+}
+
 const redirectToLogin = () => {
   if (typeof window === "undefined") return;
 
@@ -61,6 +73,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
     try {
       const currentUser = await trpcClient.auth.me.query();
       if (currentUser) {
+        cancelPendingUnauthorizedRedirect();
         console.warn('[Auth] 背景接口返回未授权，但当前会话仍有效；保留登录状态。');
         return;
       }
@@ -98,7 +111,14 @@ const trpcEndpoint = typeof window === "undefined"
   : new URL("/api/trpc", window.location.origin).toString();
 
 const trpcFetch: typeof globalThis.fetch = (input, init) => {
-  const rawToken = localStorage.getItem('auth-token');
+  // iOS / 微信 WebView 在进程恢复瞬间可能暂时拒绝 localStorage；此时继续
+  // 使用 HttpOnly Cookie 认证，而不是让 fetch 在请求发出前直接失败。
+  let rawToken: string | null = null;
+  try {
+    rawToken = localStorage.getItem('auth-token');
+  } catch (error) {
+    console.warn('[Auth] Unable to read local token; falling back to cookie session.', error);
+  }
   // 只接受标准 JWT 格式（三段 base64url，不含控制字符/换行）
   const JWT_RE = /^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*$/;
   const token = rawToken && JWT_RE.test(rawToken.trim()) ? rawToken.trim() : null;
@@ -197,7 +217,7 @@ async function bootstrap() {
   // 不能因此阻塞整站 React 挂载；本地与 Cookie 恢复本身是同步路径，超时后直接继续。
   const recovered = await Promise.race<string | null>([
     restoreToken().catch(() => null),
-    new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 800)),
+    new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 2_500)),
   ]);
   if (recovered) {
     console.log('[Auth] Token 恢复成功，无需重新登录');
