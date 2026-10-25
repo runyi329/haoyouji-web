@@ -149,6 +149,9 @@ const trpcClient = trpc.createClient({
       // 手机 WebView 若把保存与任一慢查询合并，会一直停在“提交中”且保存请求根本未到达服务端。
       condition(op) {
         return op.path === "ledger.funderUpdateParticipantOrder"
+          || op.path === "ledger.t0CreatePayoutLog"
+          || op.path === "ledger.t0UpdatePayoutLog"
+          || op.path === "ledger.t0DeletePayoutLog"
           || op.path === "yabanCustomer.uploadMedia"
           || op.path === "ledger.getStockTagPortfolio"
           || op.path === "ledger.getStockTagPublicPortfolio"

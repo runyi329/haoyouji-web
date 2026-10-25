@@ -3232,6 +3232,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [payoutEthReferencePrice, setPayoutEthReferencePrice] = useState("");
   const [payoutEthReferencePriceIsManual, setPayoutEthReferencePriceIsManual] = useState(false);
   const [payoutNote, setPayoutNote] = useState("");
+  const [payoutSubmitNotice, setPayoutSubmitNotice] = useState<{ tone: "pending" | "success" | "error"; message: string } | null>(null);
   const [editingPayoutLog, setEditingPayoutLog] = useState<T0JournalPayoutLog | null>(null);
   const [isPayoutListEditing, setIsPayoutListEditing] = useState(false);
   const [deletePayoutLogId, setDeletePayoutLogId] = useState<string | null>(null);
@@ -3684,6 +3685,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPayoutEthReferencePrice("");
     setPayoutEthReferencePriceIsManual(false);
     setPayoutNote("");
+    setPayoutSubmitNotice(null);
     setPayoutOccurredOn(getBeijingDateInputValue());
   };
   const openPayoutEntryPage = (direction: T0JournalPayoutDirection) => {
@@ -3694,6 +3696,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPayoutEthReferencePrice("");
     setPayoutEthReferencePriceIsManual(false);
     setPayoutNote("");
+    setPayoutSubmitNotice(null);
     setPayoutOccurredOn(getBeijingDateInputValue());
     setShowPayoutLog(false);
     setLocation(`/ledger/${ledgerId}/t0-journal?payout=${direction}`);
@@ -3711,9 +3714,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
         t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
       ]);
+      setPayoutSubmitNotice({ tone: "success", message: "已保存，正在刷新下方流水记录。" });
       t0Toast.success("资金流水已保存");
     },
-    onError: (error) => t0Toast.error(error.message || "资金流水保存失败"),
+    onError: (error) => {
+      const message = error.message || "资金流水保存失败";
+      setPayoutSubmitNotice({ tone: "error", message });
+      t0Toast.error(message);
+    },
   });
   const updatePayoutLogMutation = trpc.ledger.t0UpdatePayoutLog.useMutation({
     onSuccess: async (updatedLog) => {
@@ -3727,9 +3735,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
         t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
       ]);
+      setPayoutSubmitNotice({ tone: "success", message: "已更新，正在刷新下方流水记录。" });
       t0Toast.success("资金流水已更新");
     },
-    onError: (error) => t0Toast.error(error.message || "资金流水更新失败"),
+    onError: (error) => {
+      const message = error.message || "资金流水更新失败";
+      setPayoutSubmitNotice({ tone: "error", message });
+      t0Toast.error(message);
+    },
   });
   const deletePayoutLogMutation = trpc.ledger.t0DeletePayoutLog.useMutation({
     onSuccess: async (deletedLog) => {
@@ -9186,21 +9199,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setLocation(`/ledger/${ledgerId}/t0-journal`);
     };
     const submitPayoutEntry = () => {
+      const reportValidationError = (message: string) => {
+        setPayoutSubmitNotice({ tone: "error", message });
+        t0Toast.error(message);
+      };
       const amount = Number(payoutAmount);
-      if (!payoutOccurredOn) { t0Toast.error("请选择登记日期"); return; }
+      if (!payoutOccurredOn) { reportValidationError("请选择登记日期"); return; }
       const ethReferencePrice = payoutEthReferencePrice.trim();
       const ethQuantity = payoutEthQuantity.trim();
       if (isEthDepositInput) {
         if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/.test(ethQuantity) || !Number.isFinite(Number(ethQuantity)) || Number(ethQuantity) <= 0) {
-          t0Toast.error("请输入有效的 ETH 数量");
+          reportValidationError("请输入有效的 ETH 数量");
           return;
         }
-      } else if (!Number.isFinite(amount) || amount <= 0) { t0Toast.error("请输入有效的登记金额"); return; }
+      } else if (!Number.isFinite(amount) || amount <= 0) { reportValidationError("请输入有效的登记金额"); return; }
       if (isDepositEntry && (requiresEthReferencePrice || ethReferencePrice) && (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/.test(ethReferencePrice) || !Number.isFinite(Number(ethReferencePrice)) || Number(ethReferencePrice) <= 0)) {
-        t0Toast.error("请确认有效的 ETH 参考价");
+        reportValidationError("请确认有效的 ETH 参考价");
         return;
       }
-      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { t0Toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
+      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { reportValidationError(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
       const payload = {
         ledgerId: 52 as const,
         relatedUserId: payoutTargetRelatedUserId,
@@ -9210,6 +9227,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         note: payoutNote.trim() || undefined,
         maximumTotalAmount: payoutProfitCap.toFixed(2),
       };
+      setPayoutSubmitNotice({ tone: "pending", message: "正在提交，请勿重复点击。" });
       if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id, ethReferencePrice: isDepositEntry ? ethReferencePrice || undefined : undefined, ethQuantity: isEthDepositInput ? ethQuantity : undefined });
       else createPayoutLogMutation.mutate({ ...payload, ethReferencePrice: isDepositEntry ? ethReferencePrice : undefined, ethQuantity: isEthDepositInput ? ethQuantity : undefined });
     };
@@ -9271,6 +9289,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </label>
           {!isDepositEntry && <div className="mt-2 flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] tabular-nums"><span className="font-medium text-slate-500">当前可提余额</span><span className={`font-bold ${payoutFormWithdrawalLimit > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatPrice(payoutFormWithdrawalLimit)} <span className="text-[9px] font-medium">U</span></span></div>}
           <button type="button" disabled={createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending} onClick={submitPayoutEntry} className={`mt-4 h-10 w-full rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${entryButtonTone}`}>{createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending ? "保存中" : editingPayoutLog ? "保存修改" : `保存${isDepositEntry ? "投入" : "提现"}`}</button>
+          {payoutSubmitNotice && <div role="status" aria-live="polite" className={`mt-2 rounded border px-2.5 py-2 text-[11px] leading-4 ${payoutSubmitNotice.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : payoutSubmitNotice.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>{payoutSubmitNotice.tone === "error" ? "未保存：" : payoutSubmitNotice.tone === "success" ? "保存成功：" : "提交状态："}{payoutSubmitNotice.message}</div>}
         </section>
 
         <section className="border-y border-slate-200 bg-white">
