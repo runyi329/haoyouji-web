@@ -186,7 +186,7 @@ function resolveDepositEthPrincipal(input: {
   rawEthQuantity?: unknown;
 }) {
   const amountText = String(input.amountText || "").trim();
-  const referencePriceText = String(rawReferencePrice || "").trim();
+  const referencePriceText = String(input.rawReferencePrice || "").trim();
   const ethQuantityText = String(input.rawEthQuantity || "").trim();
   if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/.test(referencePriceText)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请输入最多八位小数的有效 ETH 参考价" });
