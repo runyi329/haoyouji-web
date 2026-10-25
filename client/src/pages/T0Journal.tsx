@@ -13204,7 +13204,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
         </div>
         {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
-          {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
+          {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 -translate-y-px text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
           {isPendingOnly && <Clock3 className="h-[9px] w-[9px] shrink-0 -translate-y-px text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
           {keepReopenReminder && <Eye className={`h-[9px] w-[9px] shrink-0 -translate-y-px ${isLocked && !isPendingOnly ? "text-sky-200" : "text-sky-600"}`} strokeWidth={2.6} title="持续提醒：每次平仓的数量都会以原价位待补开占位保留" aria-label="持续提醒订单" />}
           {hasProfitSharing && <Handshake className={`h-[9px] w-[9px] shrink-0 -translate-y-px ${isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : "text-[#d32f2f]"}`} strokeWidth={2.65} title="本单已设置收益分配" aria-label="收益共享订单" />}
