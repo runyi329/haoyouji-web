@@ -54,6 +54,7 @@ type T0JournalPayoutLog = {
   amount: number;
   ethReferencePrice?: string;
   ethQuantity?: string;
+  depositInputMode?: "u" | "eth";
   note?: string;
   createdAt: string;
 };
@@ -3226,6 +3227,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showPayoutXirrHelp, setShowPayoutXirrHelp] = useState(false);
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
   const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutDepositInputMode, setPayoutDepositInputMode] = useState<"u" | "eth">("u");
+  const [payoutEthQuantity, setPayoutEthQuantity] = useState("");
   const [payoutEthReferencePrice, setPayoutEthReferencePrice] = useState("");
   const [payoutEthReferencePriceIsManual, setPayoutEthReferencePriceIsManual] = useState(false);
   const [payoutNote, setPayoutNote] = useState("");
@@ -3676,6 +3679,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const resetPayoutLogForm = () => {
     setEditingPayoutLog(null);
     setPayoutAmount("");
+    setPayoutDepositInputMode("u");
+    setPayoutEthQuantity("");
     setPayoutEthReferencePrice("");
     setPayoutEthReferencePriceIsManual(false);
     setPayoutNote("");
@@ -3684,6 +3689,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const openPayoutEntryPage = (direction: T0JournalPayoutDirection) => {
     setEditingPayoutLog(null);
     setPayoutAmount("");
+    setPayoutDepositInputMode("u");
+    setPayoutEthQuantity("");
     setPayoutEthReferencePrice("");
     setPayoutEthReferencePriceIsManual(false);
     setPayoutNote("");
@@ -5479,6 +5486,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         amount: Number(row.amount || 0),
         ethReferencePrice: row.ethReferencePrice == null ? undefined : String(row.ethReferencePrice).trim() || undefined,
         ethQuantity: row.ethQuantity == null ? undefined : String(row.ethQuantity).trim() || undefined,
+        depositInputMode: row.depositInputMode === "eth" ? "eth" as const : "u" as const,
         note: String(row.note || "").trim() || undefined,
         createdAt: String(row.createdAt || ""),
       }));
@@ -5496,6 +5504,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         amount: Number(row.amount || 0),
         ethReferencePrice: row.ethReferencePrice == null ? undefined : String(row.ethReferencePrice).trim() || undefined,
         ethQuantity: row.ethQuantity == null ? undefined : String(row.ethQuantity).trim() || undefined,
+        depositInputMode: row.depositInputMode === "eth" ? "eth" as const : "u" as const,
         note: String(row.note || "").trim() || undefined,
         createdAt: String(row.createdAt || ""),
       }))
@@ -6447,12 +6456,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const renderPayoutLogRow = (log: T0JournalPayoutLog) => {
     const isDeposit = log.direction === "deposit";
     const hasFixedEthPrincipal = isDeposit && Boolean(log.ethQuantity);
+    const isEthDepositInput = isDeposit && log.depositInputMode === "eth";
     return <div key={log.id} className="px-3 py-2.5 text-xs">
       <div className="flex items-start justify-between gap-2">
         <span className="flex shrink-0 items-center gap-1.5 pt-0.5 font-medium text-slate-700"><span className="whitespace-nowrap">{log.occurredOn.replaceAll("-", "/")}</span><span className={`rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "存入" : "提取"}</span></span>
-        <span className="flex shrink-0 items-start gap-1"><span className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
+        <span className="flex shrink-0 items-start gap-1"><span className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutDepositInputMode(log.depositInputMode === "eth" ? "eth" : "u"); setPayoutEthQuantity(log.ethQuantity || ""); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
       </div>
-      {(log.note || hasFixedEthPrincipal) && <div className="mt-1 flex items-baseline gap-2 text-[10px] leading-4 text-slate-500"><span className="min-w-0 flex-1 break-words">{log.note ? <>备注：{log.note}</> : null}</span>{hasFixedEthPrincipal && <span className="flex shrink-0 items-baseline gap-3 whitespace-nowrap font-medium tabular-nums"><span>币本位 {formatPayoutEthQuantity(log.ethQuantity)} ETH</span>{log.ethReferencePrice && <span>参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
+      {(log.note || isDeposit) && <div className="mt-1 flex items-baseline gap-2 text-[10px] leading-4 text-slate-500"><span className="min-w-0 flex-1 break-words">{log.note ? <>备注：{log.note}</> : null}</span>{isDeposit && <span className="flex shrink-0 items-baseline gap-3 whitespace-nowrap font-medium tabular-nums"><span><span className={isEthDepositInput ? "text-sky-700" : "text-slate-400"}>币本位</span> {hasFixedEthPrincipal ? <>{formatPayoutEthQuantity(log.ethQuantity)} ETH</> : "—"}</span>{log.ethReferencePrice && <span>参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
       {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
     </div>;
   };
@@ -9151,16 +9161,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const entryFlowTitle = isDepositEntry ? "存入流水" : "提取流水";
     const entryTone = isDepositEntry ? "text-sky-700" : "text-slate-800";
     const entryButtonTone = isDepositEntry ? "bg-sky-600" : "bg-slate-800";
+    const isEthDepositInput = isDepositEntry && payoutDepositInputMode === "eth";
     const payoutEthReferencePriceValue = Number(payoutEthReferencePrice);
     const payoutEthQuantityPreview = isDepositEntry
+      && !isEthDepositInput
       && Number(payoutAmount) > 0
       && Number.isFinite(payoutEthReferencePriceValue)
       && payoutEthReferencePriceValue > 0
       ? Number(payoutAmount) / payoutEthReferencePriceValue
       : null;
+    const payoutUAmountPreview = isEthDepositInput
+      && Number(payoutEthQuantity) > 0
+      && Number.isFinite(payoutEthReferencePriceValue)
+      && payoutEthReferencePriceValue > 0
+      ? Number(payoutEthQuantity) * payoutEthReferencePriceValue
+      : null;
     const isFixedCoinPrincipalEditing = isDepositEntry && Boolean(editingPayoutLog?.ethQuantity);
     const isLegacyDepositEditing = isDepositEntry && Boolean(editingPayoutLog) && !isFixedCoinPrincipalEditing;
-    const requiresEthReferencePrice = isDepositEntry && (!editingPayoutLog || isFixedCoinPrincipalEditing);
+    const requiresEthReferencePrice = isDepositEntry && (isEthDepositInput || !editingPayoutLog || isFixedCoinPrincipalEditing);
     const closePayoutEntryPage = () => {
       resetPayoutLogForm();
       setIsPayoutListEditing(false);
@@ -9170,8 +9188,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const submitPayoutEntry = () => {
       const amount = Number(payoutAmount);
       if (!payoutOccurredOn) { t0Toast.error("请选择登记日期"); return; }
-      if (!Number.isFinite(amount) || amount <= 0) { t0Toast.error("请输入有效的登记金额"); return; }
       const ethReferencePrice = payoutEthReferencePrice.trim();
+      const ethQuantity = payoutEthQuantity.trim();
+      if (isEthDepositInput) {
+        if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/.test(ethQuantity) || !Number.isFinite(Number(ethQuantity)) || Number(ethQuantity) <= 0) {
+          t0Toast.error("请输入有效的 ETH 数量");
+          return;
+        }
+      } else if (!Number.isFinite(amount) || amount <= 0) { t0Toast.error("请输入有效的登记金额"); return; }
       if (isDepositEntry && (requiresEthReferencePrice || ethReferencePrice) && (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/.test(ethReferencePrice) || !Number.isFinite(Number(ethReferencePrice)) || Number(ethReferencePrice) <= 0)) {
         t0Toast.error("请确认有效的 ETH 参考价");
         return;
@@ -9181,13 +9205,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ledgerId: 52 as const,
         relatedUserId: payoutTargetRelatedUserId,
         occurredOn: payoutOccurredOn,
-        amount: amount.toFixed(2),
+        amount: isEthDepositInput ? undefined : amount.toFixed(2),
         direction: payoutEntryDirection,
         note: payoutNote.trim() || undefined,
         maximumTotalAmount: payoutProfitCap.toFixed(2),
       };
-      if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id, ethReferencePrice: isDepositEntry ? ethReferencePrice || undefined : undefined });
-      else createPayoutLogMutation.mutate({ ...payload, ethReferencePrice: isDepositEntry ? ethReferencePrice : undefined });
+      if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id, ethReferencePrice: isDepositEntry ? ethReferencePrice || undefined : undefined, ethQuantity: isEthDepositInput ? ethQuantity : undefined });
+      else createPayoutLogMutation.mutate({ ...payload, ethReferencePrice: isDepositEntry ? ethReferencePrice : undefined, ethQuantity: isEthDepositInput ? ethQuantity : undefined });
     };
 
     if (!canManage || payoutTargetRelatedUserId <= 0) {
@@ -9209,17 +9233,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       <main className="space-y-3 px-3 py-4">
         <section className="border-y border-slate-200 bg-white px-3 py-3">
-          <div className={`flex items-center justify-between gap-2 tabular-nums ${entryTone}`}><span className="flex min-w-0 items-baseline gap-1.5"><span className="shrink-0 text-xs font-medium text-slate-500">{entryFlowTitle}</span><span className="truncate text-base font-semibold">{entryTotal > 0 ? (isDepositEntry ? "+" : "−") : ""}{entryTotal === 0 ? "0" : formatPrice(entryTotal)} <span className="text-[10px] font-medium opacity-75">U</span></span></span>{isDepositEntry && entryFixedEthCount > 0 && <span className="flex shrink-0 items-baseline gap-1.5 border-l border-slate-200 pl-3"><span className="text-xs font-medium text-slate-500">币本位</span><span className="text-base font-semibold">{formatPayoutEthQuantity(String(entryFixedEthQuantity))} <span className="text-[10px] font-medium opacity-75">ETH</span></span></span>}</div>
+          <div className={`flex items-center justify-between gap-2 tabular-nums ${entryTone}`}><span className="flex min-w-0 items-baseline gap-1.5"><span className="shrink-0 text-xs font-medium text-slate-500">{entryFlowTitle}</span><span className="truncate text-base font-semibold">{entryTotal > 0 ? (isDepositEntry ? "+" : "−") : ""}{entryTotal === 0 ? "0" : formatPrice(entryTotal)} <span className="text-[10px] font-medium opacity-75">U</span></span></span>{isDepositEntry && entryFixedEthCount > 0 && <span className="flex shrink-0 items-baseline gap-1.5 border-l border-slate-200 pl-3"><span className="text-xs font-medium text-slate-500">ETH折算</span><span className="text-base font-semibold">{formatPayoutEthQuantity(String(entryFixedEthQuantity))} <span className="text-[10px] font-medium opacity-75">ETH</span></span></span>}</div>
         </section>
 
         <section className="border-y border-slate-200 bg-white px-3 py-3">
           {editingPayoutLog && <div className="mb-3 flex items-center justify-between text-xs"><span className="font-medium text-slate-600">编辑本笔{isDepositEntry ? "存入" : "提取"}</span><button type="button" onClick={resetPayoutLogForm} className="text-slate-400 active:text-slate-700">取消编辑</button></div>}
+          {isDepositEntry && <div className="mb-3 flex items-center justify-between gap-3 rounded border border-sky-100 bg-sky-50/60 px-2.5 py-2"><span className="text-[11px] font-medium text-slate-600">当前按 <span className={isEthDepositInput ? "text-sky-700" : "text-slate-500"}>{isEthDepositInput ? "ETH" : "U"}</span> 录入</span><button type="button" onClick={() => { setPayoutDepositInputMode((current) => current === "u" ? "eth" : "u"); setPayoutAmount(""); setPayoutEthQuantity(""); }} className="inline-flex h-7 items-center gap-1 rounded border border-sky-200 bg-white px-2 text-[11px] font-semibold text-sky-700 active:scale-95"><Repeat2 className="h-3.5 w-3.5" />{isEthDepositInput ? "改为 U 金额" : "改为 ETH 数量"}</button></div>}
           <div className="grid grid-cols-2 gap-2">
             <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
               <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-10 min-h-0 w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
             </label>
-            <label className="min-w-0 text-[11px] font-medium text-slate-600">金额（U）
-              <input inputMode="decimal" placeholder="0.00" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value)} className="mt-1 block h-10 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800" />
+            <label className="min-w-0 text-[11px] font-medium text-slate-600">{isEthDepositInput ? "币本位数量（ETH）" : "金额（U）"}
+              <input inputMode="decimal" placeholder="0.00" value={isEthDepositInput ? payoutEthQuantity : payoutAmount} onChange={(event) => isEthDepositInput ? setPayoutEthQuantity(event.target.value) : setPayoutAmount(event.target.value)} className={`mt-1 block h-10 min-h-0 w-full rounded px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800 ${isEthDepositInput ? "border border-sky-200 bg-sky-50/40" : "border border-slate-300 bg-white"}`} />
             </label>
           </div>
           {isDepositEntry && <div className="mt-3 grid grid-cols-2 gap-2">
@@ -9234,11 +9259,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 }}
                 className="mt-1 block h-10 min-h-0 w-full rounded border border-sky-200 bg-sky-50/40 px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800"
               />
-              <span className="mt-1 block text-[10px] font-normal text-sky-700">{isLegacyDepositEditing ? "可选补录参考价并生成币本位数量" : editingPayoutLog ? "修改后将重新计算本笔数量" : payoutEthReferencePriceIsManual ? "已手动输入" : payoutLiveEthPrice ? "实时价预填，可修改" : "等待实时行情"}</span>
+              <span className="mt-1 block text-[10px] font-normal text-sky-700">{isEthDepositInput ? "按 ETH × 参考价折算U入账" : isLegacyDepositEditing ? "可选补录参考价并生成币本位数量" : editingPayoutLog ? "修改后将重新计算本笔数量" : payoutEthReferencePriceIsManual ? "已手动输入" : payoutLiveEthPrice ? "实时价预填，可修改" : "等待实时行情"}</span>
             </label>
-            <div className="min-w-0 text-[11px] font-medium text-slate-600">币本位数量
-              <div className="mt-1 flex h-10 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-semibold tabular-nums text-slate-800">{payoutEthQuantityPreview === null ? "—" : formatPayoutEthQuantity(String(payoutEthQuantityPreview))} <span className="ml-1 text-[10px] font-medium text-slate-500">ETH</span></div>
-              <span className="mt-1 block text-[10px] font-normal text-slate-500">{editingPayoutLog ? "保存后按本次金额和价格更新" : "确认后固定，不跟随行情变化"}</span>
+            <div className="min-w-0 text-[11px] font-medium text-slate-600">{isEthDepositInput ? "折算金额（U）" : "币本位数量"}
+              <div className="mt-1 flex h-10 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-semibold tabular-nums text-slate-800">{isEthDepositInput ? (payoutUAmountPreview === null ? "—" : formatPrice(payoutUAmountPreview)) : (payoutEthQuantityPreview === null ? "—" : formatPayoutEthQuantity(String(payoutEthQuantityPreview)))} <span className="ml-1 text-[10px] font-medium text-slate-500">{isEthDepositInput ? "U" : "ETH"}</span></div>
+              <span className="mt-1 block text-[10px] font-normal text-slate-500">{isEthDepositInput ? "保存时以服务端定点折算为准" : editingPayoutLog ? "保存后按本次金额和价格更新" : "确认后固定，不跟随行情变化"}</span>
             </div>
           </div>}
           <label className="mt-3 block text-[11px] font-medium text-slate-600">备注（可选）
@@ -11879,7 +11904,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {payoutLedgerCashflowLogs.length > 0 ? <div className="divide-y divide-slate-100">{payoutLedgerCashflowLogs.map((log) => <div key={log.id} className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[11px] tabular-nums">
                     <span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span>
                     <span className="min-w-0 truncate text-slate-600">{log.note}</span>
-                    <span className={`whitespace-nowrap text-right font-semibold ${payoutLedgerTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}><span>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>{payoutLedgerTab === "deposit" && log.ethQuantity && <span className="mt-0.5 block text-[9px] font-medium text-slate-500">币本位数量 {formatPayoutEthQuantity(log.ethQuantity)} ETH</span>}</span>
+                    <span className={`whitespace-nowrap text-right font-semibold ${payoutLedgerTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}><span>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>{payoutLedgerTab === "deposit" && <span className="mt-0.5 block text-[9px] font-medium tabular-nums text-slate-500"><span className={log.depositInputMode === "eth" ? "text-sky-700" : "text-slate-400"}>币本位</span> {log.ethQuantity ? `${formatPayoutEthQuantity(log.ethQuantity)} ETH` : "—"}{log.ethReferencePrice && <span className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</span>
                   </div>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{payoutLedgerTab === "withdrawal" ? "提现" : "充值"}记录</div>}
                 </>}
               </section>
@@ -12178,7 +12203,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span>日期</span><span>金额</span></div>
                 {totalProfitDetailCashflowLogs.length > 0 ? <div className="divide-y divide-slate-100">{totalProfitDetailCashflowLogs.map((log) => <div key={log.id} className="px-3 py-2 tabular-nums">
                   <div className="flex items-center justify-between gap-3 text-[11px]"><span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span><span className={`whitespace-nowrap text-right font-semibold ${activeTotalProfitDetailTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span></div>
-                  {(!totalProfitAttribution.hasIndividualScope || log.note || (activeTotalProfitDetailTab === "deposit" && log.ethQuantity)) && <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] leading-4 text-slate-400">{!totalProfitAttribution.hasIndividualScope && <span className="shrink-0 text-slate-500">{log.relatedUserName}</span>}{log.note && <span className="min-w-0 break-words">备注：{log.note}</span>}{activeTotalProfitDetailTab === "deposit" && log.ethQuantity && <span className="shrink-0 tabular-nums">币本位 {formatPayoutEthQuantity(log.ethQuantity)} ETH</span>}</div>}
+                  {(!totalProfitAttribution.hasIndividualScope || log.note || activeTotalProfitDetailTab === "deposit") && <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] leading-4 text-slate-400">{!totalProfitAttribution.hasIndividualScope && <span className="shrink-0 text-slate-500">{log.relatedUserName}</span>}{log.note && <span className="min-w-0 break-words">备注：{log.note}</span>}{activeTotalProfitDetailTab === "deposit" && <span className="shrink-0 tabular-nums"><span className={log.depositInputMode === "eth" ? "text-sky-700" : "text-slate-400"}>币本位</span> {log.ethQuantity ? `${formatPayoutEthQuantity(log.ethQuantity)} ETH` : "—"}{log.ethReferencePrice && <span className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
                 </div>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{activeTotalProfitDetailTab === "withdrawal" ? "提现" : "充值"}记录</div>}
               </>}
             </div>

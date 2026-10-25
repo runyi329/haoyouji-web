@@ -134,8 +134,10 @@ export type T0JournalPayoutLog = {
   amount: number;
   /** 仅新登记的投入保存；历史资金流水保持为空，绝不按今日行情回填。 */
   ethReferencePrice?: string;
-  /** 由服务端以 U 金额 / 固定参考价计算，不接受客户端直接写入。 */
+  /** U录入时由服务端折算；ETH录入时为用户实际交付的固定数量。 */
   ethQuantity?: string;
+  /** 历史记录迁移为u；只有明确选择ETH录入的新记录才会标为eth。 */
+  depositInputMode?: "u" | "eth";
   note?: string;
   createdAt: string;
 };
@@ -149,6 +151,15 @@ function asRows(result: unknown): any[] {
 
 const PAYOUT_ETH_REFERENCE_PRICE_SCALE = 8;
 const PAYOUT_ETH_QUANTITY_SCALE = 18;
+
+function isLedger52T0ReadonlyPreview() {
+  return process.env.PREVIEW_READONLY === "true" || process.env.FAST_PREVIEW === "true" || process.env.DEV_BYPASS_AUTH === "true";
+}
+
+/** 预览环境不得因读取而ALTER真实库；新列上线前统一按历史U录入渲染。 */
+function payoutDepositInputModeSelectSql() {
+  return isLedger52T0ReadonlyPreview() ? "'u' AS deposit_input_mode" : "payout.deposit_input_mode";
+}
 
 function parsePayoutFixedDecimal(text: string, scale: number): bigint {
   const normalized = String(text || "").trim();
@@ -166,17 +177,47 @@ function formatPayoutFixedDecimal(value: bigint, scale: number): string {
 }
 
 /**
- * 资金流水的 U 金额保留两位小数，ETH 参考价最多八位小数；数量全程以整数定点计算并向下截断到18位，
- * 绝不使用 Number 或 toFixed 作为最终结算依据，以免多固化任何 ETH 数量。
+ * 存入流水始终以U作为账本金额：U录入时用 U / 参考价向下截断ETH数量；ETH录入时用 ETH × 参考价
+ * 向下截断到U分。两条路径均使用整数定点，绝不使用 Number 或 toFixed 作为最终入账依据。
  */
-function resolveDepositEthPrincipal(amountText: string, rawReferencePrice: unknown) {
+function resolveDepositEthPrincipal(input: {
+  amountText?: string;
+  rawReferencePrice: unknown;
+  rawEthQuantity?: unknown;
+}) {
+  const amountText = String(input.amountText || "").trim();
   const referencePriceText = String(rawReferencePrice || "").trim();
+  const ethQuantityText = String(input.rawEthQuantity || "").trim();
   if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/.test(referencePriceText)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请输入最多八位小数的有效 ETH 参考价" });
   }
   const referencePriceScaled = parsePayoutFixedDecimal(referencePriceText, PAYOUT_ETH_REFERENCE_PRICE_SCALE);
   if (referencePriceScaled <= 0n) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "ETH 参考价须大于 0" });
+  }
+  if (ethQuantityText) {
+    if (amountText) throw new TRPCError({ code: "BAD_REQUEST", message: "按 ETH 录入时无需同时填写 U 金额" });
+    if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/.test(ethQuantityText)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请输入最多十八位小数的有效 ETH 数量" });
+    }
+    const quantityScaled = parsePayoutFixedDecimal(ethQuantityText, PAYOUT_ETH_QUANTITY_SCALE);
+    if (quantityScaled <= 0n) throw new TRPCError({ code: "BAD_REQUEST", message: "ETH 数量须大于 0" });
+    // U分 = floor((ETH × 10^18) × (参考价 × 10^8) / 10^24)。
+    const amountCents = (quantityScaled * referencePriceScaled) / (10n ** 24n);
+    if (amountCents <= 0n) throw new TRPCError({ code: "BAD_REQUEST", message: "ETH 数量按参考价折算后不足 0.01 U" });
+    const resolvedAmount = formatPayoutFixedDecimal(amountCents, 2);
+    if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(resolvedAmount)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "ETH 折算后的 U 金额超出允许范围" });
+    }
+    return {
+      amount: resolvedAmount,
+      ethReferencePrice: formatPayoutFixedDecimal(referencePriceScaled, PAYOUT_ETH_REFERENCE_PRICE_SCALE),
+      ethQuantity: formatPayoutFixedDecimal(quantityScaled, PAYOUT_ETH_QUANTITY_SCALE),
+      depositInputMode: "eth" as const,
+    };
+  }
+  if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || Number(amountText) <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
   }
   const amountCents = parsePayoutFixedDecimal(amountText, 2);
   // qty × 10^18 = floor((U cents × 10^24) / (ETH price × 10^8))。
@@ -185,8 +226,10 @@ function resolveDepositEthPrincipal(amountText: string, rawReferencePrice: unkno
     throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额不足以生成有效的币本位数量" });
   }
   return {
+    amount: formatPayoutFixedDecimal(amountCents, 2),
     ethReferencePrice: formatPayoutFixedDecimal(referencePriceScaled, PAYOUT_ETH_REFERENCE_PRICE_SCALE),
     ethQuantity: formatPayoutFixedDecimal(quantityScaled, PAYOUT_ETH_QUANTITY_SCALE),
+    depositInputMode: "u" as const,
   };
 }
 
@@ -1509,6 +1552,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         direction ENUM('withdrawal','deposit') NOT NULL DEFAULT 'withdrawal',
         eth_reference_price DECIMAL(36,18) DEFAULT NULL,
         eth_quantity DECIMAL(36,18) DEFAULT NULL,
+        deposit_input_mode ENUM('u','eth') NOT NULL DEFAULT 'u',
         note VARCHAR(300) DEFAULT NULL,
         created_by_user_id INT NOT NULL,
         created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -1609,6 +1653,17 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_payout_logs
           ADD COLUMN eth_quantity DECIMAL(36,18) DEFAULT NULL AFTER eth_reference_price
       `);
+    }
+    // 旧版所有投入均由U金额反算ETH数量，迁移后统一标为u；绝不依据eth_quantity倒推或篡改历史来源。
+    // 热预览连接真实库但只作核对，不得在读取路径新增列。
+    if (!isLedger52T0ReadonlyPreview()) {
+      const [payoutDepositInputModeColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'deposit_input_mode'`);
+      if (asRows(payoutDepositInputModeColumns).length === 0) {
+        await db.execute(`
+          ALTER TABLE ledger52_t0_journal_payout_logs
+            ADD COLUMN deposit_input_mode ENUM('u','eth') NOT NULL DEFAULT 'u' AFTER eth_quantity
+        `);
+      }
     }
 
     const [dimensionAuditOperationColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_dimension_audits LIKE 'operation'`);
@@ -2400,15 +2455,18 @@ export async function getLedger52T0Journal(
 function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {
   const ethReferencePrice = row.eth_reference_price == null ? undefined : String(row.eth_reference_price).trim() || undefined;
   const ethQuantity = row.eth_quantity == null ? undefined : String(row.eth_quantity).trim() || undefined;
+  const direction: T0JournalPayoutDirection = String(row.direction) === "deposit" ? "deposit" : "withdrawal";
+  const depositInputMode = direction === "deposit" && String(row.deposit_input_mode) === "eth" ? "eth" as const : "u" as const;
   return {
     id: String(row.id),
     relatedUserId: toNumber(row.related_user_id),
     relatedUserName: String(row.related_user_name || `用户#${toNumber(row.related_user_id)}`),
     occurredOn: String(row.occurred_on || "").slice(0, 10),
-    direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
+    direction,
     amount: toNumber(row.amount),
     ethReferencePrice,
     ethQuantity,
+    depositInputMode: direction === "deposit" ? depositInputMode : undefined,
     note: String(row.note || "").trim() || undefined,
     createdAt: isoTime(row.created_at),
   };
@@ -2436,7 +2494,7 @@ export async function getLedger52T0JournalPayoutLogs(input: {
   }
   const sql = readAllUsers
     ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
@@ -2445,7 +2503,7 @@ export async function getLedger52T0JournalPayoutLogs(input: {
         LIMIT 5000`
     : adminScope
     ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
@@ -2453,7 +2511,7 @@ export async function getLedger52T0JournalPayoutLogs(input: {
         ORDER BY payout.occurred_on DESC, payout.id DESC
         LIMIT 500`
     : `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
@@ -2475,9 +2533,10 @@ export async function createLedger52T0JournalPayoutLog(input: {
   operatorUserId: number;
   relatedUserId: number;
   occurredOn: string;
-  amount: string;
+  amount?: string;
   direction: T0JournalPayoutDirection;
   ethReferencePrice?: string;
+  ethQuantity?: string;
   note?: string;
   maximumTotalAmount?: string;
 }) {
@@ -2486,23 +2545,25 @@ export async function createLedger52T0JournalPayoutLog(input: {
   const tx: any = connection;
   const relatedUserId = Number(input.relatedUserId);
   const occurredOn = String(input.occurredOn || "").trim();
-  const amountText = String(input.amount || "").trim();
+  let amountText = String(input.amount || "").trim();
   const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
   const rawEthReferencePrice = String(input.ethReferencePrice || "").trim();
+  const rawEthQuantity = String(input.ethQuantity || "").trim();
   const limitText = String(input.maximumTotalAmount || "").trim();
-  const amount = Number(amountText);
   const maximumTotalAmount = Number(limitText);
   if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
   }
+  // 新投入必须固定参考价。ETH录入时由服务器按 ETH × 参考价生成唯一U入账金额。
+  const ethPrincipal = direction === "deposit"
+    ? resolveDepositEthPrincipal({ amountText, rawReferencePrice: rawEthReferencePrice, rawEthQuantity })
+    : null;
+  if (ethPrincipal) amountText = ethPrincipal.amount;
+  const amount = Number(amountText);
   if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
   }
-  // 新投入必须先确认ETH参考价；数量由服务器从该输入即时计算并永久保存。
-  const ethPrincipal = direction === "deposit"
-    ? resolveDepositEthPrincipal(amountText, rawEthReferencePrice)
-    : null;
   if (direction === "withdrawal" && (!Number.isFinite(maximumTotalAmount) || maximumTotalAmount < 0)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "当前总收益无效，请刷新后重试" });
   }
@@ -2530,8 +2591,8 @@ export async function createLedger52T0JournalPayoutLog(input: {
     }
     const [result] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_payout_logs
-        (ledger_id, user_id, related_user_id, occurred_on, amount, direction, eth_reference_price, eth_quantity, note, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (ledger_id, user_id, related_user_id, occurred_on, amount, direction, eth_reference_price, eth_quantity, deposit_input_mode, note, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
         input.journalOwnerUserId,
@@ -2541,6 +2602,7 @@ export async function createLedger52T0JournalPayoutLog(input: {
         direction,
         ethPrincipal?.ethReferencePrice ?? null,
         ethPrincipal?.ethQuantity ?? null,
+        ethPrincipal?.depositInputMode ?? "u",
         note || null,
         input.operatorUserId,
       ],
@@ -2548,7 +2610,7 @@ export async function createLedger52T0JournalPayoutLog(input: {
     const insertedId = toNumber((result as any)?.insertId);
     const [rows] = await tx.execute(
       `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
@@ -2573,9 +2635,10 @@ export async function updateLedger52T0JournalPayoutLog(input: {
   relatedUserId: number;
   payoutLogId: string;
   occurredOn: string;
-  amount: string;
+  amount?: string;
   direction: T0JournalPayoutDirection;
   ethReferencePrice?: string;
+  ethQuantity?: string;
   note?: string;
   maximumTotalAmount?: string;
 }) {
@@ -2585,21 +2648,16 @@ export async function updateLedger52T0JournalPayoutLog(input: {
   const relatedUserId = Number(input.relatedUserId);
   const payoutLogId = Number(input.payoutLogId);
   const occurredOn = String(input.occurredOn || "").trim();
-  const amountText = String(input.amount || "").trim();
+  let amountText = String(input.amount || "").trim();
   const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
   const rawEthReferencePrice = String(input.ethReferencePrice || "").trim();
-  const amount = Number(amountText);
+  const rawEthQuantity = String(input.ethQuantity || "").trim();
+  let amount = Number.NaN;
   const maximumTotalAmount = Number(String(input.maximumTotalAmount || "").trim());
   if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
   if (!Number.isInteger(payoutLogId) || payoutLogId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
-  }
-  if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
-  }
-  if (direction === "withdrawal" && (!Number.isFinite(maximumTotalAmount) || maximumTotalAmount < 0)) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "当前总收益无效，请刷新后重试" });
   }
   const note = String(input.note || "").trim();
   if (note.length > 300) throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
@@ -2607,7 +2665,7 @@ export async function updateLedger52T0JournalPayoutLog(input: {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [existingRows] = await tx.execute(
-      `SELECT id, direction, eth_reference_price, eth_quantity FROM ledger52_t0_journal_payout_logs
+      `SELECT id, direction, eth_reference_price, eth_quantity, deposit_input_mode FROM ledger52_t0_journal_payout_logs
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
       [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
     );
@@ -2616,12 +2674,22 @@ export async function updateLedger52T0JournalPayoutLog(input: {
     const isLegacyDepositWithoutEthPrincipal = String(existingRow.direction) === "deposit"
       && existingRow.eth_reference_price == null
       && existingRow.eth_quantity == null;
-    if (direction === "deposit" && !rawEthReferencePrice && !isLegacyDepositWithoutEthPrincipal) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "请确认本笔投入的 ETH 参考价" });
+    let ethPrincipal: ReturnType<typeof resolveDepositEthPrincipal> | null = null;
+    if (direction === "deposit") {
+      if (rawEthQuantity || rawEthReferencePrice) {
+        ethPrincipal = resolveDepositEthPrincipal({ amountText, rawReferencePrice: rawEthReferencePrice, rawEthQuantity });
+        amountText = ethPrincipal.amount;
+      } else if (!isLegacyDepositWithoutEthPrincipal) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "请确认本笔投入的 ETH 参考价" });
+      }
     }
-    const ethPrincipal = direction === "deposit" && rawEthReferencePrice
-      ? resolveDepositEthPrincipal(amountText, rawEthReferencePrice)
-      : null;
+    amount = Number(amountText);
+    if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
+    }
+    if (direction === "withdrawal" && (!Number.isFinite(maximumTotalAmount) || maximumTotalAmount < 0)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "当前总收益无效，请刷新后重试" });
+    }
     if (direction === "withdrawal") {
       const [sumRows] = await tx.execute(
         `SELECT COALESCE(SUM(amount), 0) AS total_amount
@@ -2639,7 +2707,7 @@ export async function updateLedger52T0JournalPayoutLog(input: {
     }
     await tx.execute(
       `UPDATE ledger52_t0_journal_payout_logs
-          SET occurred_on = ?, amount = ?, direction = ?, eth_reference_price = ?, eth_quantity = ?, note = ?
+          SET occurred_on = ?, amount = ?, direction = ?, eth_reference_price = ?, eth_quantity = ?, deposit_input_mode = ?, note = ?
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?`,
       [
         occurredOn,
@@ -2647,6 +2715,7 @@ export async function updateLedger52T0JournalPayoutLog(input: {
         direction,
         ethPrincipal?.ethReferencePrice ?? null,
         ethPrincipal?.ethQuantity ?? null,
+        ethPrincipal?.depositInputMode ?? "u",
         note || null,
         payoutLogId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -2656,7 +2725,7 @@ export async function updateLedger52T0JournalPayoutLog(input: {
     );
     const [rows] = await tx.execute(
       `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id

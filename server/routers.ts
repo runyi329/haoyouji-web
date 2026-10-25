@@ -12109,14 +12109,18 @@ ${klinesSummary}
         ledgerId: z.literal(52),
         relatedUserId: z.number().int().positive(),
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
-        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数').optional(),
         direction: z.enum(['withdrawal', 'deposit']),
-        // 仅投入需要，数量始终由服务端按金额和此价格定点计算，客户端不可传入数量。
+        // 投入可按U或ETH数量录入；两种情况下均由服务端定点生成唯一U金额和固定快照。
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
+        ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
         note: z.string().trim().max(300).optional(),
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可以查看U与ETH双向折算，但不会写入资金流水' });
+        }
         const journal = await import('./ledger52-t0-journal');
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
@@ -12134,6 +12138,7 @@ ${klinesSummary}
           amount: input.amount,
           direction: input.direction,
           ethReferencePrice: input.ethReferencePrice,
+          ethQuantity: input.ethQuantity,
           note: input.note,
           maximumTotalAmount: input.maximumTotalAmount,
         });
@@ -12145,13 +12150,17 @@ ${klinesSummary}
         id: z.string().trim().regex(/^[1-9]\d*$/, '资金流水记录无效'),
         relatedUserId: z.number().int().positive(),
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
-        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数').optional(),
         direction: z.enum(['withdrawal', 'deposit']),
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
+        ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
         note: z.string().trim().max(300).optional(),
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可以查看U与ETH双向折算，但不会修改资金流水' });
+        }
         const journal = await import('./ledger52-t0-journal');
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
@@ -12169,6 +12178,7 @@ ${klinesSummary}
           amount: input.amount,
           direction: input.direction,
           ethReferencePrice: input.ethReferencePrice,
+          ethQuantity: input.ethQuantity,
           note: input.note,
           maximumTotalAmount: input.maximumTotalAmount,
         });
@@ -12181,6 +12191,9 @@ ${klinesSummary}
         relatedUserId: z.number().int().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：不会删除资金流水' });
+        }
         const journal = await import('./ledger52-t0-journal');
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
