@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-25
+// 生成时间：2026-10-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9765,5 +9765,20 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-10-25": [
     { date: "2026-10-24T16:33:55Z", type: "feat", cleanMessage: "add T0 weekly income settlement" },
+    { date: "2026-10-24T19:52:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-25T01:33:49Z", type: "feat", cleanMessage: "support U and ETH deposit entry" },
+    { date: "2026-10-25T01:55:41Z", type: "fix", cleanMessage: "allow payout writes outside readonly preview" },
+    { date: "2026-10-25T02:16:58Z", type: "fix", cleanMessage: "send payout writes outside mobile batch" },
+    { date: "2026-10-25T02:34:29Z", type: "fix", cleanMessage: "resolve ETH deposit reference price input" },
+    { date: "2026-10-25T03:30:37Z", type: "style", cleanMessage: "align counterparty quote status icon" },
+    { date: "2026-10-25T04:45:27Z", type: "feat", cleanMessage: "filter member orders by authorized source" },
+    { date: "2026-10-25T06:17:37Z", type: "fix", cleanMessage: "unify member settlement and team overview" },
+    { date: "2026-10-25T11:28:46Z", type: "feat", cleanMessage: "add Herbalife product series" },
+    { date: "2026-10-25T12:16:08Z", type: "feat", cleanMessage: "add team weekly settlement carousel" },
+    { date: "2026-10-25T12:35:27Z", type: "fix", cleanMessage: "verify session before global logout" },
+    { date: "2026-10-25T15:55:27Z", type: "fix", cleanMessage: "preserve session on product navigation" },
+  ],
+  "2026-10-26": [
+    { date: "2026-10-25T16:40:52Z", type: "fix", cleanMessage: "stabilize miban sessions" },
   ],
 };
