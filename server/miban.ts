@@ -34,6 +34,7 @@ import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
+import { getMibanLimitedProduct, getMibanLimitedProductSku } from "../shared/miban-limited-products";
 
 // 管理员中间件：米伴管理操作必须在服务端验证系统管理员身份。
 // 前端页面隐藏只改善体验，不能作为资金、订单和用户数据的授权边界。
@@ -2340,6 +2341,130 @@ export const mibanOrderRouter = router({
       try { await (conn as any).end(); } catch {}
     }
   }),
+});
+
+// ─── 静态限时商品下单路由 ──────────────────────────────────────────────────────
+// 商品与 SKU 的名称、金额、图片和单位都从 shared/miban-limited-products.ts 读取。
+// 浏览器只提交 productKey、skuId、数量和收货信息，不能篡改成交金额或伪造成米种。
+export const mibanLimitedProductRouter = router({
+  createOrder: protectedProcedure
+    .input(
+      z.object({
+        productKey: z.string().min(1).max(80),
+        skuId: z.string().min(1).max(80),
+        quantity: z.number().int().min(1).max(20),
+        receiverName: z.string().trim().min(1).max(64),
+        receiverPhone: z.string().trim().min(11).max(20),
+        receiverAddress: z.string().trim().min(5).max(500),
+        userNote: z.string().trim().max(500).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertAiWalletOperationEnabled(
+        "version:proj_hzxm2t",
+        "order_debit"
+      );
+
+      const product = getMibanLimitedProduct(input.productKey);
+      if (!product || product.status !== "on_sale") {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "该商品暂未上架或已结束销售",
+        });
+      }
+      const sku = getMibanLimitedProductSku(product, input.skuId);
+      if (!sku) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "商品规格不可购买",
+        });
+      }
+      if (input.quantity > sku.maxPurchaseQty) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `单笔最多购买 ${sku.maxPurchaseQty}${sku.unitLabel}`,
+        });
+      }
+
+      const userId = ctx.user!.id;
+      const totalCny = Number((sku.priceCny * input.quantity).toFixed(2));
+      const cnyBalance = await getUserCnyBalance(userId);
+      const usdtBalance = await getUserBalance(userId);
+      const usdtRate = await getUsdtCnyRate();
+      const totalAvailableCny = cnyBalance + usdtBalance * usdtRate;
+
+      if (totalAvailableCny < totalCny - 0.001) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `余额不足，需要 ¥${totalCny.toFixed(2)}，当前可用 ¥${totalAvailableCny.toFixed(2)}，请先充值`,
+        });
+      }
+
+      const deductCny = Math.min(cnyBalance, totalCny);
+      const deductUsdt = Math.max(0, (totalCny - deductCny) / usdtRate);
+      const orderNo = `LP${nanoid(10).toUpperCase()}`;
+      const productLine = {
+        kind: "limited_product" as const,
+        productKey: product.key,
+        skuId: sku.id,
+        name: product.detail.title,
+        skuName: sku.name,
+        quantity: input.quantity,
+        unitLabel: sku.unitLabel,
+        netContentText: sku.netContentText,
+        colorHex: product.card.theme.accent,
+      };
+
+      const orderId = await createOrder({
+        orderNo,
+        userId,
+        recipeName: `${product.detail.title} · ${sku.name}`,
+        ingredients: JSON.stringify([productLine]) as any,
+        // 旧表字段必须非空；限时商品的数量以 ingredients 中 quantity + unitLabel 为准。
+        totalWeightJin: String(input.quantity) as any,
+        totalPrice: String(totalCny) as any,
+        receiverName: input.receiverName,
+        receiverPhone: input.receiverPhone,
+        receiverAddress: input.receiverAddress,
+        userNote: input.userNote || undefined,
+        productImg: sku.image || product.detail.productImage,
+        walletDeductCny: String(deductCny) as any,
+        walletDeductUsdt: String(deductUsdt) as any,
+        usdtCnyRateAtOrder: String(usdtRate) as any,
+        // 限时商品不得复用米种的分佣模型。
+        commissionTrigger: "not_eligible",
+      });
+
+      const deductNote = `米伴精选商品订单扣款 #${orderNo}`;
+      if (deductCny > 0.001) {
+        await adminAdjustCnyBalance({
+          userId,
+          amount: -deductCny,
+          note: deductNote,
+          operatorId: userId,
+        });
+      }
+      if (deductUsdt > 0.000001) {
+        await addUserBalance(
+          userId,
+          -deductUsdt,
+          "reward",
+          orderId,
+          `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
+        );
+      }
+
+      console.log(
+        `[Miban] 限时商品订单创建并扣款成功: orderId=${orderId}, product=${product.key}, sku=${sku.id}`
+      );
+      return {
+        orderId,
+        orderNo,
+        totalCny,
+        quantity: input.quantity,
+        unitLabel: sku.unitLabel,
+      };
+    }),
 });
 
 // ─── 售后申请路由 ───────────────────────────────────────────────────────────────────────────────

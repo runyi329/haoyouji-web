@@ -550,6 +550,11 @@ function OrdersPanel() {
       )}
       {filteredOrders.map((order: any) => {
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
+        const limitedProductLine = ingredients.find((item: any) => item?.kind === "limited_product");
+        const isLimitedProduct = Boolean(limitedProductLine);
+        const itemQuantityLabel = isLimitedProduct
+          ? `${limitedProductLine.quantity}${limitedProductLine.unitLabel}`
+          : `${order.totalWeightJin}斤`;
         const statusColor = STATUS_COLORS[order.status] ?? "text-gray-500 bg-gray-100";
         const isSelected = selectedIds.has(order.id);
         return (
@@ -583,7 +588,12 @@ function OrdersPanel() {
                 {ORDER_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-            {ingredients.length > 0 && (
+            {isLimitedProduct ? (
+              <div className="mb-2 rounded-lg bg-rose-50 px-2.5 py-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2"><span className="font-semibold text-gray-700">{limitedProductLine.skuName || limitedProductLine.name}</span><span className="font-bold text-rose-700">{itemQuantityLabel}</span></div>
+                {limitedProductLine.netContentText && <div className="mt-0.5 text-gray-400">{limitedProductLine.netContentText}</div>}
+              </div>
+            ) : ingredients.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {ingredients.map((ing: any, i: number) => (
                   <span key={i} className="flex items-center gap-1 text-[11px] bg-gray-50 px-2 py-0.5 rounded-full text-gray-500">
@@ -595,7 +605,7 @@ function OrdersPanel() {
             )}
             <div className="flex items-center gap-2">
               <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</span>
-              <span className="text-[11px] text-gray-400">· {order.totalWeightJin}斤</span>
+              <span className="text-[11px] text-gray-400">· {itemQuantityLabel}</span>
             </div>
             {order.status === "confirmed" && (
               <div className="mt-2 space-y-1.5">

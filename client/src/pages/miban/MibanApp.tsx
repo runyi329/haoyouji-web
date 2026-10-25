@@ -19,6 +19,8 @@ import JoinPage from "./JoinPage";
 import BrandAssets from "./BrandAssets";
 import TianguiPearDetail from "./TianguiPearDetail";
 import ReviewPage from "./ReviewPage";
+import HerbalifeRedGinsengDetail from "./HerbalifeRedGinsengDetail";
+import LimitedBrandProducts from "./LimitedBrandProducts";
 
 const BASE = "/p/proj_hzxm2t";
 
@@ -30,6 +32,9 @@ export default function MibanApp() {
       <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
         <Switch>
           <Route path={`${BASE}/pear/tiangui`} component={TianguiPearDetail} />
+          <Route path={`${BASE}/limited/herbalife-red-ginseng`} component={HerbalifeRedGinsengDetail} />
+          <Route path={`${BASE}/limited/herbalife`} component={LimitedBrandProducts} />
+          <Route path={`${BASE}/limited/:productKey`} component={HerbalifeRedGinsengDetail} />
           <Route path={`${BASE}/review`} component={ReviewPage} />
           <Route path={`${BASE}/rice/:id`} component={RiceDetail} />
           <Route path={`${BASE}/rice`} component={RiceEncyclopedia} />

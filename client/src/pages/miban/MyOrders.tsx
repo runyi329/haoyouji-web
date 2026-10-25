@@ -137,6 +137,11 @@ function OrdersTab() {
       ? (daysLeft > 0 ? `${daysLeft}天${hoursLeft}小时${minsLeft}分后自动确认` : hoursLeft > 0 ? `${hoursLeft}小时${minsLeft}分后自动确认` : `${minsLeft}分钟后自动确认`)
       : "即将自动确认收货";
     const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
+    const limitedProductLine = ingredients.find((item: any) => item?.kind === "limited_product");
+    const isLimitedProduct = Boolean(limitedProductLine);
+    const itemQuantityLabel = isLimitedProduct
+      ? `${limitedProductLine.quantity}${limitedProductLine.unitLabel}`
+      : `${order.totalWeightJin} 斤`;
     const hasTracking = !!(order.trackingNo || order.trackingNumber);
     const trackingNo = order.trackingNo || order.trackingNumber || "";
     const trackingCompany = order.trackingCompany || "";
@@ -184,12 +189,22 @@ function OrdersTab() {
             </div>
             <div className="text-right flex-shrink-0">
               <p className="text-[18px] font-bold leading-tight" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{order.totalWeightJin} 斤</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{itemQuantityLabel}</p>
             </div>
           </div>
 
-          {/* ── 米种配比可视化 ── */}
-          {ingredients.length > 0 && (() => {
+          {/* ── 静态限时商品明细 / 米种配比可视化 ── */}
+          {isLimitedProduct ? (
+            <div className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-gray-800 truncate">{limitedProductLine.skuName || limitedProductLine.name}</div>
+                  {limitedProductLine.netContentText && <div className="mt-0.5 text-[11px] text-gray-400">{limitedProductLine.netContentText}</div>}
+                </div>
+                <span className="flex-shrink-0 text-[12px] font-bold text-rose-700">{itemQuantityLabel}</span>
+              </div>
+            </div>
+          ) : ingredients.length > 0 && (() => {
             const totalW = ingredients.reduce((s: number, ing: any) => s + (ing.weightJin || 0), 0) || Number(order.totalWeightJin) || 1;
             const slices = ingredients.map((ing: any) => ({
               ...ing,
@@ -335,8 +350,8 @@ function OrdersTab() {
             </div>
           )}
 
-          {/* ── 去评价（已送达状态） ── */}
-          {order.status === "delivered" && (
+          {/* ── 去评价（已送达状态；静态限时商品首发暂不开评价） ── */}
+          {order.status === "delivered" && !isLimitedProduct && (
             <div className="pt-2 border-t border-gray-100 flex justify-end">
               <button
                 onClick={() => { window.location.href = `/p/proj_hzxm2t/review?orderId=${order.id}`; }}

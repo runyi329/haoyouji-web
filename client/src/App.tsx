@@ -508,6 +508,9 @@ function Router() {
         {/* 米伴独立应用：必须在 /p/:slug 通配路由之前注册，否则会被 ProjectLanding 拦截 */}
         {/* 天桂梨详情页：单独注册，确保直接访问多级路径时不被404拦截 */}
         <Route path="/p/proj_hzxm2t/pear/tiangui" component={lazy(() => import("./pages/miban/MibanApp"))} />
+        <Route path="/p/proj_hzxm2t/limited/herbalife-red-ginseng" component={lazy(() => import("./pages/miban/MibanApp"))} />
+        <Route path="/p/proj_hzxm2t/limited/herbalife" component={lazy(() => import("./pages/miban/MibanApp"))} />
+        <Route path="/p/proj_hzxm2t/limited/:productKey" component={lazy(() => import("./pages/miban/MibanApp"))} />
         <Route path="/p/proj_hzxm2t/pear/:id" component={lazy(() => import("./pages/miban/MibanApp"))} />
         <Route path="/p/proj_hzxm2t/admin/panel" component={lazy(() => import("./pages/miban/MibanApp"))} />
         <Route path="/p/proj_hzxm2t/:rest*" component={lazy(() => import("./pages/miban/MibanApp"))} />
