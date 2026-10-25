@@ -153,7 +153,7 @@ const PAYOUT_ETH_REFERENCE_PRICE_SCALE = 8;
 const PAYOUT_ETH_QUANTITY_SCALE = 18;
 
 function isLedger52T0ReadonlyPreview() {
-  return process.env.PREVIEW_READONLY === "true" || process.env.FAST_PREVIEW === "true" || process.env.DEV_BYPASS_AUTH === "true";
+  return process.env.PREVIEW_READONLY === "true" || process.env.FAST_PREVIEW === "true";
 }
 
 /** 预览环境不得因读取而ALTER真实库；新列上线前统一按历史U录入渲染。 */

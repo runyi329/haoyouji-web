@@ -12118,7 +12118,7 @@ ${klinesSummary}
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可以查看U与ETH双向折算，但不会写入资金流水' });
         }
         const journal = await import('./ledger52-t0-journal');
@@ -12158,7 +12158,7 @@ ${klinesSummary}
         maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可以查看U与ETH双向折算，但不会修改资金流水' });
         }
         const journal = await import('./ledger52-t0-journal');
@@ -12191,7 +12191,7 @@ ${klinesSummary}
         relatedUserId: z.number().int().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：不会删除资金流水' });
         }
         const journal = await import('./ledger52-t0-journal');
