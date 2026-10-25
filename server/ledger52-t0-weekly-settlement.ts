@@ -6,6 +6,7 @@ import { listLedger52T0SettlementAdjustments, type Ledger52T0SettlementAdjustmen
 import {
   calculateLedger52T0IncomeByClosing,
   calculateLedger52T0IncomeByUser,
+  getLedger52T0TeamOverview,
   type Ledger52T0IncomeReduction,
   type Ledger52T0IncomeSnapshot,
   type Ledger52T0IncomeTrade,
@@ -927,6 +928,62 @@ export async function getLedger52T0WeeklySettlementCenter(input: {
       income: "订单收益按实际平仓成交时间归周，分佣和共享跟随来源平仓；已扣开仓与平仓手续费。",
       freeze: "本金与充值、提现由独立资金流水管理，不进入本周收益结算。历史回溯仅为当前事实数据的未冻结核算；北京时间每周一00:05后冻结上一完整周收益，冻结报告不可改写，后续差异另行追加调整报告。",
     },
+  };
+}
+
+/**
+ * 团队负责人在个人结算页的第二张滑动卡：只展示其递归下属的本周收益汇总。
+ * 名单严格复用团队总览的52号账本、非期权T+0活动筛选；负责人本人不包含在成员或汇总中。
+ * 只读实时计算，不返回成员订单、资金流水或历史周报，更不会冻结、写入或调整任何结算数据。
+ */
+export async function getLedger52T0TeamWeeklySettlement(input: {
+  journalOwnerUserId: number;
+  rootUserId: number;
+}) {
+  const [teamOverview, journal] = await Promise.all([
+    getLedger52T0TeamOverview({ journalOwnerUserId: input.journalOwnerUserId, rootUserId: input.rootUserId }),
+    getLedger52T0Journal(
+      { mode: "admin", journalOwnerUserId: input.journalOwnerUserId } satisfies T0JournalReadScope,
+      { skipTableEnsure: true, fullRead: true },
+    ),
+  ]);
+  if (!teamOverview.enabled) return { enabled: false as const };
+
+  // 团队口径完整排除期权：不仅排除期权平仓，也排除以期权开仓/平仓为来源的分佣与共享。
+  const nonOptionEntries = (Array.isArray((journal as any)?.entries) ? (journal as any).entries : [])
+    .filter((entry: any) => String(entry?.instrumentType || "contract") !== "option");
+  const nonOptionEntryIds = new Set(nonOptionEntries.map((entry: any) => String(entry.id)));
+  const teamJournal = {
+    ...journal,
+    entries: nonOptionEntries,
+    profitShareSnapshots: (Array.isArray((journal as any)?.profitShareSnapshots) ? (journal as any).profitShareSnapshots : [])
+      .filter((snapshot: any) => nonOptionEntryIds.has(String(snapshot?.openingEntryId))),
+    sharedIncomeTransfers: (Array.isArray((journal as any)?.sharedIncomeTransfers) ? (journal as any).sharedIncomeTransfers : [])
+      .filter((transfer: any) => nonOptionEntryIds.has(String(transfer?.closingEntryId))),
+    sharedIncomeReductions: (Array.isArray((journal as any)?.sharedIncomeReductions) ? (journal as any).sharedIncomeReductions : [])
+      .filter((reduction: any) => nonOptionEntryIds.has(String(reduction?.closingEntryId))),
+  };
+  const current = buildWeeklySettlementReport(teamJournal, getLedger52T0WeekWindow(), "realtime");
+  const currentMemberByUserId = new Map(current.members.map((member) => [member.userId, member]));
+  const members = teamOverview.members.map((member) => {
+    const currentMember = currentMemberByUserId.get(member.userId);
+    return {
+      userId: member.userId,
+      name: member.name,
+      avatar: member.avatar,
+      income: currentMember ? { ...currentMember.income } : emptyIncome(),
+    };
+  }).sort((left, right) => right.income.total - left.income.total || left.name.localeCompare(right.name, "zh-CN") || left.userId - right.userId);
+  return {
+    enabled: true as const,
+    generatedAt: current.generatedAt,
+    period: current.period,
+    summary: {
+      participantCount: members.length,
+      income: sumIncomeParts(members.map((member) => member.income)),
+    },
+    members,
+    definition: "仅展示负责人递归下属的本周已实现订单、分佣与共享收益；不含负责人本人、未平仓浮盈亏、本金、充值、提现、钱包余额、期权及其相关收益。",
   };
 }
 
