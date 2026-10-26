@@ -597,13 +597,17 @@ async function getLedger52MemberUserIds(userIds: number[]) {
 export async function getLedger52T0TeamOverview(input: {
   journalOwnerUserId: number;
   rootUserId: number;
+  /** 周结算可传入同一份只读财务快照，避免资格筛选与收益计算重复扫描账本。 */
+  financialFacts?: Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>> | Promise<Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>>>;
 }) {
   if (!LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(input.rootUserId)) return { enabled: false as const };
   const [allDescendants, journal] = await Promise.all([
     getRecursiveTeamMembers(input.rootUserId),
-    // 团队页只在负责人实际点开时读取完整历史；专用读取器分批取收益和XIRR所需事实，
-    // 不沿用报价页首屏限流，也不加载无关目录、行情、审计或提醒。
-    getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId }),
+    input.financialFacts
+      ? Promise.resolve(input.financialFacts)
+      // 团队页只在负责人实际点开时读取完整历史；专用读取器分批取收益和XIRR所需事实，
+      // 不沿用报价页首屏限流，也不加载无关目录、行情、审计或提醒。
+      : getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId }),
   ]);
   const entries = Array.isArray((journal as any).entries) ? (journal as any).entries : [];
   const transfers = Array.isArray((journal as any).sharedIncomeTransfers) ? (journal as any).sharedIncomeTransfers : [];

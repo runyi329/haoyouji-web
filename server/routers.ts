@@ -11999,12 +11999,13 @@ ${klinesSummary}
         return await teamOverview.getLedger52T0TeamOverview({ journalOwnerUserId, rootUserId });
       }),
 
-    // 团队负责人在个人结算页查看下属本周汇总：只读、只返回已授权递归下属的三项收益，
-    // 不下发成员订单、资金流水、历史周报或任何全局结算信息。
+    // 团队负责人在个人结算页查看下属的指定周汇总：只读、只返回已授权递归下属的三项收益，
+    // 不下发成员订单、资金流水或任何全局结算信息。
     t0GetTeamWeeklySettlement: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
         previewUserId: z.number().int().positive().optional(),
+        weekStartBjt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
@@ -12054,7 +12055,7 @@ ${klinesSummary}
           journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
         }
         if (!teamOverview.LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(rootUserId)) return { enabled: false };
-        return await weeklySettlement.getLedger52T0TeamWeeklySettlement({ journalOwnerUserId, rootUserId });
+        return await weeklySettlement.getLedger52T0TeamWeeklySettlement({ journalOwnerUserId, rootUserId, weekStartBjt: input.weekStartBjt });
       }),
 
     // 管理员选择T+0用户视角时，仅展示在本账本内且拥有可见T+0订单范围的普通成员。

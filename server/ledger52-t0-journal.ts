@@ -2276,6 +2276,8 @@ export async function getLedger52T0Journal(
     getTakeProfitPlansByEntryId(conn, entryIds),
   ]);
 
+	// 回退或删除平仓只移除活动订单，原共享转账仍保留为审计凭证；
+	// 一切有效收益读取都必须以仍存在的来源平仓单为前提，绝不能让已回退订单继续产生共享、贡献或年化。
 	const [sharedIncomeTransferResult, sharedIncomeReductionResult, sharedIncomeContributionResult, sharedIncomeEligibilityResult] = await Promise.all([
 	  conn.execute(
     `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
@@ -2284,6 +2286,12 @@ export async function getLedger52T0Journal(
             COALESCE(NULLIF(recipient_user.name, ''), NULLIF(recipient_user.username, ''), CONCAT('用户#', transfer.recipient_user_id)) AS recipient_user_name,
             recipient_user.username AS recipient_username
        FROM ledger52_t0_journal_shared_income_transfers transfer
+       INNER JOIN ledger52_t0_journal_entries source_closing
+         ON source_closing.id = transfer.closing_entry_id
+        AND source_closing.ledger_id = transfer.ledger_id
+        AND source_closing.user_id = transfer.user_id
+        AND source_closing.action IN ('closeLong', 'closeShort')
+        AND source_closing.execution_status = 'filled'
        LEFT JOIN users source_user ON source_user.id = transfer.source_user_id
        LEFT JOIN users recipient_user ON recipient_user.id = transfer.recipient_user_id
       WHERE transfer.ledger_id = ?${isAdminScope ? ' AND transfer.user_id = ?' : ' AND transfer.recipient_user_id = ?'}
@@ -2307,9 +2315,15 @@ export async function getLedger52T0Journal(
 	      ? conn.execute(
 	        `SELECT source_user_id, COALESCE(SUM(amount), 0) AS total_amount,
 	                COUNT(DISTINCT closing_entry_id) AS order_count
-	           FROM ledger52_t0_journal_shared_income_transfers
-	          WHERE ledger_id = ? AND user_id = ? AND source_user_id IS NOT NULL
-	          GROUP BY source_user_id`,
+	           FROM ledger52_t0_journal_shared_income_transfers transfer
+	           INNER JOIN ledger52_t0_journal_entries source_closing
+	             ON source_closing.id = transfer.closing_entry_id
+	            AND source_closing.ledger_id = transfer.ledger_id
+	            AND source_closing.user_id = transfer.user_id
+	            AND source_closing.action IN ('closeLong', 'closeShort')
+	            AND source_closing.execution_status = 'filled'
+	          WHERE transfer.ledger_id = ? AND transfer.user_id = ? AND transfer.source_user_id IS NOT NULL
+	          GROUP BY transfer.source_user_id`,
 	        [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
 	      )
 	      : Promise.resolve([[]]),
@@ -2553,7 +2567,9 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       }
     }
 
-    let transferCursorCreatedAt: string | null = null;
+	    // 已回退的来源平仓没有活动订单行；其原共享转账仅作审计保留，
+	    // 不得进入全量财务事实，以免周结算、账户对账或年化继续把它当收益。
+	    let transferCursorCreatedAt: string | null = null;
     let transferCursorId = 0;
     while (true) {
       const transferCursorSql = transferCursorCreatedAt !== null
@@ -2561,11 +2577,17 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
         : "";
       const transferParams: Array<string | number> = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
       if (transferCursorCreatedAt !== null) transferParams.push(transferCursorCreatedAt, transferCursorCreatedAt, transferCursorId);
-      const [transferResult] = await conn.execute(
+	      const [transferResult] = await conn.execute(
         `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
                 transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at,
                 DATE_FORMAT(transfer.created_at, '%Y-%m-%d %H:%i:%s.%f') AS cursor_created_at
            FROM ledger52_t0_journal_shared_income_transfers transfer
+	           INNER JOIN ledger52_t0_journal_entries source_closing
+	             ON source_closing.id = transfer.closing_entry_id
+	            AND source_closing.ledger_id = transfer.ledger_id
+	            AND source_closing.user_id = transfer.user_id
+	            AND source_closing.action IN ('closeLong', 'closeShort')
+	            AND source_closing.execution_status = 'filled'
           WHERE transfer.ledger_id = ? AND transfer.user_id = ?${transferCursorSql}
           ORDER BY transfer.created_at DESC, transfer.id DESC
           LIMIT ${pageSize}`,
@@ -4940,11 +4962,25 @@ async function writeEntryAudit(tx: any, input: {
 
 async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any) {
   const entryId = toNumber(entry.id);
-  const [profitShareSnapshots, plansByEntryId] = await Promise.all([
+  const [profitShareSnapshots, plansByEntryId, sharedIncomeTransferRows] = await Promise.all([
     getEntryProfitShareSnapshotRows(tx, { actorUserId, entryIds: [entryId], lock: true }),
     getTakeProfitPlansByEntryId(tx, [entryId], true),
+    tx.execute(
+      `SELECT id, closing_entry_id, source_user_id, recipient_user_id, amount, source_net_pnl,
+              manager_pool_amount, reduces_regular_distribution, created_by_user_id, created_at
+         FROM ledger52_t0_journal_shared_income_transfers
+        WHERE ledger_id = ? AND user_id = ? AND closing_entry_id = ?
+        ORDER BY id ASC FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, actorUserId, entryId],
+    ),
   ]);
-  return { ...entry, take_profit_plans: plansByEntryId.get(entryId) ?? [], profitShareSnapshots };
+  return {
+    ...entry,
+    take_profit_plans: plansByEntryId.get(entryId) ?? [],
+    profitShareSnapshots,
+    // 共享转账保留在原表，回退时不删除；审计快照同步封存，恢复同一平仓ID后可自然重获有效性。
+    sharedIncomeTransfers: asRows(sharedIncomeTransferRows),
+  };
 }
 
 type DeribitOptionDelivery = {

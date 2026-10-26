@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection, withDatabaseLock } from "./db";
-import { getLedger52T0Journal, getLedger52T0JournalSettlementFinancialFacts, type T0JournalReadScope } from "./ledger52-t0-journal";
+import { getLedger52T0Journal, getLedger52T0JournalSettlementFinancialFacts, getLedger52T0JournalTeamFinancialFacts, type T0JournalReadScope } from "./ledger52-t0-journal";
 import { listLedger52T0SettlementAdjustments, type Ledger52T0SettlementAdjustment } from "./ledger52-t0-settlement-adjustments";
 import {
   createLedger52T0SettlementReconciliationConfirmation,
@@ -1112,20 +1112,21 @@ export async function getLedger52T0WeeklySettlementCenter(input: {
 }
 
 /**
- * 团队负责人在个人结算页的第二张滑动卡：只展示其递归下属的本周收益汇总。
+ * 团队负责人在个人结算页的团队Tab：只展示其递归下属的指定结算周收益汇总。
  * 名单严格复用团队总览的52号账本、非期权T+0活动筛选；负责人本人不包含在成员或汇总中。
- * 只读实时计算，不返回成员订单、资金流水或历史周报，更不会冻结、写入或调整任何结算数据。
+ * 本周为实时计算，历史周为当前事实下的只读回溯核算；不返回订单或资金流水，更不会冻结、写入或调整结算数据。
  */
 export async function getLedger52T0TeamWeeklySettlement(input: {
   journalOwnerUserId: number;
   rootUserId: number;
+  weekStartBjt?: string;
 }) {
+  // 团队资格和周收益共用一份只读一致性快照：此前两条路径会各自扫描一次完整账本，
+  // 是团队Tab首次打开较慢的主要原因。保留团队总览原有资格口径，不以缓存或近似数据替代。
+  const financialFactsPromise = getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId });
   const [teamOverview, journal] = await Promise.all([
-    getLedger52T0TeamOverview({ journalOwnerUserId: input.journalOwnerUserId, rootUserId: input.rootUserId }),
-    getLedger52T0Journal(
-      { mode: "admin", journalOwnerUserId: input.journalOwnerUserId } satisfies T0JournalReadScope,
-      { skipTableEnsure: true, fullRead: true },
-    ),
+    getLedger52T0TeamOverview({ journalOwnerUserId: input.journalOwnerUserId, rootUserId: input.rootUserId, financialFacts: financialFactsPromise }),
+    financialFactsPromise,
   ]);
   if (!teamOverview.enabled) return { enabled: false as const };
 
@@ -1143,27 +1144,51 @@ export async function getLedger52T0TeamWeeklySettlement(input: {
     sharedIncomeReductions: (Array.isArray((journal as any)?.sharedIncomeReductions) ? (journal as any).sharedIncomeReductions : [])
       .filter((reduction: any) => nonOptionEntryIds.has(String(reduction?.closingEntryId))),
   };
-  const current = buildWeeklySettlementReport(teamJournal, getLedger52T0WeekWindow(), "realtime");
-  const currentMemberByUserId = new Map(current.members.map((member) => [member.userId, member]));
+  const currentWindow = getLedger52T0WeekWindow();
+  const selectedWeekStartBjt = input.weekStartBjt ? assertWeekStartBjt(input.weekStartBjt) : currentWindow.weekStartBjt;
+  if (selectedWeekStartBjt > currentWindow.weekStartBjt) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "不能读取未来结算周的团队收益" });
+  }
+  const window = selectedWeekStartBjt === currentWindow.weekStartBjt
+    ? currentWindow
+    : getWeekWindowFromStart(selectedWeekStartBjt);
+  const status: SettlementReport["status"] = selectedWeekStartBjt === currentWindow.weekStartBjt ? "realtime" : "backfill";
+  const facts = getSettlementIncomeFacts(teamJournal);
+  const attribution = buildSettlementIncomeAttribution(facts);
+  const report = buildWeeklySettlementReport(teamJournal, window, status, undefined, facts, attribution);
+  const teamMemberIds = new Set(teamOverview.members.map((member) => member.userId));
+  const availableWeekStarts = Array.from(new Set([
+    currentWindow.weekStartBjt,
+    ...attribution.closings.flatMap((closingIncome) => {
+      if (closingIncome.closing.isPending || !closingIncome.allocations.some((allocation) => teamMemberIds.has(allocation.userId))) return [];
+      const closingDate = getBeijingDateFromValue(getEffectiveTradeOccurredAt(closingIncome.closing));
+      const weekStartBjt = closingDate ? getWeekStartBjtForDate(closingDate) : null;
+      return weekStartBjt ? [weekStartBjt] : [];
+    }),
+  ])).sort((left, right) => left.localeCompare(right));
+  const reportMemberByUserId = new Map(report.members.map((member) => [member.userId, member]));
   const members = teamOverview.members.map((member) => {
-    const currentMember = currentMemberByUserId.get(member.userId);
+    const reportMember = reportMemberByUserId.get(member.userId);
     return {
       userId: member.userId,
       name: member.name,
       avatar: member.avatar,
-      income: currentMember ? { ...currentMember.income } : emptyIncome(),
+      income: reportMember ? { ...reportMember.income } : emptyIncome(),
     };
   }).sort((left, right) => right.income.total - left.income.total || left.name.localeCompare(right.name, "zh-CN") || left.userId - right.userId);
   return {
     enabled: true as const,
-    generatedAt: current.generatedAt,
-    period: current.period,
+    generatedAt: report.generatedAt,
+    status: report.status,
+    currentWeekStartBjt: currentWindow.weekStartBjt,
+    availableWeekStarts,
+    period: report.period,
     summary: {
       participantCount: members.length,
       income: sumIncomeParts(members.map((member) => member.income)),
     },
     members,
-    definition: "仅展示负责人递归下属的本周已实现订单、分佣与共享收益；不含负责人本人、未平仓浮盈亏、本金、充值、提现、钱包余额、期权及其相关收益。",
+    definition: `${status === "realtime" ? "本周为实时汇总" : "历史周为当前完整事实的回溯核算，不替代成员冻结周报"}；仅展示负责人递归下属的已实现订单、分佣与共享收益；不含负责人本人、未平仓浮盈亏、本金、充值、提现、钱包余额、期权及其相关收益。`,
   };
 }
 

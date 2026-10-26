@@ -221,6 +221,9 @@ type T0WeeklySettlementCenter = {
 type T0TeamWeeklySettlement = {
   enabled: boolean;
   generatedAt?: string;
+  status?: "realtime" | "backfill";
+  currentWeekStartBjt?: string;
+  availableWeekStarts?: string[];
   period?: T0WeeklySettlementReport["period"];
   summary?: { participantCount: number; income: T0WeeklySettlementIncome };
   members?: Array<{
@@ -577,28 +580,26 @@ function T0HistoricalSettlementWeekCalendar({ reports, dailyIncomeByDate, target
   </div>;
 }
 
-function T0SettlementSwipeGuide({ direction }: { direction: "team" | "self" }) {
-  const isToTeam = direction === "team";
-  const label = isToTeam ? "左滑查看团队结算" : "右滑返回个人结算";
-  return <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-600" aria-label={label}>
-    {isToTeam ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-  </span>;
-}
-
 function T0MemberWeeklySettlementCurrentCard({
   report,
   displayName,
   avatar,
   countdown,
   isRealtimeWeek,
-  showTeamSwipeHint = false,
+  onPreviousWeek,
+  onNextWeek,
+  hasPreviousWeek = false,
+  hasNextWeek = false,
 }: {
   report: T0WeeklySettlementReport;
   displayName: string;
   avatar?: string;
   countdown: number | null;
   isRealtimeWeek: boolean;
-  showTeamSwipeHint?: boolean;
+  onPreviousWeek?: () => void;
+  onNextWeek?: () => void;
+  hasPreviousWeek?: boolean;
+  hasNextWeek?: boolean;
 }) {
   const income = report.summary.income;
   const periodStatusLabel = isRealtimeWeek ? "距下期结算" : report.status === "frozen" ? "已冻结" : "本期已结束";
@@ -608,11 +609,51 @@ function T0MemberWeeklySettlementCurrentCard({
       <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-300">结算周期</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tabular-nums">{formatT0WeeklySettlementPeriod(report.period.weekStartBjt, report.period.weekEndExclusiveBjt)} <span className="ml-1 text-[10px] font-medium text-slate-300">北京时间</span></div></div>
       <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">{periodStatusLabel}</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{periodStatusValue}</div></div>
     </div>
-    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">{displayName}{isRealtimeWeek ? "本周" : "本期"}收益结算</div><div className="mt-1 flex items-center justify-center gap-2"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">{avatar ? <img src={avatar} alt={`${displayName}头像`} className="h-full w-full object-cover" /> : <span>{displayName.slice(0, 1)}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div>{showTeamSwipeHint && <T0SettlementSwipeGuide direction="team" />}</div></div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">{displayName}{isRealtimeWeek ? "本周" : "本期"}收益结算</div><div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"><button type="button" onClick={onPreviousWeek} disabled={!hasPreviousWeek} className="justify-self-start inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看上周收益结算"><ChevronLeft className="h-5 w-5" />上周</button><div className="flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">{avatar ? <img src={avatar} alt={`${displayName}头像`} className="h-full w-full object-cover" /> : <span>{displayName.slice(0, 1)}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div><div className="flex min-w-0 items-center justify-self-end"><button type="button" onClick={onNextWeek} disabled={!hasNextWeek} className="inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看下周收益结算">下周<ChevronRight className="h-5 w-5" /></button></div></div></div>
     <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">
       {[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}
     </div>
   </div>;
+}
+
+function T0AdminWeeklySettlementOverviewCard({
+  report,
+  isRealtimeWeek,
+  onPreviousWeek,
+  onNextWeek,
+  hasPreviousWeek,
+  hasNextWeek,
+  memberAvatarByUserId,
+}: {
+  report: T0WeeklySettlementReport;
+  isRealtimeWeek: boolean;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  hasPreviousWeek: boolean;
+  hasNextWeek: boolean;
+  memberAvatarByUserId?: ReadonlyMap<number, string>;
+}) {
+  const income = report.summary.income;
+  const avatarPreview = report.members.slice(0, 4);
+  const statusLabel = isRealtimeWeek ? "实时累计" : report.status === "frozen" ? "已冻结" : "回溯核算";
+  const statusClass = isRealtimeWeek ? "bg-emerald-50 text-emerald-700" : report.status === "frozen" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
+  return <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2.5"><div className="min-w-0"><div className="text-sm font-semibold text-slate-900">{isRealtimeWeek ? "全体用户本周结算" : "全体用户本期结算"}</div><div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatT0WeeklySettlementPeriod(report.period.weekStartBjt, report.period.weekEndExclusiveBjt)} · 北京时间 · {report.summary.participantCount} 人</div></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${statusClass}`}>{statusLabel}</span></div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">全体用户{isRealtimeWeek ? "本周" : "本期"}结算收益</div><div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"><button type="button" onClick={onPreviousWeek} disabled={!hasPreviousWeek} className="justify-self-start inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看上周全体用户结算"><ChevronLeft className="h-5 w-5" />上周</button><div className="flex min-w-0 items-center justify-center gap-2"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1" aria-label={`参与结算的${report.summary.participantCount}位用户头像`}>{avatarPreview.map((member, index) => { const avatar = memberAvatarByUserId?.get(member.userId); return <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{avatar ? <img src={avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>; })}{report.summary.participantCount > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{report.summary.participantCount - avatarPreview.length}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div><button type="button" onClick={onNextWeek} disabled={!hasNextWeek} className="justify-self-end inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看下周全体用户结算">下周<ChevronRight className="h-5 w-5" /></button></div></div>
+    <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">{[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}</div>
+  </div>;
+}
+
+function T0AdminWeeklySettlementMemberList({
+  report,
+  expandedMemberId,
+  onExpandedMemberChange,
+}: {
+  report: T0WeeklySettlementReport;
+  expandedMemberId: number | null;
+  onExpandedMemberChange: (userId: number | null) => void;
+}) {
+  return <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-900">用户收益结算</span><span className="text-[11px] text-slate-400">{report.members.length} 人</span></div><div className="divide-y divide-slate-100">{report.members.map((member) => { const expanded = expandedMemberId === member.userId; return <div key={member.userId}><button type="button" onClick={() => onExpandedMemberChange(expanded ? null : member.userId)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{member.name}</div><div className="mt-1 text-[10px] tabular-nums text-slate-400">订单 {member.income.orderCount} · 分佣 {member.income.commissionCount} · 共享 {member.income.sharedCount}</div></div><div className="shrink-0 text-right tabular-nums"><div className={`text-sm font-bold leading-none ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-medium">U</span></div><div className="mt-1 text-[10px] text-slate-400">点击查看收益构成</div></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.shared)}</div></div></div>}</div>; })}</div></div>;
 }
 
 function T0TeamWeeklySettlementCard({
@@ -620,30 +661,42 @@ function T0TeamWeeklySettlementCard({
   isLoading,
   hasError,
   countdown,
+  onPreviousWeek,
+  onNextWeek,
+  hasPreviousWeek = false,
+  hasNextWeek = false,
 }: {
   teamSettlement?: T0TeamWeeklySettlement;
   isLoading: boolean;
   hasError: boolean;
   countdown: number | null;
+  onPreviousWeek?: () => void;
+  onNextWeek?: () => void;
+  hasPreviousWeek?: boolean;
+  hasNextWeek?: boolean;
 }) {
-  if (isLoading) return <div className="min-h-[220px] bg-white px-3 py-12 text-center text-xs text-slate-400">团队结算数据加载中…</div>;
+  // 首次进入仍显示加载态；周切换时保留上一张已读卡，避免移动端看起来像“点击无反应”。
+  if (isLoading && !teamSettlement) return <div className="min-h-[220px] bg-white px-3 py-12 text-center text-xs text-slate-400">团队结算数据加载中…</div>;
   if (hasError) return <div className="min-h-[220px] bg-white px-3 py-12 text-center text-xs leading-5 text-rose-600">团队结算暂时无法读取，请稍后刷新。</div>;
   if (!teamSettlement) return <div className="min-h-[220px] bg-white" />;
   if (!teamSettlement.enabled || !teamSettlement.period || !teamSettlement.summary) return <div className="min-h-[220px] bg-white px-3 py-12 text-center text-xs leading-5 text-rose-600">团队结算暂时无法读取，请稍后刷新。</div>;
   const members = Array.isArray(teamSettlement.members) ? teamSettlement.members : [];
   const income = teamSettlement.summary.income;
   const avatarPreview = members.slice(0, 6);
+  const isRealtimeWeek = teamSettlement.status !== "backfill";
+  const periodStatusLabel = isRealtimeWeek ? "距下期结算" : "本期状态";
+  const periodStatusValue = isLoading ? "切换中" : isRealtimeWeek ? (countdown === null ? "--:--:--" : countdown <= 0 ? "切换中" : formatT0WeeklySettlementCountdown(countdown)) : "回溯核算";
   return <div className="bg-white">
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-800 bg-slate-900 px-3 py-3 text-white">
       <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-300">团队结算周期</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tabular-nums">{formatT0WeeklySettlementPeriod(teamSettlement.period.weekStartBjt, teamSettlement.period.weekEndExclusiveBjt)} <span className="ml-1 text-[10px] font-medium text-slate-300">北京时间</span></div></div>
-      <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">距下期结算</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{countdown === null ? "--:--:--" : countdown <= 0 ? "切换中" : formatT0WeeklySettlementCountdown(countdown)}</div></div>
+      <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">{periodStatusLabel}</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{periodStatusValue}</div></div>
     </div>
-    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">团队本周收益结算 · {teamSettlement.summary.participantCount} 人</div><div className="mt-1 flex items-center justify-center gap-2"><T0SettlementSwipeGuide direction="self" /><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1">{avatarPreview.map((member, index) => <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>)}{members.length > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{members.length - avatarPreview.length}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">团队{isRealtimeWeek ? "本周" : "本期"}收益结算 · {teamSettlement.summary.participantCount} 人</div><div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"><button type="button" onClick={onPreviousWeek} disabled={!hasPreviousWeek} className={`justify-self-start inline-flex h-11 w-11 shrink-0 items-center justify-center transition-transform active:scale-90 ${hasPreviousWeek ? "text-slate-700" : "text-slate-200"}`} aria-label="查看上一周团队结算"><ChevronLeft className="h-6 w-6" /></button><div className="flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1">{avatarPreview.map((member, index) => <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>)}{members.length > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{members.length - avatarPreview.length}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div><button type="button" onClick={onNextWeek} disabled={!hasNextWeek} className={`justify-self-end inline-flex h-11 w-11 shrink-0 items-center justify-center transition-transform active:scale-90 ${hasNextWeek ? "text-slate-700" : "text-slate-200"}`} aria-label="查看下一周团队结算"><ChevronRight className="h-6 w-6" /></button></div></div>
     <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">
       {[{ label: "订单", value: income.order }, { label: "分佣", value: income.commission }, { label: "共享", value: income.shared }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-2.5"><div className="text-[10px] text-slate-500">{item.label}</div><div className={`mt-1 whitespace-nowrap text-[clamp(11px,3.25vw,14px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}</div></div>)}
     </div>
     <div className="border-t border-slate-100">
-      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2"><span className="text-xs font-semibold text-slate-800">成员本周收益</span><span className="text-[10px] text-slate-400">仅下属成员</span></div>
+      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2"><span className="text-xs font-semibold text-slate-800">成员{isRealtimeWeek ? "本周" : "本期"}收益</span><span className="text-[10px] text-slate-400">仅下属成员</span></div>
       {members.length > 0 ? <div className="divide-y divide-slate-100">{members.map((member) => {
         const composition = [
           { key: "order", label: "订单", value: Number(member.income.order) || 0, positive: "#2563eb", negative: "#059669" },
@@ -655,7 +708,7 @@ function T0TeamWeeklySettlementCard({
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-[11px] font-bold text-white">{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</div>
-              <div className="min-w-0"><div className="truncate text-[13px] font-semibold text-slate-800">{member.name}</div><div className="mt-0.5 text-[10px] text-slate-400">本周收益结算</div></div>
+              <div className="min-w-0"><div className="truncate text-[13px] font-semibold text-slate-800">{member.name}</div><div className="mt-0.5 text-[10px] text-slate-400">{isRealtimeWeek ? "本周" : "本期"}收益结算</div></div>
             </div>
             <div className={`shrink-0 whitespace-nowrap text-[clamp(17px,5vw,21px)] font-bold leading-none tracking-[-0.035em] tabular-nums ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-semibold">U</span></div>
           </div>
@@ -665,60 +718,6 @@ function T0TeamWeeklySettlementCard({
       })}</div> : <div className="px-3 py-8 text-center text-xs text-slate-400">暂无符合团队结算范围的成员</div>}
     </div>
   </div>;
-}
-
-function T0MemberSettlementAvatarCarousel({
-  activePage,
-  onActivePageChange,
-  canViewTeam,
-  selfCard,
-  teamCard,
-}: {
-  activePage: "self" | "team";
-  onActivePageChange: (page: "self" | "team") => void;
-  canViewTeam: boolean;
-  selfCard: ReactNode;
-  teamCard: ReactNode;
-}) {
-  const touchStartX = useRef<number | null>(null);
-  const selfSlideRef = useRef<HTMLDivElement | null>(null);
-  const teamSlideRef = useRef<HTMLDivElement | null>(null);
-  const [activeSlideHeight, setActiveSlideHeight] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    if (!canViewTeam) {
-      setActiveSlideHeight(null);
-      return;
-    }
-    const activeSlide = activePage === "self" ? selfSlideRef.current : teamSlideRef.current;
-    if (!activeSlide) return;
-    const updateHeight = () => {
-      const nextHeight = Math.ceil(activeSlide.getBoundingClientRect().height);
-      if (nextHeight > 0) setActiveSlideHeight((current) => current === nextHeight ? current : nextHeight);
-    };
-    updateHeight();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
-    observer?.observe(activeSlide);
-    window.addEventListener("resize", updateHeight);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", updateHeight);
-    };
-  }, [activePage, canViewTeam, selfCard, teamCard]);
-  if (!canViewTeam) return <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">{selfCard}</div>;
-  const switchPageBySwipe = (endX: number) => {
-    const startX = touchStartX.current;
-    touchStartX.current = null;
-    if (startX === null) return;
-    const delta = endX - startX;
-    if (delta <= -42) onActivePageChange("team");
-    if (delta >= 42) onActivePageChange("self");
-  };
-  return <div className="overflow-hidden rounded-xl border border-slate-200 bg-white touch-pan-y transition-[height] duration-300 ease-out" style={activeSlideHeight === null ? undefined : { height: `${activeSlideHeight + 2}px` }} onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => switchPageBySwipe(event.changedTouches[0]?.clientX ?? 0)} onTouchCancel={() => { touchStartX.current = null; }}>
-      <div className="flex items-start transition-transform duration-300 ease-out" style={{ width: "200%", transform: activePage === "team" ? "translateX(-50%)" : "translateX(0)" }}>
-        <div ref={selfSlideRef} className="w-1/2 shrink-0">{selfCard}</div>
-        <div ref={teamSlideRef} className="w-1/2 shrink-0">{teamCard}</div>
-      </div>
-    </div>;
 }
 
 type T0SettlementAdjustmentPrefill = { accountId?: string; closingEntryId?: string };
@@ -3434,28 +3433,9 @@ function attachSharedIncomePerspectiveTrades(
       });
       continue;
     }
-    // 历史来源平仓若已缺失，仍保留一条独立“共享到账”记录：不编造方向、数量、成交价或手续费。
-    projected.push({
-      id: `shared-income-orphan-${closingEntryId}-${viewerUserId}`,
-      sourceEntryId: `shared-transfer-${closingEntryId}`,
-      detailEntryId: `shared-transfer-${closingEntryId}`,
-      accountId: "",
-      relatedUserId: sharedTransfer.sourceUserId > 0 ? String(sharedTransfer.sourceUserId) : undefined,
-      relatedUserName: sharedTransfer.sourceUserName || undefined,
-      symbol: "ETH",
-      action: "closeLong",
-      quantity: 0,
-      price: 0,
-      fee: 0,
-      createdAt: sharedTransfer.createdAt || new Date(0).toISOString(),
-      note: "共享到账（来源平仓历史缺失）",
-      isSharedIncomeOnly: true,
-      sharedIncomeSourceClosingEntryId: closingEntryId,
-      sharedIncomeSourceUserName: sharedTransfer.sourceUserName || undefined,
-      sharedIncomeRecipientUserId: String(viewerUserId),
-      sharedIncomeAmount: sharedAmount,
-      historyIncomeKind: "shared",
-    });
+    // 来源平仓已回退或删除时，该共享转账仅保留在服务端审计中，绝不能作为有效收益补造一行。
+    // 恢复同一来源平仓后，服务端会自然重新下发该转账并回到上方的正常分支。
+    continue;
   }
   return projected.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
 }
@@ -3688,6 +3668,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [memberSettlementCardPage, setMemberSettlementCardPage] = useState<"self" | "team">("self");
   // 个人顶部结算卡与七日明细共用的周期；null 表示始终跟随最新实时周。
   const [memberSettlementSelectedWeekStart, setMemberSettlementSelectedWeekStart] = useState<string | null>(null);
+  // 团队Tab独立保存查看周；null 表示本周实时汇总，历史周由服务端按当前事实只读回溯。
+  const [teamSettlementSelectedWeekStart, setTeamSettlementSelectedWeekStart] = useState<string | null>(null);
+  // 历史周请求切换时仅保留同一负责人的已读团队卡，不能把另一位用户的数据短暂带入当前视图。
+  const teamSettlementSnapshotRef = useRef<{ scopeKey: string; report: T0TeamWeeklySettlement } | null>(null);
+  const prefetchedTeamSettlementWeekKeyRef = useRef<string | null>(null);
   // 管理员结算默认先看原概览；账户对账按需读取全局账户及用户去向，成员视角永不展示。
   const [adminSettlementTab, setAdminSettlementTab] = useState<"overview" | "reconciliation">("overview");
   // null 表示默认最新实时周；仅管理员主动用左右箭头选择历史周后才固定在该周。
@@ -3947,17 +3932,38 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && effectiveSettlementReconciliationWeekStart === weeklySettlementCenter?.current?.period?.weekStartBjt,
   );
   const t0TeamWeeklySettlementQuery = trpc.ledger.t0GetTeamWeeklySettlement.useQuery(
-    { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined },
+    { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined, weekStartBjt: teamSettlementSelectedWeekStart || undefined },
     {
-      // 仅负责人主动滑到团队结算卡才计算下属本周汇总；普通成员不会请求或取得任何团队结算数据。
-      enabled: canViewTeamOverview && isMemberView && !isPreviewSwitching && memberSettlementCardPage === "team" && totalProfitPageTab === "settlement" && isTotalProfitReportVisible,
-      staleTime: 10_000,
-      refetchInterval: memberSettlementCardPage === "team" && isTotalProfitReportVisible ? 30_000 : false,
+      // 负责人进入结算页即在后台预热团队本周；点“团队”时直接复用结果，避免首次点击长时间等待。
+      // 普通成员仍不会请求或取得任何团队结算数据。
+      enabled: canViewTeamOverview && isMemberView && !isPreviewSwitching && totalProfitPageTab === "settlement" && isTotalProfitReportVisible,
+      staleTime: 60_000,
+      refetchInterval: !teamSettlementSelectedWeekStart && isTotalProfitReportVisible ? 30_000 : false,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
     },
   );
   const teamWeeklySettlement = t0TeamWeeklySettlementQuery.data as T0TeamWeeklySettlement | undefined;
+  const teamSettlementQueryScopeKey = isUserPreview ? `preview:${previewUserId || "none"}` : "member:self";
+  if (teamWeeklySettlement) {
+    teamSettlementSnapshotRef.current = { scopeKey: teamSettlementQueryScopeKey, report: teamWeeklySettlement };
+  }
+  // 同一负责人切换周时，查询缓存切键的一瞬不清空已展示卡；切换完成后再替换为目标周真实报告。
+  const displayedTeamWeeklySettlement = teamWeeklySettlement
+    || (teamSettlementSnapshotRef.current?.scopeKey === teamSettlementQueryScopeKey ? teamSettlementSnapshotRef.current.report : undefined);
+  const teamSettlementWeekStarts = useMemo(() => Array.from(new Set([
+    ...(Array.isArray(displayedTeamWeeklySettlement?.availableWeekStarts) ? displayedTeamWeeklySettlement.availableWeekStarts : []),
+    ...(displayedTeamWeeklySettlement?.currentWeekStartBjt ? [displayedTeamWeeklySettlement.currentWeekStartBjt] : []),
+  ])).filter((weekStartBjt) => /^\d{4}-\d{2}-\d{2}$/.test(weekStartBjt)).sort((left, right) => left.localeCompare(right)), [displayedTeamWeeklySettlement]);
+  const effectiveTeamSettlementWeekStart = teamSettlementSelectedWeekStart || displayedTeamWeeklySettlement?.currentWeekStartBjt || displayedTeamWeeklySettlement?.period?.weekStartBjt || null;
+  const selectedTeamSettlementWeekIndex = Math.max(0, teamSettlementWeekStarts.indexOf(effectiveTeamSettlementWeekStart || ""));
+  const previousTeamSettlementWeekStart = teamSettlementWeekStarts[selectedTeamSettlementWeekIndex - 1];
+  const nextTeamSettlementWeekStart = teamSettlementWeekStarts[selectedTeamSettlementWeekIndex + 1];
+  const selectTeamSettlementWeek = useCallback((weekStartBjt: string) => {
+    setTeamSettlementSelectedWeekStart(weekStartBjt === displayedTeamWeeklySettlement?.currentWeekStartBjt ? null : weekStartBjt);
+  }, [displayedTeamWeeklySettlement?.currentWeekStartBjt]);
+  const isTeamSettlementWeekLoading = t0TeamWeeklySettlementQuery.isLoading
+    || Boolean(teamSettlementSelectedWeekStart && displayedTeamWeeklySettlement?.period?.weekStartBjt !== teamSettlementSelectedWeekStart);
   const t0WeeklySettlementAccountReconciliationQuery = trpc.ledger.t0GetWeeklySettlementAccountReconciliation.useQuery(
     { ledgerId: 52, weekStartBjt: effectiveSettlementReconciliationWeekStart || undefined },
     {
@@ -3972,12 +3978,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const weeklySettlementAccountReconciliationRaw = t0WeeklySettlementAccountReconciliationQuery.data as T0WeeklySettlementAccountReconciliation | undefined;
-  const weeklySettlementAccountReconciliation = !effectiveSettlementReconciliationWeekStart || weeklySettlementAccountReconciliationRaw?.period.weekStartBjt === effectiveSettlementReconciliationWeekStart
-    ? weeklySettlementAccountReconciliationRaw
-    : undefined;
+	  const weeklySettlementAccountReconciliation = !effectiveSettlementReconciliationWeekStart || weeklySettlementAccountReconciliationRaw?.period.weekStartBjt === effectiveSettlementReconciliationWeekStart
+	    ? weeklySettlementAccountReconciliationRaw
+	    : undefined;
+		// 服务端是有效性权威；本地再以当前活动、已成交的平仓流水兜底，
+		// 防止回退刚成功而查询缓存尚未回填时，残留共享到账短暂进入任何收益汇总。
+		const activeSharedIncomeClosingEntryIds = useMemo(() => new Set(
+		  rawJournalTrades
+		    .filter((trade) => !ACTIONS[trade.action].opening && !trade.isPending)
+		    .map((trade) => getStoredEntryId(trade)),
+		), [rawJournalTrades]);
 		const sharedIncomeTransfers = useMemo<SharedIncomeTransfer[]>(() => {
-	  const rows = activeJournalData?.sharedIncomeTransfers;
-    return Array.isArray(rows) ? rows.map((item: any) => ({
+		  const rows = activeJournalData?.sharedIncomeTransfers;
+	    return Array.isArray(rows) ? rows.map((item: any) => ({
       id: String(item.id),
       closingEntryId: String(item.closingEntryId),
       sourceUserId: Number(item.sourceUserId),
@@ -3987,11 +4000,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       recipientUsername: item.recipientUsername ? String(item.recipientUsername) : undefined,
       amount: Number(item.amount || 0),
       sourceNetPnl: Number(item.sourceNetPnl || 0),
-      shareableAmount: Number(item.shareableAmount || 0),
-      reducesRegularDistribution: Boolean(item.reducesRegularDistribution),
-      createdAt: String(item.createdAt || ""),
-	  })).filter((item) => item.id && Number.isFinite(item.amount) && item.amount > 0) : [];
-	}, [activeJournalData]);
+	      shareableAmount: Number(item.shareableAmount || 0),
+	      reducesRegularDistribution: Boolean(item.reducesRegularDistribution),
+	      createdAt: String(item.createdAt || ""),
+		  })).filter((item) => item.id && Number.isFinite(item.amount) && item.amount > 0 && activeSharedIncomeClosingEntryIds.has(item.closingEntryId)) : [];
+		}, [activeJournalData, activeSharedIncomeClosingEntryIds]);
 	const sharedIncomeContributionsBySourceUser = useMemo(() => {
 	  const contributions = new Map<string, { amount: number; orderCount: number }>();
 	  const rows = activeJournalData?.sharedIncomeContributions;
@@ -4128,6 +4141,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       lastActivityAt: member.lastActivityAt ? String(member.lastActivityAt) : null,
     })).filter((member) => Number.isInteger(member.id) && member.id > 0)
     : [], [t0PreviewMembersQuery.data]);
+  const previewMemberAvatarById = useMemo(() => new Map(
+    previewMembers
+      .filter((member) => Boolean(member.avatar))
+      .map((member) => [member.id, member.avatar!] as const),
+  ), [previewMembers]);
   const selectedPreviewMember = previewMembers.find((member) => member.id === previewUserId) ?? null;
   const visiblePreviewMembers = useMemo(() => {
     const keyword = previewMemberSearch.trim().toLowerCase();
@@ -4192,6 +4210,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const historyIsMemberPresentation = isMemberView || isHistoryUserPerspective;
   /** 单选用户时，无论管理员直接筛选或代入用户视角，都使用同一组三类已实现收益筛选。 */
   const historyUsesIncomeCategories = historyIsMemberPresentation || selectedAdminHistoryUserId > 0;
+  /** 管理员未单选用户时，同样显示收入分类；明细改用全局真实归因行，绝不把原始订单总利润伪装成佣金。 */
+  const hasGlobalHistoryIncomeCategories = canManage
+    && !isMemberView
+    && !isHistoryUserPerspective
+    && selectedAdminHistoryUserId === 0;
+  const historyHasIncomeCategoryToolbar = historyUsesIncomeCategories || hasGlobalHistoryIncomeCategories;
   useEffect(() => {
     if (historyPerspectiveTargetUserId === 0 && historyPresentation !== "admin") {
       setHistoryPresentation("admin");
@@ -4204,6 +4228,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : (canManage && relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
       ? Number(relatedUserFilterIds[0])
       : 0);
+  // “总收益”与“结算”必须绑定同一个对象：管理员单选某位用户后，结算按该用户实际归属展示；
+  // 只有管理员处于“用户：全部”时才显示全体结算和账户对账。
+  const hasIndividualSettlementScope = Number.isInteger(payoutTargetRelatedUserId) && payoutTargetRelatedUserId > 0;
   const historyIncomeViewerUserId = historyIsMemberPresentation
     ? Number(payoutTargetRelatedUserId)
     : selectedAdminHistoryUserId;
@@ -4227,6 +4254,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const t0Utils = trpc.useUtils();
+  const adjacentHistoricalTeamSettlementWeekStart = useMemo(() => {
+    if (!canViewTeamOverview || !isMemberView || !displayedTeamWeeklySettlement || !effectiveTeamSettlementWeekStart) return null;
+    const index = teamSettlementWeekStarts.indexOf(effectiveTeamSettlementWeekStart);
+    return index > 0 ? teamSettlementWeekStarts[index - 1] || null : null;
+  }, [canViewTeamOverview, displayedTeamWeeklySettlement, effectiveTeamSettlementWeekStart, isMemberView, teamSettlementWeekStarts]);
+  useEffect(() => {
+    if (!adjacentHistoricalTeamSettlementWeekStart) return;
+    const prefetchKey = `${teamSettlementQueryScopeKey}:${adjacentHistoricalTeamSettlementWeekStart}`;
+    if (prefetchedTeamSettlementWeekKeyRef.current === prefetchKey) return;
+    // 团队本周卡呈现后短暂后台预取上一实际收益周，手机点击箭头时优先直接命中只读缓存。
+    const timer = window.setTimeout(() => {
+      prefetchedTeamSettlementWeekKeyRef.current = prefetchKey;
+      void t0Utils.ledger.t0GetTeamWeeklySettlement.prefetch({
+        ledgerId: 52,
+        previewUserId: isUserPreview ? previewUserId || undefined : undefined,
+        weekStartBjt: adjacentHistoricalTeamSettlementWeekStart,
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [adjacentHistoricalTeamSettlementWeekStart, isUserPreview, previewUserId, t0Utils, teamSettlementQueryScopeKey]);
   const adjacentHistoricalReconciliationWeekStart = useMemo(() => {
     if (!isAdminReconciliationActive || !weeklySettlementAccountReconciliationRaw || !effectiveSettlementReconciliationWeekStart) return null;
     const index = reconciliationWeekOptions.findIndex((item) => item.weekStartBjt === effectiveSettlementReconciliationWeekStart);
@@ -4809,15 +4856,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? Number(activeJournalData?.viewerProfitShareBeneficiaryUserId || activeJournalData?.viewerRelatedUserId || 0)
         // 管理员仅筛选一位用户时，同样必须补上该用户实际收到的共享收益来源。
         : historyPerspectiveTargetUserId);
-    const baseTrades = isHistoryUserPerspective
+    // 管理员单选用户的历史收益也必须先按冻结分佣快照投影；原始管理员流水没有
+    // profitShareBeneficiaryUserId，直接拿它生成“名字”会误报暂无具名分佣。
+    const shouldProjectSingleUserIncome = historyUsesIncomeCategories && memberHistoryUserId > 0;
+    const baseTrades = shouldProjectSingleUserIncome
       ? projectMemberProfitShareTrades(
         rawJournalTrades,
         profitShareSnapshots,
-        String(historyPerspectiveTargetUserId),
+        String(memberHistoryUserId),
       )
       : selectedTrades;
     return attachSharedIncomePerspectiveTrades(baseTrades, rawJournalTrades, sharedIncomeTransfers, memberHistoryUserId);
-  }, [historyPerspectiveTargetUserId, isHistoryUserPerspective, isMemberView, profitShareSnapshots, rawJournalTrades, selectedTrades, sharedIncomeTransfers, activeJournalData]);
+  }, [historyPerspectiveTargetUserId, historyUsesIncomeCategories, isHistoryUserPerspective, isMemberView, profitShareSnapshots, rawJournalTrades, selectedTrades, sharedIncomeTransfers, activeJournalData]);
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
       ? historyPerspectiveTrades
@@ -4834,29 +4884,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => filterTradesByInstrumentTypes(historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds),
     [historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds],
   );
-  /** 用户端不读取完整用户目录，类别与名字都只从已授权可见的收益投影中生成。 */
+  /** 单用户类别与名字只从已授权可见的收益投影中生成；管理员全局类别使用真实全局归因明细。 */
   const historyMemberIncomeKindFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
-    if (!historyUsesIncomeCategories) return [];
+    if (!historyHasIncomeCategoryToolbar) return [];
     const viewerUserId = historyIncomeViewerUserId;
-    if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return [];
+    if (historyUsesIncomeCategories && (!Number.isInteger(viewerUserId) || viewerUserId <= 0)) return [];
     // 三类是固定口径；即使当前用户某一类暂为 0，也保留入口，管理员与用户端始终同一布局。
     return [
       { id: "order", label: "订单", summaryLabel: "订单" },
       { id: "commission", label: "佣金", summaryLabel: "佣金" },
       { id: "shared", label: "共享", summaryLabel: "共享" },
     ];
-  }, [historyIncomeViewerUserId, historyUsesIncomeCategories]);
-  /** 用户呈现的默认“全部”是全部已实现收益，而不是混入开仓、挂单等操作流水。 */
+  }, [historyHasIncomeCategoryToolbar, historyIncomeViewerUserId, historyUsesIncomeCategories]);
+  /** “全部”按字面展示完整流水（含挂单与开平仓）；仅选订单/佣金/共享时才切换为对应收益分类。 */
+  const historyIncomeKindsAllSelected = historyMemberIncomeKindFilterOptions.length > 0
+    && historyMemberIncomeKindFilterOptions.every((option) => historyIncomeKindFilterIds.includes(option.id));
+  // 点击某个交易动作或“关联”时，暂时退出收益分类，才能如实显示开仓与完整开平链路。
+  // 这只是前端查看模式，不改变用户选择的收益类别、原始订单或任何收益归属。
+  const isHistoryTransactionOrLinkedView = journalActionFilters.size === 1 || showLinkedJournalGroups;
   useEffect(() => {
-    if (!historyUsesIncomeCategories || historyMemberIncomeKindFilterOptions.length === 0) return;
+    if (!historyHasIncomeCategoryToolbar || historyMemberIncomeKindFilterOptions.length === 0) return;
     const availableKindIds = new Set(historyMemberIncomeKindFilterOptions.map((option) => option.id));
     setHistoryIncomeKindFilterIds((current) => {
       const validCurrent = current.filter((id) => availableKindIds.has(id));
-      return validCurrent.length > 0 ? validCurrent : Array.from(availableKindIds);
+      // 动作／关联查看模式刻意保留空类别；切回收入分类时由对应按钮重新恢复三类收益。
+      return validCurrent.length > 0 || isHistoryTransactionOrLinkedView
+        ? validCurrent
+        : Array.from(availableKindIds);
     });
     setShowOnlyProfitableHistory(false);
     setShowOnlySharedIncomeHistory(false);
-  }, [historyMemberIncomeKindFilterOptions, historyUsesIncomeCategories]);
+    if (!historyUsesIncomeCategories && historyIncomeSourceFilterIds.length > 0) {
+      setHistoryIncomeSourceFilterIds([]);
+    }
+  }, [historyHasIncomeCategoryToolbar, historyIncomeSourceFilterIds.length, historyMemberIncomeKindFilterOptions, historyUsesIncomeCategories, isHistoryTransactionOrLinkedView]);
   /** 名字只列出与当前用户有明确分佣关系的来源；纯共享保持“共享”类别而不披露来源人。 */
   const historyMemberIncomeSourceFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
     if (!historyUsesIncomeCategories) return [];
@@ -4931,7 +4992,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       trade.symbol === "ETH"
       && (historyUsesIncomeCategories || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       // 用户呈现已在源数据层严格按本人/分层快照过滤，不能再套用管理员的用户、推荐或账户筛选。
-      && (isHistoryUserPerspective
+      && (historyUsesIncomeCategories
+        || isHistoryUserPerspective
         || isMemberView
         || historyRelatedUserFilterIds.length === 0
         || historyRelatedUserFilter.waitingForReferralData
@@ -4940,12 +5002,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         || Boolean(trade.profitShareBeneficiaryUserId && historyRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
         || Boolean(isMemberView && trade.sharedIncomeRecipientUserId)
         || (!isMemberView && historyProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
-      && (historyRelatedFundFilterIds.length === 0
+      && (historyUsesIncomeCategories || historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
     [historyMemberIncomeSourceScopedTrades, historyUsesIncomeCategories, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
   const isHistoryMemberIncomeSourceFilterActive = historyUsesIncomeCategories
+    && (!historyIncomeKindsAllSelected || historyIncomeSourceFilterIds.length > 0)
     && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0);
   // 来源筛选打开时，具名分佣的开仓只作为 FIFO 计算基底，不作为用户历史行显示。
   const historyDisplayScopeTrades = useMemo(
@@ -4955,8 +5018,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [isHistoryMemberIncomeSourceFilterActive, journalScopeTrades],
   );
   const availableJournalActions = useMemo(
-    () => RECENT_JOURNAL_ACTIONS.filter((action) => historyDisplayScopeTrades.some((trade) => trade.action === action)),
-    [historyDisplayScopeTrades],
+    // 收益分类下的开仓只作为 FIFO 计算基底；动作栏仍需从同一授权范围识别并保留开多、开空入口。
+    () => RECENT_JOURNAL_ACTIONS.filter((action) => (historyUsesIncomeCategories ? historyPerspectiveTrades : historyDisplayScopeTrades)
+      .some((trade) => trade.action === action)),
+    [historyDisplayScopeTrades, historyPerspectiveTrades, historyUsesIncomeCategories],
   );
   const availableJournalActionKey = availableJournalActions.join("|");
   const hasSharedIncomeHistory = useMemo(
@@ -5048,11 +5113,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [journalScopeTrades],
   );
   const hasLinkedJournalPairs = useMemo(
-    () => !isHistoryMemberIncomeSourceFilterActive && linkedJournalGroups.some((group) => (
+    () => linkedJournalGroups.some((group) => (
       (Boolean(group.opening) && group.closings.length > 0)
       || (!group.opening && Number(group.closings[0]?.trade.sharedIncomeAmount || 0) > 0)
     )),
-    [isHistoryMemberIncomeSourceFilterActive, linkedJournalGroups],
+    [linkedJournalGroups],
   );
   useEffect(() => {
     setJournalActionFilters((current) => {
@@ -5178,52 +5243,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     return resolveViewerPayout(trade, detail);
   }, [historyPerspectiveTargetUserId, historyPerspectiveTrades, isHistoryUserPerspective, resolveMemberPayout, resolveViewerPayout]);
-  // “盈利”严格使用列表当前展示的净收益：成员端及管理员的用户呈现均按该用户实际可得收益；
-  // 管理员完整视角则按订单总净收益。开仓没有已实现收益，不纳入此筛选。
-  const profitableRecentJournalTrades = useMemo(() => historyDisplayTrades.filter((trade) => {
-    if (ACTIONS[trade.action].opening) return false;
-    const detail = getHistoricalTradeDetail(trade);
-    const displayedNetPnl = resolveHistoryViewerPayout(trade, detail)?.netPnl ?? detail?.netPnl;
-    const normalizedNetPnl = Number(displayedNetPnl);
-    return Number.isFinite(normalizedNetPnl) && normalizedNetPnl > 0;
-  }), [historyDisplayTrades, getHistoricalTradeDetail, resolveHistoryViewerPayout]);
-  const visibleRecentJournalTrades = showOnlyProfitableHistory
-    ? profitableRecentJournalTrades
-    : historyDisplayTrades;
-  /** 用户收入筛选的汇总严格复用每条历史行的“本单可得”口径，不回算或改写任何收益流水。 */
-  const historyMemberIncomeFilterSummary = useMemo(() => {
-    if (!isHistoryMemberIncomeSourceFilterActive) return null;
-    const incomeTrades = historyDisplayTrades.filter((trade) => !ACTIONS[trade.action].opening);
-    const totalNetPnl = incomeTrades.reduce((total, trade) => {
-      const detail = getHistoricalTradeDetail(trade);
-      const displayedNetPnl = resolveHistoryViewerPayout(trade, detail)?.netPnl ?? detail?.netPnl;
-      return total + (Number.isFinite(Number(displayedNetPnl)) ? Number(displayedNetPnl) : 0);
-    }, 0);
-    return { count: incomeTrades.length, totalNetPnl };
-  }, [getHistoricalTradeDetail, historyDisplayTrades, isHistoryMemberIncomeSourceFilterActive, resolveHistoryViewerPayout]);
-  const recentJournalTotalPages = Math.max(1, Math.ceil(
-    (showLinkedJournalGroups ? linkedJournalGroups.length : visibleRecentJournalTrades.length) / RECENT_JOURNAL_PAGE_SIZE,
-  ));
-  const pagedRecentJournalTrades = useMemo(() => {
-    const newestFirst = [...visibleRecentJournalTrades]
-      .sort((a, b) => {
-        const timeOrder = getTradeActivityTime(b).localeCompare(getTradeActivityTime(a));
-        if (timeOrder !== 0) return timeOrder;
-        const sourceOrder = getStoredEntryId(b).localeCompare(getStoredEntryId(a));
-        if (sourceOrder !== 0) return sourceOrder;
-        const incomeKindOrder = (trade: PreviewTrade) => trade.historyIncomeKind === "commission" ? 0 : trade.historyIncomeKind === "shared" ? 1 : 0;
-        return incomeKindOrder(a) - incomeKindOrder(b);
-      });
-    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
-    return newestFirst.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
-  }, [visibleRecentJournalTrades, recentJournalPage]);
-  const pagedLinkedJournalGroups = useMemo(() => {
-    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
-    return linkedJournalGroups.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
-  }, [linkedJournalGroups, recentJournalPage]);
-  useEffect(() => {
-    setRecentJournalPage((current) => Math.min(current, recentJournalTotalPages));
-  }, [recentJournalTotalPages]);
   /**
    * 共享收益平仓预览：所有已登记投入的关联用户都可参与；仍有未平仓位的用户额外显示持仓参考。
    * 任意正向净收益订单都可先分配共享收益，剩余部分再按该订单的既有快照结算。
@@ -6308,7 +6327,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && availableJournalActions.every((action) => journalActionFilters.has(action));
   const selectJournalActionFilter = (action: TradeAction) => {
     setRecentJournalPage(1);
-    // 历史动作标签采用单选语义，避免“盈利 / 全部 / 多个动作”同时高亮而难以辨认当前口径。
+    // 交易动作与订单／佣金／共享是两种查看维度：点动作时退出收入分类，避免开仓被收入列表隐藏。
+    setHistoryIncomeKindFilterIds([]);
+    setHistoryIncomeSourceFilterIds([]);
+    // 历史动作标签采用单选语义，避免多个动作同时高亮而难以辨认当前口径。
     setJournalActionFilters(new Set([action]));
   };
   const entryRelatedFunds = useMemo(
@@ -6950,7 +6972,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [payoutSharedIncomeTransfers, payoutTargetRelatedUserId, rawJournalTrades, totalNetProfitDetails]);
   const settlementTodayBjt = getBeijingDateInputValue(liveClock);
   const memberInstantWeeklySettlementCenter = useMemo<T0WeeklySettlementCenter | undefined>(() => {
-    if (!memberSettlementIncomeByWeek || !isMemberView) return undefined;
+    if (!memberSettlementIncomeByWeek || !hasIndividualSettlementScope) return undefined;
     const currentWeekStartBjt = getT0WeeklySettlementWeekStart(`${settlementTodayBjt}T12:00:00+08:00`);
     const currentPeriod = getT0WeeklySettlementPeriodFromWeekStart(currentWeekStartBjt);
     if (!currentWeekStartBjt || !currentPeriod) return undefined;
@@ -6990,7 +7012,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         freeze: "本金与充值、提现由独立资金流水管理，不进入本周收益结算。",
       },
     };
-  }, [isMemberView, memberSettlementIncomeByWeek, settlementTodayBjt, totalProfitAttribution.targetLabel]);
+  }, [hasIndividualSettlementScope, memberSettlementIncomeByWeek, settlementTodayBjt, totalProfitAttribution.targetLabel]);
   const hasCurrentMemberWeeklySettlement = useMemo(() => {
     if (!isMemberView || weeklySettlementCenter?.view !== "member") return false;
     const targetUserId = Number(payoutTargetRelatedUserId);
@@ -7003,7 +7025,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const memberSettlementPresentation = hasCurrentMemberWeeklySettlement
     ? weeklySettlementCenter
     : memberInstantWeeklySettlementCenter;
-  const displayedWeeklySettlementCenter = isMemberView
+  const displayedWeeklySettlementCenter = hasIndividualSettlementScope
     ? memberSettlementPresentation
     : weeklySettlementCenter;
   const memberSettlementReports = useMemo(() => {
@@ -7023,15 +7045,60 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && displayedWeeklySettlementCenter?.view === "member"
     && selectedMemberSettlementReport.period.weekStartBjt === displayedWeeklySettlementCenter.current.period.weekStartBjt,
   );
+  const selectedMemberSettlementWeekIndex = Math.max(0, memberSettlementReports.findIndex((item) => item.report.period.weekStartBjt === selectedMemberSettlementReport?.period.weekStartBjt));
+  const previousMemberSettlementReport = memberSettlementReports[selectedMemberSettlementWeekIndex - 1];
+  const nextMemberSettlementReport = memberSettlementReports[selectedMemberSettlementWeekIndex + 1];
+  const selectMemberSettlementWeek = useCallback((weekStartBjt: string) => {
+    const currentWeekStartBjt = displayedWeeklySettlementCenter?.view === "member"
+      ? displayedWeeklySettlementCenter.current.period.weekStartBjt
+      : null;
+    setMemberSettlementSelectedWeekStart(weekStartBjt === currentWeekStartBjt ? null : weekStartBjt);
+  }, [displayedWeeklySettlementCenter]);
   useEffect(() => {
     if (!memberSettlementSelectedWeekStart) return;
     if (!memberSettlementReports.some((item) => item.report.period.weekStartBjt === memberSettlementSelectedWeekStart)) {
       setMemberSettlementSelectedWeekStart(null);
     }
   }, [memberSettlementReports, memberSettlementSelectedWeekStart]);
+  const adminSettlementReports = useMemo(() => {
+    if (displayedWeeklySettlementCenter?.view !== "admin" || !displayedWeeklySettlementCenter.current) return [] as Array<{ id: string; report: T0WeeklySettlementReport }>;
+    return [
+      ...displayedWeeklySettlementCenter.history.map((item) => ({ id: item.id, report: item.report })),
+      { id: "current", report: displayedWeeklySettlementCenter.current },
+    ].sort((left, right) => left.report.period.weekStartBjt.localeCompare(right.report.period.weekStartBjt));
+  }, [displayedWeeklySettlementCenter]);
+  const selectedAdminSettlementReport = useMemo(() => {
+    const current = displayedWeeklySettlementCenter?.view === "admin" ? displayedWeeklySettlementCenter.current : undefined;
+    if (!current) return undefined;
+    return adminSettlementReports.find((item) => item.report.period.weekStartBjt === selectedSettlementReconciliationWeekStart)?.report || current;
+  }, [adminSettlementReports, displayedWeeklySettlementCenter, selectedSettlementReconciliationWeekStart]);
+  const selectedAdminSettlementIsRealtime = Boolean(
+    selectedAdminSettlementReport
+    && displayedWeeklySettlementCenter?.view === "admin"
+    && selectedAdminSettlementReport.period.weekStartBjt === displayedWeeklySettlementCenter.current.period.weekStartBjt,
+  );
+  const selectedAdminSettlementWeekIndex = Math.max(0, adminSettlementReports.findIndex((item) => item.report.period.weekStartBjt === selectedAdminSettlementReport?.period.weekStartBjt));
+  const previousAdminSettlementReport = adminSettlementReports[selectedAdminSettlementWeekIndex - 1];
+  const nextAdminSettlementReport = adminSettlementReports[selectedAdminSettlementWeekIndex + 1];
+  const selectAdminSettlementWeek = useCallback((weekStartBjt: string) => {
+    const currentWeekStartBjt = displayedWeeklySettlementCenter?.view === "admin"
+      ? displayedWeeklySettlementCenter.current.period.weekStartBjt
+      : null;
+    setSelectedSettlementReconciliationWeekStart(weekStartBjt === currentWeekStartBjt ? null : weekStartBjt);
+    setExpandedSettlementMemberId(null);
+    setExpandedSettlementAccountId(null);
+    setExpandedSettlementDestinationUserId(null);
+  }, [displayedWeeklySettlementCenter]);
+  useEffect(() => {
+    if (isMemberView || !selectedSettlementReconciliationWeekStart) return;
+    if (!adminSettlementReports.some((item) => item.report.period.weekStartBjt === selectedSettlementReconciliationWeekStart)) {
+      setSelectedSettlementReconciliationWeekStart(null);
+    }
+  }, [adminSettlementReports, isMemberView, selectedSettlementReconciliationWeekStart]);
   useEffect(() => {
     if (totalProfitPageTab !== "settlement" || !isMemberView || !canViewTeamOverview || isPreviewSwitching) {
       setMemberSettlementCardPage("self");
+      setTeamSettlementSelectedWeekStart(null);
     }
   }, [canViewTeamOverview, isMemberView, isPreviewSwitching, totalProfitPageTab]);
   const currentSettlementCountdown = useMemo(() => {
@@ -7191,6 +7258,73 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     return [];
   }, [activeTotalProfitDetailTab, totalProfitAttributionDetailEntries]);
+  /**
+   * 管理员全部用户的收入模式直接读取全局归因明细：订单为下单人实际归属，佣金为冻结快照/FIFO分配，
+   * 共享为真实到账转账。动作与关联模式则继续使用下方的原始开平仓流水，两个模式不混行。
+   */
+  const isGlobalHistoryIncomeView = hasGlobalHistoryIncomeCategories
+    && !historyIncomeKindsAllSelected
+    && historyIncomeKindFilterIds.length > 0
+    && !showLinkedJournalGroups;
+  const globalHistoryIncomeEntries = useMemo(() => {
+    if (!isGlobalHistoryIncomeView) return [] as TotalProfitAttributionDetailEntry[];
+    const selectedKinds = new Set(historyIncomeKindFilterIds);
+    return totalProfitAttributionDetailEntries.filter((entry) => selectedKinds.has(entry.kind));
+  }, [historyIncomeKindFilterIds, isGlobalHistoryIncomeView, totalProfitAttributionDetailEntries]);
+  // “盈利”仅保留给旧兼容视图；收入分类视图一律显示各类别真实归因行。
+  const profitableRecentJournalTrades = useMemo(() => historyDisplayTrades.filter((trade) => {
+    if (ACTIONS[trade.action].opening) return false;
+    const detail = getHistoricalTradeDetail(trade);
+    const displayedNetPnl = resolveHistoryViewerPayout(trade, detail)?.netPnl ?? detail?.netPnl;
+    const normalizedNetPnl = Number(displayedNetPnl);
+    return Number.isFinite(normalizedNetPnl) && normalizedNetPnl > 0;
+  }), [historyDisplayTrades, getHistoricalTradeDetail, resolveHistoryViewerPayout]);
+  const visibleRecentJournalTrades = showOnlyProfitableHistory
+    ? profitableRecentJournalTrades
+    : historyDisplayTrades;
+  /** 用户收入筛选的汇总严格复用每条历史行的“本单可得”口径，不回算或改写任何收益流水。 */
+  const historyMemberIncomeFilterSummary = useMemo(() => {
+    if (!isHistoryMemberIncomeSourceFilterActive) return null;
+    const incomeTrades = historyDisplayTrades.filter((trade) => !ACTIONS[trade.action].opening);
+    const totalNetPnl = incomeTrades.reduce((total, trade) => {
+      const detail = getHistoricalTradeDetail(trade);
+      const displayedNetPnl = resolveHistoryViewerPayout(trade, detail)?.netPnl ?? detail?.netPnl;
+      return total + (Number.isFinite(Number(displayedNetPnl)) ? Number(displayedNetPnl) : 0);
+    }, 0);
+    return { count: incomeTrades.length, totalNetPnl };
+  }, [getHistoricalTradeDetail, historyDisplayTrades, isHistoryMemberIncomeSourceFilterActive, resolveHistoryViewerPayout]);
+  const historyListItemCount = showLinkedJournalGroups
+    ? linkedJournalGroups.length
+    : isGlobalHistoryIncomeView
+      ? globalHistoryIncomeEntries.length
+      : visibleRecentJournalTrades.length;
+  const recentJournalTotalPages = Math.max(1, Math.ceil(
+    historyListItemCount / RECENT_JOURNAL_PAGE_SIZE,
+  ));
+  const pagedGlobalHistoryIncomeEntries = useMemo(() => {
+    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
+    return globalHistoryIncomeEntries.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
+  }, [globalHistoryIncomeEntries, recentJournalPage]);
+  const pagedRecentJournalTrades = useMemo(() => {
+    const newestFirst = [...visibleRecentJournalTrades]
+      .sort((a, b) => {
+        const timeOrder = getTradeActivityTime(b).localeCompare(getTradeActivityTime(a));
+        if (timeOrder !== 0) return timeOrder;
+        const sourceOrder = getStoredEntryId(b).localeCompare(getStoredEntryId(a));
+        if (sourceOrder !== 0) return sourceOrder;
+        const incomeKindOrder = (trade: PreviewTrade) => trade.historyIncomeKind === "commission" ? 0 : trade.historyIncomeKind === "shared" ? 1 : 0;
+        return incomeKindOrder(a) - incomeKindOrder(b);
+      });
+    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
+    return newestFirst.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
+  }, [visibleRecentJournalTrades, recentJournalPage]);
+  const pagedLinkedJournalGroups = useMemo(() => {
+    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
+    return linkedJournalGroups.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
+  }, [linkedJournalGroups, recentJournalPage]);
+  useEffect(() => {
+    setRecentJournalPage((current) => Math.min(current, recentJournalTotalPages));
+  }, [recentJournalTotalPages]);
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
     activeTotalProfitAttributionDetailEntries.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
   ));
@@ -8458,6 +8592,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     onSuccess: (data: any) => {
       const entryId = String(data.entryId);
       setTrades((current) => current.filter((trade) => getStoredEntryId(trade) !== entryId));
+		  // 先同步移除原始活动来源，令共享到账即刻退出本页总收益；随后以服务端权威回包完整重建。
+		  setRawJournalTrades((current) => current.filter((trade) => getStoredEntryId(trade) !== entryId));
       setExpandedOpenedTradeIds((current) => {
         const next = new Set(current);
         next.delete(entryId);
@@ -8472,6 +8608,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         }, ...current.filter((item) => item.auditId !== String(data.auditId))]);
       }
       setRevertCandidate(null);
+		  void t0JournalQuery.refetch();
       t0Toast.success("速记已回撤，可在最近撤回中恢复");
     },
     onError: (error) => t0Toast.error(error.message || "速记回撤失败"),
@@ -8484,6 +8621,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setTrades((current) => [...current.filter((trade) => getStoredEntryId(trade) !== entry.id), visibleEntry]);
       setRecoverableEntries((current) => current.filter((item) => item.auditId !== String(variables.auditId)));
       setRestoreCandidate(null);
+		  // 共享转账始终由服务端按“来源平仓仍有效”下发；恢复后不可在客户端臆造或重算金额。
+		  void t0JournalQuery.refetch();
       t0Toast.success("速记已恢复");
     },
     onError: (error) => t0Toast.error(error.message || "速记恢复失败"),
@@ -9231,6 +9370,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setTotalProfitDetailTab("order");
     setTotalProfitPageTab("income");
     setMemberSettlementSelectedWeekStart(null);
+    setTeamSettlementSelectedWeekStart(null);
     setShowPayoutXirrHelp(false);
     if (isMemberView || canManage) {
       setLocation(totalProfitPagePath);
@@ -9241,6 +9381,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const closeTotalProfitReport = () => {
     setShowPayoutXirrHelp(false);
     setMemberSettlementSelectedWeekStart(null);
+    setTeamSettlementSelectedWeekStart(null);
     if (isTotalProfitPage) {
       setTotalProfitPageTab("income");
       setLocation(memberT0JournalPath);
@@ -10427,7 +10568,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           >
             <span className="inline-flex items-baseline gap-1.5 text-[13px] font-semibold tracking-[0.08em] text-slate-700" style={{ textShadow: "-0.4px -0.4px 0 rgba(255,255,255,0.88), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>
               历史记录
-              <span className="text-[11px] font-medium tracking-normal text-slate-500">{visibleRecentJournalTrades.length} 笔</span>
+              <span className="text-[11px] font-medium tracking-normal text-slate-500">{historyListItemCount} 笔</span>
             </span>
             {canManage && historyPerspectiveTargetUserId > 0 && <button
               type="button"
@@ -10463,7 +10604,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.30), rgba(208,215,221,0.16))" }}
               >
                 <div className="flex flex-nowrap items-center gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1" role="group" aria-label="历史记录动作筛选">
-                  {historyUsesIncomeCategories ? <>
+                  {historyHasIncomeCategoryToolbar ? <>
                     {historyMemberIncomeKindFilterOptions.length > 0 && <>
                       <button
                         type="button"
@@ -10509,6 +10650,50 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         </button>;
                       })}
                     </>}
+                    {RECENT_JOURNAL_ACTIONS.map((action) => {
+                      const available = availableJournalActions.includes(action);
+                      const selected = !showLinkedJournalGroups
+                        && historyIncomeKindFilterIds.length === 0
+                        && historyIncomeSourceFilterIds.length === 0
+                        && journalActionFilters.size === 1
+                        && journalActionFilters.has(action);
+                      return <button
+                        key={`income-history-${action}`}
+                        type="button"
+                        disabled={!available}
+                        aria-pressed={selected}
+                        title={available ? `仅看${ACTIONS[action].label}记录` : `暂无${ACTIONS[action].label}记录`}
+                        onClick={() => {
+                          setShowOnlyProfitableHistory(false);
+                          setShowOnlySharedIncomeHistory(false);
+                          setShowLinkedJournalGroups(false);
+                          selectJournalActionFilter(action);
+                          focusHistoryOnMobile();
+                        }}
+                        className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${selected ? ACTIONS[action].activeClass : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                      >
+                        {ACTIONS[action].label}
+                      </button>;
+                    })}
+                    <button
+                      type="button"
+                      disabled={!hasLinkedJournalPairs}
+                      aria-pressed={showLinkedJournalGroups}
+                      title={hasLinkedJournalPairs ? "查看开平仓关联链路" : "暂无可关联的开平仓记录"}
+                      onClick={() => {
+                        setHistoryIncomeKindFilterIds([]);
+                        setHistoryIncomeSourceFilterIds([]);
+                        setShowOnlyProfitableHistory(false);
+                        setShowOnlySharedIncomeHistory(false);
+                        setJournalActionFilters(new Set(availableJournalActions));
+                        setShowLinkedJournalGroups((current) => !current);
+                        setRecentJournalPage(1);
+                        focusHistoryOnMobile();
+                      }}
+                      className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                    >
+                      关联
+                    </button>
                   </> : <>
                   {availableJournalActions.length > 1 && <button
                     type="button"
@@ -10778,10 +10963,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 </>}
               </div>}
-              {visibleRecentJournalTrades.length === 0 ? (
+              {historyListItemCount === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有历史记录</div>
               ) : showLinkedJournalGroups ? (
                 pagedLinkedJournalGroups.map((group) => renderLinkedJournalGroup(group))
+              ) : isGlobalHistoryIncomeView ? (
+                pagedGlobalHistoryIncomeEntries.map((entry) => {
+                  const referenceTrade = entry.trade ?? entry.sourceTrade;
+                  const isLong = referenceTrade ? ACTIONS[referenceTrade.action].side === "long" : true;
+                  const typeLabel = entry.kind === "shared" ? "共享" : entry.kind === "commission" ? "佣金" : "订单";
+                  const typeClass = entry.kind === "shared"
+                    ? "text-blue-600"
+                    : entry.kind === "commission"
+                      ? "text-indigo-600"
+                      : isLong ? "text-rose-600" : "text-emerald-600";
+                  const displayQuantity = entry.quantity ?? referenceTrade?.quantity;
+                  const recipientLabel = entry.recipientName
+                    || (referenceTrade ? getTradeRelatedUserName(referenceTrade) : "未关联用户");
+                  return <div key={entry.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
+                    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+                      <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                        <span className={`shrink-0 font-semibold ${typeClass}`} title={recipientLabel}>{typeLabel}</span>
+                        <span className="shrink-0 font-medium text-slate-800">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)}E`}</span>
+                        {referenceTrade && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(referenceTrade.price)}</span>}
+                      </div>
+                      <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
+                      <span className={`shrink-0 border-b border-dotted pb-0.5 font-semibold ${entry.amount >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}>{formatSigned(entry.amount)}<span className="ml-0.5 text-slate-500">u</span></span>
+                    </div>
+                    <div className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden text-[10px] leading-4 text-slate-500">
+                      {referenceTrade && <><span className="min-w-0 truncate" title={getTradeAccountName(referenceTrade)}>{getTradeAccountName(referenceTrade)}</span><span className="text-slate-300">·</span></>}
+                      <span className="min-w-0 truncate" title={recipientLabel}>{entry.kind === "order" ? `订单归属 · ${recipientLabel}` : entry.kind === "commission" ? `佣金归属 · ${recipientLabel}` : `共享到账 · ${recipientLabel}`}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="ml-auto shrink-0">{formatBeijingMonthDayTime(entry.createdAt)}</span>
+                    </div>
+                  </div>;
+                })
               ) : pagedRecentJournalTrades.map((trade) => {
                 const detail = getHistoricalTradeDetail(trade);
                 const isOpening = ACTIONS[trade.action].opening;
@@ -10884,7 +11100,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 );
               })}
-              {(showLinkedJournalGroups ? linkedJournalGroups.length : visibleRecentJournalTrades.length) > 0 && recentJournalTotalPages > 1 && (
+              {historyListItemCount > 0 && recentJournalTotalPages > 1 && (
                 <div
                   className="flex items-center justify-between gap-3 border-t border-[#c7d0d7]/80 px-4 py-2.5 text-[11px] tabular-nums"
                   style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.42), rgba(208,215,221,0.34))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)" }}
@@ -12766,28 +12982,36 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>
 
             {isTotalProfitPage && <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="总收益与结算切换">
-              {[{ id: "income" as const, label: "总收益" }, { id: "settlement" as const, label: "结算" }].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={totalProfitPageTab === tab.id} onClick={() => { setTotalProfitPageTab(tab.id); setMemberSettlementCardPage("self"); setMemberSettlementSelectedWeekStart(null); if (tab.id === "settlement") setAdminSettlementTab("overview"); }} className={`h-9 rounded-md text-sm font-semibold transition active:scale-[0.99] ${totalProfitPageTab === tab.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-white"}`}>{tab.label}</button>)}
+              {[{ id: "income" as const, label: "总收益" }, { id: "settlement" as const, label: "结算" }].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={totalProfitPageTab === tab.id} onClick={() => { setTotalProfitPageTab(tab.id); setMemberSettlementCardPage("self"); setMemberSettlementSelectedWeekStart(null); setTeamSettlementSelectedWeekStart(null); if (tab.id === "settlement") setAdminSettlementTab("overview"); }} className={`h-9 rounded-md text-sm font-semibold transition active:scale-[0.99] ${totalProfitPageTab === tab.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-white"}`}>{tab.label}</button>)}
             </div>}
 
             {totalProfitPageTab === "settlement" ? (
               <section ref={weeklySettlementExportRef} className="mt-3" aria-label="周结算中心">
                 {!displayedWeeklySettlementCenter?.current && t0WeeklySettlementQuery.isLoading ? <div className="border-y border-slate-200 px-3 py-10 text-center text-xs text-slate-400">结算数据加载中…</div> : !displayedWeeklySettlementCenter?.current && t0WeeklySettlementQuery.error ? <div className="border border-rose-200 bg-rose-50 px-3 py-3 text-xs leading-5 text-rose-700">结算数据暂时无法读取，请稍后刷新。</div> : displayedWeeklySettlementCenter?.current ? <>
-                  {displayedWeeklySettlementCenter.view === "member" ? <T0MemberSettlementAvatarCarousel
-                    activePage={memberSettlementCardPage}
-                    onActivePageChange={setMemberSettlementCardPage}
-                    canViewTeam={canViewTeamOverview}
-                    selfCard={<T0MemberWeeklySettlementCurrentCard report={selectedMemberSettlementReport || displayedWeeklySettlementCenter.current} displayName={payoutTargetUserIdentity.name} avatar={payoutTargetUserIdentity.avatar} countdown={selectedMemberSettlementIsRealtime ? currentSettlementCountdown : null} isRealtimeWeek={selectedMemberSettlementIsRealtime} showTeamSwipeHint={canViewTeamOverview} />}
-                    teamCard={<T0TeamWeeklySettlementCard teamSettlement={teamWeeklySettlement} isLoading={t0TeamWeeklySettlementQuery.isLoading} hasError={Boolean(t0TeamWeeklySettlementQuery.error)} countdown={currentSettlementCountdown} />}
-                  /> : <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    {displayedWeeklySettlementCenter.view === "member" ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-800 bg-slate-900 px-3 py-3 text-white">
-                      <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-300">结算周期</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tabular-nums">{formatT0WeeklySettlementPeriod(displayedWeeklySettlementCenter.current.period.weekStartBjt, displayedWeeklySettlementCenter.current.period.weekEndExclusiveBjt)} <span className="ml-1 text-[10px] font-medium text-slate-300">北京时间</span></div></div>
-                      <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">距下期结算</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{currentSettlementCountdown === null ? "--:--:--" : currentSettlementCountdown <= 0 ? "切换中" : formatT0WeeklySettlementCountdown(currentSettlementCountdown)}</div></div>
-                    </div> : <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2.5"><div className="min-w-0"><div className="text-sm font-semibold text-slate-900">本周全局收益结算</div><div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatT0WeeklySettlementPeriod(displayedWeeklySettlementCenter.current.period.weekStartBjt, displayedWeeklySettlementCenter.current.period.weekEndExclusiveBjt)} · 北京时间 · 实时</div></div><span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">实时累计</span></div>}
-                    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">{displayedWeeklySettlementCenter.view === "member" ? `${payoutTargetUserIdentity.name}本周收益结算` : "本周结算收益"}</div><div className="mt-1 flex items-center justify-center gap-2">{displayedWeeklySettlementCenter.view === "member" && <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">{payoutTargetUserIdentity.avatar ? <img src={payoutTargetUserIdentity.avatar} alt={`${payoutTargetUserIdentity.name}头像`} className="h-full w-full object-cover" /> : <span>{payoutTargetUserIdentity.name.slice(0, 1)}</span>}</div>}<div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${displayedWeeklySettlementCenter.current.summary.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(displayedWeeklySettlementCenter.current.summary.income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
-                    <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">
-                      {[{ label: "订单", value: displayedWeeklySettlementCenter.current.summary.income.order, count: displayedWeeklySettlementCenter.current.summary.income.orderCount }, { label: "分佣", value: displayedWeeklySettlementCenter.current.summary.income.commission, count: displayedWeeklySettlementCenter.current.summary.income.commissionCount }, { label: "共享", value: displayedWeeklySettlementCenter.current.summary.income.shared, count: displayedWeeklySettlementCenter.current.summary.income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}
-                    </div>
+                  {displayedWeeklySettlementCenter.view === "member" && isMemberView && canViewTeamOverview && <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="个人与团队结算切换">
+                    {[{ id: "self" as const, label: "个人" }, { id: "team" as const, label: "团队" }].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={memberSettlementCardPage === tab.id} onClick={() => { setMemberSettlementCardPage(tab.id); if (tab.id === "team") setTeamSettlementSelectedWeekStart(memberSettlementSelectedWeekStart); }} className={`h-8 rounded-md text-xs font-semibold transition active:scale-[0.99] ${memberSettlementCardPage === tab.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-white"}`}>{tab.label}</button>)}
                   </div>}
+                  {displayedWeeklySettlementCenter.view === "member" ? <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    {memberSettlementCardPage === "team" && isMemberView && canViewTeamOverview ? <T0TeamWeeklySettlementCard teamSettlement={displayedTeamWeeklySettlement} isLoading={isTeamSettlementWeekLoading} hasError={Boolean(t0TeamWeeklySettlementQuery.error)} countdown={currentSettlementCountdown} hasPreviousWeek={Boolean(previousTeamSettlementWeekStart)} hasNextWeek={Boolean(nextTeamSettlementWeekStart)} onPreviousWeek={() => previousTeamSettlementWeekStart && selectTeamSettlementWeek(previousTeamSettlementWeekStart)} onNextWeek={() => nextTeamSettlementWeekStart && selectTeamSettlementWeek(nextTeamSettlementWeekStart)} /> : <T0MemberWeeklySettlementCurrentCard
+                      report={selectedMemberSettlementReport || displayedWeeklySettlementCenter.current}
+                      displayName={payoutTargetUserIdentity.name}
+                      avatar={payoutTargetUserIdentity.avatar}
+                      countdown={selectedMemberSettlementIsRealtime ? currentSettlementCountdown : null}
+                      isRealtimeWeek={selectedMemberSettlementIsRealtime}
+                      hasPreviousWeek={Boolean(previousMemberSettlementReport)}
+                      hasNextWeek={Boolean(nextMemberSettlementReport)}
+                      onPreviousWeek={() => previousMemberSettlementReport && selectMemberSettlementWeek(previousMemberSettlementReport.report.period.weekStartBjt)}
+                      onNextWeek={() => nextMemberSettlementReport && selectMemberSettlementWeek(nextMemberSettlementReport.report.period.weekStartBjt)}
+                    />}
+                  </div> : <T0AdminWeeklySettlementOverviewCard
+                    report={selectedAdminSettlementReport || displayedWeeklySettlementCenter.current}
+                    isRealtimeWeek={selectedAdminSettlementIsRealtime}
+                    hasPreviousWeek={Boolean(previousAdminSettlementReport)}
+                    hasNextWeek={Boolean(nextAdminSettlementReport)}
+                    memberAvatarByUserId={previewMemberAvatarById}
+                    onPreviousWeek={() => previousAdminSettlementReport && selectAdminSettlementWeek(previousAdminSettlementReport.report.period.weekStartBjt)}
+                    onNextWeek={() => nextAdminSettlementReport && selectAdminSettlementWeek(nextAdminSettlementReport.report.period.weekStartBjt)}
+                  />}
                   {displayedWeeklySettlementCenter.view === "admin" && <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="全局结算视图切换">
                     {[{ id: "overview" as const, label: "概览" }, { id: "reconciliation" as const, label: "账户对账" }].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={adminSettlementTab === tab.id} onClick={() => { setAdminSettlementTab(tab.id); setExpandedSettlementAccountId(null); setExpandedSettlementDestinationUserId(null); if (tab.id === "overview") void t0WeeklySettlementQuery.refetch(); }} className={`h-8 rounded-md text-xs font-semibold transition active:scale-[0.99] ${adminSettlementTab === tab.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-white"}`}>{tab.label}</button>)}
                   </div>}
@@ -12797,14 +13021,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     hasError={Boolean(t0WeeklySettlementAccountReconciliationQuery.error)}
                     weeks={reconciliationWeekOptions}
                     selectedWeekStart={effectiveSettlementReconciliationWeekStart || displayedWeeklySettlementCenter.current.period.weekStartBjt}
-                    onSelectedWeekStartChange={(weekStartBjt) => { setSelectedSettlementReconciliationWeekStart(weekStartBjt); setExpandedSettlementAccountId(null); setExpandedSettlementDestinationUserId(null); }}
+                    onSelectedWeekStartChange={selectAdminSettlementWeek}
                     expandedAccountId={expandedSettlementAccountId}
                     onExpandedAccountChange={setExpandedSettlementAccountId}
                     expandedDestinationUserId={expandedSettlementDestinationUserId}
                     onExpandedDestinationUserChange={setExpandedSettlementDestinationUserId}
                   />}
-                  {displayedWeeklySettlementCenter.view === "admin" && adminSettlementTab === "overview" && <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-900">用户收益结算</span><span className="text-[11px] text-slate-400">{displayedWeeklySettlementCenter.current.members.length} 人</span></div><div className="divide-y divide-slate-100">{displayedWeeklySettlementCenter.current.members.map((member) => { const expanded = expandedSettlementMemberId === member.userId; return <div key={member.userId}><button type="button" onClick={() => setExpandedSettlementMemberId(expanded ? null : member.userId)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{member.name}</div><div className="mt-1 text-[10px] tabular-nums text-slate-400">订单 {member.income.orderCount} · 分佣 {member.income.commissionCount} · 共享 {member.income.sharedCount}</div></div><div className="shrink-0 text-right tabular-nums"><div className={`text-sm font-bold leading-none ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-medium">U</span></div><div className="mt-1 text-[10px] text-slate-400">点击查看收益构成</div></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.shared)}</div></div></div>}</div>; })}</div></div>}
-                  {displayedWeeklySettlementCenter.view === "member" ? memberSettlementCardPage === "self" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><T0HistoricalSettlementWeekCalendar reports={memberSettlementReports} dailyIncomeByDate={memberSettlementIncomeByWeek?.incomeByDay} targetUserId={payoutTargetRelatedUserId} selectedWeekStart={memberSettlementSelectedWeekStart} onSelectedWeekStartChange={(weekStartBjt) => setMemberSettlementSelectedWeekStart(weekStartBjt === displayedWeeklySettlementCenter.current.period.weekStartBjt ? null : weekStartBjt)} /></div> : null : adminSettlementTab === "overview" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-800">历史收益结算</span><span className="text-[11px] text-slate-400">{displayedWeeklySettlementCenter.history.some((item) => item.kind === "backfill") ? "含回溯核算" : "已冻结周报"}</span></div>{displayedWeeklySettlementCenter.history.length > 0 ? <div className="divide-y divide-slate-100">{displayedWeeklySettlementCenter.history.map((item) => { const expanded = expandedSettlementReportId === item.id; return <div key={item.id}><button type="button" onClick={() => setExpandedSettlementReportId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div><div className="text-sm font-semibold text-slate-800">{formatT0WeeklySettlementPeriod(item.report.period.weekStartBjt, item.report.period.weekEndExclusiveBjt)}</div><div className="mt-1 text-[10px] text-slate-400">{item.kind === "frozen" ? "已冻结 · 北京时间周结" : "回溯核算 · 未冻结"}</div></div><div className={`shrink-0 text-right text-sm font-bold tabular-nums ${item.report.summary.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.total)} <span className="text-[9px] font-medium">U</span></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.shared)}</div></div></div>}</div>; })}</div> : <div className="px-3 py-7 text-center text-xs text-slate-400">暂无已结束周的收益结算记录</div>}</div> : null}
+                  {displayedWeeklySettlementCenter.view === "admin" && adminSettlementTab === "overview" && <T0AdminWeeklySettlementMemberList
+                    report={selectedAdminSettlementReport || displayedWeeklySettlementCenter.current}
+                    expandedMemberId={expandedSettlementMemberId}
+                    onExpandedMemberChange={setExpandedSettlementMemberId}
+                  />}
+                  {displayedWeeklySettlementCenter.view === "member" ? memberSettlementCardPage === "self" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><T0HistoricalSettlementWeekCalendar reports={memberSettlementReports} dailyIncomeByDate={memberSettlementIncomeByWeek?.incomeByDay} targetUserId={payoutTargetRelatedUserId} selectedWeekStart={memberSettlementSelectedWeekStart} onSelectedWeekStartChange={selectMemberSettlementWeek} /></div> : null : adminSettlementTab === "overview" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-800">历史收益结算</span><span className="text-[11px] text-slate-400">{displayedWeeklySettlementCenter.history.some((item) => item.kind === "backfill") ? "含回溯核算" : "已冻结周报"}</span></div>{displayedWeeklySettlementCenter.history.length > 0 ? <div className="divide-y divide-slate-100">{displayedWeeklySettlementCenter.history.map((item) => { const expanded = expandedSettlementReportId === item.id; return <div key={item.id}><button type="button" onClick={() => setExpandedSettlementReportId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div><div className="text-sm font-semibold text-slate-800">{formatT0WeeklySettlementPeriod(item.report.period.weekStartBjt, item.report.period.weekEndExclusiveBjt)}</div><div className="mt-1 text-[10px] text-slate-400">{item.kind === "frozen" ? "已冻结 · 北京时间周结" : "回溯核算 · 未冻结"}</div></div><div className={`shrink-0 text-right text-sm font-bold tabular-nums ${item.report.summary.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.total)} <span className="text-[9px] font-medium">U</span></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.shared)}</div></div></div>}</div>; })}</div> : <div className="px-3 py-7 text-center text-xs text-slate-400">暂无已结束周的收益结算记录</div>}</div> : null}
                   <p data-card-export-hide="true" className="mt-3 px-1 text-[10px] leading-5 text-slate-400">{displayedWeeklySettlementCenter.view === "member" && memberSettlementCardPage === "team" ? (teamWeeklySettlement?.definition || "团队结算仅展示已授权下属的本周收益汇总。") : `${displayedWeeklySettlementCenter.definition.income} ${displayedWeeklySettlementCenter.definition.freeze}`}</p>
                 </> : <div className="border-y border-slate-200 px-3 py-10 text-center text-xs text-slate-400">暂无结算数据</div>}
               </section>
