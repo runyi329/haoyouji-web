@@ -911,7 +911,6 @@ export function FunderOrderCard({
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [linkedInterestDetailKind, setLinkedInterestDetailKind] = useState<'pending' | 'paid' | null>(null);
-  const [showProfitShareDetail, setShowProfitShareDetail] = useState(false);
   const [showManualStockPnlDetail, setShowManualStockPnlDetail] = useState(false);
   // 共同拥有者会带 participantInfo 以支持独立快照，但主订单拥有者仍是主单的管理视角。
   // 结息与担保保存的参与者作用域只用于“非主拥有者”的协作视角：共同拥有者、历史参与者都独立；
@@ -3462,8 +3461,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             })()}
             </>
             )}
-            {/* 收益分成前置到利息区；默认折叠，避免常态卡片被三行设置挤占。 */}
-            {show('profitShare') && order.show_profit_share && order.commission_share && (() => {
+            {/* 收益分成使用与订单卡其余字段一致的扁平明细行。 */}
+            {(show('profitShare') || Boolean(order.show_profit_share)) && order.show_profit_share && order.commission_share && (() => {
               const cs = String(order.commission_share);
               const isCoin = cs.includes('币种收益') || cs.includes('利润分成');
               const typeLabel = isCoin ? '利润分成' : '利息分成';
@@ -3479,27 +3478,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               }
               const shareAmountLabel = isCoin ? '待分利润' : '待分金额';
               return (
-                <div className="mt-1 border-t pt-1" style={{ borderColor: '#E8EFFF' }}>
-                  <button
-                    type="button"
-                    onClick={(event) => { event.stopPropagation(); setShowProfitShareDetail((open) => !open); }}
-                    aria-expanded={showProfitShareDetail}
-                    aria-label={showProfitShareDetail ? '收起收益分成' : '展开收益分成'}
-                    className="flex w-full items-center justify-between gap-2 py-0.5 text-left"
-                  >
-                    <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>收益分成</span>
-                    <span className="flex min-w-0 items-center gap-1 text-[11px]" style={{ color: '#4B5563' }}>
-                      <span className="truncate">{typeLabel}{ratioNum > 0 ? ` · ${ratioNum}%` : ''}</span>
-                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${showProfitShareDetail ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
-                    </span>
-                  </button>
-                  {showProfitShareDetail && (
-                    <div className="mt-1 space-y-0.5 rounded-md px-2 py-1.5" style={{ background: '#F8FAFF' }}>
-                      <div className="flex items-center justify-between gap-2"><span className="text-gray-400">分成类型</span><span className="font-medium" style={{ color: '#4B5563' }}>{typeLabel}</span></div>
-                      <div className="flex items-center justify-between gap-2"><span className="text-gray-400">分成比例</span><span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span></div>
-                      <div className="flex items-center justify-between gap-2"><span className="text-gray-400">{shareAmountLabel}</span><span className="font-medium tabular-nums" style={{ color: isCoin ? '#DC2626' : '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span></div>
-                    </div>
-                  )}
+                <div className="mt-0.5 space-y-0.5 text-xs">
+                  <div className="flex items-center justify-between gap-2"><span className="text-gray-400">收益分成</span><span className="font-medium" style={{ color: '#4B5563' }}>{typeLabel}</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-gray-400">分成比例</span><span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-gray-400">{shareAmountLabel}</span><span className="font-medium tabular-nums" style={{ color: isCoin ? '#DC2626' : '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span></div>
                 </div>
               );
             })()}

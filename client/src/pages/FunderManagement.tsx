@@ -92,6 +92,16 @@ const formatTradingFeeRate = (value: unknown) => {
   return Number.isFinite(rate) && rate >= 0 ? rate.toFixed(1) : '2.0';
 };
 
+const buildProfitShareDraft = (enabled: unknown, type: unknown, ratio: unknown) => {
+  const isEnabled = Boolean(enabled);
+  const normalizedRatio = String(ratio ?? '').trim();
+  const typeLabel = type === 'coin' ? '利润分成' : '利息分成';
+  return {
+    enabled: isEnabled,
+    commissionShare: isEnabled ? `${typeLabel}${normalizedRatio ? ` ${normalizedRatio}%` : ''}` : '',
+  };
+};
+
 const getWalletAssetDisplayDigits = (assetCode: string, amount: number) => {
   if (['USDT', 'CNY'].includes(String(assetCode || '').toUpperCase())) return 2;
   const absoluteAmount = Math.abs(amount);
@@ -1115,19 +1125,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
   // 实时预览不能依赖保存函数内的局部变量；始终从当前固定区所选用户的草稿生成。
   const previewJointOrderSegments = editingOrder?.id && activeJointOrderTarget
-    ? jointOrderSegments.map((segment, index) => ({
-        ...segment,
-        id: segment.id || `segment-${index + 2}`,
-        owner_user_id: Number(activeJointOrderTarget.userId),
-        amount: String(segment.amount || '').trim(),
-        interest_base: String(segment.interest_base || '').trim(),
-        interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
-        buy_date: String(segment.buy_date || '').slice(0, 10),
-        interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
-        buy_price: String(segment.buy_price || '').trim(),
-        buy_quantity: String(segment.buy_quantity || '').trim(),
-        collateral_assets: Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [],
-      }))
+    ? jointOrderSegments.map((segment, index) => {
+        const profitShareDraft = buildProfitShareDraft(segment.show_profit_share, segment.profit_share_type, segment.profit_share_ratio);
+        return {
+          ...segment,
+          id: segment.id || `segment-${index + 2}`,
+          owner_user_id: Number(activeJointOrderTarget.userId),
+          amount: String(segment.amount || '').trim(),
+          interest_base: String(segment.interest_base || '').trim(),
+          interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
+          buy_date: String(segment.buy_date || '').slice(0, 10),
+          interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
+          buy_price: String(segment.buy_price || '').trim(),
+          buy_quantity: String(segment.buy_quantity || '').trim(),
+          commission_share: profitShareDraft.commissionShare,
+          collateral_assets: Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [],
+        };
+      })
     : [];
 
   // 拥有者在业务上是平级关系：主订单仅是数据存储锚点，不能作为界面上的主次排序依据。
@@ -3023,16 +3037,20 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const shouldPersistJointOrderSegments = Boolean(canBuildJointOrderSegments && (isSnapshotScopedEdit || jointOrderSegmentsDirty));
     // 即使本次不写入，也保留当前第二段供实时预览展示；保存条件仅控制是否发起快照更新。
     const normalizedJointOrderSegments = canBuildJointOrderSegments
-      ? jointOrderSegments.map((segment, index) => ({
-          ...segment,
-          id: segment.id || `segment-${index + 2}`,
-          owner_user_id: participantUserIdForJointSegments,
-          amount: String(segment.amount || '').trim(),
-          interest_base: String(segment.interest_base || '').trim(),
-          interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
-          buy_date: String(segment.buy_date || '').slice(0, 10),
-          interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
-        }))
+      ? jointOrderSegments.map((segment, index) => {
+          const profitShareDraft = buildProfitShareDraft(segment.show_profit_share, segment.profit_share_type, segment.profit_share_ratio);
+          return {
+            ...segment,
+            id: segment.id || `segment-${index + 2}`,
+            owner_user_id: participantUserIdForJointSegments,
+            amount: String(segment.amount || '').trim(),
+            interest_base: String(segment.interest_base || '').trim(),
+            interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
+            buy_date: String(segment.buy_date || '').slice(0, 10),
+            interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
+            commission_share: profitShareDraft.commissionShare,
+          };
+        })
       : [];
     if (shouldPersistJointOrderSegments && normalizedJointOrderSegments.some((segment) => (
       !Number.isFinite(Number(segment.amount)) || Number(segment.amount) <= 0
@@ -3042,6 +3060,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.error('请完整填写每个联合子段的订单金额、计息基数和计息日期');
       return;
     }
+    const profitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
     const payload = {
       ledgerId,
       coin: isOptionOrder ? optionFormData.optionCurrency : formData.coin,
@@ -3058,13 +3077,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestBaseCurrency: formData.interestBaseCurrency,
       interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
-      showProfitShare: Boolean(displayConfig.profitShare),
-      commissionShare: (() => {
-        if (!displayConfig.profitShare) return undefined;
-        const typeLabel = formData.profitShareType === 'coin' ? '利润分成' : '利息分成';
-        const ratio = (formData.profitShareRatio ?? '').toString().trim();
-        return ratio ? `${typeLabel} ${ratio}%` : typeLabel;
-      })(),
+      showProfitShare: profitShareDraft.enabled,
+      commissionShare: profitShareDraft.commissionShare || undefined,
       // 新建订单仅先写入手工担保；钱包担保在订单创建后走原子冻结接口。
       // 编辑订单保留全部既有担保，避免保存手工字段时丢失已冻结的钱包条目。
       collateralAssets: editingOrder
@@ -3322,6 +3336,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   ? (previewOptionSummary?.totalUsdt && previewOptionSummary.totalUsdt > 0 ? previewOptionSummary.totalUsdt.toFixed(4) : null)
                   : formData.assetType === 'stock' ? amountInputValue || null : financingAmountUsdt || null;
                 const previewDisplayInputAmount = previewIsOptionOrder ? previewOptionSummary?.totalInput || '' : amountInputValue || '';
+                // 预览与提交共用当前分成开关、类型和比例，不能再读取历史 commissionShare 文本。
+                const previewProfitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
                 const previewOrder: any = {
                   id: editingOrder?.id ?? -1,
                   order_no: editingOrder?.order_no ?? null,
@@ -3353,8 +3369,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   interest_base_currency: formData.interestBaseCurrency || 'USDT',
                   interest_rate_currency: formData.interestRateCurrency || 'USDT',
                   interest_start_date: formData.interestStartDate || null,
-                  show_profit_share: formData.showProfitShare ? 1 : 0,
-                  commission_share: formData.commissionShare || null,
+                  show_profit_share: previewProfitShareDraft.enabled ? 1 : 0,
+                  commission_share: previewProfitShareDraft.commissionShare || null,
                   profit_share_ratio: formData.profitShareRatio || null,
                   profit_share_type: formData.profitShareType || 'interest',
                   principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
@@ -3399,7 +3415,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
                 // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
-                const previewDisplayKey = `floating-preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
+                const previewDisplayKey = `floating-preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${String(previewProfitShareDraft.enabled)}-${previewProfitShareDraft.commissionShare}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <>
                     {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
