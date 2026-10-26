@@ -446,10 +446,18 @@ type Ledger52T0IncomeCalculationInput = {
 };
 
 /**
+ * 一次完整事实回放得到的逐笔归属上下文。
+ * 仅是单次请求内可重建的纯计算结果，不缓存金额，也不包含目录姓名或任何写入状态。
+ */
+export type Ledger52T0IncomeAttributionContext = {
+  closings: Ledger52T0ClosingIncomeAllocation[];
+};
+
+/**
  * 统一的已实现收入归属引擎（逐笔视图）。周结算可通过 includeClosing 只计入指定时间窗的平仓，
  * 但仍传入完整历史开仓序列，使 FIFO、分佣快照和共享扣减不因截断历史而漂移。
  */
-export function calculateLedger52T0IncomeByClosing(input: Ledger52T0IncomeCalculationInput) {
+export function buildLedger52T0IncomeAttributionContext(input: Omit<Ledger52T0IncomeCalculationInput, "includeClosing">): Ledger52T0IncomeAttributionContext {
   const reductions = new Map(input.reductions.map((item) => [item.closingEntryId, item]));
   const details = buildRecentDetails(input.trades, input.snapshots);
   const openingClosingAllocations = buildOpeningClosingAllocations(input.trades);
@@ -462,7 +470,6 @@ export function calculateLedger52T0IncomeByClosing(input: Ledger52T0IncomeCalcul
   const result: Ledger52T0ClosingIncomeAllocation[] = [];
   for (const closing of input.trades) {
     if (closing.isPending || actionInfo[closing.action].opening) continue;
-    if (input.includeClosing && !input.includeClosing(closing)) continue;
     const calculatedNetPnl = details.get(closing.id)?.netPnl;
     const netPnl = typeof calculatedNetPnl === "number" && Number.isFinite(calculatedNetPnl) ? calculatedNetPnl : null;
     const reduction = reductions.get(closing.id);
@@ -508,7 +515,12 @@ export function calculateLedger52T0IncomeByClosing(input: Ledger52T0IncomeCalcul
       variance: netPnl === null ? null : netPnl - allocatedTotal,
     });
   };
-  return result;
+  return { closings: result };
+}
+
+export function calculateLedger52T0IncomeByClosing(input: Ledger52T0IncomeCalculationInput) {
+  const context = buildLedger52T0IncomeAttributionContext(input);
+  return input.includeClosing ? context.closings.filter((item) => input.includeClosing!(item.closing)) : context.closings;
 }
 
 /** 统一的按用户已实现收益聚合，复用逐笔结果以保证与账户对账完全同源。 */

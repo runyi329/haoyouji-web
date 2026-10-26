@@ -384,7 +384,6 @@ export default function InterestManagePage() {
                     <OrderCardImageDownload
                       targetRef={expandedCardRef}
                       currentUser={currentUser}
-                      watermarkLabel={isDownloadAdministrator ? 'R1' : undefined}
                       orderNo={`利息-${tag.tagName}`}
                       color="#94A3B8"
                       outerPadding={0}

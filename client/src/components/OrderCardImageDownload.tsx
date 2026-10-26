@@ -28,7 +28,7 @@ interface OrderCardImageDownloadProps {
   variant?: "default" | "bare";
   /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
   watermarkMode?: "user-and-time" | "time-only";
-  /** 指定水印中的保存者名称；传入时始终与截图时间一起显示。 */
+  /** 指定水印中的保存者名称；传入时始终与截图时间一起显示。旧版固定R1会自动回退为实际保存者。 */
   watermarkLabel?: string;
   /** 水印文字不透明度；默认保持卡片下载的轻量水印。 */
   watermarkOpacity?: number;
@@ -78,7 +78,8 @@ function getSaverLabel(user?: SnapshotUser | null): string {
   if (!user) return "当前用户";
   const username = String(user.username || "").trim();
   const displayName = String(user.name || user.nickname || user.displayName || username || `用户${user.id || ""}`).trim();
-  return username && username !== displayName ? `${displayName}（${username}）` : displayName;
+  // 水印重复铺满图片时只保留操作人的显示名，既可追溯又避免“姓名（用户名）”过长遮挡账目。
+  return displayName;
 }
 
 function sanitizeFilename(value: string): string {
@@ -375,8 +376,12 @@ export function OrderCardImageDownload({
 
     setGenerating(true);
     const timestamp = formatBeijingTime(new Date());
-    const saverLabel = String(watermarkLabel || "").trim()
-      || (watermarkMode === "time-only" ? "" : getSaverLabel(currentUser || getStoredSnapshotUser()));
+    const requestedWatermarkLabel = String(watermarkLabel || "").trim();
+    // 旧入口曾以“R1”覆盖操作者身份。所有账本截图都应记录实际保存者，
+    // 因此保留业务自定义文字的兼容性，但不再接受固定R1作为水印主体。
+    const saverLabel = requestedWatermarkLabel && requestedWatermarkLabel.toUpperCase() !== "R1"
+      ? requestedWatermarkLabel
+      : (watermarkMode === "time-only" ? "" : getSaverLabel(currentUser || getStoredSnapshotUser()));
     const watermarkText = saverLabel ? `${saverLabel}｜${timestamp}` : timestamp;
     const scale = 2;
     let snapshotContainer: HTMLElement | null = null;

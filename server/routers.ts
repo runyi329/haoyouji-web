@@ -11784,8 +11784,11 @@ ${klinesSummary}
 
     // 管理员全局结算的账户—用户对账桥：按需只读，成员与登录代入视角不暴露账户及其他用户去向。
     t0GetWeeklySettlementAccountReconciliation: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(52) }))
-      .query(async ({ ctx }) => {
+      .input(z.object({
+        ledgerId: z.literal(52),
+        weekStartBjt: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '结算周格式应为 YYYY-MM-DD').optional(),
+      }))
+      .query(async ({ ctx, input }) => {
         if (ctx.isViewingAs) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可读取全局账户结算对账' });
         }
@@ -11801,6 +11804,43 @@ ${klinesSummary}
         }
         return await weeklySettlement.getLedger52T0WeeklySettlementAccountReconciliation({
           journalOwnerUserId: scope.journalOwnerUserId,
+          weekStartBjt: input.weekStartBjt,
+        });
+      }),
+
+    // 管理员银行式账目已平确认：仅为已结束且全部对齐的结算周追加审计凭证，不改订单、资金、收益或冻结周报。
+    t0ConfirmWeeklySettlementAccountReconciliation: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        weekStartBjt: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '结算周格式应为 YYYY-MM-DD'),
+        expectedReconciliationHash: z.string().trim().regex(/^[a-f0-9]{64}$/i, '请刷新后重新核对账目'),
+        note: z.string().trim().max(300, '核对说明不能超过300字').optional(),
+        clientRequestId: z.string().trim().regex(/^[A-Za-z0-9_-]{12,64}$/, '确认请求标识无效'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可核对历史周，但不会保存账目已平确认' });
+        }
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可确认全局账户账目' });
+        }
+        const journal = await import('./ledger52-t0-journal');
+        const weeklySettlement = await import('./ledger52-t0-weekly-settlement');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可确认账户账目已平' });
+        }
+        return await weeklySettlement.confirmLedger52T0WeeklySettlementAccountReconciliation({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          actorUserId: ctx.user.id,
+          weekStartBjt: input.weekStartBjt,
+          expectedReconciliationHash: input.expectedReconciliationHash,
+          note: input.note,
+          clientRequestId: input.clientRequestId,
         });
       }),
 

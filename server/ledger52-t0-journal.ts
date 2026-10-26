@@ -2458,7 +2458,7 @@ export async function getLedger52T0Journal(
  * 该读取器只取统一收益引擎和XIRR所需的五类不可变事实，并在同一只读一致性快照中按500条分页读取。
  * 不调用ensure表结构、不加载报价页目录/审计/行情/提醒，也绝不执行任何业务写入或DDL。
  */
-export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwnerUserId: number }) {
+export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwnerUserId: number; includePayoutCashFlows?: boolean }) {
   const conn = await getDbTransactionConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队数据库连接失败" });
 
@@ -2501,12 +2501,13 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       const entryParams: Array<string | number> = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
       if (entryCursorTradeTime !== null) entryParams.push(entryCursorTradeTime, entryCursorTradeTime, entryCursorId);
       const [entryResult] = await conn.execute(
-        `SELECT e.id, e.account_id, e.symbol, e.instrument_type, e.option_direction,
+        `SELECT e.id, e.account_id, CASE WHEN account.is_active = 1 THEN account.name ELSE NULL END AS account_name, e.symbol, e.instrument_type, e.option_direction,
                 e.option_premium, e.option_premium_currency, e.option_settlement_price, e.option_delivery_price,
                 e.execution_status, e.filled_at, e.action, e.related_user_id, e.related_fund_id,
                 e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.trade_time, e.created_at,
                 DATE_FORMAT(e.trade_time, '%Y-%m-%d %H:%i:%s.%f') AS cursor_trade_time
            FROM ledger52_t0_journal_entries e
+           INNER JOIN ledger52_t0_journal_accounts account ON account.id = e.account_id
           WHERE e.ledger_id = ? AND e.user_id = ?${entryCursorSql}
           ORDER BY e.trade_time ASC, e.id ASC
           LIMIT ${pageSize}`,
@@ -2550,21 +2551,21 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       }
     }
 
-    let transferCursorClosingEntryId = 0;
+    let transferCursorCreatedAt: string | null = null;
     let transferCursorId = 0;
-    let hasTransferCursor = false;
     while (true) {
-      const transferCursorSql = hasTransferCursor
-        ? " AND (transfer.closing_entry_id > ? OR (transfer.closing_entry_id = ? AND transfer.id > ?))"
+      const transferCursorSql = transferCursorCreatedAt !== null
+        ? " AND (transfer.created_at < ? OR (transfer.created_at = ? AND transfer.id < ?))"
         : "";
-      const transferParams: number[] = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
-      if (hasTransferCursor) transferParams.push(transferCursorClosingEntryId, transferCursorClosingEntryId, transferCursorId);
+      const transferParams: Array<string | number> = [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId];
+      if (transferCursorCreatedAt !== null) transferParams.push(transferCursorCreatedAt, transferCursorCreatedAt, transferCursorId);
       const [transferResult] = await conn.execute(
         `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
-                transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at
+                transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at,
+                DATE_FORMAT(transfer.created_at, '%Y-%m-%d %H:%i:%s.%f') AS cursor_created_at
            FROM ledger52_t0_journal_shared_income_transfers transfer
           WHERE transfer.ledger_id = ? AND transfer.user_id = ?${transferCursorSql}
-          ORDER BY transfer.closing_entry_id ASC, transfer.id ASC
+          ORDER BY transfer.created_at DESC, transfer.id DESC
           LIMIT ${pageSize}`,
         transferParams,
       );
@@ -2583,19 +2584,19 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       })));
       if (transferRows.length < pageSize) break;
       const finalTransfer = transferRows[transferRows.length - 1];
-      transferCursorClosingEntryId = toNumber(finalTransfer.closing_entry_id);
+      transferCursorCreatedAt = String(finalTransfer.cursor_created_at || "");
       transferCursorId = toNumber(finalTransfer.id);
-      if (transferCursorClosingEntryId <= 0 || transferCursorId <= 0) {
+      if (!transferCursorCreatedAt || transferCursorId <= 0) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队共享读取游标异常" });
       }
-      hasTransferCursor = true;
     }
 
-    let payoutCursorRelatedUserId = 0;
-    let payoutCursorOccurredOn = "";
-    let payoutCursorId = 0;
-    let hasPayoutCursor = false;
-    while (true) {
+    if (input.includePayoutCashFlows !== false) {
+      let payoutCursorRelatedUserId = 0;
+      let payoutCursorOccurredOn = "";
+      let payoutCursorId = 0;
+      let hasPayoutCursor = false;
+      while (true) {
       const payoutCursorSql = hasPayoutCursor
         ? " AND (payout.related_user_id > ? OR (payout.related_user_id = ? AND (payout.occurred_on > ? OR (payout.occurred_on = ? AND payout.id > ?))))"
         : "";
@@ -2629,7 +2630,8 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       if (payoutCursorRelatedUserId <= 0 || !payoutCursorOccurredOn || payoutCursorId <= 0) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队资金流水读取游标异常" });
       }
-      hasPayoutCursor = true;
+        hasPayoutCursor = true;
+      }
     }
 
     await conn.commit();
@@ -2648,6 +2650,20 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
     const release = (conn as any).release;
     if (typeof release === "function") release.call(conn);
   }
+}
+
+/**
+ * 周结算与账户对账的专用只读事实入口。
+ * 它刻意只复用统一收益归属需要的订单、冻结分佣、共享转账/扣减事实；不加载报价、审计、提醒、资金流水展示或其他页面目录。
+ */
+export async function getLedger52T0JournalSettlementFinancialFacts(input: { journalOwnerUserId: number }) {
+  const facts = await getLedger52T0JournalTeamFinancialFacts({ ...input, includePayoutCashFlows: false });
+  return {
+    entries: facts.entries,
+    profitShareSnapshots: facts.profitShareSnapshots,
+    sharedIncomeTransfers: facts.sharedIncomeTransfers,
+    sharedIncomeReductions: facts.sharedIncomeReductions,
+  };
 }
 
 function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {

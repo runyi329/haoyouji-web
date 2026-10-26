@@ -1552,7 +1552,6 @@ export default function DepositManage() {
                                 <OrderCardImageDownload
                                   targetRef={rightMarginExportRef}
                                   currentUser={currentUser}
-                                  watermarkLabel={isDownloadAdministrator ? 'R1' : undefined}
                                   orderNo={`37号账本-${cat.name}-保证金`}
                                   filenamePrefix="保证金"
                                   previewTitle="保证金图片预览"
@@ -1728,7 +1727,6 @@ export default function DepositManage() {
                                       <OrderCardImageDownload
                                         targetRef={rightBalanceExportRef}
                                         currentUser={currentUser}
-                                        watermarkLabel={isDownloadAdministrator ? 'R1' : undefined}
                                         orderNo={`37号账本-${cat.name}-账户余额`}
                                         filenamePrefix="账户余额"
                                         previewTitle="账户余额图片预览"

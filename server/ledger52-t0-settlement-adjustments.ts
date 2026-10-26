@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { getDbConnection, getDbTransactionConnection } from "./db";
+import { getDbConnection, getDbTransactionConnection, withDatabaseLock } from "./db";
 
 const LEDGER_ID = 52;
 const ADJUSTMENT_TABLE = "ledger52_t0_weekly_settlement_adjustments";
@@ -86,6 +86,21 @@ function parseMondayWeekStart(value: string) {
   return text;
 }
 
+function addCalendarDays(dateText: string, days: number) {
+  const date = new Date(`${dateText}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) throw new TRPCError({ code: "BAD_REQUEST", message: "结算周无效" });
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getBeijingDateText(value: unknown) {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const item = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  return `${item("year")}-${item("month")}-${item("day")}`;
+}
+
 function parseAllocationJson(raw: unknown): Ledger52T0SettlementAdjustmentLine[] {
   try {
     const parsed = JSON.parse(String(raw || "[]"));
@@ -142,8 +157,7 @@ export async function listLedger52T0SettlementAdjustments(input: {
          FROM ${ADJUSTMENT_TABLE} adjustment
          LEFT JOIN users creator ON creator.id = adjustment.created_by_user_id
         WHERE adjustment.ledger_id = ? AND adjustment.journal_owner_user_id = ?${weekClause}
-        ORDER BY adjustment.created_at DESC, adjustment.id DESC
-        LIMIT 500`,
+        ORDER BY adjustment.created_at DESC, adjustment.id DESC`,
       params,
     );
     const adjustments = asRows(rows).map(mapAdjustment);
@@ -220,7 +234,7 @@ async function findAdjustmentByRequest(tx: any, journalOwnerUserId: number, clie
   return row ? mapAdjustment(row) : null;
 }
 
-export async function createLedger52T0SettlementAdjustment(input: {
+async function createLedger52T0SettlementAdjustmentUnlocked(input: {
   journalOwnerUserId: number;
   actorUserId: number;
   weekStartBjt: string;
@@ -297,13 +311,17 @@ export async function createLedger52T0SettlementAdjustment(input: {
     }
     if (sourceClosingEntryId) {
       const [closingRows] = await tx.execute(
-        `SELECT id, account_id, action FROM ledger52_t0_journal_entries
+        `SELECT id, account_id, action, COALESCE(filled_at, trade_time) AS occurred_at FROM ledger52_t0_journal_entries
           WHERE id = ? AND ledger_id = ? AND user_id = ? AND action IN ('closeLong', 'closeShort') LIMIT 1 FOR UPDATE`,
         [sourceClosingEntryId, LEDGER_ID, input.journalOwnerUserId],
       );
       const closing = asRows(closingRows)[0];
       if (!closing) throw new TRPCError({ code: "NOT_FOUND", message: "来源平仓单不存在" });
       if (accountId && Number(closing.account_id) !== accountId) throw new TRPCError({ code: "BAD_REQUEST", message: "来源平仓单不属于所选账户" });
+      const occurredOn = getBeijingDateText(closing.occurred_at);
+      if (!occurredOn || occurredOn < weekStartBjt || occurredOn >= addCalendarDays(weekStartBjt, 7)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "关联平仓单不属于所选结算周" });
+      }
     }
 
     const userIds = Array.from(allocationCents.keys());
@@ -392,4 +410,24 @@ export async function createLedger52T0SettlementAdjustment(input: {
   } finally {
     tx.release?.();
   }
+}
+
+/** 调整与“账目已平”确认共享同一账本周锁，确认过程中不能插入另一张调整凭证。 */
+export async function createLedger52T0SettlementAdjustment(input: {
+  journalOwnerUserId: number;
+  actorUserId: number;
+  weekStartBjt: string;
+  type: AdjustmentType;
+  accountId?: string;
+  sourceClosingEntryId?: string;
+  sourceNetPnlDelta: string;
+  allocations: AdjustmentLineInput[];
+  reason: string;
+  clientRequestId: string;
+}) {
+  const weekStartBjt = parseMondayWeekStart(input.weekStartBjt);
+  return await withDatabaseLock(
+    `ledger52:t0:settlement-reconciliation:${input.journalOwnerUserId}:${weekStartBjt}`,
+    () => createLedger52T0SettlementAdjustmentUnlocked({ ...input, weekStartBjt }),
+  );
 }

@@ -1,12 +1,17 @@
 import { createHash } from "crypto";
 import { TRPCError } from "@trpc/server";
-import { getDbConnection } from "./db";
-import { getLedger52T0Journal, type T0JournalReadScope } from "./ledger52-t0-journal";
+import { getDbConnection, withDatabaseLock } from "./db";
+import { getLedger52T0Journal, getLedger52T0JournalSettlementFinancialFacts, type T0JournalReadScope } from "./ledger52-t0-journal";
 import { listLedger52T0SettlementAdjustments, type Ledger52T0SettlementAdjustment } from "./ledger52-t0-settlement-adjustments";
 import {
-  calculateLedger52T0IncomeByClosing,
-  calculateLedger52T0IncomeByUser,
+  createLedger52T0SettlementReconciliationConfirmation,
+  getLatestLedger52T0SettlementReconciliationConfirmation,
+  type Ledger52T0SettlementReconciliationConfirmation,
+} from "./ledger52-t0-settlement-reconciliation-confirmations";
+import {
+  buildLedger52T0IncomeAttributionContext,
   getLedger52T0TeamOverview,
+  type Ledger52T0IncomeAttributionContext,
   type Ledger52T0IncomeReduction,
   type Ledger52T0IncomeSnapshot,
   type Ledger52T0IncomeTrade,
@@ -139,6 +144,28 @@ type SettlementAccountReconciliation = {
   destinations: SettlementAccountReconciliationDestination[];
   adjustments: Ledger52T0SettlementAdjustment[];
   definition: string;
+};
+
+type SettlementReconciliationReference = {
+  status: "realtime" | "frozen" | "backfill";
+  frozenAt?: string;
+  /** 冻结周保存时的不可变周收益来源哈希；实时/回溯周没有这一项。 */
+  frozenSourceHash?: string;
+  /** 本次账户对账按完整当前事实重算的逐笔账户—用户来源哈希。 */
+  sourceHash: string;
+  /** 当前周全部追加调整凭证的稳定哈希；包含暂挂说明。 */
+  adjustmentHash: string;
+  /** 冻结周的当前事实若已不同于冻结快照，不能静默做“账目已平”确认。 */
+  frozenSourceChanged: boolean;
+};
+
+type SettlementAccountReconciliationView = SettlementAccountReconciliation & {
+  reconciliationHash: string;
+  settlementReference: SettlementReconciliationReference;
+  confirmation: {
+    state: "unconfirmed" | "confirmed" | "stale";
+    latest: Ledger52T0SettlementReconciliationConfirmation | null;
+  };
 };
 
 function toNumber(value: unknown) {
@@ -334,6 +361,43 @@ function mapReductions(rows: any[]): Ledger52T0IncomeReduction[] {
   })).filter((row) => row.closingEntryId);
 }
 
+/** 单次结算请求中可复用的纯事实映射；不包含可变目录名称、调整单或确认状态。 */
+type SettlementIncomeFacts = {
+  trades: Ledger52T0IncomeTrade[];
+  snapshots: Ledger52T0IncomeSnapshot[];
+  transfers: Ledger52T0IncomeTransfer[];
+  reductions: Ledger52T0IncomeReduction[];
+  tradeById: Map<string, Ledger52T0IncomeTrade>;
+};
+
+function getSettlementIncomeFacts(journal: any): SettlementIncomeFacts {
+  const trades = mapTrades(Array.isArray(journal?.entries) ? journal.entries : []);
+  return {
+    trades,
+    snapshots: mapSnapshots(Array.isArray(journal?.profitShareSnapshots) ? journal.profitShareSnapshots : []),
+    transfers: mapTransfers(Array.isArray(journal?.sharedIncomeTransfers) ? journal.sharedIncomeTransfers : []),
+    reductions: mapReductions(Array.isArray(journal?.sharedIncomeReductions) ? journal.sharedIncomeReductions : []),
+    tradeById: new Map(trades.map((trade) => [trade.id, trade])),
+  };
+}
+
+function buildSettlementIncomeAttribution(facts: SettlementIncomeFacts) {
+  return buildLedger52T0IncomeAttributionContext({
+    trades: facts.trades,
+    snapshots: facts.snapshots,
+    transfers: facts.transfers,
+    reductions: facts.reductions,
+  });
+}
+
+function getSettlementKnownUserIds(facts: SettlementIncomeFacts) {
+  return Array.from(new Set([
+    ...facts.trades.map((trade) => trade.relatedUserId),
+    ...facts.snapshots.map((snapshot) => snapshot.beneficiaryUserId),
+    ...facts.transfers.map((transfer) => transfer.recipientUserId),
+  ].filter((userId) => userId > 0)));
+}
+
 function sumIncomeParts(parts: Iterable<SettlementIncome>) {
   const output = emptyIncome();
   for (const item of parts) {
@@ -373,17 +437,16 @@ function buildWeeklySettlementAccountReconciliation(
   window: WeekWindow,
   generatedAt = new Date().toISOString(),
   resolvedNames?: Map<number, string>,
+  facts?: SettlementIncomeFacts,
+  attribution?: Ledger52T0IncomeAttributionContext,
 ): SettlementAccountReconciliation {
-  const entries = Array.isArray(journal?.entries) ? journal.entries : [];
-  const trades = mapTrades(entries);
-  const snapshots = mapSnapshots(Array.isArray(journal?.profitShareSnapshots) ? journal.profitShareSnapshots : []);
-  const transfers = mapTransfers(Array.isArray(journal?.sharedIncomeTransfers) ? journal.sharedIncomeTransfers : []);
-  const reductions = mapReductions(Array.isArray(journal?.sharedIncomeReductions) ? journal.sharedIncomeReductions : []);
+  const settlementFacts = facts ?? getSettlementIncomeFacts(journal);
+  const { trades } = settlementFacts;
   const isClosing = (trade: Ledger52T0IncomeTrade) => trade.action === "closeLong" || trade.action === "closeShort";
   const inPeriodClosing = (trade: Ledger52T0IncomeTrade) => isClosing(trade)
     && !trade.isPending
     && isDateInWindow(getBeijingDateFromValue(getEffectiveTradeOccurredAt(trade)), window);
-  const rows = calculateLedger52T0IncomeByClosing({ trades, snapshots, transfers, reductions, includeClosing: inPeriodClosing });
+  const rows = (attribution ?? buildSettlementIncomeAttribution(settlementFacts)).closings.filter((row) => inPeriodClosing(row.closing));
   const userIds = new Set<number>();
   const accountRows = new Map<string, {
     accountId: string;
@@ -621,32 +684,25 @@ function applyWeeklySettlementAdjustments(
  * 从完整、只读的T+0事实数据计算一个北京时间周的实时/冻结结算报表。
  * FIFO 需使用所有历史成交；周报只冻结归属于周窗的已实现订单、分佣与共享收益。
  */
-function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: SettlementReport["status"], generatedAt = new Date().toISOString()): SettlementReport {
+function buildWeeklySettlementReport(
+  journal: any,
+  window: WeekWindow,
+  status: SettlementReport["status"],
+  generatedAt = new Date().toISOString(),
+  facts?: SettlementIncomeFacts,
+  attribution?: Ledger52T0IncomeAttributionContext,
+): SettlementReport {
+  const settlementFacts = facts ?? getSettlementIncomeFacts(journal);
   const entries = Array.isArray(journal?.entries) ? journal.entries : [];
-  const trades = mapTrades(entries);
-  const snapshots = mapSnapshots(Array.isArray(journal?.profitShareSnapshots) ? journal.profitShareSnapshots : []);
-  const transfers = mapTransfers(Array.isArray(journal?.sharedIncomeTransfers) ? journal.sharedIncomeTransfers : []);
-  const reductions = mapReductions(Array.isArray(journal?.sharedIncomeReductions) ? journal.sharedIncomeReductions : []);
+  const { trades, snapshots, transfers, tradeById } = settlementFacts;
   const isClosing = (trade: Ledger52T0IncomeTrade) => trade.action === "closeLong" || trade.action === "closeShort";
   const effectiveTradeDate = (trade: Ledger52T0IncomeTrade) => getBeijingDateFromValue(getEffectiveTradeOccurredAt(trade));
   const inPeriodClosing = (trade: Ledger52T0IncomeTrade) => isClosing(trade) && !trade.isPending && isDateInWindow(effectiveTradeDate(trade), window);
   const beforePeriodEndClosing = (trade: Ledger52T0IncomeTrade) => isClosing(trade) && !trade.isPending && isBeforeWindowEnd(effectiveTradeDate(trade), window);
   const periodClosingIds = new Set(trades.filter(inPeriodClosing).map((trade) => trade.id));
-  const periodIncome = calculateLedger52T0IncomeByUser({
-    trades,
-    snapshots,
-    transfers,
-    reductions,
-    includeClosing: inPeriodClosing,
-  });
   // 每日明细与周汇总必须复用同一份逐笔归属结果，不能在浏览器侧重新做FIFO或分佣推导。
-  const periodClosingIncome = calculateLedger52T0IncomeByClosing({
-    trades,
-    snapshots,
-    transfers,
-    reductions,
-    includeClosing: inPeriodClosing,
-  });
+  const periodClosingIncome = (attribution ?? buildSettlementIncomeAttribution(settlementFacts)).closings
+    .filter((closingIncome) => inPeriodClosing(closingIncome.closing));
 
   const participantIds = new Set<number>();
   for (const trade of trades) {
@@ -654,11 +710,11 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
     if (isBeforeWindowEnd(occurredOn, window)) participantIds.add(trade.relatedUserId);
   }
   for (const snapshot of snapshots) {
-    const closing = trades.find((trade) => trade.id === snapshot.entryId);
+    const closing = tradeById.get(snapshot.entryId);
     if (closing && beforePeriodEndClosing(closing)) participantIds.add(snapshot.beneficiaryUserId);
   }
   for (const transfer of transfers) {
-    const closing = trades.find((trade) => trade.id === transfer.closingEntryId);
+    const closing = tradeById.get(transfer.closingEntryId);
     if (closing && beforePeriodEndClosing(closing)) participantIds.add(transfer.recipientUserId);
   }
   const userIds = Array.from(participantIds).filter((userId) => userId > 0).sort((left, right) => left - right);
@@ -672,19 +728,14 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
     return current;
   };
   for (const userId of userIds) {
-    const period = periodIncome.get(userId);
-    const currentPeriod = getIncome(periodIncomeByUser, userId);
-    currentPeriod.order = toNumber(period?.orderIncome);
-    currentPeriod.commission = toNumber(period?.commissionIncome);
-    currentPeriod.shared = toNumber(period?.sharedIncome);
-    currentPeriod.total = currentPeriod.order + currentPeriod.commission + currentPeriod.shared;
+    getIncome(periodIncomeByUser, userId);
   }
   for (const trade of trades.filter(inPeriodClosing)) {
     const entryOwner = getIncome(periodIncomeByUser, trade.relatedUserId);
     entryOwner.orderCount += 1;
   }
   for (const snapshot of snapshots) {
-    const closing = trades.find((trade) => trade.id === snapshot.entryId);
+    const closing = tradeById.get(snapshot.entryId);
     if (closing && inPeriodClosing(closing) && snapshot.beneficiaryUserId !== closing.relatedUserId) {
       getIncome(periodIncomeByUser, snapshot.beneficiaryUserId).commissionCount += 1;
     }
@@ -696,6 +747,9 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
     const occurredOn = getBeijingDateFromValue(getEffectiveTradeOccurredAt(closingIncome.closing));
     if (!occurredOn || !isDateInWindow(occurredOn, window)) continue;
     for (const allocation of closingIncome.allocations) {
+      const periodIncome = getIncome(periodIncomeByUser, allocation.userId);
+      periodIncome[allocation.kind] += allocation.amount;
+      periodIncome.total = periodIncome.order + periodIncome.commission + periodIncome.shared;
       const days = dailyIncomeByUser.get(allocation.userId) || new Map<string, SettlementIncome>();
       const income = days.get(occurredOn) || emptyIncome();
       income[allocation.kind] += allocation.amount;
@@ -733,7 +787,7 @@ function buildWeeklySettlementReport(journal: any, window: WeekWindow, status: S
       entries: entries.length,
       closings: trades.filter(beforePeriodEndClosing).length,
       sharedTransfers: transfers.filter((transfer) => {
-        const closing = trades.find((trade) => trade.id === transfer.closingEntryId);
+        const closing = tradeById.get(transfer.closingEntryId);
         return Boolean(closing && beforePeriodEndClosing(closing));
       }).length,
     },
@@ -770,6 +824,88 @@ function stableSourceHash(report: SettlementReport) {
     members: report.members,
   };
   return createHash("sha256").update(JSON.stringify(source)).digest("hex");
+}
+
+/** 冻结周与当前回放的事实对比忽略目录姓名、生成时间和逐日展示字段，避免重命名造成假阳性。 */
+function stableSettlementFactHash(report: SettlementReport) {
+  const source = {
+    calculationVersion: report.calculationVersion,
+    period: report.period,
+    sourceCutoffAt: report.sourceCutoffAt,
+    sourceCounts: report.sourceCounts,
+    summary: report.summary,
+    members: report.members
+      .map((member) => ({ userId: member.userId, income: member.income }))
+      .sort((left, right) => left.userId - right.userId),
+  };
+  return createHash("sha256").update(JSON.stringify(source)).digest("hex");
+}
+
+function assertWeekStartBjt(value: string) {
+  const text = String(value || "").trim();
+  const matched = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) throw new TRPCError({ code: "BAD_REQUEST", message: "对账结算周须为 YYYY-MM-DD 格式的周一" });
+  const date = new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])));
+  if (date.getUTCFullYear() !== Number(matched[1]) || date.getUTCMonth() !== Number(matched[2]) - 1 || date.getUTCDate() !== Number(matched[3]) || date.getUTCDay() !== 1) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "对账结算周必须选择北京时间周一" });
+  }
+  return text;
+}
+
+function stableReconciliationSourceHash(report: SettlementAccountReconciliation) {
+  // 生成时间、说明文案和追加调整均不参与；此哈希只覆盖逐账户、逐平仓和用户去向的当前事实回放。
+  const source = {
+    version: "t0-weekly-account-reconciliation-source-v1",
+    period: report.period,
+    sourceCutoffAt: report.sourceCutoffAt,
+    summary: report.summary,
+    accounts: report.accounts,
+    destinations: report.destinations,
+  };
+  return createHash("sha256").update(JSON.stringify(source)).digest("hex");
+}
+
+function stableReconciliationAdjustmentHash(adjustments: Ledger52T0SettlementAdjustment[]) {
+  // 含暂挂说明；展示姓名不参与，避免目录改名造成原本未变的调整事实被误判为过期。
+  const source = adjustments
+    .map((adjustment) => ({
+      id: adjustment.id,
+      weekStartBjt: adjustment.weekStartBjt,
+      type: adjustment.type,
+      accountId: adjustment.accountId,
+      sourceClosingEntryId: adjustment.sourceClosingEntryId,
+      sourceNetPnlDelta: adjustment.sourceNetPnlDelta,
+      allocations: adjustment.allocations.map((line) => ({ userId: line.userId, amount: line.amount })).sort((left, right) => left.userId - right.userId),
+      reason: adjustment.reason,
+      createdByUserId: adjustment.createdByUserId,
+      createdAt: adjustment.createdAt,
+    }))
+    .sort((left, right) => Number(left.id) - Number(right.id) || left.id.localeCompare(right.id));
+  return createHash("sha256").update(JSON.stringify({ version: "t0-weekly-account-reconciliation-adjustments-v1", adjustments: source })).digest("hex");
+}
+
+function stableReconciliationHash(input: {
+  report: SettlementAccountReconciliation;
+  sourceHash: string;
+  adjustmentHash: string;
+  reference: Omit<SettlementReconciliationReference, "sourceHash" | "adjustmentHash">;
+}) {
+  const source = {
+    version: "t0-weekly-account-reconciliation-confirmation-v1",
+    period: input.report.period,
+    sourceCutoffAt: input.report.sourceCutoffAt,
+    reference: input.reference,
+    sourceHash: input.sourceHash,
+    adjustmentHash: input.adjustmentHash,
+    summary: input.report.summary,
+    accounts: input.report.accounts,
+    destinations: input.report.destinations,
+  };
+  return createHash("sha256").update(JSON.stringify(source)).digest("hex");
+}
+
+function isAccountReconciliationBalanced(report: SettlementAccountReconciliation) {
+  return report.summary.unreconciledClosingCount === 0 && Math.abs(report.summary.variance) <= SETTLEMENT_RECONCILIATION_TOLERANCE;
 }
 
 async function ensureWeeklySettlementTables() {
@@ -846,6 +982,40 @@ async function listFrozenReports(journalOwnerUserId: number, targetUserId?: numb
   }
 }
 
+/** 账户对账切换历史周时只需该周快照，不应为此反复解析完整历史列表。 */
+async function getFrozenReportForWeek(input: {
+  journalOwnerUserId: number;
+  weekStartBjt: string;
+  targetUserId?: number;
+}): Promise<SettlementHistoryItem | null> {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0周结算数据库连接失败" });
+  try {
+    const [rows] = await conn.execute(
+      `SELECT id, week_start_bjt, week_end_exclusive_bjt, calculation_version, snapshot_json, source_hash, frozen_at
+         FROM ledger52_t0_weekly_settlement_reports
+        WHERE ledger_id = ? AND journal_owner_user_id = ? AND week_start_bjt = ? AND calculation_version = ?
+        ORDER BY id DESC
+        LIMIT 1`,
+      [LEDGER_ID, input.journalOwnerUserId, input.weekStartBjt, CALCULATION_VERSION],
+    );
+    const row = (rows as any[])[0];
+    if (!row) return null;
+    const snapshot = JSON.parse(String(row.snapshot_json || "")) as SettlementReport;
+    if (!snapshot || !Array.isArray(snapshot.members)) return null;
+    return {
+      id: String(row.id),
+      kind: "frozen",
+      frozenAt: new Date(row.frozen_at).toISOString(),
+      sourceHash: String(row.source_hash),
+      report: selectReportForViewer({ ...snapshot, status: "frozen" }, input.targetUserId),
+    };
+  } catch (error) {
+    if (isTableMissing(error)) return null;
+    throw error;
+  }
+}
+
 function hasSettlementIncome(report: SettlementReport) {
   const income = report.summary.income;
   return income.orderCount > 0 || income.commissionCount > 0 || income.sharedCount > 0 || Math.abs(income.total) > 0.0000001;
@@ -860,8 +1030,10 @@ async function listHistoricalBackfillReports(input: {
   currentWindow: WeekWindow;
   targetUserId?: number;
   frozenWeekStarts: ReadonlySet<string>;
+  facts: SettlementIncomeFacts;
+  attribution: Ledger52T0IncomeAttributionContext;
 }): Promise<SettlementHistoryItem[]> {
-  const trades = mapTrades(Array.isArray(input.journal?.entries) ? input.journal.entries : []);
+  const { trades } = input.facts;
   const weekStarts = Array.from(new Set(trades.flatMap((trade) => {
     const isClosing = trade.action === "closeLong" || trade.action === "closeShort";
     const occurredOn = getBeijingDateFromValue(getEffectiveTradeOccurredAt(trade));
@@ -873,7 +1045,14 @@ async function listHistoricalBackfillReports(input: {
   if (weekStarts.length === 0) return [];
 
   const reports = weekStarts
-    .map((weekStart) => buildWeeklySettlementReport(input.journal, getWeekWindowFromStart(weekStart), "backfill"))
+    .map((weekStart) => buildWeeklySettlementReport(
+      input.journal,
+      getWeekWindowFromStart(weekStart),
+      "backfill",
+      undefined,
+      input.facts,
+      input.attribution,
+    ))
     .filter(hasSettlementIncome);
   if (reports.length === 0) return [];
 
@@ -899,11 +1078,10 @@ export async function getLedger52T0WeeklySettlementCenter(input: {
   journalOwnerUserId: number;
   targetUserId?: number;
 }) {
-  const journal = await getLedger52T0Journal(
-    { mode: "admin", journalOwnerUserId: input.journalOwnerUserId } satisfies T0JournalReadScope,
-    { skipTableEnsure: true, fullRead: true },
-  );
-  const current = buildWeeklySettlementReport(journal, getLedger52T0WeekWindow(), "realtime");
+  const journal = await getLedger52T0JournalSettlementFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId });
+  const facts = getSettlementIncomeFacts(journal);
+  const attribution = buildSettlementIncomeAttribution(facts);
+  const current = buildWeeklySettlementReport(journal, getLedger52T0WeekWindow(), "realtime", undefined, facts, attribution);
   const currentWithDirectory = getNameMap(journal, current.members.map((member) => member.userId));
   await addDirectoryNames(currentWithDirectory.names, current.members.map((member) => member.userId));
   const renamedCurrent: SettlementReport = {
@@ -916,6 +1094,8 @@ export async function getLedger52T0WeeklySettlementCenter(input: {
     currentWindow: current.period,
     targetUserId: input.targetUserId,
     frozenWeekStarts: new Set(frozenHistory.map((item) => item.report.period.weekStartBjt)),
+    facts,
+    attribution,
   });
   const history = [...frozenHistory, ...historicalBackfills]
     .sort((left, right) => right.report.period.weekStartBjt.localeCompare(left.report.period.weekStartBjt));
@@ -988,29 +1168,136 @@ export async function getLedger52T0TeamWeeklySettlement(input: {
 }
 
 /**
- * 管理员全局结算页的按需账户对账查询。它只计算当前实时周，
- * 不写入周报、账户状态、订单、收益或任何资金流水。
+ * 管理员全局结算页的按需账户对账查询。
+ * 支持当前及历史已结束周；冻结周收益始终引用原冻结报告，账户明细只按完整事实回放以供核对，绝不改写冻结周报。
  */
-export async function getLedger52T0WeeklySettlementAccountReconciliation(input: { journalOwnerUserId: number }) {
-  const journal = await getLedger52T0Journal(
-    { mode: "admin", journalOwnerUserId: input.journalOwnerUserId } satisfies T0JournalReadScope,
-    { skipTableEnsure: true, fullRead: true },
-  );
+export async function getLedger52T0WeeklySettlementAccountReconciliation(input: {
+  journalOwnerUserId: number;
+  weekStartBjt?: string;
+}): Promise<SettlementAccountReconciliationView> {
+  const journal = await getLedger52T0JournalSettlementFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId });
   const generatedAt = new Date().toISOString();
-  const window = getLedger52T0WeekWindow();
-  const preliminary = buildWeeklySettlementAccountReconciliation(journal, window, generatedAt);
-  const userIds = Array.from(new Set(preliminary.accounts.flatMap((account) => [
-    ...account.closings.map((closing) => closing.ownerUserId),
-    ...account.closings.flatMap((closing) => closing.allocations.map((allocation) => allocation.userId)),
-  ]))).filter((userId) => userId > 0);
+  const currentWindow = getLedger52T0WeekWindow();
+  const selectedWeekStart = input.weekStartBjt ? assertWeekStartBjt(input.weekStartBjt) : currentWindow.weekStartBjt;
+  if (selectedWeekStart > currentWindow.weekStartBjt) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "不能读取未来结算周的账户对账" });
+  }
+  const window = selectedWeekStart === currentWindow.weekStartBjt ? currentWindow : getWeekWindowFromStart(selectedWeekStart);
+  const facts = getSettlementIncomeFacts(journal);
+  const attribution = buildSettlementIncomeAttribution(facts);
+  const userIds = getSettlementKnownUserIds(facts);
   const { names } = getNameMap(journal, userIds);
   await addDirectoryNames(names, userIds);
-  const baseReport = buildWeeklySettlementAccountReconciliation(journal, window, generatedAt, names);
+  const baseReport = buildWeeklySettlementAccountReconciliation(journal, window, generatedAt, names, facts, attribution);
   const adjustments = await listLedger52T0SettlementAdjustments({
     journalOwnerUserId: input.journalOwnerUserId,
     weekStartBjt: window.weekStartBjt,
   });
-  return applyWeeklySettlementAdjustments(baseReport, adjustments);
+  const report = applyWeeklySettlementAdjustments(baseReport, adjustments);
+  const frozen = window.weekStartBjt === currentWindow.weekStartBjt ? null : await getFrozenReportForWeek({
+    journalOwnerUserId: input.journalOwnerUserId,
+    weekStartBjt: window.weekStartBjt,
+  });
+  const settlementStatus: SettlementReconciliationReference["status"] = frozen
+    ? "frozen"
+    : window.weekStartBjt === currentWindow.weekStartBjt
+      ? "realtime"
+      : "backfill";
+  const liveSettlementReport = buildWeeklySettlementReport(journal, window, settlementStatus, generatedAt, facts, attribution);
+  const frozenSourceHash = frozen?.sourceHash;
+  const sourceHash = stableReconciliationSourceHash(baseReport);
+  const adjustmentHash = stableReconciliationAdjustmentHash(adjustments);
+  const reference: Omit<SettlementReconciliationReference, "sourceHash" | "adjustmentHash"> = {
+    status: settlementStatus,
+    ...(frozen?.frozenAt ? { frozenAt: frozen.frozenAt } : {}),
+    ...(frozenSourceHash ? { frozenSourceHash } : {}),
+    frozenSourceChanged: Boolean(frozen && stableSettlementFactHash(frozen.report) !== stableSettlementFactHash(liveSettlementReport)),
+  };
+  const reconciliationHash = stableReconciliationHash({ report, sourceHash, adjustmentHash, reference });
+  const latestConfirmation = await getLatestLedger52T0SettlementReconciliationConfirmation({
+    journalOwnerUserId: input.journalOwnerUserId,
+    weekStartBjt: window.weekStartBjt,
+  });
+  return {
+    ...report,
+    definition: `${report.definition} ${settlementStatus === "frozen" ? "本周收益总额以既有冻结周报为准；账户逐笔明细仅按当前完整事实回放核对，若与冻结来源不一致将禁止确认已平。" : settlementStatus === "backfill" ? "该历史周尚未冻结，当前为可随来源事实变化的回溯核算；确认仅证明本次回放依据。" : "当前进行周仅供实时核对，结束后方可确认已平。"}`,
+    reconciliationHash,
+    settlementReference: { ...reference, sourceHash, adjustmentHash },
+    confirmation: {
+      state: latestConfirmation ? latestConfirmation.basisHash === reconciliationHash ? "confirmed" : "stale" : "unconfirmed",
+      latest: latestConfirmation,
+    },
+  };
+}
+
+/**
+ * 银行式“账目已平”确认：服务端对客户端哈希重新计算，且只允许结束周、逐笔已对齐、无暂挂、冻结来源一致时追加确认凭证。
+ */
+async function confirmLedger52T0WeeklySettlementAccountReconciliationUnlocked(input: {
+  journalOwnerUserId: number;
+  actorUserId: number;
+  weekStartBjt: string;
+  expectedReconciliationHash: string;
+  note?: string;
+  clientRequestId: string;
+}) {
+  const report = await getLedger52T0WeeklySettlementAccountReconciliation({
+    journalOwnerUserId: input.journalOwnerUserId,
+    weekStartBjt: input.weekStartBjt,
+  });
+  const currentWindow = getLedger52T0WeekWindow();
+  if (report.period.weekStartBjt >= currentWindow.weekStartBjt || report.settlementReference.status === "realtime") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "正在进行的本周仅供实时核对，周结束后才可确认账目已平" });
+  }
+  if (report.settlementReference.frozenSourceChanged) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "冻结周收益与当前追溯来源不一致，需先核对来源事实，不能直接确认已平" });
+  }
+  if (report.adjustments.some((adjustment) => adjustment.type === "hold")) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "本周仍有暂挂说明，处理完成前不能确认账目已平" });
+  }
+  if (!isAccountReconciliationBalanced(report)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "仍有逐笔差额或待核对平仓，不能确认账目已平" });
+  }
+  if (String(input.expectedReconciliationHash || "").toLowerCase() !== report.reconciliationHash) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "对账数据刚刚变化，请刷新后重新核对再确认" });
+  }
+  const basisSnapshot = {
+    version: "t0-weekly-account-reconciliation-confirmation-v1",
+    period: report.period,
+    settlementReference: report.settlementReference,
+    reconciliationHash: report.reconciliationHash,
+    summary: report.summary,
+    accounts: report.accounts,
+    destinations: report.destinations,
+    adjustments: report.adjustments,
+  };
+  return await createLedger52T0SettlementReconciliationConfirmation({
+    journalOwnerUserId: input.journalOwnerUserId,
+    actorUserId: input.actorUserId,
+    weekStartBjt: report.period.weekStartBjt,
+    basisHash: report.reconciliationHash,
+    settlementSourceStatus: report.settlementReference.status,
+    settlementSourceHash: report.settlementReference.frozenSourceHash || report.settlementReference.sourceHash,
+    basisSnapshot,
+    note: input.note,
+    clientRequestId: input.clientRequestId,
+  });
+}
+
+/** 与调整单按“账本所有者 + 结算周”串行，保证确认时复算的调整集合不会在写入中途变化。 */
+export async function confirmLedger52T0WeeklySettlementAccountReconciliation(input: {
+  journalOwnerUserId: number;
+  actorUserId: number;
+  weekStartBjt: string;
+  expectedReconciliationHash: string;
+  note?: string;
+  clientRequestId: string;
+}) {
+  const weekStartBjt = assertWeekStartBjt(input.weekStartBjt);
+  return await withDatabaseLock(
+    `ledger52:t0:settlement-reconciliation:${input.journalOwnerUserId}:${weekStartBjt}`,
+    () => confirmLedger52T0WeeklySettlementAccountReconciliationUnlocked({ ...input, weekStartBjt }),
+  );
 }
 
 async function freezeOneWeeklySettlement(journalOwnerUserId: number, window: WeekWindow) {

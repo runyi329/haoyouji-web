@@ -2808,7 +2808,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           <OrderCardImageDownload
             targetRef={cardExportRef}
             currentUser={currentUser}
-            watermarkLabel={isAdmin ? "R1" : undefined}
             orderNo={order.order_no || order.id}
             color="#64748B"
           />
@@ -3072,7 +3071,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       <OrderCardImageDownload
                         targetRef={manualStockPnlDetailExportRef}
                         currentUser={currentUser}
-                        watermarkLabel={isAdmin ? "R1" : undefined}
                         orderNo={order.order_no || order.id}
                         color="#64748B"
                         outerPadding={12}
