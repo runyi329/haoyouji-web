@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { z } from "zod";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -34,7 +33,7 @@ import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
-import { getMibanLimitedProduct, getMibanLimitedProductSku } from "../shared/miban-limited-products";
+import { getMibanLimitedProduct, getMibanLimitedProductSku, mibanLimitedProducts } from "../shared/miban-limited-products";
 
 // 管理员中间件：米伴管理操作必须在服务端验证系统管理员身份。
 // 前端页面隐藏只改善体验，不能作为资金、订单和用户数据的授权边界。
@@ -131,6 +130,373 @@ async function createOrder(data: typeof mibanOrders.$inferInsert) {
     console.error('[Miban] createOrder ERROR:', e?.message);
     throw e;
   }
+}
+
+// 米伴商城沿用账本订单的六码可读编号：两个大写字母 + 四位数字（如 AB1234）。
+// 下单前查重，数据库唯一索引仍是并发情况下的最终保护。
+async function createUniqueMibanOrderNo() {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const digits = "0123456789";
+
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    const orderNo =
+      letters[Math.floor(Math.random() * letters.length)] +
+      letters[Math.floor(Math.random() * letters.length)] +
+      digits[Math.floor(Math.random() * digits.length)] +
+      digits[Math.floor(Math.random() * digits.length)] +
+      digits[Math.floor(Math.random() * digits.length)] +
+      digits[Math.floor(Math.random() * digits.length)];
+    const existing = await db
+      .select({ id: mibanOrders.id })
+      .from(mibanOrders)
+      .where(eq(mibanOrders.orderNo, orderNo))
+      .limit(1);
+    if (!existing.length) return orderNo;
+  }
+
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "订单编号生成失败，请稍后再试",
+  });
+}
+
+type LimitedProductLine = {
+  productKey: string;
+  skuId: string;
+  quantity: number;
+};
+
+let limitedProductManagementSchemaReady = false;
+let limitedProductManagementSchemaPromise: Promise<void> | null = null;
+
+function readLimitedProductLine(order: any): LimitedProductLine | null {
+  try {
+    const ingredients = JSON.parse(String(order?.ingredients ?? "[]"));
+    const line = Array.isArray(ingredients)
+      ? ingredients.find((item: any) => item?.kind === "limited_product")
+      : null;
+    if (
+      !line?.productKey ||
+      !line?.skuId ||
+      !Number.isInteger(Number(line?.quantity))
+    ) {
+      return null;
+    }
+    return {
+      productKey: String(line.productKey),
+      skuId: String(line.skuId),
+      quantity: Number(line.quantity),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// 统计口径以中国自然日归集。MySQL 的无时区 DATETIME 已按业务库本地时间存储，
+// 带时区的 ISO 时间则显式换算到 Asia/Shanghai，避免服务器时区影响日切分。
+function getShanghaiDateKey(value: unknown): string | null {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:\s|$)/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const date = value instanceof Date ? value : new Date(String(value ?? ""));
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find(item => item.type === type)?.value;
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+  return year && month && day ? `${year}-${month}-${day}` : null;
+}
+
+function shiftDateKey(dateKey: string, offsetDays: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + offsetDays))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function positiveOrderAmount(value: unknown) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+function roundSalesAmount(value: number, digits: number) {
+  return Number(value.toFixed(digits));
+}
+
+
+async function ensureLimitedProductManagementTables() {
+  const conn = await getDbConnection();
+  if (!conn)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "限时商品管理服务暂不可用",
+    });
+  if (!limitedProductManagementSchemaReady) {
+    if (!limitedProductManagementSchemaPromise) {
+      limitedProductManagementSchemaPromise = (async () => {
+        await (conn as any)
+          .execute(`CREATE TABLE IF NOT EXISTS miban_limited_sku_state (
+          product_key VARCHAR(80) NOT NULL,
+          sku_id VARCHAR(80) NOT NULL,
+          is_active TINYINT(1) NOT NULL DEFAULT 1,
+          stock_qty INT NOT NULL DEFAULT -1,
+          updated_by INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (product_key, sku_id),
+          KEY idx_miban_limited_sku_active (is_active, product_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await (conn as any)
+          .execute(`CREATE TABLE IF NOT EXISTS miban_limited_stock_movements (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          product_key VARCHAR(80) NOT NULL,
+          sku_id VARCHAR(80) NOT NULL,
+          event_type VARCHAR(32) NOT NULL,
+          delta_qty INT NOT NULL,
+          stock_before INT NOT NULL,
+          stock_after INT NOT NULL,
+          order_id INT NULL,
+          operator_user_id INT NULL,
+          note VARCHAR(500) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uq_miban_limited_stock_event (event_type, order_id, product_key, sku_id),
+          KEY idx_miban_limited_stock_sku (product_key, sku_id, created_at),
+          KEY idx_miban_limited_stock_order (order_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await (conn as any)
+          .execute(`CREATE TABLE IF NOT EXISTS miban_order_operation_logs (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          order_id INT NOT NULL,
+          operation_type VARCHAR(40) NOT NULL,
+          operator_user_id INT NOT NULL,
+          reason VARCHAR(500) NULL,
+          before_data JSON NULL,
+          after_data JSON NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_miban_order_operation (order_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        limitedProductManagementSchemaReady = true;
+      })().finally(() => {
+        limitedProductManagementSchemaPromise = null;
+      });
+    }
+    await limitedProductManagementSchemaPromise;
+  }
+
+  // 新商品发布后也会在首次管理/下单时自动补齐默认状态。-1 表示不限库存，
+  // 不会因为上线管理功能而意外停售既有商品；管理员设置非负库存后启用自动扣减。
+  for (const product of mibanLimitedProducts) {
+    for (const sku of product.skus) {
+      await (conn as any).execute(
+        `INSERT IGNORE INTO miban_limited_sku_state (product_key, sku_id, is_active, stock_qty)
+         VALUES (?, ?, ?, -1)`,
+        [
+          product.key,
+          sku.id,
+          product.status === "on_sale" && sku.active ? 1 : 0,
+        ]
+      );
+    }
+  }
+  return conn;
+}
+
+async function releaseLimitedSkuStock(
+  productKey: string,
+  skuId: string,
+  quantity: number,
+  eventType: "order_rollback" | "cancel_restock",
+  orderId: number | null,
+  operatorUserId: number | null,
+  note: string
+) {
+  const conn = await ensureLimitedProductManagementTables();
+  try {
+    await (conn as any).beginTransaction();
+    const [rows] = await (conn as any).execute(
+      `SELECT stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1 FOR UPDATE`,
+      [productKey, skuId]
+    );
+    const state = (rows as any[])[0];
+    const before = Number(state?.stock_qty ?? -1);
+    if (before < 0) {
+      await (conn as any).rollback();
+      return false;
+    }
+    // 已取消的订单只能回补一次，即使管理员重复点击或网络重放请求也不会再次加库存。
+    if (eventType === "cancel_restock" && orderId !== null) {
+      const [existingRows] = await (conn as any).execute(
+        `SELECT id FROM miban_limited_stock_movements
+         WHERE event_type = 'cancel_restock' AND order_id = ? AND product_key = ? AND sku_id = ?
+         LIMIT 1 FOR UPDATE`,
+        [orderId, productKey, skuId]
+      );
+      if ((existingRows as any[]).length > 0) {
+        await (conn as any).rollback();
+        return false;
+      }
+    }
+    const after = before + quantity;
+    await (conn as any).execute(
+      `UPDATE miban_limited_sku_state SET stock_qty = ? WHERE product_key = ? AND sku_id = ?`,
+      [after, productKey, skuId]
+    );
+    await (conn as any).execute(
+      `INSERT IGNORE INTO miban_limited_stock_movements
+       (product_key, sku_id, event_type, delta_qty, stock_before, stock_after, order_id, operator_user_id, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        productKey,
+        skuId,
+        eventType,
+        quantity,
+        before,
+        after,
+        orderId,
+        operatorUserId,
+        note,
+      ]
+    );
+    await (conn as any).commit();
+    return true;
+  } catch (error) {
+    try {
+      await (conn as any).rollback();
+    } catch {}
+    throw error;
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+}
+
+async function reserveLimitedSkuStock(
+  productKey: string,
+  skuId: string,
+  quantity: number,
+  operatorUserId: number,
+  orderNo: string
+) {
+  const conn = await ensureLimitedProductManagementTables();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT is_active, stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1`,
+      [productKey, skuId]
+    );
+    const state = (rows as any[])[0];
+    if (!state || Number(state.is_active) !== 1) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "该商品规格已下架" });
+    }
+    const before = Number(state.stock_qty);
+    if (before < 0) return false;
+    if (before < quantity) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `库存不足，当前仅剩 ${before} 件`,
+      });
+    }
+    const [result] = await (conn as any).execute(
+      `UPDATE miban_limited_sku_state
+       SET stock_qty = stock_qty - ?
+       WHERE product_key = ? AND sku_id = ? AND is_active = 1 AND stock_qty >= ?`,
+      [quantity, productKey, skuId, quantity]
+    );
+    if (Number((result as any)?.affectedRows ?? 0) !== 1) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "库存已变动，请刷新后重试",
+      });
+    }
+    const after = before - quantity;
+    await (conn as any).execute(
+      `INSERT INTO miban_limited_stock_movements
+       (product_key, sku_id, event_type, delta_qty, stock_before, stock_after, operator_user_id, note)
+       VALUES (?, ?, 'order_deduct', ?, ?, ?, ?, ?)`,
+      [
+        productKey,
+        skuId,
+        -quantity,
+        before,
+        after,
+        operatorUserId,
+        `用户下单扣减库存 #${orderNo}`,
+      ]
+    );
+    return true;
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+}
+
+async function linkLimitedStockDeductionToOrder(
+  productKey: string,
+  skuId: string,
+  orderNo: string,
+  orderId: number
+) {
+  const conn = await ensureLimitedProductManagementTables();
+  try {
+    const [result] = await (conn as any).execute(
+      `UPDATE miban_limited_stock_movements
+       SET order_id = ?
+       WHERE product_key = ? AND sku_id = ? AND event_type = 'order_deduct'
+         AND order_id IS NULL AND note = ?`,
+      [orderId, productKey, skuId, `用户下单扣减库存 #${orderNo}`]
+    );
+    if (Number((result as any)?.affectedRows ?? 0) !== 1) {
+      throw new Error(`订单 ${orderNo} 的库存扣减流水关联失败`);
+    }
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+}
+
+async function restockLimitedOrderIfManaged(
+  order: any,
+  operatorUserId: number | null,
+  note: string
+) {
+  const line = readLimitedProductLine(order);
+  if (!line) return false;
+  const conn = await ensureLimitedProductManagementTables();
+  try {
+    const [deductRows] = await (conn as any).execute(
+      `SELECT id FROM miban_limited_stock_movements
+       WHERE event_type = 'order_deduct' AND order_id = ? AND product_key = ? AND sku_id = ?
+       LIMIT 1`,
+      [Number(order.id), line.productKey, line.skuId]
+    );
+    // 管理功能上线前的历史订单未扣过新库存账，取消时不能凭空增加库存。
+    if ((deductRows as any[]).length === 0) return false;
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+  return releaseLimitedSkuStock(
+    line.productKey,
+    line.skuId,
+    line.quantity,
+    "cancel_restock",
+    Number(order.id),
+    operatorUserId,
+    note
+  );
 }
 
 function serializeOrder(o: any) {
@@ -1680,38 +2046,46 @@ export const mibanOrderRouter = router({
       userNote: z.string().optional(),
       productImg: z.string().url().optional(),
       subscriptionMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).optional(), // 订阅期数
+      // 未传时保持历史“优先扣人民币”的兼容行为；新结算页会传入用户指定的人民币分配额。
+      cnyAmount: z.number().finite().min(0).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await assertAiWalletOperationEnabled("version:proj_hzxm2t", "order_debit");
       const userId = ctx.user!.id;
       const singleCny = input.totalPrice; // 单期金额（人民币）
       const subMonths = input.subscriptionMonths ?? null; // 订阅期数（null=单次）
-      const totalCny = subMonths !== null ? singleCny * subMonths : singleCny; // 本次实际扣款总额
+      const totalCny = Number(
+        (subMonths !== null ? singleCny * subMonths : singleCny).toFixed(2)
+      ); // 本次实际扣款总额
 
       // 1. 查询用户钱包余额
       const cnyBalance = await getUserCnyBalance(userId);
       const usdtBalance = await getUserBalance(userId);
-      const usdtRate = await getUsdtCnyRate(); // 1 USDT = ? CNY
-
-      // 2. 计算可用总额（折合成 CNY）
-      const totalAvailableCny = cnyBalance + usdtBalance * usdtRate;
-      if (totalAvailableCny < totalCny - 0.001) {
+      const usdtRate = Number(Number(await getUsdtCnyRate()).toFixed(4)); // 1 USDT = ? CNY
+      if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
         throw new TRPCError({
-          code: "PAYMENT_REQUIRED",
-          message: `余额不足，需要 ¥${totalCny.toFixed(2)}，当前可用 ¥${totalAvailableCny.toFixed(2)}（CNY ¥${cnyBalance.toFixed(2)} + USDT ${usdtBalance.toFixed(4)} ≈ ¥${(usdtBalance * usdtRate).toFixed(2)}），请先充値`,
+          code: "PRECONDITION_FAILED",
+          message: "当前汇率暂不可用，请稍后再试",
         });
       }
 
-      // 3. 确定扣款方案：优先扣 CNY（一次性扣全部期数）
-      let deductCny = 0;
-      let deductUsdt = 0;
-      if (cnyBalance >= totalCny) {
-        deductCny = totalCny;
-        deductUsdt = 0;
-      } else {
-        deductCny = cnyBalance;
-        const remainCny = totalCny - cnyBalance;
-        deductUsdt = remainCny / usdtRate;
+      // 2. 用户可指定本次使用的人民币；剩余金额由 U 按订单时汇率支付。
+      // 老客户端不传 cnyAmount 时，继续采用历史的“优先扣人民币”规则。
+      const requestedCny = input.cnyAmount ?? Math.min(cnyBalance, totalCny);
+      const deductCny = Number(requestedCny.toFixed(2));
+      if (deductCny > totalCny || deductCny > cnyBalance) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
+        });
+      }
+      const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
+      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      if (deductUsdt > usdtBalance) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
+        });
       }
 
       // 4. 查询买家所属团队的制度触发时机，快照到订单中
@@ -1767,9 +2141,19 @@ export const mibanOrderRouter = router({
         shipDate.setMonth(shipDate.getMonth() + i);
         const scheduledShipDateStr = shipDate.toISOString().slice(0, 10); // YYYY-MM-DD
 
-        // 每期分摊扣款金额（仅记录，实际一次性扣款）
-        const perPeriodDeductCny = deductCny / totalPeriods;
-        const perPeriodDeductUsdt = deductUsdt / totalPeriods;
+        // 每期分摊扣款金额（仅记录，实际一次性扣款）。最后一期承接精度尾差，保证总和准确。
+        const cnyPerPeriod = Math.floor((deductCny / totalPeriods) * 100) / 100;
+        const usdtPerPeriod = Number((deductUsdt / totalPeriods).toFixed(8));
+        const perPeriodDeductCny =
+          i === totalPeriods - 1
+            ? Number((deductCny - cnyPerPeriod * (totalPeriods - 1)).toFixed(2))
+            : cnyPerPeriod;
+        const perPeriodDeductUsdt =
+          i === totalPeriods - 1
+            ? Number(
+                (deductUsdt - usdtPerPeriod * (totalPeriods - 1)).toFixed(8)
+              )
+            : usdtPerPeriod;
 
         const orderId = await createOrder({
           orderNo,
@@ -1826,6 +2210,9 @@ export const mibanOrderRouter = router({
         subscriptionMonths: subMonths ?? undefined,
         subscriptionGroupId: subscriptionGroupId ?? undefined,
         orderCount: totalPeriods,
+        deductCny,
+        deductUsdt,
+        usdtCnyRateAtOrder: usdtRate,
       };
     }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
@@ -1842,37 +2229,11 @@ export const mibanOrderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
 
-      // 如果是取消订单，查询原订单扣款金额并退款
       if (input.status === "cancelled") {
-        const [order] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
-        if (order && order.status !== "cancelled") {
-          const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
-          const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
-          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.7;
-          const orderNo = order.orderNo;
-          const userId = order.userId;
-
-          // 退回 CNY
-          if (deductCny > 0.001) {
-            await adminAdjustCnyBalance({
-              userId,
-              amount: deductCny,
-              note: `米伴订单退款 #${orderNo}`,
-              operatorId: userId,
-            });
-          }
-          // 退回 USDT
-          if (deductUsdt > 0.000001) {
-            await addUserBalance(
-              userId,
-              deductUsdt,
-              'reward',
-              order.id,
-              `米伴订单退款 #${orderNo} (+${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
-            );
-          }
-          console.log(`[Miban] 订单取消并退款: orderId=${order.id}, orderNo=${orderNo}, refundCny=${deductCny}, refundUsdt=${deductUsdt}`);
-        }
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "请使用“取消订单（退款）”操作，确保退款与库存同步处理",
+        });
       }
 
       await updateOrderStatus(input.id, input.status, input.trackingNo, input.trackingCompany, input.adminNote);
@@ -1963,6 +2324,84 @@ export const mibanOrderRouter = router({
         })
         .where(eq(mibanOrders.id, input.orderId));
       return { success: true };
+    }),
+
+  // 限时商品管理员可代客修正尚未发货的订单地址；不修改用户地址簿，并保留前后快照。
+  adminUpdateAddress: mibanAdminProcedure
+    .input(
+      z.object({
+        orderId: z.number(),
+        receiverName: z.string().trim().min(1).max(64),
+        receiverPhone: z.string().trim().min(11).max(20),
+        receiverAddress: z.string().trim().min(5).max(500),
+        reason: z.string().trim().min(1, "请填写修改说明").max(500),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const conn = await ensureLimitedProductManagementTables();
+      try {
+        await (conn as any).beginTransaction();
+        const [rows] = await (conn as any).execute(
+          `SELECT id, orderNo, status, ingredients, receiverName, receiverPhone, receiverAddress
+           FROM miban_orders WHERE id = ? LIMIT 1 FOR UPDATE`,
+          [input.orderId]
+        );
+        const order = (rows as any[])[0];
+        if (!order)
+          throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+        if (!readLimitedProductLine(order)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "仅限时商品订单可在此处修改地址",
+          });
+        }
+        if (
+          !["pending", "confirmed", "packing"].includes(String(order.status))
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "订单已发货、完成或取消，不能再修改地址",
+          });
+        }
+        await (conn as any).execute(
+          `UPDATE miban_orders SET receiverName = ?, receiverPhone = ?, receiverAddress = ? WHERE id = ?`,
+          [
+            input.receiverName,
+            input.receiverPhone,
+            input.receiverAddress,
+            input.orderId,
+          ]
+        );
+        await (conn as any).execute(
+          `INSERT INTO miban_order_operation_logs
+           (order_id, operation_type, operator_user_id, reason, before_data, after_data)
+           VALUES (?, 'address_update', ?, ?,
+             JSON_OBJECT('receiverName', ?, 'receiverPhone', ?, 'receiverAddress', ?),
+             JSON_OBJECT('receiverName', ?, 'receiverPhone', ?, 'receiverAddress', ?))`,
+          [
+            input.orderId,
+            ctx.user!.id,
+            input.reason,
+            order.receiverName,
+            order.receiverPhone,
+            order.receiverAddress,
+            input.receiverName,
+            input.receiverPhone,
+            input.receiverAddress,
+          ]
+        );
+        await (conn as any).commit();
+        return { success: true };
+      } catch (error) {
+        try {
+          await (conn as any).rollback();
+        } catch {}
+        throw error;
+      } finally {
+        try {
+          await (conn as any).end();
+        } catch {}
+      }
     }),
 
   // 奖金预览：模拟分佣计算但不写入数据库
@@ -2163,12 +2602,16 @@ export const mibanOrderRouter = router({
   // 管理员取消订单（退款原路返回）
   adminCancel: mibanAdminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
       const [order] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
       if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
       if (order.status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: '订单已取消' });
+      if (order.status === 'shipped') throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: '订单已发货，请在完成退货验收入库后处理退款',
+      });
       if (order.status === 'delivered') throw new TRPCError({ code: 'BAD_REQUEST', message: '已送达订单不可取消' });
 
       const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
@@ -2185,8 +2628,18 @@ export const mibanOrderRouter = router({
           `米伴订单退款 #${orderNo} (+${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`);
       }
       await db.update(mibanOrders).set({ status: 'cancelled' }).where(eq(mibanOrders.id, input.id));
-      console.log(`[Miban] 管理员取消并退款: orderId=${order.id}, refundCny=${deductCny}, refundUsdt=${deductUsdt}`);
-      return { success: true, refundCny: deductCny, refundUsdt: deductUsdt };
+      const restocked = await restockLimitedOrderIfManaged(
+        order,
+        ctx.user!.id,
+        `管理员取消订单 #${orderNo}，回补库存`
+      );
+      console.log(`[Miban] 管理员取消并退款: orderId=${order.id}, refundCny=${deductCny}, refundUsdt=${deductUsdt}, restocked=${restocked}`);
+      return {
+        success: true,
+        refundCny: deductCny,
+        refundUsdt: deductUsdt,
+        restocked,
+      };
     }),
 
   // 管理员删除订单（不退款，直接从数据库删除）
@@ -2347,6 +2800,351 @@ export const mibanOrderRouter = router({
 // 商品与 SKU 的名称、金额、图片和单位都从 shared/miban-limited-products.ts 读取。
 // 浏览器只提交 productKey、skuId、数量和收货信息，不能篡改成交金额或伪造成米种。
 export const mibanLimitedProductRouter = router({
+  // 前台只读取运营覆盖层，商品内容、价格与规格始终以静态目录为准。
+  publicAvailability: publicProcedure.query(async () => {
+    const conn = await ensureLimitedProductManagementTables();
+    try {
+      const [rows] = await (conn as any).execute(
+        `SELECT product_key, sku_id, is_active, stock_qty FROM miban_limited_sku_state`
+      );
+      const states = new Map(
+        (Array.isArray(rows) ? rows : []).map((row: any) => [
+          `${row.product_key}:${row.sku_id}`,
+          {
+            isActive: Number(row.is_active) === 1,
+            stockQty: Number(row.stock_qty),
+          },
+        ])
+      );
+      return mibanLimitedProducts.flatMap(product =>
+        product.skus.map(sku => {
+          const state = states.get(`${product.key}:${sku.id}`) ?? {
+            isActive: false,
+            stockQty: 0,
+          };
+          return {
+            productKey: product.key,
+            skuId: sku.id,
+            isOnSale:
+              product.status === "on_sale" &&
+              sku.active &&
+              state.isActive &&
+              (state.stockQty < 0 || state.stockQty > 0),
+            stockQty: state.stockQty,
+          };
+        })
+      );
+    } finally {
+      try {
+        await (conn as any).end();
+      } catch {}
+    }
+  }),
+
+  // 只统计 ingredients 中明确标记为 limited_product 的订单，避免混入普通米伴订单。
+  // 按下单创建日（中国时间）归集；已取消订单单列，不能当成有效销售额。
+  adminSalesStats: mibanAdminProcedure
+    .input(
+      z
+        .object({
+          range: z.enum(["today", "7d", "30d"]).default("7d"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const range = input?.range ?? "7d";
+      const rangeDays = range === "today" ? 1 : range === "30d" ? 30 : 7;
+      const today = getShanghaiDateKey(new Date());
+      if (!today) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "销售统计日期初始化失败",
+        });
+      }
+
+      const dateKeys = Array.from({ length: rangeDays }, (_, index) =>
+        shiftDateKey(today, -index)
+      );
+      const dateSet = new Set(dateKeys);
+      const buckets = new Map(
+        dateKeys.map(date => [
+          date,
+          {
+            date,
+            effectiveOrderCount: 0,
+            effectiveCny: 0,
+            effectiveUsdt: 0,
+            cancelledOrderCount: 0,
+            cancelledCny: 0,
+            cancelledUsdt: 0,
+          },
+        ])
+      );
+
+      const orders = await getAllOrders();
+      for (const order of orders) {
+        if (!readLimitedProductLine(order)) continue;
+        const date = getShanghaiDateKey(order.createdAt);
+        if (!date || !dateSet.has(date)) continue;
+        const bucket = buckets.get(date);
+        if (!bucket) continue;
+
+        const cny = positiveOrderAmount(order.walletDeductCny);
+        const usdt = positiveOrderAmount(order.walletDeductUsdt);
+        if (String(order.status) === "cancelled") {
+          bucket.cancelledOrderCount += 1;
+          bucket.cancelledCny += cny;
+          bucket.cancelledUsdt += usdt;
+        } else {
+          bucket.effectiveOrderCount += 1;
+          bucket.effectiveCny += cny;
+          bucket.effectiveUsdt += usdt;
+        }
+      }
+
+      const daily = dateKeys.map(date => {
+        const bucket = buckets.get(date)!;
+        return {
+          ...bucket,
+          effectiveCny: roundSalesAmount(bucket.effectiveCny, 2),
+          effectiveUsdt: roundSalesAmount(bucket.effectiveUsdt, 8),
+          cancelledCny: roundSalesAmount(bucket.cancelledCny, 2),
+          cancelledUsdt: roundSalesAmount(bucket.cancelledUsdt, 8),
+        };
+      });
+      const summary = daily.reduce(
+        (total, day) => ({
+          effectiveOrderCount:
+            total.effectiveOrderCount + day.effectiveOrderCount,
+          effectiveCny: total.effectiveCny + day.effectiveCny,
+          effectiveUsdt: total.effectiveUsdt + day.effectiveUsdt,
+          cancelledOrderCount:
+            total.cancelledOrderCount + day.cancelledOrderCount,
+          cancelledCny: total.cancelledCny + day.cancelledCny,
+          cancelledUsdt: total.cancelledUsdt + day.cancelledUsdt,
+        }),
+        {
+          effectiveOrderCount: 0,
+          effectiveCny: 0,
+          effectiveUsdt: 0,
+          cancelledOrderCount: 0,
+          cancelledCny: 0,
+          cancelledUsdt: 0,
+        }
+      );
+
+      return {
+        range,
+        timezone: "Asia/Shanghai",
+        startDate: dateKeys[dateKeys.length - 1],
+        endDate: dateKeys[0],
+        summary: {
+          ...summary,
+          effectiveCny: roundSalesAmount(summary.effectiveCny, 2),
+          effectiveUsdt: roundSalesAmount(summary.effectiveUsdt, 8),
+          cancelledCny: roundSalesAmount(summary.cancelledCny, 2),
+          cancelledUsdt: roundSalesAmount(summary.cancelledUsdt, 8),
+        },
+        daily,
+      };
+    }),
+
+
+  // 静态目录只提供图文、规格和价格；此接口叠加运营状态，供管理员按品牌、分类管理。
+  adminCatalog: mibanAdminProcedure.query(async () => {
+    const conn = await ensureLimitedProductManagementTables();
+    try {
+      const [rows] = await (conn as any).execute(
+        `SELECT product_key, sku_id, is_active, stock_qty, updated_at FROM miban_limited_sku_state`
+      );
+      const states = new Map(
+        (Array.isArray(rows) ? rows : []).map((row: any) => [
+          `${row.product_key}:${row.sku_id}`,
+          {
+            isActive: Number(row.is_active) === 1,
+            stockQty: Number(row.stock_qty),
+            updatedAt: row.updated_at ?? null,
+          },
+        ])
+      );
+      return mibanLimitedProducts.map(product => ({
+        key: product.key,
+        brand: product.brand,
+        category: product.category,
+        title: product.detail.title,
+        subtitle: product.detail.subtitle,
+        image: product.card.image || product.detail.productImage,
+        skus: product.skus.map(sku => {
+          const state = states.get(`${product.key}:${sku.id}`) ?? {
+            isActive: false,
+            stockQty: 0,
+            updatedAt: null,
+          };
+          return {
+            id: sku.id,
+            name: sku.name,
+            subtitle: sku.subtitle,
+            image: sku.image || product.detail.productImage,
+            unitLabel: sku.unitLabel,
+            netContentText: sku.netContentText,
+            isActive: state.isActive,
+            stockQty: state.stockQty,
+            updatedAt: state.updatedAt,
+          };
+        }),
+      }));
+    } finally {
+      try {
+        await (conn as any).end();
+      } catch {}
+    }
+  }),
+
+  adminUpdateSkuState: mibanAdminProcedure
+    .input(
+      z.object({
+        productKey: z.string().min(1).max(80),
+        skuId: z.string().min(1).max(80),
+        isActive: z.boolean().optional(),
+        // -1 表示不限库存；0 表示售罄；正整数表示启用自动扣减库存。
+        stockQty: z.number().int().min(-1).max(1_000_000).optional(),
+        note: z.string().trim().max(500).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const product = getMibanLimitedProduct(input.productKey);
+      const sku = product
+        ? getMibanLimitedProductSku(product, input.skuId)
+        : null;
+      if (!product || !sku)
+        throw new TRPCError({ code: "NOT_FOUND", message: "商品规格不存在" });
+
+      const conn = await ensureLimitedProductManagementTables();
+      try {
+        const [rows] = await (conn as any).execute(
+          `SELECT is_active, stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1`,
+          [input.productKey, input.skuId]
+        );
+        const previous = (rows as any[])[0] ?? { is_active: 1, stock_qty: -1 };
+        const nextActive =
+          input.isActive === undefined
+            ? Number(previous.is_active) === 1
+            : input.isActive;
+        const nextStock =
+          input.stockQty === undefined
+            ? Number(previous.stock_qty)
+            : input.stockQty;
+        await (conn as any).execute(
+          `INSERT INTO miban_limited_sku_state (product_key, sku_id, is_active, stock_qty, updated_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE is_active = VALUES(is_active), stock_qty = VALUES(stock_qty), updated_by = VALUES(updated_by)`,
+          [
+            input.productKey,
+            input.skuId,
+            nextActive ? 1 : 0,
+            nextStock,
+            ctx.user!.id,
+          ]
+        );
+        const previousStock = Number(previous.stock_qty);
+        if (input.stockQty !== undefined && previousStock !== nextStock) {
+          await (conn as any).execute(
+            `INSERT INTO miban_limited_stock_movements
+             (product_key, sku_id, event_type, delta_qty, stock_before, stock_after, operator_user_id, note)
+             VALUES (?, ?, 'manual_adjust', ?, ?, ?, ?, ?)`,
+            [
+              input.productKey,
+              input.skuId,
+              previousStock < 0 || nextStock < 0
+                ? 0
+                : nextStock - previousStock,
+              previousStock,
+              nextStock,
+              ctx.user!.id,
+              input.note || "管理员调整库存",
+            ]
+          );
+        }
+        return { success: true, isActive: nextActive, stockQty: nextStock };
+      } finally {
+        try {
+          await (conn as any).end();
+        } catch {}
+      }
+    }),
+
+  adminStockMovements: mibanAdminProcedure
+    .input(
+      z.object({
+        productKey: z.string().min(1).max(80),
+        skuId: z.string().min(1).max(80),
+      })
+    )
+    .query(async ({ input }) => {
+      const conn = await ensureLimitedProductManagementTables();
+      try {
+        const [rows] = await (conn as any).execute(
+          `SELECT id, event_type, delta_qty, stock_before, stock_after, order_id, operator_user_id, note, created_at
+           FROM miban_limited_stock_movements
+           WHERE product_key = ? AND sku_id = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT 30`,
+          [input.productKey, input.skuId]
+        );
+        return Array.isArray(rows) ? rows : [];
+      } finally {
+        try {
+          await (conn as any).end();
+        } catch {}
+      }
+    }),
+
+  adminOrders: mibanAdminProcedure
+    .input(
+      z
+        .object({
+          brand: z.string().trim().max(80).optional(),
+          category: z.string().trim().max(80).optional(),
+          productKey: z.string().trim().max(80).optional(),
+          skuId: z.string().trim().max(80).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const products = new Map(
+        mibanLimitedProducts.map(product => [product.key, product])
+      );
+      const orders = await getAllOrders();
+      return orders.flatMap((order: any) => {
+        const line = readLimitedProductLine(order);
+        if (!line) return [];
+        const product = products.get(line.productKey);
+        if (!product) return [];
+        if (input?.brand && product.brand !== input.brand) return [];
+        if (input?.category && product.category !== input.category) return [];
+        if (input?.productKey && line.productKey !== input.productKey)
+          return [];
+        if (input?.skuId && line.skuId !== input.skuId) return [];
+        const sku = getMibanLimitedProductSku(product, line.skuId);
+        return [
+          {
+            ...order,
+            limitedProduct: {
+              productKey: line.productKey,
+              skuId: line.skuId,
+              quantity: line.quantity,
+              brand: product.brand,
+              category: product.category,
+              productName: product.detail.title,
+              skuName: sku?.name ?? line.skuId,
+              unitLabel: sku?.unitLabel ?? "件",
+            },
+          },
+        ];
+      });
+    }),
+
+
   createOrder: protectedProcedure
     .input(
       z.object({
@@ -2357,6 +3155,7 @@ export const mibanLimitedProductRouter = router({
         receiverPhone: z.string().trim().min(11).max(20),
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
+        cnyAmount: z.number().finite().min(0),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -2390,80 +3189,131 @@ export const mibanLimitedProductRouter = router({
       const totalCny = Number((sku.priceCny * input.quantity).toFixed(2));
       const cnyBalance = await getUserCnyBalance(userId);
       const usdtBalance = await getUserBalance(userId);
-      const usdtRate = await getUsdtCnyRate();
-      const totalAvailableCny = cnyBalance + usdtBalance * usdtRate;
+      const usdtRateRaw = await getUsdtCnyRate();
+      // 按订单表既有的四位小数精度固化汇率，实际U扣款和退款都能用同一快照复核。
+      const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
+      if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "当前汇率暂不可用，请稍后再试",
+        });
+      }
 
-      if (totalAvailableCny < totalCny - 0.001) {
+      // 浏览器只提交人民币分配额；剩余应付金额始终由服务端以当前汇率换算为 U。
+      const deductCny = Number(input.cnyAmount.toFixed(2));
+      if (deductCny > totalCny || deductCny > cnyBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
-          message: `余额不足，需要 ¥${totalCny.toFixed(2)}，当前可用 ¥${totalAvailableCny.toFixed(2)}，请先充值`,
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
         });
       }
-
-      const deductCny = Math.min(cnyBalance, totalCny);
-      const deductUsdt = Math.max(0, (totalCny - deductCny) / usdtRate);
-      const orderNo = `LP${nanoid(10).toUpperCase()}`;
-      const productLine = {
-        kind: "limited_product" as const,
-        productKey: product.key,
-        skuId: sku.id,
-        name: product.detail.title,
-        skuName: sku.name,
-        quantity: input.quantity,
-        unitLabel: sku.unitLabel,
-        netContentText: sku.netContentText,
-        colorHex: product.card.theme.accent,
-      };
-
-      const orderId = await createOrder({
-        orderNo,
+      const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
+      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      if (deductUsdt > usdtBalance) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
+        });
+      }
+      // 条件更新保证多个用户同时提交时不会超卖；未设置库存（-1）的 SKU 仍可沿用原有不限量行为。
+      const orderNo = await createUniqueMibanOrderNo();
+      const stockReserved = await reserveLimitedSkuStock(
+        product.key,
+        sku.id,
+        input.quantity,
         userId,
-        recipeName: `${product.detail.title} · ${sku.name}`,
-        ingredients: JSON.stringify([productLine]) as any,
-        // 旧表字段必须非空；限时商品的数量以 ingredients 中 quantity + unitLabel 为准。
-        totalWeightJin: String(input.quantity) as any,
-        totalPrice: String(totalCny) as any,
-        receiverName: input.receiverName,
-        receiverPhone: input.receiverPhone,
-        receiverAddress: input.receiverAddress,
-        userNote: input.userNote || undefined,
-        productImg: sku.image || product.detail.productImage,
-        walletDeductCny: String(deductCny) as any,
-        walletDeductUsdt: String(deductUsdt) as any,
-        usdtCnyRateAtOrder: String(usdtRate) as any,
-        // 限时商品不得复用米种的分佣模型。
-        commissionTrigger: "not_eligible",
-      });
-
-      const deductNote = `米伴精选商品订单扣款 #${orderNo}`;
-      if (deductCny > 0.001) {
-        await adminAdjustCnyBalance({
-          userId,
-          amount: -deductCny,
-          note: deductNote,
-          operatorId: userId,
-        });
-      }
-      if (deductUsdt > 0.000001) {
-        await addUserBalance(
-          userId,
-          -deductUsdt,
-          "reward",
-          orderId,
-          `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
-        );
-      }
-
-      console.log(
-        `[Miban] 限时商品订单创建并扣款成功: orderId=${orderId}, product=${product.key}, sku=${sku.id}`
+        orderNo
       );
-      return {
-        orderId,
-        orderNo,
-        totalCny,
-        quantity: input.quantity,
-        unitLabel: sku.unitLabel,
-      };
+      let orderCreated = false;
+      try {
+        const productLine = {
+          kind: "limited_product" as const,
+          productKey: product.key,
+          skuId: sku.id,
+          name: product.detail.title,
+          skuName: sku.name,
+          quantity: input.quantity,
+          unitLabel: sku.unitLabel,
+          netContentText: sku.netContentText,
+          colorHex: product.card.theme.accent,
+        };
+
+        const orderId = await createOrder({
+          orderNo,
+          userId,
+          recipeName: `${product.detail.title} · ${sku.name}`,
+          ingredients: JSON.stringify([productLine]) as any,
+          // 旧表字段必须非空；限时商品的数量以 ingredients 中 quantity + unitLabel 为准。
+          totalWeightJin: String(input.quantity) as any,
+          totalPrice: String(totalCny) as any,
+          receiverName: input.receiverName,
+          receiverPhone: input.receiverPhone,
+          receiverAddress: input.receiverAddress,
+          userNote: input.userNote || undefined,
+          productImg: sku.image || product.detail.productImage,
+          walletDeductCny: String(deductCny) as any,
+          walletDeductUsdt: String(deductUsdt) as any,
+          usdtCnyRateAtOrder: String(usdtRate) as any,
+          // 限时商品不得复用米种的分佣模型。
+          commissionTrigger: "not_eligible",
+        });
+        orderCreated = true;
+        if (stockReserved) {
+          await linkLimitedStockDeductionToOrder(
+            product.key,
+            sku.id,
+            orderNo,
+            orderId
+          );
+        }
+
+        const deductNote = `米伴精选商品订单扣款 #${orderNo}`;
+        if (deductCny > 0.001) {
+          await adminAdjustCnyBalance({
+            userId,
+            amount: -deductCny,
+            note: deductNote,
+            operatorId: userId,
+          });
+        }
+        if (deductUsdt > 0.000001) {
+          await addUserBalance(
+            userId,
+            -deductUsdt,
+            "reward",
+            orderId,
+            `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
+          );
+        }
+
+        console.log(
+          `[Miban] 限时商品订单创建并扣款成功: orderId=${orderId}, product=${product.key}, sku=${sku.id}`
+        );
+        return {
+          orderId,
+          orderNo,
+          totalCny,
+          deductCny,
+          deductUsdt,
+          quantity: input.quantity,
+          unitLabel: sku.unitLabel,
+        };
+      } catch (error) {
+        // 下单记录尚未创建时才回滚库存；订单已创建后的资金异常由既有订单售后/取消链路处理，
+        // 不提前释放库存，避免出现已生成订单却再次售出的情况。
+        if (stockReserved && !orderCreated) {
+          await releaseLimitedSkuStock(
+            product.key,
+            sku.id,
+            input.quantity,
+            "order_rollback",
+            null,
+            userId,
+            "订单创建失败，回滚预留库存"
+          );
+        }
+        throw error;
+      }
     }),
 });
 

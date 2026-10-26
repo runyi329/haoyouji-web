@@ -30,6 +30,7 @@ import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
+import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
 
 const RICE_TYPES = [
   { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#A07840", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_white_single.webp" },
@@ -275,7 +276,6 @@ export default function DiyWorkshop() {
   const [receiverAddress, setReceiverAddress] = useState("");
   const [userNote, setUserNote] = useState("");
   const [showAddressPicker, setShowAddressPicker] = useState(false);
-  const [showWalletDetail, setShowWalletDetail] = useState(false);
   const [saveToBook, setSaveToBook] = useState(false);
   const [selectedFromBook, setSelectedFromBook] = useState(false);
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -284,27 +284,24 @@ export default function DiyWorkshop() {
   const [aiResult, setAiResult] = useState<{ recommended: string[]; reason: string } | null>(null);
   // 余额查询
   const trpcUtils = trpc.useUtils();
-  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
-  // 实时 USDT/CNY 汇率（服务端缓存，每3秒刷新）
-  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
-  const cnyBalanceNum = Number(cnyBalance ?? 0);
-  const usdtBalanceNum = Number(usdtBalance ?? 0);
-  const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 6.7; // 备用汇率
-  const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
   // 订阅计划状态（null=单次，3/6/12=订阅期数）
   const [subscriptionPlan, setSubscriptionPlan] = useState<3 | 6 | 12 | null>(null);
   // 每月发货日（null=未选）
   const [shipDay, setShipDay] = useState<number | null>(null);
   // 下单 mutation
-  const [pendingOrderPrice, setPendingOrderPrice] = useState(0);
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (result: any) => {
       console.log('[DiyWorkshop] order.create result:', JSON.stringify(result));
       const orderId = typeof result === 'object' ? (result.orderId ?? result.id ?? result) : result;
       const orderNo = typeof result === 'object' ? (result.orderNo ?? result.order_no ?? '') : '';
       const subMonths = typeof result === 'object' ? (result.subscriptionMonths ?? null) : null;
-      setOrderSuccess({ orderId, orderNo, deductCny: pendingOrderPrice, deductUsdt: 0, subscriptionMonths: subMonths ?? undefined });
+      setOrderSuccess({
+        orderId,
+        orderNo,
+        deductCny: Number(result?.deductCny ?? 0),
+        deductUsdt: Number(result?.deductUsdt ?? 0),
+        subscriptionMonths: subMonths ?? undefined,
+      });
       setShowOrderDialog(false);
       cartList.refetch();
       // 下单扣款后立即刷新余额显示
@@ -393,6 +390,9 @@ export default function DiyWorkshop() {
       return sum + (pct / 100) * weight * rice.price;
     }, 0);
   }, [ratios, weight]);
+
+  const checkoutTotalCny = Number((totalPrice() * (subscriptionPlan ?? 1)).toFixed(2));
+  const walletPayment = useMibanMixedPayment(checkoutTotalCny, isAuthenticated);
 
   const applyEqual = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
@@ -916,7 +916,7 @@ export default function DiyWorkshop() {
         {/* 下单按钮 */}
         {isAuthenticated ? (
           <button
-            onClick={() => setShowOrderDialog(true)}
+            onClick={() => { walletPayment.resetToCnyFirst(); setShowOrderDialog(true); }}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform mb-2"
             style={{ background: "#FF6900" }}
           >
@@ -1042,7 +1042,7 @@ export default function DiyWorkshop() {
 
         {isAuthenticated ? (
           <button
-            onClick={() => setShowOrderDialog(true)}
+            onClick={() => { walletPayment.resetToCnyFirst(); setShowOrderDialog(true); }}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform"
             style={{ background: "#FF6900" }}
           >
@@ -1278,50 +1278,8 @@ export default function DiyWorkshop() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-1.5 relative">
-                <button
-                  onClick={() => setShowWalletDetail(v => !v)}
-                  className="flex items-center gap-1.5 active:opacity-70 transition-opacity"
-                >
-                  <Wallet size={13} className="text-gray-400" />
-                  <span className="text-[12px] text-gray-400">可用余额</span>
-                  <ChevronDown size={11} className={`text-gray-400 transition-transform ${showWalletDetail ? 'rotate-180' : ''}`} />
-                </button>
-                <div className="flex items-center gap-2">
-                  {totalAvailableCny < (subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice()) && (
-                    <button onClick={() => { setShowOrderDialog(false); window.location.href = "/recharge"; }} className="text-[11px] text-[#FF6900] font-semibold">去充値</button>
-                  )}
-                  <span className={`text-[13px] font-semibold ${totalAvailableCny >= (subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice()) ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
-                </div>
-                {/* 钉子弹出明细 */}
-                {showWalletDetail && (
-                  <div className="absolute top-7 left-0 bg-white border border-gray-100 rounded-2xl shadow-lg p-4 z-40 w-64">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[13px] font-semibold text-black">脉动网錢包</span>
-                      <button onClick={() => setShowWalletDetail(false)}><X size={14} className="text-gray-400" /></button>
-                    </div>
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-gray-500">CNY 余额</span>
-                        <span className="text-[14px] font-bold text-black">¥{cnyBalanceNum.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-gray-500">USDT 余额</span>
-                        <div className="text-right">
-                          <span className="text-[14px] font-bold text-black">{usdtBalanceNum.toFixed(2)} U</span>
-                          <div className="text-[11px] text-gray-400 mt-0.5">= ¥{(usdtBalanceNum * usdtCnyRate).toFixed(2)}</div>
-                        </div>
-                      </div>
-                      <div className="border-t border-gray-100 pt-2 flex items-center justify-between">
-                        <span className="text-[12px] text-gray-500">可用总额</span>
-                        <span className={`text-[15px] font-bold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
-                      </div>
-                      <p className="text-[10px] text-gray-400">1 USDT = ¥{usdtCnyRate.toFixed(2)}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
+            <MibanMixedPaymentAllocation payment={walletPayment} disabled={createOrder.isPending} />
             {/* 收货信息 */}
             <div className="space-y-3 mb-5">
               <div className="flex items-center justify-between">
@@ -1409,15 +1367,12 @@ export default function DiyWorkshop() {
             </div>
             {/* 下单按钮 */}
             {(() => {
-              const finalPrice = subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice();
-              const isInsufficient = totalAvailableCny < finalPrice;
+              const isInsufficient = !walletPayment.canPay;
               return (
                 <button
                   disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || isInsufficient}
                   onClick={() => {
                     const singlePrice = totalPrice();
-                    const totalPayPrice = subscriptionPlan !== null ? singlePrice * subscriptionPlan : singlePrice;
-                    setPendingOrderPrice(totalPayPrice);
                     const ingredients = selected.map((id) => {
                       const rice = allRiceList.find(r => r.id === id)!;
                       const pct = ratios[id] ?? Math.round(100 / selected.length);
@@ -1447,6 +1402,7 @@ export default function DiyWorkshop() {
                       receiverAddress: receiverAddress.trim(),
                       userNote: userNote.trim() || undefined,
                       subscriptionMonths: subscriptionPlan ?? undefined,
+                      cnyAmount: walletPayment.cnyAmount,
                     });
                   }}
                   className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
@@ -1457,8 +1413,8 @@ export default function DiyWorkshop() {
                     : isInsufficient
                       ? "余额不足，请先充值"
                       : subscriptionPlan !== null
-                        ? `确认订阅 ${subscriptionPlan} 期 · 扣款 ¥${finalPrice.toFixed(2)}`
-                        : `确认下单 · 扣款 ¥${finalPrice.toFixed(2)}`
+                        ? `确认订阅 ${subscriptionPlan} 期 · ${walletPayment.paymentSummary}`
+                        : `确认下单 · ${walletPayment.paymentSummary}`
                   }
                 </button>
               );
@@ -1485,11 +1441,12 @@ export default function DiyWorkshop() {
             </p>
             <div className="bg-orange-50 rounded-2xl px-5 py-4 mb-5">
               <p className="text-[12px] text-gray-500 mb-1">已从錢包扣除</p>
-              <p className="text-[22px] font-bold text-[#FF6900]">¥{orderSuccess.deductCny.toFixed(2)}</p>
+              {orderSuccess.deductCny > 0 && <p className="text-[22px] font-bold text-[#FF6900]">¥{orderSuccess.deductCny.toFixed(2)}</p>}
+              {orderSuccess.deductUsdt > 0 && <p className="text-[15px] font-bold text-[#FF6900] mt-1">{orderSuccess.deductUsdt.toFixed(4)} U</p>}
               {orderSuccess.subscriptionMonths && (
                 <p className="text-[11px] text-gray-500 mt-1">{orderSuccess.subscriptionMonths} 期 × 单期价，按月发货</p>
               )}
-              <p className="text-[11px] text-gray-400 mt-1">优先扣 CNY，不足部分按实时汇率扣 USDT</p>
+              <p className="text-[11px] text-gray-400 mt-1">已按下单时的实时汇率完成组合扣款</p>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setOrderSuccess(null)} className="flex-1 py-3 rounded-xl border border-gray-200 text-[14px] text-gray-600">继续配米</button>

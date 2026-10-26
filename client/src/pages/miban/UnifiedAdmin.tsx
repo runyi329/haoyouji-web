@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import InventoryPanel from "./InventoryPanel";
+import LimitedProductsPanel from "./LimitedProductsPanel";
 import {
   Package, Wheat, Users, BarChart3, Truck, Loader2,
   ChevronLeft, Settings, TrendingUp, Warehouse, Copy,
@@ -582,7 +583,13 @@ function OrdersPanel() {
               </div>
               <select
                 value={order.status}
-                onChange={(e) => updateMutation.mutate({ id: order.id, status: e.target.value as any })}
+                onChange={(e) => {
+                  if (e.target.value === "cancelled") {
+                    setConfirmAction({ type: 'cancel', orderId: order.id, orderNo: order.orderNo });
+                    return;
+                  }
+                  updateMutation.mutate({ id: order.id, status: e.target.value as any });
+                }}
                 className={`text-[11px] border-0 rounded-full px-2.5 py-1 font-medium flex-shrink-0 focus:outline-none ${statusColor}`}
               >
                 {ORDER_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -683,7 +690,7 @@ function OrdersPanel() {
             </div>
             <CommissionPreviewBadge orderId={order.id} />
             {/* 取消 / 删除 按鈕（批量模式下隐藏） */}
-            {!batchMode && order.status !== 'delivered' && (
+            {!batchMode && !["delivered", "shipped"].includes(order.status) && (
               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
                 {order.status !== 'cancelled' && (
                   <button
@@ -2519,7 +2526,7 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals" | "pending" | "aftersale" | "teamOrders";
+type AdminTabKey = "orders" | "rice" | "inventory" | "limitedProducts" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals" | "pending" | "aftersale" | "teamOrders";
 
 // ─── 待结算佣金面板 ─────────────────────────────────────────────────────
 function PendingCommissionsPanel() {
@@ -2909,6 +2916,7 @@ export default function UnifiedAdmin() {
     { key: "aftersale", label: "售后" },
     { key: "rice",      label: "米库管理" },
     { key: "inventory", label: "库存管理" },
+    { key: "limitedProducts", label: "限时商品" },
     { key: "users",     label: "用户管理" },
     { key: "teamManage", label: "团队管理" },
   ] : [
@@ -2943,13 +2951,13 @@ export default function UnifiedAdmin() {
           </span>
         </div>
 
-        {/* Tab 标签栏：均分一屏，不滚动 */}
-        <div className="flex -mx-4">
+        {/* 管理标签可横向浏览，避免窄屏压缩功能名称。 */}
+        <div className="flex gap-0 -mx-4 overflow-x-auto scrollbar-none">
           {adminTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex-1 py-2.5 text-[11px] font-semibold transition-all border-b-2"
+              className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2"
               style={{
                 color: activeTab === tab.key ? "#FF6900" : "#888",
                 borderBottomColor: activeTab === tab.key ? "#FF6900" : "transparent",
@@ -2968,6 +2976,7 @@ export default function UnifiedAdmin() {
         {activeTab === "aftersale" && <AftersalePanel />}
         {activeTab === "rice"      && <RicePanel />}
         {activeTab === "inventory" && <InventoryPanel />}
+        {activeTab === "limitedProducts" && <LimitedProductsPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users"     && <UsersPanel />}
         {activeTab === "teamManage" && <SalesPanel />}

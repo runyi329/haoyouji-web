@@ -511,6 +511,7 @@ function Router() {
         {/* 米伴独立应用：必须在 /p/:slug 通配路由之前注册，否则会被 ProjectLanding 拦截 */}
         {/* 所有路径均复用模块级 MibanApp，不在 Router 渲染时重新创建 lazy 组件类型。 */}
         <Route path="/p/proj_hzxm2t/pear/tiangui" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/limited/:productKey/buy" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/limited/herbalife-red-ginseng" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/limited/herbalife" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/limited/:productKey" component={MibanApp} />

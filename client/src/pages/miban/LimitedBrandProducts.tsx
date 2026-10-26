@@ -6,21 +6,47 @@ import {
   type LimitedProduct,
 } from "../../../../shared/miban-limited-products";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
+import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
+import { mtrpc } from "./mibanTrpc";
 
 const BRAND = "康宝莱";
 const HERBALIFE_ACCENT = HERBALIFE_THEME.primary;
 
-function getActiveSku(product: LimitedProduct) {
-  return product.skus.find(sku => sku.active);
+function getActiveSku(
+  product: LimitedProduct,
+  availability: Map<string, any>,
+  useStaticFallback: boolean
+) {
+  return product.skus.find(sku => {
+    if (!sku.active) return false;
+    const runtime = availability.get(`${product.key}:${sku.id}`);
+    return useStaticFallback || runtime?.isOnSale === true;
+  });
 }
 
 export default function LimitedBrandProducts() {
+  const usdtCnyRate = useMibanUsdtCnyRate();
+  const { data: availability, isLoading: availabilityLoading } =
+    mtrpc.limitedProduct.publicAvailability.useQuery();
+  const availabilityBySku = useMemo(
+    () =>
+      new Map(
+        (availability ?? []).map((item: any) => [
+          `${item.productKey}:${item.skuId}`,
+          item,
+        ])
+      ),
+    [availability]
+  );
   const brandProducts = useMemo(
     () =>
       mibanLimitedProducts.filter(
-        product => product.brand === BRAND && product.status === "on_sale"
+        product =>
+          product.brand === BRAND &&
+          product.status === "on_sale" &&
+          Boolean(getActiveSku(product, availabilityBySku, availabilityLoading))
       ),
-    []
+    [availabilityBySku, availabilityLoading]
   );
 
   return (
@@ -77,7 +103,12 @@ export default function LimitedBrandProducts() {
         {brandProducts.length > 0 ? (
           <div className="space-y-3">
             {brandProducts.map(product => {
-              const sku = getActiveSku(product);
+              const sku = getActiveSku(
+                product,
+                availabilityBySku,
+                availabilityLoading
+              );
+              const priceU = sku ? cnyToU(sku.priceCny, usdtCnyRate) : null;
               return (
                 <Link
                   key={product.key}
@@ -143,17 +174,26 @@ export default function LimitedBrandProducts() {
 
                       <div className="mt-2 flex items-end justify-between gap-2">
                         <div
-                          className="flex items-baseline"
+                          className="leading-none"
                           style={{ color: HERBALIFE_THEME.price }}
                         >
-                          <span className="text-[11px] font-bold">¥</span>
-                          <span className="text-[21px] font-extrabold leading-none">
-                            {sku?.priceCny ?? "--"}
-                          </span>
-                          {sku && (
-                            <span className="ml-0.5 text-[10px] font-medium opacity-70">
-                              /{sku.unitLabel}
+                          <div className="flex items-baseline">
+                            <span className="text-[21px] font-extrabold">
+                              {priceU === null ? "--" : priceU.toFixed(2)}
                             </span>
+                            <span className="ml-0.5 text-[11px] font-bold">
+                              U
+                            </span>
+                            {sku && (
+                              <span className="ml-1 text-[10px] font-medium opacity-70">
+                                /{sku.unitLabel}
+                              </span>
+                            )}
+                          </div>
+                          {sku && (
+                            <div className="mt-1 text-[10px] text-gray-400">
+                              ≈ ¥{sku.priceCny.toFixed(2)}
+                            </div>
                           )}
                         </div>
                         <span

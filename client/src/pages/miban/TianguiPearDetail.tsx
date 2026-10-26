@@ -11,6 +11,7 @@ import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AddressBook from "./AddressBook";
 import { provinces, getCities, getDistricts } from "./regionData";
+import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
 
 const IMGS = {
   hero:    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -124,7 +125,7 @@ export default function TianguiPearDetail() {
   const [userNote, setUserNote] = useState("");
   const [saveToBook, setSaveToBook] = useState(false);
   const [showAddressPicker, setShowAddressPicker] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<{ orderNo: string } | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderNo: string; deductCny: number; deductUsdt: number } | null>(null);
 
   const { isAuthenticated, loading: authLoading } = useAuth();
 
@@ -153,19 +154,12 @@ export default function TianguiPearDetail() {
   };
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
   const addAddressMut = mtrpc.address.add.useMutation();
-  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
-  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
-  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
-  const cnyBalanceNum = Number(cnyBalance ?? 0);
-  const usdtBalanceNum = Number(usdtBalance ?? 0);
-  const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 7.3;
-  const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
 
   const trpcUtils = trpc.useUtils();
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (data: any) => {
       setShowOrderDialog(false);
-      setOrderSuccess({ orderNo: data.orderNo });
+      setOrderSuccess({ orderNo: data.orderNo, deductCny: Number(data.deductCny ?? 0), deductUsdt: Number(data.deductUsdt ?? 0) });
       // 下单扣款后立即刷新余额显示
       trpcUtils.recharge.getBalance.invalidate();
       trpcUtils.recharge.getCnyBalance.invalidate();
@@ -203,6 +197,7 @@ export default function TianguiPearDetail() {
       navigate("/login");
       return;
     }
+    walletPayment.resetToCnyFirst();
     setShowOrderDialog(true);
   };
 
@@ -229,6 +224,7 @@ export default function TianguiPearDetail() {
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       productImg: IMGS.hero,
+      cnyAmount: walletPayment.cnyAmount,
     });
   };
 
@@ -272,8 +268,9 @@ export default function TianguiPearDetail() {
 
   const totalPrice = currentSpec.price * qty;
   const totalWeightJin = currentSpec.weightJin * qty;
+  const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
   const canSubmit = receiverName.trim() && receiverPhone.trim() && receiverProvince && (isMunicipality || receiverCity) && receiverDetail.trim() && !createOrder.isPending;
-  const balanceOk = totalAvailableCny >= totalPrice;
+  const balanceOk = walletPayment.canPay;
 
   return (
     <div className="min-h-screen bg-white pb-20" style={{ maxWidth: 480, margin: "0 auto" }}>
@@ -618,33 +615,7 @@ export default function TianguiPearDetail() {
               </div>
             </div>
 
-            {/* 余额提示 */}
-            {isAuthenticated && (() => {
-              // 计算预计扣款明细
-              const deductCny = Math.min(cnyBalanceNum, totalPrice);
-              const remainCny = totalPrice - deductCny;
-              const deductUsdt = remainCny > 0.001 ? remainCny / usdtCnyRate : 0;
-              const totalDeductUsdt = deductUsdt + (deductCny > 0.001 ? deductCny / usdtCnyRate : 0);
-              return (
-                <div className="mb-4 px-4 py-2.5 rounded-xl" style={{ background: "#f8f7f5" }}>
-                  {totalPrice > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-gray-500">预计扣款</span>
-                      <span className="text-[12px] text-gray-700">¥{totalPrice.toFixed(2)} = {(totalPrice / usdtCnyRate).toFixed(2)}U <span className="text-gray-400 text-[11px]">@{usdtCnyRate.toFixed(2)}</span></span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[12px] text-gray-400">钱包余额</span>
-                    <div className="flex items-center gap-2">
-                      {usdtBalanceNum > 0 && <span className="text-[12px] text-gray-500">{usdtBalanceNum.toFixed(2)}U</span>}
-                      {usdtBalanceNum > 0 && cnyBalanceNum > 0 && <span className="text-[11px] text-gray-300">+</span>}
-                      {cnyBalanceNum > 0 && <span className="text-[12px] text-gray-500">¥{cnyBalanceNum.toFixed(2)}</span>}
-                      {usdtBalanceNum === 0 && cnyBalanceNum === 0 && <span className="text-[12px] text-gray-400">0.00U</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {isAuthenticated && <MibanMixedPaymentAllocation payment={walletPayment} disabled={createOrder.isPending} />}
             <div className="flex flex-col gap-3">
               {/* 收货信息容器 */}
               <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -776,7 +747,7 @@ export default function TianguiPearDetail() {
                 ? <><Loader2 size={18} className="animate-spin" />提交中…</>
                 : !balanceOk
                   ? "余额不足，请先充值"
-                  : `确认下单 · 扣款 ¥${totalPrice}`
+                  : `确认下单 · ${walletPayment.paymentSummary}`
               }
             </button>
           </div>
@@ -793,6 +764,11 @@ export default function TianguiPearDetail() {
             <div className="text-xl font-extrabold text-gray-900 mb-2">下单成功</div>
             <div className="text-sm text-gray-400 mb-1">订单号：{orderSuccess.orderNo}</div>
             <div className="text-sm text-gray-400 mb-6">我们将尽快安排发货，请保持手机畅通</div>
+            <div className="mb-6 rounded-2xl bg-orange-50 px-4 py-3 text-left">
+              <div className="text-[11px] text-gray-500">已从钱包扣除</div>
+              {orderSuccess.deductCny > 0 && <div className="mt-1 text-[17px] font-extrabold text-[#FF6900]">¥{orderSuccess.deductCny.toFixed(2)}</div>}
+              {orderSuccess.deductUsdt > 0 && <div className="mt-0.5 text-[13px] font-bold text-[#FF6900]">{orderSuccess.deductUsdt.toFixed(4)} U</div>}
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={() => { setOrderSuccess(null); navigate("/p/proj_hzxm2t/my-orders"); }}
@@ -815,4 +791,3 @@ export default function TianguiPearDetail() {
     </div>
   );
 }
-

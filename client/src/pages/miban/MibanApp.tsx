@@ -32,6 +32,7 @@ export default function MibanApp() {
       <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
         <Switch>
           <Route path={`${BASE}/pear/tiangui`} component={TianguiPearDetail} />
+          <Route path={`${BASE}/limited/:productKey/buy`} component={HerbalifeRedGinsengDetail} />
           <Route path={`${BASE}/limited/herbalife-red-ginseng`} component={HerbalifeRedGinsengDetail} />
           <Route path={`${BASE}/limited/herbalife`} component={LimitedBrandProducts} />
           <Route path={`${BASE}/limited/:productKey`} component={HerbalifeRedGinsengDetail} />
