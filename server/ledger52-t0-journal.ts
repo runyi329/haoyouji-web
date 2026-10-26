@@ -2080,7 +2080,9 @@ export async function getLedger52T0Journal(
   const isAdminScope = scope.mode === "admin";
   // 常规报价页保留原有限流；周结算等后台只读归集显式请求全量历史，避免 FIFO 上下文被截断。
   const entryLimitClause = options.fullRead ? "" : "LIMIT 2000";
-  const sharedIncomeTransferLimitClause = options.fullRead ? "" : "LIMIT 200";
+  // 共享转账必须与订单使用同一历史窗口；管理员端若只取最近200笔，
+  // 按某位用户筛选时会漏掉较早共享收入，而成员端却会看到完整记录。
+  const sharedIncomeTransferLimitClause = options.fullRead ? "" : "LIMIT 2000";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
   // 普通成员只可读取本人作为订单所属人、本人被明确写入收益分配快照的订单，
@@ -5116,7 +5118,7 @@ async function refreshLedger52T0PendingOrderScanState() {
 
 /**
  * 生产进程启动及之后每小时，读取 HTX 最近一分钟标记价K线，为仍处于 pending 的开仓做兜底复核。
- * 单笔订单只在其最后保存时间之后寻找首次越价；最终更新再次锁定 pending + updated_at，
+ * 单笔订单只在其最后保存时间之后的下一根完整分钟K线中寻找首次越价；最终更新再次锁定 pending + updated_at，
  * 因此已删除、已成交、手工修改过或后来新建的订单都不会被历史K线误成交。
  */
 async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number, reason: "启动补扫" | "定时补扫") {
@@ -5149,7 +5151,8 @@ async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number
       const action = String(row.action) as T0JournalAction;
       if (entryId <= 0 || pendingPrice <= 0 || !Number.isFinite(updatedAt)) continue;
       const firstCrossedCandle = candles.find((candle) => {
-        if (candle.observedAt.getTime() <= updatedAt) return false;
+        // K线的 high/low 没有分钟内先后顺序；只有挂单在该分钟开盘前已经生效，才能用这根完整K线成交。
+        if (candle.openedAt.getTime() <= updatedAt) return false;
         return action === "openLong" ? candle.low <= pendingPrice : candle.high >= pendingPrice;
       });
       if (!firstCrossedCandle) continue;
@@ -5167,7 +5170,7 @@ async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number
         rangeHigh: candle.high,
         rangeLow: candle.low,
         pendingEntryIds: entryIds,
-        historicalEligibleAt: candle.observedAt,
+        historicalEligibleAt: candle.openedAt,
         historicalRecovery: true,
         skipTakeProfit: true,
       });
@@ -5192,9 +5195,14 @@ export async function scanLedger52T0PendingOrders(input: {
   filledAt?: Date;
   rangeHigh?: number;
   rangeLow?: number;
+  /**
+   * 与实时标记价并行的最近一根已收盘 HTX 一分钟K线。
+   * 只允许在该分钟开盘前已生效的挂单引用其高低点，避免把挂单创建前或分钟内此前的波动误判成交。
+   */
+  completedMinuteRange?: { high: number; low: number; openedAt: Date; observedAt: Date };
   /** 历史补扫只锁定已被复核命中的指定挂单，绝不让同一根K线影响其他订单。 */
   pendingEntryIds?: number[];
-  /** 历史K线时点：订单在此时点之后若被编辑，最终更新会拒绝该补扫。 */
+  /** 历史完整K线开盘时点：订单必须在此前已生效，之后若被编辑也会拒绝该补扫。 */
   historicalEligibleAt?: Date;
   historicalRecovery?: boolean;
   /** 历史补扫只补开仓挂单，止盈仍由实时扫描处理，避免一根历史K线连续触发两步动作。 */
@@ -5219,6 +5227,39 @@ export async function scanLedger52T0PendingOrders(input: {
   const rangeLabel = rangeHigh > rangeLow
     ? `ETH永续扫描区间 ${rangeLow.toFixed(2)}–${rangeHigh.toFixed(2)} U`
     : `ETH永续价 ${markPrice.toFixed(2)} U`;
+  const completedMinuteRange = input.completedMinuteRange;
+  const completedMinuteHigh = Number(completedMinuteRange?.high);
+  const completedMinuteLow = Number(completedMinuteRange?.low);
+  const completedMinuteObservedAt = completedMinuteRange?.observedAt instanceof Date
+    ? completedMinuteRange.observedAt.getTime()
+    : Number.NaN;
+  const completedMinuteOpenedAt = completedMinuteRange?.openedAt instanceof Date
+    ? completedMinuteRange.openedAt.getTime()
+    : Number.NaN;
+  const hasCompletedMinuteRange = Number.isFinite(completedMinuteOpenedAt)
+    && completedMinuteOpenedAt > 0
+    && Number.isFinite(completedMinuteObservedAt)
+    && completedMinuteObservedAt > 0
+    && completedMinuteOpenedAt < completedMinuteObservedAt
+    && Number.isFinite(completedMinuteHigh)
+    && completedMinuteHigh > 0
+    && Number.isFinite(completedMinuteLow)
+    && completedMinuteLow > 0;
+  const normalizedCompletedMinuteHigh = hasCompletedMinuteRange
+    ? Math.max(completedMinuteHigh, completedMinuteLow)
+    : 0;
+  const normalizedCompletedMinuteLow = hasCompletedMinuteRange
+    ? Math.min(completedMinuteHigh, completedMinuteLow)
+    : 0;
+  const completedMinuteObservedDate = hasCompletedMinuteRange
+    ? new Date(completedMinuteObservedAt)
+    : null;
+  const completedMinuteOpenedDate = hasCompletedMinuteRange
+    ? new Date(completedMinuteOpenedAt)
+    : null;
+  const completedMinuteRangeLabel = hasCompletedMinuteRange
+    ? `HTX已收盘1分钟标记价区间 ${normalizedCompletedMinuteLow.toFixed(2)}–${normalizedCompletedMinuteHigh.toFixed(2)} U`
+    : null;
   const pendingEntryIds = Array.from(new Set((input.pendingEntryIds ?? [])
     .map((entryId) => Number(entryId))
     .filter((entryId) => Number.isInteger(entryId) && entryId > 0)));
@@ -5226,7 +5267,14 @@ export async function scanLedger52T0PendingOrders(input: {
     ? ` AND id IN (${pendingEntryIds.map(() => "?").join(", ")})`
     : "";
   const historicalEligibleAt = input.historicalEligibleAt ? mysqlDateTime(input.historicalEligibleAt) : null;
-  const historicalEligibilitySql = historicalEligibleAt ? " AND updated_at <= ?" : "";
+  const historicalEligibilitySql = historicalEligibleAt ? " AND updated_at < ?" : "";
+  const completedMinuteEligibilitySql = completedMinuteOpenedDate
+    ? ` OR (
+          updated_at < ?
+          AND ((action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18)))
+            OR (action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))))
+        )`
+    : "";
 
   pendingOrderScanInFlight = true;
   const connection = await getDbTransactionConnection();
@@ -5244,11 +5292,23 @@ export async function scanLedger52T0PendingOrders(input: {
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
         WHERE ledger_id = ? AND execution_status = 'pending' AND action IN ('openLong', 'openShort')${pendingEntryScopeSql}${historicalEligibilitySql}
-          AND ((action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18)))
-            OR (action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))))
+          AND (
+            (action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))
+            OR action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))
+            )${completedMinuteEligibilitySql}
+          )
         ORDER BY trade_time ASC, id ASC
         FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, ...pendingEntryIds, ...(historicalEligibleAt ? [historicalEligibleAt] : []), String(rangeLow), String(rangeHigh)],
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        ...pendingEntryIds,
+        ...(historicalEligibleAt ? [historicalEligibleAt] : []),
+        String(rangeLow),
+        String(rangeHigh),
+        ...(completedMinuteOpenedDate
+          ? [mysqlDateTime(completedMinuteOpenedDate), String(normalizedCompletedMinuteLow), String(normalizedCompletedMinuteHigh)]
+          : []),
+      ],
     );
     let filled = 0;
     const filledOpeningEntryIds = new Set<number>();
@@ -5261,20 +5321,37 @@ export async function scanLedger52T0PendingOrders(input: {
       const action = String(row.action) as T0JournalAction;
       const isOpenLong = action === "openLong";
       const pendingPrice = toNumber(row.price);
+      const currentRangeTriggered = isOpenLong
+        ? pendingPrice >= rangeLow
+        : pendingPrice <= rangeHigh;
+      const rowUpdatedAt = new Date(row.updated_at).getTime();
+      const completedMinuteTriggered = Boolean(completedMinuteObservedDate)
+        && Number.isFinite(rowUpdatedAt)
+        && rowUpdatedAt < completedMinuteOpenedAt
+        && (isOpenLong
+          ? pendingPrice >= normalizedCompletedMinuteLow
+          : pendingPrice <= normalizedCompletedMinuteHigh);
+      // 历史分钟线仅作为实时扫描的安全兜底；若当前瞬时/区间价也命中，则优先按实时价成交。
+      const matchedByCompletedMinute = !input.historicalRecovery && !currentRangeTriggered && completedMinuteTriggered;
+      const effectiveFilledAt = matchedByCompletedMinute && completedMinuteObservedDate
+        ? completedMinuteObservedDate
+        : filledAt;
       // 历史一分钟K线只能确认曾跨价，不能虚构具体撮合点，因此补扫一律按原挂单价成交；
       // 实时价直接越价时仍按更优的实时标记价成交。
-      const executionPrice = input.historicalRecovery
+      const executionPrice = input.historicalRecovery || matchedByCompletedMinute
         ? pendingPrice
         : isOpenLong ? Math.min(markPrice, pendingPrice) : Math.max(markPrice, pendingPrice);
       const systemNote = input.historicalRecovery
         ? `[系统历史补扫成交] ${formatBeijingSystemTime(filledAt)}｜HTX 1分钟标记价${rangeLabel.replace("ETH永续", "")}，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
-        : `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
+        : matchedByCompletedMinute
+          ? `[系统一分钟补扫成交] ${formatBeijingSystemTime(effectiveFilledAt)}｜${completedMinuteRangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
+          : `[系统自动成交] ${formatBeijingSystemTime(effectiveFilledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
       const note = appendSystemSettlementNote(row.note, systemNote);
       await tx.execute(
         `UPDATE ledger52_t0_journal_entries
             SET execution_status = 'filled', filled_at = ?, filled_price = ?, note = ?, updated_at = NOW(3)
           WHERE id = ? AND ledger_id = ? AND user_id = ? AND execution_status = 'pending'`,
-        [mysqlDateTime(filledAt), String(executionPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+        [mysqlDateTime(effectiveFilledAt), String(executionPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
       );
       const [afterRows] = await tx.execute(
         `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, is_counterparty,

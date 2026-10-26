@@ -1612,6 +1612,10 @@ type PreviewTrade = {
   /** 共享收益不生成独立流水；仅在收款人的同一来源平仓单视图上标记其实际共享金额。 */
   sharedIncomeRecipientUserId?: string;
   sharedIncomeAmount?: number;
+  /** 历史来源平仓已无法读取时的只读到账回退行；仅展示共享到账，绝不当作真实平仓。 */
+  isSharedIncomeOnly?: boolean;
+  sharedIncomeSourceClosingEntryId?: string;
+  sharedIncomeSourceUserName?: string;
   /** 仅历史列表使用的视觉拆分标记；绝不参与仓位、收益汇总或任何写库载荷。 */
   historyIncomeKind?: "commission" | "shared";
 };
@@ -3379,17 +3383,30 @@ function attachSharedIncomePerspectiveTrades(
   viewerUserId: number,
 ) {
   if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return baseTrades;
-  const sharedAmountByClosingId = new Map<string, number>();
+  const sharedTransferByClosingId = new Map<string, {
+    amount: number;
+    createdAt: string;
+    sourceUserId: number;
+    sourceUserName: string;
+  }>();
   for (const transfer of transfers) {
     if (transfer.recipientUserId !== viewerUserId || !Number.isFinite(transfer.amount) || transfer.amount <= 0) continue;
     const closingEntryId = String(transfer.closingEntryId || "").trim();
     if (!closingEntryId) continue;
-    sharedAmountByClosingId.set(closingEntryId, (sharedAmountByClosingId.get(closingEntryId) || 0) + transfer.amount);
+    const existing = sharedTransferByClosingId.get(closingEntryId);
+    sharedTransferByClosingId.set(closingEntryId, {
+      amount: (existing?.amount || 0) + transfer.amount,
+      // 同一来源若有多笔共享转账，历史行按最后一笔实际到账时间排序。
+      createdAt: !existing || String(transfer.createdAt || "") > existing.createdAt ? String(transfer.createdAt || "") : existing.createdAt,
+      sourceUserId: Number(transfer.sourceUserId || existing?.sourceUserId || 0),
+      sourceUserName: String(transfer.sourceUserName || existing?.sourceUserName || ""),
+    });
   }
-  if (sharedAmountByClosingId.size === 0) return baseTrades;
+  if (sharedTransferByClosingId.size === 0) return baseTrades;
 
   const projected = [...baseTrades];
-  for (const [closingEntryId, sharedAmount] of sharedAmountByClosingId) {
+  for (const [closingEntryId, sharedTransfer] of sharedTransferByClosingId) {
+    const sharedAmount = sharedTransfer.amount;
     const projectedIndex = projected.findIndex((trade) => (
       !ACTIONS[trade.action].opening && getStoredEntryId(trade) === closingEntryId
     ));
@@ -3405,14 +3422,39 @@ function attachSharedIncomePerspectiveTrades(
     const sourceClosing = rawTrades.find((trade) => (
       !ACTIONS[trade.action].opening && getStoredEntryId(trade) === closingEntryId
     ));
-    if (!sourceClosing) continue;
+    if (sourceClosing) {
+      projected.push({
+        ...sourceClosing,
+        id: `shared-income-view-${closingEntryId}-${viewerUserId}`,
+        sourceEntryId: getStoredEntryId(sourceClosing),
+        detailEntryId: getDetailEntryId(sourceClosing),
+        sharedIncomeRecipientUserId: String(viewerUserId),
+        sharedIncomeAmount: sharedAmount,
+        historyIncomeKind: "shared",
+      });
+      continue;
+    }
+    // 历史来源平仓若已缺失，仍保留一条独立“共享到账”记录：不编造方向、数量、成交价或手续费。
     projected.push({
-      ...sourceClosing,
-      id: `shared-income-view-${closingEntryId}-${viewerUserId}`,
-      sourceEntryId: getStoredEntryId(sourceClosing),
-      detailEntryId: getDetailEntryId(sourceClosing),
+      id: `shared-income-orphan-${closingEntryId}-${viewerUserId}`,
+      sourceEntryId: `shared-transfer-${closingEntryId}`,
+      detailEntryId: `shared-transfer-${closingEntryId}`,
+      accountId: "",
+      relatedUserId: sharedTransfer.sourceUserId > 0 ? String(sharedTransfer.sourceUserId) : undefined,
+      relatedUserName: sharedTransfer.sourceUserName || undefined,
+      symbol: "ETH",
+      action: "closeLong",
+      quantity: 0,
+      price: 0,
+      fee: 0,
+      createdAt: sharedTransfer.createdAt || new Date(0).toISOString(),
+      note: "共享到账（来源平仓历史缺失）",
+      isSharedIncomeOnly: true,
+      sharedIncomeSourceClosingEntryId: closingEntryId,
+      sharedIncomeSourceUserName: sharedTransfer.sourceUserName || undefined,
       sharedIncomeRecipientUserId: String(viewerUserId),
       sharedIncomeAmount: sharedAmount,
+      historyIncomeKind: "shared",
     });
   }
   return projected.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
@@ -4142,10 +4184,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && /^\d+$/.test(relatedUserFilterIds[0])
     ? Number(relatedUserFilterIds[0])
     : 0;
+  /** 管理员仅筛选一位用户时，历史收益须以这位用户的实际归属口径展示。 */
+  const selectedAdminHistoryUserId = !isMemberView ? historyPerspectiveTargetUserId : 0;
   const isHistoryUserPerspective = Boolean(
     historyPresentation === "member" && historyPerspectiveTargetUserId > 0,
   );
   const historyIsMemberPresentation = isMemberView || isHistoryUserPerspective;
+  /** 单选用户时，无论管理员直接筛选或代入用户视角，都使用同一组三类已实现收益筛选。 */
+  const historyUsesIncomeCategories = historyIsMemberPresentation || selectedAdminHistoryUserId > 0;
   useEffect(() => {
     if (historyPerspectiveTargetUserId === 0 && historyPresentation !== "admin") {
       setHistoryPresentation("admin");
@@ -4158,6 +4204,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : (canManage && relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
       ? Number(relatedUserFilterIds[0])
       : 0);
+  const historyIncomeViewerUserId = historyIsMemberPresentation
+    ? Number(payoutTargetRelatedUserId)
+    : selectedAdminHistoryUserId;
   const t0PayoutLogsQuery = trpc.ledger.t0GetPayoutLogs.useQuery(
     { ledgerId: 52, relatedUserId: payoutTargetRelatedUserId || undefined, previewUserId: previewUserId || undefined },
     {
@@ -4758,7 +4807,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? historyPerspectiveTargetUserId
       : (isMemberView
         ? Number(activeJournalData?.viewerProfitShareBeneficiaryUserId || activeJournalData?.viewerRelatedUserId || 0)
-        : 0);
+        // 管理员仅筛选一位用户时，同样必须补上该用户实际收到的共享收益来源。
+        : historyPerspectiveTargetUserId);
     const baseTrades = isHistoryUserPerspective
       ? projectMemberProfitShareTrades(
         rawJournalTrades,
@@ -4786,35 +4836,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   /** 用户端不读取完整用户目录，类别与名字都只从已授权可见的收益投影中生成。 */
   const historyMemberIncomeKindFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
-    if (!historyIsMemberPresentation) return [];
-    const viewerUserId = Number(payoutTargetRelatedUserId);
+    if (!historyUsesIncomeCategories) return [];
+    const viewerUserId = historyIncomeViewerUserId;
     if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return [];
-    let hasOwnOrderHistory = false;
-    let hasCommissionHistory = false;
-    let hasSharedIncomeHistory = false;
-    for (const trade of historyPerspectiveTrades) {
-      if (ACTIONS[trade.action].opening) continue;
-      const sourceUserId = Number(trade.relatedUserId || 0);
-      const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
-        && sourceUserId > 0
-        && sourceUserId !== viewerUserId;
-      const hasSharedIncome = Number(trade.sharedIncomeRecipientUserId || 0) === viewerUserId
-        && Number(trade.sharedIncomeAmount || 0) > 0;
-      const isOwnOrder = sourceUserId === viewerUserId;
-      if (isOwnOrder) hasOwnOrderHistory = true;
-      if (hasCommissionRelationship) hasCommissionHistory = true;
-      if (hasSharedIncome) hasSharedIncomeHistory = true;
-    }
+    // 三类是固定口径；即使当前用户某一类暂为 0，也保留入口，管理员与用户端始终同一布局。
     return [
-      ...(hasOwnOrderHistory ? [{ id: "order", label: "订单", summaryLabel: "订单" }] : []),
-      ...(hasCommissionHistory ? [{ id: "commission", label: "佣金", summaryLabel: "佣金" }] : []),
-      ...(hasSharedIncomeHistory ? [{ id: "shared", label: "共享", summaryLabel: "共享" }] : []),
+      { id: "order", label: "订单", summaryLabel: "订单" },
+      { id: "commission", label: "佣金", summaryLabel: "佣金" },
+      { id: "shared", label: "共享", summaryLabel: "共享" },
     ];
-  }, [historyIsMemberPresentation, historyPerspectiveTrades, payoutTargetRelatedUserId]);
+  }, [historyIncomeViewerUserId, historyUsesIncomeCategories]);
+  /** 用户呈现的默认“全部”是全部已实现收益，而不是混入开仓、挂单等操作流水。 */
+  useEffect(() => {
+    if (!historyUsesIncomeCategories || historyMemberIncomeKindFilterOptions.length === 0) return;
+    const availableKindIds = new Set(historyMemberIncomeKindFilterOptions.map((option) => option.id));
+    setHistoryIncomeKindFilterIds((current) => {
+      const validCurrent = current.filter((id) => availableKindIds.has(id));
+      return validCurrent.length > 0 ? validCurrent : Array.from(availableKindIds);
+    });
+    setShowOnlyProfitableHistory(false);
+    setShowOnlySharedIncomeHistory(false);
+  }, [historyMemberIncomeKindFilterOptions, historyUsesIncomeCategories]);
   /** 名字只列出与当前用户有明确分佣关系的来源；纯共享保持“共享”类别而不披露来源人。 */
   const historyMemberIncomeSourceFilterOptions = useMemo<T0MultiSelectOption[]>(() => {
-    if (!historyIsMemberPresentation) return [];
-    const viewerUserId = Number(payoutTargetRelatedUserId);
+    if (!historyUsesIncomeCategories) return [];
+    const viewerUserId = historyIncomeViewerUserId;
     if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return [];
     const commissionSources = new Map<string, T0MultiSelectOption>();
     for (const trade of historyPerspectiveTrades) {
@@ -4834,10 +4880,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       });
     }
     return Array.from(commissionSources.values()).sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
-  }, [historyIsMemberPresentation, historyPerspectiveTrades, payoutTargetRelatedUserId]);
+  }, [historyIncomeViewerUserId, historyPerspectiveTrades, historyUsesIncomeCategories]);
   const historyMemberIncomeSourceScopedTrades = useMemo(() => {
-    if (!historyIsMemberPresentation || (historyIncomeKindFilterIds.length === 0 && historyIncomeSourceFilterIds.length === 0)) return historyInstrumentScopedTrades;
-    const viewerUserId = Number(payoutTargetRelatedUserId);
+    if (!historyUsesIncomeCategories || (historyIncomeKindFilterIds.length === 0 && historyIncomeSourceFilterIds.length === 0)) return historyInstrumentScopedTrades;
+    const viewerUserId = historyIncomeViewerUserId;
     const selectedKindIds = new Set(historyIncomeKindFilterIds);
     const selectedSourceIds = new Set(historyIncomeSourceFilterIds);
     const allowOrder = selectedKindIds.size === 0 || selectedKindIds.has("order");
@@ -4861,7 +4907,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       // 纯共享没有可显示的来源人，因此只有“名字”未限定时才归入共享类别。
       return allowShared && selectedSourceIds.size === 0 && hasSharedIncome;
     });
-  }, [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyInstrumentScopedTrades, historyIsMemberPresentation, payoutTargetRelatedUserId]);
+  }, [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyIncomeViewerUserId, historyInstrumentScopedTrades, historyUsesIncomeCategories]);
   const historyRelatedUserFilter = useMemo(
     () => resolveT0RelatedUserFilter(
       historyRelatedUserFilterIds,
@@ -4883,7 +4929,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const journalScopeTrades = useMemo(
     () => historyMemberIncomeSourceScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
-      && (historyIsMemberPresentation || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
+      && (historyUsesIncomeCategories || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       // 用户呈现已在源数据层严格按本人/分层快照过滤，不能再套用管理员的用户、推荐或账户筛选。
       && (isHistoryUserPerspective
         || isMemberView
@@ -4897,9 +4943,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [historyMemberIncomeSourceScopedTrades, historyIsMemberPresentation, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+    [historyMemberIncomeSourceScopedTrades, historyUsesIncomeCategories, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
-  const isHistoryMemberIncomeSourceFilterActive = historyIsMemberPresentation
+  const isHistoryMemberIncomeSourceFilterActive = historyUsesIncomeCategories
     && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0);
   // 来源筛选打开时，具名分佣的开仓只作为 FIFO 计算基底，不作为用户历史行显示。
   const historyDisplayScopeTrades = useMemo(
@@ -4931,7 +4977,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
    */
   const historyDisplayTrades = useMemo(() => recentJournalTrades.flatMap((trade) => {
     const sharedIncomeAmount = Math.max(0, Number(trade.sharedIncomeAmount || 0));
-    const shouldSplitMixedIncome = historyIsMemberPresentation
+    const isSingleUserIncomePresentation = historyIsMemberPresentation || selectedAdminHistoryUserId > 0;
+    const shouldSplitMixedIncome = isSingleUserIncomePresentation
       && !ACTIONS[trade.action].opening
       && sharedIncomeAmount > 0
       && Boolean(trade.profitShareBeneficiaryUserId);
@@ -4958,7 +5005,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     // 筛选的开仓只用于上方已经完成的 FIFO 计算，不能作为用户收入历史展示。
     if (ACTIONS[trade.action].opening) return [];
-    const viewerUserId = Number(payoutTargetRelatedUserId);
+    const viewerUserId = historyIncomeViewerUserId;
     const sourceUserId = Number(trade.relatedUserId || 0);
     const hasCommissionRelationship = Number(trade.profitShareBeneficiaryUserId || 0) === viewerUserId
       && sourceUserId > 0
@@ -4995,7 +5042,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && selectedSourceIds.size === 0
       && allowShared;
     return showSharedOnly ? [trade] : [];
-  }), [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyIsMemberPresentation, isHistoryMemberIncomeSourceFilterActive, payoutTargetRelatedUserId, recentJournalTrades, showOnlySharedIncomeHistory]);
+  }), [historyIncomeKindFilterIds, historyIncomeSourceFilterIds, historyIncomeViewerUserId, historyIsMemberPresentation, isHistoryMemberIncomeSourceFilterActive, recentJournalTrades, selectedAdminHistoryUserId, showOnlySharedIncomeHistory]);
   const linkedJournalGroups = useMemo(
     () => buildLinkedJournalGroups(journalScopeTrades),
     [journalScopeTrades],
@@ -5110,30 +5157,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [profitShareSnapshots, sharedIncomeReductionsByClosingEntryId]);
   const resolveDisplayedPayout = useCallback((trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
-    const selectedAdminBeneficiaryUserId = !isMemberView
-      && relatedUserFilterIds.length === 1
-      && /^\d+$/.test(relatedUserFilterIds[0])
-      ? Number(relatedUserFilterIds[0])
-      : 0;
     if (isMemberView) {
       return resolveMemberPayout(trade, displayedNetPnl, viewerProfitShareBeneficiaryUserId, trades);
     }
-    if (!Number.isFinite(displayedNetPnl) || selectedAdminBeneficiaryUserId <= 0) return null;
-    const allocations = buildClosingProfitShareDistribution({
-      trades,
-      snapshots: profitShareSnapshots,
-      closing: trade,
-      displayedNetPnl,
-      sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
-    });
-    if (allocations.length === 0) {
-      return Number(trade.relatedUserId || 0) === selectedAdminBeneficiaryUserId
-        ? { netPnl: getRegularDistributableNetPnl(displayedNetPnl, getStoredEntryId(trade), sharedIncomeReductionsByClosingEntryId), isProfitShared: true }
-        : null;
-    }
-    const allocation = allocations.find((item) => item.beneficiaryUserId === selectedAdminBeneficiaryUserId);
-    return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
-  }, [isMemberView, profitShareSnapshots, relatedUserFilterIds, resolveMemberPayout, sharedIncomeReductionsByClosingEntryId, trades, viewerProfitShareBeneficiaryUserId]);
+    if (selectedAdminHistoryUserId <= 0) return null;
+    // 管理员单选用户与用户本人视角必须复用同一归属函数：共享到账不能只在用户端出现。
+    return resolveMemberPayout(trade, displayedNetPnl, selectedAdminHistoryUserId, trades);
+  }, [isMemberView, resolveMemberPayout, selectedAdminHistoryUserId, trades, viewerProfitShareBeneficiaryUserId]);
   const resolveViewerPayout = useCallback((trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
     return resolveDisplayedPayout(trade, detail?.netPnl);
   }, [resolveDisplayedPayout]);
@@ -6183,8 +6213,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     || historyInstrumentTypeFilterIds.length > 0
     || historyExecutionFilter !== "all"
     || historyHideLocked
-    || (historyIsMemberPresentation && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0));
-  const canFilterMemberHistoryIncome = historyIsMemberPresentation && historyMemberIncomeKindFilterOptions.length > 0;
+    || (historyUsesIncomeCategories && (historyIncomeKindFilterIds.length > 0 || historyIncomeSourceFilterIds.length > 0));
+  const canFilterMemberHistoryIncome = historyUsesIncomeCategories && historyMemberIncomeKindFilterOptions.length > 0;
   const historyInstrumentFilterSummary = getT0InstrumentFilterSummary(historyInstrumentTypeFilterIds);
   const historyExecutionFilterSummary = getT0ExecutionFilterSummary(historyExecutionFilter, historyHideLocked);
   const historyTypeStatusGridTemplateColumns = useMemo(
@@ -10406,7 +10436,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               aria-label={isHistoryUserPerspective ? "切换为管理员视角" : "切换为用户视角"}
               title={isHistoryUserPerspective ? "切换为管理员视角" : "切换为用户视角"}
               onClick={() => {
-                setHistoryPresentation((current) => current === "admin" ? "member" : "admin");
+                const nextPresentation = historyPresentation === "admin" ? "member" : "admin";
+                setHistoryPresentation(nextPresentation);
+                if (nextPresentation === "member") {
+                  setHistoryIncomeKindFilterIds(historyMemberIncomeKindFilterOptions.map((option) => option.id));
+                  setHistoryIncomeSourceFilterIds([]);
+                  setShowOnlyProfitableHistory(false);
+                  setShowOnlySharedIncomeHistory(false);
+                  setShowLinkedJournalGroups(false);
+                }
                 setHistoryActionMenuTradeId(null);
                 setNetProfitDetail(null);
                 setShowHistoryFilters(false);
@@ -10425,6 +10463,53 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.30), rgba(208,215,221,0.16))" }}
               >
                 <div className="flex flex-nowrap items-center gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1" role="group" aria-label="历史记录动作筛选">
+                  {historyUsesIncomeCategories ? <>
+                    {historyMemberIncomeKindFilterOptions.length > 0 && <>
+                      <button
+                        type="button"
+                        aria-pressed={historyIncomeSourceFilterIds.length === 0 && historyMemberIncomeKindFilterOptions.every((option) => historyIncomeKindFilterIds.includes(option.id))}
+                        onClick={() => {
+                          setHistoryIncomeKindFilterIds(historyMemberIncomeKindFilterOptions.map((option) => option.id));
+                          setHistoryIncomeSourceFilterIds([]);
+                          setShowOnlyProfitableHistory(false);
+                          setShowOnlySharedIncomeHistory(false);
+                          setShowLinkedJournalGroups(false);
+                          setJournalActionFilters(new Set(availableJournalActions));
+                          setRecentJournalPage(1);
+                          focusHistoryOnMobile();
+                        }}
+                        className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${historyIncomeSourceFilterIds.length === 0 && historyMemberIncomeKindFilterOptions.every((option) => historyIncomeKindFilterIds.includes(option.id)) ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                      >
+                        全部
+                      </button>
+                      {historyMemberIncomeKindFilterOptions.map((option) => {
+                        const selected = historyIncomeKindFilterIds.length === 1 && historyIncomeKindFilterIds[0] === option.id && historyIncomeSourceFilterIds.length === 0;
+                        const activeClass = option.id === "order"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : option.id === "commission"
+                            ? "border-amber-500 bg-amber-500 text-white"
+                            : "border-emerald-600 bg-emerald-600 text-white";
+                        return <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => {
+                            setHistoryIncomeKindFilterIds([option.id]);
+                            setHistoryIncomeSourceFilterIds([]);
+                            setShowOnlyProfitableHistory(false);
+                            setShowOnlySharedIncomeHistory(false);
+                            setShowLinkedJournalGroups(false);
+                            setJournalActionFilters(new Set(availableJournalActions));
+                            setRecentJournalPage(1);
+                            focusHistoryOnMobile();
+                          }}
+                          className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${selected ? activeClass : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                        >
+                          {option.label}
+                        </button>;
+                      })}
+                    </>}
+                  </> : <>
                   {availableJournalActions.length > 1 && <button
                     type="button"
                     aria-pressed={allJournalActionsSelected && !showOnlyProfitableHistory && !showOnlySharedIncomeHistory && !showLinkedJournalGroups}
@@ -10511,19 +10596,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       focusHistoryOnMobile();
                     }}
                     className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
-                  >
-                    关联
-                  </button>}
+                    >
+                      关联
+                    </button>}
+                  </>}
                   {((canManage && !isHistoryUserPerspective) || canFilterMemberHistoryIncome) && <button
                     type="button"
-                    aria-label={showHistoryFilters ? "收起并清空历史筛选" : historyIsMemberPresentation ? "筛选佣金、共享和名字" : "筛选历史记录"}
+                    aria-label={showHistoryFilters ? "收起并清空历史筛选" : historyUsesIncomeCategories ? "筛选收益类别和名字" : "筛选历史记录"}
                     aria-expanded={showHistoryFilters}
-                    title={showHistoryFilters ? "收起并恢复全部" : historyIsMemberPresentation ? "筛选佣金、共享和名字" : "筛选历史记录"}
+                    title={showHistoryFilters ? "收起并恢复全部" : historyUsesIncomeCategories ? "筛选收益类别和名字" : "筛选历史记录"}
                     onClick={() => {
                       if (showHistoryFilters) {
-                        if (historyIsMemberPresentation) {
-                          // 用户端只清空佣金/共享类别与名字，不能意外清空管理员顶部或成员范围条件。
-                          setHistoryIncomeKindFilterIds([]);
+                        if (historyUsesIncomeCategories) {
+                          // 单选用户时恢复“全部收益”，不能回到混入开仓、挂单的旧操作流水。
+                          setHistoryIncomeKindFilterIds(historyMemberIncomeKindFilterOptions.map((option) => option.id));
                           setHistoryIncomeSourceFilterIds([]);
                         } else {
                           // 第二次点击在收起面板的同时清空五项条件，快速回到全部历史记录。
@@ -10542,9 +10628,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setShowHistoryFilters(true);
                       focusHistoryOnMobile();
                     }}
-                    className={`ml-0.5 flex shrink-0 items-center justify-center rounded-[3px] border font-medium leading-none transition-colors active:scale-95 ${historyIsMemberPresentation ? "h-[22px] px-1 text-[10px]" : "h-6 w-7"} ${showHistoryFilters || hasActiveHistoryDetailFilters ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                    className={`ml-0.5 flex shrink-0 items-center justify-center rounded-[3px] border font-medium leading-none transition-colors active:scale-95 ${historyUsesIncomeCategories ? "h-[22px] px-1 text-[10px]" : "h-6 w-7"} ${showHistoryFilters || hasActiveHistoryDetailFilters ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
-                    {historyIsMemberPresentation ? "筛选" : <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />}
+                    {historyUsesIncomeCategories ? "筛选" : <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />}
                   </button>}
                   {(showOnlyProfitableHistory || showOnlySharedIncomeHistory || showLinkedJournalGroups) && <div data-card-export-hide="true" className="ml-auto flex shrink-0 items-center">
                     <OrderCardImageDownload
@@ -10573,16 +10659,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 className="relative z-20 border-b border-[#c7d0d7]/70 px-4 py-2.5"
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.52), rgba(208,215,221,0.28))" }}
               >
-                {historyIsMemberPresentation ? <div className="space-y-1.5">
+                {historyUsesIncomeCategories ? <div className="space-y-1.5">
                   <div className="grid grid-cols-2 gap-1.5">
                     <T0MultiSelect
-                      label="佣金"
+                      label="收益"
                       options={historyMemberIncomeKindFilterOptions}
                       selectedIds={historyIncomeKindFilterIds}
                       emptyLabel="暂无收益类别"
                       toolbar
                       onChange={(ids) => {
-                        setHistoryIncomeKindFilterIds(ids);
+                        setHistoryIncomeKindFilterIds(ids.length > 0 ? ids : historyMemberIncomeKindFilterOptions.map((option) => option.id));
                         setRecentJournalPage(1);
                         focusHistoryOnMobile();
                       }}
@@ -10701,6 +10787,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const historyIncomeKind = trade.historyIncomeKind;
+                const isSharedIncomeOnly = trade.isSharedIncomeOnly === true;
                 const sharedIncomeAmount = Math.max(0, Number(trade.sharedIncomeAmount || 0));
                 const isSharedIncomePerspective = historyIncomeKind === "shared" || sharedIncomeAmount > 0;
                 const displayDetail = detail ?? (isSharedIncomePerspective ? { netPnl: 0 } : undefined);
@@ -10708,9 +10795,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isAutomaticTakeProfit = trade.note?.includes("[系统自动止盈]") ?? false;
                 const viewerPayout = resolveHistoryViewerPayout(trade, detail);
                 const displayedNetPnl = viewerPayout?.netPnl ?? detail?.netPnl;
-                const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
+                const isSingleUserIncomePresentation = historyIsMemberPresentation || selectedAdminHistoryUserId > 0;
+                const payoutPresentation = isSingleUserIncomePresentation || isSharedIncomeOnly ? "member" : "admin";
+                const payoutViewerUserId = historyIsMemberPresentation
+                  ? (isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId)
+                  : (selectedAdminHistoryUserId || undefined);
+                const hideRepeatedSettlementPrices = isSingleUserIncomePresentation && Boolean(viewerPayout);
                 const sharedClosingPriceLabel = isLong ? "卖" : "买";
-                const historyActionLabel = historyIncomeKind === "commission"
+                const historyActionLabel = isSharedIncomeOnly
+                  ? "共享到账"
+                  : historyIncomeKind === "commission"
                   ? "分佣"
                   : historyIncomeKind === "shared"
                     ? "共享"
@@ -10722,8 +10816,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                         <span className={`shrink-0 font-semibold ${isSplitIncomeDisplay ? "text-blue-600" : isLong ? "text-rose-600" : "text-emerald-600"}`}>{historyActionLabel}</span>
                         {isAutomaticTakeProfit && <Target className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.5} aria-label="系统自动止盈" />}
-                        <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
-                        {(isSplitIncomeDisplay || isSharedIncomePerspective) && !isOpening && <span className="shrink-0 text-slate-600">{sharedClosingPriceLabel}{formatPrice(trade.price)}</span>}
+                        {isSharedIncomeOnly ? <span className="shrink-0 text-[10px] font-medium text-slate-400">来源平仓记录缺失</span> : <>
+                          <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
+                          {(isSplitIncomeDisplay || isSharedIncomePerspective) && !isOpening && <span className="shrink-0 text-slate-600">{sharedClosingPriceLabel}{formatPrice(trade.price)}</span>}
+                        </>}
                         {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
                         {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
                         {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
@@ -10738,11 +10834,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           onClick={() => setNetProfitDetail({
                             trade,
                             detail: displayDetail,
-                            presentation: historyIsMemberPresentation ? "member" : "admin",
-                            viewerUserId: historyIsMemberPresentation ? (isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId) : undefined,
+                            presentation: payoutPresentation,
+                            viewerUserId: payoutPresentation === "member" ? payoutViewerUserId : undefined,
                           })}
                           className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                          aria-label={viewerPayout ? (historyIsMemberPresentation ? "查看本单可得明细" : "查看本单分成与全体分佣明细") : "查看净利润计算明细"}
+                          aria-label={viewerPayout ? (isSingleUserIncomePresentation ? "查看本单可得明细" : "查看本单分成与全体分佣明细") : "查看净利润计算明细"}
                         >
                           {formatSigned(displayedNetPnl)}<span className="ml-0.5 text-slate-500">u</span>
                         </button>
@@ -10753,7 +10849,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
                         <span className="text-slate-300">·</span>
                       </>}
-                      {historyIncomeKind === "commission" ? <>
+                      {isSharedIncomeOnly ? <>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)}>{trade.sharedIncomeSourceUserName || "共享到账"}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)}>来源平仓 #{trade.sharedIncomeSourceClosingEntryId || "—"}</span>
+                        <span className="text-slate-300">·</span>
+                      </> : historyIncomeKind === "commission" ? <>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
                         <span className="text-slate-300">·</span>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
@@ -10773,12 +10874,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className="text-slate-300">·</span>
                       </>}
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
-                      {canManage && !historyIsMemberPresentation && !isSplitIncomeDisplay ? renderHistoryActionMenuButton(trade) : !isOpening && displayDetail && displayedNetPnl !== undefined && <>
+                      {canManage && !historyIsMemberPresentation && !isSplitIncomeDisplay && !isSharedIncomeOnly ? renderHistoryActionMenuButton(trade) : !isOpening && displayDetail && displayedNetPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
-                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">{isSharedIncomeOnly ? "实际到账" : viewerPayout ? "本单可得" : "净利润"}</span>
                       </>}
                     </div>
-                    {!isSplitIncomeDisplay && renderHistoryActionMenu(trade, historyIsMemberPresentation)}
+                    {!isSplitIncomeDisplay && !isSharedIncomeOnly && renderHistoryActionMenu(trade, historyIsMemberPresentation)}
                     {!isSharedIncomePerspective && !isSplitIncomeDisplay && trade.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{trade.note.trim()}</div>}
                   </div>
                 );

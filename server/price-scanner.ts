@@ -60,6 +60,12 @@ let perpetualMarkCacheSaveTimer: NodeJS.Timeout | null = null;
 type PendingOrderMarkTick = { price: number; observedAt: Date; rangeHigh: number; rangeLow: number };
 const pendingOrderMarkTicks: PendingOrderMarkTick[] = [];
 let pendingOrderMarkTriggerRunning = false;
+type CompletedT0MinuteMarkRange = { high: number; low: number; openedAt: Date; observedAt: Date };
+let latestCompletedT0MinuteMarkRange: CompletedT0MinuteMarkRange | null = null;
+let completedT0MinuteMarkRangeRefreshInFlight = false;
+let lastCompletedT0MinuteMarkRangeRefreshAt = 0;
+const T0_COMPLETED_MINUTE_RANGE_REFRESH_MS = 3_000;
+const T0_COMPLETED_MINUTE_RANGE_MAX_AGE_MS = 125_000;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
@@ -146,6 +152,8 @@ function triggerLedger52T0PendingOrders(
   range: { high?: number; low?: number } = {},
 ) {
   if (process.env.DEV_BYPASS_AUTH === 'true' || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
+  // 实时价扫描不等待外部K线请求；已缓存的完整分钟线会被同一次数据库判定作为第二依据带入。
+  void refreshLatestCompletedT0MinuteMarkRange();
   const requestedHigh = Number(range.high);
   const requestedLow = Number(range.low);
   const rangeHigh = isValidPrice(requestedHigh) ? Math.max(price, requestedHigh) : price;
@@ -176,6 +184,7 @@ function triggerLedger52T0PendingOrders(
           filledAt: tick.observedAt,
           rangeHigh: tick.rangeHigh,
           rangeLow: tick.rangeLow,
+          completedMinuteRange: getLatestCompletedT0MinuteMarkRange() ?? undefined,
         });
         if (result.filled > 0 || result.takeProfit > 0) {
           console.log(`[T0自动订单] 永续扫描区间 ${tick.rangeLow}–${tick.rangeHigh}，挂单成交 ${result.filled} 笔，自动止盈 ${result.takeProfit} 笔`);
@@ -302,10 +311,9 @@ async function fetchEthPerpetualMarkQuote(): Promise<{ price: number; source: st
 }
 
 
-type EthPerpetualMarkRange = { high: number; low: number };
-
 /** HTX ETH 永续标记价一分钟K线；仅供T+0挂单的启动/定期漏扫复核使用。 */
 export type T0EthPerpetualMarkHistoryCandle = {
+  openedAt: Date;
   observedAt: Date;
   close: number;
   high: number;
@@ -314,7 +322,7 @@ export type T0EthPerpetualMarkHistoryCandle = {
 
 /**
  * Gate 当前只提供实时标记价，因此历史补扫固定读取 HTX 官方一分钟标记价K线。
- * 返回按时间正序排列的有效K线；任何缺价/异常行都不会参与自动订单判断。
+ * 仅返回按时间正序排列的已收盘有效K线；任何进行中、缺价或异常K线都不会参与自动订单判断。
  */
 export async function getT0EthPerpetualMarkHistory(limit = 1_500): Promise<T0EthPerpetualMarkHistoryCandle[]> {
   const requestedLimit = Math.max(1, Math.min(1_500, Math.floor(limit)));
@@ -329,14 +337,16 @@ export async function getT0EthPerpetualMarkHistory(limit = 1_500): Promise<T0Eth
       .map((row: any) => {
         const rawEpoch = Number(row?.id);
         const openedAtMs = rawEpoch > 1_000_000_000_000 ? rawEpoch : rawEpoch * 1_000;
+        const observedAtMs = openedAtMs + 59_999;
         const close = Number(row?.close);
         const high = Number(row?.high);
         const low = Number(row?.low);
-        if (!Number.isFinite(openedAtMs) || openedAtMs <= 0 || openedAtMs > now + 60_000
+        if (!Number.isFinite(openedAtMs) || openedAtMs <= 0 || observedAtMs > now
           || !isValidPrice(close) || !isValidPrice(high) || !isValidPrice(low)) return null;
         return {
+          openedAt: new Date(openedAtMs),
           // 将一分钟K线的事件时点置于该分钟收盘，保证只用已经完整形成的区间。
-          observedAt: new Date(openedAtMs + 59_999),
+          observedAt: new Date(observedAtMs),
           close,
           high: Math.max(high, low),
           low: Math.min(high, low),
@@ -350,18 +360,38 @@ export async function getT0EthPerpetualMarkHistory(limit = 1_500): Promise<T0Eth
 }
 
 /**
- * 实时流暂不可用时，读取 HTX 最新一分钟的 ETH 永续标记价高低值。
- * 该区间只在存在自动订单时使用，用于补齐 REST 轮询之间已越过又回落的触发价。
+ * 返回最近一根已收盘的一分钟标记价区间。未收盘K线不得作为挂单成交依据，
+ * 否则会把挂单创建前同一分钟发生的波动误归为该订单的成交依据。
  */
-async function fetchEthPerpetualMarkRange(): Promise<EthPerpetualMarkRange | null> {
+function getLatestCompletedT0MinuteMarkRange(): CompletedT0MinuteMarkRange | null {
+  if (!latestCompletedT0MinuteMarkRange) return null;
+  const age = Date.now() - latestCompletedT0MinuteMarkRange.observedAt.getTime();
+  if (!Number.isFinite(age) || age < 0 || age > T0_COMPLETED_MINUTE_RANGE_MAX_AGE_MS) return null;
+  return latestCompletedT0MinuteMarkRange;
+}
+
+async function refreshLatestCompletedT0MinuteMarkRange() {
+  if (!hasLedger52T0PendingOrders() || completedT0MinuteMarkRangeRefreshInFlight) return;
+  const now = Date.now();
+  if (now - lastCompletedT0MinuteMarkRangeRefreshAt < T0_COMPLETED_MINUTE_RANGE_REFRESH_MS) return;
+  lastCompletedT0MinuteMarkRangeRefreshAt = now;
+  completedT0MinuteMarkRangeRefreshInFlight = true;
   try {
-    const data = await fetchPerpetualMarkJson('https://api.hbdm.com/index/market/history/linear_swap_mark_price_kline?contract_code=ETH-USDT&period=1min&size=1');
-    const row = data?.status === 'ok' ? data.data?.[0] : null;
-    const high = Number(row?.high);
-    const low = Number(row?.low);
-    if (isValidPrice(high) && isValidPrice(low)) return { high: Math.max(high, low), low: Math.min(high, low) };
-  } catch {}
-  return null;
+    const candles = await getT0EthPerpetualMarkHistory(2);
+    // observedAt 是分钟收盘时刻；只采纳已经结束的K线，绝不使用当前进行中的一分钟。
+    const latestClosed = [...candles].reverse().find((candle) => candle.observedAt.getTime() <= Date.now());
+    if (!latestClosed) return;
+    latestCompletedT0MinuteMarkRange = {
+      high: latestClosed.high,
+      low: latestClosed.low,
+      openedAt: latestClosed.openedAt,
+      observedAt: latestClosed.observedAt,
+    };
+  } catch {
+    // 保留尚未过期的上一根完整分钟线；超过时效会由读取函数自动拒绝使用。
+  } finally {
+    completedT0MinuteMarkRangeRefreshInFlight = false;
+  }
 }
 
 async function fetchTodayOpen(coin: string): Promise<number | null> {
@@ -943,11 +973,8 @@ async function updateEthPerpetualMarkFast() {
     return;
   }
   entryFromPrice(ETH_PERP_MARK_CACHE_KEY, quote.price, quote.source, quote.patch);
-  let range: EthPerpetualMarkRange | null = null;
-  if (hasLedger52T0PendingOrders() && !isEthPerpetualMarkStreamFresh()) {
-    range = await fetchEthPerpetualMarkRange();
-  }
-  triggerLedger52T0PendingOrders(quote.price, new Date(), range ? { high: range.high, low: range.low } : {});
+  if (hasLedger52T0PendingOrders()) void refreshLatestCompletedT0MinuteMarkRange();
+  triggerLedger52T0PendingOrders(quote.price, new Date());
 }
 
 /** 常规数字币以小请求并发方式统一每三秒写入同一份内存缓存。 */
@@ -1144,11 +1171,13 @@ export function startPriceScanner() {
   loadCacheFromFile();
   void scanPrices();
   startEthPerpetualMarkStream();
-  // WebSocket 建连或收流异常时才以 Gate → HTX REST 保温；实时流健康时不再重复轮询 ETH 永续标记价。
+  // WebSocket 建连或收流异常时才以 Gate → HTX REST 保温；完整一分钟K线则始终仅在有自动订单时缓存为安全补扫依据。
   void scanEthPerpetualMark();
+  void refreshLatestCompletedT0MinuteMarkRange();
   // 固定节拍：上一轮尚未完成时由 scanInProgress 丢弃本轮，避免“完成后再等三秒”变成六秒。
   nextScanTimer = setInterval(() => { void scanPrices(); }, CRYPTO_SCAN_INTERVAL_MS);
   setInterval(() => {
+    if (hasLedger52T0PendingOrders()) void refreshLatestCompletedT0MinuteMarkRange();
     if (!isEthPerpetualMarkStreamFresh()) void scanEthPerpetualMark();
   }, CRYPTO_SCAN_INTERVAL_MS);
   console.log(`[行情] 统一行情扫描已启动：数字币固定每${CRYPTO_SCAN_INTERVAL_MS / 1000}秒刷新，ETH永续由T+0专属实时流维护，证券与商品每${SLOW_MARKET_SCAN_INTERVAL_MS / 1000}秒刷新`);
