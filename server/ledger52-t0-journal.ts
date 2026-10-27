@@ -1229,7 +1229,15 @@ function mapT0JournalSystemActivity(row: any) {
  * 账户与流水均按 ledger 52 + 当前管理员 user_id 分区。
  * 不设外键，避免旧库迁移时受历史数据状态影响；所有读写均由接口侧权限校验保障。
  */
+function isLedger52T0ReadOnlyPreview(): boolean {
+  return process.env.PREVIEW_READONLY === "true"
+    || process.env.FAST_PREVIEW === "true"
+    || process.env.DEV_BYPASS_AUTH === "true";
+}
+
 export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
+  // 热预览读取真实账本数据时，任何调用方都不得通过“确保表结构”执行DDL。
+  if (isLedger52T0ReadOnlyPreview()) return;
   if (tablesReady) return tablesReady;
   tablesReady = (async () => {
     const db = conn ?? await getDbConnection();
@@ -1621,6 +1629,39 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_shared_income_eligibility_audit_pair (ledger_id, user_id, source_user_id, recipient_user_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0：共享收益资格开关的不可变变更审计'
+    `);
+    // AI共享收益的本金参数是账本级“未来试算规则”。当前值可更新，而每次变更均另存审计，
+    // 不会重算、回写或影响任何已经确认的平仓、共享到账和周结算。
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_shared_income_principal_rules (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        curve ENUM('linear','balanced','strong') NOT NULL DEFAULT 'linear',
+        influence_percentage TINYINT UNSIGNED NOT NULL DEFAULT 100,
+        version INT UNSIGNED NOT NULL DEFAULT 1,
+        configured_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_shared_income_principal_rule_ledger (ledger_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：共享收益AI按本金比例的未来试算规则'
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_shared_income_principal_rule_audits (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        previous_curve ENUM('linear','balanced','strong') DEFAULT NULL,
+        previous_influence_percentage TINYINT UNSIGNED DEFAULT NULL,
+        next_curve ENUM('linear','balanced','strong') NOT NULL,
+        next_influence_percentage TINYINT UNSIGNED NOT NULL,
+        version INT UNSIGNED NOT NULL,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_shared_income_principal_rule_audit_ledger (ledger_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：共享收益AI本金规则的不可变审计'
     `);
     // 历史共享收益按旧规则已经完成结算，默认值 0 使其不回溯改变既有订单收益；
     // 新规则写入 1，令读取端以“本单净收益 - 共享收益”作为原分佣的基数。
@@ -2075,7 +2116,11 @@ export async function getLedger52T0Journal(
 ) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
-  if (!options.skipTableEnsure) await ensureLedger52T0JournalTables(conn);
+  // 热预览读取真实数据时绝不能借“确保表结构”执行DDL；生产与常规开发仍保留原初始化兼容。
+  const isReadOnlyPreview = process.env.PREVIEW_READONLY === "true"
+    || process.env.FAST_PREVIEW === "true"
+    || process.env.DEV_BYPASS_AUTH === "true";
+  if (!options.skipTableEnsure && !isReadOnlyPreview) await ensureLedger52T0JournalTables(conn);
 
   const isAdminScope = scope.mode === "admin";
   // 常规报价页保留原有限流；周结算等后台只读归集显式请求全量历史，避免 FIFO 上下文被截断。
@@ -3225,6 +3270,125 @@ export async function setLedger52T0JournalSharedIncomeEligibility(input: {
     }
     await tx.commit();
     return { sourceUserId, recipientUserId, enabled: nextEnabled };
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    await tx.release();
+  }
+}
+
+export type Ledger52T0SharedIncomePrincipalRule = {
+  curve: "linear" | "balanced" | "strong";
+  influencePercentage: number;
+  version: number;
+  updatedAt: string | null;
+};
+
+export const DEFAULT_LEDGER52_T0_SHARED_INCOME_PRINCIPAL_RULE: Ledger52T0SharedIncomePrincipalRule = {
+  curve: "linear",
+  influencePercentage: 100,
+  version: 0,
+  updatedAt: null,
+};
+
+function normalizeLedger52T0SharedIncomePrincipalRule(input: {
+  curve: string;
+  influencePercentage: number;
+}): Pick<Ledger52T0SharedIncomePrincipalRule, "curve" | "influencePercentage"> {
+  const curve = input.curve === "balanced" || input.curve === "strong" ? input.curve : input.curve === "linear" ? input.curve : null;
+  if (!curve) throw new TRPCError({ code: "BAD_REQUEST", message: "本金曲线仅可选直接比例、平滑比例或强平滑" });
+  const influencePercentage = Number(input.influencePercentage);
+  if (!Number.isInteger(influencePercentage) || influencePercentage < 0 || influencePercentage > 100) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "本金影响度必须是0至100的整数" });
+  }
+  return { curve, influencePercentage };
+}
+
+function mapLedger52T0SharedIncomePrincipalRule(row: any): Ledger52T0SharedIncomePrincipalRule {
+  const curve = row?.curve === "balanced" || row?.curve === "strong" ? row.curve : "linear";
+  const rawInfluencePercentage = Number(row?.influence_percentage);
+  return {
+    curve,
+    influencePercentage: Math.min(100, Math.max(0, Math.trunc(Number.isFinite(rawInfluencePercentage) ? rawInfluencePercentage : 100))),
+    version: Math.max(0, Math.trunc(toNumber(row?.version))),
+    updatedAt: row?.updated_at instanceof Date ? row.updated_at.toISOString() : row?.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+/** 账本级规则仅影响未来打开的AI共享收益试算；历史订单和已确认分配不追溯。 */
+export async function getLedger52T0SharedIncomePrincipalRule(options: { skipTableEnsure?: boolean } = {}): Promise<Ledger52T0SharedIncomePrincipalRule> {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  if (!options.skipTableEnsure) await ensureLedger52T0JournalTables(conn);
+  try {
+    const [rows] = await conn.execute(
+      `SELECT curve, influence_percentage, version, updated_at
+         FROM ledger52_t0_journal_shared_income_principal_rules
+        WHERE ledger_id = ?
+        LIMIT 1`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    const row = asRows(rows)[0];
+    return row ? mapLedger52T0SharedIncomePrincipalRule(row) : { ...DEFAULT_LEDGER52_T0_SHARED_INCOME_PRINCIPAL_RULE };
+  } catch (error: any) {
+    // 新表尚未上线到真实库时，预览只能展示默认规则；不得借此执行DDL。
+    if (options.skipTableEnsure && (error?.code === "ER_NO_SUCH_TABLE" || error?.errno === 1146)) {
+      return { ...DEFAULT_LEDGER52_T0_SHARED_INCOME_PRINCIPAL_RULE };
+    }
+    throw error;
+  }
+}
+
+export async function setLedger52T0SharedIncomePrincipalRule(input: {
+  actorUserId: number;
+  curve: string;
+  influencePercentage: number;
+}): Promise<Ledger52T0SharedIncomePrincipalRule> {
+  const next = normalizeLedger52T0SharedIncomePrincipalRule(input);
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [existingRows] = await tx.execute(
+      `SELECT curve, influence_percentage, version, updated_at
+         FROM ledger52_t0_journal_shared_income_principal_rules
+        WHERE ledger_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    const existing = asRows(existingRows)[0];
+    const previous = existing ? mapLedger52T0SharedIncomePrincipalRule(existing) : null;
+    if (previous && previous.curve === next.curve && previous.influencePercentage === next.influencePercentage) {
+      await tx.commit();
+      return previous;
+    }
+    const version = (previous?.version || 0) + 1;
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_shared_income_principal_rules
+        (ledger_id, curve, influence_percentage, version, configured_by_user_id)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE curve = VALUES(curve), influence_percentage = VALUES(influence_percentage),
+         version = VALUES(version), configured_by_user_id = VALUES(configured_by_user_id), updated_at = NOW(3)`,
+      [LEDGER_52_T0_JOURNAL_ID, next.curve, next.influencePercentage, version, input.actorUserId],
+    );
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_shared_income_principal_rule_audits
+        (ledger_id, previous_curve, previous_influence_percentage, next_curve, next_influence_percentage, version, operator_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [LEDGER_52_T0_JOURNAL_ID, previous?.curve || null, previous?.influencePercentage ?? null, next.curve, next.influencePercentage, version, input.actorUserId],
+    );
+    const [savedRows] = await tx.execute(
+      `SELECT curve, influence_percentage, version, updated_at
+         FROM ledger52_t0_journal_shared_income_principal_rules
+        WHERE ledger_id = ?
+        LIMIT 1`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    await tx.commit();
+    return mapLedger52T0SharedIncomePrincipalRule(asRows(savedRows)[0]);
   } catch (error) {
     await tx.rollback();
     throw error;
@@ -5129,6 +5293,7 @@ function activateLedger52T0PendingOrderScan() {
 }
 
 async function refreshLedger52T0PendingOrderScanState() {
+  if (isLedger52T0ReadOnlyPreview()) return false;
   const connection = await getDbConnection();
   if (!connection) return pendingOrderScanActive;
   await ensureLedger52T0JournalTables(connection as any);
@@ -5158,7 +5323,7 @@ async function refreshLedger52T0PendingOrderScanState() {
  * 因此已删除、已成交、手工修改过或后来新建的订单都不会被历史K线误成交。
  */
 async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number, reason: "启动补扫" | "定时补扫") {
-  if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderHistoryRecoveryInFlight || !pendingOrderScanActive) {
+  if (isLedger52T0ReadOnlyPreview() || pendingOrderHistoryRecoveryInFlight || !pendingOrderScanActive) {
     return { candidates: 0, matched: 0, filled: 0 };
   }
   pendingOrderHistoryRecoveryInFlight = true;
@@ -5244,7 +5409,7 @@ export async function scanLedger52T0PendingOrders(input: {
   /** 历史补扫只补开仓挂单，止盈仍由实时扫描处理，避免一根历史K线连续触发两步动作。 */
   skipTakeProfit?: boolean;
 } = {}) {
-  if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderScanInFlight || !pendingOrderScanActive) {
+  if (isLedger52T0ReadOnlyPreview() || pendingOrderScanInFlight || !pendingOrderScanActive) {
     return { filled: 0, takeProfit: 0, markPrice: null as number | null };
   }
   const { getT0EthPerpetualMark } = input.markPrice === undefined
@@ -5642,7 +5807,7 @@ export async function scanLedger52T0ExpiredOptions(input: {
   now?: Date;
   fetchDelivery?: (instrumentName: string, expiryAt: Date) => Promise<DeribitOptionDelivery | null>;
 } = {}) {
-  if (optionExpirySettlementScanInFlight) return { settled: 0, awaitingDelivery: 0 };
+  if (isLedger52T0ReadOnlyPreview() || optionExpirySettlementScanInFlight) return { settled: 0, awaitingDelivery: 0 };
   const now = input.now ?? new Date();
   const connection = await getDbConnection();
   if (!connection) return { settled: 0, awaitingDelivery: 0 };
@@ -5818,9 +5983,9 @@ export async function scanLedger52T0ExpiredOptions(input: {
   }
 }
 
-/** 生产服务每分钟确认一次到期交割；本地 DEV_BYPASS 绝不启动，避免热预览写入真实订单。 */
+/** 生产服务每分钟确认一次到期交割；任一只读预览环境绝不启动。 */
 export function startLedger52T0ExpiredOptionScanner() {
-  if (optionExpirySettlementScanTimer || process.env.DEV_BYPASS_AUTH === "true") return;
+  if (optionExpirySettlementScanTimer || isLedger52T0ReadOnlyPreview()) return;
   const run = () => {
     void scanLedger52T0ExpiredOptions()
       .then((result) => {
@@ -5835,10 +6000,10 @@ export function startLedger52T0ExpiredOptionScanner() {
 
 /**
  * 启动生产自动订单扫描开关：启动时检查挂单与止盈计划；随后由实时 ETH 永续标记价逐笔触发。
- * DEV_BYPASS 热预览绝不启动，避免将预览行情写入真实订单。
+ * 任一只读热预览绝不启动，避免将预览行情写入真实订单。
  */
 export function startLedger52T0PendingOrderScanner() {
-  if (pendingOrderScannerStarted || process.env.DEV_BYPASS_AUTH === "true") return;
+  if (pendingOrderScannerStarted || isLedger52T0ReadOnlyPreview()) return;
   pendingOrderScannerStarted = true;
   const refreshScanState = (reason: "初始化" | "定时复核") => {
     const wasActive = pendingOrderScanActive;

@@ -759,14 +759,13 @@ async function startServer() {
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
-    if (isFastPreview) {
-      // 轻量预览不启动交易、资金、预警等后台任务；但37号保证金、52号担保物和
-      // 钱包估值都必须走同一份实时行情缓存，不能把 ETH 等币种按 ¥0 处理。
+    const isReadOnlyPreview = process.env.PREVIEW_READONLY === 'true'
+      || process.env.FAST_PREVIEW === 'true'
+      || process.env.DEV_BYPASS_AUTH === 'true';
+    if (isFastPreview || isReadOnlyPreview) {
+      // 只读预览不启动任何后台写任务；保留行情缓存仅供页面实时估值。
       startPriceScanner();
-      // DEV_BYPASS_AUTH 本地热预览会在扫描器内部直接退出，不会写入真实流水；
-      // 若生产环境误带 FAST_PREVIEW，仍确保 T+0 自动订单不被整个后台任务短路。
-      startLedger52T0PendingOrderScanner();
-      console.log('[FastPreview] 无关后台任务已禁用；统一行情扫描已保留用于实时估值');
+      console.log('[ReadOnlyPreview] 后台写任务已禁用；统一行情扫描仅保留用于实时估值');
       return;
     }
     // 部署成功后发送短信通知（已关闭）

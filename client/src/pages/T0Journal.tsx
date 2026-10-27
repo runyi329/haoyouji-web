@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   AlertTriangle,
@@ -123,23 +123,70 @@ type SharedIncomeEligibility = {
   updatedAt?: string;
 };
 type SharedIncomeAllocationBudgetMode = "percentage" | "amount";
-type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap" | "withdrawalProgress";
+type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap" | "withdrawalProgress" | "openingOrderCount";
+type SharedIncomePrincipalRule = {
+  /** 0% 是全员均分，100% 是完全按本金曲线。 */
+  influencePercentage: number;
+  curve: "linear" | "balanced" | "strong";
+};
+const DEFAULT_SHARED_INCOME_PRINCIPAL_RULE: SharedIncomePrincipalRule = {
+  // 保持当前线上默认“完全按本金比例”，设置页仅供管理员先试算平滑方案。
+  influencePercentage: 100,
+  curve: "linear",
+};
+function getSharedIncomePrincipalCurveExponent(curve: SharedIncomePrincipalRule["curve"]) {
+  return curve === "strong" ? 0.35 : curve === "balanced" ? 0.5 : 1;
+}
+function getSharedIncomePrincipalCurveLabel(curve: SharedIncomePrincipalRule["curve"]) {
+  return curve === "strong" ? "强平滑" : curve === "balanced" ? "平滑比例" : "直接比例";
+}
+function getSharedIncomePrincipalGuideExample(rule: SharedIncomePrincipalRule) {
+  /** 0.5%、1.5%、3%、5%、8%、12%、17%、23%、30%：由小到大完整覆盖。 */
+  const principals = [50, 150, 300, 500, 800, 1_200, 1_700, 2_300, 3_000];
+  const principalTotal = principals.reduce((total, principal) => total + principal, 0);
+  const influence = Math.min(100, Math.max(0, Number(rule.influencePercentage) || 0)) / 100;
+  const scores = principals.map((principal) => Math.pow(principal, getSharedIncomePrincipalCurveExponent(rule.curve)));
+  const scoreTotal = scores.reduce((total, score) => total + score, 0);
+  return principals.map((principal, index) => ({
+    principal,
+    principalShare: principalTotal > 0 ? principal / principalTotal : 0,
+    allocation: 100 * ((1 - influence) / principals.length + (scoreTotal > 0 ? influence * scores[index] / scoreTotal : 0)),
+  }));
+}
 const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
   id: SharedIncomeAllocationMetric;
   label: string;
   category: string;
   compactLabel: string;
   emptyMessage: string;
+  guideDescription: string;
+  guideFormula: string;
+  accent: string;
 }> = [
-  { id: "principal", label: "按本金比例", category: "规模公平", compactLabel: "本金", emptyMessage: "当前开启的分配人没有已登记本金" },
-  { id: "historicalProfit", label: "按已获利润", category: "收益激励", compactLabel: "已获利润", emptyMessage: "当前开启的分配人没有已获得的历史利润" },
-  { id: "holdingLoss", label: "按持仓浮亏", category: "风险补偿", compactLabel: "持仓浮亏", emptyMessage: "当前开启的分配人没有持仓浮亏" },
-  { id: "realizedAnnualized", label: "按实现年化", category: "收益平衡", compactLabel: "已实现年化", emptyMessage: "当前开启的分配人没有可计算的已实现年化补差" },
-  { id: "externalShareContribution", label: "按对外共享贡献", category: "协作回馈", compactLabel: "贡献权重", emptyMessage: "当前开启的分配人还没有对外共享贡献记录" },
-  { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人" },
-  { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人" },
-  { id: "withdrawalProgress", label: "按提现进度", category: "回款平衡", compactLabel: "提现占比", emptyMessage: "当前开启的分配人没有可计算的提现进度" },
+  { id: "principal", label: "按本金比例", category: "规模公平", compactLabel: "本金", emptyMessage: "当前开启的分配人没有已登记本金", guideDescription: "按实际累计投入的比例分配，投入规模越大，本维度的分配份额越高。", guideFormula: "累计投入占比 → 本维度份额", accent: "#2563eb" },
+  { id: "historicalProfit", label: "按已获利润", category: "收益激励", compactLabel: "已获利润", emptyMessage: "当前开启的分配人没有已获得的历史利润", guideDescription: "以已实现订单收益与既得共享收益为依据，回馈持续创造实际收益的参与者。", guideFormula: "已获历史利润占比 → 本维度份额", accent: "#f59e0b" },
+  { id: "holdingLoss", label: "按持仓浮亏", category: "风险补偿", compactLabel: "持仓浮亏", emptyMessage: "当前开启的分配人没有持仓浮亏", guideDescription: "仅参考当前仍持有仓位的浮亏，浮亏越多，本维度补偿权重越高。", guideFormula: "未实现浮亏占比 → 本维度份额", accent: "#059669" },
+  { id: "realizedAnnualized", label: "按实现年化", category: "收益平衡", compactLabel: "已实现年化", emptyMessage: "当前开启的分配人没有可计算的已实现年化补差", guideDescription: "以所有有效参与人的已实现年化均值为目标，优先补足低于均值者，让长期回报趋向平衡。", guideFormula: "距平均年化的补足额 → 本维度份额", accent: "#7c3aed" },
+  { id: "externalShareContribution", label: "按对外共享贡献", category: "协作回馈", compactLabel: "贡献权重", emptyMessage: "当前开启的分配人还没有对外共享贡献记录", guideDescription: "同时参考对外共享金额和贡献订单次数，回馈已为其他成员创造共享收益的人。", guideFormula: "共享金额与订单次数综合 → 本维度份额", accent: "#0f766e" },
+  { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人", guideDescription: "历史收到共享金额越少，补差权重越高，避免收益机会长期集中。", guideFormula: "最高已收金额 − 个人已收金额 → 权重", accent: "#e11d48" },
+  { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人", guideDescription: "历史收到共享的次数越少，机会补差越多，保障每个人都持续有参与感。", guideFormula: "最高已收次数 − 个人已收次数 → 权重", accent: "#db2777" },
+  { id: "withdrawalProgress", label: "按提现进度", category: "回款平衡", compactLabel: "提现占比", emptyMessage: "当前开启的分配人没有可计算的提现进度", guideDescription: "提现占投入比例越低，本维度速度越高；始终保留最低档，不会把有效成员排空。", guideFormula: "权重 = 100 − 提现进度（最低 1）", accent: "#0284c7" },
+  { id: "openingOrderCount", label: "按挂单数量", category: "市场贡献", compactLabel: "挂单数量", emptyMessage: "当前开启的分配人没有可统计的开仓或挂单记录", guideDescription: "统计现货、合约、期权、网格的全部开仓记录；已成交和当前挂单均计入，多空直接相加不抵消。倾斜度100%时，零笔用户不获得本维度份额。", guideFormula: "均分保障 + 挂单数量比例 → 本维度份额", accent: "#4f46e5" },
 ];
+
+function getSharedIncomeAllocationClientVisual(metric: SharedIncomeAllocationMetric): { metricLabel: string; directionLabel: string; priorityLabel: string } {
+  switch (metric) {
+    case "historicalProfit": return { metricLabel: "已获利润", directionLabel: "越多", priorityLabel: "越优先" };
+    case "holdingLoss": return { metricLabel: "持仓浮亏", directionLabel: "越多", priorityLabel: "越优先" };
+    case "realizedAnnualized": return { metricLabel: "实现年化", directionLabel: "越少", priorityLabel: "越优先" };
+    case "externalShareContribution": return { metricLabel: "对外共享", directionLabel: "越多", priorityLabel: "越优先" };
+    case "receivedSharedAmountGap": return { metricLabel: "已收共享", directionLabel: "越少", priorityLabel: "越优先" };
+    case "receivedSharedCountGap": return { metricLabel: "已收次数", directionLabel: "越少", priorityLabel: "越优先" };
+    case "withdrawalProgress": return { metricLabel: "提现进度", directionLabel: "越少", priorityLabel: "越优先" };
+    case "openingOrderCount": return { metricLabel: "挂单数量", directionLabel: "越多", priorityLabel: "越优先" };
+    default: return { metricLabel: "参与条件", directionLabel: "符合", priorityLabel: "越优先" };
+  }
+}
 type T0ReopenReminder = {
   id: string;
   sourceOpeningEntryId: string;
@@ -407,6 +454,91 @@ function buildT0SettlementAccountSourceBreakdown(
     kinds,
     days,
   };
+}
+
+/** 共享收益的可分享说明页。维度清单直接复用AI实际算法配置，后续新增方案会自动进入长图。 */
+function SharedIncomeAllocationGuidePage({
+  exportRef,
+  currentUser,
+  principalRule,
+  canManage,
+  onConfigurePrincipal,
+  onClose,
+}: {
+  exportRef: RefObject<HTMLElement | null>;
+  currentUser?: any;
+  principalRule: SharedIncomePrincipalRule;
+  canManage: boolean;
+  onConfigurePrincipal: () => void;
+  onClose: () => void;
+}) {
+  const principalEqualFloor = Math.max(0, 100 - principalRule.influencePercentage);
+  return <div className="fixed inset-0 z-[150] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="AI智能共享收益分配说明">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm">
+      <button type="button" onClick={onClose} aria-label="返回智能分配" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"><ArrowLeft className="h-5 w-5" /></button>
+      <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-900">AI 智能共享收益分配</div><div className="truncate text-[10px] text-slate-400">一图看懂共享收益如何兼顾公平</div></div>
+      <OrderCardImageDownload targetRef={exportRef} currentUser={currentUser} orderNo="AI共享收益分配" filenamePrefix="52号账本AI共享收益分配方案" previewTitle="AI智能共享收益分配图片预览" previewHint="包含全部分配维度与当前挂单数量规则" color="#4338CA" outerPadding={0} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" />
+    </header>
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <main ref={exportRef} className="mx-auto w-full max-w-md space-y-3 rounded-2xl bg-slate-50 p-3 text-slate-800">
+        <section className="overflow-hidden rounded-xl bg-slate-900 px-4 py-4 text-white shadow-sm">
+          <div><div className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.12em] text-indigo-200"><BookOpen className="h-3.5 w-3.5" />共享收益 · 多维公平</div><h2 className="mt-1 text-[21px] font-bold tracking-tight">AI 智能共享收益分配</h2><p className="mt-1 text-[11px] leading-5 text-slate-300">每笔共享收益都可组合多个公平维度；每个已选维度均分本次预算，再按各自规则计算。</p></div>
+          <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 overflow-hidden rounded-lg border border-white/10 bg-white/[0.06] text-center"><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">①</div><div className="mt-0.5 text-[10px] font-semibold">确定预算</div><div className="mt-0.5 text-[8px] text-slate-300">仅正向净收益</div></div><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">②</div><div className="mt-0.5 text-[10px] font-semibold">选择公平维度</div><div className="mt-0.5 text-[8px] text-slate-300">可复选组合</div></div><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">③</div><div className="mt-0.5 text-[10px] font-semibold">分配到人</div><div className="mt-0.5 text-[8px] text-slate-300">精确到分</div></div></div>
+        </section>
+
+        <section className="pt-1"><div className="flex items-end justify-between gap-3 px-1"><div><div className="text-[13px] font-bold text-slate-900">全部公平维度</div><p className="mt-0.5 text-[9px] text-slate-400">每一项都用一句话和一个小图讲清楚</p></div><span className="text-[10px] font-semibold text-slate-400">{SHARED_INCOME_ALLOCATION_DIMENSIONS.length} 项</span></div><div className="mt-2.5 space-y-2.5">{SHARED_INCOME_ALLOCATION_DIMENSIONS.map((dimension, index) => {
+          const isInverseGuide = dimension.id === "realizedAnnualized" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress";
+          const barHeights = isInverseGuide ? [76, 48, 25] : [25, 48, 76];
+          const guideVisual = getSharedIncomeAllocationClientVisual(dimension.id);
+          const DirectionIcon = isInverseGuide ? ArrowDownLeft : ArrowUpRight;
+          if (dimension.id === "principal") return <article key={dimension.id} className="rounded-xl border border-blue-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-[11px] font-bold text-blue-600">{String(index + 1).padStart(2, "0")}</span><div><div className="text-[9px] font-semibold text-blue-700">规模公平</div><h3 className="text-[13px] font-bold text-slate-900">按本金比例共享收益</h3></div></div>{canManage && <button type="button" data-html2canvas-ignore="true" onClick={onConfigurePrincipal} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 text-[10px] font-bold text-blue-700 active:scale-[0.98]"><SlidersHorizontal className="h-3.5 w-3.5" />设置</button>}</div>
+            <div className="mt-2.5 divide-y divide-slate-100 border-y border-slate-100"><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white">1</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-blue-700">按本金：</b>当前 <b>{principalRule.influencePercentage}%</b> 的共享收益，按每人的本金占比分配。</p></div><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-black text-amber-950">2</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-amber-800">均分保障：</b>当前 <b>{principalEqualFloor}%</b> 的共享收益，按有效参与人数均分。</p></div><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[9px] font-black text-white">3</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-slate-900">AI 输出：</b>自动生成本次共享收益建议，确认前仍可人工调整。</p></div></div>
+            <div className="mt-2 text-center font-mono text-[8px] leading-4 text-slate-400">共享收益建议 = 子池 × [{principalEqualFloor}% ÷ 有效人数 + {principalRule.influencePercentage}% × 本金权重]</div>
+          </article>;
+          return <article key={dimension.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.035)]" style={{ borderTopWidth: 3, borderTopColor: `${dimension.accent}80` }}><div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-[11px] font-bold" style={{ color: dimension.accent }}>{String(index + 1).padStart(2, "0")}</span><div className="min-w-0"><div className="text-[9px] font-semibold" style={{ color: dimension.accent }}>{dimension.category}</div><h3 className="truncate text-[12px] font-bold text-slate-800">{dimension.label}</h3></div></div><span className="shrink-0 text-[8px] font-semibold" style={{ color: dimension.accent }}>共享收益</span></div><div className="mt-2 grid grid-cols-[66px_minmax(0,1fr)_66px] items-center gap-2"><div className="text-center"><div className="flex h-9 items-end justify-center gap-1">{barHeights.map((height, barIndex) => <span key={barIndex} className="w-3 rounded-t-sm" style={{ height: `${height}%`, backgroundColor: dimension.accent, opacity: 0.46 + barIndex * 0.24 }} />)}</div><div className="mt-0.5 text-[7px] font-semibold text-slate-400">{isInverseGuide ? "多 ← 少" : "少 → 多"}</div></div><div className="min-w-0 text-center"><div className="text-[8px] text-slate-400">看 {guideVisual.metricLabel}</div><div className="mt-0.5 flex items-center justify-center gap-1" style={{ color: dimension.accent }}><DirectionIcon className="h-4 w-4" /><span className="text-[15px] font-black">{guideVisual.directionLabel}</span></div></div><div className="text-center"><div className="mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-full text-[8px] font-bold leading-3 text-white" style={{ backgroundColor: dimension.accent }}><span>共享</span><span>收益</span></div><div className="mt-0.5 text-[8px] font-bold" style={{ color: dimension.accent }}>{guideVisual.priorityLabel}</div></div></div></article>;
+        })}</div></section>
+
+        <section className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3"><div className="text-[11px] font-bold text-amber-900">共同规则</div><div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] leading-4 text-amber-800"><div>• 仅已登记本金且已开启资格的人参与</div><div>• 多选维度时各维度均分预算</div><div>• 金额按分计算，余数按规则补足</div><div>• AI结果可在确认前手动微调</div></div></section>
+        <p className="px-1 text-center text-[9px] leading-4 text-slate-400">本说明图用于解释分配规则；实际到账金额以平仓确认时的收益、资格和订单快照为准。</p>
+      </main>
+    </div>
+  </div>;
+}
+
+
+function SharedIncomePrincipalRuleSettingsPage({
+  rule,
+  onChange,
+  isSaving,
+  onSaveAndExit,
+  onClose,
+}: {
+  rule: SharedIncomePrincipalRule;
+  onChange: (next: SharedIncomePrincipalRule) => void;
+  isSaving: boolean;
+  onSaveAndExit: () => void;
+  onClose: () => void;
+}) {
+  const example = getSharedIncomePrincipalGuideExample(rule);
+  const equalFloor = Math.max(0, 100 - rule.influencePercentage);
+  return <div className="fixed inset-0 z-[160] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="按本金比例设置">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm">
+      <button type="button" onClick={onClose} aria-label="返回方案说明" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"><ArrowLeft className="h-5 w-5" /></button>
+      <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-900">按本金比例 · 设置</div><div className="truncate text-[10px] text-slate-400">保存后影响后续AI建议；历史到账不变</div></div>
+      <button type="button" disabled={isSaving} onClick={() => onChange(DEFAULT_SHARED_INCOME_PRINCIPAL_RULE)} className="text-[11px] font-semibold text-blue-700 active:opacity-60 disabled:opacity-40">恢复默认</button>
+    </header>
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <main className="mx-auto w-full max-w-md space-y-3">
+        <section className="rounded-xl border border-blue-100 bg-blue-50/50 px-2.5 py-2"><div className="flex items-baseline justify-between gap-2"><div className="text-[12px] font-bold text-blue-950">即时试算 · 子池 100 U</div><span className="text-[8px] font-medium text-blue-800/70">蓝条 = 本次分配占比</span></div><p className="mt-0.5 text-[8px] leading-3 text-blue-800/80">九位成员从极小到大本金依次排列；拖动下方滑杆即可纵向比较每一位的变化。</p><div className="mt-1.5 overflow-hidden rounded-md border border-blue-100 bg-white tabular-nums"><div className="grid h-5 grid-cols-[66px_minmax(0,1fr)_72px] items-center gap-1.5 border-b border-blue-100 bg-blue-50/60 px-2 text-[7px] font-semibold text-blue-800"><span>本金</span><span className="text-center">本次分配</span><span className="text-right">金额／占比</span></div>{example.map((item, index) => <div key={item.principal} className={`grid h-7 grid-cols-[66px_minmax(0,1fr)_72px] items-center gap-1.5 px-2 ${index > 0 ? "border-t border-blue-50" : ""}`}><div className="min-w-0 whitespace-nowrap text-[8px] leading-3 text-slate-500"><span className="font-semibold text-slate-700">{(item.principalShare * 100).toFixed(1)}%</span><span className="ml-1">{item.principal.toLocaleString()}U</span></div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max(1, item.allocation)}%` }} /></div><div className="whitespace-nowrap text-right text-[8px] leading-3"><span className="font-bold text-rose-600">{item.allocation.toFixed(2)}U</span><span className="ml-1 text-[7px] text-blue-700">{item.allocation.toFixed(2)}%</span></div></div>)}</div></section>
+        <section className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="text-[13px] font-bold text-slate-900">本金曲线</div><p className="mt-1 text-[10px] leading-4 text-slate-500">本金越多仍分得越多；曲线越平滑，大本金的边际优势越小。</p><div className="mt-2 grid grid-cols-3 gap-1.5">{(["linear", "balanced", "strong"] as const).map((curve) => <button key={curve} type="button" onClick={() => onChange({ ...rule, curve })} className={`min-h-14 rounded-lg border px-1.5 text-left ${rule.curve === curve ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600"}`}><span className="block text-[10px] font-bold">{getSharedIncomePrincipalCurveLabel(curve)}</span><span className="mt-1 block text-[8px] leading-3 opacity-75">{curve === "linear" ? "本金翻倍，份额同样翻倍" : curve === "balanced" ? "推荐：平方根递减" : "更优先照顾均衡"}</span></button>)}</div></section>
+        <section className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="flex items-baseline justify-between gap-3"><div className="text-[13px] font-bold text-slate-900">本金影响度</div><div className="text-sm font-bold tabular-nums text-blue-700">{rule.influencePercentage}%</div></div><p className="mt-1 text-[10px] leading-4 text-slate-500">本维度中 <b className="text-slate-700">{equalFloor}% 全员均分</b>，<b className="text-slate-700">{rule.influencePercentage}% 按本金曲线</b> 分配。</p><input type="range" min="0" max="100" step="1" value={rule.influencePercentage} onChange={(event) => onChange({ ...rule, influencePercentage: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} className="mt-3 h-3 w-full cursor-pointer accent-blue-600" aria-label="本金影响度" /><div className="mt-1 flex justify-between text-[9px] font-medium text-slate-400"><span>0% 全员均分</span><span>100% 只看本金</span></div></section>
+
+        <section className="border-l-2 border-amber-400 px-3 py-1"><div className="text-[10px] font-bold text-amber-900">固定账本口径</div><p className="mt-1 text-[9px] leading-4 text-amber-800">投入金额、资格与历史流水只能由账本事实生成；这里不能按人加减分或改写任何历史到账。</p></section>
+      </main>
+    </div>
+    <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] shadow-[0_-2px_10px_rgba(15,23,42,0.06)]"><div className="mx-auto flex w-full max-w-md gap-2"><button type="button" disabled={isSaving} onClick={onClose} className="h-10 shrink-0 rounded-lg border border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">取消</button><button type="button" disabled={isSaving} onClick={onSaveAndExit} className="h-10 min-w-0 flex-1 rounded-lg bg-blue-700 px-4 text-[12px] font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isSaving ? "正在保存…" : "保存并退出"}</button></div></footer>
+  </div>;
 }
 
 function T0SettlementAccountSourceTopRows({
@@ -1139,6 +1271,8 @@ type SharedIncomeCandidate = {
   receivedSharedIncomeCount: number;
   contributedSharedIncome: number;
   contributedSharedIncomeOrderCount: number;
+  /** 全部T+0开仓记录：现货、合约、期权、网格均包含，已成交与当前挂单均计数，多空不抵消。 */
+  openingOrderCount: number;
   realizedCashFlows: T0XirrCashFlow[];
   realizedTerminalValue: number;
   heldDays: number;
@@ -3618,6 +3752,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isTotalProfitPageRoute = location === `/ledger/${ledgerId}/t0-journal/total-profit`;
   /** 仅供界面验收的直达页：使用真实读取数据模拟平仓，但永不允许写入账本。 */
   const isCloseDistributionPreviewLink = searchParams.get("preview") === "close-distribution";
+  /** AI分配规则的只读说明页：可独立打开、下载长图，不需要先进入某一笔平仓流程。 */
+  const isSharedIncomeAllocationGuideRoute = searchParams.get("aiAllocationGuide") === "1";
+  const closeSharedIncomeAllocationGuideRoute = `/ledger/${ledgerId}/t0-journal${previewUserIdFromUrl ? `?previewUserId=${previewUserIdFromUrl}` : ""}`;
   const payoutEntryDirection = searchParams.get("payout") === "deposit"
     ? "deposit"
     : searchParams.get("payout") === "withdrawal"
@@ -3704,6 +3841,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("99");
   /** AI分配可同时选择多个维度；空数组代表保留当前草案做手动调整。 */
   const [sharedIncomeAllocationMetrics, setSharedIncomeAllocationMetrics] = useState<SharedIncomeAllocationMetric[]>([]);
+  /** 0%为此维度全员均分，100%为完全按累计挂单数量比例分配；默认70%保留30%均分保障。 */
+  const [sharedIncomeOpeningOrderCountIntensity, setSharedIncomeOpeningOrderCountIntensity] = useState(70);
+  /** 当前仅用于热预览试算；后续发布版会以版本化审计规则替代此本地草案。 */
+  const [sharedIncomePrincipalRule, setSharedIncomePrincipalRule] = useState<SharedIncomePrincipalRule>(DEFAULT_SHARED_INCOME_PRINCIPAL_RULE);
+  const [showSharedIncomeAllocationGuide, setShowSharedIncomeAllocationGuide] = useState(false);
+  const [showSharedIncomePrincipalRuleSettings, setShowSharedIncomePrincipalRuleSettings] = useState(false);
   const [sharedIncomeAllocationPlanError, setSharedIncomeAllocationPlanError] = useState<string | null>(null);
   /** 切换资格后先本地稳定呈现，再由服务端权威读模型回填；AI方案会随开启用户即时重分配。 */
   const [sharedIncomeEligibilityOverrides, setSharedIncomeEligibilityOverrides] = useState<Record<string, boolean>>({});
@@ -3799,6 +3942,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const settlementPeriodRefreshRef = useRef<string | null>(null);
   /** “盈利”历史记录截图入口：仅导出当前历史记录区块。 */
   const profitableHistoryExportRef = useRef<HTMLElement | null>(null);
+  const sharedIncomeAllocationGuideExportRef = useRef<HTMLElement | null>(null);
   const payoutSharedContentRef = useRef<HTMLDivElement | null>(null);
   const totalProfitAttributionExportRef = useRef<HTMLDivElement | null>(null);
   /** 结算图片仅包含周期、本周三项收益和七日明细，不截取账本顶部或页面操作栏。 */
@@ -3928,6 +4072,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       refetchOnWindowFocus: true,
     },
   );
+  const t0SharedIncomePrincipalRuleQuery = trpc.ledger.t0GetSharedIncomePrincipalRule.useQuery(
+    { ledgerId: 52 },
+    {
+      enabled: canAccess,
+      staleTime: 60_000,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const savedSharedIncomePrincipalRule = useMemo<SharedIncomePrincipalRule>(() => {
+    const data = t0SharedIncomePrincipalRuleQuery.data as any;
+    const rawInfluencePercentage = Number(data?.influencePercentage);
+    return {
+      curve: data?.curve === "balanced" || data?.curve === "strong" ? data.curve : "linear",
+      influencePercentage: Math.min(100, Math.max(0, Math.trunc(Number.isFinite(rawInfluencePercentage) ? rawInfluencePercentage : 100))),
+    };
+  }, [t0SharedIncomePrincipalRuleQuery.data]);
+  useEffect(() => {
+    // 设置页内允许实时试算草案；退出设置后才以服务端已保存版本重新接管。
+    if (!showSharedIncomePrincipalRuleSettings) setSharedIncomePrincipalRule(savedSharedIncomePrincipalRule);
+  }, [savedSharedIncomePrincipalRule, showSharedIncomePrincipalRuleSettings]);
   // tRPC切换查询键时仍可能在一个渲染周期内保留上一范围的缓存回包。
   // 用户预览绝不能因为展示名称已更新，就把管理员或上一位成员的订单、收益和资金数据
   // 填进当前用户页面；所有下游投影必须只消费与当前目标严格匹配的回包。
@@ -4664,6 +4828,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setSharedIncomeAllocationBudgetMode("percentage");
       setSharedIncomeAllocationBudgetValue("99");
       setSharedIncomeAllocationMetrics([]);
+      setShowSharedIncomeAllocationGuide(false);
       setSharedIncomeAllocationPlanError(null);
       setSharedIncomeEligibilityOverrides({});
       setCloseSaveError(null);
@@ -5396,6 +5561,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ];
     const allocations = buildOpeningClosingAllocations(allTrades);
     const managerUserId = Number((me as any)?.id || 0);
+    // 市场参与贡献采用独立、可追溯的订单口径：所有开仓均算一笔，现货/合约/期权/网格、
+    // 已成交/当前挂单全部包含；多空绝不抵消。回退或删除记录已不在权威trades集合中，天然排除。
+    const openingOrderCountByUser = new Map<string, number>();
+    for (const trade of trades) {
+      if (!ACTIONS[trade.action].opening || !trade.relatedUserId) continue;
+      const userId = String(trade.relatedUserId);
+      openingOrderCountByUser.set(userId, (openingOrderCountByUser.get(userId) || 0) + 1);
+    }
     let sourceNetPnl = 0;
     for (const opening of allTrades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType)) continue;
@@ -5570,10 +5743,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         // 资格开关不参与本次重型快照计算；在下方依订单使用者轻量覆盖。
         sharedIncomeEnabled: true,
 	        receivedSharedIncome,
-	        receivedSharedIncomeCount: receivedSharedIncomeTransfers.length,
-	        contributedSharedIncome: contribution.amount,
-	        contributedSharedIncomeOrderCount: contribution.orderCount,
-	        realizedCashFlows,
+        receivedSharedIncomeCount: receivedSharedIncomeTransfers.length,
+        contributedSharedIncome: contribution.amount,
+        contributedSharedIncomeOrderCount: contribution.orderCount,
+        openingOrderCount: openingOrderCountByUser.get(candidate.userId) || 0,
+        realizedCashFlows,
         realizedTerminalValue: currentNetValue,
         heldDays,
         settlementAgeDays,
@@ -5631,8 +5805,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	  const sharedIncomeBudgetSliderPercentage = Math.min(99, Math.max(1, Math.round(
 	    Number(sharedIncomeAllocationBudgetValue) || 1,
 	  )));
-	  const sharedIncomeSelectedDimensions = useMemo(() => SHARED_INCOME_ALLOCATION_DIMENSIONS
-	    .filter((dimension) => sharedIncomeAllocationMetrics.includes(dimension.id)), [sharedIncomeAllocationMetrics]);
+	  const sharedIncomeAvailableAllocationDimensions = SHARED_INCOME_ALLOCATION_DIMENSIONS;
+  const sharedIncomeSelectedDimensions = useMemo(() => sharedIncomeAvailableAllocationDimensions
+    .filter((dimension) => sharedIncomeAllocationMetrics.includes(dimension.id)), [sharedIncomeAllocationMetrics]);
 	  const sharedIncomeDimensionWeightPercentage = sharedIncomeSelectedDimensions.length > 0
 	    ? 100 / sharedIncomeSelectedDimensions.length
 	    : 0;
@@ -5647,27 +5822,30 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	    .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
 	    .map((candidate) => ({ recipientUserId: Number(candidate.userId), amount: (Number(sharedIncomeDrafts[candidate.userId]) || 0).toFixed(2) }))
 	    .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0), [sharedIncomeClosePreview.candidates, sharedIncomeDrafts]);
-	  const buildSharedIncomeAllocationPlan = useCallback((
-	    metrics: SharedIncomeAllocationMetric[],
-	    candidates: SharedIncomeCandidate[],
-	    allocationLimit: number,
-	  ): { drafts: Record<string, string>; error: string | null } => {
+  const buildSharedIncomeAllocationPlan = useCallback((
+    metrics: SharedIncomeAllocationMetric[],
+    candidates: SharedIncomeCandidate[],
+    allocationLimit: number,
+    openingOrderCountIntensity: number,
+  principalRule: SharedIncomePrincipalRule,
+  ): { drafts: Record<string, string>; error: string | null } => {
 	    const allocationLimitCents = Math.round(allocationLimit * 100);
 	    const selectedDimensions = SHARED_INCOME_ALLOCATION_DIMENSIONS.filter((dimension) => metrics.includes(dimension.id));
 	    if (allocationLimitCents <= 0 || selectedDimensions.length === 0) return { drafts: {}, error: null };
 	    const eligibleCandidates = candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled);
 	    // 协作回馈与两类共享补差都不能把任何有效成员排空：子池的20%均分保底，
 	    // 其余80%才按对应指标倾斜。指标完全相同则自然退化为全员均分。
-	    const getSmoothedWeights = (scoredCandidates: Array<{ candidate: SharedIncomeCandidate; score: number }>) => {
-	      if (scoredCandidates.length === 0) return [];
-	      const normalizedScores = scoredCandidates.map(({ candidate, score }) => ({ candidate, score: Math.max(0, Number.isFinite(score) ? score : 0) }));
-	      const totalScore = normalizedScores.reduce((total, item) => total + item.score, 0);
-	      if (totalScore <= 0.000001) return normalizedScores.map(({ candidate }) => ({ candidate, weight: 1 }));
-	      const equalFloorWeight = 0.2 / normalizedScores.length;
-	      return normalizedScores.map(({ candidate, score }) => ({
-	        candidate,
-	        weight: equalFloorWeight + 0.8 * score / totalScore,
-	      }));
+    const getSmoothedWeights = (scoredCandidates: Array<{ candidate: SharedIncomeCandidate; score: number }>, scoreShare = 0.8) => {
+      if (scoredCandidates.length === 0) return [];
+      const normalizedScores = scoredCandidates.map(({ candidate, score }) => ({ candidate, score: Math.max(0, Number.isFinite(score) ? score : 0) }));
+      const totalScore = normalizedScores.reduce((total, item) => total + item.score, 0);
+      if (totalScore <= 0.000001) return normalizedScores.map(({ candidate }) => ({ candidate, weight: 1 }));
+      const normalizedScoreShare = Math.min(1, Math.max(0, Number(scoreShare) || 0));
+      const equalFloorWeight = (1 - normalizedScoreShare) / normalizedScores.length;
+      return normalizedScores.map(({ candidate, score }) => ({
+        candidate,
+        weight: equalFloorWeight + normalizedScoreShare * score / totalScore,
+      }));
 	    };
 	    const getReceivedSharedIncomeGapWeights = (valueForCandidate: (candidate: SharedIncomeCandidate) => number) => {
 	      const values = eligibleCandidates.map((candidate) => ({ candidate, value: Math.max(0, valueForCandidate(candidate)) }));
@@ -5687,11 +5865,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	          + (totalContributedOrderCount > 0 ? candidate.contributedSharedIncomeOrderCount / totalContributedOrderCount / activeFactorCount : 0),
 	      })));
 	    };
-	    const getWeightedCandidates = (metric: SharedIncomeAllocationMetric) => {
-	      if (metric === "externalShareContribution") return getExternalShareContributionWeights();
-	      if (metric === "receivedSharedAmountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncome);
-	      if (metric === "receivedSharedCountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncomeCount);
-	      if (metric === "withdrawalProgress") {
+    const getWeightedCandidates = (metric: SharedIncomeAllocationMetric) => {
+      if (metric === "externalShareContribution") return getExternalShareContributionWeights();
+      if (metric === "receivedSharedAmountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncome);
+      if (metric === "receivedSharedCountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncomeCount);
+      if (metric === "openingOrderCount") {
+        const totalOpeningOrderCount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.openingOrderCount), 0);
+        const normalizedOpeningOrderCountIntensity = Math.min(100, Math.max(0, Number(openingOrderCountIntensity) || 0)) / 100;
+        // 0% 明确表示本维度全员均分，即使暂时无人有开仓记录也可成立；只要存在按数量倾斜而又没有任何订单，才提示该维度无数据。
+        if (totalOpeningOrderCount <= 0 && normalizedOpeningOrderCountIntensity > 0.000001) return [];
+        // 倾斜度0%时本维度退化为全员均分；100%时完全依挂单数量比例。默认70%意味着30%均分保障。
+        return getSmoothedWeights(
+          eligibleCandidates.map((candidate) => ({ candidate, score: candidate.openingOrderCount })),
+          normalizedOpeningOrderCountIntensity,
+        );
+      }      if (metric === "principal") {
+        const influence = Math.min(100, Math.max(0, Number(principalRule.influencePercentage) || 0)) / 100;
+        const exponent = getSharedIncomePrincipalCurveExponent(principalRule.curve);
+        return getSmoothedWeights(eligibleCandidates.map((candidate) => ({
+          candidate,
+          score: Math.pow(Math.max(0, candidate.cumulativeDepositAmount), exponent),
+        })), influence);
+      }      if (metric === "withdrawalProgress") {
 	        // 回款进度严格按用户设定的反向速度：提现占投入 1% 时权重 99，99% 时权重 1。
 	        // 0% 提现维持最高 99 档；超过100%仍保留最低 1 档，不会把任何有效分配人排空。
 	        return eligibleCandidates.map((candidate) => {
@@ -5718,9 +5913,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      }
 	      return eligibleCandidates.map((candidate) => ({
 	        candidate,
-	        weight: metric === "principal"
-	          ? candidate.cumulativeDepositAmount
-	          : metric === "historicalProfit"
+	        weight: metric === "historicalProfit"
 	            ? candidate.historicalProfit
 	            : Math.max(0, -candidate.holdingNetPnl),
 	      })).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
@@ -5738,7 +5931,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      const receivesRemainderCent = dimensionRemainder > 0;
 	      const dimensionCents = baseDimensionCents + (receivesRemainderCent ? 1 : 0);
 	      if (receivesRemainderCent) dimensionRemainder -= 1;
-	      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress")
+      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress")
 	        && dimensionCents >= weightedCandidates.length;
 	      const equalMinimumCents = guaranteesMinimumCents ? 1 : 0;
 	      const distributableCents = dimensionCents - equalMinimumCents * weightedCandidates.length;
@@ -5764,15 +5957,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	  }, []);
 	  useEffect(() => {
 	    if (sharedIncomeAllocationMetrics.length === 0 || sharedIncomeBudget.error) return;
-	    const plan = buildSharedIncomeAllocationPlan(
-	      sharedIncomeAllocationMetrics,
-	      sharedIncomeClosePreview.candidates,
-	      sharedIncomeBudget.allocationLimit,
-	    );
+    const plan = buildSharedIncomeAllocationPlan(
+      sharedIncomeAllocationMetrics,
+      sharedIncomeClosePreview.candidates,
+      sharedIncomeBudget.allocationLimit,
+      sharedIncomeOpeningOrderCountIntensity,
+      sharedIncomePrincipalRule,
+    );
 	    setSharedIncomeTargetSelections((current) => Object.keys(current).length === 0 ? current : {});
 	    setSharedIncomeDrafts(plan.drafts);
 	    setSharedIncomeAllocationPlanError(plan.error);
-	  }, [buildSharedIncomeAllocationPlan, sharedIncomeAllocationMetrics, sharedIncomeBudget.allocationLimit, sharedIncomeBudget.error, sharedIncomeClosePreview.candidates]);
+  }, [buildSharedIncomeAllocationPlan, sharedIncomeAllocationMetrics, sharedIncomeBudget.allocationLimit, sharedIncomeBudget.error, sharedIncomeClosePreview.candidates, sharedIncomeOpeningOrderCountIntensity, sharedIncomePrincipalRule]);
 	  const toggleSharedIncomeAllocationMetric = (metric: SharedIncomeAllocationMetric) => {
 	    setSharedIncomeTargetSelections({});
 	    setSharedIncomeAllocationPlanError(null);
@@ -5844,7 +6039,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const isReceivedSharedAmountGapMetric = input.compactAllocationMetric === "receivedSharedAmountGap";
       const isReceivedSharedCountGapMetric = input.compactAllocationMetric === "receivedSharedCountGap";
       const isWithdrawalProgressMetric = input.compactAllocationMetric === "withdrawalProgress";
-      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : isWithdrawalProgressMetric ? "提现占比" : "组合占比";
+      const isOpeningOrderCountMetric = input.compactAllocationMetric === "openingOrderCount";
+      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : isOpeningOrderCountMetric ? "挂单数量" : isWithdrawalProgressMetric ? "提现占比" : "组合占比";
       const enabledCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => !input.showEligibilityControls || candidate.sharedIncomeEnabled);
       const eligibleMetricCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal);
       const totalContributedAmount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
@@ -5868,12 +6064,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   ? candidate.receivedSharedIncome
                   : isReceivedSharedCountGapMetric
                     ? candidate.receivedSharedIncomeCount
+                    : isOpeningOrderCountMetric
+                      ? candidate.openingOrderCount
                     : isWithdrawalProgressMetric
                       ? Math.max(0, Number(candidate.withdrawalProgressPercentage) || 0)
                       : allocationLimit > 0 ? Math.max(0, Number(input.drafts[candidate.userId]) || 0) / allocationLimit * 100 : 0;
       const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isExternalShareContributionMetric || isWithdrawalProgressMetric
         ? "%"
-        : isReceivedSharedCountGapMetric ? " 次" : " u";
+        : isReceivedSharedCountGapMetric || isOpeningOrderCountMetric ? " 笔" : " u";
       const getCandidateDisplayName = (candidate: SharedIncomeCandidate) => [candidate.name, candidate.username]
         .find((value) => Boolean(value && /[\u3400-\u9fff]/.test(value)))
         || candidate.name
@@ -5889,10 +6087,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const withdrawalProgressAverage = withdrawalProgressCandidates.length > 0
         ? withdrawalProgressCandidates.reduce((total, candidate) => total + Number(candidate.withdrawalProgressPercentage), 0) / withdrawalProgressCandidates.length
         : null;
+      const openingOrderCountTotal = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.openingOrderCount), 0);
       const allocatedMetricTotal = isRealizedAnnualizedMetric
         ? annualizedAverage === null ? 0 : annualizedAverage * 100
         : isWithdrawalProgressMetric
           ? withdrawalProgressAverage === null ? 0 : withdrawalProgressAverage
+          : isOpeningOrderCountMetric
+            ? openingOrderCountTotal
         : allocatedCandidates.reduce((total, candidate) => total + getCompactMetricValue(candidate), 0);
       const getCompactMetricValueClassName = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
@@ -5900,31 +6101,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           ? "font-semibold text-blue-600"
         : isReceivedSharedAmountGapMetric
           ? "font-semibold text-rose-600"
+        : isOpeningOrderCountMetric
+          ? "font-semibold text-indigo-700"
         : isWithdrawalProgressMetric
           ? "font-semibold text-sky-700"
-          : isRealizedAnnualizedMetric
+        : isRealizedAnnualizedMetric
           ? Number(candidate.annualizedReference) < 0 ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"
           : "font-semibold text-slate-700";
-      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : compactMetricLabel;
+      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : isOpeningOrderCountMetric ? "累计挂单" : compactMetricLabel;
       const compactSummaryValueClassName = input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
         : isExternalShareContributionMetric
           ? "font-semibold text-blue-600"
         : isReceivedSharedAmountGapMetric
           ? "font-semibold text-rose-600"
+        : isOpeningOrderCountMetric
+          ? "font-semibold text-indigo-700"
         : isWithdrawalProgressMetric
           ? "font-semibold text-sky-700"
-          : isRealizedAnnualizedMetric && annualizedAverage !== null && annualizedAverage < 0
+        : isRealizedAnnualizedMetric && annualizedAverage !== null && annualizedAverage < 0
           ? "font-semibold text-emerald-600"
           : isRealizedAnnualizedMetric ? "font-semibold text-rose-600" : "font-semibold text-slate-700";
       const formatCompactMetricValue = (candidate: SharedIncomeCandidate) => isRealizedAnnualizedMetric
         ? formatT0AnnualizedReturn(candidate.annualizedReference)
-        : isReceivedSharedCountGapMetric
+        : isReceivedSharedCountGapMetric || isOpeningOrderCountMetric
           ? `${Math.round(getCompactMetricValue(candidate))}${compactMetricUnit}`
         : `${formatPrice(getCompactMetricValue(candidate))}${compactMetricUnit}`;
       const formatCompactMetricSummary = () => isRealizedAnnualizedMetric
         ? formatT0AnnualizedReturn(annualizedAverage)
-        : isReceivedSharedCountGapMetric
+        : isReceivedSharedCountGapMetric || isOpeningOrderCountMetric
           ? `${Math.round(allocatedMetricTotal)}${compactMetricUnit}`
         : `${formatPrice(allocatedMetricTotal)}${compactMetricUnit}`;
       const updateCompactDraft = (candidate: SharedIncomeCandidate, rawValue: string) => {
@@ -8505,6 +8710,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     onSuccess: () => {
       void t0JournalQuery.refetch();
     },
+  });
+  const setSharedIncomePrincipalRuleMutation = trpc.ledger.t0SetSharedIncomePrincipalRule.useMutation({
+    onSuccess: (data: any) => {
+      const rawInfluencePercentage = Number(data?.influencePercentage);
+      const savedRule: SharedIncomePrincipalRule = {
+        curve: data?.curve === "balanced" || data?.curve === "strong" ? data.curve : "linear",
+        influencePercentage: Math.min(100, Math.max(0, Math.trunc(Number.isFinite(rawInfluencePercentage) ? rawInfluencePercentage : 100))),
+      };
+      setSharedIncomePrincipalRule(savedRule);
+      setShowSharedIncomePrincipalRuleSettings(false);
+      void t0SharedIncomePrincipalRuleQuery.refetch();
+      t0Toast.success(`本金规则已保存为第${Math.max(1, Number(data?.version) || 1)}版；仅影响之后打开的AI分配建议`);
+    },
+    onError: (error) => t0Toast.error(error.message || "本金规则保存失败，请稍后重试"),
   });
   const changeSharedIncomeCandidateEligibility = useCallback((candidate: SharedIncomeCandidate, enabled: boolean) => {
     if (isCloseDistributionPreviewLink) {
@@ -12643,13 +12862,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	              </section>
 	              {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <>
 	                <section className="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-	                  <div className="flex items-center justify-between gap-2"><div className="text-sm font-semibold text-slate-900">AI 智能分配方案</div><button type="button" onClick={() => { setSharedIncomeAllocationMetrics([]); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationPlanError(null); }} className={`h-8 rounded border px-2.5 text-[11px] font-semibold ${sharedIncomeAllocationMetrics.length === 0 ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600"}`}>手动</button></div>
+	                  <div className="flex items-center justify-between gap-2"><div className="text-sm font-semibold text-slate-900">AI 智能分配方案</div><div className="flex shrink-0 items-center gap-1.5"><button type="button" onClick={() => setShowSharedIncomeAllocationGuide(true)} className="inline-flex h-8 items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 text-[11px] font-semibold text-indigo-700 active:scale-[0.98]"><BookOpen className="h-3.5 w-3.5" />方案说明</button><button type="button" onClick={() => { setSharedIncomeAllocationMetrics([]); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationPlanError(null); }} className={`h-8 rounded border px-2.5 text-[11px] font-semibold ${sharedIncomeAllocationMetrics.length === 0 ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600"}`}>手动</button></div></div>
 	                  <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-	                    {SHARED_INCOME_ALLOCATION_DIMENSIONS.map((dimension) => {
+	                    {sharedIncomeAvailableAllocationDimensions.map((dimension) => {
 	                      const isSelected = sharedIncomeAllocationMetrics.includes(dimension.id);
 	                      return <button key={dimension.id} type="button" aria-pressed={isSelected} onClick={() => toggleSharedIncomeAllocationMetric(dimension.id)} className={`flex min-h-11 flex-col items-center justify-center rounded border px-1 leading-tight ${isSelected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"}`}><span className="flex items-center gap-1 text-[11px] font-semibold">{isSelected && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}{dimension.label}</span><span className={`mt-0.5 text-[9px] font-medium ${isSelected ? "text-blue-500" : "text-slate-400"}`}>{dimension.category}</span></button>;
 	                    })}
 	                  </div>
+	                  {sharedIncomeAllocationMetrics.includes("openingOrderCount") && <div className="mt-2.5 rounded-md border border-indigo-100 bg-indigo-50/55 px-2.5 py-2"><div className="flex items-baseline justify-between gap-2"><div className="text-[11px] font-semibold text-indigo-900">挂单数量倾斜度</div><div className="text-xs font-bold tabular-nums text-indigo-700">{sharedIncomeOpeningOrderCountIntensity}%</div></div><input type="range" min="0" max="100" step="1" value={sharedIncomeOpeningOrderCountIntensity} aria-label="挂单数量倾斜度，0%为全员均分，100%为完全按挂单数量" onChange={(event) => setSharedIncomeOpeningOrderCountIntensity(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} className="mt-1.5 h-3 w-full cursor-pointer accent-indigo-600" /><div className="mt-1 flex justify-between text-[9px] font-medium text-indigo-500"><span>0% 全员均分</span><span>100% 挂单比例</span></div><div className="mt-1.5 text-[10px] leading-4 text-indigo-700/80">当前：{100 - sharedIncomeOpeningOrderCountIntensity}% 均分保障 + {sharedIncomeOpeningOrderCountIntensity}% 按累计挂单数量倾斜。</div></div>}
 	                  {sharedIncomeSelectedDimensions.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-4 text-slate-500"><span>已选 {sharedIncomeSelectedDimensions.length} 个维度：</span>{sharedIncomeSelectedDimensions.map((dimension, index) => <span key={dimension.id} className="whitespace-nowrap font-medium text-blue-700">{index > 0 && <span className="mr-1.5 text-slate-300">·</span>}{dimension.compactLabel} {sharedIncomeDimensionWeightPercentage.toFixed(2)}%</span>)}</div>}
 	                </section>
 	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">{sharedIncomeAllocationMetrics.length === 0 ? "共享分配人" : "共享分配清单"}</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
@@ -12681,6 +12901,36 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	          </div>
 	        </div>
 	      )}
+
+      {((showEntrySheet && showSharedIncomeAllocationGuide) || isSharedIncomeAllocationGuideRoute) && <SharedIncomeAllocationGuidePage
+        exportRef={sharedIncomeAllocationGuideExportRef}
+        currentUser={me as any}
+        principalRule={sharedIncomePrincipalRule}
+        canManage={canManage}
+        onConfigurePrincipal={() => {
+          setSharedIncomePrincipalRule(savedSharedIncomePrincipalRule);
+          setShowSharedIncomePrincipalRuleSettings(true);
+        }}
+        onClose={() => {
+          setShowSharedIncomePrincipalRuleSettings(false);
+          if (isSharedIncomeAllocationGuideRoute) setLocation(closeSharedIncomeAllocationGuideRoute);
+          else setShowSharedIncomeAllocationGuide(false);
+        }}
+      />}
+      {showSharedIncomePrincipalRuleSettings && <SharedIncomePrincipalRuleSettingsPage
+        rule={sharedIncomePrincipalRule}
+        onChange={setSharedIncomePrincipalRule}
+        isSaving={setSharedIncomePrincipalRuleMutation.isPending}
+        onSaveAndExit={() => setSharedIncomePrincipalRuleMutation.mutate({
+          ledgerId: 52,
+          curve: sharedIncomePrincipalRule.curve,
+          influencePercentage: sharedIncomePrincipalRule.influencePercentage,
+        })}
+        onClose={() => {
+          setSharedIncomePrincipalRule(savedSharedIncomePrincipalRule);
+          setShowSharedIncomePrincipalRuleSettings(false);
+        }}
+      />}
 
       {canManage && profitShareSource && (
         <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={entryProfitShareEditTarget ? "编辑本单收益分配" : "管理收益分配"}>

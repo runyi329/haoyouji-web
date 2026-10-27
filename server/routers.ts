@@ -1629,11 +1629,13 @@ async function buildFunderSettlementSnapshot(
   }
   let optionInfo: any = null;
   try { optionInfo = typeof sourceOrder.option_info === 'string' ? JSON.parse(sourceOrder.option_info) : sourceOrder.option_info; } catch {}
-  const optionSymbol = String(optionInfo?.coin || optionInfo?.premiumCurrency || '').trim().toUpperCase();
-  if (optionSymbol) symbols.add(optionSymbol);
+  [optionInfo?.coin, optionInfo?.premiumCurrency, optionInfo?.denomination]
+    .map((value) => String(value || '').trim().toUpperCase())
+    .filter(Boolean)
+    .forEach((symbol) => symbols.add(symbol));
 
   const priceBySymbol: Record<string, string> = { USDT: '1', CNY: String(1 / usdtCnyRate) };
-  for (const symbol of symbols) {
+  for (const symbol of Array.from(symbols)) {
     if (!symbol) continue;
     if (symbol === primarySymbol) {
       priceBySymbol[symbol] = String(primaryPriceUsdt);
@@ -24602,6 +24604,14 @@ ${klinesSummary}
           try {
             const option = typeof order.option_info === 'string' ? JSON.parse(order.option_info) : order.option_info;
             addCoin(option?.coin);
+            addCoin(option?.denomination);
+          } catch {}
+          try {
+            const segments = typeof order.joint_order_segments === 'string' ? JSON.parse(order.joint_order_segments) : order.joint_order_segments;
+            if (Array.isArray(segments)) segments.forEach((segment: any) => {
+              addCoin(segment?.option_info?.coin);
+              addCoin(segment?.option_info?.denomination);
+            });
           } catch {}
           try {
             const assets = typeof order.collateral_assets === 'string' ? JSON.parse(order.collateral_assets) : order.collateral_assets;
@@ -28204,41 +28214,62 @@ ${klinesSummary}
           const safeOptionInfo = (value: unknown) => {
             let parsed: unknown = value;
             try { if (typeof parsed === 'string') parsed = JSON.parse(parsed); } catch { parsed = null; }
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
             const source = parsed as Record<string, unknown>;
             const coin = safeCoin(source.coin);
             const direction = ['long_call', 'long_put', 'short_call', 'short_put'].includes(String(source.direction))
               ? String(source.direction)
-              : undefined;
+              : '';
+            const exerciseDate = safeDate(source.exerciseDate);
+            const deribitLabel = safeText(source.deribitLabel, 24).toUpperCase();
+            const strikePrice = safeAmount(source.strikePrice);
+            const premium = safeAmount(source.premium);
+            const buyQty = safeAmount(source.buyQty);
             const denomination = safeCoin(source.denomination);
-            const optionInfo = {
-              ...(coin ? { coin } : {}),
-              ...(direction ? { direction } : {}),
-              ...(safeDate(source.exerciseDate) ? { exerciseDate: safeDate(source.exerciseDate) } : {}),
-              ...(safeText(source.deribitLabel, 48) ? { deribitLabel: safeText(source.deribitLabel, 48) } : {}),
-              ...(safeAmount(source.strikePrice) ? { strikePrice: safeAmount(source.strikePrice) } : {}),
-              ...(safeAmount(source.premium) ? { premium: safeAmount(source.premium) } : {}),
-              ...(denomination ? { denomination } : {}),
-              ...(safeAmount(source.buyQty) ? { buyQty: safeAmount(source.buyQty) } : {}),
+            const validCoin = coin === 'BTC' || coin === 'ETH';
+            const validDenomination = denomination === 'USDT' || denomination === coin;
+            if (!validCoin || !direction || !exerciseDate || !/^[0-9A-Z]{3,24}$/.test(deribitLabel)
+              || !strikePrice || !premium || !buyQty || !validDenomination) return null;
+            return {
+              version: 1,
+              coin,
+              direction,
+              exerciseDate,
+              deribitLabel,
+              strikePrice,
+              premium,
+              denomination,
+              buyQty,
             };
-            return Object.keys(optionInfo).length > 0 ? optionInfo : undefined;
           };
+          const { getLatestPrice } = await import('./price-scanner');
           mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
             const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
             const previousSettlement = persistedSettledSegmentsById.get(segmentId);
+            const assetType = safeAssetType(raw?.asset_type);
+            const optionInfo = safeOptionInfo(raw?.option_info);
+            if (assetType === 'crypto_option' && !optionInfo) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '期权第二段须完整填写Deribit到期日、行权价、权利金和张数' });
+            }
+            const optionTotal = optionInfo ? Number(optionInfo.premium) * Number(optionInfo.buyQty) : 0;
+            const optionDenominationPrice = optionInfo?.denomination === 'USDT'
+              ? 1
+              : Number(getLatestPrice(optionInfo?.denomination || '') || 0);
+            if (optionInfo && (!Number.isFinite(optionTotal) || optionTotal <= 0 || !Number.isFinite(optionDenominationPrice) || optionDenominationPrice <= 0)) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '期权权利金或计价币实时价格无效，暂不能保存第二段' });
+            }
             const nextSegment = {
             id: segmentId,
             // 强制以当前参与者为唯一归属，不接受客户端指定他人。
             owner_user_id: Number(input.userId),
             // 缺省时保持旧子段“继承第一段”的兼容行为；新子段可存自己的类型和标的。
-            ...(safeAssetType(raw?.asset_type) ? { asset_type: safeAssetType(raw?.asset_type) } : {}),
-            ...(safeCoin(raw?.coin) ? { coin: safeCoin(raw?.coin) } : {}),
-            ...(safeOptionInfo(raw?.option_info) ? { option_info: safeOptionInfo(raw?.option_info) } : {}),
+            ...(assetType ? { asset_type: assetType } : {}),
+            ...(optionInfo ? { coin: optionInfo.coin, option_info: optionInfo } : (safeCoin(raw?.coin) ? { coin: safeCoin(raw?.coin) } : {})),
             ...(raw?.trade_direction === 'long' || raw?.trade_direction === 'short' ? { trade_direction: raw.trade_direction } : {}),
-            amount: safeAmount(raw?.amount),
+            amount: optionInfo ? String(optionTotal * optionDenominationPrice) : safeAmount(raw?.amount),
             amount_currency: safeCurrency(raw?.amount_currency),
-            buy_price: safeAmount(raw?.buy_price),
-            buy_quantity: safeAmount(raw?.buy_quantity),
+            buy_price: optionInfo ? optionInfo.premium : safeAmount(raw?.buy_price),
+            buy_quantity: optionInfo ? optionInfo.buyQty : safeAmount(raw?.buy_quantity),
             buy_date: safeDate(raw?.buy_date),
             storage_account: safeText(raw?.storage_account),
             broker_name: safeText(raw?.broker_name),

@@ -206,6 +206,81 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
   });
 }
 
+type DeribitJointOptionInfo = {
+  version: 1;
+  coin: 'BTC' | 'ETH';
+  direction: 'long_call' | 'long_put' | 'short_call' | 'short_put';
+  exerciseDate: string;
+  deribitLabel: string;
+  strikePrice: string;
+  premium: string;
+  denomination: 'USDT' | 'BTC' | 'ETH';
+  buyQty: string;
+};
+
+const JOINT_OPTION_DIRECTION_LABELS: Record<DeribitJointOptionInfo['direction'], string> = {
+  long_call: '买入看涨',
+  long_put: '买入看跌',
+  short_call: '卖出看涨',
+  short_put: '卖出看跌',
+};
+
+function normalizeDeribitJointOptionInfo(value: JointOrderSegmentDraft['option_info'] | undefined, fallbackCoin = 'BTC'): DeribitJointOptionInfo {
+  const rawCoin = String(value?.coin || fallbackCoin).trim().toUpperCase();
+  const coin: DeribitJointOptionInfo['coin'] = rawCoin === 'ETH' ? 'ETH' : 'BTC';
+  const rawDirection = String(value?.direction || '').trim();
+  const direction: DeribitJointOptionInfo['direction'] = ['long_call', 'long_put', 'short_call', 'short_put'].includes(rawDirection)
+    ? rawDirection as DeribitJointOptionInfo['direction']
+    : 'long_call';
+  const rawDenomination = String(value?.denomination || 'USDT').trim().toUpperCase();
+  const denomination: DeribitJointOptionInfo['denomination'] = rawDenomination === coin ? coin : 'USDT';
+  return {
+    version: 1,
+    coin,
+    direction,
+    exerciseDate: String(value?.exerciseDate || '').slice(0, 10),
+    deribitLabel: String(value?.deribitLabel || '').slice(0, 24),
+    strikePrice: String(value?.strikePrice ?? '').slice(0, 32),
+    premium: String(value?.premium ?? '').slice(0, 32),
+    denomination,
+    buyQty: String(value?.buyQty ?? '').slice(0, 32),
+  };
+}
+
+function JointOptionSegmentFields({ optionInfo, onChange }: { optionInfo: DeribitJointOptionInfo; onChange: (next: DeribitJointOptionInfo) => void }) {
+  const { data: expiriesData, isLoading: expiriesLoading } = (trpc.ledger as any).deribitGetExpiries.useQuery(
+    { currency: optionInfo.coin },
+    { staleTime: 5 * 60 * 1000 },
+  );
+  const expiries: Array<{ dateStr?: string; deribitLabel: string; ts: number; diffDays: number }> = expiriesData?.expiries ?? [];
+  const { data: strikesData, isLoading: strikesLoading } = (trpc.ledger as any).deribitGetStrikes.useQuery(
+    { currency: optionInfo.coin, deribitLabel: optionInfo.deribitLabel },
+    { enabled: !!optionInfo.deribitLabel, staleTime: 5 * 60 * 1000 },
+  );
+  const strikes: number[] = strikesData?.strikes ?? [];
+  const denominations = optionInfo.coin === 'ETH' ? (['USDT', 'ETH'] as const) : (['USDT', 'BTC'] as const);
+  const total = Number(optionInfo.premium || 0) * Number(optionInfo.buyQty || 0);
+  const totalPremium = Number.isFinite(total) && total > 0 ? total : 0;
+
+  return <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+    <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-violet-700">期权参数（本段）</span><span className="text-[11px] text-violet-500">Deribit 固定合约</span></div>
+    <div className="grid grid-cols-2 gap-2">
+      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">期权标的</span><select value={optionInfo.coin} onChange={event => onChange({ ...optionInfo, coin: event.target.value === 'ETH' ? 'ETH' : 'BTC', denomination: 'USDT', deribitLabel: '', exerciseDate: '', strikePrice: '' })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="BTC">BTC</option><option value="ETH">ETH</option></select></label>
+      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">方向</span><select value={optionInfo.direction} onChange={event => onChange({ ...optionInfo, direction: event.target.value as DeribitJointOptionInfo['direction'] })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200">{Object.entries(JOINT_OPTION_DIRECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    </div>
+    <label className="block"><span className="mb-1.5 block text-xs font-medium text-violet-700">Deribit 到期日 {expiriesLoading ? '· 加载中' : ''}</span><select value={optionInfo.deribitLabel} onChange={event => { const expiry = expiries.find(item => item.deribitLabel === event.target.value); onChange({ ...optionInfo, deribitLabel: event.target.value, exerciseDate: expiry ? new Date(expiry.ts).toISOString().slice(0, 10) : '', strikePrice: '' }); }} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="">请选择固定到期日</option>{expiries.map(expiry => <option key={expiry.deribitLabel} value={expiry.deribitLabel}>{expiry.dateStr || expiry.deribitLabel}（{expiry.diffDays > 0 ? `余${expiry.diffDays}天` : '即将到期'}）</option>)}</select></label>
+    <div className="grid grid-cols-2 gap-2">
+      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">行权价（USD）{strikesLoading ? ' · 加载中' : ''}</span>{optionInfo.deribitLabel ? <select value={optionInfo.strikePrice} onChange={event => onChange({ ...optionInfo, strikePrice: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="">请选择行权价</option>{strikes.map(strike => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}</select> : <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-400">请先选择到期日</div>}</label>
+      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">权利金（{optionInfo.denomination}）</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.premium} onChange={event => onChange({ ...optionInfo, premium: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-200" placeholder="如：500" /></label>
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <div><span className="mb-1.5 block text-xs font-medium text-violet-700">权利金计价</span><div className="grid grid-cols-2 overflow-hidden rounded-xl border border-violet-200 bg-white">{denominations.map(currency => <button key={currency} type="button" onClick={() => onChange({ ...optionInfo, denomination: currency })} className={`py-2.5 text-sm font-semibold ${optionInfo.denomination === currency ? 'bg-violet-600 text-white' : 'text-violet-700'}`}>{currency === 'USDT' ? 'U' : currency}</button>)}</div></div>
+      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">购买张数</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.buyQty} onChange={event => onChange({ ...optionInfo, buyQty: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-200" placeholder="如：1" /></label>
+    </div>
+    {totalPremium > 0 && <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs"><span className="font-medium text-violet-600">总权利金</span><span className="font-semibold tabular-nums text-violet-800">{totalPremium.toLocaleString(undefined, { maximumFractionDigits: optionInfo.denomination === 'USDT' ? 2 : 6 })} {optionInfo.denomination}</span></div>}
+  </div>;
+}
+
 const formatChineseStockPriceDate = (value?: string | null) => {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -1255,7 +1330,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         expanded: false,
       });
     }
-    return [...merged.values()].map((participant) => ({
+    return Array.from(merged.values()).map((participant) => ({
       ...participant,
       userName: authoritativeNames.get(Number(participant.userId)) || participant.userName,
     }));
@@ -3065,25 +3140,51 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const normalizedJointOrderSegments = canBuildJointOrderSegments
       ? jointOrderSegments.map((segment, index) => {
           const profitShareDraft = buildProfitShareDraft(segment.show_profit_share, segment.profit_share_type, segment.profit_share_ratio);
+          const inheritedAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType))
+            ? formData.assetType as 'stock' | 'crypto' | 'crypto_option'
+            : 'crypto';
+          const assetType = segment.asset_type || inheritedAssetType;
+          const optionInfo = assetType === 'crypto_option'
+            ? normalizeDeribitJointOptionInfo(segment.option_info, segment.coin || formData.coin || 'BTC')
+            : undefined;
+          const optionTotal = optionInfo ? Number(optionInfo.premium) * Number(optionInfo.buyQty) : 0;
+          const optionAmount = optionInfo && Number.isFinite(optionTotal) && optionTotal > 0
+            ? toUsdtBase(optionTotal, optionInfo.denomination)
+            : null;
           return {
             ...segment,
             id: segment.id || `segment-${index + 2}`,
             owner_user_id: participantUserIdForJointSegments,
-            amount: String(segment.amount || '').trim(),
+            ...(assetType ? { asset_type: assetType } : {}),
+            ...(assetType === 'stock'
+              ? { coin: 'CNY' }
+              : optionInfo
+                ? { coin: optionInfo.coin }
+                : (segment.coin ? { coin: String(segment.coin).toUpperCase() } : {})),
+            amount: optionInfo && optionAmount ? String(Number(optionAmount.toFixed(8))) : String(segment.amount || '').trim(),
             interest_base: String(segment.interest_base || '').trim(),
             interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
             buy_date: String(segment.buy_date || '').slice(0, 10),
             interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
+            buy_price: optionInfo ? optionInfo.premium : String(segment.buy_price || '').trim(),
+            buy_quantity: optionInfo ? optionInfo.buyQty : String(segment.buy_quantity || '').trim(),
             commission_share: profitShareDraft.commissionShare,
+            ...(optionInfo ? { option_info: optionInfo } : {}),
           };
         })
       : [];
-    if (shouldPersistJointOrderSegments && normalizedJointOrderSegments.some((segment) => (
-      !Number.isFinite(Number(segment.amount)) || Number(segment.amount) <= 0
-      || !Number.isFinite(Number(segment.interest_base)) || Number(segment.interest_base) <= 0
-      || !segment.interest_start_date
-    ))) {
-      toast.error('请完整填写每个联合子段的订单金额、计息基数和计息日期');
+    if (shouldPersistJointOrderSegments && normalizedJointOrderSegments.some((segment) => {
+      const option = segment.asset_type === 'crypto_option' ? normalizeDeribitJointOptionInfo(segment.option_info, segment.coin || 'BTC') : null;
+      const invalidOption = !!option && (!option.exerciseDate || !option.deribitLabel
+        || !Number.isFinite(Number(option.strikePrice)) || Number(option.strikePrice) <= 0
+        || !Number.isFinite(Number(option.premium)) || Number(option.premium) <= 0
+        || !Number.isFinite(Number(option.buyQty)) || Number(option.buyQty) <= 0);
+      return invalidOption
+        || !Number.isFinite(Number(segment.amount)) || Number(segment.amount) <= 0
+        || !Number.isFinite(Number(segment.interest_base)) || Number(segment.interest_base) <= 0
+        || !segment.interest_start_date;
+    })) {
+      toast.error('请完整填写每个联合子段的交易参数、计息基数和计息日期；期权须选择Deribit到期日、行权价、权利金和张数');
       return;
     }
     const profitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
@@ -5988,49 +6089,41 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         const segmentAssets = Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [];
                         const updateSegmentAssets = (assets: JointOrderSegmentDraft['collateral_assets']) => updateSegment({ collateral_assets: assets });
                         const segmentKey = `${segment.id}-${index}`;
-                        const secondTone = {
-                          label: 'text-indigo-700',
-                          divider: 'bg-indigo-100',
-                          input: 'border-indigo-200 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400',
-                          inactive: 'bg-indigo-50 text-indigo-600',
-                          active: 'bg-indigo-600 text-white border-indigo-600',
-                        };
                         const inheritedSegmentAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType))
                           ? formData.assetType as 'stock' | 'crypto' | 'crypto_option'
                           : 'crypto';
                         // 旧子段没有类型时只作显示兼容；用户选择后会写入自身快照。
                         const segmentAssetType = segment.asset_type || inheritedSegmentAssetType;
-                        const segmentOptionInfo = segment.option_info || {};
-                        const segmentOptionCoin = String(segmentOptionInfo.coin || segment.coin || formData.coin || 'BTC').toUpperCase();
-                        const segmentCoin = String(segmentAssetType === 'crypto_option' ? segmentOptionCoin : (segment.coin || formData.coin || 'BTC')).toUpperCase();
-                        const segmentOptionDirection = ['long_call', 'long_put', 'short_call', 'short_put'].includes(String(segmentOptionInfo.direction))
-                          ? segmentOptionInfo.direction as NonNullable<JointOrderSegmentDraft['option_info']>['direction']
-                          : 'long_call';
-                        const segmentOptionDenomination = String(segmentOptionInfo.denomination || 'USDT').toUpperCase();
+                        const segmentCoin = String(segment.coin || formData.coin || 'BTC').toUpperCase();
+                        const jointOptionInfo = normalizeDeribitJointOptionInfo(segment.option_info, segmentCoin);
                         const updateSegmentAssetType = (assetType: 'stock' | 'crypto' | 'crypto_option') => updateSegment({
                           asset_type: assetType,
-                          coin: assetType === 'stock' ? 'CNY' : (assetType === 'crypto_option' ? segmentOptionCoin : segmentCoin),
+                          coin: assetType === 'stock' ? 'CNY' : (assetType === 'crypto_option' ? jointOptionInfo.coin : segmentCoin),
                           amount_currency: assetType === 'stock' ? 'CNY' : segment.amount_currency,
                           trade_direction: assetType === 'crypto' ? (segment.trade_direction || 'long') : '',
                           option_info: assetType === 'crypto_option'
-                            ? { coin: segmentOptionCoin, direction: segmentOptionDirection, denomination: segmentOptionDenomination, ...segmentOptionInfo }
+                            ? jointOptionInfo
                             : undefined,
                         });
-                        const updateSegmentOptionInfo = (patch: NonNullable<JointOrderSegmentDraft['option_info']>) => {
-                          const next = { ...segmentOptionInfo, ...patch };
-                          const coin = String(next.coin || segmentOptionCoin).toUpperCase();
-                          const denomination = String(next.denomination || segmentOptionDenomination).toUpperCase();
-                          const premium = Number(next.premium || 0);
-                          const quantity = Number(next.buyQty || 0);
-                          const totalU = premium > 0 && quantity > 0 ? toUsdtBase(premium * quantity, denomination) : null;
+                        const updateJointOptionInfo = (next: DeribitJointOptionInfo) => {
+                          const total = Number(next.premium || 0) * Number(next.buyQty || 0);
+                          const totalU = Number.isFinite(total) && total > 0 ? toUsdtBase(total, next.denomination) : null;
                           updateSegment({
                             asset_type: 'crypto_option',
-                            coin,
+                            coin: next.coin,
                             option_info: next,
-                            amount_currency: denomination === 'CNY' ? 'CNY' : 'USDT',
+                            amount_currency: 'USDT',
                             amount: totalU !== null ? String(Number(totalU.toFixed(8))) : segment.amount,
-                            buy_quantity: String(next.buyQty || ''),
+                            buy_price: next.premium,
+                            buy_quantity: next.buyQty,
                           });
+                        };
+                        const secondTone = {
+                          label: segmentAssetType === 'crypto_option' ? 'text-violet-700' : 'text-indigo-700',
+                          divider: segmentAssetType === 'crypto_option' ? 'bg-violet-100' : 'bg-indigo-100',
+                          input: segmentAssetType === 'crypto_option' ? 'border-violet-200 focus:ring-2 focus:ring-violet-100 focus:border-violet-400' : 'border-indigo-200 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400',
+                          inactive: segmentAssetType === 'crypto_option' ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600',
+                          active: segmentAssetType === 'crypto_option' ? 'bg-violet-600 text-white border-violet-600' : 'bg-indigo-600 text-white border-indigo-600',
                         };
                         const isNegativeRate = String(segment.interest_rate_annual || '').startsWith('-');
                         const segmentPeriodInterestTotalEnabled = segmentDisplay.periodInterestTotal === true;
@@ -6080,36 +6173,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             </div>
 
                             <div className="space-y-3">
-                              <span className="block text-xs text-indigo-400">{segmentAssetType === 'stock' ? '股票子段仅录入人民币融资金额' : '订单金额、买入价格与数量由本段独立维护'}</span>
-                              <div className="flex items-end gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>{segmentAssetType === 'stock' ? '融资金额（人民币）' : '订单金额'}</label>
-                                  <input type="number" min="0" step="0.01" inputMode="decimal" value={segment.amount} onChange={event => updateSegment({ amount: event.target.value })} placeholder="如：100000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} />
-                                </div>
-                                {segmentAssetType !== 'stock' && <div style={{ width: '34%' }}>
-                                  <label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>融资币种</label>
-                                  <select value={segment.amount_currency} onChange={event => updateSegment({ amount_currency: event.target.value === 'CNY' ? 'CNY' : 'USDT' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>
-                                    <option value="USDT">USDT</option><option value="CNY">人民币 CNY</option>
-                                  </select>
-                                </div>}
-                              </div>
-                              {segmentAssetType === 'stock' && (
-                                <>
-                                  <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券公司</label><input value={segment.broker_name} onChange={event => updateSegment({ broker_name: event.target.value })} placeholder="如：中信证券" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                                  <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券账号</label><input value={segment.broker_account} onChange={event => updateSegment({ broker_account: event.target.value })} placeholder="如：6225xxxx" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                                </>
-                              )}
-                              {segmentAssetType !== 'stock' && <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>买入价格（{segment.amount_currency}/{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_price} onChange={event => updateSegment({ buy_price: event.target.value })} placeholder="如：95000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>}
-                              {segmentAssetType !== 'stock' && <div className="flex items-end gap-3">
-                                <div style={{ width: '40%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>购买币种</label><select value={segmentCoin} onChange={event => updateSegment({ coin: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>{[segmentCoin, 'BTC', 'ETH', 'SOL', 'SUI', 'BNB', 'CRCL', 'UNI'].filter((coin, i, list) => list.indexOf(coin) === i).map(coin => <option key={coin} value={coin}>{coin}</option>)}</select></div>
-                                <div className="min-w-0 flex-1"><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>币数（{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_quantity} onChange={event => updateSegment({ buy_quantity: event.target.value })} placeholder="如：1.05" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                              </div>}
-                              {segmentAssetType === 'crypto_option' && <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/30 p-3">
-                                <div className="text-sm font-semibold text-violet-700">期权参数（本段）</div>
-                                <div className="grid grid-cols-2 gap-3"><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>期权标的</span><select value={segmentOptionCoin} onChange={event => updateSegmentOptionInfo({ coin: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>{[segmentOptionCoin, 'BTC', 'ETH', 'SOL'].filter((coin, i, list) => list.indexOf(coin) === i).map(coin => <option key={coin} value={coin}>{coin}</option>)}</select></label><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>方向</span><select value={segmentOptionDirection} onChange={event => updateSegmentOptionInfo({ direction: event.target.value as NonNullable<JointOrderSegmentDraft['option_info']>['direction'] })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`}><option value="long_call">买入看涨</option><option value="long_put">买入看跌</option><option value="short_call">卖出看涨</option><option value="short_put">卖出看跌</option></select></label></div>
-                                <div className="grid grid-cols-2 gap-3"><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>到期日</span><input type="date" value={segmentOptionInfo.exerciseDate || ''} onChange={event => updateSegmentOptionInfo({ exerciseDate: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /></label><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>行权价（U）</span><input type="number" min="0" step="any" inputMode="decimal" value={segmentOptionInfo.strikePrice || ''} onChange={event => updateSegmentOptionInfo({ strikePrice: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /></label></div>
-                                <div className="grid grid-cols-3 gap-3"><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>权利金</span><input type="number" min="0" step="any" inputMode="decimal" value={segmentOptionInfo.premium || ''} onChange={event => updateSegmentOptionInfo({ premium: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /></label><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>计价币种</span><select value={segmentOptionDenomination} onChange={event => updateSegmentOptionInfo({ denomination: event.target.value })} className={`w-full rounded-xl border bg-white px-2 py-2.5 text-sm outline-none ${secondTone.input}`}><option value="USDT">U</option><option value="ETH">ETH</option><option value="BTC">BTC</option></select></label><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>张数</span><input type="number" min="0" step="any" inputMode="decimal" value={segmentOptionInfo.buyQty || ''} onChange={event => updateSegmentOptionInfo({ buyQty: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /></label></div>
-                              </div>}
+                              {segmentAssetType === 'crypto_option' ? <JointOptionSegmentFields optionInfo={jointOptionInfo} onChange={updateJointOptionInfo} /> : <>
+                                <span className="block text-xs text-indigo-400">{segmentAssetType === 'stock' ? '股票子段仅录入人民币融资金额' : '订单金额、买入价格与数量由本段独立维护'}</span>
+                                <div className="flex items-end gap-3"><div className="min-w-0 flex-1"><label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>{segmentAssetType === 'stock' ? '融资金额（人民币）' : '订单金额'}</label><input type="number" min="0" step="0.01" inputMode="decimal" value={segment.amount} onChange={event => updateSegment({ amount: event.target.value })} placeholder="如：100000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>{segmentAssetType !== 'stock' && <div style={{ width: '34%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>融资币种</label><select value={segment.amount_currency} onChange={event => updateSegment({ amount_currency: event.target.value === 'CNY' ? 'CNY' : 'USDT' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}><option value="USDT">USDT</option><option value="CNY">人民币 CNY</option></select></div>}</div>
+                                {segmentAssetType === 'stock' && <><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券公司</label><input value={segment.broker_name} onChange={event => updateSegment({ broker_name: event.target.value })} placeholder="如：中信证券" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券账号</label><input value={segment.broker_account} onChange={event => updateSegment({ broker_account: event.target.value })} placeholder="如：6225xxxx" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div></>}
+                                {segmentAssetType === 'crypto' && <><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>买入价格（{segment.amount_currency}/{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_price} onChange={event => updateSegment({ buy_price: event.target.value })} placeholder="如：95000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div><div className="flex items-end gap-3"><div style={{ width: '40%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>购买币种</label><select value={segmentCoin} onChange={event => updateSegment({ coin: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>{[segmentCoin, 'BTC', 'ETH', 'SOL', 'SUI', 'BNB', 'CRCL', 'UNI'].filter((coin, i, list) => list.indexOf(coin) === i).map(coin => <option key={coin} value={coin}>{coin}</option>)}</select></div><div className="min-w-0 flex-1"><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>币数（{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_quantity} onChange={event => updateSegment({ buy_quantity: event.target.value })} placeholder="如：1.05" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div></div></>}
+                              </>}
                               <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>存放账户</label><input value={segment.storage_account} onChange={event => updateSegment({ storage_account: event.target.value })} placeholder="账户名称或编号" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
                             </div>
 

@@ -151,7 +151,10 @@ function triggerLedger52T0PendingOrders(
   observedAt = new Date(),
   range: { high?: number; low?: number } = {},
 ) {
-  if (process.env.DEV_BYPASS_AUTH === 'true' || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
+  const isReadOnlyPreview = process.env.PREVIEW_READONLY === 'true'
+    || process.env.FAST_PREVIEW === 'true'
+    || process.env.DEV_BYPASS_AUTH === 'true';
+  if (isReadOnlyPreview || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
   // 实时价扫描不等待外部K线请求；已缓存的完整分钟线会被同一次数据库判定作为第二依据带入。
   void refreshLatestCompletedT0MinuteMarkRange();
   const requestedHigh = Number(range.high);
