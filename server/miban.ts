@@ -171,27 +171,42 @@ type LimitedProductLine = {
 let limitedProductManagementSchemaReady = false;
 let limitedProductManagementSchemaPromise: Promise<void> | null = null;
 
-function readLimitedProductLine(order: any): LimitedProductLine | null {
+function readLimitedProductLines(order: any): LimitedProductLine[] {
   try {
     const ingredients = JSON.parse(String(order?.ingredients ?? "[]"));
-    const line = Array.isArray(ingredients)
-      ? ingredients.find((item: any) => item?.kind === "limited_product")
-      : null;
-    if (
-      !line?.productKey ||
-      !line?.skuId ||
-      !Number.isInteger(Number(line?.quantity))
-    ) {
-      return null;
+    if (!Array.isArray(ingredients)) return [];
+    const unique = new Map<string, LimitedProductLine>();
+    for (const line of ingredients) {
+      const productKey = String(line?.productKey ?? "").trim();
+      const skuId = String(line?.skuId ?? "").trim();
+      const quantity = Number(line?.quantity);
+      if (
+        line?.kind !== "limited_product" ||
+        !productKey ||
+        !skuId ||
+        !Number.isInteger(quantity) ||
+        quantity < 1
+      ) {
+        continue;
+      }
+      const key = `${productKey}:${skuId}`;
+      // 新订单会在创建前拒绝重复行；这里合并可安全读取早期或人工导入的重复数据。
+      const previous = unique.get(key);
+      unique.set(key, {
+        productKey,
+        skuId,
+        quantity: (previous?.quantity ?? 0) + quantity,
+      });
     }
-    return {
-      productKey: String(line.productKey),
-      skuId: String(line.skuId),
-      quantity: Number(line.quantity),
-    };
+    return Array.from(unique.values());
   } catch {
-    return null;
+    return [];
   }
+}
+
+// 兼容既有单商品调用点；新合单功能应使用 readLimitedProductLines。
+function readLimitedProductLine(order: any): LimitedProductLine | null {
+  return readLimitedProductLines(order)[0] ?? null;
 }
 
 // 统计口径以中国自然日归集。MySQL 的无时区 DATETIME 已按业务库本地时间存储，
@@ -230,7 +245,6 @@ function positiveOrderAmount(value: unknown) {
 function roundSalesAmount(value: number, digits: number) {
   return Number(value.toFixed(digits));
 }
-
 
 async function ensureLimitedProductManagementTables() {
   const conn = await getDbConnection();
@@ -466,37 +480,220 @@ async function linkLimitedStockDeductionToOrder(
   }
 }
 
-async function restockLimitedOrderIfManaged(
-  order: any,
-  operatorUserId: number | null,
-  note: string
+async function reserveLimitedSkuStocks(
+  lines: LimitedProductLine[],
+  operatorUserId: number,
+  orderNo: string
 ) {
-  const line = readLimitedProductLine(order);
-  if (!line) return false;
   const conn = await ensureLimitedProductManagementTables();
+  const managed: LimitedProductLine[] = [];
+  const snapshots: Array<LimitedProductLine & { stockBefore: number }> = [];
+  const sortedLines = [...lines].sort((a, b) =>
+    `${a.productKey}:${a.skuId}`.localeCompare(`${b.productKey}:${b.skuId}`)
+  );
   try {
-    const [deductRows] = await (conn as any).execute(
-      `SELECT id FROM miban_limited_stock_movements
-       WHERE event_type = 'order_deduct' AND order_id = ? AND product_key = ? AND sku_id = ?
-       LIMIT 1`,
-      [Number(order.id), line.productKey, line.skuId]
-    );
-    // 管理功能上线前的历史订单未扣过新库存账，取消时不能凭空增加库存。
-    if ((deductRows as any[]).length === 0) return false;
+    await (conn as any).beginTransaction();
+    for (const line of sortedLines) {
+      const [rows] = await (conn as any).execute(
+        `SELECT is_active, stock_qty FROM miban_limited_sku_state
+         WHERE product_key = ? AND sku_id = ? LIMIT 1 FOR UPDATE`,
+        [line.productKey, line.skuId]
+      );
+      const state = (rows as any[])[0];
+      if (!state || Number(state.is_active) !== 1) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "购物车中有商品已下架，请刷新后重试",
+        });
+      }
+      const stockBefore = Number(state.stock_qty);
+      if (stockBefore >= 0 && stockBefore < line.quantity) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `“${line.skuId}”库存不足，当前仅剩 ${stockBefore} 件`,
+        });
+      }
+      snapshots.push({ ...line, stockBefore });
+    }
+
+    for (const line of snapshots) {
+      if (line.stockBefore < 0) continue;
+      const stockAfter = line.stockBefore - line.quantity;
+      await (conn as any).execute(
+        `UPDATE miban_limited_sku_state SET stock_qty = ?
+         WHERE product_key = ? AND sku_id = ?`,
+        [stockAfter, line.productKey, line.skuId]
+      );
+      await (conn as any).execute(
+        `INSERT INTO miban_limited_stock_movements
+         (product_key, sku_id, event_type, delta_qty, stock_before, stock_after, operator_user_id, note)
+         VALUES (?, ?, 'order_deduct', ?, ?, ?, ?, ?)`,
+        [
+          line.productKey,
+          line.skuId,
+          -line.quantity,
+          line.stockBefore,
+          stockAfter,
+          operatorUserId,
+          `用户合单扣减库存 #${orderNo}`,
+        ]
+      );
+      managed.push({
+        productKey: line.productKey,
+        skuId: line.skuId,
+        quantity: line.quantity,
+      });
+    }
+    await (conn as any).commit();
+    return managed;
+  } catch (error) {
+    try {
+      await (conn as any).rollback();
+    } catch {}
+    throw error;
   } finally {
     try {
       await (conn as any).end();
     } catch {}
   }
-  return releaseLimitedSkuStock(
-    line.productKey,
-    line.skuId,
-    line.quantity,
+}
+
+async function linkLimitedStockDeductionsToOrder(
+  lines: LimitedProductLine[],
+  orderNo: string,
+  orderId: number
+) {
+  if (lines.length === 0) return;
+  const conn = await ensureLimitedProductManagementTables();
+  try {
+    await (conn as any).beginTransaction();
+    for (const line of lines) {
+      const [result] = await (conn as any).execute(
+        `UPDATE miban_limited_stock_movements
+         SET order_id = ?
+         WHERE product_key = ? AND sku_id = ? AND event_type = 'order_deduct'
+           AND order_id IS NULL AND note = ?`,
+        [orderId, line.productKey, line.skuId, `用户合单扣减库存 #${orderNo}`]
+      );
+      if (Number((result as any)?.affectedRows ?? 0) !== 1) {
+        throw new Error(`订单 ${orderNo} 的库存扣减流水关联失败`);
+      }
+    }
+    await (conn as any).commit();
+  } catch (error) {
+    try {
+      await (conn as any).rollback();
+    } catch {}
+    throw error;
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+}
+
+async function releaseLimitedSkuStocks(
+  lines: LimitedProductLine[],
+  eventType: "order_rollback" | "cancel_restock",
+  orderId: number | null,
+  operatorUserId: number | null,
+  note: string
+) {
+  if (lines.length === 0) return 0;
+  const conn = await ensureLimitedProductManagementTables();
+  let released = 0;
+  const sortedLines = [...lines].sort((a, b) =>
+    `${a.productKey}:${a.skuId}`.localeCompare(`${b.productKey}:${b.skuId}`)
+  );
+  try {
+    await (conn as any).beginTransaction();
+    for (const line of sortedLines) {
+      const [rows] = await (conn as any).execute(
+        `SELECT stock_qty FROM miban_limited_sku_state
+         WHERE product_key = ? AND sku_id = ? LIMIT 1 FOR UPDATE`,
+        [line.productKey, line.skuId]
+      );
+      const stockBefore = Number((rows as any[])[0]?.stock_qty ?? -1);
+      if (stockBefore < 0) continue;
+      if (eventType === "cancel_restock" && orderId !== null) {
+        const [existingRows] = await (conn as any).execute(
+          `SELECT id FROM miban_limited_stock_movements
+           WHERE event_type = 'cancel_restock' AND order_id = ? AND product_key = ? AND sku_id = ?
+           LIMIT 1 FOR UPDATE`,
+          [orderId, line.productKey, line.skuId]
+        );
+        if ((existingRows as any[]).length > 0) continue;
+      }
+      const stockAfter = stockBefore + line.quantity;
+      await (conn as any).execute(
+        `UPDATE miban_limited_sku_state SET stock_qty = ? WHERE product_key = ? AND sku_id = ?`,
+        [stockAfter, line.productKey, line.skuId]
+      );
+      await (conn as any).execute(
+        `INSERT INTO miban_limited_stock_movements
+         (product_key, sku_id, event_type, delta_qty, stock_before, stock_after, order_id, operator_user_id, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          line.productKey,
+          line.skuId,
+          eventType,
+          line.quantity,
+          stockBefore,
+          stockAfter,
+          orderId,
+          operatorUserId,
+          note,
+        ]
+      );
+      released += 1;
+    }
+    await (conn as any).commit();
+    return released;
+  } catch (error) {
+    try {
+      await (conn as any).rollback();
+    } catch {}
+    throw error;
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+}
+
+async function restockLimitedOrderIfManaged(
+  order: any,
+  operatorUserId: number | null,
+  note: string
+) {
+  const lines = readLimitedProductLines(order);
+  if (lines.length === 0) return false;
+  const conn = await ensureLimitedProductManagementTables();
+  const managedLines: LimitedProductLine[] = [];
+  try {
+    for (const line of lines) {
+      const [deductRows] = await (conn as any).execute(
+        `SELECT id FROM miban_limited_stock_movements
+         WHERE event_type = 'order_deduct' AND order_id = ? AND product_key = ? AND sku_id = ?
+         LIMIT 1`,
+        [Number(order.id), line.productKey, line.skuId]
+      );
+      // 管理功能上线前的历史订单未扣过新库存账，取消时不能凭空增加库存。
+      if ((deductRows as any[]).length > 0) managedLines.push(line);
+    }
+  } finally {
+    try {
+      await (conn as any).end();
+    } catch {}
+  }
+  const released = await releaseLimitedSkuStocks(
+    managedLines,
     "cancel_restock",
     Number(order.id),
     operatorUserId,
     note
   );
+  return released > 0;
 }
 
 function serializeOrder(o: any) {
@@ -3116,20 +3313,12 @@ export const mibanLimitedProductRouter = router({
       );
       const orders = await getAllOrders();
       return orders.flatMap((order: any) => {
-        const line = readLimitedProductLine(order);
-        if (!line) return [];
-        const product = products.get(line.productKey);
-        if (!product) return [];
-        if (input?.brand && product.brand !== input.brand) return [];
-        if (input?.category && product.category !== input.category) return [];
-        if (input?.productKey && line.productKey !== input.productKey)
-          return [];
-        if (input?.skuId && line.skuId !== input.skuId) return [];
-        const sku = getMibanLimitedProductSku(product, line.skuId);
-        return [
-          {
-            ...order,
-            limitedProduct: {
+        const limitedProducts = readLimitedProductLines(order)
+          .map(line => {
+            const product = products.get(line.productKey);
+            if (!product) return null;
+            const sku = getMibanLimitedProductSku(product, line.skuId);
+            return {
               productKey: line.productKey,
               skuId: line.skuId,
               quantity: line.quantity,
@@ -3138,12 +3327,28 @@ export const mibanLimitedProductRouter = router({
               productName: product.detail.title,
               skuName: sku?.name ?? line.skuId,
               unitLabel: sku?.unitLabel ?? "件",
-            },
+            };
+          })
+          .filter(Boolean);
+        if (limitedProducts.length === 0) return [];
+        const matches = limitedProducts.some(
+          (line: any) =>
+            (!input?.brand || line.brand === input.brand) &&
+            (!input?.category || line.category === input.category) &&
+            (!input?.productKey || line.productKey === input.productKey) &&
+            (!input?.skuId || line.skuId === input.skuId)
+        );
+        if (!matches) return [];
+        return [
+          {
+            ...order,
+            // 保留旧字段以兼容已有管理端，同时提供完整行供合单展示。
+            limitedProduct: limitedProducts[0],
+            limitedProducts,
           },
         ];
       });
     }),
-
 
   createOrder: protectedProcedure
     .input(
@@ -3310,6 +3515,230 @@ export const mibanLimitedProductRouter = router({
             null,
             userId,
             "订单创建失败，回滚预留库存"
+          );
+        }
+        throw error;
+      }
+    }),
+
+  // 同系列多商品合单。旧 createOrder 保持不变，兼容已发布的单商品详情页。
+  createCartOrder: protectedProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              productKey: z.string().trim().min(1).max(80),
+              skuId: z.string().trim().min(1).max(80),
+              quantity: z.number().int().min(1).max(20),
+            })
+          )
+          .min(1)
+          .max(10),
+        receiverName: z.string().trim().min(1).max(64),
+        receiverPhone: z.string().trim().min(11).max(20),
+        receiverAddress: z.string().trim().min(5).max(500),
+        userNote: z.string().trim().max(500).optional(),
+        cnyAmount: z.number().finite().min(0),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertAiWalletOperationEnabled(
+        "version:proj_hzxm2t",
+        "order_debit"
+      );
+
+      const seen = new Set<string>();
+      const resolvedLines: Array<
+        LimitedProductLine & {
+          product: NonNullable<ReturnType<typeof getMibanLimitedProduct>>;
+          sku: NonNullable<ReturnType<typeof getMibanLimitedProductSku>>;
+          lineTotalCny: number;
+        }
+      > = [];
+      let checkoutGroupKey = "";
+      let totalCents = 0;
+
+      for (const item of input.items) {
+        const itemKey = `${item.productKey}:${item.skuId}`;
+        if (seen.has(itemKey)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "购物车中存在重复商品，请刷新后重试",
+          });
+        }
+        seen.add(itemKey);
+        const product = getMibanLimitedProduct(item.productKey);
+        if (!product || product.status !== "on_sale") {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "购物车中有商品暂未上架或已结束销售",
+          });
+        }
+        const sku = getMibanLimitedProductSku(product, item.skuId);
+        if (!sku || !sku.active) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "购物车中有商品规格不可购买",
+          });
+        }
+        if (item.quantity > sku.maxPurchaseQty) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `“${sku.name}”单笔最多购买 ${sku.maxPurchaseQty}${sku.unitLabel}`,
+          });
+        }
+        const currentGroupKey = product.checkoutGroupKey ?? product.key;
+        if (checkoutGroupKey && checkoutGroupKey !== currentGroupKey) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "一次订单仅支持同一精选系列商品，请分别结算",
+          });
+        }
+        checkoutGroupKey = currentGroupKey;
+        const lineTotalCents =
+          Math.round(Number(sku.priceCny) * 100) * item.quantity;
+        totalCents += lineTotalCents;
+        resolvedLines.push({
+          productKey: product.key,
+          skuId: sku.id,
+          quantity: item.quantity,
+          product,
+          sku,
+          lineTotalCny: Number((lineTotalCents / 100).toFixed(2)),
+        });
+      }
+
+      const totalCny = Number((totalCents / 100).toFixed(2));
+      const userId = ctx.user!.id;
+      const cnyBalance = await getUserCnyBalance(userId);
+      const usdtBalance = await getUserBalance(userId);
+      const usdtRateRaw = await getUsdtCnyRate();
+      const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
+      if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "当前汇率暂不可用，请稍后再试",
+        });
+      }
+      const deductCny = Number(input.cnyAmount.toFixed(2));
+      if (deductCny > totalCny || deductCny > cnyBalance) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
+        });
+      }
+      const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
+      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      if (deductUsdt > usdtBalance) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
+        });
+      }
+
+      const orderNo = await createUniqueMibanOrderNo();
+      const stockLines = resolvedLines.map(
+        ({ productKey, skuId, quantity }) => ({
+          productKey,
+          skuId,
+          quantity,
+        })
+      );
+      // 先统一锁定全部规格，再一次性扣减；任一行失败会回滚整车库存预占。
+      const managedStockLines = await reserveLimitedSkuStocks(
+        stockLines,
+        userId,
+        orderNo
+      );
+      let orderCreated = false;
+      try {
+        const productLines = resolvedLines.map(line => ({
+          kind: "limited_product" as const,
+          productKey: line.productKey,
+          skuId: line.skuId,
+          name: line.product.detail.title,
+          skuName: line.sku.name,
+          image: line.sku.image || line.product.detail.productImage,
+          quantity: line.quantity,
+          unitLabel: line.sku.unitLabel,
+          netContentText: line.sku.netContentText,
+          unitPriceCny: line.sku.priceCny,
+          lineTotalCny: line.lineTotalCny,
+          colorHex: line.product.card.theme.accent,
+        }));
+        const firstLine = resolvedLines[0];
+        const totalQuantity = resolvedLines.reduce(
+          (sum, line) => sum + line.quantity,
+          0
+        );
+        const orderId = await createOrder({
+          orderNo,
+          userId,
+          recipeName:
+            resolvedLines.length === 1
+              ? `${firstLine.product.detail.title} · ${firstLine.sku.name}`
+              : `${firstLine.product.brand}精选 · ${firstLine.product.detail.title}等${resolvedLines.length}款`,
+          ingredients: JSON.stringify(productLines) as any,
+          // 旧表字段必须非空；限时商品以 ingredients 中的多行数量和单位为准。
+          totalWeightJin: String(totalQuantity) as any,
+          totalPrice: String(totalCny) as any,
+          receiverName: input.receiverName,
+          receiverPhone: input.receiverPhone,
+          receiverAddress: input.receiverAddress,
+          userNote: input.userNote || undefined,
+          productImg:
+            firstLine.sku.image || firstLine.product.detail.productImage,
+          walletDeductCny: String(deductCny) as any,
+          walletDeductUsdt: String(deductUsdt) as any,
+          usdtCnyRateAtOrder: String(usdtRate) as any,
+          commissionTrigger: "not_eligible",
+        });
+        orderCreated = true;
+        await linkLimitedStockDeductionsToOrder(
+          managedStockLines,
+          orderNo,
+          orderId
+        );
+
+        const deductNote = `米伴精选合单扣款 #${orderNo}`;
+        if (deductCny > 0.001) {
+          await adminAdjustCnyBalance({
+            userId,
+            amount: -deductCny,
+            note: deductNote,
+            operatorId: userId,
+          });
+        }
+        if (deductUsdt > 0.000001) {
+          await addUserBalance(
+            userId,
+            -deductUsdt,
+            "reward",
+            orderId,
+            `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
+          );
+        }
+        return {
+          orderId,
+          orderNo,
+          totalCny,
+          deductCny,
+          deductUsdt,
+          usdtCnyRateAtOrder: usdtRate,
+          itemCount: resolvedLines.length,
+          totalQuantity,
+          lines: productLines,
+        };
+      } catch (error) {
+        // 订单记录还未生成时才释放全部库存预占；已生成订单须走取消退款售后链路。
+        if (!orderCreated) {
+          await releaseLimitedSkuStocks(
+            managedStockLines,
+            "order_rollback",
+            null,
+            userId,
+            "合单订单创建失败，回滚预留库存"
           );
         }
         throw error;

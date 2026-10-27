@@ -6,6 +6,10 @@
  * - 服务端按此配置核验 SKU、数量和价格，绝不信任浏览器传入的金额。
  */
 import { HERBALIFE_THEME } from "./herbalife-theme";
+import {
+  TUOQUETANG_THEME,
+  tuoquetangImage,
+} from "./miban-limited-brand-config";
 
 export type LimitedProductSku = {
   id: string;
@@ -33,6 +37,8 @@ export type LimitedProduct = {
   key: string;
   status: "draft" | "on_sale" | "off_sale";
   brand: string;
+  /** 同一键下的商品可加入同一张限时订单；未配置时仅允许本商品自身合单。 */
+  checkoutGroupKey?: string;
   category: string;
   card: {
     badge: string;
@@ -47,8 +53,13 @@ export type LimitedProduct = {
     subtitle: string;
     tags: string[];
     heroImages: string[];
+    /** 首屏使用真实透明产品图时，可单独提供背景层，避免重绘包装。 */
+    heroBackgroundImage?: string;
     detailImage?: string;
     detailImages?: string[];
+    /** 置于产品简介内的说明图片，例如使用方法或成分说明。 */
+    introImage?: string;
+    introImageAlt?: string;
     consumerNoticeImage?: string;
     productImage: string;
     description?: string;
@@ -74,6 +85,12 @@ const HERBALIFE_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/herbalife/v1";
 const herbalifeImage = (product: string, file: string) =>
   `${HERBALIFE_COS_BASE}/${product}/${file}`;
+const herbalifeTeaLemonDetailImage = (file: string) =>
+  herbalifeImage("herbal-tea-lemon/user-detail-v2", file);
+const herbalifeAloeDetailImage = (file: string) =>
+  herbalifeImage("aloe-nutrition/user-detail-v2", file);
+const herbalifeRedBeanShakeDetailImage = (file: string) =>
+  herbalifeImage("shake-red-bean/user-detail-v2", file);
 const youthProteinMobileDetailImage = (file: string) =>
   herbalifeImage("youth-protein-portable/mobile-detail", file);
 const youthProteinMobileHeroImage = (file: string) =>
@@ -111,6 +128,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-red-ginseng",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "营养健康",
     card: {
       badge: "精选",
@@ -184,6 +202,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-herbal-tea-lemon",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "草本茶饮",
     card: {
       badge: "条装易享",
@@ -200,10 +219,16 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       title: "草本浓缩速溶茶饮易享装",
       subtitle: "柠檬口味 · 3.4g × 14条/盒",
       tags: ["条装易享", "柠檬口味", "含咖啡因"],
-      heroImages: [herbalifeImage("herbal-tea-lemon", "product-main.png")],
+      heroImages: [
+        herbalifeTeaLemonDetailImage("detail-01-lifestyle-lemon.jpg"),
+      ],
       detailImages: [
-        herbalifeImage("herbal-tea-lemon", "product-main.png"),
-        herbalifeImage("herbal-tea-lemon", "product-legacy.png"),
+        herbalifeTeaLemonDetailImage("detail-01-lifestyle-lemon.jpg"),
+        herbalifeTeaLemonDetailImage("detail-02-portable-pack.jpg"),
+        herbalifeTeaLemonDetailImage("detail-03-botanical-ingredients.jpg"),
+        herbalifeTeaLemonDetailImage("detail-04-calorie-comparison.png"),
+        herbalifeTeaLemonDetailImage("detail-05-quality-assurance.webp"),
+        herbalifeTeaLemonDetailImage("detail-06-life-scenarios.jpg"),
       ],
       productImage: herbalifeImage("herbal-tea-lemon", "product-main.png"),
       description:
@@ -233,6 +258,9 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         maxPurchaseQty: 10,
         active: true,
         image: herbalifeImage("herbal-tea-lemon", "product-main.png"),
+        heroImages: [
+          herbalifeTeaLemonDetailImage("detail-01-lifestyle-lemon.jpg"),
+        ],
       },
     ],
     orderPolicy: domesticOrderPolicy,
@@ -241,6 +269,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-aloe-nutrition",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "营养健康",
     card: {
       badge: "条装易享",
@@ -259,9 +288,16 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       tags: ["条装易享", "芦荟凝胶粉", "膳食纤维"],
       heroImages: [herbalifeImage("aloe-nutrition", "product-main.png")],
       detailImages: [
-        herbalifeImage("aloe-nutrition", "product-main.png"),
-        herbalifeImage("aloe-nutrition", "product-legacy.png"),
+        herbalifeAloeDetailImage("detail-01-pocket-nutrition.jpg"),
+        herbalifeAloeDetailImage("detail-02-portable-pack.jpg"),
+        herbalifeAloeDetailImage("detail-03-lifestyle-concerns.jpg"),
+        herbalifeAloeDetailImage("detail-04-nutrition-support.jpg"),
+        herbalifeAloeDetailImage("detail-05-product-pack.jpg"),
+        herbalifeAloeDetailImage("detail-06-material-formula-taste.jpg"),
+        herbalifeAloeDetailImage("detail-07-usage-and-lifestyles.jpg"),
       ],
+      introImage: herbalifeAloeDetailImage("intro-usage-guide-crop.jpg"),
+      introImageAlt: "芦荟营养粉易享装食用方法：每次一条，每日一次",
       productImage: herbalifeImage("aloe-nutrition", "product-main.png"),
       description:
         "本品以库拉索芦荟凝胶粉及益生元为主要原料精制而成，富含膳食纤维。",
@@ -296,6 +332,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-protein-shake-portable",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "营养奶昔",
     card: {
       badge: "三味可选",
@@ -341,11 +378,15 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         active: true,
         image: herbalifeImage("shake-red-bean", "product-legacy.png"),
         detailImages: [
-          herbalifeImage("shake-red-bean", "product-main.jpg"),
-          herbalifeImage("shake-red-bean", "product-hero.jpg"),
-          herbalifeImage("shake-red-bean", "product-legacy.png"),
-          herbalifeImage("shake-red-bean", "shake-bead.jpg"),
-          herbalifeImage("shake-red-bean", "product-icon.jpg"),
+          herbalifeRedBeanShakeDetailImage(
+            "detail-01-product-info-scenarios.jpg"
+          ),
+          herbalifeRedBeanShakeDetailImage("detail-02-calorie-comparison.jpg"),
+          herbalifeRedBeanShakeDetailImage("detail-03-nutrition-features.jpg"),
+          herbalifeRedBeanShakeDetailImage("detail-04-two-step-usage.jpg"),
+          herbalifeRedBeanShakeDetailImage("detail-05-shake-lifestyle.jpg"),
+          herbalifeRedBeanShakeDetailImage("detail-06-product-visual.jpg"),
+          herbalifeRedBeanShakeDetailImage("detail-07-brand-story.jpg"),
         ],
       },
       {
@@ -393,6 +434,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-ningyouran-sleep-5in1",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "睡眠营养",
     card: {
       badge: "每日一条",
@@ -451,6 +493,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     key: "herbalife-youth-protein-portable",
     status: "on_sale",
     brand: "康宝莱",
+    checkoutGroupKey: "herbalife-limited",
     category: "儿童青少年营养",
     card: {
       badge: "易享装",
@@ -528,6 +571,183 @@ export const mibanLimitedProducts: LimitedProduct[] = [
           youthProteinMobileDetailImage("06-daily-scenarios.jpg"),
           youthProteinMobileDetailImage("07-product-information.jpg"),
           youthProteinMobileDetailImage("08-questions-and-answers.jpg"),
+        ],
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  },
+  {
+    key: "tuoquetang-blue-cloth-herbal-toothpaste",
+    // 仅在本地热预览通过 ?preview=1 展示；未核验前不得进入实际销售链路。
+    status: "draft",
+    brand: "佗鹊堂",
+    checkoutGroupKey: "tuoquetang-limited",
+    category: "口腔清洁",
+    card: {
+      badge: "资料核验中",
+      title: "蓝布正植物牙膏",
+      subtitle: "10支组合装 · 日常刷牙清洁",
+      highlights: ["10支组合装", "草本植物牙膏", "暂未上架"],
+      image: tuoquetangImage("card-visuals", "toothpaste-mobile-card.webp"),
+      theme: {
+        accent: TUOQUETANG_THEME.primary,
+        background: TUOQUETANG_THEME.surfaceMuted,
+      },
+    },
+    detail: {
+      title: "佗鹊堂蓝布正植物牙膏",
+      subtitle: "10支组合装 · 商品信息以实物包装标签为准",
+      tags: ["资料核验中", "草本植物牙膏", "日常口腔清洁"],
+      heroImages: [
+        tuoquetangImage("hero-visuals", "toothpaste-square-hero.webp"),
+      ],
+      detailImages: [
+        tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
+        tuoquetangImage("toothpaste", "detail-02-plant-care.jpg"),
+      ],
+      productImage: tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
+      description:
+        "本页为商品资料预览，展示图来自供货链路提供的原始素材。商品用于日常刷牙清洁，成分、使用方法、注意事项及生产信息请以实物销售包装标签为准。",
+      usage: "请按实物包装标注的使用方法使用。",
+      warning:
+        "当前仍在核验产品备案、逐支规格、包装标签及渠道资料；本页不构成任何疾病预防、治疗或功效承诺。出现牙龈出血、疼痛等口腔不适时，请及时咨询牙科专业人士。",
+      logistics: [
+        {
+          title: "资料状态",
+          description: "当前为本地预览，商品尚未上架，不支持下单或扣款。",
+        },
+        {
+          title: "组合信息",
+          description:
+            "拟上架为10支组合装；单支净含量、批次与包装信息待实物核验。",
+        },
+        {
+          title: "渠道核验",
+          description: "正式上架前需核验品牌授权、供货凭证和产品标签信息。",
+        },
+        {
+          title: "图片说明",
+          description:
+            "页面展示为用户提供的产品资料图，正式销售包装以实物为准。",
+        },
+      ],
+      notices: [
+        {
+          label: "上架前提",
+          text: "请补充逐支六面包装图、备案/生产信息、授权或采购凭证后再开启销售。",
+        },
+      ],
+    },
+    skus: [
+      {
+        id: "blue-cloth-herbal-toothpaste-10-pack",
+        name: "10支组合装",
+        subtitle: "资料核验中 · 单支净含量以实物包装为准",
+        priceCny: 199,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "套",
+        netContentText: "10支组合装（规格待核验）",
+        maxPurchaseQty: 10,
+        active: true,
+        image: tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
+        heroImages: [
+          tuoquetangImage("hero-visuals", "toothpaste-square-hero.webp"),
+        ],
+        detailImages: [
+          tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
+          tuoquetangImage("toothpaste", "detail-02-plant-care.jpg"),
+        ],
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  },
+  {
+    key: "tuoquetang-revigor-one",
+    // 仅在本地热预览通过 ?preview=1 展示；未核验前不得进入实际销售链路。
+    status: "draft",
+    brand: "佗鹊堂",
+    checkoutGroupKey: "tuoquetang-limited",
+    category: "资料待核验",
+    card: {
+      badge: "资料核验中",
+      title: "复生1号",
+      subtitle: "展示价 ¥980 · 规格以实物包装为准",
+      highlights: ["展示价 ¥980", "包装资料图", "暂未上架"],
+      image: tuoquetangImage("card-visuals", "revigor-mobile-card.webp"),
+      theme: {
+        accent: TUOQUETANG_THEME.primary,
+        background: TUOQUETANG_THEME.surfaceMuted,
+      },
+    },
+    detail: {
+      title: "佗鹊堂复生1号",
+      subtitle: "展示价 ¥980 · 净含量与产品属性以实物包装为准",
+      tags: ["资料核验中", "包装资料图", "暂未上架"],
+      heroImages: [
+        tuoquetangImage("hero-visuals", "revigor-authentic-bottle-cutout.webp"),
+      ],
+      heroBackgroundImage: tuoquetangImage(
+        "hero-visuals",
+        "revigor-authentic-hero-background.webp"
+      ),
+      detailImages: [
+        tuoquetangImage("revigor-one", "detail-01-origin.jpg"),
+        tuoquetangImage("revigor-one", "detail-02-research.jpg"),
+      ],
+      productImage: tuoquetangImage("revigor-one", "product-bottle-focus.jpg"),
+      description:
+        "本页为商品资料预览。当前仅展示用户提供的包装与图文资料，净含量、配料或成分、生产信息、产品类别及使用说明均应以实物销售包装和随附说明为准。",
+      warning:
+        "当前仍在核验产品法定属性、包装六面图、标签、生产信息、渠道授权及采购凭证；本页不作任何疾病预防、治疗、保健或功能性承诺。",
+      logistics: [
+        {
+          title: "资料状态",
+          description: "当前为本地预览，商品尚未上架，不支持下单或扣款。",
+        },
+        {
+          title: "规格待核",
+          description: "净含量、粒数、配料或成分和使用说明待实物标签核验。",
+        },
+        {
+          title: "渠道核验",
+          description: "正式上架前需核验品牌授权、供货凭证和产品标签信息。",
+        },
+        {
+          title: "图片说明",
+          description:
+            "页面展示为用户提供的产品资料图，正式销售包装以实物为准。",
+        },
+      ],
+      notices: [
+        {
+          label: "上架前提",
+          text: "请补充当前包装六面图、净含量/规格、生产或备案信息及授权或采购凭证后再开启销售。",
+        },
+      ],
+    },
+    skus: [
+      {
+        id: "revigor-one-single-unit",
+        name: "单件展示",
+        subtitle: "资料核验中 · 规格以实物包装为准",
+        priceCny: 980,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "瓶",
+        netContentText: "单件（规格待核验）",
+        maxPurchaseQty: 10,
+        active: true,
+        image: tuoquetangImage("revigor-one", "product-bottle-focus.jpg"),
+        heroImages: [
+          tuoquetangImage(
+            "hero-visuals",
+            "revigor-authentic-bottle-cutout.webp"
+          ),
+        ],
+        detailImages: [
+          tuoquetangImage("revigor-one", "detail-01-origin.jpg"),
+          tuoquetangImage("revigor-one", "detail-02-research.jpg"),
         ],
       },
     ],

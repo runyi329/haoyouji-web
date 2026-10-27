@@ -21,42 +21,64 @@ import TianguiPearDetail from "./TianguiPearDetail";
 import ReviewPage from "./ReviewPage";
 import HerbalifeRedGinsengDetail from "./HerbalifeRedGinsengDetail";
 import LimitedBrandProducts from "./LimitedBrandProducts";
+import { LimitedProductCartProvider } from "./LimitedProductCart";
 
 const BASE = "/p/proj_hzxm2t";
 
 export default function MibanApp() {
   return (
-    <div className="min-h-screen bg-[#F8F6F3]">
-      <NavBar />
-      {/* 顶部 NavBar 占位 52px，底部 Tab 占位 64px */}
-      <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
-        <Switch>
-          <Route path={`${BASE}/pear/tiangui`} component={TianguiPearDetail} />
-          <Route path={`${BASE}/limited/:productKey/buy`} component={HerbalifeRedGinsengDetail} />
-          <Route path={`${BASE}/limited/herbalife-red-ginseng`} component={HerbalifeRedGinsengDetail} />
-          <Route path={`${BASE}/limited/herbalife`} component={LimitedBrandProducts} />
-          <Route path={`${BASE}/limited/:productKey`} component={HerbalifeRedGinsengDetail} />
-          <Route path={`${BASE}/review`} component={ReviewPage} />
-          <Route path={`${BASE}/rice/:id`} component={RiceDetail} />
-          <Route path={`${BASE}/rice`} component={RiceEncyclopedia} />
-          <Route path={`${BASE}/encyclopedia`} component={RiceEncyclopedia} />
-          <Route path={`${BASE}/limited`} component={LimitedSale} />
-          <Route path={`${BASE}/diy`} component={DiyWorkshop} />
-          <Route path={`${BASE}/ai-health`} component={AiHealth} />
-          <Route path={`${BASE}/presets`} component={PresetRecipes} />
-          <Route path={`${BASE}/my-recipes`} component={MyRecipes} />
-          <Route path={`${BASE}/my-orders`} component={MyOrders} />
-          <Route path={`${BASE}/admin/panel`} component={UnifiedAdmin} />
-          <Route path={`${BASE}/admin`} component={UnifiedAdmin} />
-          <Route path={`${BASE}/agent`} component={UnifiedAdmin} />
-          <Route path={`${BASE}/join`} component={JoinPage} />
-          <Route path={`${BASE}/brand`} component={BrandAssets} />
-          <Route path={`${BASE}`} component={Home} />
-          <Route path={`${BASE}/`} component={Home} />
-          {/* 默认回首页 */}
-          <Route component={Home} />
-        </Switch>
+    <LimitedProductCartProvider>
+      <div className="min-h-screen bg-[#F8F6F3]">
+        <NavBar />
+        {/* 顶部 NavBar 占位 52px，底部 Tab 占位 64px */}
+        <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
+          <Switch>
+            <Route
+              path={`${BASE}/pear/tiangui`}
+              component={TianguiPearDetail}
+            />
+            <Route
+              path={`${BASE}/limited/:productKey/buy`}
+              component={HerbalifeRedGinsengDetail}
+            />
+            <Route
+              path={`${BASE}/limited/herbalife-red-ginseng`}
+              component={HerbalifeRedGinsengDetail}
+            />
+            <Route
+              path={`${BASE}/limited/herbalife`}
+              component={LimitedBrandProducts}
+            />
+            <Route
+              path={`${BASE}/limited/tuoquetang`}
+              component={LimitedBrandProducts}
+            />
+            <Route
+              path={`${BASE}/limited/:productKey`}
+              component={HerbalifeRedGinsengDetail}
+            />
+            <Route path={`${BASE}/review`} component={ReviewPage} />
+            <Route path={`${BASE}/rice/:id`} component={RiceDetail} />
+            <Route path={`${BASE}/rice`} component={RiceEncyclopedia} />
+            <Route path={`${BASE}/encyclopedia`} component={RiceEncyclopedia} />
+            <Route path={`${BASE}/limited`} component={LimitedSale} />
+            <Route path={`${BASE}/diy`} component={DiyWorkshop} />
+            <Route path={`${BASE}/ai-health`} component={AiHealth} />
+            <Route path={`${BASE}/presets`} component={PresetRecipes} />
+            <Route path={`${BASE}/my-recipes`} component={MyRecipes} />
+            <Route path={`${BASE}/my-orders`} component={MyOrders} />
+            <Route path={`${BASE}/admin/panel`} component={UnifiedAdmin} />
+            <Route path={`${BASE}/admin`} component={UnifiedAdmin} />
+            <Route path={`${BASE}/agent`} component={UnifiedAdmin} />
+            <Route path={`${BASE}/join`} component={JoinPage} />
+            <Route path={`${BASE}/brand`} component={BrandAssets} />
+            <Route path={`${BASE}`} component={Home} />
+            <Route path={`${BASE}/`} component={Home} />
+            {/* 默认回首页 */}
+            <Route component={Home} />
+          </Switch>
+        </div>
       </div>
-    </div>
+    </LimitedProductCartProvider>
   );
 }

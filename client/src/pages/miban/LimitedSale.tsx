@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, FileSearch, Sparkles } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
-import herbalifeBrandFamily from "../../assets/miban/herbalife-brand-family.jpg";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
+import { TUOQUETANG_THEME } from "../../../../shared/miban-limited-brand-config";
+
+const BRAND_CARD_COS_BASE =
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v2";
+const HERBALIFE_CN_PRODUCTS_CARD =
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v3/herbalife-cn-weight-management-products-trimmed.webp";
 
 export default function LimitedSale() {
   const { data: pearSpecs } = mtrpc.pear.getSpecs.useQuery({
@@ -17,6 +22,8 @@ export default function LimitedSale() {
   const pearDeadline = new Date("2026-07-25T00:00:00+08:00").getTime();
   const [pearCountdown, setPearCountdown] = useState("");
   const [pearExpired, setPearExpired] = useState(false);
+  // 佗鹊堂产品资料尚未完成包装、备案和渠道核验，只在本地热预览展示。
+  const showTuoquetangPreview = import.meta.env.DEV;
 
   useEffect(() => {
     const tick = () => {
@@ -129,7 +136,7 @@ export default function LimitedSale() {
       className="min-h-screen pb-8"
       style={{ background: HERBALIFE_THEME.canvas }}
     >
-      <section className="px-5 pt-6" aria-label="品牌卡牌">
+      <section className="space-y-4 px-5 pt-6" aria-label="品牌卡牌">
         <Link
           href="/p/proj_hzxm2t/limited/herbalife"
           className="block active:scale-[0.985]"
@@ -137,45 +144,95 @@ export default function LimitedSale() {
           <article
             className="relative min-h-[220px] overflow-hidden rounded-[22px]"
             style={{
-              background: HERBALIFE_THEME.primary,
-              boxShadow: "0 14px 32px rgba(122,193,67,0.24)",
+              background:
+                "radial-gradient(circle at 88% 0%, #9CD85D 0%, rgba(156,216,93,0) 31%), linear-gradient(125deg, #0D572C 0%, #2E9437 57%, #59B941 100%)",
+              boxShadow: "0 14px 32px rgba(59,128,37,0.22)",
             }}
           >
-            <img
-              src={herbalifeBrandFamily}
-              alt="康宝莱系列"
-              className="absolute inset-0 h-full w-full object-contain object-center"
-            />
             <div
               className="absolute inset-0"
               style={{
                 background:
-                  "linear-gradient(90deg,rgba(122,193,67,0.97) 0%,rgba(122,193,67,0.80) 42%,rgba(122,193,67,0.08) 78%)",
+                  "linear-gradient(90deg,rgba(7,70,32,0.94) 0%,rgba(18,111,46,0.86) 47%,rgba(40,141,50,0.24) 75%,rgba(50,143,57,0.02) 100%)",
               }}
             />
-            <div className="relative flex min-h-[220px] max-w-[66%] flex-col justify-between px-5 py-5 text-white">
+            <div className="pointer-events-none absolute bottom-[-28px] right-[-64px] h-[280px] w-[280px]">
+              <div className="absolute bottom-4 left-1/2 h-8 w-[188px] -translate-x-1/2 rounded-[50%] bg-[#0A4B28]/35 blur-md" />
+              <img
+                src={HERBALIFE_CN_PRODUCTS_CARD}
+                alt="康宝莱中国官网体重管理系列中文包装产品"
+                className="absolute bottom-0 right-0 h-full w-full object-contain drop-shadow-[0_16px_16px_rgba(0,0,0,0.25)]"
+              />
+            </div>
+            <div className="relative z-10 flex min-h-[220px] max-w-[50%] flex-col justify-between px-5 py-5 text-white">
               <div>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  健康营养系列
+                  中国官网系列
                 </div>
                 <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                  康宝莱系列
+                  康宝莱精选
                 </h3>
                 <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  营养补充、体重管理与日常健康支持，进入专区查看在售商品。
+                  中文包装产品系列，进入专区查看在售商品。
                 </p>
               </div>
               <span
                 className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-3 py-2 text-[11px] font-bold"
                 style={{ color: HERBALIFE_THEME.primary }}
               >
-                进入康宝莱系列
+                查看康宝莱精选
                 <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
               </span>
             </div>
           </article>
         </Link>
+
+        {showTuoquetangPreview && (
+          <Link
+            href="/p/proj_hzxm2t/limited/tuoquetang?preview=1"
+            className="block active:scale-[0.985]"
+          >
+            <article
+              className="relative min-h-[220px] overflow-hidden rounded-[22px]"
+              style={{
+                background: TUOQUETANG_THEME.primary,
+                boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
+              }}
+            >
+              <img
+                src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
+                alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,61,56,0.98)_0%,rgba(8,76,68,0.91)_47%,rgba(8,76,68,0.22)_77%,rgba(8,76,68,0.04)_100%)]" />
+              <div className="relative flex min-h-[220px] max-w-[59%] flex-col justify-between px-5 py-5 text-white">
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
+                    <FileSearch className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    草本日用 · 资料预览
+                  </div>
+                  <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                    佗鹊堂精选
+                  </h3>
+                  <p className="mt-2 text-[11px] leading-5 text-white/78">
+                    蓝布正植物牙膏与复生1号，等待包装与渠道资料核验。
+                  </p>
+                </div>
+                <span
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
+                  style={{
+                    background: "#FFF8E8",
+                    color: TUOQUETANG_THEME.primary,
+                  }}
+                >
+                  查看佗鹊堂精选
+                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </span>
+              </div>
+            </article>
+          </Link>
+        )}
       </section>
 
       <section className="px-5 pb-1 pt-8" aria-label="时令上新">

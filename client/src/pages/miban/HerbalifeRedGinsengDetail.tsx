@@ -16,15 +16,15 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import {
-  getMibanLimitedProduct,
-} from "../../../../shared/miban-limited-products";
+import { getMibanLimitedProduct } from "../../../../shared/miban-limited-products";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
+import { getMibanLimitedBrandByName } from "../../../../shared/miban-limited-brand-config";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
 import { getCities, getDistricts, provinces } from "./regionData";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
 import { toast } from "sonner";
 
 type LimitedOrderSuccess = {
@@ -73,7 +73,7 @@ function Price({
       >
         {priceU.toFixed(2)}
         <span className={large ? "ml-1 text-[14px]" : "ml-0.5 text-[11px]"}>
-          U
+          USDT
         </span>
       </span>
       <span
@@ -100,13 +100,21 @@ export default function HerbalifeRedGinsengDetail() {
     routeParams?.productKey ??
     "herbalife-red-ginseng";
   const detailPath = `/p/proj_hzxm2t/limited/${productKey}`;
-  const checkoutSkuId = new URLSearchParams(location.split("?")[1] ?? "").get(
-    "sku"
-  );
+  const queryString =
+    typeof window === "undefined" ? "" : window.location.search;
+  const checkoutSkuId = new URLSearchParams(queryString).get("sku");
   const checkoutPathBase = `${detailPath}/buy`;
   const isCheckoutPage = location.split("?")[0] === checkoutPathBase;
   const currentProduct = getMibanLimitedProduct(productKey);
+  const previewMode = new URLSearchParams(queryString).get("preview") === "1";
+  const currentBrand = getMibanLimitedBrandByName(currentProduct?.brand ?? "");
+  const theme = currentBrand?.theme ?? HERBALIFE_THEME;
+  const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${previewMode ? "?preview=1" : ""}`;
+  const isPreviewProduct = Boolean(
+    previewMode && currentProduct?.status === "draft"
+  );
   const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const { addItem: addCartItem } = useLimitedProductCart();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedSkuId, setSelectedSkuId] = useState(() => checkoutSkuId ?? "");
   const [quantity, setQuantity] = useState(1);
@@ -129,8 +137,11 @@ export default function HerbalifeRedGinsengDetail() {
   const orderReceiptRef = useRef<HTMLDivElement>(null);
 
   const { data: availability, isLoading: availabilityLoading } =
-    mtrpc.limitedProduct.publicAvailability.useQuery();
-  const availabilityBySku = new Map(
+    mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
+      // 草稿资料预览不访问真实库存状态，也不会触发草稿SKU的运行时初始化。
+      enabled: !previewMode,
+    });
+  const availabilityBySku = new Map<string, any>(
     (availability ?? []).map((item: any) => [
       `${item.productKey}:${item.skuId}`,
       item,
@@ -140,7 +151,8 @@ export default function HerbalifeRedGinsengDetail() {
     currentProduct?.skus.filter(
       sku =>
         sku.active &&
-        (availabilityLoading ||
+        (previewMode ||
+          availabilityLoading ||
           availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOnSale ===
             true)
     ) ?? [];
@@ -149,7 +161,7 @@ export default function HerbalifeRedGinsengDetail() {
   const selectedSku = currentProduct
     ? (activeSkus.find(sku => sku.id === activeSkuId) ?? activeSkus[0])
     : undefined;
-  const accent = HERBALIFE_THEME.primary;
+  const accent = theme.primary;
   const productHeroImages =
     selectedSku?.heroImages && selectedSku.heroImages.length > 0
       ? selectedSku.heroImages
@@ -159,6 +171,7 @@ export default function HerbalifeRedGinsengDetail() {
   const hasSkuHeroCarousel = Boolean(
     selectedSku?.heroImages && selectedSku.heroImages.length > 0
   );
+  const heroBackgroundImage = currentProduct?.detail.heroBackgroundImage;
   const detailImages =
     selectedSku?.detailImages ??
     currentProduct?.detail.detailImages ??
@@ -242,13 +255,13 @@ export default function HerbalifeRedGinsengDetail() {
   const hasAvailablePaymentWallet = combinedPaymentAvailable;
   const paymentSummary =
     cnyDeductAmount > 0 && requiredUsdt > 0
-      ? `¥${cnyDeductAmount.toFixed(2)} + ${requiredUsdt.toFixed(2)} U`
+      ? `¥${cnyDeductAmount.toFixed(2)} + ${requiredUsdt.toFixed(2)} USDT`
       : cnyDeductAmount > 0
         ? `¥${cnyDeductAmount.toFixed(2)}`
-        : `${requiredUsdt.toFixed(2)} U`;
+        : `${requiredUsdt.toFixed(2)} USDT`;
 
   const createOrder = mtrpc.limitedProduct.createOrder.useMutation({
-    onSuccess: data => {
+    onSuccess: (data: any) => {
       setShowWalletPayment(false);
       setOrderSuccess({
         orderNo: data.orderNo,
@@ -312,6 +325,25 @@ export default function HerbalifeRedGinsengDetail() {
       return;
     }
     navigate(checkoutPath);
+  };
+
+  const handleAddToCart = () => {
+    if (!isOnSale || isPreviewProduct) return;
+    addCartItem({
+      checkoutGroupKey: currentProduct.checkoutGroupKey ?? currentProduct.key,
+      groupLabel: `${currentProduct.brand}精选`,
+      productKey: currentProduct.key,
+      productName: currentProduct.detail.title,
+      skuId: selectedSku.id,
+      skuName: selectedSku.name,
+      image: checkoutProductImage || selectedSku.image || "",
+      unitLabel: selectedSku.unitLabel,
+      netContentText: selectedSku.netContentText,
+      priceCny: selectedSku.priceCny,
+      maxPurchaseQty: selectedSku.maxPurchaseQty,
+      quantity,
+      accent,
+    });
   };
 
   const handleFavorite = () => {
@@ -449,7 +481,7 @@ export default function HerbalifeRedGinsengDetail() {
         }}
       >
         <button
-          onClick={() => navigate("/p/proj_hzxm2t/limited/herbalife")}
+          onClick={() => navigate(brandPagePath)}
           className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-800 active:bg-gray-100"
           aria-label="返回"
         >
@@ -461,7 +493,7 @@ export default function HerbalifeRedGinsengDetail() {
 
       <div
         className="relative overflow-hidden"
-        style={{ background: HERBALIFE_THEME.canvas }}
+        style={{ background: theme.canvas }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -472,16 +504,26 @@ export default function HerbalifeRedGinsengDetail() {
           {productHeroImages.map((image, index) => (
             <div
               key={image}
-              className="w-full flex-none"
+              className="relative w-full flex-none"
               style={{ aspectRatio: "1 / 1" }}
             >
+              {heroBackgroundImage && index === 0 && (
+                <img
+                  src={heroBackgroundImage}
+                  alt=""
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                />
+              )}
               <img
                 src={image}
                 alt={`${currentProduct.detail.title}展示图 ${index + 1}`}
                 className={
-                  hasSkuHeroCarousel || index > 0
-                    ? "h-full w-full object-cover"
-                    : "h-full w-full object-contain p-5"
+                  heroBackgroundImage && index === 0
+                    ? "relative z-10 h-full w-full object-contain p-3 drop-shadow-[0_18px_16px_rgba(0,0,0,0.24)]"
+                    : hasSkuHeroCarousel || index > 0
+                      ? "h-full w-full object-cover"
+                      : "h-full w-full object-contain p-5"
                 }
                 loading={index === 0 ? "eager" : "lazy"}
               />
@@ -514,6 +556,20 @@ export default function HerbalifeRedGinsengDetail() {
         )}
       </div>
 
+      {isPreviewProduct && (
+        <div
+          className="mx-4 mt-4 rounded-2xl border px-3 py-2.5 text-[11px] leading-5"
+          style={{
+            borderColor: theme.border,
+            background: theme.surfaceMuted,
+            color: theme.muted,
+          }}
+        >
+          <strong style={{ color: accent }}>资料核验中：</strong>
+          当前为本地设计预览，商品尚未上架；不会创建库存状态、订单或钱包扣款。页面内的包装与图文资料仅供核验，不作为对外功效承诺。
+        </div>
+      )}
+
       <section className="border-b border-gray-100 px-5 pb-5 pt-4">
         <div className="mb-2 flex flex-wrap gap-1.5">
           {currentProduct.detail.tags.map(tag => (
@@ -522,7 +578,7 @@ export default function HerbalifeRedGinsengDetail() {
               className="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"
               style={{
                 color: accent,
-                background: HERBALIFE_THEME.surfaceMuted,
+                background: theme.surfaceMuted,
               }}
             >
               {tag}
@@ -535,37 +591,29 @@ export default function HerbalifeRedGinsengDetail() {
         <p className="mt-1 text-[13px] text-gray-500">
           {currentProduct.detail.subtitle}
         </p>
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5">
-          <div className="min-w-0">
-            <div className="flex items-end gap-1.5">
-              <Price
-                value={selectedSku.priceCny}
-                usdtCnyRate={usdtCnyRate}
-                large
-                color={HERBALIFE_THEME.price}
-              />
-              <span className="mb-1 text-[11px] text-gray-400">
-                /{selectedSku.unitLabel}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-400">
-              {currentProduct.detail.isOverseas
+        <div className="mt-4">
+          <div className="flex items-end gap-1.5">
+            <Price
+              value={selectedSku.priceCny}
+              usdtCnyRate={usdtCnyRate}
+              large
+              color={theme.price}
+            />
+            <span className="mb-1 text-[11px] text-gray-400">
+              /{selectedSku.unitLabel}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+            <span className="font-medium text-gray-500">规格 / 净含量</span>
+            <span className="text-gray-700">{selectedSku.netContentText}</span>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400">
+            {isPreviewProduct
+              ? "商品资料来自用户提供的原始素材，包装与规格待实物核验"
+              : currentProduct.detail.isOverseas
                 ? "海外购商品，税费以订单实际申报为准"
                 : "商品资料整理自品牌公开信息，包装以到货实物为准"}
-            </p>
-          </div>
-          <div
-            className="min-w-[108px] shrink-0 rounded-xl px-3 py-2 text-right"
-            style={{ background: HERBALIFE_THEME.surfaceMuted }}
-          >
-            <div className="text-[10px] text-gray-400">净含量</div>
-            <div
-              className="mt-0.5 whitespace-nowrap text-[12px] font-bold"
-              style={{ color: accent }}
-            >
-              {selectedSku.netContentText}
-            </div>
-          </div>
+          </p>
         </div>
       </section>
 
@@ -582,7 +630,7 @@ export default function HerbalifeRedGinsengDetail() {
             </p>
           </div>
           <span className="text-[11px] font-semibold" style={{ color: accent }}>
-            康宝莱
+            {currentProduct.brand}
           </span>
         </div>
         <div className="space-y-2.5">
@@ -598,7 +646,7 @@ export default function HerbalifeRedGinsengDetail() {
                 className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
                 style={{
                   borderColor: selected ? accent : "#E7E5E4",
-                  background: selected ? HERBALIFE_THEME.surfaceMuted : "#fff",
+                  background: selected ? theme.surfaceMuted : "#fff",
                 }}
               >
                 <div>
@@ -622,7 +670,7 @@ export default function HerbalifeRedGinsengDetail() {
                 <Price
                   value={sku.priceCny}
                   usdtCnyRate={usdtCnyRate}
-                  color={HERBALIFE_THEME.price}
+                  color={theme.price}
                 />
               </button>
             );
@@ -634,9 +682,11 @@ export default function HerbalifeRedGinsengDetail() {
         <div className="px-5 pb-3 pt-5">
           <h2 className="text-[17px] font-extrabold text-gray-900">商品详情</h2>
           <p className="mt-1 text-[11px] text-gray-400">
-            {detailImages.length > 0
-              ? "以下图文按官方公开商品资料顺序展示"
-              : "以下商品信息整理自品牌公开资料"}
+            {isPreviewProduct
+              ? "以下为供货链路提供的原始资料图，仅供内部核验"
+              : detailImages.length > 0
+                ? "以下图文按官方公开商品资料顺序展示"
+                : "以下商品信息整理自品牌公开资料"}
           </p>
         </div>
         {detailImages.length > 0 && (
@@ -653,13 +703,34 @@ export default function HerbalifeRedGinsengDetail() {
           </div>
         )}
         {(currentProduct.detail.description ||
+          currentProduct.detail.introImage ||
           currentProduct.detail.usage ||
           currentProduct.detail.warning) && (
           <div className="space-y-4 px-5 pb-5 text-[13px] leading-6 text-gray-600">
-            {currentProduct.detail.description && (
+            {(currentProduct.detail.description ||
+              currentProduct.detail.introImage) && (
               <div>
                 <h3 className="font-bold text-gray-900">产品简介</h3>
-                <p className="mt-1">{currentProduct.detail.description}</p>
+                {currentProduct.detail.introImage && (
+                  <img
+                    src={currentProduct.detail.introImage}
+                    alt={
+                      currentProduct.detail.introImageAlt ||
+                      `${currentProduct.detail.title}产品介绍图`
+                    }
+                    className="mt-2 w-full rounded-xl bg-white"
+                    loading="lazy"
+                  />
+                )}
+                {currentProduct.detail.description && (
+                  <p
+                    className={
+                      currentProduct.detail.introImage ? "mt-3" : "mt-1"
+                    }
+                  >
+                    {currentProduct.detail.description}
+                  </p>
+                )}
               </div>
             )}
             {currentProduct.detail.usage && (
@@ -706,11 +777,9 @@ export default function HerbalifeRedGinsengDetail() {
               className="p-3"
               style={{
                 borderRight:
-                  index % 2 === 0
-                    ? `1px solid ${HERBALIFE_THEME.border}`
-                    : undefined,
+                  index % 2 === 0 ? `1px solid ${theme.border}` : undefined,
                 borderBottom:
-                  index < 2 ? `1px solid ${HERBALIFE_THEME.border}` : undefined,
+                  index < 2 ? `1px solid ${theme.border}` : undefined,
               }}
             >
               <div
@@ -758,8 +827,8 @@ export default function HerbalifeRedGinsengDetail() {
             className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl active:scale-95 disabled:opacity-60"
             style={{
               background: favoriteData?.favorited
-                ? HERBALIFE_THEME.surfaceMuted
-                : HERBALIFE_THEME.canvas,
+                ? theme.surfaceMuted
+                : theme.canvas,
             }}
           >
             <Heart
@@ -777,19 +846,31 @@ export default function HerbalifeRedGinsengDetail() {
             </span>
           </button>
         )}
+        <LimitedCartButton accent={accent} />
+        <button
+          onClick={handleAddToCart}
+          disabled={!isOnSale || isPreviewProduct}
+          className="h-14 flex-1 rounded-xl border text-[14px] font-extrabold disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300"
+          style={{
+            borderColor: isOnSale ? accent : undefined,
+            color: isOnSale ? accent : undefined,
+          }}
+        >
+          加入购物车
+        </button>
         <button
           onClick={handleBuy}
           disabled={!isOnSale || authLoading}
-          className="h-14 flex-1 rounded-xl text-[16px] font-extrabold tracking-wide text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+          className="h-14 flex-1 rounded-xl text-[14px] font-extrabold tracking-wide text-white disabled:cursor-not-allowed disabled:bg-gray-300"
           style={{
-            background: isOnSale ? HERBALIFE_THEME.primary : undefined,
+            background: isOnSale ? accent : undefined,
           }}
         >
-          {isOnSale ? "立即购买" : "暂未开售"}
+          {isPreviewProduct ? "资料核验中" : isOnSale ? "立即购买" : "暂未开售"}
         </button>
       </div>
 
-      {isCheckoutPage && !orderSuccess && (
+      {isCheckoutPage && !orderSuccess && !isPreviewProduct && (
         <div className="fixed inset-0 z-[70] bg-white">
           <div className="mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
@@ -812,7 +893,7 @@ export default function HerbalifeRedGinsengDetail() {
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <div
                 className="flex gap-3 rounded-2xl p-3"
-                style={{ background: HERBALIFE_THEME.surfaceMuted }}
+                style={{ background: theme.surfaceMuted }}
               >
                 <img
                   src={checkoutProductImage}
@@ -830,7 +911,7 @@ export default function HerbalifeRedGinsengDetail() {
                     <Price
                       value={selectedSku.priceCny}
                       usdtCnyRate={usdtCnyRate}
-                      color={HERBALIFE_THEME.price}
+                      color={theme.price}
                     />
                   </div>
                 </div>
@@ -874,7 +955,7 @@ export default function HerbalifeRedGinsengDetail() {
 
               <div
                 className="mt-4 rounded-xl px-4 py-3"
-                style={{ background: HERBALIFE_THEME.canvas }}
+                style={{ background: theme.canvas }}
               >
                 <div className="border-b border-gray-200 pb-3">
                   <div className="mb-2 text-[12px] font-semibold text-gray-600">
@@ -885,7 +966,7 @@ export default function HerbalifeRedGinsengDetail() {
                       <div className="text-[10px] text-gray-400">USDT</div>
                       <div
                         className="mt-0.5 whitespace-nowrap text-[14px] font-extrabold"
-                        style={{ color: HERBALIFE_THEME.price }}
+                        style={{ color: theme.price }}
                       >
                         {totalPriceU.toFixed(2)} U
                       </div>
@@ -1081,171 +1162,174 @@ export default function HerbalifeRedGinsengDetail() {
                 disabled={!canSubmit}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
                 style={{
-                  background: canSubmit ? HERBALIFE_THEME.primary : undefined,
+                  background: canSubmit ? accent : undefined,
                 }}
               >
                 {!hasAvailablePaymentWallet
                   ? "查看钱包余额"
-                  : `去支付 · ${totalPriceU.toFixed(2)} U`}
+                  : `去支付 · ${totalPriceU.toFixed(2)} USDT`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showWalletPayment && isCheckoutPage && !orderSuccess && (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45">
-          <div
-            className="w-full rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
-            style={{
-              maxWidth: 480,
-              paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-            }}
-          >
-            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200" />
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-[19px] font-extrabold text-gray-900">
-                  钱包支付
-                </h2>
-                <p className="mt-1 text-[12px] text-gray-400">
-                  人民币与 U 均可组合使用
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowWalletPayment(false)}
-                disabled={createOrder.isPending}
-                className="rounded-lg px-2 py-1 text-[13px] text-gray-500 disabled:opacity-40"
-              >
-                取消
-              </button>
-            </div>
-
+      {showWalletPayment &&
+        isCheckoutPage &&
+        !orderSuccess &&
+        !isPreviewProduct && (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45">
             <div
-              className="mt-4 rounded-2xl px-4 py-3"
-              style={{ background: HERBALIFE_THEME.surfaceMuted }}
-            >
-              <div className="text-[11px] text-gray-500">本次应付</div>
-              <div className="mt-1">
-                <Price
-                  value={totalPrice}
-                  usdtCnyRate={usdtCnyRate}
-                  large
-                  color={HERBALIFE_THEME.price}
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 text-[13px] font-bold text-gray-800">
-              支付分配
-            </div>
-            <div className="mt-2.5 space-y-2.5">
-              <div
-                className="rounded-2xl border px-4 py-3.5"
-                style={{
-                  borderColor: HERBALIFE_THEME.border,
-                  background: HERBALIFE_THEME.surfaceMuted,
-                }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[14px] font-bold text-gray-900">
-                      人民币钱包
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-gray-500">
-                      可用 ¥{cnyBalanceNum.toFixed(2)}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCnyPayment(maxCnyPayment)}
-                    disabled={createOrder.isPending}
-                    className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
-                    style={{ color: accent, background: "#FFFFFF" }}
-                  >
-                    全部使用
-                  </button>
-                </div>
-                <div className="mt-3 flex items-center rounded-xl border border-gray-200 bg-white px-3">
-                  <span className="text-[16px] font-bold text-gray-600">¥</span>
-                  <input
-                    value={cnyPaymentInput}
-                    onChange={event =>
-                      handleCnyPaymentInput(event.target.value)
-                    }
-                    onBlur={() => setCnyPayment(cnyDeductAmount)}
-                    inputMode="decimal"
-                    disabled={createOrder.isPending}
-                    aria-label="本次使用的人民币金额"
-                    className="h-10 min-w-0 flex-1 bg-transparent px-2 text-right text-[16px] font-extrabold text-gray-900 outline-none disabled:opacity-40"
-                  />
-                  <span className="text-[12px] text-gray-400">本次使用</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[14px] font-bold text-gray-900">
-                      USDT 钱包
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-gray-500">
-                      可用 {usdtBalanceNum.toFixed(2)} U
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={useAvailableUsdtFirst}
-                    disabled={createOrder.isPending || usdtBalanceNum <= 0}
-                    className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
-                    style={{
-                      color: accent,
-                      background: HERBALIFE_THEME.surfaceMuted,
-                    }}
-                  >
-                    优先使用 U
-                  </button>
-                </div>
-                <div className="mt-3 flex h-10 items-center justify-between rounded-xl bg-gray-50 px-3">
-                  <span className="text-[12px] text-gray-500">本次使用</span>
-                  <span
-                    className="text-[16px] font-extrabold"
-                    style={{ color: HERBALIFE_THEME.price }}
-                  >
-                    {requiredUsdt.toFixed(2)} U
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <p className="mt-3 text-[11px] leading-5 text-gray-400">
-              可直接输入本次要使用的人民币金额，剩余部分自动按实时汇率由 U
-              支付；点击“优先使用 U”可尽量使用 U 余额。
-            </p>
-            <button
-              type="button"
-              onClick={handleConfirmWalletPayment}
-              disabled={!combinedPaymentAvailable || createOrder.isPending}
-              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
+              className="w-full rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
               style={{
-                background: combinedPaymentAvailable
-                  ? HERBALIFE_THEME.primary
-                  : undefined,
+                maxWidth: 480,
+                paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
               }}
             >
-              {createOrder.isPending ? (
-                <>
-                  <Loader2 size={17} className="animate-spin" />
-                  支付中
-                </>
-              ) : (
-                `确认支付 · ${paymentSummary}`
-              )}
-            </button>
+              <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200" />
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-[19px] font-extrabold text-gray-900">
+                    钱包支付
+                  </h2>
+                  <p className="mt-1 text-[12px] text-gray-400">
+                    人民币与 U 均可组合使用
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowWalletPayment(false)}
+                  disabled={createOrder.isPending}
+                  className="rounded-lg px-2 py-1 text-[13px] text-gray-500 disabled:opacity-40"
+                >
+                  取消
+                </button>
+              </div>
+
+              <div
+                className="mt-4 rounded-2xl px-4 py-3"
+                style={{ background: theme.surfaceMuted }}
+              >
+                <div className="text-[11px] text-gray-500">本次应付</div>
+                <div className="mt-1">
+                  <Price
+                    value={totalPrice}
+                    usdtCnyRate={usdtCnyRate}
+                    large
+                    color={theme.price}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 text-[13px] font-bold text-gray-800">
+                支付分配
+              </div>
+              <div className="mt-2.5 space-y-2.5">
+                <div
+                  className="rounded-2xl border px-4 py-3.5"
+                  style={{
+                    borderColor: theme.border,
+                    background: theme.surfaceMuted,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[14px] font-bold text-gray-900">
+                        人民币钱包
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-gray-500">
+                        可用 ¥{cnyBalanceNum.toFixed(2)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCnyPayment(maxCnyPayment)}
+                      disabled={createOrder.isPending}
+                      className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
+                      style={{ color: accent, background: "#FFFFFF" }}
+                    >
+                      全部使用
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center rounded-xl border border-gray-200 bg-white px-3">
+                    <span className="text-[16px] font-bold text-gray-600">
+                      ¥
+                    </span>
+                    <input
+                      value={cnyPaymentInput}
+                      onChange={event =>
+                        handleCnyPaymentInput(event.target.value)
+                      }
+                      onBlur={() => setCnyPayment(cnyDeductAmount)}
+                      inputMode="decimal"
+                      disabled={createOrder.isPending}
+                      aria-label="本次使用的人民币金额"
+                      className="h-10 min-w-0 flex-1 bg-transparent px-2 text-right text-[16px] font-extrabold text-gray-900 outline-none disabled:opacity-40"
+                    />
+                    <span className="text-[12px] text-gray-400">本次使用</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[14px] font-bold text-gray-900">
+                        USDT 钱包
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-gray-500">
+                        可用 {usdtBalanceNum.toFixed(2)} U
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={useAvailableUsdtFirst}
+                      disabled={createOrder.isPending || usdtBalanceNum <= 0}
+                      className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
+                      style={{
+                        color: accent,
+                        background: theme.surfaceMuted,
+                      }}
+                    >
+                      优先使用 U
+                    </button>
+                  </div>
+                  <div className="mt-3 flex h-10 items-center justify-between rounded-xl bg-gray-50 px-3">
+                    <span className="text-[12px] text-gray-500">本次使用</span>
+                    <span
+                      className="text-[16px] font-extrabold"
+                      style={{ color: theme.price }}
+                    >
+                      {requiredUsdt.toFixed(2)} USDT
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[11px] leading-5 text-gray-400">
+                可直接输入本次要使用的人民币金额，剩余部分自动按实时汇率由 U
+                支付；点击“优先使用 U”可尽量使用 U 余额。
+              </p>
+              <button
+                type="button"
+                onClick={handleConfirmWalletPayment}
+                disabled={!combinedPaymentAvailable || createOrder.isPending}
+                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
+                style={{
+                  background: combinedPaymentAvailable ? accent : undefined,
+                }}
+              >
+                {createOrder.isPending ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    支付中
+                  </>
+                ) : (
+                  `确认支付 · ${paymentSummary}`
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {orderSuccess && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 px-6">
@@ -1261,8 +1345,8 @@ export default function HerbalifeRedGinsengDetail() {
                 <div
                   className="mx-auto flex h-12 w-12 items-center justify-center rounded-full"
                   style={{
-                    background: HERBALIFE_THEME.surfaceMuted,
-                    color: HERBALIFE_THEME.primary,
+                    background: theme.surfaceMuted,
+                    color: accent,
                   }}
                 >
                   <Check size={25} strokeWidth={3} />
@@ -1278,7 +1362,7 @@ export default function HerbalifeRedGinsengDetail() {
               <div className="space-y-3 py-4 text-[12px] leading-relaxed">
                 <div
                   className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
-                  style={{ background: HERBALIFE_THEME.surfaceMuted }}
+                  style={{ background: theme.surfaceMuted }}
                 >
                   <span className="shrink-0 text-gray-500">订单编号</span>
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -1292,7 +1376,7 @@ export default function HerbalifeRedGinsengDetail() {
                         copyToClipboard(orderSuccess.orderNo, "订单编号已复制")
                       }
                       className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white"
-                      style={{ color: HERBALIFE_THEME.primary }}
+                      style={{ color: accent }}
                       aria-label="复制订单编号"
                       title="复制订单编号"
                     >
@@ -1321,7 +1405,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <span className="text-gray-400">应付金额</span>
                   <span
                     className="text-right font-extrabold"
-                    style={{ color: HERBALIFE_THEME.price }}
+                    style={{ color: theme.price }}
                   >
                     ¥{orderSuccess.totalCny.toFixed(2)}
                   </span>
@@ -1335,7 +1419,7 @@ export default function HerbalifeRedGinsengDetail() {
                       ? " + "
                       : ""}
                     {orderSuccess.deductUsdt > 0.000001
-                      ? `USDT ${orderSuccess.deductUsdt.toFixed(2)} U`
+                      ? `USDT ${orderSuccess.deductUsdt.toFixed(2)}`
                       : ""}
                   </span>
                 </div>
@@ -1376,7 +1460,7 @@ export default function HerbalifeRedGinsengDetail() {
                 targetRef={orderReceiptRef}
                 currentUser={user}
                 orderNo={orderSuccess.orderNo}
-                color={HERBALIFE_THEME.primary}
+                color={accent}
                 outerPadding={12}
                 captureFullContent
                 fullContentHorizontalBleed={0}
@@ -1393,7 +1477,7 @@ export default function HerbalifeRedGinsengDetail() {
             <Link
               href="/p/proj_hzxm2t/my-orders"
               className="mt-3 flex h-11 items-center justify-center rounded-xl text-[14px] font-bold text-white"
-              style={{ background: HERBALIFE_THEME.primary }}
+              style={{ background: accent }}
             >
               查看我的订单
             </Link>

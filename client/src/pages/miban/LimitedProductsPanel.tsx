@@ -36,14 +36,14 @@ const STATUS_STYLE: Record<string, string> = {
   cancelled: "bg-red-50 text-red-600",
 };
 
-function parseLimitedLine(order: any) {
+function parseLimitedLines(order: any) {
   try {
     const list = JSON.parse(order.ingredients ?? "[]");
     return Array.isArray(list)
-      ? list.find((item: any) => item?.kind === "limited_product")
-      : null;
+      ? list.filter((item: any) => item?.kind === "limited_product")
+      : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -639,7 +639,10 @@ export default function LimitedProductsPanel() {
                 ) : (
                   <div className="space-y-2">
                     {ordersQuery.data.map((order: any) => {
-                      const line = parseLimitedLine(order);
+                      const lines = parseLimitedLines(order);
+                      const currentSkuLines = lines.filter(
+                        (line: any) => line?.skuId === selectedSku.id
+                      );
                       const addressEditable = [
                         "pending",
                         "confirmed",
@@ -673,11 +676,22 @@ export default function LimitedProductsPanel() {
                               {STATUS_LABELS[order.status] || order.status}
                             </span>
                           </div>
-                          <p className="mt-2 text-[11px] text-gray-600">
-                            {line?.skuName || selectedSku.name} ×{" "}
-                            {line?.quantity || 1}
-                            {line?.unitLabel || selectedSku.unitLabel}
-                          </p>
+                          <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                            {currentSkuLines.map((line: any, index: number) => (
+                              <p key={`${line.skuId}-${index}`}>
+                                {line.skuName || selectedSku.name} ×{" "}
+                                {line.quantity || 1}
+                                {line.unitLabel || selectedSku.unitLabel}
+                              </p>
+                            ))}
+                            {lines.length > currentSkuLines.length && (
+                              <p className="text-gray-400">
+                                该订单还含{" "}
+                                {lines.length - currentSkuLines.length}{" "}
+                                件其他商品
+                              </p>
+                            )}
+                          </div>
                           <p className="mt-1 flex gap-1 text-[11px] text-gray-500">
                             <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
                             <span>
@@ -701,7 +715,9 @@ export default function LimitedProductsPanel() {
                                 onClick={() => setCancelTarget(order)}
                                 className="flex-1 rounded-lg border border-red-100 bg-red-50 py-1.5 text-[11px] text-red-500"
                               >
-                                取消并退款
+                                {lines.length > 1
+                                  ? "取消整单并退款"
+                                  : "取消并退款"}
                               </button>
                             )}
                           </div>
