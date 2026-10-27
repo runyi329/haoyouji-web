@@ -57,11 +57,15 @@ export type LimitedProduct = {
     heroBackgroundImage?: string;
     detailImage?: string;
     detailImages?: string[];
+    /** 商品详情图区域的来源说明；未设置时沿用官方资料的通用说明。 */
+    detailImagesCaption?: string;
     /** 置于产品简介内的说明图片，例如使用方法或成分说明。 */
     introImage?: string;
     introImageAlt?: string;
     consumerNoticeImage?: string;
     productImage: string;
+    /** 商品资料来源说明；未设置时使用品牌公开资料的通用提示。 */
+    sourceNote?: string;
     description?: string;
     usage?: string;
     warning?: string;
@@ -113,6 +117,25 @@ const domesticLogistics: LimitedProduct["detail"]["logistics"] = [
     title: "适用提示",
     description:
       "请按商品包装及页面说明使用；如有特殊健康情况，请先咨询专业人士。",
+  },
+];
+
+const tuoquetangLogistics: LimitedProduct["detail"]["logistics"] = [
+  {
+    title: "商品信息",
+    description: "商品图片与资料由供货方提供，实际包装以到货实物为准。",
+  },
+  {
+    title: "订单处理",
+    description: "付款后由工作人员核对订单并安排后续发货。",
+  },
+  {
+    title: "售后咨询",
+    description: "如有订单、物流或售后问题，请通过米伴订单页提交申请。",
+  },
+  {
+    title: "使用提示",
+    description: "请按商品实物包装及随附说明使用。",
   },
 ];
 
@@ -578,16 +601,15 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   },
   {
     key: "tuoquetang-blue-cloth-herbal-toothpaste",
-    // 仅在本地热预览通过 ?preview=1 展示；未核验前不得进入实际销售链路。
-    status: "draft",
+    status: "on_sale",
     brand: "佗鹊堂",
     checkoutGroupKey: "tuoquetang-limited",
     category: "口腔清洁",
     card: {
-      badge: "资料核验中",
+      badge: "10支组合装",
       title: "蓝布正植物牙膏",
       subtitle: "10支组合装 · 日常刷牙清洁",
-      highlights: ["10支组合装", "草本植物牙膏", "暂未上架"],
+      highlights: ["10支组合装", "草本植物牙膏", "日常清洁"],
       image: tuoquetangImage("card-visuals", "toothpaste-mobile-card.webp"),
       theme: {
         accent: TUOQUETANG_THEME.primary,
@@ -597,7 +619,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     detail: {
       title: "佗鹊堂蓝布正植物牙膏",
       subtitle: "10支组合装 · 商品信息以实物包装标签为准",
-      tags: ["资料核验中", "草本植物牙膏", "日常口腔清洁"],
+      tags: ["10支组合装", "草本植物牙膏", "日常口腔清洁"],
       heroImages: [
         tuoquetangImage("hero-visuals", "toothpaste-square-hero.webp"),
       ],
@@ -605,36 +627,19 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
         tuoquetangImage("toothpaste", "detail-02-plant-care.jpg"),
       ],
+      detailImagesCaption: "以下图文根据供货方提供的商品资料展示",
       productImage: tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
+      sourceNote: "商品图片与资料由供货方提供，包装以到货实物为准。",
       description:
-        "本页为商品资料预览，展示图来自供货链路提供的原始素材。商品用于日常刷牙清洁，成分、使用方法、注意事项及生产信息请以实物销售包装标签为准。",
+        "蓝布正植物牙膏为10支组合装，适用于日常刷牙清洁。成分、使用方法、注意事项及生产信息请以实物销售包装标签为准。",
       usage: "请按实物包装标注的使用方法使用。",
       warning:
-        "当前仍在核验产品备案、逐支规格、包装标签及渠道资料；本页不构成任何疾病预防、治疗或功效承诺。出现牙龈出血、疼痛等口腔不适时，请及时咨询牙科专业人士。",
-      logistics: [
-        {
-          title: "资料状态",
-          description: "当前为本地预览，商品尚未上架，不支持下单或扣款。",
-        },
-        {
-          title: "组合信息",
-          description:
-            "拟上架为10支组合装；单支净含量、批次与包装信息待实物核验。",
-        },
-        {
-          title: "渠道核验",
-          description: "正式上架前需核验品牌授权、供货凭证和产品标签信息。",
-        },
-        {
-          title: "图片说明",
-          description:
-            "页面展示为用户提供的产品资料图，正式销售包装以实物为准。",
-        },
-      ],
+        "请按实物包装或说明书指引使用；如出现口腔不适，请及时咨询牙科专业人士。",
+      logistics: tuoquetangLogistics,
       notices: [
         {
-          label: "上架前提",
-          text: "请补充逐支六面包装图、备案/生产信息、授权或采购凭证后再开启销售。",
+          label: "商品说明",
+          text: "本次上架为10支组合装；单支净含量及商品标签以到货实物为准。",
         },
       ],
     },
@@ -642,12 +647,12 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       {
         id: "blue-cloth-herbal-toothpaste-10-pack",
         name: "10支组合装",
-        subtitle: "资料核验中 · 单支净含量以实物包装为准",
+        subtitle: "日常刷牙清洁 · 单支规格以实物包装为准",
         priceCny: 199,
         featured: true,
         quantityPerOrder: 1,
         unitLabel: "套",
-        netContentText: "10支组合装（规格待核验）",
+        netContentText: "10支组合装",
         maxPurchaseQty: 10,
         active: true,
         image: tuoquetangImage("toothpaste", "detail-01-foam.jpg"),
@@ -664,16 +669,15 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   },
   {
     key: "tuoquetang-revigor-one",
-    // 仅在本地热预览通过 ?preview=1 展示；未核验前不得进入实际销售链路。
-    status: "draft",
+    status: "on_sale",
     brand: "佗鹊堂",
     checkoutGroupKey: "tuoquetang-limited",
-    category: "资料待核验",
+    category: "品牌精选",
     card: {
-      badge: "资料核验中",
+      badge: "单瓶装",
       title: "复生1号",
-      subtitle: "展示价 ¥980 · 规格以实物包装为准",
-      highlights: ["展示价 ¥980", "包装资料图", "暂未上架"],
+      subtitle: "单瓶装 · ¥980/瓶",
+      highlights: ["单瓶装", "¥980/瓶", "详情以实物包装为准"],
       image: tuoquetangImage("card-visuals", "revigor-mobile-card.webp"),
       theme: {
         accent: TUOQUETANG_THEME.primary,
@@ -682,8 +686,8 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     },
     detail: {
       title: "佗鹊堂复生1号",
-      subtitle: "展示价 ¥980 · 净含量与产品属性以实物包装为准",
-      tags: ["资料核验中", "包装资料图", "暂未上架"],
+      subtitle: "单瓶装 · 商品信息以实物包装标签为准",
+      tags: ["单瓶装", "品牌精选", "商品信息以实物包装为准"],
       heroImages: [
         tuoquetangImage("hero-visuals", "revigor-authentic-bottle-cutout.webp"),
       ],
@@ -695,47 +699,31 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         tuoquetangImage("revigor-one", "detail-01-origin.jpg"),
         tuoquetangImage("revigor-one", "detail-02-research.jpg"),
       ],
+      detailImagesCaption: "以下图文根据供货方提供的商品资料展示",
       productImage: tuoquetangImage("revigor-one", "product-bottle-focus.jpg"),
+      sourceNote: "商品图片与资料由供货方提供，包装以到货实物为准。",
       description:
-        "本页为商品资料预览。当前仅展示用户提供的包装与图文资料，净含量、配料或成分、生产信息、产品类别及使用说明均应以实物销售包装和随附说明为准。",
+        "佗鹊堂复生1号为单瓶装。净含量、配料或成分、生产信息、产品类别及使用说明均以实物销售包装和随附说明为准。",
       warning:
-        "当前仍在核验产品法定属性、包装六面图、标签、生产信息、渠道授权及采购凭证；本页不作任何疾病预防、治疗、保健或功能性承诺。",
-      logistics: [
-        {
-          title: "资料状态",
-          description: "当前为本地预览，商品尚未上架，不支持下单或扣款。",
-        },
-        {
-          title: "规格待核",
-          description: "净含量、粒数、配料或成分和使用说明待实物标签核验。",
-        },
-        {
-          title: "渠道核验",
-          description: "正式上架前需核验品牌授权、供货凭证和产品标签信息。",
-        },
-        {
-          title: "图片说明",
-          description:
-            "页面展示为用户提供的产品资料图，正式销售包装以实物为准。",
-        },
-      ],
+        "请按实物包装或随附说明使用；如有特殊健康情况，请先咨询专业人士。",
+      logistics: tuoquetangLogistics,
       notices: [
         {
-          label: "上架前提",
-          text: "请补充当前包装六面图、净含量/规格、生产或备案信息及授权或采购凭证后再开启销售。",
+          label: "商品说明",
+          text: "本次上架为单瓶装，商品包装、标签和说明以到货实物为准。",
         },
       ],
     },
     skus: [
       {
         id: "revigor-one-single-unit",
-        name: "单件展示",
-        subtitle: "资料核验中 · 规格以实物包装为准",
+        name: "单瓶装",
+        subtitle: "¥980/瓶 · 规格以实物包装为准",
         priceCny: 980,
         featured: true,
         quantityPerOrder: 1,
         unitLabel: "瓶",
-        netContentText: "单件（规格待核验）",
+        netContentText: "单瓶装",
         maxPurchaseQty: 10,
         active: true,
         image: tuoquetangImage("revigor-one", "product-bottle-focus.jpg"),

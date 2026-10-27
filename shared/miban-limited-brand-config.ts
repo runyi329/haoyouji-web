@@ -34,8 +34,8 @@ export const mibanLimitedBrands = [
     brand: "佗鹊堂",
     eyebrow: "草本日用",
     title: "佗鹊堂精选",
-    description: "两件商品资料预览，等待包装与渠道资料核验",
-    status: "review" as const,
+    description: "蓝布正植物牙膏与复生1号",
+    status: "on_sale" as const,
     theme: TUOQUETANG_THEME,
   },
 ] as const;

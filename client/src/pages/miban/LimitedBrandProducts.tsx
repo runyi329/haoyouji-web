@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ChevronRight, FileSearch, PackageOpen } from "lucide-react";
+import { ArrowLeft, ChevronRight, PackageOpen } from "lucide-react";
 import {
   mibanLimitedProducts,
   type LimitedProduct,
@@ -27,15 +27,13 @@ export default function LimitedBrandProducts() {
   const [location] = useLocation();
   const usdtCnyRate = useMibanUsdtCnyRate();
   const path = location.split("?")[0];
-  const previewMode =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("preview") === "1";
+  const localPreviewMode = import.meta.env.DEV;
   const brandSlug = path.endsWith("/tuoquetang") ? "tuoquetang" : "herbalife";
   const brand = getMibanLimitedBrandBySlug(brandSlug);
   const { data: availability, isLoading: availabilityLoading } =
     mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
-      // 资料核验预览不能访问真实库存状态，避免为草稿SKU创建任何运行时状态。
-      enabled: !previewMode,
+      // 本地热预览不触发真实数据库的SKU初始化；生产始终读取运营库存状态。
+      enabled: !localPreviewMode,
     });
   const availabilityBySku = useMemo(
     () =>
@@ -49,22 +47,21 @@ export default function LimitedBrandProducts() {
   );
 
   const theme = brand?.theme ?? HERBALIFE_THEME;
-  const isReviewPreview = Boolean(previewMode && brand?.status === "review");
   const brandProducts = useMemo(
     () =>
       mibanLimitedProducts.filter(
         product =>
           product.brand === brand?.brand &&
-          (product.status === "on_sale" || isReviewPreview) &&
+          product.status === "on_sale" &&
           Boolean(
             getActiveSku(
               product,
               availabilityBySku,
-              isReviewPreview || availabilityLoading
+              localPreviewMode || availabilityLoading
             )
           )
       ),
-    [availabilityBySku, availabilityLoading, brand?.brand, isReviewPreview]
+    [availabilityBySku, availabilityLoading, brand?.brand, localPreviewMode]
   );
 
   if (!brand) {
@@ -74,8 +71,6 @@ export default function LimitedBrandProducts() {
       </div>
     );
   }
-
-  const previewQuery = isReviewPreview ? "?preview=1" : "";
 
   return (
     <div className="min-h-screen pb-8" style={{ background: theme.canvas }}>
@@ -106,15 +101,13 @@ export default function LimitedBrandProducts() {
               {brand.title}
             </h1>
             <p className="mt-1 text-[11px]" style={{ color: theme.muted }}>
-              {isReviewPreview
-                ? "当前为资料核验预览，不开放购买"
+              {localPreviewMode
+                ? "本地上架预览，不会初始化库存状态"
                 : "点击商品查看完整图文详情"}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {!isReviewPreview && (
-              <LimitedCartButton compact accent={theme.primary} />
-            )}
+            <LimitedCartButton compact accent={theme.primary} />
             <span
               className="rounded-full px-2.5 py-1 text-[10px] font-bold"
               style={{
@@ -122,31 +115,11 @@ export default function LimitedBrandProducts() {
                 color: theme.primary,
               }}
             >
-              {isReviewPreview
-                ? "资料核验中"
-                : `${brandProducts.length} 件在售`}
+              {`${brandProducts.length} 件在售`}
             </span>
           </div>
         </div>
       </header>
-
-      {isReviewPreview && (
-        <div
-          className="mx-4 mt-4 flex gap-2 rounded-2xl border px-3 py-2.5"
-          style={{
-            borderColor: theme.border,
-            background: "rgba(255,255,255,0.82)",
-          }}
-        >
-          <FileSearch
-            className="mt-0.5 h-4 w-4 shrink-0"
-            style={{ color: theme.primary }}
-          />
-          <p className="text-[11px] leading-5" style={{ color: theme.muted }}>
-            已按确认价格和原始包装图完成视觉预览。产品标签、规格、备案/生产信息及渠道资料补齐前，页面不会开放下单、库存或钱包扣款。
-          </p>
-        </div>
-      )}
 
       <section
         className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-[480px]"
@@ -158,19 +131,16 @@ export default function LimitedBrandProducts() {
               const sku = getActiveSku(
                 product,
                 availabilityBySku,
-                isReviewPreview || availabilityLoading
+                localPreviewMode || availabilityLoading
               );
               const priceU = sku ? cnyToU(sku.priceCny, usdtCnyRate) : null;
-              const productPreview =
-                isReviewPreview && product.status === "draft";
-              // 图片按钮自适应融合方案：草稿商品使用为4:5图槽制作的静物图；
+              // 图片按钮自适应融合方案：佗鹊堂商品使用为4:5图槽制作的静物图；
               // 右侧文字、金额与按钮采用独立栅格，不在不同手机宽度下争抢同一行。
-              const useAdaptivePreviewCard =
-                productPreview && brandSlug === "tuoquetang";
+              const useAdaptiveProductCard = brandSlug === "tuoquetang";
               return (
                 <Link
                   key={product.key}
-                  href={`/p/proj_hzxm2t/limited/${product.key}${productPreview ? "?preview=1" : ""}`}
+                  href={`/p/proj_hzxm2t/limited/${product.key}${localPreviewMode ? "?preview=1" : ""}`}
                   className="block overflow-hidden rounded-[20px] border bg-white shadow-[0_6px_16px_rgba(0,0,0,0.05)] active:scale-[0.99]"
                   style={{ borderColor: theme.border }}
                 >
@@ -183,14 +153,14 @@ export default function LimitedBrandProducts() {
                         className="absolute left-0 top-3 z-10 rounded-r-full px-2.5 py-1 text-[9px] font-bold text-white"
                         style={{ background: product.card.theme.accent }}
                       >
-                        {productPreview ? "资料核验中" : product.card.badge}
+                        {product.card.badge}
                       </div>
                       <img
                         src={product.card.image}
                         alt={product.card.title}
-                        className={`h-full w-full ${useAdaptivePreviewCard ? "object-cover object-center" : "object-contain p-3"}`}
+                        className={`h-full w-full ${useAdaptiveProductCard ? "object-cover object-center" : "object-contain p-3"}`}
                       />
-                      {useAdaptivePreviewCard && (
+                      {useAdaptiveProductCard && (
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/20 to-transparent" />
                       )}
                     </div>
@@ -257,18 +227,7 @@ export default function LimitedBrandProducts() {
                             background: theme.surfaceMuted,
                           }}
                         >
-                          {productPreview ? (
-                            <>
-                              <span className="max-[360px]:hidden">
-                                查看资料
-                              </span>
-                              <span className="hidden max-[360px]:inline">
-                                资料
-                              </span>
-                            </>
-                          ) : (
-                            "购买"
-                          )}
+                          购买
                           <ChevronRight
                             className="h-3.5 w-3.5"
                             strokeWidth={2.4}
@@ -302,8 +261,8 @@ export default function LimitedBrandProducts() {
         className="px-5 pt-5 text-center text-[11px]"
         style={{ color: theme.subtle }}
       >
-        {isReviewPreview
-          ? "本地设计预览 · 未进入实际销售"
+        {localPreviewMode
+          ? "本地上架预览 · 不会初始化库存状态"
           : "点击商品可查看完整图文介绍、规格并购买"}
       </p>
     </div>

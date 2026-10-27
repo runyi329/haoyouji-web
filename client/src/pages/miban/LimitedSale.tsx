@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ChevronRight, FileSearch, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import { TUOQUETANG_THEME } from "../../../../shared/miban-limited-brand-config";
@@ -22,8 +22,6 @@ export default function LimitedSale() {
   const pearDeadline = new Date("2026-07-25T00:00:00+08:00").getTime();
   const [pearCountdown, setPearCountdown] = useState("");
   const [pearExpired, setPearExpired] = useState(false);
-  // 佗鹊堂产品资料尚未完成包装、备案和渠道核验，只在本地热预览展示。
-  const showTuoquetangPreview = import.meta.env.DEV;
 
   useEffect(() => {
     const tick = () => {
@@ -188,51 +186,49 @@ export default function LimitedSale() {
           </article>
         </Link>
 
-        {showTuoquetangPreview && (
-          <Link
-            href="/p/proj_hzxm2t/limited/tuoquetang?preview=1"
-            className="block active:scale-[0.985]"
+        <Link
+          href="/p/proj_hzxm2t/limited/tuoquetang"
+          className="block active:scale-[0.985]"
+        >
+          <article
+            className="relative min-h-[220px] overflow-hidden rounded-[22px]"
+            style={{
+              background: TUOQUETANG_THEME.primary,
+              boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
+            }}
           >
-            <article
-              className="relative min-h-[220px] overflow-hidden rounded-[22px]"
-              style={{
-                background: TUOQUETANG_THEME.primary,
-                boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
-              }}
-            >
-              <img
-                src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
-                alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,61,56,0.98)_0%,rgba(8,76,68,0.91)_47%,rgba(8,76,68,0.22)_77%,rgba(8,76,68,0.04)_100%)]" />
-              <div className="relative flex min-h-[220px] max-w-[59%] flex-col justify-between px-5 py-5 text-white">
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
-                    <FileSearch className="h-3.5 w-3.5" strokeWidth={2.2} />
-                    草本日用 · 资料预览
-                  </div>
-                  <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                    佗鹊堂精选
-                  </h3>
-                  <p className="mt-2 text-[11px] leading-5 text-white/78">
-                    蓝布正植物牙膏与复生1号，等待包装与渠道资料核验。
-                  </p>
+            <img
+              src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
+              alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,61,56,0.98)_0%,rgba(8,76,68,0.91)_47%,rgba(8,76,68,0.22)_77%,rgba(8,76,68,0.04)_100%)]" />
+            <div className="relative flex min-h-[220px] max-w-[59%] flex-col justify-between px-5 py-5 text-white">
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
+                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  草本日用 · 正式上架
                 </div>
-                <span
-                  className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
-                  style={{
-                    background: "#FFF8E8",
-                    color: TUOQUETANG_THEME.primary,
-                  }}
-                >
-                  查看佗鹊堂精选
-                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-                </span>
+                <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                  佗鹊堂精选
+                </h3>
+                <p className="mt-2 text-[11px] leading-5 text-white/78">
+                  蓝布正植物牙膏与复生1号，进入专区查看在售商品。
+                </p>
               </div>
-            </article>
-          </Link>
-        )}
+              <span
+                className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
+                style={{
+                  background: "#FFF8E8",
+                  color: TUOQUETANG_THEME.primary,
+                }}
+              >
+                查看佗鹊堂精选
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+              </span>
+            </div>
+          </article>
+        </Link>
       </section>
 
       <section className="px-5 pb-1 pt-8" aria-label="时令上新">

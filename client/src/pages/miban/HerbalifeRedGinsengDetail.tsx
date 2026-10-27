@@ -106,12 +106,12 @@ export default function HerbalifeRedGinsengDetail() {
   const checkoutPathBase = `${detailPath}/buy`;
   const isCheckoutPage = location.split("?")[0] === checkoutPathBase;
   const currentProduct = getMibanLimitedProduct(productKey);
-  const previewMode = new URLSearchParams(queryString).get("preview") === "1";
+  const localPreviewMode = import.meta.env.DEV;
   const currentBrand = getMibanLimitedBrandByName(currentProduct?.brand ?? "");
   const theme = currentBrand?.theme ?? HERBALIFE_THEME;
-  const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${previewMode ? "?preview=1" : ""}`;
+  const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${localPreviewMode ? "?preview=1" : ""}`;
   const isPreviewProduct = Boolean(
-    previewMode && currentProduct?.status === "draft"
+    localPreviewMode && currentProduct?.status === "draft"
   );
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const { addItem: addCartItem } = useLimitedProductCart();
@@ -138,8 +138,8 @@ export default function HerbalifeRedGinsengDetail() {
 
   const { data: availability, isLoading: availabilityLoading } =
     mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
-      // 草稿资料预览不访问真实库存状态，也不会触发草稿SKU的运行时初始化。
-      enabled: !previewMode,
+      // 本地上架预览不访问真实库存状态，也不会触发SKU运行时初始化。
+      enabled: !localPreviewMode,
     });
   const availabilityBySku = new Map<string, any>(
     (availability ?? []).map((item: any) => [
@@ -151,7 +151,7 @@ export default function HerbalifeRedGinsengDetail() {
     currentProduct?.skus.filter(
       sku =>
         sku.active &&
-        (previewMode ||
+        (localPreviewMode ||
           availabilityLoading ||
           availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOnSale ===
             true)
@@ -610,9 +610,10 @@ export default function HerbalifeRedGinsengDetail() {
           <p className="mt-2 text-[11px] text-gray-400">
             {isPreviewProduct
               ? "商品资料来自用户提供的原始素材，包装与规格待实物核验"
-              : currentProduct.detail.isOverseas
-                ? "海外购商品，税费以订单实际申报为准"
-                : "商品资料整理自品牌公开信息，包装以到货实物为准"}
+              : currentProduct.detail.sourceNote ||
+                (currentProduct.detail.isOverseas
+                  ? "海外购商品，税费以订单实际申报为准"
+                  : "商品资料整理自品牌公开信息，包装以到货实物为准")}
           </p>
         </div>
       </section>
@@ -684,9 +685,10 @@ export default function HerbalifeRedGinsengDetail() {
           <p className="mt-1 text-[11px] text-gray-400">
             {isPreviewProduct
               ? "以下为供货链路提供的原始资料图，仅供内部核验"
-              : detailImages.length > 0
-                ? "以下图文按官方公开商品资料顺序展示"
-                : "以下商品信息整理自品牌公开资料"}
+              : currentProduct.detail.detailImagesCaption ||
+                (detailImages.length > 0
+                  ? "以下图文按官方公开商品资料顺序展示"
+                  : "以下商品信息整理自品牌公开资料")}
           </p>
         </div>
         {detailImages.length > 0 && (
@@ -695,7 +697,7 @@ export default function HerbalifeRedGinsengDetail() {
               <img
                 key={image}
                 src={image}
-                alt={`${currentProduct.detail.title}官方商品图 ${index + 1}`}
+                alt={`${currentProduct.detail.title}商品图 ${index + 1}`}
                 className="block w-full bg-white"
                 loading="lazy"
               />
