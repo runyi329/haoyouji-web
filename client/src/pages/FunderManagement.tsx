@@ -247,7 +247,14 @@ function normalizeDeribitJointOptionInfo(value: JointOrderSegmentDraft['option_i
   };
 }
 
-function JointOptionSegmentFields({ optionInfo, onChange }: { optionInfo: DeribitJointOptionInfo; onChange: (next: DeribitJointOptionInfo) => void }) {
+function JointOptionSegmentFields({ optionInfo, onChange, buyDate, datePickerOpen, onToggleDatePicker, onChangeBuyDate }: {
+  optionInfo: DeribitJointOptionInfo;
+  onChange: (next: DeribitJointOptionInfo) => void;
+  buyDate: string;
+  datePickerOpen: boolean;
+  onToggleDatePicker: () => void;
+  onChangeBuyDate: (value: string) => void;
+}) {
   const { data: expiriesData, isLoading: expiriesLoading } = (trpc.ledger as any).deribitGetExpiries.useQuery(
     { currency: optionInfo.coin },
     { staleTime: 5 * 60 * 1000 },
@@ -262,22 +269,29 @@ function JointOptionSegmentFields({ optionInfo, onChange }: { optionInfo: Deribi
   const total = Number(optionInfo.premium || 0) * Number(optionInfo.buyQty || 0);
   const totalPremium = Number.isFinite(total) && total > 0 ? total : 0;
 
-  return <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
-    <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-violet-700">期权参数（本段）</span><span className="text-[11px] text-violet-500">Deribit 固定合约</span></div>
-    <div className="grid grid-cols-2 gap-2">
-      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">期权标的</span><select value={optionInfo.coin} onChange={event => onChange({ ...optionInfo, coin: event.target.value === 'ETH' ? 'ETH' : 'BTC', denomination: 'USDT', deribitLabel: '', exerciseDate: '', strikePrice: '' })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="BTC">BTC</option><option value="ETH">ETH</option></select></label>
-      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">方向</span><select value={optionInfo.direction} onChange={event => onChange({ ...optionInfo, direction: event.target.value as DeribitJointOptionInfo['direction'] })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200">{Object.entries(JOINT_OPTION_DIRECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+  return <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
+    <div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold text-purple-600">期权参数</span><span className="text-[11px] text-purple-500">总投入自动计算</span></div>
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-gray-500">开仓日期</label>
+      <div className="relative">
+        <button type="button" onClick={onToggleDatePicker} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-sm outline-none focus:ring-2 focus:ring-purple-200" style={{ color: buyDate ? '#1A2340' : '#9CA3AF' }}>{buyDate || '点击选择日期'}</button>
+        {datePickerOpen && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={buyDate} onChange={onChangeBuyDate} /></div>}
+      </div>
     </div>
-    <label className="block"><span className="mb-1.5 block text-xs font-medium text-violet-700">Deribit 到期日 {expiriesLoading ? '· 加载中' : ''}</span><select value={optionInfo.deribitLabel} onChange={event => { const expiry = expiries.find(item => item.deribitLabel === event.target.value); onChange({ ...optionInfo, deribitLabel: event.target.value, exerciseDate: expiry ? new Date(expiry.ts).toISOString().slice(0, 10) : '', strikePrice: '' }); }} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="">请选择固定到期日</option>{expiries.map(expiry => <option key={expiry.deribitLabel} value={expiry.deribitLabel}>{expiry.dateStr || expiry.deribitLabel}（{expiry.diffDays > 0 ? `余${expiry.diffDays}天` : '即将到期'}）</option>)}</select></label>
-    <div className="grid grid-cols-2 gap-2">
-      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">行权价（USD）{strikesLoading ? ' · 加载中' : ''}</span>{optionInfo.deribitLabel ? <select value={optionInfo.strikePrice} onChange={event => onChange({ ...optionInfo, strikePrice: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-violet-200"><option value="">请选择行权价</option>{strikes.map(strike => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}</select> : <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-400">请先选择到期日</div>}</label>
-      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">权利金（{optionInfo.denomination}）</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.premium} onChange={event => onChange({ ...optionInfo, premium: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-200" placeholder="如：500" /></label>
+    <div className="flex gap-2">
+      <label style={{ width: '40%' }}><span className="mb-1.5 block text-xs font-medium text-gray-500">标的币种</span><select value={optionInfo.coin} onChange={event => onChange({ ...optionInfo, coin: event.target.value === 'ETH' ? 'ETH' : 'BTC', denomination: 'USDT', deribitLabel: '', exerciseDate: '', strikePrice: '' })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="BTC">BTC</option><option value="ETH">ETH</option></select></label>
+      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">方向</span><select value={optionInfo.direction} onChange={event => onChange({ ...optionInfo, direction: event.target.value as DeribitJointOptionInfo['direction'] })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200">{Object.entries(JOINT_OPTION_DIRECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     </div>
-    <div className="grid grid-cols-2 gap-2">
-      <div><span className="mb-1.5 block text-xs font-medium text-violet-700">权利金计价</span><div className="grid grid-cols-2 overflow-hidden rounded-xl border border-violet-200 bg-white">{denominations.map(currency => <button key={currency} type="button" onClick={() => onChange({ ...optionInfo, denomination: currency })} className={`py-2.5 text-sm font-semibold ${optionInfo.denomination === currency ? 'bg-violet-600 text-white' : 'text-violet-700'}`}>{currency === 'USDT' ? 'U' : currency}</button>)}</div></div>
-      <label><span className="mb-1.5 block text-xs font-medium text-violet-700">购买张数</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.buyQty} onChange={event => onChange({ ...optionInfo, buyQty: event.target.value })} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-200" placeholder="如：1" /></label>
+    <label className="block"><span className="mb-1.5 block text-xs font-medium text-gray-500">到期日 {expiriesLoading && <span className="text-purple-400">加载中...</span>}</span><select value={optionInfo.deribitLabel} onChange={event => { const expiry = expiries.find(item => item.deribitLabel === event.target.value); onChange({ ...optionInfo, deribitLabel: event.target.value, exerciseDate: expiry ? new Date(expiry.ts).toISOString().slice(0, 10) : '', strikePrice: '' }); }} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="">请选择到期日</option>{expiries.map(expiry => <option key={expiry.deribitLabel} value={expiry.deribitLabel}>{expiry.dateStr || expiry.deribitLabel}（{expiry.diffDays > 0 ? `余${expiry.diffDays}天` : '即将到期'}）</option>)}</select></label>
+    <div className="flex gap-2">
+      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">行权价（USD）{strikesLoading && <span className="ml-1 text-purple-400">加载中...</span>}</span>{optionInfo.deribitLabel ? <select value={optionInfo.strikePrice} onChange={event => onChange({ ...optionInfo, strikePrice: event.target.value })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="">请选择行权价</option>{strikes.map(strike => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}</select> : <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400">请先选择到期日</div>}</label>
+      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">权利金（{optionInfo.denomination}）</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.premium} onChange={event => onChange({ ...optionInfo, premium: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200" placeholder="如：500" /></label>
     </div>
-    {totalPremium > 0 && <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs"><span className="font-medium text-violet-600">总权利金</span><span className="font-semibold tabular-nums text-violet-800">{totalPremium.toLocaleString(undefined, { maximumFractionDigits: optionInfo.denomination === 'USDT' ? 2 : 6 })} {optionInfo.denomination}</span></div>}
+    <div className="flex gap-2">
+      <label style={{ width: '40%' }}><span className="mb-1.5 block text-xs font-medium text-gray-500">权利金计价</span><select value={optionInfo.denomination} onChange={event => onChange({ ...optionInfo, denomination: event.target.value as DeribitJointOptionInfo['denomination'] })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200">{denominations.map(currency => <option key={currency} value={currency}>{currency === 'USDT' ? 'U' : currency}</option>)}</select></label>
+      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">数量</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.buyQty} onChange={event => onChange({ ...optionInfo, buyQty: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200" placeholder="如：1" /></label>
+    </div>
+    {totalPremium > 0 && <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-xs"><span className="font-medium text-purple-600">总权利金</span><span className="text-right font-semibold tabular-nums text-purple-800">{totalPremium.toLocaleString(undefined, { maximumFractionDigits: optionInfo.denomination === 'USDT' ? 2 : 6 })} {optionInfo.denomination}</span></div>}
   </div>;
 }
 
@@ -6119,11 +6133,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           });
                         };
                         const secondTone = {
-                          label: segmentAssetType === 'crypto_option' ? 'text-violet-700' : 'text-indigo-700',
-                          divider: segmentAssetType === 'crypto_option' ? 'bg-violet-100' : 'bg-indigo-100',
-                          input: segmentAssetType === 'crypto_option' ? 'border-violet-200 focus:ring-2 focus:ring-violet-100 focus:border-violet-400' : 'border-indigo-200 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400',
-                          inactive: segmentAssetType === 'crypto_option' ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600',
-                          active: segmentAssetType === 'crypto_option' ? 'bg-violet-600 text-white border-violet-600' : 'bg-indigo-600 text-white border-indigo-600',
+                          label: segmentAssetType === 'crypto_option' ? 'text-purple-700' : 'text-indigo-700',
+                          divider: segmentAssetType === 'crypto_option' ? 'bg-purple-100' : 'bg-indigo-100',
+                          input: segmentAssetType === 'crypto_option' ? 'border-purple-200 focus:ring-2 focus:ring-purple-100 focus:border-purple-400' : 'border-indigo-200 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400',
+                          inactive: segmentAssetType === 'crypto_option' ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600',
+                          active: segmentAssetType === 'crypto_option' ? 'bg-purple-600 text-white border-purple-600' : 'bg-indigo-600 text-white border-indigo-600',
                         };
                         const isNegativeRate = String(segment.interest_rate_annual || '').startsWith('-');
                         const segmentPeriodInterestTotalEnabled = segmentDisplay.periodInterestTotal === true;
@@ -6149,23 +6163,35 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             </div>
                             <div>
                               <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>本段资产类型</label>
-                              <div className="grid grid-cols-3 gap-2">
+                              <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
                                 {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '期权' }] as const).map(type => (
-                                  <button key={type.value} type="button" onClick={() => updateSegmentAssetType(type.value)} className={`rounded-xl border px-2 py-2.5 text-sm font-semibold transition-colors ${segmentAssetType === type.value ? secondTone.active : 'border-indigo-100 bg-white text-indigo-600'}`}>{type.label}</button>
+                                  <button
+                                    key={type.value}
+                                    type="button"
+                                    onClick={() => { setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`)); updateSegmentAssetType(type.value); }}
+                                    className="flex-1 min-w-0 border-r border-gray-200 px-1 py-2.5 text-sm font-semibold transition-all last:border-r-0"
+                                    style={segmentAssetType === type.value
+                                      ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                                      : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                                  >
+                                    {type.label}
+                                  </button>
                                 ))}
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="min-w-0">
-                                <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>开仓日期</label>
-                                <div className="relative">
-                                  <button type="button" onClick={() => setJointDatePickerFor(current => current === segmentKey ? null : segmentKey)} className={`w-full rounded-xl border bg-white px-4 py-3 text-left text-base outline-none ${secondTone.input}`} style={{ color: segment.buy_date ? '#1A2340' : '#9CA3AF' }}>
-                                    {segment.buy_date || '点击选择日期'}
-                                  </button>
-                                  {jointDatePickerFor === segmentKey && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={segment.buy_date} onChange={value => { updateSegment({ buy_date: value }); setJointDatePickerFor(null); }} /></div>}
+                            <div className={segmentAssetType === 'crypto_option' ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-2 gap-3'}>
+                              {segmentAssetType !== 'crypto_option' && (
+                                <div className="min-w-0">
+                                  <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>开仓日期</label>
+                                  <div className="relative">
+                                    <button type="button" onClick={() => setJointDatePickerFor(current => current === segmentKey ? null : segmentKey)} className={`w-full rounded-xl border bg-white px-4 py-3 text-left text-base outline-none ${secondTone.input}`} style={{ color: segment.buy_date ? '#1A2340' : '#9CA3AF' }}>
+                                      {segment.buy_date || '点击选择日期'}
+                                    </button>
+                                    {jointDatePickerFor === segmentKey && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={segment.buy_date} onChange={value => { updateSegment({ buy_date: value }); setJointDatePickerFor(null); }} /></div>}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                               <div className="min-w-0">
                                 <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>订单对象</label>
                                 <div className="min-h-[48px] rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-sm font-semibold text-indigo-800">{activeJointOrderTarget.userName}</div>
@@ -6173,7 +6199,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             </div>
 
                             <div className="space-y-3">
-                              {segmentAssetType === 'crypto_option' ? <JointOptionSegmentFields optionInfo={jointOptionInfo} onChange={updateJointOptionInfo} /> : <>
+                              {segmentAssetType === 'crypto_option' ? <JointOptionSegmentFields optionInfo={jointOptionInfo} onChange={updateJointOptionInfo} buyDate={segment.buy_date} datePickerOpen={jointDatePickerFor === segmentKey} onToggleDatePicker={() => setJointDatePickerFor(current => current === segmentKey ? null : segmentKey)} onChangeBuyDate={value => { updateSegment({ buy_date: value }); setJointDatePickerFor(null); }} /> : <>
                                 <span className="block text-xs text-indigo-400">{segmentAssetType === 'stock' ? '股票子段仅录入人民币融资金额' : '订单金额、买入价格与数量由本段独立维护'}</span>
                                 <div className="flex items-end gap-3"><div className="min-w-0 flex-1"><label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>{segmentAssetType === 'stock' ? '融资金额（人民币）' : '订单金额'}</label><input type="number" min="0" step="0.01" inputMode="decimal" value={segment.amount} onChange={event => updateSegment({ amount: event.target.value })} placeholder="如：100000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>{segmentAssetType !== 'stock' && <div style={{ width: '34%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>融资币种</label><select value={segment.amount_currency} onChange={event => updateSegment({ amount_currency: event.target.value === 'CNY' ? 'CNY' : 'USDT' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}><option value="USDT">USDT</option><option value="CNY">人民币 CNY</option></select></div>}</div>
                                 {segmentAssetType === 'stock' && <><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券公司</label><input value={segment.broker_name} onChange={event => updateSegment({ broker_name: event.target.value })} placeholder="如：中信证券" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券账号</label><input value={segment.broker_account} onChange={event => updateSegment({ broker_account: event.target.value })} placeholder="如：6225xxxx" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div></>}
