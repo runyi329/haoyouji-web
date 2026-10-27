@@ -7416,15 +7416,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && targetUserId > 0
       && weeklySettlementCenter.current.members.some((member) => member.userId === targetUserId);
   }, [payoutTargetRelatedUserId, weeklySettlementCenter]);
-  // 管理员切换成员时，必须先确认返回周报的成员ID与当前页面目标一致，
-  // 才允许它接管显示；这样不会短暂展示上一位成员的分佣或收益。
-  const shouldAwaitAuthoritativeFilteredMemberSettlement = canManage
-    && !isUserPreview
-    && hasIndividualSettlementScope
-    && Boolean(weeklySettlementPreviewUserId);
+  // 个人、代入用户与管理员单选用户统一只认服务端权威成员周报。
+  // 等待期间显示加载态，绝不以浏览器本地即时模型临时替换，避免同一周出现两套金额。
   const memberSettlementPresentation = hasCurrentMemberWeeklySettlement
     ? weeklySettlementCenter
-    : (shouldAwaitAuthoritativeFilteredMemberSettlement ? undefined : memberInstantWeeklySettlementCenter);
+    : undefined;
   const displayedWeeklySettlementCenter = hasIndividualSettlementScope
     ? memberSettlementPresentation
     : weeklySettlementCenter;
