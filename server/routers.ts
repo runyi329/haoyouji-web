@@ -1543,7 +1543,8 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   // 拥有者可见范围和个人担保覆盖均是当前个人视图的业务状态，不能只留在关系冗余列。
   'owner_visibility_mode', 'visible_owner_ids', 'participant_collateral_override',
   // 结清估值和联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
-  'settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments'
+  // 第一段的内部共享标记也必须按当前拥有者隔离，不能复用物理订单的跨订单共享开关。
+  'settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_primary_collateral_share_mode', 'joint_order_segments'
 ] as const;
 
 function buildFunderParticipantSnapshot(source: any): Record<string, any> {
@@ -23280,9 +23281,10 @@ ${klinesSummary}
         let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }> }>> = {};
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
-          const placeholders = orderIds.map(() => '?').join(',');
-          const walletHoldTags = orderIds.map((id) => `52号融资订单 #${id} 钱包担保`);
-          const holdPlaceholders = walletHoldTags.map(() => '?').join(',');
+              const placeholders = orderIds.map(() => '?').join(',');
+              const walletHoldTags = orderIds.map((id) => `52号融资订单 #${id} 钱包担保`);
+              const walletHoldTagParams = orderIds.flatMap((id) => [`52号融资订单 #${id} 钱包担保`, `52号融资订单 #${id} · 联合段 % 钱包担保`]);
+              const walletHoldCondition = orderIds.map(() => '(h.tag_name = ? OR h.tag_name LIKE ?)').join(' OR ');
           const [ptRowsResult, pcRowsResult, ownerRowsResult, walletLockRowsResult, walletHoldRowsResult] = await Promise.all([
             conn.execute(
               `SELECT order_id, participant_user_id, amount, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 6.75) as exchange_rate
@@ -23393,6 +23395,7 @@ ${klinesSummary}
                 jointOrderSnapshotMetaMap[oid] = {
                   userId: Number(row.user_id),
                   segments: jointSegments,
+                  primaryCollateralShareMode: ownerSnapshot?.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none',
                   primarySettlement: ownerSnapshot?.joint_order_primary_settlement && typeof ownerSnapshot.joint_order_primary_settlement === 'object'
                     ? ownerSnapshot.joint_order_primary_settlement
                     : null,
@@ -23431,6 +23434,7 @@ ${klinesSummary}
             ...o,
             ...(jointMeta ? {
               joint_order_segments: jointMeta.segments,
+              joint_order_primary_collateral_share_mode: jointMeta.primaryCollateralShareMode,
               joint_order_primary_settlement: jointMeta.primarySettlement,
               _jointSnapshotUserId: jointMeta.userId,
             } : {}),
@@ -23509,7 +23513,11 @@ ${klinesSummary}
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
           const allOwnerOrders = rawOrders
             .map((o: any) => ({ ...o, _sharedPoolParticipantUserId: null }));
-          const orders = allOwnerOrders.filter((o: any) => o.collateral_share_mode === 'self');
+          // “买入全额”不计担保物，既不能贡献担保，也不能占用共享池。该服务端过滤
+          // 同时兜住历史脏数据或绕过前端的直接接口调用。
+          const isLegacySharedEligible = (order: any) => order?.collateral_share_mode === 'self'
+            && getFunderCollateralRiskFormula(order?.principal_lent_out, order?.display_config) !== 'full_value';
+          const orders = allOwnerOrders.filter(isLegacySharedEligible);
 
           // 查询每个订单的已结利息明细；后续按当前视角身份筛选。
           // 主订单使用 participant_user_id IS NULL，参与者子订单只使用该参与者自己的记录。
@@ -23558,10 +23566,10 @@ ${klinesSummary}
                    FROM ai_wallet_project_holds h
                    LEFT JOIN users u ON u.id = h.user_id
                    LEFT JOIN ledger_members lm ON lm.ledgerId = h.ledger_id AND lm.userId = h.user_id
-                  WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
-                    AND h.tag_name IN (${walletHoldPlaceholders})
-                  ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
-                [input.ledgerId, ...walletHoldTags],
+                    WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
+                      AND (${walletHoldCondition})
+                    ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
+                  [input.ledgerId, ...walletHoldTagParams],
               ).catch(() => null) as Promise<any>,
             ]);
             const lockRows = Array.isArray(walletLockResult?.[0]) ? walletLockResult[0] : (Array.isArray(walletLockResult) ? walletLockResult : []);
@@ -24212,10 +24220,10 @@ ${klinesSummary}
             return difference !== 0 ? difference : String(a.orderNo ?? '').localeCompare(String(b.orderNo ?? ''));
           };
           const sharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode === 'self')
+            .filter((detail: any) => detail.shareMode === 'self' && detail.collateralRiskFormula !== 'full_value')
             .sort(sortByCollateralValue);
           const nonSharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode !== 'self')
+            .filter((detail: any) => detail.shareMode !== 'self' || detail.collateralRiskFormula === 'full_value')
             .sort(sortByCollateralValue);
           // ⑤必须复用原订单卡已展示的最终担保缺口，而非采用上方 nonSharedOrders
           // 的服务端摘要 collateralGap。当前查看者已通过共享池的同一权限校验，故只向
@@ -24224,7 +24232,7 @@ ${klinesSummary}
           // 丢失 collateral_source、display_config 等决定最终缺口的配置。
           const rawNonSharedById = new Map<number, any>(
             allOwnerOrders
-              .filter((raw: any) => raw.collateral_share_mode !== 'self')
+              .filter((raw: any) => !isLegacySharedEligible(raw))
               .map((raw: any) => [Number(raw.id), raw])
           );
           // 第二层订单详情、⑤的隐藏原订单卡都消费这里的原始订单快照。
@@ -24265,7 +24273,7 @@ ${klinesSummary}
           // 不能由服务端的现货价格简化公式代替。因此一并返回已授权的原始订单输入。
           const rawSharedById = new Map<number, any>(
             allOwnerOrders
-              .filter((raw: any) => raw.collateral_share_mode === 'self')
+              .filter(isLegacySharedEligible)
               .map((raw: any) => [Number(raw.id), raw])
           );
           const sharedOrderCardSources = sharedOrderDetails
@@ -24922,15 +24930,15 @@ ${klinesSummary}
         const roleByUserId = new Map<number, string>();
         roleByUserId.set(Number(order.user_id), 'owner');
         for (const row of participantList) roleByUserId.set(Number(row.user_id), String(row.role || 'participant'));
-        const assetsByUserId = new Map<number, Array<{ coin: string; qty: string; source: 'wallet' }>>();
-        const appendAsset = (userId: number, coin: string, qty: string) => {
+        const assetsByUserId = new Map<number, Array<{ coin: string; qty: string; source: 'wallet'; jointSegmentId: string }>>();
+        const appendAsset = (userId: number, coin: string, qty: string, jointSegmentId = '__primary__') => {
           if (!(Number(userId) > 0) || !coin || !(Number(qty) > 0)) return;
           const entries = assetsByUserId.get(Number(userId)) || [];
-          entries.push({ coin, qty, source: 'wallet' });
+          entries.push({ coin, qty, source: 'wallet', jointSegmentId });
           assetsByUserId.set(Number(userId), entries);
         };
-        for (const lock of marketLocks) appendAsset(lock.userId, String(lock.assetCode || '').toUpperCase(), String(lock.amount || '0'));
-        for (const hold of fundingHolds) appendAsset(hold.userId, String(hold.assetCode || '').toUpperCase(), String(hold.remainingAmount || '0'));
+        for (const lock of marketLocks) appendAsset(lock.userId, String(lock.assetCode || '').toUpperCase(), String(lock.amount || '0'), String((lock as any).jointSegmentId || '__primary__'));
+        for (const hold of fundingHolds) appendAsset(hold.userId, String(hold.assetCode || '').toUpperCase(), String(hold.remainingAmount || '0'), String((hold as any).jointSegmentId || '__primary__'));
         return Array.from(userIds)
           .sort((left, right) => Number(left) - Number(right))
           .map((userId) => ({
@@ -24947,6 +24955,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(52),
         orderId: z.number().int().positive(),
+        jointSegmentId: z.string().regex(/^(?:__primary__|[A-Za-z0-9_-]{1,48})$/).optional(),
         userId: z.number().int().positive(),
         assets: z.array(z.object({
           coin: z.enum(['CNY', 'USDT', ...AI_WALLET_SETTLEMENT_ASSETS]),
@@ -24979,6 +24988,7 @@ ${klinesSummary}
           const order = asRows(orderRows)[0];
           if (!order || order.deleted_at) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
           if (String(order.status) !== 'active') throw new TRPCError({ code: 'BAD_REQUEST', message: '仅持有中的订单可冻结钱包担保物' });
+          const jointSegmentId = input.jointSegmentId || '__primary__';
 
           const primaryOwnerId = Number(order.user_id);
           let isOrderHolder = primaryOwnerId === input.userId;
@@ -25024,6 +25034,23 @@ ${klinesSummary}
           }
           if (!isOrderHolder) throw new TRPCError({ code: 'FORBIDDEN', message: '钱包担保物必须属于本订单的拥有者或参与者' });
 
+          // 后续联合段必须严格属于本次选择的钱包用户，绝不能仅凭前端段序号创建冻结。
+          let jointSegmentParticipantRow: any = null;
+          if (jointSegmentId !== '__primary__') {
+            const [jointSegmentRows] = await transaction.execute(
+              `SELECT id, order_snapshot FROM ledger_order_participants
+                 WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'
+                 LIMIT 1 FOR UPDATE`,
+              [input.orderId, input.ledgerId, input.userId],
+            );
+            jointSegmentParticipantRow = asRows(jointSegmentRows)[0];
+            const segmentSnapshot = parseFunderParticipantSnapshot(jointSegmentParticipantRow?.order_snapshot) || {};
+            const segments = Array.isArray(segmentSnapshot.joint_order_segments) ? segmentSnapshot.joint_order_segments : [];
+            if (!jointSegmentParticipantRow || !segments.some((segment: any) => String(segment?.id || '') === jointSegmentId && Number(segment?.owner_user_id || input.userId) === input.userId)) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '联合订单担保段不存在或不属于当前用户' });
+            }
+          }
+
           const normalizedAssets = input.assets.map((asset) => ({ coin: asset.coin, qty: asset.qty, source: 'wallet', note: '钱包担保冻结' }));
           const fundingAssets = input.assets
             .filter((asset) => asset.coin === 'CNY' || asset.coin === 'USDT')
@@ -25032,6 +25059,7 @@ ${klinesSummary}
           const result = await dbMultiAssetWallet.syncWalletCollateralLocks({
             ledgerId: input.ledgerId,
             orderId: input.orderId,
+            jointSegmentId,
             userId: input.userId,
             assets: marketAssets,
             actorUserId: ctx.user.id,
@@ -25039,6 +25067,7 @@ ${klinesSummary}
           });
           const fundingResult = await syncLedger52FundingCollateralHolds({
             orderId: input.orderId,
+            jointSegmentId,
             userId: input.userId,
             assets: fundingAssets,
             actorUserId: ctx.user.id,
@@ -25046,7 +25075,26 @@ ${klinesSummary}
           });
           let collateralBeforeData: string | null = null;
           let collateralAfterData: string | null = null;
-          if (primaryOwnerId === input.userId) {
+          if (jointSegmentId !== '__primary__') {
+            let snapshot: Record<string, any> = {};
+            try { snapshot = jointSegmentParticipantRow?.order_snapshot ? JSON.parse(String(jointSegmentParticipantRow.order_snapshot)) : {}; } catch {}
+            const segments = Array.isArray(snapshot.joint_order_segments) ? snapshot.joint_order_segments : [];
+            const targetSegment = segments.find((segment: any) => String(segment?.id || '') === jointSegmentId) || {};
+            collateralBeforeData = targetSegment.collateral_assets ? JSON.stringify(targetSegment.collateral_assets) : null;
+            const existingAssets = Array.isArray(targetSegment.collateral_assets) ? targetSegment.collateral_assets : [];
+            const isWalletCollateral = (asset: any) => asset?.source === 'wallet' || asset?.note === '钱包担保冻结';
+            const mergedAssets = [...existingAssets.filter((asset: any) => !isWalletCollateral(asset)), ...normalizedAssets];
+            const nextSegments = segments.map((segment: any) => String(segment?.id || '') === jointSegmentId
+              ? { ...segment, collateral_assets: mergedAssets }
+              : segment,
+            );
+            collateralAfterData = JSON.stringify(mergedAssets);
+            snapshot.joint_order_segments = nextSegments;
+            await transaction.execute(
+              `UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?`,
+              [JSON.stringify(snapshot), Number(jointSegmentParticipantRow.id)],
+            );
+          } else if (primaryOwnerId === input.userId) {
             collateralBeforeData = order.collateral_assets ? String(order.collateral_assets) : null;
             let existingAssets: any[] = [];
             try { existingAssets = order.collateral_assets ? JSON.parse(String(order.collateral_assets)) : []; } catch {}
@@ -25087,7 +25135,7 @@ ${klinesSummary}
           await transaction.execute(
             `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, before_data, after_data, note)
              VALUES (?, ?, ?, 'wallet_collateral_sync', ?, ?, ?)`,
-            [input.ledgerId, input.orderId, ctx.user.id, collateralBeforeData, collateralAfterData, `钱包担保同步：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
+            [input.ledgerId, input.orderId, ctx.user.id, collateralBeforeData, collateralAfterData, `钱包担保同步（${jointSegmentId === '__primary__' ? '第1段' : `联合段 ${jointSegmentId}`}）：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
           );
           await transaction.commit();
           return { success: true, locks: result.locks, fundingHolds: fundingResult.holds };
@@ -25946,7 +25994,7 @@ ${klinesSummary}
               // 但其个人结清/分段快照必须一并返回，确保结清后的估值不再读取实时行情。
               const ownSnapshot = parseFunderParticipantSnapshot((o as any)._participant_order_snapshot);
               if (ownSnapshot) {
-                for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments']) {
+                for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_primary_collateral_share_mode', 'joint_order_segments']) {
                   if (ownSnapshot[field] !== undefined) (o as any)[field] = ownSnapshot[field];
                 }
               }
@@ -26097,7 +26145,7 @@ ${klinesSummary}
                 // 主拥有者订单仍显示主订单数据；仅叠加本人的结清与联合分段快照。
                 const ownSnapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
                 if (ownSnapshot) {
-                  for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments']) {
+                  for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_primary_collateral_share_mode', 'joint_order_segments']) {
                     if (ownSnapshot[field] !== undefined) (o as any)[field] = ownSnapshot[field];
                   }
                 }
@@ -26117,7 +26165,7 @@ ${klinesSummary}
         const walletCollateralContributorsMap: Record<number, Array<{
           userId: number;
           name: string;
-          assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }>;
+          assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }>;
         }>> = {};
         if (input.ledgerId === 52 && allOrders.length > 0) {
           const conn = await getDbConnection();
@@ -26126,10 +26174,11 @@ ${klinesSummary}
             if (orderIds.length > 0) {
               const placeholders = orderIds.map(() => '?').join(',');
               const walletHoldTags = orderIds.map((id) => `52号融资订单 #${id} 钱包担保`);
-              const holdPlaceholders = walletHoldTags.map(() => '?').join(',');
+              const walletHoldTagParams = orderIds.flatMap((id) => [`52号融资订单 #${id} 钱包担保`, `52号融资订单 #${id} · 联合段 % 钱包担保`]);
+              const walletHoldCondition = orderIds.map(() => '(h.tag_name = ? OR h.tag_name LIKE ?)').join(' OR ');
               const [walletLockRowsResult, walletHoldRowsResult] = await Promise.all([
                 conn.execute(
-                  `SELECT l.order_id, l.user_id, l.asset_code, l.amount,
+                  `SELECT l.order_id, l.joint_segment_id, l.user_id, l.asset_code, l.amount,
                           COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', l.user_id)) AS display_name
                      FROM ai_wallet_asset_collateral_locks l
                      LEFT JOIN users u ON u.id = l.user_id
@@ -26146,12 +26195,12 @@ ${klinesSummary}
                      LEFT JOIN users u ON u.id = h.user_id
                      LEFT JOIN ledger_members lm ON lm.ledgerId = h.ledger_id AND lm.userId = h.user_id
                     WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
-                      AND h.tag_name IN (${holdPlaceholders})
+                      AND (${walletHoldCondition})
                     ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
-                  [input.ledgerId, ...walletHoldTags],
+                  [input.ledgerId, ...walletHoldTagParams],
                 ).catch(() => null) as Promise<any>,
               ]);
-              const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string) => {
+              const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
                 if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
                 if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
                 let contributor = walletCollateralContributorsMap[orderId].find((item) => item.userId === userId);
@@ -26164,20 +26213,21 @@ ${klinesSummary}
                   qty: String(qty),
                   source: 'wallet',
                   note: `钱包担保冻结 · ${contributor.name}`,
+                  jointSegmentId,
                 });
               };
               const lockRows = walletLockRowsResult
                 ? (Array.isArray(walletLockRowsResult[0]) ? walletLockRowsResult[0] : (Array.isArray(walletLockRowsResult) ? walletLockRowsResult : []))
                 : [];
               for (const row of lockRows) {
-                appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+                appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
               }
               const holdRows = walletHoldRowsResult
                 ? (Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []))
                 : [];
-              const orderIdByTag = new Map(walletHoldTags.map((tag, index) => [tag, orderIds[index]]));
               for (const row of holdRows) {
-                appendWalletContributorAsset(Number(orderIdByTag.get(String(row.tag_name)) || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+                const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
+                appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
               }
             }
           }
@@ -26658,6 +26708,31 @@ ${klinesSummary}
         await ensureInterestEndDateColumn();
         await ensureFrontendPlacementColumn();
         await ensureSettlementSnapshotColumn();
+        if (input.collateralShareMode === 'self') {
+          const [snapshotRows] = await conn.execute(
+            `SELECT order_snapshot FROM ledger_order_participants
+             WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'`,
+            [input.id, input.ledgerId],
+          ) as any;
+          const hasJointInternalMember = (Array.isArray(snapshotRows) ? snapshotRows : []).some((snapshotRow: any) => {
+            const snapshot = parseFunderParticipantSnapshot(snapshotRow?.order_snapshot) || {};
+            const primaryInPool = snapshot.joint_order_primary_collateral_share_mode === 'self'
+              && getFunderCollateralRiskFormula(snapshot.principal_lent_out, snapshot.display_config) !== 'full_value';
+            let segments: any[] = [];
+            try {
+              const raw = typeof snapshot.joint_order_segments === 'string'
+                ? JSON.parse(snapshot.joint_order_segments)
+                : snapshot.joint_order_segments;
+              segments = Array.isArray(raw) ? raw : [];
+            } catch {}
+            return primaryInPool || segments.some((segment: any) => segment?.collateral_share_mode === 'self'
+              && getFunderCollateralRiskFormula(segment?.principal_lent_out, segment?.display_config) !== 'full_value');
+          });
+          if (hasJointInternalMember) {
+            await conn.end();
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单已使用联合订单内部共享担保，不能同时开启本人其他订单共享' });
+          }
+        }
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。
@@ -27072,6 +27147,7 @@ ${klinesSummary}
           }
 
           const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          const newlySettledSegmentIds: string[] = [];
           const primaryState = snapshot.joint_order_primary_settlement && typeof snapshot.joint_order_primary_settlement === 'object'
             ? { ...snapshot.joint_order_primary_settlement }
             : {};
@@ -27082,6 +27158,7 @@ ${klinesSummary}
               throw new TRPCError({ code: 'BAD_REQUEST', message: '第一段结息截止日不能早于计息开始日' });
             }
             primaryState.status = 'settled';
+            newlySettledSegmentIds.push('__primary__');
             primaryState.settled_at = settledAt;
             primaryState.interest_end_date = primaryRequest.interestEndDate;
             primaryState.settlement_snapshot = await buildFunderSettlementSnapshot(
@@ -27104,6 +27181,7 @@ ${klinesSummary}
                 throw new TRPCError({ code: 'BAD_REQUEST', message: '关联分段的结息截止日不能早于其计息开始日' });
               }
               nextSegment.status = 'settled';
+              newlySettledSegmentIds.push(segmentId);
               nextSegment.settled_at = settledAt;
               nextSegment.interest_end_date = request.interestEndDate;
               nextSegment.settlement_snapshot = await buildFunderSettlementSnapshot(
@@ -27138,6 +27216,24 @@ ${klinesSummary}
             nextSnapshot.settled_at = null;
             nextSnapshot.interest_end_date = null;
             delete nextSnapshot.settlement_snapshot;
+          }
+          // 段结清只解除自己名下的两类钱包冻结；未结清的其他段继续受担保限制。
+          for (const jointSegmentId of newlySettledSegmentIds) {
+            await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52, orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+            });
+            await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+            });
+          }
+          // 全部段结清时清扫可能来自历史订单级台账的遗留冻结，避免永久占用用户余额。
+          if (everyPartSettled) {
+            await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52, orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+            });
+            await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+            });
           }
           await conn.execute(
             'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ?',
@@ -28247,6 +28343,10 @@ ${klinesSummary}
             const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
             const previousSettlement = persistedSettledSegmentsById.get(segmentId);
             const assetType = safeAssetType(raw?.asset_type);
+            const segmentDisplayConfig = safeDisplayConfig(raw?.display_config);
+            const segmentCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(segmentDisplayConfig.collateralRiskFormula))
+              ? String(segmentDisplayConfig.collateralRiskFormula)
+              : (safeBoolean(raw?.principal_lent_out) ? 'principal_coverage' : 'floating_pnl');
             const optionInfo = safeOptionInfo(raw?.option_info);
             if (assetType === 'crypto_option' && !optionInfo) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '期权第二段须完整填写Deribit到期日、行权价、权利金和张数' });
@@ -28287,9 +28387,14 @@ ${klinesSummary}
             commission_share: safeAmount(raw?.commission_share),
             trading_fee_rate_per_mille: safeAmount(raw?.trading_fee_rate_per_mille),
             trading_fee_status: ['unpaid', 'half_paid', 'paid'].includes(String(raw?.trading_fee_status)) ? String(raw?.trading_fee_status) : 'unpaid',
-            // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用，避免跨段混算。
+            // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用。
+            // self 仅代表同一张联合订单内的分段共享，不会越过当前个人快照进入他人订单。
             collateral_assets: safeAssets(raw?.collateral_assets),
-            display_config: safeDisplayConfig(raw?.display_config),
+            // 买入全额完全不使用担保物，服务端不得让客户端绕过界面限制加入内部池。
+            collateral_share_mode: segmentCollateralRiskFormula === 'full_value'
+              ? 'none'
+              : (raw?.collateral_share_mode === 'self' ? 'self' : 'none'),
+            display_config: segmentDisplayConfig,
             };
             // 已结清段仍可随原订单一起展示，但不能被普通保存改回持有中、替换冻结行情，
             // 也不能把结算时的本段类型、标的或成交基础改成另一种资产。
@@ -28314,6 +28419,26 @@ ${klinesSummary}
               settlement_snapshot: previousSettlement.settlement_snapshot || null,
             };
           });
+        }
+        // 第一段和后续段都只属于当前 input.userId 的个人快照。第一段的内部共享标记
+        // 不复用 ledger_orders.collateral_share_mode，后者是历史“本人所有订单”跨订单池。
+        const primaryDisplayConfig = parseFunderDisplayConfig(mergedSnapshot.display_config);
+        const primaryCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(primaryDisplayConfig.collateralRiskFormula))
+          ? String(primaryDisplayConfig.collateralRiskFormula)
+          : (mergedSnapshot.principal_lent_out === true || mergedSnapshot.principal_lent_out === 1 ? 'principal_coverage' : 'floating_pnl');
+        mergedSnapshot.joint_order_primary_collateral_share_mode = primaryCollateralRiskFormula === 'full_value'
+          ? 'none'
+          : (mergedSnapshot.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none');
+        const hasJointInternalCollateralMember = mergedSnapshot.joint_order_primary_collateral_share_mode === 'self'
+          || (Array.isArray(mergedSnapshot.joint_order_segments)
+            && mergedSnapshot.joint_order_segments.some((segment: any) => segment?.collateral_share_mode === 'self'));
+        if (hasJointInternalCollateralMember && row.collateral_share_mode === 'self') {
+          // 同一订单不能同时留在旧跨订单池和新联合内部池，自动退出旧池以消除跨订单混算。
+          await conn.execute(
+            'UPDATE ledger_orders SET collateral_share_mode = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ?',
+            ['none', input.orderId, input.ledgerId],
+          );
+          row.collateral_share_mode = 'none';
         }
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
         // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。

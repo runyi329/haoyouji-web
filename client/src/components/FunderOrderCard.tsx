@@ -699,6 +699,9 @@ export interface FunderOrderCardProps {
   allOrders?: any[];
   /** 联合订单的子段卡片：只展示本段，禁止再递归读取下一层子段。 */
   jointSegmentMode?: boolean;
+  /** 联合订单内部共享池：子段只回传不含担保物的风险项，由父卡统一把池资产加一次。 */
+  onJointInternalRiskContributionChange?: (segmentId: string, contribution: number | null) => void;
+  jointInternalRiskSegmentId?: string;
 }
 
 // `Number(null) === 0` 会把尚未到齐的订单缺口错误伪装成 +0.00 U。
@@ -762,6 +765,8 @@ export function FunderOrderCard({
   onPreviewSegmentFocusChange,
   allOrders,
   jointSegmentMode = false,
+  onJointInternalRiskContributionChange,
+  jointInternalRiskSegmentId,
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
@@ -937,6 +942,61 @@ export function FunderOrderCard({
     if (!Array.isArray(raw)) return [];
     return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
   }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
+  const primaryJointInternalShareEnabled = !jointSegmentMode
+    && (order as any).joint_order_primary_collateral_share_mode === 'self'
+    && getFunderCollateralRiskFormulaForDisplay(order) !== 'full_value';
+  const getManualJointCollateralAssets = (value: unknown) => {
+    let assets: any[] = [];
+    try { assets = typeof value === 'string' ? JSON.parse(value) : (Array.isArray(value) ? value : []); } catch {}
+    return Array.isArray(assets)
+      // 钱包冻结属于订单级且可能由多位拥有者共同贡献，37号引用也没有段级归属；
+      // 在明确建模前都不能混入某一位用户的联合内部池。
+      .filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'))
+      .filter((asset: any) => String(asset?.coin || '').trim() && Number(asset?.qty) > 0);
+  };
+  const getJointSegmentWalletCollateralAssets = (segmentId: string) => {
+    const contributors = Array.isArray((order as any).wallet_collateral_contributors)
+      ? (order as any).wallet_collateral_contributors
+      : [];
+    return contributors
+      .filter((contributor: any) => Number(contributor?.userId) === Number(_jointSegmentScopeUserId))
+      .flatMap((contributor: any) => Array.isArray(contributor?.assets) ? contributor.assets : [])
+      .filter((asset: any) => String(asset?.jointSegmentId || '__primary__') === segmentId)
+      .filter((asset: any) => String(asset?.coin || '').trim() && Number(asset?.qty) > 0)
+      .map((asset: any) => ({ ...asset, source: 'wallet' as const, note: '钱包担保冻结' }));
+  };
+  // 只在同一张联合订单、同一位拥有者／参与者的分段内汇总。第一段与后续段均须
+  // 显式参加，且“买入全额”永远不进入；资产在父卡只作为一个池估值一次。
+  const jointSharedCollateralAssets = useMemo(() => {
+    if (jointSegmentMode) return [] as any[];
+    const primaryAssets = primaryJointInternalShareEnabled
+      ? [...getManualJointCollateralAssets((order as any).collateral_assets), ...getJointSegmentWalletCollateralAssets('__primary__')]
+      : [];
+    const segmentAssets = jointOrderSegments
+      .filter((segment: any) => segment?.collateral_share_mode === 'self'
+        && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value')
+      .flatMap((segment: any) => [
+        ...getManualJointCollateralAssets(segment?.collateral_assets),
+        ...getJointSegmentWalletCollateralAssets(String(segment?.id || '')),
+      ]);
+    return [...primaryAssets, ...segmentAssets];
+  }, [jointSegmentMode, primaryJointInternalShareEnabled, (order as any).collateral_assets, (order as any).wallet_collateral_contributors, _jointSegmentScopeUserId, jointOrderSegments]);
+  const jointInternalSharedMemberIds = useMemo(() => {
+    if (jointSegmentMode) return [] as string[];
+    return [
+      ...(primaryJointInternalShareEnabled ? ['__primary__'] : []),
+      ...jointOrderSegments
+        .filter((segment: any) => segment?.collateral_share_mode === 'self'
+          && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value')
+        .map((segment: any, index: number) => String(segment.id || `segment-${index + 2}`)),
+    ];
+  }, [jointSegmentMode, primaryJointInternalShareEnabled, jointOrderSegments]);
+  const [jointInternalRiskContributions, setJointInternalRiskContributions] = useState<Record<string, number | null>>({});
+  const handleJointInternalRiskContributionChange = useCallback((segmentId: string, contribution: number | null) => {
+    setJointInternalRiskContributions(current => current[segmentId] === contribution
+      ? current
+      : { ...current, [segmentId]: contribution });
+  }, []);
   // 只有编辑器的浮动预览才折叠多段；正式订单卡仍完整显示，避免改变用户端展示。
   const isPreviewSegmentAccordion = previewMode
     && !jointSegmentMode
@@ -1100,6 +1160,9 @@ export function FunderOrderCard({
   // 共享担保只属于归属为本人的订单拥有者。参与者或「他人」订单即使快照带有 self，
   // 也不能形成或加入当前用户的共享池。
   const orderShareMode = (_isParticipantOrder || _isOtherPerspective) ? 'none' : (order as any).collateral_share_mode;
+  // 联合分段的共享只在父订单内部合并，不触发跨订单的共享担保池查询。
+  const usesJointSegmentSharedCollateral = jointSegmentMode && (order as any).joint_segment_shared_collateral === true;
+  const usesJointInternalSharedCollateral = primaryJointInternalShareEnabled || usesJointSegmentSharedCollateral;
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
@@ -1537,7 +1600,16 @@ export function FunderOrderCard({
       ...(asset.source === 'wallet' ? { source: 'wallet' as const } : {}),
     }));
   const selectedJointCollateralSegment = jointOrderSegments.find(segment => String(segment.id || '') === selectedJointCollateralSegmentId) || null;
-  const loadQuickCollateralEditor = (source: Record<string, any>) => {
+  const getSegmentWalletCollateralItems = (segmentId: string, sourceOwnerUserId?: unknown): QuickCollateralItem[] => {
+    const ownerId = Number(sourceOwnerUserId || selectedJointCollateralSegment?.owner_user_id || quickWalletCollateralUserId || 0);
+    const contributors = Array.isArray((order as any).wallet_collateral_contributors) ? (order as any).wallet_collateral_contributors : [];
+    return contributors
+      .filter((contributor: any) => !ownerId || Number(contributor?.userId) === ownerId)
+      .flatMap((contributor: any) => Array.isArray(contributor?.assets) ? contributor.assets : [])
+      .filter((asset: any) => String(asset?.jointSegmentId || '__primary__') === segmentId)
+      .map((asset: any) => ({ coin: String(asset.coin || '').toUpperCase(), qty: String(asset.qty ?? ''), source: 'wallet' as const, note: '钱包担保冻结' }));
+  };
+  const loadQuickCollateralEditor = (source: Record<string, any>, segmentId = '__primary__') => {
     // 手工担保与钱包冻结担保必须分开加载，两个区域各自只操作自己的条目。
     let allItems: QuickCollateralItem[] = [];
     try {
@@ -1555,8 +1627,11 @@ export function FunderOrderCard({
       }
     } catch {}
     const initialManualItems = allItems.filter((item) => !isQuickWalletCollateral(item));
-    const initialWalletItems = allItems.filter(isQuickWalletCollateral)
+    const mirrorWalletItems = allItems.filter(isQuickWalletCollateral)
       .map((item) => ({ ...item, source: 'wallet' as const, note: '钱包担保冻结' }));
+    // 段级台账是唯一真相；旧订单未升级时才回退其历史镜像字段。
+    const lockedWalletItems = getSegmentWalletCollateralItems(segmentId, source?.owner_user_id);
+    const initialWalletItems = lockedWalletItems.length > 0 ? lockedWalletItems : mirrorWalletItems;
     setCollateralEditItems(initialManualItems);
     setWalletCollateralEditItems(initialWalletItems);
     setInitialCollateralSignature(JSON.stringify(normalizeQuickCollateralAssets(initialManualItems)));
@@ -1610,12 +1685,12 @@ export function FunderOrderCard({
   const selectJointCollateralSegment = (segmentId: string) => {
     setSelectedJointCollateralSegmentId(segmentId);
     const segment = jointOrderSegments.find(item => String(item.id || '') === segmentId);
-    loadQuickCollateralEditor(segment || order);
+    loadQuickCollateralEditor(segment || order, segmentId || '__primary__');
   };
   const handleOpenCollateralPanel = () => {
     if (showCollateralPanel) { setShowCollateralPanel(false); return; }
     setSelectedJointCollateralSegmentId('');
-    loadQuickCollateralEditor(order);
+    loadQuickCollateralEditor(order, '__primary__');
     setShowCollateralPanel(true);
   };
   const handleSaveCollateral = () => {
@@ -1707,6 +1782,7 @@ export function FunderOrderCard({
     _intSaveWalletCollateralMutation.mutate({
       ledgerId: 52,
       orderId: Number(order.id),
+      jointSegmentId: selectedJointCollateralSegmentId || '__primary__',
       userId: quickWalletCollateralUserId,
       assets: assets as any,
       autoRegisterOwner: true,
@@ -2199,8 +2275,11 @@ export function FunderOrderCard({
 function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
   const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
   if (contributors.length === 0) return assets;
+  const expectedSegmentId = String(order?.joint_segment_id || '__primary__');
   const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'));
-  const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : []).flatMap((asset: any) => {
+  const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : [])
+    .filter((asset: any) => String(asset?.jointSegmentId || '__primary__') === expectedSegmentId)
+    .flatMap((asset: any) => {
     const coin = String(asset?.coin || '').trim().toUpperCase();
     const qty = String(asset?.qty ?? '').trim();
     return coin && Number(qty) > 0 ? [{ coin, qty, source: 'wallet', note: `钱包担保冻结 · ${String(contributor?.name || '拥有者')}` }] : [];
@@ -2210,14 +2289,19 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
 // 担保物
   let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
-  try {
-    const rawCA = order.collateral_assets;
-    if (rawCA) {
-      const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
-      if (Array.isArray(parsed)) collateralAssets = parsed;
-    }
-  } catch {}
-  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
+  if (primaryJointInternalShareEnabled) {
+    // 父卡为内部池唯一的资产估值点；所有显式参加段的手工担保物只加一次。
+    collateralAssets = jointSharedCollateralAssets;
+  } else {
+    try {
+      const rawCA = order.collateral_assets;
+      if (rawCA) {
+        const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+        if (Array.isArray(parsed)) collateralAssets = parsed;
+      }
+    } catch {}
+    collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
+  }
   let collateralValue = 0;
   let collateralValueKnown = true;
   const collateralItemValues: (number | null)[] = [];
@@ -2587,6 +2671,51 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 不再退回成漏算担保物的数值。
   // 非共享的37号标签订单用含利息的外部担保公式，其他订单沿用原有 exposure 逻辑。
   const effectiveExposure = isSharedMode ? sharedOrderExposure : (externalNonSharedGapU ?? exposure);
+  // 联合内部共享池的每段只贡献“未计担保物”的风险项；父订单在下面把该池的
+  // 手工担保物总值统一加一次。这样不会因每张子卡渲染而把同一资产重复相加。
+  // 37号标签（担保、浮盈和利息）保持第一段的独立来源，绝不作为本订单各段共用的池资产。
+  const jointInternalFloatingPnlU = isExternalStockPnlSource ? floatPnlForRisk : formulaFloatingPnlU;
+  const jointInternalAccruedForRisk = hasExternalPendingInterest ? automaticAccruedForRisk : accruedForRisk;
+  const jointInternalPaidForRisk = hasExternalPaidInterest ? totalPaidForRisk : paidInterestForRisk;
+  const jointInternalRiskContribution = usesJointInternalSharedCollateral && collateralRiskFormula !== 'full_value'
+    ? (usesPrincipalCoverageFormula
+      ? -principalLentOutValueForRisk - jointInternalAccruedForRisk + jointInternalPaidForRisk
+      : jointInternalFloatingPnlU === null
+        ? null
+        : jointInternalFloatingPnlU - jointInternalAccruedForRisk + jointInternalPaidForRisk)
+    : null;
+  useEffect(() => {
+    const callback = jointSegmentMode
+      ? onJointInternalRiskContributionChange
+      : (primaryJointInternalShareEnabled ? handleJointInternalRiskContributionChange : undefined);
+    const segmentId = jointSegmentMode ? String(jointInternalRiskSegmentId || '') : '__primary__';
+    if (!callback || !segmentId) return;
+    callback(segmentId, Number.isFinite(jointInternalRiskContribution) ? jointInternalRiskContribution : null);
+    return () => callback(segmentId, null);
+  }, [jointSegmentMode, onJointInternalRiskContributionChange, jointInternalRiskSegmentId, primaryJointInternalShareEnabled, handleJointInternalRiskContributionChange, jointInternalRiskContribution]);
+  const jointInternalPoolCollateralValueU = useMemo(() => {
+    if (jointSegmentMode || jointInternalSharedMemberIds.length === 0) return null;
+    let total = 0;
+    for (const asset of jointSharedCollateralAssets) {
+      const quantity = Number(asset?.qty);
+      const coin = String(asset?.coin || '').trim().toUpperCase();
+      if (!coin || !Number.isFinite(quantity) || quantity <= 0) continue;
+      const unitPrice = coin === 'CNY' ? 1 / cnyRate : (coin === 'USDT' ? 1 : Number(livePrices[coin]));
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+      total += quantity * unitPrice;
+    }
+    return total;
+  }, [jointSegmentMode, jointInternalSharedMemberIds, jointSharedCollateralAssets, cnyRate, livePrices]);
+  const jointInternalPoolRemainingU = useMemo(() => {
+    if (jointSegmentMode || jointInternalSharedMemberIds.length === 0 || jointInternalPoolCollateralValueU === null) return null;
+    let riskTotal = 0;
+    for (const memberId of jointInternalSharedMemberIds) {
+      const contribution = jointInternalRiskContributions[memberId];
+      if (!Number.isFinite(contribution)) return null;
+      riskTotal += Number(contribution);
+    }
+    return jointInternalPoolCollateralValueU + riskTotal;
+  }, [jointSegmentMode, jointInternalSharedMemberIds, jointInternalPoolCollateralValueU, jointInternalRiskContributions]);
   // 担保余量：正数表示担保充足，负数表示仍需补足。
   const isSufficient = effectiveExposure !== null && effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
@@ -3619,7 +3748,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               );
             })}
             {show('collateralCoin') && !hasExternalCollateral && (
-              orderShareMode === 'self'
+              (orderShareMode === 'self' || usesJointInternalSharedCollateral)
                 ? (
                   // 开启了共享担保：标题改为红色“共享担保”
                   collateralAssets.length === 0
@@ -3731,7 +3860,48 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               {(showCollateralInfo || showCollateralGapFormulaInfo) && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={closeCollateralInfoDialog}>
                   <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
-                    {hasExternalCollateral && _parsedCollateralSource && !showCollateralGapFormulaInfo ? (
+                    {usesJointInternalSharedCollateral && !jointSegmentMode ? (
+                      <div className="p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-bold" style={{ color: '#312E81' }}>联合内部共享担保</div>
+                            <div className="mt-0.5 text-[11px]" style={{ color: '#6366F1' }}>每段独立核算，只有明确参加的段进入同一共享池</div>
+                          </div>
+                          <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs">
+                          <div className="flex justify-between gap-3"><span className="text-indigo-600">共享池担保总额</span><strong className="tabular-nums text-indigo-900">{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                          <div className="mt-1 flex justify-between gap-3"><span className="text-indigo-600">合并担保余量</span><strong className="tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                        </div>
+                        <div className="mt-3 space-y-2.5">
+                          {[
+                            ...(primaryJointInternalShareEnabled ? [{ id: '__primary__', label: '第1段', source: order }] : []),
+                            ...jointOrderSegments.filter((segment: any) => segment?.collateral_share_mode === 'self' && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value').map((segment: any, index: number) => ({ id: String(segment.id || `segment-${index + 2}`), label: `第${index + 2}段`, source: segment })),
+                          ].map((member: any) => {
+                            const manualAssets = getManualJointCollateralAssets(member.source?.collateral_assets);
+                            const walletAssets = getJointSegmentWalletCollateralAssets(member.id);
+                            const assets = [...manualAssets, ...walletAssets];
+                            const valueU = assets.reduce<number | null>((total, asset: any) => {
+                              if (total === null) return null;
+                              const qty = Number(asset?.qty || 0);
+                              const coin = String(asset?.coin || '').toUpperCase();
+                              const price = coin === 'CNY' ? 1 / cnyRate : coin === 'USDT' ? 1 : Number(livePrices[coin]);
+                              return qty > 0 && Number.isFinite(price) && price > 0 ? total + qty * price : null;
+                            }, 0);
+                            const risk = jointInternalRiskContributions[member.id];
+                            return <div key={member.id} className="rounded-xl border border-gray-200 bg-white p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-gray-800">{order.order_no} · {member.label}</span>
+                                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">参加共享</span>
+                              </div>
+                              <div className="mt-2 flex justify-between gap-3 text-xs"><span className="text-gray-500">本段担保前盈亏 / 风险差额</span><strong className="tabular-nums" style={{ color: risk === null || risk === undefined ? '#9CA3AF' : risk >= 0 ? '#15803D' : '#DC2626' }}>{risk === null || risk === undefined ? '计算中…' : `${risk >= 0 ? '+' : ''}${Number(risk).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                              <div className="mt-2 border-t border-gray-100 pt-2 text-xs"><div className="mb-1 text-gray-500">本段担保物</div><div className="flex flex-wrap gap-1">{assets.length > 0 ? assets.map((asset: any, index: number) => <span key={`${member.id}-${asset.coin}-${index}`} className={`rounded px-1.5 py-0.5 ${asset.source === 'wallet' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{asset.source === 'wallet' ? '钱包 ' : '手工 '}{asset.qty} {asset.coin}</span>) : <span className="text-gray-400">暂无担保物</span>}</div><div className="mt-1 text-right font-semibold tabular-nums" style={{ color: '#374151' }}>{valueU === null ? '实时价加载中…' : `本段担保 ≈ ${valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</div></div>
+                            </div>;
+                          })}
+                        </div>
+                        <p className="mt-3 text-[11px] leading-4 text-gray-500">共享池总额只将以上各段担保物计一次；37号引用担保不进入本联合池。</p>
+                      </div>
+                    ) : hasExternalCollateral && _parsedCollateralSource && !showCollateralGapFormulaInfo ? (
                       <>
                         <div className="flex items-center justify-between px-5 pt-4 pb-2">
                           <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保资产详情</span>
@@ -4801,6 +4971,24 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       </>}
 
+      {!jointSegmentMode && jointInternalSharedMemberIds.length > 0 && (
+        <div className="mx-4 mt-3 rounded-xl border px-3 py-2.5" style={{ borderColor: '#C7D2FE', background: '#EEF2FF' }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold" style={{ color: '#4338CA' }}>联合内部共享担保</div>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold" style={{ color: '#6366F1' }}>{jointInternalSharedMemberIds.length} 段参加</span>
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
+            <span style={{ color: '#6366F1' }}>手工担保池（仅计一次）</span>
+            <span className="font-semibold tabular-nums" style={{ color: '#312E81' }}>{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+          </div>
+          <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+            <span style={{ color: '#6366F1' }}>合并担保余量</span>
+            <span className="font-semibold tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+          </div>
+          <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>仅合并本订单、当前拥有者明确勾选的段；手工与已归属的钱包冻结均只计一次，37号引用不进入本池。</p>
+        </div>
+      )}
+
         {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
     {jointOrderSegments.map((segment, index) => {
       const segmentId = String(segment.id || `segment-${index + 2}`);
@@ -4816,6 +5004,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       let segmentDisplayConfig: Record<string, any> = {};
       try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
       try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
+      const segmentSharesJointCollateral = segment.collateral_share_mode === 'self'
+        && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value';
+      const segmentWalletContributors = (Array.isArray((order as any).wallet_collateral_contributors)
+        ? (order as any).wallet_collateral_contributors
+        : [])
+        .filter((contributor: any) => Number(contributor?.userId) === Number(_jointSegmentScopeUserId))
+        .map((contributor: any) => ({
+          ...contributor,
+          assets: (Array.isArray(contributor?.assets) ? contributor.assets : [])
+            .filter((asset: any) => String(asset?.jointSegmentId || '__primary__') === segmentId),
+        }))
+        .filter((contributor: any) => contributor.assets.length > 0);
       const segmentOrder = {
         ...order,
         ...segment,
@@ -4836,10 +5036,20 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         order_no: order.order_no,
         paidTotal: null,
         joint_order_segments: [],
-        // 每段保留自己的手工担保与资金属性；不继承主单的37号引用或共享担保模式。
-        collateral_assets: Array.isArray(segment.collateral_assets) ? JSON.stringify(segment.collateral_assets) : null,
+        // 每段保留自己的资金属性；选择“共享担保”时，只合并同一张订单内其他已选择
+        // 共享的分段担保物，不继承主单37号引用，也不跨订单或跨用户读取担保。
+        collateral_assets: (segmentSharesJointCollateral
+          ? jointSharedCollateralAssets
+          : (Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [])).length > 0
+          ? JSON.stringify(segmentSharesJointCollateral
+            ? jointSharedCollateralAssets
+            : segment.collateral_assets)
+          : null,
+        // 仅附加当前拥有者在本段实际冻结的资产，绝不继承其他段或其他拥有者的钱包冻结。
+        wallet_collateral_contributors: segmentSharesJointCollateral ? [] : segmentWalletContributors,
         collateral_source: null,
         collateral_share_mode: 'none',
+        joint_segment_shared_collateral: segmentSharesJointCollateral,
         principal_lent_out: segment.principal_lent_out ? 1 : 0,
         joint_segment_id: String(segment.id || `segment-${index + 2}`),
         joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
@@ -4849,7 +5059,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         display_config: JSON.stringify({
           ...parentDisplayConfig,
           ...segmentDisplayConfig,
-          // 子段不重复引用主订单的37号数据或共享担保模式；仅展示本段自身手工担保。
+          // 子段不重复引用主订单的37号数据；段级共享担保已经在上方局部汇总。
           marginRate: false,
         }),
       };
@@ -4880,6 +5090,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             ledgerId={ledgerId}
             previewMode={previewMode}
             jointSegmentMode={true}
+            jointInternalRiskSegmentId={segmentId}
+            onJointInternalRiskContributionChange={segmentSharesJointCollateral ? handleJointInternalRiskContributionChange : undefined}
           />
         </div>
       );

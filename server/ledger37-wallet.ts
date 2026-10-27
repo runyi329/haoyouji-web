@@ -1110,18 +1110,38 @@ export async function releaseLedger37WalletHold(params: {
   }
 }
 
-const ledger52FundingCollateralTag = (orderId: number) => `52号融资订单 #${orderId} 钱包担保`;
+const ledger52FundingCollateralTag = (orderId: number, jointSegmentId = dbMultiAssetWallet.PRIMARY_JOINT_SEGMENT_ID) => {
+  const segmentId = dbMultiAssetWallet.normalizeJointCollateralSegmentId(jointSegmentId);
+  return segmentId === dbMultiAssetWallet.PRIMARY_JOINT_SEGMENT_ID
+    ? `52号融资订单 #${orderId} 钱包担保`
+    : `52号融资订单 #${orderId} · 联合段 ${segmentId} 钱包担保`;
+};
+
+const ledger52FundingCollateralTagsForOrder = (orderId: number) => ({
+  primary: ledger52FundingCollateralTag(orderId),
+  segmentLike: `52号融资订单 #${orderId} · 联合段 % 钱包担保`,
+});
+
+function jointSegmentIdFromLedger52FundingTag(orderId: number, tagName: unknown): string {
+  const text = String(tagName || '');
+  if (text === ledger52FundingCollateralTag(orderId)) return dbMultiAssetWallet.PRIMARY_JOINT_SEGMENT_ID;
+  const match = text.match(new RegExp(`^52号融资订单 #${orderId} · 联合段 ([A-Za-z0-9_-]{1,48}) 钱包担保$`));
+  return match ? dbMultiAssetWallet.normalizeJointCollateralSegmentId(match[1]) : dbMultiAssetWallet.PRIMARY_JOINT_SEGMENT_ID;
+}
+
+export type Ledger52FundingCollateralHold = Ledger37WalletHold & { jointSegmentId: string };
 
 type Ledger52FundingCollateralInput = { coin: "CNY" | "USDT"; qty: string };
 
 /** 52号融资订单的人民币与USDT担保；冻结不改变资产总额，只占用可用余额。 */
 export async function syncLedger52FundingCollateralHolds(params: {
   orderId: number;
+  jointSegmentId?: string;
   userId: number;
   assets: Ledger52FundingCollateralInput[];
   actorUserId: number;
   transaction?: any;
-}): Promise<{ holds: Ledger37WalletHold[] }> {
+}): Promise<{ holds: Ledger52FundingCollateralHold[] }> {
   if (!Number.isInteger(params.orderId) || params.orderId <= 0 || !Number.isInteger(params.userId) || params.userId <= 0) {
     throw new Error("订单或担保用户无效");
   }
@@ -1137,7 +1157,8 @@ export async function syncLedger52FundingCollateralHolds(params: {
   const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
   const transaction = conn as any;
-  const tagName = ledger52FundingCollateralTag(params.orderId);
+  const jointSegmentId = dbMultiAssetWallet.normalizeJointCollateralSegmentId(params.jointSegmentId);
+  const tagName = ledger52FundingCollateralTag(params.orderId, jointSegmentId);
   try {
     if (ownConnection) await transaction.beginTransaction();
     const [existingRows] = await transaction.execute(
@@ -1178,7 +1199,7 @@ export async function syncLedger52FundingCollateralHolds(params: {
       [LEDGER_52_ID, tagName, params.userId],
     );
     if (ownConnection) await transaction.commit();
-    return { holds: rowsOf(finalRows).map(holdResult) };
+    return { holds: rowsOf(finalRows).map((row) => ({ ...holdResult(row), jointSegmentId })) };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;
@@ -1187,23 +1208,27 @@ export async function syncLedger52FundingCollateralHolds(params: {
   }
 }
 
-export async function getLedger52FundingCollateralHoldsForOrder(orderId: number): Promise<Ledger37WalletHold[]> {
+export async function getLedger52FundingCollateralHoldsForOrder(orderId: number, jointSegmentId?: string): Promise<Ledger52FundingCollateralHold[]> {
   if (!Number.isInteger(orderId) || orderId <= 0) return [];
   await ensureLedger37WalletInfrastructure();
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接失败");
+  const tags = ledger52FundingCollateralTagsForOrder(orderId);
+  const normalizedSegmentId = jointSegmentId === undefined ? null : dbMultiAssetWallet.normalizeJointCollateralSegmentId(jointSegmentId);
+  const tagName = normalizedSegmentId ? ledger52FundingCollateralTag(orderId, normalizedSegmentId) : null;
   const [rows] = await (conn as any).execute(
     `SELECT * FROM ai_wallet_project_holds
-      WHERE ledger_id = ? AND tag_name = ? AND status = 'active' AND amount > COALESCE(released_amount, 0)
-      ORDER BY user_id ASC, asset_code ASC, id ASC`,
-    [LEDGER_52_ID, ledger52FundingCollateralTag(orderId)],
+      WHERE ledger_id = ? AND ${tagName ? 'tag_name = ?' : '(tag_name = ? OR tag_name LIKE ?)'} AND status = 'active' AND amount > COALESCE(released_amount, 0)
+      ORDER BY user_id ASC, tag_name ASC, asset_code ASC, id ASC`,
+    tagName ? [LEDGER_52_ID, tagName] : [LEDGER_52_ID, tags.primary, tags.segmentLike],
   );
-  return rowsOf(rows).map(holdResult);
+  return rowsOf(rows).map((row) => ({ ...holdResult(row), jointSegmentId: jointSegmentIdFromLedger52FundingTag(orderId, row.tag_name) }));
 }
 
-/** 结清或移入回收站时，自动解除该融资订单全部人民币与USDT钱包担保。 */
+/** 结清或移入回收站时解除人民币与USDT钱包担保；可按联合段精确解除。 */
 export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
   orderId: number;
+  jointSegmentId?: string;
   actorUserId: number;
   reason: "order_settled" | "order_deleted";
   transaction?: any;
@@ -1214,13 +1239,16 @@ export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
   const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
   const transaction = conn as any;
+  const normalizedSegmentId = params.jointSegmentId === undefined ? null : dbMultiAssetWallet.normalizeJointCollateralSegmentId(params.jointSegmentId);
+  const tags = ledger52FundingCollateralTagsForOrder(params.orderId);
+  const tagName = normalizedSegmentId ? ledger52FundingCollateralTag(params.orderId, normalizedSegmentId) : null;
   try {
     if (ownConnection) await transaction.beginTransaction();
     const [rows] = await transaction.execute(
       `SELECT id FROM ai_wallet_project_holds
-        WHERE ledger_id = ? AND tag_name = ? AND status = 'active' AND amount > COALESCE(released_amount, 0)
+        WHERE ledger_id = ? AND ${tagName ? 'tag_name = ?' : '(tag_name = ? OR tag_name LIKE ?)'} AND status = 'active' AND amount > COALESCE(released_amount, 0)
         ORDER BY user_id ASC, asset_code ASC, id ASC FOR UPDATE`,
-      [LEDGER_52_ID, ledger52FundingCollateralTag(params.orderId)],
+      tagName ? [LEDGER_52_ID, tagName] : [LEDGER_52_ID, tags.primary, tags.segmentLike],
     );
     const holds = rowsOf(rows);
     for (const row of holds) {

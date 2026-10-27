@@ -46,6 +46,8 @@ export type WalletCollateralLock = {
   id: number;
   ledgerId: number;
   orderId: number;
+  /** 联合订单第一段固定为 __primary__；后续段使用其持久化 id。 */
+  jointSegmentId: string;
   userId: number;
   assetCode: MultiAssetWalletAsset;
   amount: string;
@@ -55,6 +57,8 @@ export type WalletCollateralLock = {
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
 const SIGNED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{16,96}$/;
+export const PRIMARY_JOINT_SEGMENT_ID = "__primary__";
+const JOINT_SEGMENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,48}$/;
 
 let multiAssetWalletInfrastructureReady: Promise<void> | null = null;
 
@@ -72,6 +76,14 @@ export function normalizeMultiAssetWalletAsset(value: unknown): MultiAssetWallet
     throw new Error("该资产尚未启用独立钱包账本；CNY 与 USDT 请继续使用现有账户");
   }
   return assetCode as MultiAssetWalletAsset;
+}
+
+/** 资金冻结必须保存到真实台账；段号只接受第一段哨兵或联合段的稳定 id。 */
+export function normalizeJointCollateralSegmentId(value: unknown): string {
+  const segmentId = String(value || PRIMARY_JOINT_SEGMENT_ID).trim();
+  if (segmentId === PRIMARY_JOINT_SEGMENT_ID) return PRIMARY_JOINT_SEGMENT_ID;
+  if (!JOINT_SEGMENT_ID_PATTERN.test(segmentId)) throw new Error("联合订单担保段落无效");
+  return segmentId;
 }
 
 function normalizeUnsignedDecimal(value: string): string {
@@ -211,6 +223,7 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
           ledger_id INT NOT NULL,
           order_id BIGINT UNSIGNED NOT NULL,
+          joint_segment_id VARCHAR(48) NOT NULL DEFAULT '__primary__',
           user_id INT NOT NULL,
           asset_code VARCHAR(16) NOT NULL,
           amount DECIMAL(36,18) NOT NULL,
@@ -222,9 +235,10 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
-          UNIQUE KEY uk_wallet_collateral_active_order_asset (ledger_id, order_id, user_id, asset_code),
+          UNIQUE KEY uk_wallet_collateral_active_order_segment_asset (ledger_id, order_id, user_id, joint_segment_id, asset_code),
           KEY idx_wallet_collateral_user_asset_status (user_id, asset_code, status),
-          KEY idx_wallet_collateral_order_status (ledger_id, order_id, status)
+          KEY idx_wallet_collateral_order_status (ledger_id, order_id, status),
+          KEY idx_wallet_collateral_order_segment_status (ledger_id, order_id, joint_segment_id, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='52号融资订单的钱包数字资产担保冻结；余额不扣除，仅限制可用额'
       `, []);
       // 兼容首版预览中已存在但缺少账本归属列的冻结表；查询前必须补齐，
@@ -242,6 +256,22 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
         }
       }
+      const hasJointSegmentId = asRows(lockColumns).some((row) => String(row.column_name || row.COLUMN_NAME) === 'joint_segment_id');
+      if (!hasJointSegmentId) {
+        try {
+          // 历史订单级冻结从未记录段归属，统一且只回填到第一段，绝不擅自拆分。
+          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD COLUMN joint_segment_id VARCHAR(48) NOT NULL DEFAULT '__primary__' AFTER order_id`, []);
+        } catch (error: any) {
+          if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+        }
+      }
+      // 旧唯一索引会阻止同一用户把同一币种分别冻结到多个联合段，需原子替换。
+      try { await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks DROP INDEX uk_wallet_collateral_active_order_asset`, []); }
+      catch (error: any) { if (!['ER_CANT_DROP_FIELD_OR_KEY', 'ER_KEY_DOES_NOT_EXIST'].includes(error?.code)) throw error; }
+      try { await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD UNIQUE KEY uk_wallet_collateral_active_order_segment_asset (ledger_id, order_id, user_id, joint_segment_id, asset_code)`, []); }
+      catch (error: any) { if (error?.code !== 'ER_DUP_KEYNAME') throw error; }
+      try { await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD KEY idx_wallet_collateral_order_segment_status (ledger_id, order_id, joint_segment_id, status)`, []); }
+      catch (error: any) { if (error?.code !== 'ER_DUP_KEYNAME') throw error; }
     })().catch((error) => {
       multiAssetWalletInfrastructureReady = null;
       throw error;
@@ -737,6 +767,7 @@ async function appendCollateralEntry(transaction: any, params: {
   eventType: "collateral_lock" | "collateral_release";
   ledgerId: number;
   orderId: number;
+  jointSegmentId: string;
   actorUserId: number;
   requestId: string;
 }) {
@@ -754,7 +785,7 @@ async function appendCollateralEntry(transaction: any, params: {
       params.amount,
       params.balanceAfter,
       params.eventType,
-      `${actionLabel}：52号融资订单 #${params.orderId}`,
+      `${actionLabel}：52号融资订单 #${params.orderId}${params.jointSegmentId === PRIMARY_JOINT_SEGMENT_ID ? ' · 第1段' : ` · 联合段 ${params.jointSegmentId}`}`,
       params.ledgerId,
       params.actorUserId,
     ],
@@ -769,6 +800,7 @@ async function appendCollateralEntry(transaction: any, params: {
 export async function syncWalletCollateralLocks(params: {
   ledgerId: number;
   orderId: number;
+  jointSegmentId?: string;
   userId: number;
   assets: WalletCollateralAssetInput[];
   actorUserId: number;
@@ -779,6 +811,7 @@ export async function syncWalletCollateralLocks(params: {
     throw new Error("订单或担保用户无效");
   }
   const desiredAssets = normalizeWalletCollateralAssets(params.assets || []);
+  const jointSegmentId = normalizeJointCollateralSegmentId(params.jointSegmentId);
   await ensureMultiAssetWalletInfrastructure();
   const ownConnection = !params.transaction;
   const conn = params.transaction || await getDbTransactionConnection();
@@ -790,9 +823,9 @@ export async function syncWalletCollateralLocks(params: {
     const [lockRows] = await transaction.execute(
       `SELECT id, asset_code, amount, status
          FROM ai_wallet_asset_collateral_locks
-        WHERE ledger_id = ? AND order_id = ? AND user_id = ?
+        WHERE ledger_id = ? AND order_id = ? AND joint_segment_id = ? AND user_id = ?
         FOR UPDATE`,
-      [params.ledgerId, params.orderId, params.userId],
+      [params.ledgerId, params.orderId, jointSegmentId, params.userId],
     );
     const existingByAsset = new Map<string, any>();
     for (const row of asRows(lockRows)) existingByAsset.set(String(row.asset_code).toUpperCase(), row);
@@ -825,6 +858,7 @@ export async function syncWalletCollateralLocks(params: {
         await appendCollateralEntry(transaction, {
           userId: params.userId, assetCode, amount: `-${deltaText}`, balanceAfter: String(balance.available_balance),
           eventType: "collateral_lock", ledgerId: params.ledgerId, orderId: params.orderId,
+          jointSegmentId,
           actorUserId: params.actorUserId, requestId: `${buildCollateralRequestId()}_lock_${assetCode}`,
         });
       } else if (comparison < 0) {
@@ -843,6 +877,7 @@ export async function syncWalletCollateralLocks(params: {
         await appendCollateralEntry(transaction, {
           userId: params.userId, assetCode, amount: releaseText, balanceAfter: String(balance.available_balance),
           eventType: "collateral_release", ledgerId: params.ledgerId, orderId: params.orderId,
+          jointSegmentId,
           actorUserId: params.actorUserId, requestId: `${buildCollateralRequestId()}_release_${assetCode}`,
         });
       }
@@ -858,9 +893,9 @@ export async function syncWalletCollateralLocks(params: {
         } else {
           await transaction.execute(
             `INSERT INTO ai_wallet_asset_collateral_locks
-              (ledger_id, order_id, user_id, asset_code, amount, status, created_by)
-             VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), 'active', ?)`,
-            [params.ledgerId, params.orderId, params.userId, assetCode, desiredAmount, params.actorUserId],
+              (ledger_id, order_id, joint_segment_id, user_id, asset_code, amount, status, created_by)
+             VALUES (?, ?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), 'active', ?)`,
+            [params.ledgerId, params.orderId, jointSegmentId, params.userId, assetCode, desiredAmount, params.actorUserId],
           );
         }
       } else if (existing && String(existing.status) === "active") {
@@ -874,15 +909,15 @@ export async function syncWalletCollateralLocks(params: {
     }
     if (ownConnection) await transaction.commit();
     const [finalRows] = await transaction.execute(
-      `SELECT id, ledger_id, order_id, user_id, asset_code, amount, status
+      `SELECT id, ledger_id, order_id, joint_segment_id, user_id, asset_code, amount, status
          FROM ai_wallet_asset_collateral_locks
-        WHERE ledger_id = ? AND order_id = ? AND user_id = ? AND status = 'active'
+        WHERE ledger_id = ? AND order_id = ? AND joint_segment_id = ? AND user_id = ? AND status = 'active'
         ORDER BY asset_code ASC`,
-      [params.ledgerId, params.orderId, params.userId],
+      [params.ledgerId, params.orderId, jointSegmentId, params.userId],
     );
     return {
       locks: asRows(finalRows).map((row) => ({
-        id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), userId: Number(row.user_id),
+        id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), jointSegmentId: normalizeJointCollateralSegmentId(row.joint_segment_id), userId: Number(row.user_id),
         assetCode: normalizeMultiAssetWalletAsset(row.asset_code), amount: String(row.amount), status: "active" as const,
       })),
     };
@@ -894,10 +929,11 @@ export async function syncWalletCollateralLocks(params: {
   }
 }
 
-/** 订单结清或移入回收站时释放全部钱包担保，不会改变总持币。 */
+/** 订单结清或移入回收站时释放钱包担保；传入段号时只释放该段，不会改变总持币。 */
 export async function releaseWalletCollateralLocksForOrder(params: {
   ledgerId: number;
   orderId: number;
+  jointSegmentId?: string;
   actorUserId: number;
   reason: "order_settled" | "order_deleted";
   transaction?: any;
@@ -908,15 +944,16 @@ export async function releaseWalletCollateralLocksForOrder(params: {
   const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
   const transaction = conn as any;
+  const jointSegmentId = params.jointSegmentId === undefined ? null : normalizeJointCollateralSegmentId(params.jointSegmentId);
   try {
     if (ownConnection) await transaction.beginTransaction();
     const [lockRows] = await transaction.execute(
-      `SELECT id, user_id, asset_code, amount
+      `SELECT id, user_id, asset_code, amount, joint_segment_id
          FROM ai_wallet_asset_collateral_locks
-        WHERE ledger_id = ? AND order_id = ? AND status = 'active'
+        WHERE ledger_id = ? AND order_id = ? AND status = 'active'${jointSegmentId ? ' AND joint_segment_id = ?' : ''}
         ORDER BY user_id ASC, asset_code ASC
         FOR UPDATE`,
-      [params.ledgerId, params.orderId],
+      jointSegmentId ? [params.ledgerId, params.orderId, jointSegmentId] : [params.ledgerId, params.orderId],
     );
     const locks = asRows(lockRows);
     for (const lock of locks) {
@@ -939,6 +976,7 @@ export async function releaseWalletCollateralLocksForOrder(params: {
       await appendCollateralEntry(transaction, {
         userId, assetCode, amount, balanceAfter: String(balance.available_balance), eventType: "collateral_release",
         ledgerId: params.ledgerId, orderId: params.orderId, actorUserId: params.actorUserId,
+        jointSegmentId: normalizeJointCollateralSegmentId(lock.joint_segment_id),
         requestId: `${buildCollateralRequestId()}_settled_${Number(lock.id)}`,
       });
       await transaction.execute(
@@ -958,19 +996,19 @@ export async function releaseWalletCollateralLocksForOrder(params: {
   }
 }
 
-export async function getActiveWalletCollateralLocks(ledgerId: number, orderId: number): Promise<WalletCollateralLock[]> {
+export async function getActiveWalletCollateralLocks(ledgerId: number, orderId: number, jointSegmentId?: string): Promise<WalletCollateralLock[]> {
   await ensureMultiAssetWalletInfrastructure();
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接失败");
   const [rows] = await (conn as any).execute(
-    `SELECT id, ledger_id, order_id, user_id, asset_code, amount, status
+    `SELECT id, ledger_id, order_id, joint_segment_id, user_id, asset_code, amount, status
        FROM ai_wallet_asset_collateral_locks
-      WHERE ledger_id = ? AND order_id = ? AND status = 'active'
-      ORDER BY user_id ASC, asset_code ASC`,
-    [ledgerId, orderId],
+      WHERE ledger_id = ? AND order_id = ? AND status = 'active'${jointSegmentId === undefined ? '' : ' AND joint_segment_id = ?'}
+      ORDER BY user_id ASC, joint_segment_id ASC, asset_code ASC`,
+    jointSegmentId === undefined ? [ledgerId, orderId] : [ledgerId, orderId, normalizeJointCollateralSegmentId(jointSegmentId)],
   );
   return asRows(rows).map((row) => ({
-    id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), userId: Number(row.user_id),
+    id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), jointSegmentId: normalizeJointCollateralSegmentId(row.joint_segment_id), userId: Number(row.user_id),
     assetCode: normalizeMultiAssetWalletAsset(row.asset_code), amount: String(row.amount), status: "active" as const,
   }));
 }
