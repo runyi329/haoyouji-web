@@ -19030,7 +19030,7 @@ ${klinesSummary}
                 WHERE m.user_id = ${targetUserId}
                   AND m.note NOT LIKE '[CNY]%'
                   AND m.note NOT LIKE '[BALANCE_BASE]%'
-                  // 本金迁入冻结会保留一正一负两条审计账务；用户端以真实冻结台账替代展示，避免误读为支出/收入。
+                  /* 本金迁入冻结会保留一正一负两条审计账务；用户端以真实冻结台账替代展示，避免误读为支出/收入。 */
                   AND COALESCE(m.note, '') NOT LIKE '[AF52本金冻结迁移-%'
                 ORDER BY m.created_at DESC`
           ) as any;
