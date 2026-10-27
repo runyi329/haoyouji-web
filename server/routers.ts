@@ -23322,9 +23322,9 @@ ${klinesSummary}
                  LEFT JOIN users u ON u.id = h.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = h.ledger_id AND lm.userId = h.user_id
                 WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
-                  AND h.tag_name IN (${holdPlaceholders})
+                  AND (${walletHoldCondition})
                 ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
-              [input.ledgerId, ...walletHoldTags]
+              [input.ledgerId, ...walletHoldTagParams]
             ).catch(() => null) as Promise<any> : Promise.resolve(null)
           ]);
           if (pcRowsResult) {
@@ -23547,7 +23547,8 @@ ${klinesSummary}
           if (input.ledgerId === 52 && orderIds.length > 0) {
             const walletLockPlaceholders = orderIds.map(() => '?').join(',');
             const walletHoldTags = orderIds.map((id) => `52号融资订单 #${id} 钱包担保`);
-            const walletHoldPlaceholders = walletHoldTags.map(() => '?').join(',');
+            const walletHoldTagParams = orderIds.flatMap((id) => [`52号融资订单 #${id} 钱包担保`, `52号融资订单 #${id} · 联合段 % 钱包担保`]);
+            const walletHoldCondition = orderIds.map(() => '(h.tag_name = ? OR h.tag_name LIKE ?)').join(' OR ');
             const [walletLockResult, walletHoldResult] = await Promise.all([
               conn.execute(
                 `SELECT l.order_id, l.user_id, l.asset_code, l.amount,
