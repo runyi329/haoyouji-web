@@ -4184,8 +4184,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const teamOverview = t0TeamOverviewQuery.data as T0TeamOverview | undefined;
   const teamOverviewMembers = useMemo(() => Array.isArray(teamOverview?.members) ? teamOverview.members : [], [teamOverview?.members]);
   const isAdminReconciliationActive = canManage && isTotalProfitPage && totalProfitPageTab === "settlement" && adminSettlementTab === "reconciliation";
+  // 管理员在主账本单选一位用户时，周结算必须走服务端同一份成员周报。
+  // 不能只因未进入 URL 预览模式就回退为全局周报，再由前端本地流水临时拼接。
+  const weeklySettlementPreviewUserId = isUserPreview
+    ? previewUserId || undefined
+    : (canManage && relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
+      ? Number(relatedUserFilterIds[0])
+      : undefined);
   const t0WeeklySettlementQuery = trpc.ledger.t0GetWeeklySettlementCenter.useQuery(
-    { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined },
+    { ledgerId: 52, previewUserId: weeklySettlementPreviewUserId },
     {
       // 成员与管理员都以服务端统一FIFO、冻结分佣快照和共享扣减为周结算权威口径。
       // 成员端已加载的总收益明细只可在本查询返回前临时构造首屏，不能长期覆盖权威周报。
@@ -7403,17 +7410,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
   }, [hasIndividualSettlementScope, memberSettlementIncomeByWeek, settlementTodayBjt, totalProfitAttribution.targetLabel]);
   const hasCurrentMemberWeeklySettlement = useMemo(() => {
-    if (!isMemberView || weeklySettlementCenter?.view !== "member") return false;
+    if (weeklySettlementCenter?.view !== "member") return false;
     const targetUserId = Number(payoutTargetRelatedUserId);
     return Number.isInteger(targetUserId)
       && targetUserId > 0
       && weeklySettlementCenter.current.members.some((member) => member.userId === targetUserId);
-  }, [isMemberView, payoutTargetRelatedUserId, weeklySettlementCenter]);
+  }, [payoutTargetRelatedUserId, weeklySettlementCenter]);
   // 管理员切换成员时，必须先确认返回周报的成员ID与当前页面目标一致，
   // 才允许它接管显示；这样不会短暂展示上一位成员的分佣或收益。
+  const shouldAwaitAuthoritativeFilteredMemberSettlement = canManage
+    && !isUserPreview
+    && hasIndividualSettlementScope
+    && Boolean(weeklySettlementPreviewUserId);
   const memberSettlementPresentation = hasCurrentMemberWeeklySettlement
     ? weeklySettlementCenter
-    : memberInstantWeeklySettlementCenter;
+    : (shouldAwaitAuthoritativeFilteredMemberSettlement ? undefined : memberInstantWeeklySettlementCenter);
   const displayedWeeklySettlementCenter = hasIndividualSettlementScope
     ? memberSettlementPresentation
     : weeklySettlementCenter;
@@ -13582,7 +13593,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className={isTotalProfitPage ? "-mx-4 flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4" : "flex justify-end"}>
               {isTotalProfitPage && <>
                 <button type="button" onClick={closeTotalProfitReport} aria-label="返回T+0速记账本" className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
-                <h1 className="min-w-0 flex-1 truncate font-semibold text-slate-900">{isMemberView ? "总收益" : "全局总收益"}</h1>
+                <h1 className="min-w-0 flex-1 truncate font-semibold text-slate-900">{hasIndividualSettlementScope ? "总收益" : "全局总收益"}</h1>
               </>}
               <div data-html2canvas-ignore="true" className="ml-auto flex shrink-0 items-center gap-1">
                 {totalProfitPageTab === "income" && <OrderCardImageDownload
