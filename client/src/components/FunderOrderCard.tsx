@@ -2136,10 +2136,27 @@ export function FunderOrderCard({
       return [];
     }
   })();
+  // 多段订单共用同一个页眉：第一段和全部可见子段的类型并列展示，同类只保留一个标签。
+  // 历史子段未记录类型时维持原兼容逻辑，按第一段的类型展示。
+  const headerAssetTypes = useMemo(() => {
+    const resolveType = (value: unknown, fallback: unknown) => {
+      const normalized = String(value || '').trim();
+      if (normalized === 'stock' || normalized === 'crypto' || normalized === 'crypto_option') return normalized;
+      const fallbackNormalized = String(fallback || '').trim();
+      return fallbackNormalized === 'stock' || fallbackNormalized === 'crypto' || fallbackNormalized === 'crypto_option'
+        ? fallbackNormalized
+        : '';
+    };
+    const primaryType = resolveType(order.asset_type, '');
+    return Array.from(new Set([
+      primaryType,
+      ...jointOrderSegments.map(segment => resolveType(segment.asset_type, primaryType)),
+    ].filter(Boolean)));
+  }, [order.asset_type, jointOrderSegments]);
   const headerTagCount = ((show('showOwnerName') || forceAdminOptionHeader)
     ? (isOwnerView ? Number(Boolean(ownerGroupHeaderLabel)) : Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerCollaboratorLabel)))
     : 0)
-    + Number(Boolean(order.asset_type && (show('assetType') || forceAdminOptionHeader)))
+    + (show('assetType') || forceAdminOptionHeader ? headerAssetTypes.length : 0)
     + manualHeaderTags.length;
   const headerTagsRef = useRef<HTMLDivElement>(null);
   const [hasHeaderTagOverflow, setHasHeaderTagOverflow] = useState(false);
@@ -2164,7 +2181,7 @@ export function FunderOrderCard({
       observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [headerTagsExpanded, headerTagCount, headerOwnerLabel, headerCollaboratorLabel, ownerGroupHeaderLabel, order.asset_type, manualHeaderTags.join('\u0001')]);
+  }, [headerTagsExpanded, headerTagCount, headerOwnerLabel, headerCollaboratorLabel, ownerGroupHeaderLabel, headerAssetTypes.join('|'), manualHeaderTags.join('\u0001')]);
   // 52号账本：手续费仅在订单控制区明确开启后，才在订单模式向前端展示。
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && dc?.tradingFee === true;
@@ -2755,18 +2772,21 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               参与者 {headerCollaboratorLabel}
             </span>
           )}
-          {order.asset_type && (show('assetType') || forceAdminOptionHeader) && (
+          {(show('assetType') || forceAdminOptionHeader) && headerAssetTypes.map(assetType => (
             <span
+              key={assetType}
               data-header-tag
               className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0"
-              style={order.asset_type === 'crypto_option'
+              style={assetType === 'crypto_option'
                 ? { backgroundColor: '#F3E8FF', color: '#7C3AED' }
-                : { backgroundColor: '#EDEEF5', color: '#4B5563' }
+                : assetType === 'stock'
+                  ? { backgroundColor: '#FEF3C7', color: '#B45309' }
+                  : { backgroundColor: '#EDEEF5', color: '#4B5563' }
               }
             >
-              {order.asset_type === 'stock' ? '股票' : order.asset_type === 'crypto_option' ? '期权' : '数字币'}
+              {assetType === 'stock' ? '股票' : assetType === 'crypto_option' ? '期权' : '数字币'}
             </span>
-          )}
+          ))}
           {manualHeaderTags.map((tag, i) => (
             <span
               key={`${tag}-${i}`}
@@ -4786,6 +4806,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       const segmentId = String(segment.id || `segment-${index + 2}`);
       // 浮动预览中只完整展示当前编辑段；其他段由上方小切换条代表，避免多段订单撑满手机屏幕。
       if (isPreviewSegmentAccordion && previewFocusedSegmentId !== segmentId) return null;
+      // 历史子段没有 asset_type 时才兼容展示第一段；显式的新子段绝不再继承其类型或期权参数。
+      const segmentHasExplicitAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(segment.asset_type));
+      const segmentAssetType = segmentHasExplicitAssetType ? segment.asset_type : order.asset_type;
+      const segmentCoin = segmentHasExplicitAssetType
+        ? (segment.asset_type === 'stock' ? 'CNY' : (segment.coin || order.coin))
+        : order.coin;
       let parentDisplayConfig: Record<string, any> = {};
       let segmentDisplayConfig: Record<string, any> = {};
       try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
@@ -4799,6 +4825,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         settled_at: segment.settled_at || order.settled_at,
         interest_end_date: segment.interest_end_date || order.interest_end_date,
         settlement_snapshot: segment.settlement_snapshot || null,
+        asset_type: segmentAssetType,
+        coin: segmentCoin,
+        option_info: segmentAssetType === 'crypto_option'
+          ? (segmentHasExplicitAssetType ? (segment.option_info || null) : order.option_info)
+          : null,
+        trade_direction: segmentAssetType === 'crypto'
+          ? (segmentHasExplicitAssetType ? (segment.trade_direction || null) : order.trade_direction)
+          : null,
         order_no: order.order_no,
         paidTotal: null,
         joint_order_segments: [],

@@ -28172,6 +28172,15 @@ ${klinesSummary}
             const currency = String(value ?? 'USDT').trim().toUpperCase();
             return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
           };
+          const safeCoin = (value: unknown) => String(value ?? '')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '')
+            .slice(0, 16);
+          const safeAssetType = (value: unknown) => {
+            const assetType = String(value ?? '').trim();
+            return ['stock', 'crypto', 'crypto_option'].includes(assetType) ? assetType : undefined;
+          };
           const safeDisplayConfig = (value: unknown) => {
             if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
             const result: Record<string, boolean | string> = {};
@@ -28192,6 +28201,28 @@ ${klinesSummary}
               return [{ coin, qty, ...(note ? { note } : {}), source: 'manual' as const }];
             });
           };
+          const safeOptionInfo = (value: unknown) => {
+            let parsed: unknown = value;
+            try { if (typeof parsed === 'string') parsed = JSON.parse(parsed); } catch { parsed = null; }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+            const source = parsed as Record<string, unknown>;
+            const coin = safeCoin(source.coin);
+            const direction = ['long_call', 'long_put', 'short_call', 'short_put'].includes(String(source.direction))
+              ? String(source.direction)
+              : undefined;
+            const denomination = safeCoin(source.denomination);
+            const optionInfo = {
+              ...(coin ? { coin } : {}),
+              ...(direction ? { direction } : {}),
+              ...(safeDate(source.exerciseDate) ? { exerciseDate: safeDate(source.exerciseDate) } : {}),
+              ...(safeText(source.deribitLabel, 48) ? { deribitLabel: safeText(source.deribitLabel, 48) } : {}),
+              ...(safeAmount(source.strikePrice) ? { strikePrice: safeAmount(source.strikePrice) } : {}),
+              ...(safeAmount(source.premium) ? { premium: safeAmount(source.premium) } : {}),
+              ...(denomination ? { denomination } : {}),
+              ...(safeAmount(source.buyQty) ? { buyQty: safeAmount(source.buyQty) } : {}),
+            };
+            return Object.keys(optionInfo).length > 0 ? optionInfo : undefined;
+          };
           mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
             const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
             const previousSettlement = persistedSettledSegmentsById.get(segmentId);
@@ -28199,6 +28230,11 @@ ${klinesSummary}
             id: segmentId,
             // 强制以当前参与者为唯一归属，不接受客户端指定他人。
             owner_user_id: Number(input.userId),
+            // 缺省时保持旧子段“继承第一段”的兼容行为；新子段可存自己的类型和标的。
+            ...(safeAssetType(raw?.asset_type) ? { asset_type: safeAssetType(raw?.asset_type) } : {}),
+            ...(safeCoin(raw?.coin) ? { coin: safeCoin(raw?.coin) } : {}),
+            ...(safeOptionInfo(raw?.option_info) ? { option_info: safeOptionInfo(raw?.option_info) } : {}),
+            ...(raw?.trade_direction === 'long' || raw?.trade_direction === 'short' ? { trade_direction: raw.trade_direction } : {}),
             amount: safeAmount(raw?.amount),
             amount_currency: safeCurrency(raw?.amount_currency),
             buy_price: safeAmount(raw?.buy_price),
@@ -28224,10 +28260,28 @@ ${klinesSummary}
             collateral_assets: safeAssets(raw?.collateral_assets),
             display_config: safeDisplayConfig(raw?.display_config),
             };
-            // 已结清段仍可随原订单一起展示，但不能被普通保存改回持有中或替换冻结行情。
-            return previousSettlement
-              ? { ...nextSegment, status: 'settled', settled_at: previousSettlement.settled_at || null, interest_end_date: previousSettlement.interest_end_date || null, settlement_snapshot: previousSettlement.settlement_snapshot || null }
-              : nextSegment;
+            // 已结清段仍可随原订单一起展示，但不能被普通保存改回持有中、替换冻结行情，
+            // 也不能把结算时的本段类型、标的或成交基础改成另一种资产。
+            if (!previousSettlement) return nextSegment;
+            const settledAssetFields = {
+              ...(safeAssetType(previousSettlement.asset_type) ? { asset_type: safeAssetType(previousSettlement.asset_type) } : {}),
+              ...(safeCoin(previousSettlement.coin) ? { coin: safeCoin(previousSettlement.coin) } : {}),
+              ...(safeOptionInfo(previousSettlement.option_info) ? { option_info: safeOptionInfo(previousSettlement.option_info) } : {}),
+              ...(previousSettlement.trade_direction === 'long' || previousSettlement.trade_direction === 'short' ? { trade_direction: previousSettlement.trade_direction } : {}),
+              ...(previousSettlement.amount !== undefined ? { amount: safeAmount(previousSettlement.amount) } : {}),
+              ...(previousSettlement.amount_currency !== undefined ? { amount_currency: safeCurrency(previousSettlement.amount_currency) } : {}),
+              ...(previousSettlement.buy_price !== undefined ? { buy_price: safeAmount(previousSettlement.buy_price) } : {}),
+              ...(previousSettlement.buy_quantity !== undefined ? { buy_quantity: safeAmount(previousSettlement.buy_quantity) } : {}),
+              ...(previousSettlement.buy_date !== undefined ? { buy_date: safeDate(previousSettlement.buy_date) } : {}),
+            };
+            return {
+              ...nextSegment,
+              ...settledAssetFields,
+              status: 'settled',
+              settled_at: previousSettlement.settled_at || null,
+              interest_end_date: previousSettlement.interest_end_date || null,
+              settlement_snapshot: previousSettlement.settlement_snapshot || null,
+            };
           });
         }
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
