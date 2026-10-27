@@ -5,6 +5,7 @@ import {
   ArrowDownLeft,
   ArrowLeft,
   ArrowUpRight,
+  BellRing,
   BookOpen,
   Check,
   ChevronDown,
@@ -97,6 +98,51 @@ function getOpeningEditSaveSafetySignal(input: {
     quantityExceeded,
     priceDeviationExceeded,
   };
+}
+
+/**
+ * ETH 处于四位数报价时，录入框只固定展示实时价前两位；后两位和小数由管理员快速补齐。
+ * 前缀只是界面辅助，绝不直接写入表单或订单事实。
+ */
+function getT0EthPriceInputPrefix(markPrice: number | null): string {
+  if (markPrice === null || !Number.isFinite(markPrice) || markPrice < 1_000 || markPrice >= 10_000) return "";
+  return String(Math.trunc(markPrice)).slice(0, 2);
+}
+
+function limitT0ManualDecimalInput(value: string, maximumFractionDigits: number): string {
+  const normalized = value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+  const firstDecimal = normalized.indexOf(".");
+  const integerPart = (firstDecimal === -1 ? normalized : normalized.slice(0, firstDecimal)).replace(/\D/g, "");
+  if (firstDecimal === -1) return integerPart;
+  const fractionalPart = normalized.slice(firstDecimal + 1).replace(/\D/g, "").slice(0, maximumFractionDigits);
+  return `${integerPart}.${fractionalPart}`;
+}
+
+/** 人工录入ETH数量：最多500.00，整数最多三位，小数最多两位。 */
+function limitT0EthQuantityInput(value: string): string {
+  const normalized = limitT0ManualDecimalInput(value, 2);
+  const firstDecimal = normalized.indexOf(".");
+  const integerPart = (firstDecimal === -1 ? normalized : normalized.slice(0, firstDecimal)).slice(0, 3);
+  const fractionalPart = firstDecimal === -1 ? "" : normalized.slice(firstDecimal + 1);
+  const hasDecimal = firstDecimal !== -1;
+  if (!integerPart && !fractionalPart) return "";
+  const numericValue = Number(`${integerPart || "0"}${hasDecimal ? `.${fractionalPart}` : ""}`);
+  if (Number.isFinite(numericValue) && numericValue > 500) return "500";
+  return hasDecimal ? `${integerPart}.${fractionalPart}` : integerPart;
+}
+
+function normalizeT0MarketPriceInput(value: string, prefix = "", autoAppendDecimal = true): string {
+  const normalized = limitT0ManualDecimalInput(value, 2);
+  const firstDecimal = normalized.indexOf(".");
+  const integerPart = (firstDecimal === -1 ? normalized : normalized.slice(0, firstDecimal)).replace(/\D/g, "");
+  const fractionalPart = firstDecimal === -1 ? "" : normalized.slice(firstDecimal + 1).replace(/\D/g, "");
+  const hasDecimal = firstDecimal !== -1;
+  if (!integerPart && !fractionalPart) return "";
+
+  // 输入不足四位时视为“实时前缀后的尾数”；手动输入满四位则尊重为完整成交价。
+  const fullInteger = prefix && integerPart.length < 4 ? `${prefix}${integerPart}` : integerPart;
+  const fullValue = `${fullInteger}${hasDecimal ? `.${fractionalPart}` : ""}`;
+  return autoAppendDecimal && /^\d{4}$/.test(fullValue) ? `${fullValue}.` : fullValue;
 }
 type SharedIncomeTransfer = {
   id: string;
@@ -2120,6 +2166,8 @@ type EntryForm = {
   takeProfitPlans: T0TakeProfitPlanDraft[];
   quantity: string;
   price: string;
+  /** 新建普通开仓时固定的实时价前两位，仅作输入辅助，绝不作为订单价格保存。 */
+  priceInputPrefix?: string;
   note: string;
   targetPrice?: number;
   /** 从逐笔开仓卡进入平仓时保存真实流水 ID，跨二次确认保持不变。 */
@@ -3811,6 +3859,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [previewMemberSearch, setPreviewMemberSearch] = useState("");
   const [previewMemberRecentIds, setPreviewMemberRecentIds] = useState<number[]>([]);
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
+  const [profitShareRecipientPickerOpen, setProfitShareRecipientPickerOpen] = useState(false);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
   const [debouncedProfitShareRecipientSearch, setDebouncedProfitShareRecipientSearch] = useState("");
   const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
@@ -3976,6 +4025,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
   // 整合报价详情必须沿用进入时的展示归档宽度，避免详情范围在交互中漂移。
   const entrySheetArchiveStepRef = useRef<number>(POSITION_ARCHIVE_STEP);
+  // 四位价格自动补点仅服务向前输入；退格时必须允许连续删回个位和十位来纠错。
+  const smartOpeningPriceBackspaceRef = useRef(false);
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
     accountId: "",
@@ -4004,6 +4055,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     takeProfitPlans: [],
     quantity: "",
     price: "",
+    priceInputPrefix: "",
     note: "",
   });
 
@@ -4681,7 +4733,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const profitShareRecipientSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
     { ledgerId: 52, query: debouncedProfitShareRecipientSearch },
     {
-      enabled: canManage && Boolean(profitShareSource) && debouncedProfitShareRecipientSearch.length > 0,
+      enabled: canManage && Boolean(profitShareSource) && profitShareRecipientPickerOpen && debouncedProfitShareRecipientSearch.length > 0,
       staleTime: 30_000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
@@ -6609,18 +6661,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
     [relatedFunds, entryForm.relatedUserId],
   );
+  // 关联用户弹层按“常用”排序：只计本账本真实关联订单，不让分佣、共享受益或筛选视图影响录单习惯。
+  const entryRelatedUserUsageCountById = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const trade of rawJournalTrades) {
+      const userId = String(trade.relatedUserId || "").trim();
+      if (!userId || trade.relatedUserHidden) continue;
+      counts.set(userId, (counts.get(userId) || 0) + 1);
+    }
+    return counts;
+  }, [rawJournalTrades]);
   // 速记账本会定时同步历史关联用户；刚从全局搜索选中的用户尚未产生流水时，
   // 服务端列表不会立刻包含他。把当前表单选择单独补入下拉，避免移动端回跳成“暂不关联”。
   const entryRelatedUserOptions = useMemo<PreviewRelatedUser[]>(() => {
-    if (!entryForm.relatedUserId || recentRelatedUsers.some((user) => user.id === entryForm.relatedUserId)) {
-      return recentRelatedUsers;
-    }
-    return [{
-      id: entryForm.relatedUserId,
-      name: entryForm.relatedUserName || entryForm.relatedUsername || `用户#${entryForm.relatedUserId}`,
-      username: entryForm.relatedUsername || undefined,
-    }, ...recentRelatedUsers];
-  }, [entryForm.relatedUserId, entryForm.relatedUserName, entryForm.relatedUsername, recentRelatedUsers]);
+    const options = !entryForm.relatedUserId || recentRelatedUsers.some((user) => user.id === entryForm.relatedUserId)
+      ? recentRelatedUsers
+      : [{
+        id: entryForm.relatedUserId,
+        name: entryForm.relatedUserName || entryForm.relatedUsername || `用户#${entryForm.relatedUserId}`,
+        username: entryForm.relatedUsername || undefined,
+      }, ...recentRelatedUsers];
+    return options.slice().sort((left, right) => {
+      // 最终规则：常用用户优先；同等常用时，累计充值更多的优先。
+      const usageDifference = (entryRelatedUserUsageCountById.get(right.id) || 0) - (entryRelatedUserUsageCountById.get(left.id) || 0);
+      if (usageDifference !== 0) return usageDifference;
+      const depositDifference = Number(payoutDepositAmountByRelatedUser.get(right.id) || 0) - Number(payoutDepositAmountByRelatedUser.get(left.id) || 0);
+      if (Math.abs(depositDifference) > 0.000001) return depositDifference;
+      const lastUsedDifference = String(right.lastUsedAt || "").localeCompare(String(left.lastUsedAt || ""));
+      if (lastUsedDifference !== 0) return lastUsedDifference;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+  }, [entryForm.relatedUserId, entryForm.relatedUserName, entryForm.relatedUsername, entryRelatedUserUsageCountById, payoutDepositAmountByRelatedUser, recentRelatedUsers]);
+  const profitShareRecipientCandidates = useMemo(
+    () => entryRelatedUserOptions.filter((user) => !profitShareAllocations.some((allocation) => allocation.user.id === user.id)),
+    [entryRelatedUserOptions, profitShareAllocations],
+  );
   const directoryManagerItems = useMemo<Array<{ id: string; name: string; secondary?: string }>>(() => {
     if (directoryManagerKind === "account") {
       return accounts.map((account) => ({ id: account.id, name: account.name }));
@@ -6654,6 +6729,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return null;
   }, [entryForm.quantity]);
   const isGridOpeningEntry = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "grid";
+  // 只在新建普通开仓中启用：历史订单编辑、平仓、期权、网格均保留原始完整价格输入，避免误改成交事实。
+  const smartOpeningPricePrefix = entryForm.priceInputPrefix ?? "";
+  const isSmartOpeningPriceInput = ACTIONS[entryForm.action].opening
+    && !entryForm.editingEntryId
+    && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract")
+    && Boolean(smartOpeningPricePrefix);
+  const smartOpeningPriceUsesPrefix = isSmartOpeningPriceInput
+    && (entryForm.price === "" || entryForm.price.startsWith(smartOpeningPricePrefix));
+  const smartOpeningPriceDisplayValue = smartOpeningPriceUsesPrefix
+    ? (entryForm.price || smartOpeningPricePrefix)
+    : entryForm.price;
+  const smartOpeningPriceIsIncomplete = smartOpeningPriceUsesPrefix
+    && entryForm.price !== ""
+    && !/^\d{4}(?:\.\d*)?$/.test(entryForm.price);
   const gridReferencePrice = useMemo(() => {
     if (!isGridOpeningEntry) return null;
     const reference = entryForm.gridDirection === "long" ? entryForm.gridRangeMin : entryForm.gridRangeMax;
@@ -7967,6 +8056,135 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isEditingPendingOpening = Boolean(isEditingOriginalPendingOpening && entryForm.isPending);
   const isPendingFillConfirmationQueued = Boolean(isEditingOriginalPendingOpening && !entryForm.isPending);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
+  const selectOpeningInstrumentType = (instrument: (typeof T0_INSTRUMENT_TYPES)[number]) => {
+    if (instrument.value === "option" && !entryForm.editingEntryId) {
+      setEntrySide(getOptionLadderSide(entryForm.optionDirection));
+    }
+    if (instrument.value === "grid" && !entryForm.editingEntryId) {
+      setEntrySide(entryForm.gridDirection === "long" ? "long" : "short");
+    }
+    setEntryForm((current) => {
+      if (instrument.value === "option") {
+        const isNewOption = current.instrumentType !== "option";
+        return {
+          ...current,
+          action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
+          instrumentType: "option",
+          isPending: false,
+          isTakeProfit: false,
+          takeProfitPrice: "",
+          takeProfitQuantity: "",
+          takeProfitPlans: [],
+          optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
+          optionPremium: isNewOption ? "" : current.optionPremium,
+          price: isNewOption ? "" : current.price,
+        };
+      }
+      if (instrument.value === "grid") {
+        return {
+          ...current,
+          action: current.editingEntryId ? current.action : current.gridDirection === "long" ? "openLong" : "openShort",
+          instrumentType: "grid",
+          isPending: false,
+          isTakeProfit: false,
+          takeProfitPrice: "",
+          takeProfitQuantity: "",
+          takeProfitPlans: [],
+          price: "",
+        };
+      }
+      return { ...current, instrumentType: instrument.value };
+    });
+  };
+  const renderOpeningExecutionControls = () => ACTIONS[entryForm.action].opening ? (
+    <div className="inline-flex items-center gap-0.5" aria-label="订单执行设置">
+      <button
+        type="button"
+        disabled={isCloseReview || !canToggleOpeningPendingStatus || entryForm.instrumentType === "option" || entryForm.instrumentType === "grid"}
+        aria-pressed={entryForm.isPending}
+        aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "取消挂单选择，保存时确认成交" : isEditingEntry ? "取消回挂单，恢复已成交" : "取消本笔开仓挂单，改为直接成交" : isEditingOriginalPendingOpening ? "恢复挂单选择" : isEditingEntry ? "将本笔已成交订单改回挂单" : "设为本笔开仓挂单"}
+        title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "挂单已选中；取消后需点击保存修改才确认成交" : isEditingEntry ? "当前准备改回挂单；再次点击可恢复已成交" : "挂单中，点击改为直接成交" : isEditingOriginalPendingOpening ? "已取消挂单选择；点击可恢复挂单" : isEditingEntry ? "将已成交订单改回挂单；保存后退出仓位与收益计算" : "直接成交，点击改为挂单"}
+        onClick={() => setEntryForm((current) => ({
+          ...current,
+          isPending: !current.isPending,
+          // 挂单成交前不允许锁定；改为挂单时立即解除已有锁定标记。
+          isLocked: current.isPending ? current.isLocked : false,
+        }))}
+        className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+      >
+        <Clock3 className="h-4 w-4" strokeWidth={2.3} />
+      </button>
+      <button
+        type="button"
+        disabled={isCloseReview || entryForm.isPending || isFullyClosedOpeningEdit}
+        aria-pressed={entryForm.isLocked}
+        aria-label={entryForm.isPending ? "挂单不可锁定" : entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
+        title={entryForm.isPending ? "挂单不可锁定；成交后才可设为锁定" : entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
+        onClick={() => setEntryForm((current) => ({ ...current, isLocked: !current.isLocked }))}
+        className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+      >
+        {entryForm.isLocked ? <Lock className="h-4 w-4" strokeWidth={2.3} /> : <LockOpen className="h-4 w-4" strokeWidth={2.3} />}
+      </button>
+      <button
+        type="button"
+        disabled={isCloseReview || !isTakeProfitAvailable || isFullyClosedOpeningEdit}
+        aria-pressed={entryForm.isTakeProfit}
+        aria-label={isTakeProfitAvailable ? (entryForm.isTakeProfit ? "关闭本笔开仓止盈" : "设置本笔开仓止盈") : "当前订单类型不支持止盈设置"}
+        title={isTakeProfitAvailable ? (entryForm.isTakeProfit ? "止盈已开启，点击关闭" : "设置止盈价与止盈数量") : "当前订单类型不支持止盈设置"}
+        onClick={() => setEntryForm((current) => ({
+          ...current,
+          isTakeProfit: !current.isTakeProfit,
+          takeProfitPrice: current.isTakeProfit ? "" : current.takeProfitPrice,
+          takeProfitQuantity: current.isTakeProfit ? "" : (current.takeProfitQuantity || normalizeEthQuantity(current.quantity)),
+          takeProfitPlans: current.isTakeProfit ? [] : (current.takeProfitPlans.length > 0
+            ? current.takeProfitPlans
+            : [{ price: current.takeProfitPrice, quantity: normalizeEthQuantity(current.quantity) }]),
+        }))}
+        className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isTakeProfit ? "border-amber-500/80 bg-amber-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+      >
+        <Target className="h-4 w-4" strokeWidth={2.3} />
+      </button>
+      <button
+        type="button"
+        disabled={isCloseReview || hasDependentCloseOpeningEdit}
+        aria-pressed={entryForm.isCounterparty}
+        aria-label={entryForm.isCounterparty ? "关闭管理员反向展示" : "开启管理员反向展示"}
+        title={entryForm.isCounterparty ? "管理员反向展示已开启，点击关闭" : "用户与管理员使用相反多空和损益展示"}
+        onClick={() => setEntryForm((current) => ({ ...current, isCounterparty: !current.isCounterparty }))}
+        className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isCounterparty ? "border-violet-500/80 bg-violet-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+      >
+        <Repeat2 className="h-4 w-4" strokeWidth={2.35} />
+      </button>
+      <button
+        type="button"
+        disabled={pauseReopenReminderMutation.isPending}
+        aria-pressed={entryForm.keepReopenReminder}
+        aria-label={entryForm.keepReopenReminder ? "关闭持续提醒" : "开启持续提醒"}
+        title={entryForm.reminderTemplateId
+          ? entryForm.keepReopenReminder
+            ? "持续提醒已开启；关闭后需保存才会取消"
+            : "已选择取消持续提醒；保存后生效"
+          : entryForm.keepReopenReminder
+            ? "持续提醒已开启：每次平仓后保留待补开"
+            : "开启持续提醒：每次平仓后保留待补开"}
+        onClick={() => {
+          // 从蓝色占位进入时，关闭只形成取消草稿；保存后才会暂停该段待补开。
+          setEntryForm((current) => ({ ...current, keepReopenReminder: !current.keepReopenReminder }));
+        }}
+        className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-wait disabled:opacity-60 ${entryForm.keepReopenReminder ? "border-sky-500/80 bg-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+      >
+        <BellRing className="h-4 w-4" strokeWidth={2.3} />
+      </button>
+    </div>
+  ) : undefined;
+  // 平仓选择后仅调整当前界面顺序：已选主单沉到列表最下方，紧贴下方平仓编辑区；绝不改订单或FIFO排序。
+  const closingOrderedOpenedTradeRows = useMemo(() => {
+    if (!isClosingEntry || !closingSourceTrade) return activeOpenedTradeRows;
+    const selectedEntryId = getStoredEntryId(closingSourceTrade);
+    const unselectedRows = activeOpenedTradeRows.filter((row) => getStoredEntryId(row.trade) !== selectedEntryId);
+    const selectedRows = activeOpenedTradeRows.filter((row) => getStoredEntryId(row.trade) === selectedEntryId);
+    return selectedRows.length > 0 ? [...unselectedRows, ...selectedRows] : activeOpenedTradeRows;
+  }, [activeOpenedTradeRows, closingSourceTrade, isClosingEntry]);
   // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
   const editingRemainingQuantity = useMemo(() => {
     if (!isEditingEntry || !editingOriginalTrade) return null;
@@ -7991,6 +8209,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && editingRemainingQuantity !== null
     && editingRemainingQuantity <= 0.0000001,
   );
+  // 未被任何后续平仓使用的开仓单，可在“已成交”和“挂单”间双向校正；
+  // 服务端会在提交时以行锁再次复核，已有平仓链路绝不允许回切挂单。
+  const canToggleOpeningPendingStatus = Boolean(!isEditingEntry || !hasDependentCloseOpeningEdit);
   const hasPartialOpeningMarkerChange = Boolean(
     isPartiallyClosedOpeningEdit
     && editingOriginalTrade
@@ -8304,6 +8525,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
+      // 仅本次新建普通开仓固定实时价前两位；行情之后变动也不改写正在录入的价格。
+      priceInputPrefix: getT0EthPriceInputPrefix(markPrice),
       note: "",
       targetPrice,
     });
@@ -8554,6 +8777,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       // 部分平仓时表单只展示剩余可操作量；服务端 lockOnly 分支只更新标记，不改写原始订单数量。
       quantity: normalizeEthQuantity(String(editableQuantity)),
       price: trade.price.toFixed(2),
+      priceInputPrefix: "",
       note: trade.note ?? "",
       editingEntryId: getStoredEntryId(trade),
     });
@@ -9123,6 +9347,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setDirectoryDeleteTarget(null);
     setEntryProfitShareEditTarget(null);
     setProfitShareSaveError(null);
+    setProfitShareRecipientPickerOpen(false);
     setProfitShareSource(source);
     setProfitShareAllocations(currentRules.length > 0
       ? currentRules.map((rule) => ({
@@ -9163,6 +9388,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setDirectoryDeleteTarget(null);
     setEntryProfitShareEditTarget(opening);
     setProfitShareSaveError(null);
+    setProfitShareRecipientPickerOpen(false);
     setProfitShareSource(source);
     setProfitShareAllocations(draft);
     setProfitShareRecipientSearch("");
@@ -9174,6 +9400,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setProfitShareSource(null);
     setEntryProfitShareEditTarget(null);
     setProfitShareAllocations([]);
+    setProfitShareRecipientPickerOpen(false);
     setProfitShareRecipientSearch("");
   };
 
@@ -9305,6 +9532,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRelatedUserQuickPickerOpen(false);
   };
 
+  const addProfitShareRecipient = (user: PreviewRelatedUser) => {
+    if (profitShareAllocations.some((allocation) => allocation.user.id === user.id)) return;
+    if (profitShareAllocations.length >= 20) {
+      t0Toast.error("收益分配人最多添加20位");
+      return;
+    }
+    setProfitShareSaveError(null);
+    setProfitShareAllocations((current) => [...current, { user, percentage: "1" }]);
+    setProfitShareRecipientSearch("");
+    setProfitShareRecipientPickerOpen(false);
+  };
+
   const selectRelatedFund = (fundId: string) => {
     if (fundId === "legacy") {
       setEntryForm((current) => ({ ...current, relatedFundId: "legacy", relatedFundName: "" }));
@@ -9371,6 +9610,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
     const isOptionOpening = selectedAction.opening && entryForm.instrumentType === "option";
     const isGridOpening = selectedAction.opening && entryForm.instrumentType === "grid";
+    if (smartOpeningPriceIsIncomplete) {
+      showSaveValidationError(`请在实时价前缀 ${smartOpeningPricePrefix} 后补齐成交价后两位`);
+      return;
+    }
     const effectivePriceInput = isGridOpening && gridReferencePrice !== null
       ? String(gridReferencePrice)
       : entryForm.price.trim();
@@ -10140,7 +10383,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
   const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
   const historicalOpeningQuantity = trade.originalQuantityBeforeReassignment ?? trade.quantity;
-  const reassignedQuantity = trade.reassignedQuantity ?? 0;
   const historicalOpeningValue = historicalOpeningQuantity * trade.price;
   const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
   const floatingPnl = trade.isPending || trade.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(
@@ -10153,6 +10395,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
   // 锁定不改变已成交/已平仓流水，只保护尚余可平数量；解锁后立即恢复平仓能力。
   const canQuickClose = remainingQuantity > 0.0000001 && !trade.isLocked;
+  const showsQuickCloseAction = row.kind === "active";
   const takeProfitPlans = getTradeTakeProfitPlans(trade);
   const pendingTakeProfitQuantity = getPendingTakeProfitQuantity(trade);
   const takeProfitMarkerLabel = getTakeProfitMarkerLabel(trade.takeProfitEnabled, pendingTakeProfitQuantity, remainingQuantity);
@@ -10160,13 +10403,42 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const visibleProfitShareAllocations = isMemberView
     ? openingProfitShareAllocations.filter((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId)
     : openingProfitShareAllocations;
-  const profitShareSummary = visibleProfitShareAllocations
-    .map((allocation) => `${allocation.beneficiaryUserName}${formatProfitSharePercentage(allocation.percentage)}`)
-    .join(" · ");
+  const isSelectedClosingSource = Boolean(
+    isClosingEntry
+    && closingSourceTrade
+    && getStoredEntryId(trade) === getStoredEntryId(closingSourceTrade),
+  );
   const isExpanded = expandedOpenedTradeIds.has(trade.id);
   return (
-    <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2">
-      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+    <div key={trade.id} className={`rounded border px-3 py-2 ${isSelectedClosingSource ? "border-indigo-400 bg-indigo-50/80 ring-1 ring-indigo-200/70" : "border-slate-200 bg-slate-50/80"}`}>
+      <div className={`grid min-w-0 items-center gap-x-0 ${isMemberView ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[repeat(3,minmax(0,1fr))_auto]"}`}>
+        {!isMemberView && <div className="flex min-w-0 items-baseline gap-1">
+          <span className="shrink-0 text-[10px] font-medium text-slate-400">账户</span>
+          <span title={getTradeAccountName(trade)} className="min-w-0 truncate text-xs font-semibold text-slate-800">{getTradeAccountName(trade)}</span>
+        </div>}
+        <div className={`flex min-w-0 items-baseline gap-1 ${isMemberView ? "" : "justify-center"}`}>
+          <span className="shrink-0 text-[10px] font-medium text-slate-400">用户</span>
+          <span title={getTradeRelatedUserName(trade)} className="min-w-0 truncate text-xs font-semibold text-slate-800">{getTradeRelatedUserName(trade)}</span>
+        </div>
+        <div className="flex min-w-0 items-baseline justify-end gap-1 text-right">
+          <span className="shrink-0 text-[10px] font-medium text-slate-400">项目</span>
+          <span title={getTradeRelatedFundName(trade)} className="min-w-0 truncate text-xs font-semibold text-slate-800">{getTradeRelatedFundName(trade)}</span>
+        </div>
+        <button
+          type="button"
+          aria-label={isExpanded ? "收起本笔开仓详情" : "展开本笔开仓详情"}
+          onClick={() => setExpandedOpenedTradeIds((current) => {
+            const next = new Set(current);
+            if (next.has(trade.id)) next.delete(trade.id);
+            else next.add(trade.id);
+            return next;
+          })}
+          className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center text-slate-400 active:scale-95"
+        >
+          <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+        </button>
+      </div>
+      <div className={`mt-1.5 w-full border-y border-slate-200/85 py-1.5 ${canManage && showsQuickCloseAction ? "grid grid-cols-[minmax(0,1fr)_3.25rem] items-stretch gap-x-2" : ""}`}>
         <button
           type="button"
           aria-expanded={isExpanded}
@@ -10178,70 +10450,61 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           })}
           className="min-w-0 text-left"
         >
-          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-5">
-                              <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
-                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(historicalOpeningQuantity)} ETH</span>
-                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 rounded bg-sky-50 px-1 py-0.5 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span>}
-                              {takeProfitMarkerLabel && <span className="inline-flex shrink-0 items-center gap-0.5 text-sm font-semibold text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} />{takeProfitMarkerLabel}</span>}
-                              {!trade.isPending && (trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>)}
+          <span className="block min-w-0 text-[11px] leading-4 tabular-nums">
+            <span className="grid grid-cols-3 gap-x-0">
+              <span className="flex min-w-0 items-baseline justify-start gap-1 whitespace-nowrap">
+                <span className={`font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
+                <span className="text-sm font-semibold text-slate-900">{formatQuantity(historicalOpeningQuantity)} E</span>
+              </span>
+              <span className="flex min-w-0 items-baseline justify-center gap-1 whitespace-nowrap">
+                <span className="font-semibold text-sky-600">已平</span>
+                <span className="text-sm font-semibold text-slate-700">{formatQuantity(linkedClosedQuantity)} E</span>
+              </span>
+              <span className="flex min-w-0 items-baseline justify-end gap-1 whitespace-nowrap">
+                <span className="font-semibold text-slate-600">剩余</span>
+                <span className="text-sm font-semibold text-slate-800">{formatQuantity(remainingQuantity)} E</span>
+                {trade.isLocked && <span title="已锁定" aria-label="已锁定" className="inline-flex shrink-0 text-amber-700"><Lock className="h-3.5 w-3.5" /></span>}
+                {takeProfitMarkerLabel && <span title={takeProfitMarkerLabel} aria-label={takeProfitMarkerLabel} className="inline-flex shrink-0 text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} /></span>}
+              </span>
+            </span>
+            <span className="mt-1 grid grid-cols-2 items-baseline gap-x-3 border-t border-slate-200/80 pt-1">
+              <span className="min-w-0 whitespace-nowrap text-slate-600">开仓价 <span className="font-semibold text-slate-800">{formatPrice(trade.price)}</span></span>
+              {trade.isPending ? <span className="inline-flex justify-end whitespace-nowrap items-center gap-1 text-sky-700"><span className="text-slate-500">当前状态</span><Clock3 className="h-3 w-3" />待成交</span>
+                : trade.instrumentType === "option" ? <span className="flex min-w-0 items-baseline justify-end gap-1 whitespace-nowrap"><span className="shrink-0 text-slate-500">实时盈亏</span><OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 font-semibold tabular-nums" /></span>
+                : <span className={`justify-self-end whitespace-nowrap font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}><span className="mr-1 font-normal text-slate-500">实时盈亏</span>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+            </span>
           </span>
         </button>
-        <button
+        {canManage && showsQuickCloseAction && <button
           type="button"
-          aria-label={isExpanded ? "收起本笔开仓详情" : "展开本笔开仓详情"}
-          onClick={() => setExpandedOpenedTradeIds((current) => {
-            const next = new Set(current);
-            if (next.has(trade.id)) next.delete(trade.id);
-            else next.add(trade.id);
-            return next;
-          })}
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 active:scale-95"
+          disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview || trade.isPending || trade.instrumentType === "option"}
+          onClick={() => isSelectedClosingSource ? backToOrderList() : openQuickCloseSheet(trade)}
+          title={isSelectedClosingSource ? `取消本笔${ACTIONS[closeAction].label}选择，恢复新开仓编辑` : trade.isPending ? "挂单成交后才能平仓" : trade.instrumentType === "option" ? "期权订单请在编辑页处理" : trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
+          className={`min-h-[52px] rounded border px-1 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${closeAction === "closeLong" ? "border-rose-300 bg-rose-50 text-rose-700" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}
         >
-          <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-        </button>
-      </div>
-      <div className="mt-1.5 flex min-w-0 items-end justify-between gap-2 text-[10px] font-medium">
-        {!isExpanded && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1 leading-4">
-          {linkedClosedQuantity > 0.0000001 && <>
-            <span className="shrink-0 tabular-nums text-slate-600">{reassignedQuantity > 0 ? `已平 ${formatQuantity(linkedClosedQuantity)} · 已转入 ${formatQuantity(reassignedQuantity)}` : `已平 ${formatQuantity(linkedClosedQuantity)} · 剩 ${formatQuantity(remainingQuantity)} ETH`}</span>
-          </>}
-          {!isMemberView && <span title={getTradeAccountName(trade)} className="inline-flex shrink-0 items-baseline gap-0.5 whitespace-nowrap"><span className="text-slate-400">账户</span><span className="text-slate-600">{getTradeAccountName(trade)}</span></span>}
-          <span title={getTradeRelatedUserName(trade)} className="inline-flex shrink-0 items-baseline gap-0.5 whitespace-nowrap"><span className="text-slate-400">用户</span><span className="text-slate-600">{getTradeRelatedUserName(trade)}</span></span>
-          <span title={getTradeRelatedFundName(trade)} className="inline-flex shrink-0 items-baseline gap-0.5 whitespace-nowrap"><span className="text-slate-400">项目</span><span className="text-slate-600">{getTradeRelatedFundName(trade)}</span></span>
-          {visibleProfitShareAllocations.length > 0 && <span title={profitShareSummary} className="inline-flex min-w-0 flex-1 items-baseline gap-0.5 text-indigo-700"><span className="shrink-0 text-indigo-400">分配</span><span className="min-w-0 truncate">{isMemberView ? formatProfitSharePercentage(visibleProfitShareAllocations[0].percentage) : profitShareSummary}</span></span>}
-        </div>
-        }
-        {canManage && <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            disabled={isCloseReview || Boolean(trade.isSyncing)}
-            onClick={() => setDeleteCandidate(trade)}
-            className="h-9 rounded border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            删除
-          </button>
-          <button
-            type="button"
-            disabled={isCloseReview || Boolean(trade.isSyncing)}
-            onClick={() => openEditOpeningTrade(trade)}
-            className="h-9 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            编辑
-          </button>
-          {row.kind === "active" && !trade.isPending && trade.instrumentType !== "option" && <button
-            type="button"
-            disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
-            onClick={() => openQuickCloseSheet(trade)}
-            title={trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
-            className={`h-9 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
-          >
-            {ACTIONS[closeAction].label}
-          </button>}
-        </div>}
+          {isSelectedClosingSource ? `取消${ACTIONS[closeAction].label}` : ACTIONS[closeAction].label}
+        </button>}
       </div>
       {isExpanded && (
         <>
+          {canManage && <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isCloseReview || Boolean(trade.isSyncing)}
+              onClick={() => setDeleteCandidate(trade)}
+              className="h-9 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              删除
+            </button>
+            <button
+              type="button"
+              disabled={isCloseReview || Boolean(trade.isSyncing)}
+              onClick={() => openEditOpeningTrade(trade)}
+              className="h-9 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              编辑
+            </button>
+          </div>}
           <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
             <div className="min-w-0">
               <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
@@ -10260,20 +10523,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className="min-w-0 text-right">
               <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
               <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
-            </div>
-            <div className={`col-span-3 grid gap-x-2 border-t border-slate-200 pt-2 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}>
-              {!isMemberView && <div className="min-w-0">
-                <div className="text-[10px] text-slate-400">账户</div>
-                <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
-              </div>}
-              <div className={`min-w-0 ${isMemberView ? "text-left" : "text-center"}`}>
-                <div className="text-[10px] text-slate-400">用户</div>
-                <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
-              </div>
-              <div className="min-w-0 text-right">
-                <div className="text-[10px] text-slate-400">专项款</div>
-                <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
-              </div>
             </div>
             {visibleProfitShareAllocations.length > 0 && <div className="col-span-3 border-t border-indigo-100 pt-2">
               <div className="flex items-center justify-between gap-2">
@@ -11799,28 +12048,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className="text-[10px] text-slate-500">点哪张的{ACTIONS[entryForm.action].label}，只平哪张</span>
                     </div>
                     <div className="space-y-1.5">
-                      {activeOpenedTradeRows.map(renderOpenedTradeRow)}
+                      {closingOrderedOpenedTradeRows.map(renderOpenedTradeRow)}
                     </div>
                   </section>
                 )}
-              {isClosingEntry && closingSourceTrade && (
-                <div className="flex items-center justify-between gap-3 rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-medium text-indigo-600">当前选择的开仓订单</div>
-                    <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-slate-800">
-                      {ACTIONS[closingSourceTrade.action].label} {formatQuantity(closingSourceTrade.quantity)} ETH @ {formatPrice(closingSourceTrade.price)}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={isCloseReview}
-                    onClick={backToOrderList}
-                    className="h-8 shrink-0 rounded border border-indigo-200 bg-white px-2.5 text-[11px] font-semibold text-indigo-700 active:scale-[0.98] disabled:opacity-40"
-                  >
-                    重选订单
-                  </button>
-                </div>
-              )}
               </div>
 
               {!isEditingEntry && !isClosingEntry && <div className="space-y-1.5">
@@ -11847,101 +12078,63 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           ? "挂单按钮已选中；取消选中后，点击底部“保存修改”才会按当前成交价确认成交。"
                           : isPendingFillConfirmationQueued
                             ? "已取消挂单选择；点击底部“保存修改”后，将按当前成交价确认成交并计入仓位。"
+                            : entryForm.isPending
+                              ? "已改为挂单状态；保存修改后将退出持仓、收益和 FIFO 计算，锁定会自动解除。"
                           : "请直接修改下方字段，完成后点击底部“保存修改”。"}
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] gap-3 items-start">
-                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已全部平仓（ETH）" : isPartiallyClosedOpeningEdit ? "剩余可操作（ETH）" : "数量（ETH）"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
-                    <div className="relative">
+                <div className="space-y-2">
+                  <Field
+                    label={<span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已平 E" : isPartiallyClosedOpeningEdit ? "剩余 E" : "数量 E"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}
+                    labelFor="t0-entry-quantity"
+                    horizontal
+                    labelAction={ACTIONS[entryForm.action].opening ? (
+                      <div className="inline-flex items-center gap-0.5" aria-label="订单类型">
+                        {T0_INSTRUMENT_TYPES.map((instrument) => {
+                          const isActive = entryForm.instrumentType === instrument.value;
+                          return (
+                            <button
+                              key={instrument.value}
+                              type="button"
+                              title={instrument.label}
+                              aria-label={instrument.label}
+                              aria-pressed={isActive}
+                              disabled={isCloseReview || hasDependentCloseOpeningEdit}
+                              onClick={() => selectOpeningInstrumentType(instrument)}
+                              className={`flex h-8 w-8 items-center justify-center rounded border text-[11px] font-bold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                            >
+                              {instrument.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : undefined}
+                  >
+                    <div>
                       <input
+                        id="t0-entry-quantity"
                         inputMode="decimal"
-                        maxLength={7}
+                        maxLength={6}
                         disabled={isCloseReview || hasDependentCloseOpeningEdit}
                         aria-invalid={Boolean(quantityFormatError)}
                         value={entryForm.quantity}
-                        onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, quantity: limitT0EthQuantityInput(event.target.value) }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 ${ACTIONS[entryForm.action].opening ? "pr-[8.9rem]" : "pr-3"} text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
-                      {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-                        <button
-                          type="button"
-                          disabled={isCloseReview || entryForm.isPending || isFullyClosedOpeningEdit}
-                          aria-pressed={entryForm.isLocked}
-                          aria-label={entryForm.isPending ? "挂单不可锁定" : entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
-                          title={entryForm.isPending ? "挂单不可锁定；成交后才可设为锁定" : entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
-                          onClick={() => setEntryForm((current) => ({ ...current, isLocked: !current.isLocked }))}
-                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
-                        >
-                          {entryForm.isLocked ? <Lock className="h-4 w-4" strokeWidth={2.3} /> : <LockOpen className="h-4 w-4" strokeWidth={2.3} />}
-                        </button>
-                        {(!isEditingEntry || isEditingOriginalPendingOpening) && <button
-                          type="button"
-                          disabled={isCloseReview || entryForm.instrumentType === "option" || entryForm.instrumentType === "grid"}
-                          aria-pressed={entryForm.isPending}
-                          aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "取消挂单选择，保存时确认成交" : "取消本笔开仓挂单，改为直接成交" : isEditingOriginalPendingOpening ? "恢复挂单选择" : "设为本笔开仓挂单"}
-                          title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "挂单已选中；取消后需点击保存修改才确认成交" : "挂单中，点击改为直接成交" : isEditingOriginalPendingOpening ? "已取消挂单选择；点击可恢复挂单" : "直接成交，点击改为挂单"}
-                          onClick={() => setEntryForm((current) => ({
-                            ...current,
-                            isPending: !current.isPending,
-                            // 挂单成交前不允许锁定；改为挂单时立即解除已有锁定标记。
-                            isLocked: current.isPending ? current.isLocked : false,
-                          }))}
-                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
-                        >
-                          <Clock3 className="h-4 w-4" strokeWidth={2.3} />
-                        </button>}
-                        {isTakeProfitAvailable && <button
-                          type="button"
-                          disabled={isCloseReview || isFullyClosedOpeningEdit}
-                          aria-pressed={entryForm.isTakeProfit}
-                          aria-label={entryForm.isTakeProfit ? "关闭本笔开仓止盈" : "设置本笔开仓止盈"}
-                          title={entryForm.isTakeProfit ? "止盈已开启，点击关闭" : "设置止盈价与止盈数量"}
-                          onClick={() => setEntryForm((current) => ({
-                            ...current,
-                            isTakeProfit: !current.isTakeProfit,
-                            takeProfitPrice: current.isTakeProfit ? "" : current.takeProfitPrice,
-                            takeProfitQuantity: current.isTakeProfit ? "" : (current.takeProfitQuantity || normalizeEthQuantity(current.quantity)),
-                            takeProfitPlans: current.isTakeProfit ? [] : (current.takeProfitPlans.length > 0
-                              ? current.takeProfitPlans
-                              : [{ price: current.takeProfitPrice, quantity: normalizeEthQuantity(current.quantity) }]),
-                          }))}
-                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isTakeProfit ? "border-amber-500/80 bg-amber-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
-                        >
-                          <Target className="h-4 w-4" strokeWidth={2.3} />
-                        </button>}
-                        <button
-                          type="button"
-                          disabled={isCloseReview || hasDependentCloseOpeningEdit}
-                          aria-pressed={entryForm.isCounterparty}
-                          aria-label={entryForm.isCounterparty ? "关闭管理员反向展示" : "开启管理员反向展示"}
-                          title={entryForm.isCounterparty ? "管理员反向展示已开启，点击关闭" : "用户与管理员使用相反多空和损益展示"}
-                          onClick={() => setEntryForm((current) => ({ ...current, isCounterparty: !current.isCounterparty }))}
-                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isCounterparty ? "border-violet-500/80 bg-violet-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
-                        >
-                          <Repeat2 className="h-4 w-4" strokeWidth={2.35} />
-                        </button>
-                      </div>}
                     </div>
-                    {ACTIONS[entryForm.action].opening && entryForm.isCounterparty && <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-violet-700"><Repeat2 className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} /><span>反向展示已开启：用户保持本单原始多空与损益；管理员按相反数字展示。关闭后订单保留并立即恢复普通展示。</span></div>}
-                    {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
-                      <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
-                        <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
-                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量与成交数据固定。账户、项目可选同步已平历史；如更换用户名，只会转入之后的剩余仓位。</span>
-                      </div>
-                    )}
-                    {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
                   <Field label={
                     <span className="inline-flex whitespace-nowrap text-sm font-semibold text-slate-800">
                       {ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : isGridOpeningEntry ? "网格参考价" : "成交价" : "平仓价"}{(isOptionOpeningEntry || isGridOpeningEntry) && <span className="text-rose-500">*</span>}
                     </span>
-                  }>
+                  } labelFor="t0-entry-price" horizontal labelAction={renderOpeningExecutionControls()}>
                     {isOptionOpeningEntry ? (
                       <select
+                        id="t0-entry-price"
                         disabled={isCloseReview || hasDependentCloseOpeningEdit || !t0OptionDeribitLabel || t0OptionStrikesQuery.isLoading}
                         value={entryForm.price}
                         onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
@@ -11958,16 +12151,44 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         {t0OptionStrikes.map((strike) => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}
                       </select>
                     ) : isGridOpeningEntry ? <input
+                      id="t0-entry-price"
                       readOnly
                       value={gridReferencePrice === null ? "" : formatPrice(gridReferencePrice)}
                       placeholder={entryForm.gridDirection === "long" ? "填写网格下限后生成" : "填写网格上限后生成"}
                       className="h-14 w-full rounded border border-cyan-200 bg-cyan-50/70 px-3 text-xl font-semibold tabular-nums text-cyan-950 outline-none placeholder:text-cyan-500/65"
                     /> : <input
+                      id="t0-entry-price"
                       inputMode="decimal"
                       disabled={isCloseReview || hasDependentCloseOpeningEdit}
-                      value={entryForm.price}
-                      onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
-                      placeholder="0.00"
+                      aria-label={ACTIONS[entryForm.action].opening ? "成交价" : "平仓价"}
+                      value={isSmartOpeningPriceInput ? smartOpeningPriceDisplayValue : entryForm.price}
+                      onKeyDown={(event) => {
+                        smartOpeningPriceBackspaceRef.current = event.key === "Backspace";
+                      }}
+                      onKeyUp={() => {
+                        smartOpeningPriceBackspaceRef.current = false;
+                      }}
+                      onBlur={() => {
+                        smartOpeningPriceBackspaceRef.current = false;
+                      }}
+                      onChange={(event) => setEntryForm((current) => {
+                        if (!isSmartOpeningPriceInput) return { ...current, price: limitT0ManualDecimalInput(event.target.value, 2) };
+                        const prefix = current.priceInputPrefix ?? "";
+                        const rawValue = event.target.value;
+                        const rawIntegerLength = rawValue.replace(/,/g, ".").split(".")[0].replace(/\D/g, "").length;
+                        const autoAppendDecimal = !smartOpeningPriceBackspaceRef.current;
+                        // 前缀在视觉上与正常数字完全一致，但不足四位时不允许误删成独立价格。
+                        const nextPrice = !rawValue
+                          ? ""
+                          : rawValue.startsWith(prefix)
+                            ? normalizeT0MarketPriceInput(rawValue.slice(prefix.length), prefix, autoAppendDecimal)
+                            : rawIntegerLength >= 4
+                              ? normalizeT0MarketPriceInput(rawValue, "", autoAppendDecimal)
+                              : "";
+                        smartOpeningPriceBackspaceRef.current = false;
+                        return { ...current, price: nextPrice };
+                      })}
+                      placeholder={isSmartOpeningPriceInput ? undefined : "0.00"}
                       className="min-w-0 w-full h-14 rounded border border-slate-200 px-2.5 text-[19px] font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                     />}
                     {!isOptionOpeningEntry && openingArchivePrice !== null && (
@@ -11978,6 +12199,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </div>
                     )}
                   </Field>
+                  {ACTIONS[entryForm.action].opening && entryForm.isCounterparty && <div className="flex items-start gap-1.5 text-[10px] font-medium leading-4 text-violet-700"><Repeat2 className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} /><span>反向展示已开启：用户保持本单原始多空与损益；管理员按相反数字展示。关闭后订单保留并立即恢复普通展示。</span></div>}
+                  {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
+                    <div className="flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
+                      <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
+                      <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量与成交数据固定。账户、项目可选同步已平历史；如更换用户名，只会转入之后的剩余仓位。</span>
+                    </div>
+                  )}
+                  {quantityFormatError && <div className="text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                 </div>
 
                 {isClosingEntry && <div className="-mt-1 grid grid-cols-8 gap-1" aria-label="按可平数量选择百分比">
@@ -12020,83 +12249,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   })}
                 </div>}
 
-                {ACTIONS[entryForm.action].opening && <div className="-mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span className="mr-0.5 text-[11px] text-slate-400">类型</span>
-                  {T0_INSTRUMENT_TYPES.map((instrument) => {
-                    const isActive = entryForm.instrumentType === instrument.value;
-                    return (
-                      <button
-                        key={instrument.value}
-                        type="button"
-                        disabled={isCloseReview || hasDependentCloseOpeningEdit}
-                        onClick={() => {
-                          if (instrument.value === "option" && !entryForm.editingEntryId) {
-                            setEntrySide(getOptionLadderSide(entryForm.optionDirection));
-                          }
-                          if (instrument.value === "grid" && !entryForm.editingEntryId) {
-                            setEntrySide(entryForm.gridDirection === "long" ? "long" : "short");
-                          }
-                          setEntryForm((current) => {
-                            if (instrument.value === "option") {
-                              const isNewOption = current.instrumentType !== "option";
-                              return {
-                                ...current,
-                                action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
-                                instrumentType: "option",
-                                isPending: false,
-                                isTakeProfit: false,
-                                takeProfitPrice: "",
-                                takeProfitQuantity: "",
-                                takeProfitPlans: [],
-                                optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
-                                optionPremium: isNewOption ? "" : current.optionPremium,
-                                price: isNewOption ? "" : current.price,
-                              };
-                            }
-                            if (instrument.value === "grid") {
-                              return {
-                                ...current,
-                                action: current.editingEntryId ? current.action : current.gridDirection === "long" ? "openLong" : "openShort",
-                                instrumentType: "grid",
-                                isPending: false,
-                                isTakeProfit: false,
-                                takeProfitPrice: "",
-                                takeProfitQuantity: "",
-                                takeProfitPlans: [],
-                                price: "",
-                              };
-                            }
-                            return { ...current, instrumentType: instrument.value };
-                          });
-                        }}
-                        className={`h-7 rounded border px-3 text-[11px] font-medium transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
-                        aria-pressed={isActive}
-                      >
-                        {instrument.label}
-                      </button>
-                    );
-                  })}
-                </div>}
-
-                {ACTIONS[entryForm.action].opening && <button
-                  type="button"
-                  disabled={pauseReopenReminderMutation.isPending}
-                  onClick={() => {
-                    // 从蓝色占位进入时，关闭开关只形成取消草稿；
-                    // 底部“保存取消提醒”才会暂停这一段待补开，关闭页面则不做任何改动。
-                    setEntryForm((current) => ({ ...current, keepReopenReminder: !current.keepReopenReminder }));
-                  }}
-                  className={`-mt-1 flex w-full items-center justify-between rounded border px-3 py-2 text-left text-xs transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 ${entryForm.keepReopenReminder ? 'border-sky-300 bg-sky-50 text-sky-800' : 'border-slate-200 bg-white text-slate-600'}`}
-                >
-                  <span className="font-semibold">持续提醒</span>
-                  <span className="text-[11px]">{entryForm.reminderTemplateId
-                    ? entryForm.keepReopenReminder
-                      ? '关闭后需保存才取消'
-                      : '已选择取消，保存后生效'
-                    : entryForm.keepReopenReminder
-                      ? '每次平仓后保留待补开'
-                      : '平仓后从报价单移除'}</span>
-                </button>}
                 {isReminderCancellationPending && <div role="status" className="-mt-0.5 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800">
                   已选择取消这张蓝色待补开位，尚未保存。点击底部“保存取消提醒”后才会隐藏；直接关闭本页不会改变提醒。
                 </div>}
@@ -12130,10 +12282,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <Field label={<span>数量（ETH） <span className="text-rose-500">*</span></span>}>
                           <input
                             inputMode="decimal"
-                            maxLength={7}
+                            maxLength={6}
                             disabled={isCloseReview || isFullyClosedOpeningEdit}
                             value={plan.quantity}
-                            onChange={(event) => setEntryForm((current) => ({ ...current, takeProfitPlans: current.takeProfitPlans.map((item, planIndex) => planIndex === index ? { ...item, quantity: event.target.value } : item) }))}
+                            onChange={(event) => setEntryForm((current) => ({ ...current, takeProfitPlans: current.takeProfitPlans.map((item, planIndex) => planIndex === index ? { ...item, quantity: limitT0EthQuantityInput(event.target.value) } : item) }))}
                             onBlur={() => setEntryForm((current) => ({ ...current, takeProfitPlans: current.takeProfitPlans.map((item, planIndex) => planIndex === index ? { ...item, quantity: normalizeEthQuantity(item.quantity) } : item) }))}
                             placeholder="部分数量"
                             className="h-10 w-full rounded border border-amber-200 bg-white px-2.5 text-sm font-semibold tabular-nums text-slate-900 outline-none placeholder:text-amber-600/50 focus:border-amber-500 disabled:cursor-not-allowed disabled:bg-slate-50"
@@ -12408,110 +12560,66 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
-                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit) ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
-                      <select
-                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
-                        value={entryForm.relatedUserId}
-                        onChange={(event) => {
-                          const userId = event.target.value;
-                          if (userId === "__manage_related_users__") {
-                            openDirectoryManager("relatedUser");
-                            return;
-                          }
-                          setRelatedUserPickerOpen(false);
-                          setRelatedUserSearch("");
-                          if (!userId) {
-                            clearRelatedUser();
-                            return;
-                          }
-                          const user = entryRelatedUserOptions.find((item) => item.id === userId);
-                          if (user) selectRelatedUser(user);
-                        }}
-                        aria-label="选择已有订单关联用户"
-                        className="h-full min-w-0 flex-1 appearance-auto bg-transparent px-3 text-sm font-medium outline-none disabled:cursor-not-allowed"
-                      >
-                        <option value="">暂不关联</option>
-                        {recentRelatedUsers.length > 0 && <option value="__manage_related_users__">编辑 / 删除关联用户…</option>}
-                        {entryRelatedUserOptions.map((user) => <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>)}
-                      </select>
-                      <button
-                        type="button"
-                        disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
-	                        aria-label="搜索并添加未在订单中出现过的关联用户"
-	                        title="搜索全局用户并添加"
-	                        onClick={() => {
-	                          setRelatedUserQuickPickerOpen(false);
-	                          setRelatedUserSearch("");
-	                          setRelatedUserPickerOpen(true);
-	                        }}
-	                        className="flex w-10 shrink-0 items-center justify-center border-l border-slate-200/80 text-slate-400 transition active:bg-indigo-100/60 active:text-indigo-600 disabled:opacity-40"
-                      >
-                        <Search className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </Field>
-                </div>
+	                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && (!hasDependentCloseOpeningEdit || isPartiallyClosedOpeningEdit) && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+	                    <button
+	                      type="button"
+	                      disabled={isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit)}
+	                      aria-haspopup="dialog"
+	                      aria-expanded={relatedUserPickerOpen}
+	                      aria-label="选择关联用户"
+	                      onClick={() => {
+	                        setRelatedUserQuickPickerOpen(false);
+	                        setRelatedUserSearch("");
+	                        setRelatedUserPickerOpen(true);
+	                      }}
+	                      className={`flex h-11 w-full items-center gap-2 rounded border px-3 text-left text-sm outline-none transition active:scale-[0.99] disabled:cursor-not-allowed disabled:active:scale-100 ${isCloseAssociationLocked || (hasDependentCloseOpeningEdit && !isPartiallyClosedOpeningEdit) ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
+	                    >
+	                      <span className={`min-w-0 flex-1 truncate font-medium ${entryForm.relatedUserId ? "text-slate-800" : "text-slate-400"}`}>{entryForm.relatedUserId ? (entryForm.relatedUserName || entryForm.relatedUsername || `用户#${entryForm.relatedUserId}`) : "暂不关联"}</span>
+	                      {entryForm.relatedUserId && entryForm.relatedUsername && entryForm.relatedUsername !== entryForm.relatedUserName && <span className="max-w-[32%] truncate text-xs text-slate-400">@{entryForm.relatedUsername}</span>}
+	                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.2} />
+	                    </button>
+	                  </Field>
+	                </div>
 
-	                {relatedUserPickerOpen && (
-	                  <div className="overflow-hidden rounded border border-indigo-100 bg-white shadow-sm">
-	                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
-	                      <Search className="h-4 w-4 shrink-0 text-indigo-500" />
-	                      <input
-	                        autoFocus
-	                        value={relatedUserSearch}
-	                        onChange={(event) => setRelatedUserSearch(event.target.value)}
-	                        placeholder="搜索全局用户并添加"
-	                        className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-	                      />
-	                      <button
-	                        type="button"
-	                        onClick={() => {
-	                          setRelatedUserPickerOpen(false);
-	                          setRelatedUserSearch("");
-	                        }}
-	                        aria-label="关闭关联用户搜索"
-	                        className="rounded p-0.5 text-slate-400 active:scale-90"
-	                      >
-	                        <X className="h-4 w-4" />
-	                      </button>
-	                    </div>
-	                    {relatedUserSearch.trim().length === 0 ? (
-	                      <div className="px-3 py-4 text-center text-xs text-slate-400">输入用户名或昵称，添加此前未在本账本订单出现过的用户</div>
-	                    ) : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? (
-	                      <div className="max-h-56 overflow-y-auto py-1" aria-busy={relatedUserSearchUpdating}>
-	                        {relatedUserSearchUpdating && <div role="status" className="px-3 pb-1 text-[10px] text-indigo-500">正在更新搜索结果…</div>}
-	                        {(relatedUserSearchQuery.data as any[]).map((candidate) => {
-	                          const user: PreviewRelatedUser = {
-	                            id: String(candidate.id),
-	                            name: String(candidate.name || candidate.username || `用户#${candidate.id}`),
-	                            username: candidate.username ? String(candidate.username) : undefined,
-	                            avatar: candidate.avatar ? String(candidate.avatar) : undefined,
-	                          };
-	                          const isNewToJournal = !recentRelatedUsers.some((existing) => existing.id === user.id);
-	                          return (
-	                            <button
-	                              key={user.id}
-	                              type="button"
-	                              disabled={relatedUserSearchDataMayNotMatch}
-	                              onClick={() => selectRelatedUser(user)}
-	                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50 disabled:opacity-55"
-	                            >
-	                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-	                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
-	                              {isNewToJournal && <span className="shrink-0 text-[10px] font-semibold text-indigo-600">新增</span>}
-	                              {user.username && <span className="max-w-[32%] truncate text-xs text-slate-400">@{user.username}</span>}
-	                            </button>
-	                          );
-	                        })}
+	                {relatedUserPickerOpen && <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/45 px-4 py-6" role="dialog" aria-modal="true" aria-label="选择关联用户" onMouseDown={() => { setRelatedUserPickerOpen(false); setRelatedUserSearch(""); }}>
+	                  <section className="flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+	                    <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+	                      <div className="min-w-0 flex-1"><h3 className="text-base font-semibold text-slate-900">选择关联用户</h3><p className="mt-0.5 text-[11px] text-slate-400">点击用户即可关联</p></div>
+	                      {recentRelatedUsers.length > 0 && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="shrink-0 text-xs font-semibold text-indigo-600">管理</button>}
+	                      <button type="button" onClick={() => { setRelatedUserPickerOpen(false); setRelatedUserSearch(""); }} aria-label="关闭关联用户选择" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 active:bg-slate-100"><X className="h-4 w-4" /></button>
+	                    </header>
+	                    <div className="border-b border-slate-100 px-4 py-2.5">
+	                      <div className="flex h-10 items-center gap-2 rounded-lg bg-slate-100 px-3">
+	                        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+	                        <input autoFocus value={relatedUserSearch} onChange={(event) => setRelatedUserSearch(event.target.value)} placeholder="搜索全局用户并添加" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+	                        {relatedUserSearch && <button type="button" onClick={() => setRelatedUserSearch("")} aria-label="清空用户搜索" className="text-slate-400 active:scale-90"><X className="h-4 w-4" /></button>}
 	                      </div>
-	                    ) : relatedUserSearchUpdating ? (
-	                      <div role="status" className="px-3 py-4 text-center text-xs text-slate-400">正在搜索全局用户…</div>
-	                    ) : (
-	                      <div className="px-3 py-4 text-center text-xs text-slate-400">未找到匹配的全局用户</div>
-	                    )}
-	                  </div>
-	                )}
+	                    </div>
+	                    <div className="min-h-0 overflow-y-auto px-4 py-3">
+	                      {relatedUserSearch.trim().length === 0 ? <>
+	                        <button type="button" onClick={clearRelatedUser} aria-pressed={!entryForm.relatedUserId} className={`mb-3 flex h-9 w-full items-center justify-center rounded-lg border text-xs font-semibold transition active:scale-[0.99] ${!entryForm.relatedUserId ? "border-slate-400 bg-slate-100 text-slate-800" : "border-slate-200 bg-white text-slate-500"}`}>暂不关联</button>
+	                        {entryRelatedUserOptions.length > 0 ? <div className="grid grid-cols-2 border-y border-slate-200" aria-label="已关联用户列表">
+	                          {entryRelatedUserOptions.map((user, index) => {
+	                            const selected = entryForm.relatedUserId === user.id;
+	                            return <button key={user.id} type="button" aria-pressed={selected} onClick={() => selectRelatedUser(user)} title={user.name} className={`flex h-10 min-w-0 items-center justify-center gap-1 px-2 text-center text-xs transition active:bg-indigo-50 ${index % 2 === 0 ? "border-r border-slate-200" : ""} ${index + 2 < entryRelatedUserOptions.length ? "border-b border-slate-200" : ""} ${selected ? "bg-indigo-50 font-semibold text-indigo-800" : "bg-white font-medium text-slate-700"}`}>
+	                              <span className="max-w-[58%] truncate">{user.name}</span>
+	                              {user.username && <span className={`max-w-[38%] truncate text-[10px] ${selected ? "text-indigo-500" : "text-slate-400"}`}>@{user.username}</span>}
+	                            </button>;
+	                          })}
+	                        </div> : <div className="py-10 text-center text-sm text-slate-400">暂无已关联用户，请搜索添加</div>}
+	                      </> : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? <div className="grid grid-cols-2 border-y border-slate-200" aria-busy={relatedUserSearchUpdating} aria-label="全局用户搜索结果">
+	                        {(relatedUserSearchQuery.data as any[]).map((candidate, index, candidates) => {
+	                          const user: PreviewRelatedUser = { id: String(candidate.id), name: String(candidate.name || candidate.username || `用户#${candidate.id}`), username: candidate.username ? String(candidate.username) : undefined, avatar: candidate.avatar ? String(candidate.avatar) : undefined };
+	                          const selected = entryForm.relatedUserId === user.id;
+	                          return <button key={user.id} type="button" disabled={relatedUserSearchDataMayNotMatch} aria-pressed={selected} onClick={() => selectRelatedUser(user)} title={user.name} className={`flex h-10 min-w-0 items-center justify-center gap-1 px-2 text-center text-xs transition active:bg-indigo-50 disabled:opacity-55 ${index % 2 === 0 ? "border-r border-slate-200" : ""} ${index + 2 < candidates.length ? "border-b border-slate-200" : ""} ${selected ? "bg-indigo-50 font-semibold text-indigo-800" : "bg-white font-medium text-slate-700"}`}>
+	                            <span className="max-w-[58%] truncate">{user.name}</span>
+	                            {user.username && <span className={`max-w-[38%] truncate text-[10px] ${selected ? "text-indigo-500" : "text-slate-400"}`}>@{user.username}</span>}
+	                          </button>;
+	                        })}
+	                      </div> : relatedUserSearchUpdating ? <div role="status" className="py-10 text-center text-sm text-slate-400">正在搜索全局用户…</div> : <div className="py-10 text-center text-sm text-slate-400">未找到匹配的全局用户</div>}
+	                    </div>
+	                  </section>
+	                </div>}
 
                 <div className="-mt-1 grid grid-cols-[minmax(6.75rem,0.7fr)_minmax(0,1.3fr)] gap-3 text-[10px] leading-4 text-slate-400">
                   <span>{isPartiallyClosedOpeningEdit ? "已平历史的用户名与成交数据固定；可改账户、用户、项目。换用户名时，只会为剩余仓位生成承接订单。" : hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
@@ -12975,22 +13083,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded border border-slate-200">
-              <div className="flex items-center gap-2 bg-slate-50 px-3 py-2">
+            <div className="mt-4">
+              <button type="button" disabled={profitShareAllocations.length >= 20} aria-haspopup="dialog" aria-expanded={profitShareRecipientPickerOpen} onClick={() => { setProfitShareRecipientSearch(""); setProfitShareRecipientPickerOpen(true); }} className="flex h-11 w-full items-center gap-2 rounded border border-slate-200 bg-white px-3 text-left text-sm text-slate-500 transition active:bg-indigo-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400">
                 <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                <input value={profitShareRecipientSearch} onChange={(event) => setProfitShareRecipientSearch(event.target.value)} placeholder="搜索并添加分配人" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
-              </div>
-              {profitShareRecipientSearch.trim().length === 0 ? <div className="px-3 py-2.5 text-xs text-slate-400">仅可搜索引用全局已有用户；添加后请在上方调整整数比例。</div>
-                : Array.isArray(profitShareRecipientSearchQuery.data) && profitShareRecipientSearchQuery.data.length > 0 ? <div className="max-h-40 overflow-y-auto border-t border-slate-100 py-1" aria-busy={profitShareRecipientSearchUpdating}>
-                    {profitShareRecipientSearchUpdating && <div role="status" className="px-3 pb-1 text-[10px] text-indigo-500">正在更新搜索结果…</div>}
-                    {(profitShareRecipientSearchQuery.data as any[]).map((candidate) => {
-                      const candidateUser: PreviewRelatedUser = { id: String(candidate.id), name: String(candidate.name || candidate.username || `用户#${candidate.id}`), username: candidate.username ? String(candidate.username) : undefined };
-                      const alreadyAdded = profitShareAllocations.some((allocation) => allocation.user.id === candidateUser.id);
-                      return <button key={candidateUser.id} type="button" disabled={profitShareRecipientSearchDataMayNotMatch || alreadyAdded || profitShareAllocations.length >= 20} onClick={() => { setProfitShareSaveError(null); setProfitShareAllocations((current) => [...current, { user: candidateUser, percentage: "1" }]); setProfitShareRecipientSearch(""); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left disabled:opacity-40 active:bg-indigo-50">
-                        <UserRound className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{candidateUser.name}</span>{candidateUser.username && <span className="max-w-[35%] truncate text-xs text-slate-400">@{candidateUser.username}</span>}
-                      </button>;
-                    })}
-                  </div> : profitShareRecipientSearchUpdating ? <div role="status" className="px-3 py-2.5 text-xs text-slate-400">正在搜索用户…</div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
+                <span className="min-w-0 flex-1">点击搜索并添加收益分配人</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.2} />
+              </button>
+              <p className="mt-1.5 text-[11px] leading-5 text-slate-400">仅可引用全局已有用户；添加后请在上方调整整数比例。</p>
             </div>
 
             {entryProfitShareEditTarget ? <div className="mt-3 text-[11px] leading-5 text-indigo-700">点击下方“保存本单与后续新单”即刻生效，无需再点击持仓编辑页底部“保存修改”。</div> : activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">保存后，本项目仍有剩余仓位的订单与后续新订单都会采用新清单；已全部平仓的历史订单保持原快照。</div>}
@@ -13000,6 +13099,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending ? "正在保存…" : entryProfitShareEditTarget ? "保存本单与后续新单" : "保存并返回订单"}</button>
             </div>
           </div>
+          {profitShareRecipientPickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 px-4 py-6" role="dialog" aria-modal="true" aria-label="添加收益分配人" onMouseDown={() => { setProfitShareRecipientPickerOpen(false); setProfitShareRecipientSearch(""); }}>
+            <section className="flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+              <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+                <div className="min-w-0 flex-1"><h3 className="text-base font-semibold text-slate-900">添加收益分配人</h3><p className="mt-0.5 text-[11px] text-slate-400">点击用户即可加入分配清单</p></div>
+                <button type="button" onClick={() => { setProfitShareRecipientPickerOpen(false); setProfitShareRecipientSearch(""); }} aria-label="关闭收益分配人选择" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 active:bg-slate-100"><X className="h-4 w-4" /></button>
+              </header>
+              <div className="border-b border-slate-100 px-4 py-2.5">
+                <div className="flex h-10 items-center gap-2 rounded-lg bg-slate-100 px-3">
+                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  <input autoFocus value={profitShareRecipientSearch} onChange={(event) => setProfitShareRecipientSearch(event.target.value)} placeholder="搜索全局用户" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+                  {profitShareRecipientSearch && <button type="button" onClick={() => setProfitShareRecipientSearch("")} aria-label="清空分配人搜索" className="text-slate-400 active:scale-90"><X className="h-4 w-4" /></button>}
+                </div>
+              </div>
+              <div className="min-h-0 overflow-y-auto px-4 py-3">
+                {profitShareAllocations.length >= 20 ? <div className="py-10 text-center text-sm text-slate-400">收益分配人最多20位</div>
+                  : profitShareRecipientSearch.trim().length === 0 ? profitShareRecipientCandidates.length > 0 ? <div className="grid grid-cols-2 border-y border-slate-200" aria-label="常用收益分配人">
+                    {profitShareRecipientCandidates.map((user, index) => <button key={user.id} type="button" onClick={() => addProfitShareRecipient(user)} title={user.name} className={`flex h-10 min-w-0 items-center justify-center gap-1 px-2 text-center text-xs font-medium text-slate-700 transition active:bg-indigo-50 ${index % 2 === 0 ? "border-r border-slate-200" : ""} ${index + 2 < profitShareRecipientCandidates.length ? "border-b border-slate-200" : ""}`}><span className="max-w-[58%] truncate">{user.name}</span>{user.username && <span className="max-w-[38%] truncate text-[10px] text-slate-400">@{user.username}</span>}</button>)}
+                  </div> : <div className="py-10 text-center text-sm text-slate-400">常用用户均已加入分配清单</div>
+                    : Array.isArray(profitShareRecipientSearchQuery.data) && profitShareRecipientSearchQuery.data.length > 0 ? (() => {
+                      const candidates = (profitShareRecipientSearchQuery.data as any[])
+                        .map((candidate) => ({ id: String(candidate.id), name: String(candidate.name || candidate.username || `用户#${candidate.id}`), username: candidate.username ? String(candidate.username) : undefined }))
+                        .filter((user) => !profitShareAllocations.some((allocation) => allocation.user.id === user.id));
+                      return candidates.length > 0 ? <div className="grid grid-cols-2 border-y border-slate-200" aria-busy={profitShareRecipientSearchUpdating} aria-label="全局收益分配人搜索结果">
+                        {candidates.map((user, index) => <button key={user.id} type="button" disabled={profitShareRecipientSearchDataMayNotMatch} onClick={() => addProfitShareRecipient(user)} title={user.name} className={`flex h-10 min-w-0 items-center justify-center gap-1 px-2 text-center text-xs font-medium text-slate-700 transition active:bg-indigo-50 disabled:opacity-55 ${index % 2 === 0 ? "border-r border-slate-200" : ""} ${index + 2 < candidates.length ? "border-b border-slate-200" : ""}`}><span className="max-w-[58%] truncate">{user.name}</span>{user.username && <span className="max-w-[38%] truncate text-[10px] text-slate-400">@{user.username}</span>}</button>)}
+                      </div> : <div className="py-10 text-center text-sm text-slate-400">匹配用户均已加入分配清单</div>;
+                    })() : profitShareRecipientSearchUpdating ? <div role="status" className="py-10 text-center text-sm text-slate-400">正在搜索全局用户…</div> : <div className="py-10 text-center text-sm text-slate-400">未找到匹配用户</div>}
+              </div>
+            </section>
+          </div>}
         </div>
       )}
 
@@ -13960,7 +14088,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
 }
 
-function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+function Field({ label, children, labelAction, labelFor, horizontal = false }: { label: ReactNode; children: ReactNode; labelAction?: ReactNode; labelFor?: string; horizontal?: boolean }) {
+  if (horizontal) {
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.58fr)] items-center gap-x-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <label htmlFor={labelFor} className="w-12 shrink-0 text-xs font-medium text-slate-600">{label}</label>
+          {labelAction && <div className="min-w-0 shrink-0">{labelAction}</div>}
+        </div>
+        <div className="min-w-0">{children}</div>
+      </div>
+    );
+  }
   return (
     <label className="block">
       <span className="block text-xs font-medium text-slate-600 mb-2">{label}</span>

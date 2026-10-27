@@ -6051,11 +6051,11 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   counterpartyOnly?: boolean;
   /** 仅锁定标记切换：可安全标识已部分平仓主单的剩余仓位，服务端只更新该标记本身。 */
   lockOnly?: boolean;
-  /** 未传时保持原成交状态；新建时 true 为挂单，编辑时不可直接切换。 */
+  /** 未传时保持原成交状态；编辑时仅无后续平仓的开仓单可在 pending / filled 间切换。 */
   isPending?: boolean;
   /** 未传时保持原设置；仅开仓主单有效。 */
   keepReopenReminder?: boolean;
-  /** 仅允许管理员把仍未成交的开仓挂单单向确认成交；必须同时传 isPending=false。 */
+  /** 管理员确认仍未成交挂单为成交；必须同时传 isPending=false。 */
   manualConfirmPendingFill?: boolean;
   /** 止盈仅用于现货/合约；可在挂单创建时预设，必须成交后触发。 */
   takeProfitEnabled?: boolean;
@@ -6106,13 +6106,33 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       ? String(before.execution_status ?? "filled") === "pending"
       : isPending === 1;
     const wasPending = String(before.execution_status ?? "filled") === "pending";
-    // 已成交单不能回退为挂单。唯一例外是管理员明确确认一笔仍处于 pending 的开仓挂单，
-    // 以当前表单成交价和当前确认时间落为 filled；普通编辑绝不可绕过该确认动作。
+    const executionStatusChanged = isPending !== null && nextIsPending !== wasPending;
+    // 普通字段编辑绝不改写既有成交事实；只有真实状态切换才更新这三个字段。
+    const pendingStatusForUpdate = executionStatusChanged ? (nextIsPending ? 1 : 0) : null;
+    // 挂单确认成交必须是一项明确操作，以当前表单成交价与确认时间落为 filled；
+    // 已成交回切挂单仅限尚未被任何平仓使用的开仓单，避免改写已实现收益或 FIFO。
     if (manualConfirmPendingFill && (!wasPending || nextIsPending)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "仅未成交挂单可以手动确认成交" });
     }
-    if (isPending !== null && nextIsPending !== wasPending && !(manualConfirmPendingFill && wasPending && !nextIsPending)) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "已有开仓订单不可在编辑中切换挂单状态；挂单仅能在新开仓或平仓时设置" });
+    if (executionStatusChanged && (input.lockOnly === true || input.takeProfitOnly === true || profitShareOnlyUpdate || input.counterpartyOnly === true)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "切换挂单状态时不能同时提交锁定、止盈、收益分配或反向展示的单独更新" });
+    }
+    if (executionStatusChanged && lockedEntry.hasDependentClose) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，不能切换回挂单状态" });
+    }
+    if (wasPending && !nextIsPending && !manualConfirmPendingFill) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "确认挂单成交请通过保存修改完成" });
+    }
+    if (executionStatusChanged && nextIsPending) {
+      const [triggeredPlanRows] = await tx.execute(
+        `SELECT id FROM ledger52_t0_journal_take_profit_plans
+          WHERE ledger_id = ? AND user_id = ? AND opening_entry_id = ? AND status = 'triggered'
+          LIMIT 1 FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+      );
+      if (asRows(triggeredPlanRows)[0]) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓单已有已触发止盈历史，不能切换回挂单状态" });
+      }
     }
     if (nextIsPending && isLocked === 1) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "挂单成交前不可设为锁定；请在成交后再锁定" });
@@ -6392,14 +6412,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         takeProfit.enabled ? 1 : 0,
         takeProfit.enabled ? 1 : 0,
         takeProfit.enabled ? 1 : 0,
-        isPending,
-        isPending,
-        isPending,
-        isPending,
-        isPending,
-        isPending,
-        isPending,
-        isPending,
+        takeProfit.enabled ? 1 : 0,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
+        pendingStatusForUpdate,
         effectivePrice,
         effectiveInstrumentType ?? null,
         normalizedQuantity,
@@ -6484,7 +6504,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await writeEntryAudit(tx, {
       actorUserId: input.actorUserId,
       entryId: input.entryId,
-      operation: manualConfirmPendingFill ? "fill" : "update",
+      operation: wasPending && !nextIsPending ? "fill" : "update",
       before: beforeForAudit,
       after: afterForAudit,
     });
