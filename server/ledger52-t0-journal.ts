@@ -6412,7 +6412,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         takeProfit.enabled ? 1 : 0,
         takeProfit.enabled ? 1 : 0,
         takeProfit.enabled ? 1 : 0,
-        takeProfit.enabled ? 1 : 0,
+        pendingStatusForUpdate,
         pendingStatusForUpdate,
         pendingStatusForUpdate,
         pendingStatusForUpdate,
