@@ -11382,6 +11382,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className="text-slate-500">实时参考价</span>
               {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
               {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
+              <span>{formatPrice(markPrice)}</span>
             </div>
           </div>
           <div
@@ -15147,8 +15148,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-[9px] font-medium leading-none ${isShort ? "flex-row-reverse text-right" : "text-left"} ${isLocked && !isPendingOnly ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`${metadata.accountName ? `账户 ${metadata.accountName}，` : ""}用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPendingOnly ? "，挂单待成交" : ""}`}>
-        <div className={`flex min-w-0 flex-1 items-center overflow-hidden ${isShort ? "flex-row-reverse justify-start" : ""}`}>
+      {/* 底部灰色归属行保持两侧同一阅读顺序：账户 · 用户 · 项目，再接状态图标；仅上半区镜像。 */}
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPendingOnly ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`${metadata.accountName ? `账户 ${metadata.accountName}，` : ""}用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPendingOnly ? "，挂单待成交" : ""}`}>
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           {metadata.accountName && <>
             <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
             <span className="shrink-0">·</span>
@@ -15157,7 +15159,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className={`${isShort ? "mr-1" : "ml-1"} flex shrink-0 items-center gap-0.5`}>
+        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 -translate-y-px text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
           {isPendingOnly && <Clock3 className="h-[9px] w-[9px] shrink-0 -translate-y-px text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
