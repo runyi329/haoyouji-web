@@ -23278,7 +23278,7 @@ ${klinesSummary}
         const ownerUserIdsMap: Record<number, Set<number>> = {};
         // 52号同一融资订单允许多位拥有者分别冻结钱包资产；列表必须合并这些真实冻结台账，
         // 以确保每个拥有者视角看到的担保总值和缺口完全一致。
-        let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }> }>> = {};
+        let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }> }>> = {};
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
               const placeholders = orderIds.map(() => '?').join(',');
@@ -23305,7 +23305,7 @@ ${klinesSummary}
               [input.ledgerId, ...orderIds]
             ).catch(() => null) as Promise<any>,
             input.ledgerId === 52 ? conn.execute(
-              `SELECT l.order_id, l.user_id, l.asset_code, l.amount,
+              `SELECT l.order_id, l.joint_segment_id, l.user_id, l.asset_code, l.amount,
                       COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', l.user_id)) AS display_name
                  FROM ai_wallet_asset_collateral_locks l
                  LEFT JOIN users u ON u.id = l.user_id
@@ -23403,7 +23403,7 @@ ${klinesSummary}
               }
             }
           }
-          const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string) => {
+          const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
             if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
             if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
             let contributor = walletCollateralContributorsMap[orderId].find((item) => item.userId === userId);
@@ -23411,16 +23411,17 @@ ${klinesSummary}
               contributor = { userId, name: name || `用户${userId}`, assets: [] };
               walletCollateralContributorsMap[orderId].push(contributor);
             }
-            contributor.assets.push({ coin: coin.toUpperCase(), qty: String(qty), source: 'wallet', note: `钱包担保冻结 · ${contributor.name}` });
+            contributor.assets.push({ coin: coin.toUpperCase(), qty: String(qty), source: 'wallet', note: `钱包担保冻结 · ${contributor.name}`, jointSegmentId });
           };
           if (walletLockRowsResult) {
             const walletLockRows = Array.isArray(walletLockRowsResult[0]) ? walletLockRowsResult[0] : (Array.isArray(walletLockRowsResult) ? walletLockRowsResult : []);
-            for (const row of walletLockRows) appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+            for (const row of walletLockRows) appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
           }
           if (walletHoldRowsResult) {
-            const walletHoldRows = Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []);
-            const orderIdByTag = new Map(walletHoldTags.map((tag, index) => [tag, orderIds[index]]));
-            for (const row of walletHoldRows) appendWalletContributorAsset(Number(orderIdByTag.get(String(row.tag_name)) || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+            for (const row of walletHoldRows) {
+              const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
+              appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
+            }
           }
         }
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => {
@@ -23527,9 +23528,9 @@ ${klinesSummary}
           const walletCollateralContributorsMap: Record<number, Array<{
             userId: number;
             name: string;
-            assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }>;
+            assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }>;
           }>> = {};
-          const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string) => {
+          const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
             if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
             if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
             let contributor = walletCollateralContributorsMap[orderId].find((item) => item.userId === userId);
@@ -23542,6 +23543,7 @@ ${klinesSummary}
               qty: String(qty),
               source: 'wallet',
               note: `钱包担保冻结 · ${contributor.name}`,
+              jointSegmentId,
             });
           };
           if (input.ledgerId === 52 && orderIds.length > 0) {
@@ -23551,7 +23553,7 @@ ${klinesSummary}
             const walletHoldCondition = orderIds.map(() => '(h.tag_name = ? OR h.tag_name LIKE ?)').join(' OR ');
             const [walletLockResult, walletHoldResult] = await Promise.all([
               conn.execute(
-                `SELECT l.order_id, l.user_id, l.asset_code, l.amount,
+                `SELECT l.order_id, l.joint_segment_id, l.user_id, l.asset_code, l.amount,
                         COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', l.user_id)) AS display_name
                    FROM ai_wallet_asset_collateral_locks l
                    LEFT JOIN users u ON u.id = l.user_id
@@ -23575,12 +23577,12 @@ ${klinesSummary}
             ]);
             const lockRows = Array.isArray(walletLockResult?.[0]) ? walletLockResult[0] : (Array.isArray(walletLockResult) ? walletLockResult : []);
             for (const row of lockRows) {
-              appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+              appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
             }
-            const orderIdByTag = new Map(walletHoldTags.map((tag, index) => [tag, orderIds[index]]));
             const holdRows = Array.isArray(walletHoldResult?.[0]) ? walletHoldResult[0] : (Array.isArray(walletHoldResult) ? walletHoldResult : []);
             for (const row of holdRows) {
-              appendWalletContributorAsset(Number(orderIdByTag.get(String(row.tag_name)) || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+              const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
+              appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
             }
           }
           const paymentRowsMap: Record<number, any[]> = {};
@@ -25047,8 +25049,27 @@ ${klinesSummary}
             jointSegmentParticipantRow = asRows(jointSegmentRows)[0];
             const segmentSnapshot = parseFunderParticipantSnapshot(jointSegmentParticipantRow?.order_snapshot) || {};
             const segments = Array.isArray(segmentSnapshot.joint_order_segments) ? segmentSnapshot.joint_order_segments : [];
-            if (!jointSegmentParticipantRow || !segments.some((segment: any) => String(segment?.id || '') === jointSegmentId && Number(segment?.owner_user_id || input.userId) === input.userId)) {
+            const targetSegment = segments.find((segment: any) => String(segment?.id || '') === jointSegmentId && Number(segment?.owner_user_id || input.userId) === input.userId);
+            if (!jointSegmentParticipantRow || !targetSegment) {
               throw new TRPCError({ code: 'NOT_FOUND', message: '联合订单担保段不存在或不属于当前用户' });
+            }
+            if (['settled', 'completed'].includes(String(targetSegment.status || '').toLowerCase())) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '该联合订单段已结清，不能再次冻结钱包担保物' });
+            }
+          } else {
+            // 第一段的结清状态保存于该用户个人快照；物理主订单仍可能因其他段而保持 active。
+            let primarySnapshot = parseFunderParticipantSnapshot(participantRow?.order_snapshot) || {};
+            if (Object.keys(primarySnapshot).length === 0) {
+              const [primaryRows] = await transaction.execute(
+                `SELECT order_snapshot FROM ledger_order_participants
+                   WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'
+                   LIMIT 1 FOR UPDATE`,
+                [input.orderId, input.ledgerId, input.userId],
+              );
+              primarySnapshot = parseFunderParticipantSnapshot(asRows(primaryRows)[0]?.order_snapshot) || {};
+            }
+            if (['settled', 'completed'].includes(String(primarySnapshot?.joint_order_primary_settlement?.status || '').toLowerCase())) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '第1段已结清，不能再次冻结钱包担保物' });
             }
           }
 
@@ -28209,7 +28230,7 @@ ${klinesSummary}
         const persistedSnapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
         const persistedSettledSegmentsById = new Map(
           (Array.isArray(persistedSnapshot.joint_order_segments) ? persistedSnapshot.joint_order_segments : [])
-            .filter((segment: any) => String(segment?.status || '').toLowerCase() === 'settled')
+            .filter((segment: any) => ['settled', 'completed'].includes(String(segment?.status || '').toLowerCase()))
             .map((segment: any) => [String(segment.id || ''), segment]),
         );
         const snapshotBase = Object.keys(persistedSnapshot).length > 0
@@ -28340,9 +28361,22 @@ ${klinesSummary}
             };
           };
           const { getLatestPrice } = await import('./price-scanner');
-          mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
+          const normalizedJointOrderSegments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
             const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
             const previousSettlement = persistedSettledSegmentsById.get(segmentId);
+            // 已结清段是完整历史快照。普通保存绝不能事后改写其利息、担保、展示开关或
+            // 成交基础；任何更正必须走专用且可审计的结清更正流程。
+            if (previousSettlement) {
+              return {
+                ...previousSettlement,
+                id: segmentId,
+                owner_user_id: Number(input.userId),
+                status: 'settled',
+                settled_at: previousSettlement.settled_at || null,
+                interest_end_date: previousSettlement.interest_end_date || null,
+                settlement_snapshot: previousSettlement.settlement_snapshot || null,
+              };
+            }
             const assetType = safeAssetType(raw?.asset_type);
             const segmentDisplayConfig = safeDisplayConfig(raw?.display_config);
             const segmentCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(segmentDisplayConfig.collateralRiskFormula))
@@ -28388,6 +28422,10 @@ ${klinesSummary}
             commission_share: safeAmount(raw?.commission_share),
             trading_fee_rate_per_mille: safeAmount(raw?.trading_fee_rate_per_mille),
             trading_fee_status: ['unpaid', 'half_paid', 'paid'].includes(String(raw?.trading_fee_status)) ? String(raw?.trading_fee_status) : 'unpaid',
+            order_fill_status: String(raw?.order_fill_status) === 'pending' ? 'pending' : 'filled',
+            frontend_placement: ['auto', 'self', 'participant'].includes(String(raw?.frontend_placement))
+              ? String(raw?.frontend_placement)
+              : 'self',
             // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用。
             // self 仅代表同一张联合订单内的分段共享，不会越过当前个人快照进入他人订单。
             collateral_assets: safeAssets(raw?.collateral_assets),
@@ -28397,29 +28435,14 @@ ${klinesSummary}
               : (raw?.collateral_share_mode === 'self' ? 'self' : 'none'),
             display_config: segmentDisplayConfig,
             };
-            // 已结清段仍可随原订单一起展示，但不能被普通保存改回持有中、替换冻结行情，
-            // 也不能把结算时的本段类型、标的或成交基础改成另一种资产。
-            if (!previousSettlement) return nextSegment;
-            const settledAssetFields = {
-              ...(safeAssetType(previousSettlement.asset_type) ? { asset_type: safeAssetType(previousSettlement.asset_type) } : {}),
-              ...(safeCoin(previousSettlement.coin) ? { coin: safeCoin(previousSettlement.coin) } : {}),
-              ...(safeOptionInfo(previousSettlement.option_info) ? { option_info: safeOptionInfo(previousSettlement.option_info) } : {}),
-              ...(previousSettlement.trade_direction === 'long' || previousSettlement.trade_direction === 'short' ? { trade_direction: previousSettlement.trade_direction } : {}),
-              ...(previousSettlement.amount !== undefined ? { amount: safeAmount(previousSettlement.amount) } : {}),
-              ...(previousSettlement.amount_currency !== undefined ? { amount_currency: safeCurrency(previousSettlement.amount_currency) } : {}),
-              ...(previousSettlement.buy_price !== undefined ? { buy_price: safeAmount(previousSettlement.buy_price) } : {}),
-              ...(previousSettlement.buy_quantity !== undefined ? { buy_quantity: safeAmount(previousSettlement.buy_quantity) } : {}),
-              ...(previousSettlement.buy_date !== undefined ? { buy_date: safeDate(previousSettlement.buy_date) } : {}),
-            };
-            return {
-              ...nextSegment,
-              ...settledAssetFields,
-              status: 'settled',
-              settled_at: previousSettlement.settled_at || null,
-              interest_end_date: previousSettlement.interest_end_date || null,
-              settlement_snapshot: previousSettlement.settlement_snapshot || null,
-            };
+            return nextSegment;
           });
+          // 即使旧版客户端或异常操作没有携带已结清段，也必须将其原样补回，防止历史结算快照被删除。
+          const normalizedSegmentIds = new Set(normalizedJointOrderSegments.map((segment: any) => String(segment?.id || '')));
+          for (const [segmentId, settledSegment] of persistedSettledSegmentsById) {
+            if (!normalizedSegmentIds.has(segmentId)) normalizedJointOrderSegments.push(settledSegment);
+          }
+          mergedSnapshot.joint_order_segments = normalizedJointOrderSegments;
         }
         // 第一段和后续段都只属于当前 input.userId 的个人快照。第一段的内部共享标记
         // 不复用 ledger_orders.collateral_share_mode，后者是历史“本人所有订单”跨订单池。

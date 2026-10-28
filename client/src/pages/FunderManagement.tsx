@@ -73,6 +73,9 @@ type JointOrderSegmentDraft = {
   commission_share: string;
   trading_fee_rate_per_mille: string;
   trading_fee_status: 'unpaid' | 'half_paid' | 'paid';
+  // 与第一段一致的订单展示属性；联合段各自保存，不能再继承主订单状态。
+  order_fill_status?: 'pending' | 'filled';
+  frontend_placement?: 'auto' | 'self' | 'participant';
   collateral_assets: Array<{ coin: string; qty: string; note?: string; source?: 'manual' }>;
   // 本段可选择加入同一张联合订单内的共享担保池；默认保持本段独立担保。
   collateral_share_mode?: 'none' | 'self';
@@ -192,6 +195,10 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
       commission_share: String(item.commission_share ?? ''),
       trading_fee_rate_per_mille: formatTradingFeeRate(item.trading_fee_rate_per_mille),
       trading_fee_status: ['unpaid', 'half_paid', 'paid'].includes(String(item.trading_fee_status)) ? item.trading_fee_status : 'unpaid',
+      order_fill_status: item.order_fill_status === 'pending' ? 'pending' : 'filled',
+      frontend_placement: ['auto', 'self', 'participant'].includes(String(item.frontend_placement))
+        ? item.frontend_placement as 'auto' | 'self' | 'participant'
+        : 'self',
       collateral_assets: Array.isArray(item.collateral_assets) ? item.collateral_assets.flatMap((asset: any) => {
         const coin = String(asset?.coin || '').trim().toUpperCase();
         const qty = String(asset?.qty ?? '').trim();
@@ -221,13 +228,6 @@ type DeribitJointOptionInfo = {
   buyQty: string;
 };
 
-const JOINT_OPTION_DIRECTION_LABELS: Record<DeribitJointOptionInfo['direction'], string> = {
-  long_call: '买入看涨',
-  long_put: '买入看跌',
-  short_call: '卖出看涨',
-  short_put: '卖出看跌',
-};
-
 function normalizeDeribitJointOptionInfo(value: JointOrderSegmentDraft['option_info'] | undefined, fallbackCoin = 'BTC'): DeribitJointOptionInfo {
   const rawCoin = String(value?.coin || fallbackCoin).trim().toUpperCase();
   const coin: DeribitJointOptionInfo['coin'] = rawCoin === 'ETH' ? 'ETH' : 'BTC';
@@ -248,54 +248,6 @@ function normalizeDeribitJointOptionInfo(value: JointOrderSegmentDraft['option_i
     denomination,
     buyQty: String(value?.buyQty ?? '').slice(0, 32),
   };
-}
-
-function JointOptionSegmentFields({ optionInfo, onChange, buyDate, datePickerOpen, onToggleDatePicker, onChangeBuyDate }: {
-  optionInfo: DeribitJointOptionInfo;
-  onChange: (next: DeribitJointOptionInfo) => void;
-  buyDate: string;
-  datePickerOpen: boolean;
-  onToggleDatePicker: () => void;
-  onChangeBuyDate: (value: string) => void;
-}) {
-  const { data: expiriesData, isLoading: expiriesLoading } = (trpc.ledger as any).deribitGetExpiries.useQuery(
-    { currency: optionInfo.coin },
-    { staleTime: 5 * 60 * 1000 },
-  );
-  const expiries: Array<{ dateStr?: string; deribitLabel: string; ts: number; diffDays: number }> = expiriesData?.expiries ?? [];
-  const { data: strikesData, isLoading: strikesLoading } = (trpc.ledger as any).deribitGetStrikes.useQuery(
-    { currency: optionInfo.coin, deribitLabel: optionInfo.deribitLabel },
-    { enabled: !!optionInfo.deribitLabel, staleTime: 5 * 60 * 1000 },
-  );
-  const strikes: number[] = strikesData?.strikes ?? [];
-  const denominations = optionInfo.coin === 'ETH' ? (['USDT', 'ETH'] as const) : (['USDT', 'BTC'] as const);
-  const total = Number(optionInfo.premium || 0) * Number(optionInfo.buyQty || 0);
-  const totalPremium = Number.isFinite(total) && total > 0 ? total : 0;
-
-  return <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
-    <div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold text-purple-600">期权参数</span><span className="text-[11px] text-purple-500">总投入自动计算</span></div>
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-500">开仓日期</label>
-      <div className="relative">
-        <button type="button" onClick={onToggleDatePicker} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-sm outline-none focus:ring-2 focus:ring-purple-200" style={{ color: buyDate ? '#1A2340' : '#9CA3AF' }}>{buyDate || '点击选择日期'}</button>
-        {datePickerOpen && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={buyDate} onChange={onChangeBuyDate} /></div>}
-      </div>
-    </div>
-    <div className="flex gap-2">
-      <label style={{ width: '40%' }}><span className="mb-1.5 block text-xs font-medium text-gray-500">标的币种</span><select value={optionInfo.coin} onChange={event => onChange({ ...optionInfo, coin: event.target.value === 'ETH' ? 'ETH' : 'BTC', denomination: 'USDT', deribitLabel: '', exerciseDate: '', strikePrice: '' })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="BTC">BTC</option><option value="ETH">ETH</option></select></label>
-      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">方向</span><select value={optionInfo.direction} onChange={event => onChange({ ...optionInfo, direction: event.target.value as DeribitJointOptionInfo['direction'] })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200">{Object.entries(JOINT_OPTION_DIRECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-    </div>
-    <label className="block"><span className="mb-1.5 block text-xs font-medium text-gray-500">到期日 {expiriesLoading && <span className="text-purple-400">加载中...</span>}</span><select value={optionInfo.deribitLabel} onChange={event => { const expiry = expiries.find(item => item.deribitLabel === event.target.value); onChange({ ...optionInfo, deribitLabel: event.target.value, exerciseDate: expiry ? new Date(expiry.ts).toISOString().slice(0, 10) : '', strikePrice: '' }); }} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="">请选择到期日</option>{expiries.map(expiry => <option key={expiry.deribitLabel} value={expiry.deribitLabel}>{expiry.dateStr || expiry.deribitLabel}（{expiry.diffDays > 0 ? `余${expiry.diffDays}天` : '即将到期'}）</option>)}</select></label>
-    <div className="flex gap-2">
-      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">行权价（USD）{strikesLoading && <span className="ml-1 text-purple-400">加载中...</span>}</span>{optionInfo.deribitLabel ? <select value={optionInfo.strikePrice} onChange={event => onChange({ ...optionInfo, strikePrice: event.target.value })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200"><option value="">请选择行权价</option>{strikes.map(strike => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}</select> : <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400">请先选择到期日</div>}</label>
-      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">权利金（{optionInfo.denomination}）</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.premium} onChange={event => onChange({ ...optionInfo, premium: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200" placeholder="如：500" /></label>
-    </div>
-    <div className="flex gap-2">
-      <label style={{ width: '40%' }}><span className="mb-1.5 block text-xs font-medium text-gray-500">权利金计价</span><select value={optionInfo.denomination} onChange={event => onChange({ ...optionInfo, denomination: event.target.value as DeribitJointOptionInfo['denomination'] })} className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200">{denominations.map(currency => <option key={currency} value={currency}>{currency === 'USDT' ? 'U' : currency}</option>)}</select></label>
-      <label className="min-w-0 flex-1"><span className="mb-1.5 block text-xs font-medium text-gray-500">数量</span><input type="number" min="0" step="any" inputMode="decimal" value={optionInfo.buyQty} onChange={event => onChange({ ...optionInfo, buyQty: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-purple-200" placeholder="如：1" /></label>
-    </div>
-    {totalPremium > 0 && <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-xs"><span className="font-medium text-purple-600">总权利金</span><span className="text-right font-semibold tabular-nums text-purple-800">{totalPremium.toLocaleString(undefined, { maximumFractionDigits: optionInfo.denomination === 'USDT' ? 2 : 6 })} {optionInfo.denomination}</span></div>}
-  </div>;
 }
 
 const formatChineseStockPriceDate = (value?: string | null) => {
@@ -445,18 +397,22 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 联合订单子段保存到指定拥有者／参与者的个人快照；主订单不保存、不共享。
   const [jointOrderSegments, setJointOrderSegments] = useState<JointOrderSegmentDraft[]>([]);
   const [jointOrderPanelExpanded, setJointOrderPanelExpanded] = useState(false);
+  // 编辑器只有一套主表单。切换段时仅替换这套表单绑定的草稿，而不再渲染第二套简化字段。
+  const [activeJointEditorSegmentId, setActiveJointEditorSegmentId] = useState('__primary__');
+  const primaryEditorDraftRef = useRef<any>(null);
+  const skipJointSegmentFormSyncRef = useRef(false);
   // 浮窗预览仅展开当前编辑的段；第一段用固定标识，后续段使用其稳定 ID。
   const [floatingPreviewSegmentId, setFloatingPreviewSegmentId] = useState('__primary__');
   const [jointOrderTargetUserId, setJointOrderTargetUserId] = useState<number | null>(null);
   const [jointOrderSegmentsDirty, setJointOrderSegmentsDirty] = useState(false);
+  // 任何保存回调只能清除它所提交的同一版本；用户保存后又切段输入时，旧请求不能抹掉新草稿的脏状态。
+  const jointOrderSegmentsSignatureRef = useRef('');
   // 第一段同样可独立选择是否进入“当前用户 + 当前联合订单”的内部共享担保池。
   // 它不复用旧的 collateralShareMode，后者仍只代表跨订单的历史共享功能。
   const [jointPrimaryCollateralShareMode, setJointPrimaryCollateralShareMode] = useState<'none' | 'self'>('none');
   // 仅改联合子段时无需再串行保存一遍主订单。该 ref 由编辑抽屉中的主订单控件捕获，
   // 避免在手机端将一次轻量快照保存放大成两次完整数据库同步。
   const primaryOrderDirtyRef = useRef(false);
-  const [jointDatePickerFor, setJointDatePickerFor] = useState<string | null>(null);
-  const [jointInterestDatePickerFor, setJointInterestDatePickerFor] = useState<string | null>(null);
   const jointOrderSegmentsLoadedRef = useRef<string | null>(null);
   // 多视角订单参与方相关 state
   const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
@@ -1257,6 +1213,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 立即清空旧拥有者的局部草稿，避免在 effect 装载新快照前出现串读闪屏。
     setJointOrderSegments([]);
     setJointPrimaryCollateralShareMode('none');
+    setActiveJointEditorSegmentId('__primary__');
+    primaryEditorDraftRef.current = null;
     setFloatingPreviewSegmentId('__primary__');
     setJointOrderTargetUserId(userId);
     setJointOrderSegmentsDirty(false);
@@ -1265,13 +1223,51 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 输入框必须优先响应。多段卡片本身包含行情、Greeks 与担保试算，直接把每个按键
   // 同步传入预览会让 4～8 段订单在手机上明显掉帧；空闲时再刷新预览即可。
   const deferredJointOrderSegments = useDeferredValue(jointOrderSegments);
+  useEffect(() => {
+    jointOrderSegmentsSignatureRef.current = JSON.stringify({
+      segments: jointOrderSegments,
+      primaryCollateralShareMode: jointPrimaryCollateralShareMode,
+    });
+  }, [jointOrderSegments, jointPrimaryCollateralShareMode]);
+  // 输入时继续延迟整张预览，避免 5 段期权的 Greeks 刷新阻塞手机键盘；但“参加共享担保”、
+  // 担保物和担保口径属于明确的点按操作，必须立刻反映在预览人数与合并余量中，不能等待低优先级渲染。
+  const jointSegmentRealtimeShareSignature = JSON.stringify(jointOrderSegments.map((segment) => ({
+    id: String(segment.id || ''),
+    collateralShareMode: segment.collateral_share_mode === 'self' ? 'self' : 'none',
+    collateralAssets: (segment.collateral_assets || []).map((asset) => ({
+      coin: String(asset.coin || '').toUpperCase(),
+      qty: String(asset.qty || ''),
+      note: asset.note || '',
+    })),
+    collateralRiskFormula: String(segment.display_config?.collateralRiskFormula || ''),
+  })));
+  const jointSegmentRealtimeShareMeta = useMemo(() => {
+    const metaById = new Map<string, {
+      collateralShareMode: 'none' | 'self';
+      collateralAssets: JointOrderSegmentDraft['collateral_assets'];
+      collateralRiskFormula: string;
+    }>();
+    for (const segment of jointOrderSegments) {
+      metaById.set(String(segment.id || ''), {
+        collateralShareMode: segment.collateral_share_mode === 'self' ? 'self' : 'none',
+        collateralAssets: segment.collateral_assets || [],
+        collateralRiskFormula: String(segment.display_config?.collateralRiskFormula || ''),
+      });
+    }
+    return metaById;
+  // 签名未变时保持 Map 引用稳定，让输入仍沿用延迟预览。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jointSegmentRealtimeShareSignature]);
+  const jointOrderSegmentCount = jointOrderSegments.length;
   // 实时预览不能依赖保存函数内的局部变量；始终从当前固定区所选用户的草稿生成。
-  const previewJointOrderSegments = editingOrder?.id && activeJointOrderTarget
-    ? deferredJointOrderSegments.map((segment, index) => {
+  const previewJointOrderSegments = useMemo(() => editingOrder?.id && activeJointOrderTarget
+    ? (deferredJointOrderSegments.length === jointOrderSegmentCount ? deferredJointOrderSegments : jointOrderSegments).map((segment, index) => {
+        const segmentId = String(segment.id || `segment-${index + 2}`);
+        const realtimeShareMeta = jointSegmentRealtimeShareMeta.get(segmentId);
         const profitShareDraft = buildProfitShareDraft(segment.show_profit_share, segment.profit_share_type, segment.profit_share_ratio);
         return {
           ...segment,
-          id: segment.id || `segment-${index + 2}`,
+          id: segmentId,
           owner_user_id: Number(activeJointOrderTarget.userId),
           amount: String(segment.amount || '').trim(),
           interest_base: String(segment.interest_base || '').trim(),
@@ -1281,10 +1277,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           buy_price: String(segment.buy_price || '').trim(),
           buy_quantity: String(segment.buy_quantity || '').trim(),
           commission_share: profitShareDraft.commissionShare,
-          collateral_assets: Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [],
+          // 共享状态和本段担保物以当前草稿覆盖延迟预览版本，保证点按开关立即生效。
+          collateral_share_mode: realtimeShareMeta?.collateralShareMode || (segment.collateral_share_mode === 'self' ? 'self' : 'none'),
+          collateral_assets: realtimeShareMeta?.collateralAssets || (Array.isArray(segment.collateral_assets) ? segment.collateral_assets : []),
+          display_config: {
+            ...(segment.display_config || {}),
+            ...(realtimeShareMeta?.collateralRiskFormula ? { collateralRiskFormula: realtimeShareMeta.collateralRiskFormula } : {}),
+          },
         };
       })
-    : [];
+    : [], [editingOrder?.id, activeJointOrderTarget?.userId, deferredJointOrderSegments, jointOrderSegmentCount, jointSegmentRealtimeShareMeta]);
 
   // 拥有者在业务上是平级关系：主订单仅是数据存储锚点，不能作为界面上的主次排序依据。
   // 保留原数组索引给保存动作使用，展示层仅按角色和姓名做稳定排序。
@@ -1500,6 +1502,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     ? floatingPreviewSegmentId
     : '__primary__';
   const activeWalletCollateralSegmentLabel = walletCollateralSegmentOptions.find((option) => option.id === activeWalletCollateralSegmentId)?.label || '第1段';
+  const currentSegmentWalletCollateralContributors = walletCollateralContributors
+    .map((contributor) => ({
+      ...contributor,
+      assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === activeWalletCollateralSegmentId),
+    }))
+    .filter((contributor) => contributor.assets.length > 0);
   const currentWalletCollateralContributor = walletCollateralContributors.find((contributor) => Number(contributor.userId) === walletCollateralUserId) || null;
   const currentWalletCollateralOwnerName = currentWalletCollateralContributor?.name
     || getUserDisplayName((funderUsers || []).find((user: any) => Number(user.id ?? user.userId) === walletCollateralUserId) as any)
@@ -1743,6 +1751,344 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return usdtBase !== null && isFinite(usdtBase) ? usdtBase.toFixed(2) : '';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amountInputValue, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
+
+  // 联合订单不再保留“主表单 + 子段简化表单”两套实现。选中后续段时，将其草稿水合到
+  // 原主表单的全部状态；所有既有交互（金额联动、Deribit、担保口径、字段开关等）因而天然复用。
+  const activeJointEditorSegment = useMemo(
+    () => activeJointEditorSegmentId === '__primary__'
+      ? null
+      : jointOrderSegments.find(segment => String(segment.id) === activeJointEditorSegmentId) || null,
+    [activeJointEditorSegmentId, jointOrderSegments],
+  );
+  const isEditingJointSegment = !!activeJointEditorSegment;
+  const isActiveJointEditorSegmentSettled = isEditingJointSegment
+    && ['settled', 'completed'].includes(String(activeJointEditorSegment?.status || '').toLowerCase());
+  const buildUnifiedEditorDraft = () => ({
+    formData: { ...formData, tags: [...formData.tags], ownerVisibleOwnerIds: [...formData.ownerVisibleOwnerIds] },
+    optionFormData: { ...optionFormData },
+    amountInputValue,
+    displayConfig: { ...displayConfig },
+    marginAlertThreshold,
+    collateralAssets: collateralAssets.map(asset => ({ ...asset })),
+    collateralShareMode,
+    collateralSourceMode,
+    collateralSource: collateralSource ? { ...collateralSource } : null,
+    pendingInterestTagName,
+    paidInterestTagName,
+    stockPnlSourceMode,
+    manualStockPnlCalculationMode,
+    manualStockPositions: manualStockPositions.map(position => ({ ...position })),
+    manualStockTotalCapital,
+    manualStockCapitalCurrency,
+    manualStockPnlCoefficient,
+    manualLinkedFields: [...manualLinkedFieldsRef.current],
+    derivedLinkedField,
+    interestBaseTouched: interestBaseTouchedRef.current,
+  });
+  const restoreUnifiedEditorDraft = (draft: any) => {
+    if (!draft) return;
+    skipJointSegmentFormSyncRef.current = true;
+    setFormData(draft.formData);
+    setOptionFormData(draft.optionFormData);
+    setAmountInputValue(draft.amountInputValue || '');
+    setDisplayConfig(draft.displayConfig || DEFAULT_DISPLAY_CONFIG);
+    setMarginAlertThreshold(draft.marginAlertThreshold || '');
+    setCollateralAssets(Array.isArray(draft.collateralAssets) ? draft.collateralAssets : []);
+    setCollateralShareMode(draft.collateralShareMode || 'none');
+    setCollateralSourceMode(draft.collateralSourceMode || 'manual');
+    setCollateralSource(draft.collateralSource || null);
+    setPendingInterestTagName(draft.pendingInterestTagName || '');
+    setPaidInterestTagName(draft.paidInterestTagName || '');
+    setStockPnlSourceMode(draft.stockPnlSourceMode || 'none');
+    setManualStockPnlCalculationMode(draft.manualStockPnlCalculationMode || 'position_cost');
+    setManualStockPositions(Array.isArray(draft.manualStockPositions) ? draft.manualStockPositions : []);
+    setManualStockTotalCapital(draft.manualStockTotalCapital || '');
+    setManualStockCapitalCurrency(draft.manualStockCapitalCurrency || 'CNY');
+    setManualStockPnlCoefficient(draft.manualStockPnlCoefficient || '1');
+    manualLinkedFieldsRef.current = Array.isArray(draft.manualLinkedFields) ? draft.manualLinkedFields : [];
+    setDerivedLinkedField(draft.derivedLinkedField || null);
+    interestBaseTouchedRef.current = !!draft.interestBaseTouched;
+    setShowDatePicker(false);
+    setShowInterestDatePicker(false);
+  };
+  const buildSegmentFromUnifiedEditor = (segment: JointOrderSegmentDraft): JointOrderSegmentDraft => {
+    const assetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType))
+      ? formData.assetType as 'stock' | 'crypto' | 'crypto_option'
+      : (segment.asset_type || 'crypto');
+    const optionSummary = assetType === 'crypto_option' ? getOptionPremiumSummary() : null;
+    const optionInfo = assetType === 'crypto_option' ? {
+      coin: String(optionFormData.optionCurrency || formData.coin || 'BTC').toUpperCase(),
+      direction: optionFormData.direction,
+      exerciseDate: optionFormData.exerciseDate,
+      deribitLabel: optionFormData.deribitLabel,
+      strikePrice: optionFormData.strikePrice,
+      premium: optionFormData.premium,
+      denomination: optionFormData.premiumDenomination,
+      buyQty: optionFormData.buyQty,
+    } : undefined;
+    const amount = assetType === 'stock'
+      ? amountInputValue.trim()
+      : assetType === 'crypto_option'
+        ? (optionSummary?.totalUsdt && optionSummary.totalUsdt > 0 ? optionSummary.totalUsdt.toFixed(8) : '')
+        : financingAmountUsdt;
+    const nextDisplayConfig: Record<string, boolean | string> = {
+      ...displayConfig,
+      collateralRiskFormula,
+      financingInputAmount: assetType === 'crypto_option' ? optionSummary?.totalInput || '' : amountInputValue || '',
+      financingInputCurrency: assetType === 'crypto_option' ? optionFormData.premiumDenomination || 'USDT' : assetType === 'stock' ? 'CNY' : formData.amountCurrency || 'USDT',
+      linkedManualFields: assetType === 'crypto_option' ? '' : manualLinkedFieldsRef.current.join(','),
+      linkedDerivedField: assetType === 'crypto_option' ? '' : derivedLinkedField || '',
+      ...(marginAlertThreshold ? { marginAlertThreshold } : {}),
+    };
+    const profitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
+    return {
+      ...segment,
+      owner_user_id: Number(activeJointOrderTarget?.userId || segment.owner_user_id || 0),
+      asset_type: assetType,
+      coin: assetType === 'stock' ? 'CNY' : (optionInfo?.coin || String(formData.coin || segment.coin || 'BTC').toUpperCase()),
+      trade_direction: assetType === 'crypto' ? (formData.tradeDirection || '') : '',
+      ...(optionInfo ? { option_info: optionInfo } : { option_info: undefined }),
+      amount: amount || '',
+      amount_currency: assetType === 'stock' ? 'CNY' : (formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT'),
+      buy_price: assetType === 'crypto_option' ? String(optionFormData.premium || '') : assetType === 'stock' ? '' : String(formData.buyPrice || ''),
+      buy_quantity: assetType === 'crypto_option' ? String(optionFormData.buyQty || '') : assetType === 'stock' ? '' : String(formData.buyQuantity || ''),
+      buy_date: String(formData.buyDate || '').slice(0, 10),
+      storage_account: String(formData.storageAccount || ''),
+      broker_name: assetType === 'stock' ? String(formData.brokerName || '') : '',
+      broker_account: assetType === 'stock' ? String(formData.brokerAccount || '') : '',
+      interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual),
+      interest_base: String(formData.interestBase || ''),
+      interest_base_currency: formData.interestBaseCurrency,
+      interest_rate_currency: formData.interestRateCurrency,
+      interest_payment_type: String(formData.interestPaymentType || ''),
+      interest_start_date: String(formData.interestStartDate || '').slice(0, 10),
+      principal_lent_out: effectivePrincipalLentOut,
+      show_profit_share: profitShareDraft.enabled,
+      profit_share_ratio: String(formData.profitShareRatio || ''),
+      profit_share_type: formData.profitShareType,
+      commission_share: profitShareDraft.commissionShare,
+      trading_fee_rate_per_mille: formatTradingFeeRate(formData.tradingFeeRate),
+      trading_fee_status: formData.tradingFeeStatus,
+      order_fill_status: formData.orderFillStatus,
+      frontend_placement: formData.frontendPlacement,
+      // 钱包资产由独立冻结接口保存；主表单在这里仅回写当前段的手工担保物。
+      collateral_assets: collateralAssets
+        .filter(asset => !isWalletCollateralAsset(asset))
+        .filter(asset => asset.coin && Number(asset.qty) > 0)
+        .map(asset => ({ coin: String(asset.coin).toUpperCase(), qty: String(asset.qty), ...(asset.note ? { note: asset.note } : {}), source: 'manual' as const })),
+      display_config: nextDisplayConfig,
+    };
+  };
+  const hydrateUnifiedEditorFromSegment = (segment: JointOrderSegmentDraft) => {
+    const segmentConfig = { ...DEFAULT_DISPLAY_CONFIG, ...(segment.display_config || {}) };
+    const assetType = segment.asset_type || 'crypto';
+    const optionInfo = normalizeDeribitJointOptionInfo(segment.option_info, segment.coin || 'BTC');
+    const savedCurrency = String(segmentConfig.financingInputCurrency || segment.amount_currency || 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT';
+    const savedInput = Number(segmentConfig.financingInputAmount);
+    const amountNumber = Number(segment.amount || 0);
+    const fallbackInput = assetType === 'stock'
+      ? String(segment.amount || '')
+      : savedInput > 0 && savedCurrency === (assetType === 'stock' ? 'CNY' : segment.amount_currency)
+        ? String(segmentConfig.financingInputAmount)
+        : savedCurrency === 'CNY' && amountNumber > 0
+          ? (() => { const converted = fromUsdtBase(amountNumber, 'CNY'); return converted === null ? String(segment.amount || '') : String(Number(converted.toFixed(2))); })()
+          : String(segment.amount || '');
+    skipJointSegmentFormSyncRef.current = true;
+    resetLinkedAmountFields();
+    const savedDerived = (['amount', 'price', 'quantity'] as LinkedAmountField[]).includes(String(segmentConfig.linkedDerivedField) as LinkedAmountField)
+      ? String(segmentConfig.linkedDerivedField) as LinkedAmountField
+      : null;
+    manualLinkedFieldsRef.current = String(segmentConfig.linkedManualFields || '')
+      .split(',')
+      .filter((field): field is LinkedAmountField => (['amount', 'price', 'quantity'] as string[]).includes(field));
+    setDerivedLinkedField(savedDerived);
+    setFormData(current => ({
+      ...current,
+      userId: Number(activeJointOrderTarget?.userId || current.userId),
+      coin: (assetType === 'stock' ? 'CNY' : (optionInfo.coin || segment.coin || 'BTC')) as CoinType,
+      amountCurrency: (assetType === 'stock' ? 'CNY' : savedCurrency) as CoinType,
+      buyPrice: assetType === 'crypto_option' ? String(optionInfo.premium || '') : assetType === 'stock' ? '' : String(segment.buy_price || ''),
+      buyQuantity: assetType === 'crypto_option' ? String(optionInfo.buyQty || '') : assetType === 'stock' ? '' : String(segment.buy_quantity || ''),
+      buyDate: String(segment.buy_date || getBeijingToday()).slice(0, 10),
+      storageAccount: String(segment.storage_account || ''),
+      interestRateAnnual: normalizeFunderAnnualRate(segment.interest_rate_annual),
+      interestPaymentType: String(segment.interest_payment_type || ''),
+      interestBase: String(segment.interest_base || ''),
+      interestBaseCurrency: segment.interest_base_currency === 'CNY' ? 'CNY' : 'USDT',
+      interestRateCurrency: segment.interest_rate_currency === 'CNY' ? 'CNY' : 'USDT',
+      interestStartDate: String(segment.interest_start_date || getBeijingToday()).slice(0, 10),
+      showProfitShare: Boolean(segment.show_profit_share),
+      commissionShare: String(segment.commission_share || ''),
+      profitShareRatio: String(segment.profit_share_ratio || ''),
+      profitShareType: segment.profit_share_type === 'coin' ? 'coin' : 'interest',
+      originalAmount: String(segment.amount || ''),
+      assetType,
+      tradeDirection: assetType === 'crypto' && (segment.trade_direction === 'long' || segment.trade_direction === 'short') ? segment.trade_direction : null,
+      principalLentOut: Boolean(segment.principal_lent_out),
+      tradingFeeRate: formatTradingFeeRate(segment.trading_fee_rate_per_mille),
+      tradingFeeStatus: segment.trading_fee_status || 'unpaid',
+      brokerName: String(segment.broker_name || ''),
+      brokerAccount: String(segment.broker_account || ''),
+      orderFillStatus: segment.order_fill_status === 'pending' ? 'pending' : 'filled',
+      frontendPlacement: segment.frontend_placement || 'self',
+    }));
+    setOptionFormData({
+      optionCurrency: (optionInfo.coin || segment.coin || 'BTC') as CoinType,
+      direction: optionInfo.direction || 'long_call',
+      exerciseDate: optionInfo.exerciseDate || '',
+      deribitLabel: optionInfo.deribitLabel || '',
+      strikePrice: String(optionInfo.strikePrice || ''),
+      premium: String(optionInfo.premium || ''),
+      premiumDenomination: (optionInfo.denomination || 'USDT') as CoinType,
+      buyQty: String(optionInfo.buyQty || ''),
+    });
+    setAmountInputValue(fallbackInput);
+    setDisplayConfig(segmentConfig);
+    setMarginAlertThreshold(String(segmentConfig.marginAlertThreshold || ''));
+    setCollateralAssets((segment.collateral_assets || []).map(asset => ({ ...asset, source: 'manual' as const })));
+    setCollateralShareMode('none');
+    setCollateralSourceMode('manual');
+    setCollateralSource(null);
+    setPendingInterestTagName('');
+    setPaidInterestTagName('');
+    setStockPnlSourceMode('none');
+    setManualStockPositions([]);
+    setManualStockTotalCapital('');
+    setManualStockPnlCoefficient('1');
+    interestBaseTouchedRef.current = Boolean(segment.interest_base && Number(segment.interest_base) > 0);
+    setShowDatePicker(false);
+    setShowInterestDatePicker(false);
+  };
+  const selectUnifiedEditorSegment = (segmentId: string) => {
+    if (segmentId === activeJointEditorSegmentId) {
+      setFloatingPreviewSegmentId(segmentId);
+      return;
+    }
+    if (activeJointEditorSegmentId === '__primary__') {
+      primaryEditorDraftRef.current = buildUnifiedEditorDraft();
+    } else if (activeJointEditorSegment) {
+      const nextSegment = buildSegmentFromUnifiedEditor(activeJointEditorSegment);
+      setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId ? nextSegment : segment));
+      setJointOrderSegmentsDirty(true);
+    }
+    setActiveJointEditorSegmentId(segmentId);
+    setFloatingPreviewSegmentId(segmentId);
+    if (segmentId === '__primary__') {
+      restoreUnifiedEditorDraft(primaryEditorDraftRef.current);
+      return;
+    }
+    const nextSegment = jointOrderSegments.find(segment => String(segment.id) === segmentId);
+    if (nextSegment) hydrateUnifiedEditorFromSegment(nextSegment);
+  };
+  // 手机端预览卡的段标签也作为“编辑当前段”的入口。此前它只切换浮窗，导致下方担保
+  // 开关仍在修改上一段，视觉上便出现“点了第三段但共享人数不变、切回来又关掉”。
+  const handlePreviewSegmentFocusChange = (segmentId: string) => {
+    const isKnownSegment = segmentId === '__primary__'
+      || jointOrderSegments.some((segment) => String(segment.id) === segmentId);
+    if (!isKnownSegment) return;
+    selectUnifiedEditorSegment(segmentId);
+  };
+  const setActiveJointSegmentCollateralShareMode = (mode: 'none' | 'self') => {
+    if (!activeJointEditorSegment) return;
+    if (isActiveJointEditorSegmentSettled) {
+      toast.error('该联合订单段已结清，不能再调整共享担保');
+      return;
+    }
+    if (mode === 'self' && collateralRiskFormula === 'full_value') {
+      toast.error('“买入全额”不使用担保物，不能参加共享担保');
+      return;
+    }
+    setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId
+      ? { ...segment, collateral_share_mode: mode }
+      : segment));
+    setJointOrderSegmentsDirty(true);
+    setFloatingPreviewSegmentId(activeJointEditorSegmentId);
+  };
+  const addUnifiedEditorSegment = () => {
+    const newSegmentId = `segment-${Date.now()}`;
+    const ownerUserId = Number(activeJointOrderTarget?.userId || formData.userId || 0);
+    if (activeJointEditorSegmentId === '__primary__') {
+      primaryEditorDraftRef.current = buildUnifiedEditorDraft();
+    } else if (activeJointEditorSegment) {
+      const currentDraft = buildSegmentFromUnifiedEditor(activeJointEditorSegment);
+      setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId ? currentDraft : segment));
+    }
+    const newSegment: JointOrderSegmentDraft = {
+      id: newSegmentId,
+      owner_user_id: ownerUserId,
+      asset_type: 'crypto',
+      coin: 'BTC',
+      trade_direction: 'long',
+      amount: '',
+      amount_currency: 'USDT',
+      buy_price: '',
+      buy_quantity: '',
+      buy_date: getBeijingToday(),
+      storage_account: '',
+      broker_name: '',
+      broker_account: '',
+      interest_rate_annual: '',
+      interest_base: '',
+      interest_base_currency: 'USDT',
+      interest_rate_currency: 'USDT',
+      interest_payment_type: '',
+      interest_start_date: getBeijingToday(),
+      principal_lent_out: false,
+      show_profit_share: false,
+      profit_share_ratio: '',
+      profit_share_type: 'interest',
+      commission_share: '',
+      trading_fee_rate_per_mille: '2.0',
+      trading_fee_status: 'unpaid',
+      order_fill_status: 'filled',
+      frontend_placement: 'self',
+      collateral_assets: [],
+      collateral_share_mode: 'none',
+      display_config: { ...DEFAULT_DISPLAY_CONFIG, buyDate: true, holdDuration: true, collateralRiskFormula: 'floating_pnl' },
+    };
+    setJointOrderSegments(current => [...current, newSegment]);
+    setJointOrderSegmentsDirty(true);
+    setJointOrderPanelExpanded(true);
+    setActiveJointEditorSegmentId(newSegmentId);
+    setFloatingPreviewSegmentId(newSegmentId);
+    hydrateUnifiedEditorFromSegment(newSegment);
+  };
+  const jointSegmentEditorStateKey = useMemo(() => JSON.stringify({
+    formData,
+    optionFormData,
+    amountInputValue,
+    displayConfig,
+    marginAlertThreshold,
+    collateralAssets,
+    derivedLinkedField,
+    linkedFields: manualLinkedFieldsRef.current,
+  }), [formData, optionFormData, amountInputValue, displayConfig, marginAlertThreshold, collateralAssets, derivedLinkedField]);
+  // 输入时只同步当前段草稿；实时预览继续通过 deferredJointOrderSegments 降频，避免五段订单打字卡顿。
+  useEffect(() => {
+    if (!activeJointEditorSegment || skipJointSegmentFormSyncRef.current) return;
+    const next = buildSegmentFromUnifiedEditor(activeJointEditorSegment);
+    setJointOrderSegments(current => {
+      const index = current.findIndex(segment => String(segment.id) === activeJointEditorSegmentId);
+      if (index < 0 || JSON.stringify(current[index]) === JSON.stringify(next)) return current;
+      const updated = [...current];
+      updated[index] = next;
+      return updated;
+    });
+    setJointOrderSegmentsDirty(true);
+  // 由序列化键而非整段预览对象触发，防止展示行情刷新造成草稿回写。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeJointEditorSegmentId, jointSegmentEditorStateKey]);
+  useEffect(() => {
+    // 水合那一次不应把旧的主表单状态覆盖进刚选中的段；下一次用户输入才开始同步。
+    if (skipJointSegmentFormSyncRef.current) skipJointSegmentFormSyncRef.current = false;
+  }, [activeJointEditorSegmentId]);
+  useEffect(() => {
+    if (!showForm || !editingOrder?.id || activeJointEditorSegmentId !== '__primary__' || primaryEditorDraftRef.current) return;
+    // handleOpenEdit 的状态更新在同一批次落地后才记录，确保缓存的是完整的第一段而不是上笔订单残留。
+    primaryEditorDraftRef.current = buildUnifiedEditorDraft();
+  // 初始缓存只在打开第一段时建立；离开第一段前会再次捕获最新草稿。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm, editingOrder?.id, activeJointEditorSegmentId, jointSegmentEditorStateKey]);
 
   // 便捷操作：融资币种为 CNY 时计息基数默认按人民币带入；其余数字币融资仍按 USDT 基准带入。
   // 仅在用户未手动改过计息基数时生效；用户手动修改后不再覆盖。
@@ -2326,6 +2672,36 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const oid = editingOrder?.id ? Number(editingOrder.id) : null;
     if (!oid) return; // 新建态无订单 ID，跳过（随订单一起保存）
     const cleanAssets = assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
+    // 后续段的手工担保属于段快照，不能调用原来的整单担保接口；钱包冻结另走按段接口。
+    if (isEditingJointSegment && activeJointEditorSegment) {
+      if (isActiveJointEditorSegmentSettled) {
+        toast.error('该联合订单段已结清，不能再修改担保物');
+        return;
+      }
+      const segmentAssets = cleanAssets
+        .filter(asset => !isWalletCollateralAsset(asset))
+        .map(asset => ({ coin: String(asset.coin).toUpperCase(), qty: String(asset.qty), ...(asset.note ? { note: asset.note } : {}), source: 'manual' as const }));
+      const nextActiveSegment = {
+        ...buildSegmentFromUnifiedEditor(activeJointEditorSegment),
+        collateral_assets: segmentAssets,
+      };
+      const nextSegments = jointOrderSegments.map(segment => String(segment.id) === activeJointEditorSegmentId ? nextActiveSegment : segment);
+      setJointOrderSegments(nextSegments);
+      setJointOrderSegmentsDirty(true);
+      const targetUserId = Number(activeJointOrderTarget?.userId || editingOrder?.participantInfo?.userId || editingOrder?.participantInfo?.user_id || formData.userId || 0);
+      if (targetUserId > 0) {
+        saveJointOrderSegmentsMutation.mutate({
+          orderId: oid,
+          ledgerId,
+          userId: targetUserId,
+          snapshot: {
+            joint_order_segments: nextSegments,
+            joint_order_primary_collateral_share_mode: jointPrimaryCollateralShareMode,
+          },
+        });
+      }
+      return;
+    }
     const participantUserId = editingOrder?.participantInfo?.userId ?? editingOrder?.participantInfo?.user_id;
     if (isSnapshotScopedEdit && participantUserId) {
       saveParticipantCollateralMutation.mutate({
@@ -2343,6 +2719,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     });
   };
   const persistWalletCollateral = async (orderId: number, holderUserId: number, assets: { coin: string; qty: string; source?: 'wallet' }[], jointSegmentId = '__primary__') => {
+    const targetSegment = jointSegmentId === '__primary__'
+      ? null
+      : jointOrderSegments.find((segment) => String(segment.id) === jointSegmentId);
+    if (targetSegment && ['settled', 'completed'].includes(String(targetSegment.status || '').toLowerCase())) {
+      toast.error('该联合订单段已结清，不能再冻结钱包担保物');
+      return;
+    }
     const walletAssets = assets
       .filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
       .map((asset) => ({ coin: asset.coin as any, qty: asset.qty }));
@@ -2496,7 +2879,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             },
           }
         : participant));
-      setJointOrderSegmentsDirty(false);
+      const submittedSignature = JSON.stringify({
+        segments: variables.snapshot.joint_order_segments || [],
+        primaryCollateralShareMode: variables.snapshot.joint_order_primary_collateral_share_mode || 'none',
+      });
+      if (jointOrderSegmentsSignatureRef.current === submittedSignature) {
+        setJointOrderSegmentsDirty(false);
+      }
       toast.success('联合订单分段已保存');
       trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: variables.orderId, ledgerId: variables.ledgerId });
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
@@ -2626,6 +3015,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [formUserSearch, setFormUserSearch] = useState('');
 
   const handleOpenCreate = () => {
+    setActiveJointEditorSegmentId('__primary__');
+    primaryEditorDraftRef.current = null;
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
@@ -2710,6 +3101,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
   const handleOpenEdit = (order: any, scrollTo?: string, preserveEditorRoot = false) => {
     primaryOrderDirtyRef.current = false;
+    setActiveJointEditorSegmentId('__primary__');
+    primaryEditorDraftRef.current = null;
     // 协作人卡片带的是该人的个人快照，但主订单本体仍是共同订单的唯一真实锚点。
     // 必须单独保留它，避免从胡二等协作人入口切回大饼江湖时，错误把旧个人快照当主订单。
     const canonicalRootOrder = order?._rootOrder && typeof order._rootOrder === 'object'
@@ -3148,6 +3541,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
 
   const handleSubmit = () => {
+    if (isActiveJointEditorSegmentSettled) {
+      toast.error('该联合订单段已结清，历史数据已锁定；如需更正请使用结清更正流程');
+      return;
+    }
     // 新建模式必须选择用户
     if (!editingOrder && !formData.userId) {
       toast.error('请选择用户');
@@ -3200,10 +3597,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     }
     const participantUserIdForJointSegments = Number(activeJointOrderTarget?.userId || editingOrder?.participantInfo?.userId || editingOrder?.participantInfo?.user_id || 0);
     const canBuildJointOrderSegments = Boolean(editingOrder?.id && participantUserIdForJointSegments);
-    const shouldPersistJointOrderSegments = Boolean(canBuildJointOrderSegments && (isSnapshotScopedEdit || jointOrderSegmentsDirty));
+    // 即使用户刚输入最后一个字符便点保存，也以当前统一表单覆盖正在编辑的段，不能等待 effect 的下一帧。
+    const jointSegmentsForSave = isEditingJointSegment && activeJointEditorSegment
+      ? jointOrderSegments.map(segment => String(segment.id) === activeJointEditorSegmentId
+        ? buildSegmentFromUnifiedEditor(activeJointEditorSegment)
+        : segment)
+      : jointOrderSegments;
+    const shouldPersistJointOrderSegments = Boolean(canBuildJointOrderSegments && (isSnapshotScopedEdit || jointOrderSegmentsDirty || isEditingJointSegment));
     // 即使本次不写入，也保留当前第二段供实时预览展示；保存条件仅控制是否发起快照更新。
     const normalizedJointOrderSegments = canBuildJointOrderSegments
-      ? jointOrderSegments.map((segment, index) => {
+      ? jointSegmentsForSave.map((segment, index) => {
           const profitShareDraft = buildProfitShareDraft(segment.show_profit_share, segment.profit_share_type, segment.profit_share_ratio);
           const inheritedAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType))
             ? formData.assetType as 'stock' | 'crypto' | 'crypto_option'
@@ -3346,6 +3749,25 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         toast.error('无法确定参与者用户ID');
         return;
       }
+      // 后续段使用统一表单时，只保存联合段快照。绝不能把当前段的字段覆盖该参与者的第一段。
+      if (isEditingJointSegment && shouldPersistJointOrderSegments) {
+        saveJointOrderSegmentsMutation.mutate({
+          orderId: Number(editingOrder.id),
+          ledgerId,
+          userId: Number(participantUserId),
+          snapshot: {
+            joint_order_segments: normalizedJointOrderSegments,
+            joint_order_primary_collateral_share_mode: jointPrimaryCollateralShareMode,
+          },
+        }, {
+          onSuccess: () => {
+            refetchOrders();
+            trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+            closeOrderEditor();
+          },
+        });
+        return;
+      }
       updateParticipantOrderMutation.mutate({
         orderId: Number(editingOrder.id),
         ledgerId,
@@ -3398,7 +3820,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       // 主订单编辑页也可保存第一位拥有者或任一参与者的第二段。若本次没有动主订单字段，
       // 快照成功后立即完成：不再重复执行主订单的字段迁移、协作人同步和第二次网络往返。
       // 五段期权此前会因此长期停在“提交中”，但实际第一步已经成功写入。
-      if (jointOrderSegmentsDirty && participantUserIdForJointSegments) {
+      if ((jointOrderSegmentsDirty || isEditingJointSegment) && participantUserIdForJointSegments) {
         const isPrimaryJointOrderTarget = participantUserIdForJointSegments === primaryJointOrderUserId;
         const shouldSaveMainOrder = primaryOrderDirtyRef.current;
         saveJointOrderSegmentsMutation.mutate({
@@ -3407,7 +3829,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           userId: participantUserIdForJointSegments,
           snapshot: {
             // 首位拥有者若首次建立个人快照，需同时带入本次编辑后的第一段，避免第二段保存时采用旧主订单数据。
-            ...(isPrimaryJointOrderTarget ? {
+            ...(!isEditingJointSegment && isPrimaryJointOrderTarget ? {
               coin: payload.coin,
               amount: payload.amount,
               amount_currency: payload.amountCurrency || null,
@@ -3469,6 +3891,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   const closeOrderEditor = () => {
     primaryOrderDirtyRef.current = false;
+    setActiveJointEditorSegmentId('__primary__');
+    primaryEditorDraftRef.current = null;
     setShowForm(false);
     setEditingOrder(null);
     editorRootOrderRef.current = null;
@@ -3661,7 +4085,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         ledgerId={ledgerId}
                         previewMode={true}
                         previewSegmentFocusId={floatingPreviewSegmentId}
-                        onPreviewSegmentFocusChange={setFloatingPreviewSegmentId}
+                        onPreviewSegmentFocusChange={handlePreviewSegmentFocusChange}
                         showCollateralInfo={showPreviewCollateralInfo}
                         setShowCollateralInfo={setShowPreviewCollateralInfo}
                         showMarginInfo={showPreviewMarginInfo}
@@ -3957,11 +4381,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             className="relative bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden"
             style={{ overscrollBehavior: 'contain' }}
             onChangeCapture={event => {
-              if (!(event.target as HTMLElement).closest('[data-joint-order-segments]')) primaryOrderDirtyRef.current = true;
+              if (!isEditingJointSegment && !(event.target as HTMLElement).closest('[data-joint-order-segments]')) primaryOrderDirtyRef.current = true;
             }}
             onClickCapture={event => {
               const target = event.target as HTMLElement;
-              if (target.closest('[data-joint-order-segments], [data-editor-preview], [data-editor-save], [data-editor-close]')) return;
+              if (isEditingJointSegment || target.closest('[data-joint-order-segments], [data-editor-preview], [data-editor-save], [data-editor-close]')) return;
               if (target.closest('button, [role="button"]')) primaryOrderDirtyRef.current = true;
             }}
           >
@@ -4033,7 +4457,30 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </div>
               )}
               <>
-              {/* 所有拥有者均显示同一套类型与方向控件；切换仅替换当前对象的数据。 */}
+              {editingOrder?.id && activeJointOrderTarget && (
+                <section data-joint-order-segments className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3">
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-indigo-900">联合订单分段</div>
+                      <p className="mt-0.5 text-[11px] leading-4 text-indigo-600">当前编辑 {activeJointEditorSegmentId === '__primary__' ? '第1段' : `第${jointOrderSegments.findIndex(segment => String(segment.id) === activeJointEditorSegmentId) + 2}段`}。所有段共用下方这一套完整订单表单。</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-semibold text-indigo-600">{jointOrderSegments.length + 1} 段</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button type="button" onClick={() => selectUnifiedEditorSegment('__primary__')} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${activeJointEditorSegmentId === '__primary__' ? 'border-blue-600 bg-blue-600 text-white' : 'border-indigo-200 bg-white text-indigo-700'}`}>第1段</button>
+                    {jointOrderSegments.map((segment, index) => <button key={segment.id} type="button" onClick={() => selectUnifiedEditorSegment(String(segment.id))} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${activeJointEditorSegmentId === String(segment.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-indigo-200 bg-white text-indigo-700'}`}>第{index + 2}段</button>)}
+                    <button type="button" onClick={addUnifiedEditorSegment} className="rounded-full border border-dashed border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600"><Plus className="mr-0.5 inline h-3.5 w-3.5" />添加段</button>
+                  </div>
+                  {isEditingJointSegment && <div className="mt-2 rounded-lg border border-indigo-100 bg-white/80 px-2.5 py-2 text-[11px] leading-4 text-indigo-700">本段的类型、期权参数、利息、手工/钱包担保、担保口径和展示开关均独立保存；切换到其他段不会带入本段输入。</div>}
+                </section>
+              )}
+              {/* 第一段与所有后续段均显示同一套类型与方向控件；切换只替换当前段草稿。 */}
+              {isActiveJointEditorSegmentSettled && (
+                <div className="mx-4 mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+                  本段已结清，成交、利息、担保和展示配置均为历史快照，仅可查看或切换到其他段编辑。
+                </div>
+              )}
+              <fieldset disabled={isActiveJointEditorSegmentSettled} className="contents">
                 <div className="grid grid-cols-5 gap-3">
                   <div className={(formData.assetType === 'crypto' || formData.assetType === '') ? 'col-span-3' : 'col-span-5'}>
                     <label className="block text-xs font-medium text-gray-600 mb-1">类型</label>
@@ -4043,7 +4490,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           key={opt.value}
                           type="button"
                           onClick={() => {
-                            if (editingOrder && !editingOrder.participantInfo) {
+                            if (editingOrder && !editingOrder.participantInfo && !isEditingJointSegment) {
                               toast.error('\u5df2\u521b\u5efa\u8ba2\u5355\u7684\u8d44\u4ea7\u7c7b\u578b\u4e0d\u53ef\u4fee\u6539');
                               return;
                             }
@@ -4240,8 +4687,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 );
               })()}
 
-              {/* 自定义标签 */}
-              {(
+              {/* 标签是整张订单共用元数据，不在后续段编辑时重复显示。 */}
+              {!isEditingJointSegment && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -4288,7 +4735,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {/* 所有订单都在标签下固定显示当前拥有者；共同拥有者仅通过顶部“编辑对象”切换。 */}
               <div className="flex items-start gap-3">
-              {isCollaborativeOrderEdit ? (
+              {(isEditingJointSegment || isCollaborativeOrderEdit) ? (
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">订单拥有者</label>
                   <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-200 bg-blue-50">
@@ -5026,7 +5473,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     }`}
                   >钱包担保物</button>
                 )}
-                {formData.assetType === 'stock' && (
+                {formData.assetType === 'stock' && !isEditingJointSegment && (
                 <button
                   type="button"
                   onClick={() => setCollateralSourceMode('external')}
@@ -5041,18 +5488,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {ledgerId === 52 && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-xs font-semibold text-slate-600">当前担保汇总（所有拥有者的钱包冻结均计入总值）</div>
+                  <div className="text-xs font-semibold text-slate-600">当前担保汇总（{activeWalletCollateralSegmentLabel}；全体拥有者在本段的冻结均计入）</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
                       <span key={`manual-${index}`} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">手工 · {asset.qty} {asset.coin}</span>
                     ))}
-                    {walletCollateralContributors.map((contributor) => contributor.assets.map((asset, index) => (
+                    {currentSegmentWalletCollateralContributors.map((contributor) => contributor.assets.map((asset, index) => (
                       <span key={`wallet-${contributor.userId}-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{contributor.name} · {formatWalletAssetAmount(asset.coin, asset.qty)} {asset.coin}</span>
                     )))}
                     {!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
                       <span key={`wallet-draft-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包待冻结 · {formatWalletAssetAmount(asset.coin, asset.qty)} {asset.coin}</span>
                     ))}
-                    {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0 && walletCollateralContributors.length === 0 && (!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0) && (
+                    {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0 && currentSegmentWalletCollateralContributors.length === 0 && (!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0) && (
                       <span className="text-[11px] text-slate-400">暂无担保物</span>
                     )}
                   </div>
@@ -5060,7 +5507,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               )}
 
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
-              {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
+              {formData.assetType === 'stock' && !isEditingJointSegment && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
                 <div className="rounded-lg border border-blue-100 bg-white/70 px-2.5 py-2 text-[11px] leading-4 text-blue-600">
                   下拉列表会分别标注“利息已暂停”和“保证金查询已暂停”；两者是37号账本的独立状态，暂停后既有盈亏、担保和利息数据仍可引用。
@@ -5247,7 +5694,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               </div>
               )}
 
-              {formData.assetType === 'stock' && (
+              {formData.assetType === 'stock' && !isEditingJointSegment && (
                 <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
                   <div>
                     <div className="text-sm font-semibold text-violet-800">股票浮动盈亏来源</div>
@@ -5760,61 +6207,37 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     )}
                 </div>
 
-                {/* 旧版跨订单共享。联合订单内各段的共享在下方“第二段订单”区域单独设置，
-                    绝不因为此处开启而把每一段自动选入。 */}
-                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
-                  <div className="text-sm font-medium text-gray-700">跨订单共享担保设置</div>
-                  <div className="flex flex-col gap-2">
-                    {/* 不共享 */}
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="collateralShareMode"
-                        value="none"
-                        checked={collateralShareMode === 'none'}
-                        onChange={() => setCollateralShareMode('none')}
-                        className="w-4 h-4 accent-blue-600"
-                      />
-                      <span className="text-sm text-gray-700">不共享（担保物仅保障本订单）</span>
-                    </label>
-                    {/* 本人订单共享 */}
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="collateralShareMode"
-                        value="self"
-                        checked={collateralShareMode === 'self'}
-                        onChange={() => {
-                          if (hasJointInternalCollateralMembers) {
-                            toast.error('当前联合订单已有分段参加内部共享，请勿再开启跨订单共享');
-                            return;
-                          }
-                          // 显示确认弹窗，列出当前共享池中的订单
-                          const poolOrders = (sharedPoolData as any)?.orders ?? [];
-                          // 排除当前正在编辑的订单
-                          const otherOrders = poolOrders.filter((o: any) => !editingOrder || o.orderId !== editingOrder.id);
-                          setShareConfirmModal({ mode: 'self', sharedOrders: otherOrders });
-                        }}
-                        className="w-4 h-4 accent-blue-600"
-                      />
-                      <span className="text-sm text-gray-700">本人其他订单共享</span>
-                      {collateralShareMode === 'self' && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">已开启</span>
-                      )}
-                    </label>
-                    {/* 与他人共享（占位，暂不开放） */}
-                    <label className="flex items-center gap-2.5 opacity-40 cursor-not-allowed">
-                      <input
-                        type="radio"
-                        name="collateralShareMode"
-                        value="cross"
-                        disabled
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm text-gray-400">与他人共享（开发中）</span>
-                    </label>
+                {isEditingJointSegment ? (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 space-y-2">
+                    <div className="text-sm font-medium text-indigo-800">本段担保方式</div>
+                    <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-indigo-200 bg-white">
+                      <button type="button" onClick={() => setActiveJointSegmentCollateralShareMode('none')} className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold ${activeJointEditorSegment?.collateral_share_mode !== 'self' ? 'bg-white text-indigo-700' : 'bg-indigo-50 text-indigo-400'}`}>独立担保</button>
+                      <button type="button" disabled={collateralRiskFormula === 'full_value' || isActiveJointEditorSegmentSettled} onClick={() => setActiveJointSegmentCollateralShareMode('self')} className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${activeJointEditorSegment?.collateral_share_mode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-600'}`}>参加共享担保</button>
+                    </div>
+                    <p className="text-[11px] leading-4 text-indigo-600">仅与当前用户、当前订单内同样选择“参加共享担保”的分段合并；本段的手工和钱包担保仍独立归属、独立可编辑。</p>
+                    {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">买入全额口径不使用担保物，本段不能参加共享担保。</p>}
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
+                    <div className="text-sm font-medium text-gray-700">跨订单共享担保设置</div>
+                    <div className="flex flex-col gap-2">
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="collateralShareMode" value="none" checked={collateralShareMode === 'none'} onChange={() => setCollateralShareMode('none')} className="w-4 h-4 accent-blue-600" />
+                        <span className="text-sm text-gray-700">不共享（担保物仅保障本订单）</span>
+                      </label>
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input type="radio" name="collateralShareMode" value="self" checked={collateralShareMode === 'self'} onChange={() => {
+                          if (hasJointInternalCollateralMembers) { toast.error('当前联合订单已有分段参加内部共享，请勿再开启跨订单共享'); return; }
+                          const poolOrders = (sharedPoolData as any)?.orders ?? [];
+                          setShareConfirmModal({ mode: 'self', sharedOrders: poolOrders.filter((o: any) => !editingOrder || o.orderId !== editingOrder.id) });
+                        }} className="w-4 h-4 accent-blue-600" />
+                        <span className="text-sm text-gray-700">本人其他订单共享</span>
+                        {collateralShareMode === 'self' && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">已开启</span>}
+                      </label>
+                      <label className="flex items-center gap-2.5 opacity-40 cursor-not-allowed"><input type="radio" name="collateralShareMode" value="cross" disabled className="w-4 h-4" /><span className="text-sm text-gray-400">与他人共享（开发中）</span></label>
+                    </div>
+                  </div>
+                )}
               </div>
               )}
 
@@ -6028,7 +6451,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                 setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }));
                                 if (option.value === 'full_value') {
                                   setCollateralShareMode('none');
-                                  if (jointPrimaryCollateralShareMode === 'self') {
+                                  if (isEditingJointSegment) {
+                                    setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId ? { ...segment, collateral_share_mode: 'none' } : segment));
+                                    setJointOrderSegmentsDirty(true);
+                                  } else if (jointPrimaryCollateralShareMode === 'self') {
                                     setJointPrimaryCollateralShareMode('none');
                                     setJointOrderSegmentsDirty(true);
                                   }
@@ -6180,8 +6606,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       </div>
                     ))}
                   </div>
+                  </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* 后续分段保存在当前拥有者／参与者的独立快照；每段可有自己的资产类型与标的。 */}
               {editingOrder?.id && activeJointOrderTarget && (
@@ -6193,8 +6620,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     aria-expanded={jointOrderPanelExpanded}
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-indigo-700">第二段订单</div>
-                      <p className="mt-0.5 truncate text-[11px] leading-4 text-indigo-500">每段独立维护类型、标的、金额与利息；页眉、备注和关联关系共用</p>
+                      <div className="text-sm font-semibold text-indigo-700">联合订单分段管理</div>
+                      <p className="mt-0.5 truncate text-[11px] leading-4 text-indigo-500">每段均使用同一套完整表单；页眉、备注和关联关系共用</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">{jointOrderSegments.length + 1} 段</span>
@@ -6215,6 +6642,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           </select>
                         </label>
                       )}
+                      {!isEditingJointSegment && (
                       <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 px-3 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -6256,249 +6684,40 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         </div>
                         {collateralRiskFormula === 'full_value' && <p className="mt-1.5 text-[11px] leading-4 text-amber-700">当前第一段为“买入全额”口径，不计担保物，因此固定为独立担保。</p>}
                       </div>
-                      {jointOrderSegments.map((segment, index) => {
-                        const updateSegment = (patch: Partial<JointOrderSegmentDraft>) => {
-                          setJointOrderSegments(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
-                          setJointOrderSegmentsDirty(true);
-                        };
-                        const segmentDisplay = segment.display_config || {};
-                        const segmentAssets = Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [];
-                        const segmentSharesCollateral = segment.collateral_share_mode === 'self';
-                        const updateSegmentAssets = (assets: JointOrderSegmentDraft['collateral_assets']) => updateSegment({ collateral_assets: assets });
-                        const segmentKey = `${segment.id}-${index}`;
-                        const inheritedSegmentAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType))
-                          ? formData.assetType as 'stock' | 'crypto' | 'crypto_option'
-                          : 'crypto';
-                        // 旧子段没有类型时只作显示兼容；用户选择后会写入自身快照。
-                        const segmentAssetType = segment.asset_type || inheritedSegmentAssetType;
-                        const segmentCoin = String(segment.coin || formData.coin || 'BTC').toUpperCase();
-                        const jointOptionInfo = normalizeDeribitJointOptionInfo(segment.option_info, segmentCoin);
-                        const updateSegmentAssetType = (assetType: 'stock' | 'crypto' | 'crypto_option') => updateSegment({
-                          asset_type: assetType,
-                          coin: assetType === 'stock' ? 'CNY' : (assetType === 'crypto_option' ? jointOptionInfo.coin : segmentCoin),
-                          amount_currency: assetType === 'stock' ? 'CNY' : segment.amount_currency,
-                          trade_direction: assetType === 'crypto' ? (segment.trade_direction || 'long') : '',
-                          option_info: assetType === 'crypto_option'
-                            ? jointOptionInfo
-                            : undefined,
-                        });
-                        const updateJointOptionInfo = (next: DeribitJointOptionInfo) => {
-                          const total = Number(next.premium || 0) * Number(next.buyQty || 0);
-                          const totalU = Number.isFinite(total) && total > 0 ? toUsdtBase(total, next.denomination) : null;
-                          updateSegment({
-                            asset_type: 'crypto_option',
-                            coin: next.coin,
-                            option_info: next,
-                            amount_currency: 'USDT',
-                            amount: totalU !== null ? String(Number(totalU.toFixed(8))) : segment.amount,
-                            buy_price: next.premium,
-                            buy_quantity: next.buyQty,
-                          });
-                        };
-                        const secondTone = {
-                          label: segmentAssetType === 'crypto_option' ? 'text-purple-700' : 'text-indigo-700',
-                          divider: segmentAssetType === 'crypto_option' ? 'bg-purple-100' : 'bg-indigo-100',
-                          input: segmentAssetType === 'crypto_option' ? 'border-purple-200 focus:ring-2 focus:ring-purple-100 focus:border-purple-400' : 'border-indigo-200 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400',
-                          inactive: segmentAssetType === 'crypto_option' ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600',
-                          active: segmentAssetType === 'crypto_option' ? 'bg-purple-600 text-white border-purple-600' : 'bg-indigo-600 text-white border-indigo-600',
-                        };
-                        const isNegativeRate = String(segment.interest_rate_annual || '').startsWith('-');
-                        const segmentPeriodInterestTotalEnabled = segmentDisplay.periodInterestTotal === true;
-                        const segmentCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(segmentDisplay.collateralRiskFormula))
-                          ? String(segmentDisplay.collateralRiskFormula) as 'principal_coverage' | 'floating_pnl' | 'full_value'
-                          : (segment.principal_lent_out ? 'principal_coverage' : 'floating_pnl');
-                        return (
-                          <div
-                            key={segment.id}
-                            className="space-y-5 border-t border-dashed border-indigo-200 pt-4 first:border-t-0 first:pt-0"
-                            onFocusCapture={() => setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`))}
-                            onPointerDownCapture={() => setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`))}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-indigo-800">第 {index + 2} 段</div>
-                                <div className="mt-0.5 text-[11px] text-indigo-500">类型、标的、金额、利息、担保与展示均只作用于本段</div>
-                              </div>
-                              <button type="button" onClick={() => { setJointOrderSegments(current => current.filter((_, itemIndex) => itemIndex !== index)); setFloatingPreviewSegmentId(current => current === String(segment.id || `segment-${index + 2}`) ? '__primary__' : current); setJointOrderSegmentsDirty(true); }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 hover:bg-red-100" aria-label={`删除第${index + 2}段`}>
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-
-                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-3 py-2.5 text-xs leading-5 text-indigo-700">
-                              选择本段类型后，预览和保存均只按本段的标的与参数计算；不会再读取第一段的类型。
-                            </div>
-                            <div>
-                              <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>本段资产类型</label>
-                              <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                                {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '期权' }] as const).map(type => (
-                                  <button
-                                    key={type.value}
-                                    type="button"
-                                    onClick={() => { setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`)); updateSegmentAssetType(type.value); }}
-                                    className="flex-1 min-w-0 border-r border-gray-200 px-1 py-2.5 text-sm font-semibold transition-all last:border-r-0"
-                                    style={segmentAssetType === type.value
-                                      ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
-                                      : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
-                                  >
-                                    {type.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className={segmentAssetType === 'crypto_option' ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-2 gap-3'}>
-                              {segmentAssetType !== 'crypto_option' && (
-                                <div className="min-w-0">
-                                  <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>开仓日期</label>
-                                  <div className="relative">
-                                    <button type="button" onClick={() => setJointDatePickerFor(current => current === segmentKey ? null : segmentKey)} className={`w-full rounded-xl border bg-white px-4 py-3 text-left text-base outline-none ${secondTone.input}`} style={{ color: segment.buy_date ? '#1A2340' : '#9CA3AF' }}>
-                                      {segment.buy_date || '点击选择日期'}
-                                    </button>
-                                    {jointDatePickerFor === segmentKey && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={segment.buy_date} onChange={value => { updateSegment({ buy_date: value }); setJointDatePickerFor(null); }} /></div>}
-                                  </div>
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>订单对象</label>
-                                <div className="min-h-[48px] rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-sm font-semibold text-indigo-800">{activeJointOrderTarget.userName}</div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              {segmentAssetType === 'crypto_option' ? <JointOptionSegmentFields optionInfo={jointOptionInfo} onChange={updateJointOptionInfo} buyDate={segment.buy_date} datePickerOpen={jointDatePickerFor === segmentKey} onToggleDatePicker={() => setJointDatePickerFor(current => current === segmentKey ? null : segmentKey)} onChangeBuyDate={value => { updateSegment({ buy_date: value }); setJointDatePickerFor(null); }} /> : <>
-                                <span className="block text-xs text-indigo-400">{segmentAssetType === 'stock' ? '股票子段仅录入人民币融资金额' : '订单金额、买入价格与数量由本段独立维护'}</span>
-                                <div className="flex items-end gap-3"><div className="min-w-0 flex-1"><label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>{segmentAssetType === 'stock' ? '融资金额（人民币）' : '订单金额'}</label><input type="number" min="0" step="0.01" inputMode="decimal" value={segment.amount} onChange={event => updateSegment({ amount: event.target.value })} placeholder="如：100000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>{segmentAssetType !== 'stock' && <div style={{ width: '34%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>融资币种</label><select value={segment.amount_currency} onChange={event => updateSegment({ amount_currency: event.target.value === 'CNY' ? 'CNY' : 'USDT' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}><option value="USDT">USDT</option><option value="CNY">人民币 CNY</option></select></div>}</div>
-                                {segmentAssetType === 'stock' && <><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券公司</label><input value={segment.broker_name} onChange={event => updateSegment({ broker_name: event.target.value })} placeholder="如：中信证券" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券账号</label><input value={segment.broker_account} onChange={event => updateSegment({ broker_account: event.target.value })} placeholder="如：6225xxxx" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div></>}
-                                {segmentAssetType === 'crypto' && <><div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>买入价格（{segment.amount_currency}/{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_price} onChange={event => updateSegment({ buy_price: event.target.value })} placeholder="如：95000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div><div className="flex items-end gap-3"><div style={{ width: '40%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>购买币种</label><select value={segmentCoin} onChange={event => updateSegment({ coin: event.target.value })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>{[segmentCoin, 'BTC', 'ETH', 'SOL', 'SUI', 'BNB', 'CRCL', 'UNI'].filter((coin, i, list) => list.indexOf(coin) === i).map(coin => <option key={coin} value={coin}>{coin}</option>)}</select></div><div className="min-w-0 flex-1"><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>币数（{segmentCoin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_quantity} onChange={event => updateSegment({ buy_quantity: event.target.value })} placeholder="如：1.05" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div></div></>}
-                              </>}
-                              <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>存放账户</label><input value={segment.storage_account} onChange={event => updateSegment({ storage_account: event.target.value })} placeholder="账户名称或编号" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                            </div>
-
-                            <div className="flex items-center gap-3"><div className={`h-px flex-1 ${secondTone.divider}`} /><span className="shrink-0 text-xs text-indigo-400">利息约定</span><div className={`h-px flex-1 ${secondTone.divider}`} /></div>
-
-                            <div>
-                              <label className={`mb-1 block text-sm font-medium ${secondTone.label}`}>计息基数 <span className="ml-1.5 text-xs font-normal text-indigo-400">利息计算的本金基数</span></label>
-                              <div className="flex min-w-0 gap-2">
-                                <div className="flex shrink-0 overflow-hidden rounded-xl border border-indigo-200">
-                                  {(['USDT', 'CNY'] as const).map(currency => <button key={currency} type="button" onClick={() => updateSegment({ interest_base_currency: currency, interest_rate_currency: currency })} className={`px-3 py-3 text-sm font-medium ${segment.interest_base_currency === currency ? secondTone.active : 'bg-white text-indigo-500'}`}>{currency === 'USDT' ? 'USDT' : '人民币'}</button>)}
-                                </div>
-                                <input type="number" min="0" step="0.01" inputMode="decimal" value={segment.interest_base} onChange={event => updateSegment({ interest_base: event.target.value })} placeholder={segment.interest_base_currency === 'CNY' ? '如：800000' : '如：120000'} className={`min-w-0 flex-1 rounded-xl border bg-white px-4 py-3 text-base outline-none ${secondTone.input}`} />
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>计息开始日期 <span className="ml-1.5 text-xs font-normal text-indigo-400">利息从此日开始累计</span></label>
-                              <div className="relative"><button type="button" onClick={() => setJointInterestDatePickerFor(current => current === segmentKey ? null : segmentKey)} className={`w-full rounded-xl border bg-white px-4 py-3 text-left text-base outline-none ${secondTone.input}`} style={{ color: segment.interest_start_date ? '#1A2340' : '#9CA3AF' }}>{segment.interest_start_date || '点击选择开始日期'}</button>{jointInterestDatePickerFor === segmentKey && <div className="absolute left-0 right-0 top-full z-30 mt-2"><DatePicker value={segment.interest_start_date} onChange={value => { updateSegment({ interest_start_date: value }); setJointInterestDatePickerFor(null); }} /></div>}</div>
-                            </div>
-
-                            <div>
-                              <label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>约定年化利息（%）</label>
-                              <div className="flex items-center gap-2">
-                                <button type="button" title="收" onClick={() => { const raw = normalizeFunderAnnualRate(segment.interest_rate_annual); updateSegment({ interest_rate_annual: raw.startsWith('-') ? raw.slice(1) : raw }); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-bold" style={!isNegativeRate ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}>+</button>
-                                <button type="button" title="付" onClick={() => { const raw = normalizeFunderAnnualRate(segment.interest_rate_annual); const absolute = raw.startsWith('-') ? raw.slice(1) : raw; updateSegment({ interest_rate_annual: `-${absolute}` }); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-bold" style={isNegativeRate ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}>−</button>
-                                <input type="text" inputMode="decimal" value={isNegativeRate ? segment.interest_rate_annual.slice(1) : segment.interest_rate_annual} onChange={event => { const value = limitFunderAnnualRateInput(event.target.value); if (value !== null) updateSegment({ interest_rate_annual: isNegativeRate ? `-${value}` : value }); }} onBlur={() => updateSegment({ interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual) })} placeholder="如：8.5" className={`min-w-0 flex-1 rounded-xl border bg-white px-4 py-3 text-base outline-none ${secondTone.input}`} />
-                                <span className="shrink-0 text-base font-medium text-gray-500">% / 年</span>
-                              </div>
-                              <div className="mt-2 flex gap-2">{(['USDT', 'CNY'] as const).map(currency => <button key={currency} type="button" onClick={() => updateSegment({ interest_rate_currency: currency })} className={`flex-1 rounded-xl py-2 text-sm font-medium ${segment.interest_rate_currency === currency ? secondTone.active : secondTone.inactive}`}>{currency === 'USDT' ? 'U（USDT）' : '人民币（元）'}</button>)}</div>
-                            </div>
-
-                            <div><label className={`mb-2 block text-sm font-medium ${secondTone.label}`}>利息支付方式</label><select value={segment.interest_payment_type} onChange={event => updateSegment({ interest_payment_type: event.target.value })} className={`w-full rounded-xl border bg-white px-4 py-3 text-base outline-none ${secondTone.input}`}><option value="">请选择支付方式</option>{INTEREST_PAYMENT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-
-                            <div className="flex items-center gap-3"><div className={`h-px flex-1 ${secondTone.divider}`} /><span className="shrink-0 text-xs text-indigo-400">担保货币</span><div className={`h-px flex-1 ${secondTone.divider}`} /></div>
-                            <div className="space-y-3">
-                              <div>
-                                <label className={`mb-1.5 block text-sm font-medium ${secondTone.label}`}>本段担保方式</label>
-                                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50/50">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateSegment({ collateral_share_mode: 'none' })}
-                                    className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold ${!segmentSharesCollateral ? 'bg-white text-indigo-700' : 'text-indigo-400'}`}
-                                  >独立担保</button>
-                                  <button
-                                    type="button"
-                                    disabled={segmentCollateralRiskFormula === 'full_value'}
-                                    onClick={() => updateSegment({ collateral_share_mode: 'self' })}
-                                    className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${segmentSharesCollateral ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
-                                  >共享担保</button>
-                                </div>
-                                {segmentSharesCollateral && (
-                                  <p className="mt-1.5 text-[11px] leading-4 text-indigo-600">本段录入的担保物会与本订单内同样选择“共享担保”的其他分段合并展示和估值；取消后仍保留本段原有担保物。</p>
-                                )}
-                                {segmentCollateralRiskFormula === 'full_value' && <p className="mt-1.5 text-[11px] leading-4 text-amber-700">本段为“买入全额”口径，不计担保物，因此不能参加共享担保。</p>}
-                              </div>
-                              {segmentAssets.map((asset, assetIndex) => <div key={`${asset.coin}-${assetIndex}`} className="space-y-2"><div className="flex items-center gap-2"><select value={asset.coin} onChange={event => updateSegmentAssets(segmentAssets.map((item, itemIndex) => itemIndex === assetIndex ? { ...item, coin: event.target.value } : item))} className={`min-w-0 rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} style={{ width: '42%' }}>{COLLATERAL_COINS.map(coin => <option key={coin} value={coin}>{coin === 'CNY' ? '人民币 CNY' : coin}</option>)}</select><input type="number" min="0" step="0.00000001" inputMode="decimal" value={asset.qty} onChange={event => updateSegmentAssets(segmentAssets.map((item, itemIndex) => itemIndex === assetIndex ? { ...item, qty: event.target.value } : item))} placeholder="数量" className={`min-w-0 flex-1 rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /><button type="button" onClick={() => updateSegmentAssets(segmentAssets.filter((_, itemIndex) => itemIndex !== assetIndex))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-400"><Trash2 className="h-4 w-4" /></button></div><input value={asset.note || ''} onChange={event => updateSegmentAssets(segmentAssets.map((item, itemIndex) => itemIndex === assetIndex ? { ...item, note: event.target.value } : item))} placeholder="备注（选填）" className={`w-full rounded-xl border bg-white px-3 py-2 text-sm outline-none ${secondTone.input}`} /></div>)}
-                              <button type="button" onClick={() => updateSegmentAssets([...segmentAssets, { coin: 'USDT', qty: '', source: 'manual' }])} className="flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-indigo-300 py-2.5 text-sm font-medium text-indigo-600"><Plus className="h-4 w-4" />{segmentSharesCollateral ? '添加共享担保物' : '添加手工担保物'}</button>
-                            </div>
-
-                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5">
-                              <div className="mb-2 text-xs font-semibold text-indigo-700">本段担保缺口计算口径</div>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {([
-                                  { value: 'principal_coverage', label: '担保差值', detail: '担保物 − 买入价值 ± 利息' },
-                                  { value: 'floating_pnl', label: '担保＋浮盈', detail: '担保物 + 浮盈 ± 利息' },
-                                  { value: 'full_value', label: '买入全额', detail: '买入价值 ± 利息，不计担保' },
-                                ] as const).map(option => {
-                                  const active = segmentCollateralRiskFormula === option.value;
-                                  return <button
-                                    key={option.value}
-                                    type="button"
-                                    onClick={() => updateSegment({
-                                      collateral_share_mode: option.value === 'full_value' ? 'none' : segment.collateral_share_mode,
-                                      display_config: { ...segmentDisplay, collateralRiskFormula: option.value },
-                                    })}
-                                    className={`rounded-md border px-1.5 py-2 text-left transition-colors ${active ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-indigo-100 bg-white text-slate-600'}`}
-                                  >
-                                    <span className="block text-xs font-semibold">{option.label}</span>
-                                    <span className={`mt-0.5 block text-[10px] leading-3 ${active ? 'text-indigo-100' : 'text-slate-400'}`}>{option.detail}</span>
-                                  </button>;
-                                })}
-                              </div>
-                              <p className="mt-2 text-[11px] leading-4 text-indigo-600">每段独立保存本口径；选择“买入全额”会自动退出本订单的内部共享池。</p>
-                            </div>
-
-                            <div className="flex items-center gap-3"><div className={`h-px flex-1 ${secondTone.divider}`} /><span className="shrink-0 text-xs text-indigo-400">字段展示控制</span><div className={`h-px flex-1 ${secondTone.divider}`} /></div>
-                            <div className="border-y border-indigo-100 bg-indigo-50/30 px-4 py-3">
-                              <div className="mb-1.5 text-xs font-medium text-indigo-600">左栏 · 持有资产</div>
-                              <div className="grid grid-cols-3 gap-x-2 gap-y-1">{([{ key: 'buyPrice', label: '买入币价' }, { key: 'buyValue', label: '买入价值' }, { key: 'buyDate', label: '开仓时间' }, { key: 'holdDuration', label: '持有时长' }, { key: 'orderNo', label: '订单编号' }, { key: 'assetType', label: '资产标签' }] as const).map(({ key, label }) => <CompactDisplayToggle key={key} label={label} checked={segmentDisplay[key] !== false} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, [key]: segmentDisplay[key] === false } })} tone="indigo" />)}</div>
-                              <div className="my-2 h-px bg-indigo-100" />
-                              <div className="mb-1.5 text-xs font-medium text-indigo-600">右栏 · 利息担保</div>
-                              <div className="grid grid-cols-3 gap-x-2 gap-y-1">
-                                {([{ key: 'accruedInterest', label: '待结利息' }, { key: 'paidInterest', label: '已结利息' }, { key: 'periodInterestTotal', label: '周期总息' }, { key: 'interestBase', label: '计息基数' }, { key: 'interestStartDate', label: '计息日期' }, { key: 'interestDuration', label: '计息时长' }, { key: 'interestPaymentType', label: '付息方式' }, { key: 'collateralCoin', label: '担保货币' }, { key: 'collateralValue', label: '担保价值' }, { key: 'collateral', label: '担保缺口' }, { key: 'marginRate', label: '保证金率' }] as const).map(({ key, label }) => {
-                                  const checked = key === 'periodInterestTotal' ? segmentPeriodInterestTotalEnabled : segmentDisplay[key] !== false;
-                                  return <CompactDisplayToggle key={key} label={label} checked={checked} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, [key]: key === 'periodInterestTotal' ? !segmentPeriodInterestTotalEnabled : segmentDisplay[key] === false } })} tone="indigo" />;
-                                })}
-                              </div>
-                              {segmentPeriodInterestTotalEnabled && (
-                                <div className="mt-2 rounded-lg border border-indigo-100 bg-white p-2">
-                                  <div className="mb-1.5 text-[11px] font-medium text-indigo-600">本段显示周期</div>
-                                  <div className="grid grid-cols-3 gap-1.5">
-                                    {([
-                                      { value: 'week', label: '一周' },
-                                      { value: 'month', label: '整月' },
-                                      { value: 'quarter', label: '整季' },
-                                      { value: 'halfYear', label: '半年' },
-                                      { value: 'year', label: '整年' },
-                                    ] as const).map(option => (
-                                      <button key={option.value} type="button" onClick={() => updateSegment({ display_config: { ...segmentDisplay, periodInterestTotal: true, periodInterestTotalPeriod: option.value } })} className={`rounded-md border px-1.5 py-1.5 text-xs font-medium transition-colors ${String(segmentDisplay.periodInterestTotalPeriod || 'month') === option.value ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-indigo-100 bg-indigo-50 text-indigo-600'}`}>
-                                        {option.label}总息
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-3"><div className={`h-px flex-1 ${secondTone.divider}`} /><span className="shrink-0 text-xs text-indigo-400">功能开关</span><div className={`h-px flex-1 ${secondTone.divider}`} /></div>
-                            <div className="grid grid-cols-3 gap-x-2 gap-y-1"><CompactDisplayToggle label="借出本金" checked={segment.principal_lent_out} onToggle={() => updateSegment({ principal_lent_out: !segment.principal_lent_out })} tone="indigo" /><CompactDisplayToggle label="收益分成" checked={segment.show_profit_share} onToggle={() => updateSegment({ show_profit_share: !segment.show_profit_share })} tone="indigo" /><CompactDisplayToggle label="手续费" checked={segmentDisplay.tradingFee === true} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, tradingFee: segmentDisplay.tradingFee !== true } })} tone="indigo" /></div>
-                            <div className="border border-indigo-100 bg-indigo-50/30 px-4 py-3 space-y-3">
-                              <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-indigo-900">参考手续费费率</div><p className="mt-0.5 text-[11px] text-indigo-500">按本段计息基数自动计算</p></div><div className="flex items-center gap-1"><input type="number" min="0" step="0.1" value={segment.trading_fee_rate_per_mille} onChange={event => updateSegment({ trading_fee_rate_per_mille: event.target.value })} className={`w-16 rounded-lg border bg-white px-2 py-1.5 text-center text-sm font-semibold text-indigo-700 outline-none ${secondTone.input}`} /><span className="text-sm font-medium text-gray-500">‰</span></div></div>
-                              <div><div className="mb-1.5 text-xs text-indigo-600">手续费支付进度</div><div className="grid grid-cols-3 gap-2">{([{ value: 'unpaid', label: '已付0%' }, { value: 'half_paid', label: '已付50%' }, { value: 'paid', label: '已付100%' }] as const).map(item => <button key={item.value} type="button" onClick={() => updateSegment({ trading_fee_status: item.value })} className={`rounded-lg border px-1 py-1.5 text-xs font-medium ${segment.trading_fee_status === item.value ? secondTone.active : 'border-indigo-100 bg-white text-indigo-600'}`}>{item.label}</button>)}</div></div>
-                            </div>
-                            {segment.show_profit_share && <div className="space-y-3 border-y border-indigo-100 bg-indigo-50/30 px-4 py-3"><div className="text-xs font-medium text-indigo-600">右栏 · 收益分成</div><div className="grid grid-cols-2 gap-3"><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>分成比例</span><div className="flex items-center gap-2"><input type="number" min="0" step="0.01" inputMode="decimal" value={segment.profit_share_ratio} onChange={event => updateSegment({ profit_share_ratio: event.target.value })} placeholder="例如 20" className={`min-w-0 flex-1 rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`} /><span className="text-sm text-gray-500">%</span></div></label><label><span className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>分成类型</span><select value={segment.profit_share_type} onChange={event => updateSegment({ profit_share_type: event.target.value === 'coin' ? 'coin' : 'interest' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${secondTone.input}`}><option value="interest">利息分成</option><option value="coin">利润分成</option></select></label></div></div>}
+                      )}
+                      <div className="space-y-2 rounded-xl border border-indigo-100 bg-white p-2.5">
+                        <div className="flex items-center justify-between gap-3 px-0.5">
+                          <div>
+                            <div className="text-sm font-semibold text-indigo-900">后续段管理</div>
+                            <p className="mt-0.5 text-[11px] leading-4 text-indigo-500">选择任一段后，上方立即显示同一套完整订单表单；不再存在简化版第二段页面。</p>
                           </div>
-                        );
-                      })}
-                      <button type="button" onClick={() => { const participantUserId = Number(activeJointOrderTarget.userId || 0); const nextSegmentId = `segment-${Date.now()}`; const nextAssetType = ['stock', 'crypto', 'crypto_option'].includes(String(formData.assetType)) ? formData.assetType as 'stock' | 'crypto' | 'crypto_option' : 'crypto'; const nextOptionInfo = nextAssetType === 'crypto_option' ? { coin: optionFormData.optionCurrency || formData.coin || 'BTC', direction: optionFormData.direction || 'long_call', exerciseDate: optionFormData.exerciseDate || '', deribitLabel: optionFormData.deribitLabel || '', strikePrice: optionFormData.strikePrice || '', premium: optionFormData.premium || '', denomination: optionFormData.premiumDenomination || 'USDT', buyQty: optionFormData.buyQty || '' } : undefined; setJointOrderSegments(current => [...current, { id: nextSegmentId, owner_user_id: participantUserId, asset_type: nextAssetType, coin: nextAssetType === 'stock' ? 'CNY' : (nextAssetType === 'crypto_option' ? nextOptionInfo?.coin : formData.coin || 'BTC'), trade_direction: nextAssetType === 'crypto' ? (formData.tradeDirection === 'short' ? 'short' : 'long') : '', option_info: nextOptionInfo, amount: '', amount_currency: nextAssetType === 'stock' ? 'CNY' : formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT', buy_date: formData.buyDate || getBeijingToday(), interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual), interest_base: formData.interestBase || '', interest_base_currency: formData.interestBaseCurrency, interest_rate_currency: formData.interestRateCurrency, interest_payment_type: formData.interestPaymentType || '', interest_start_date: formData.interestStartDate || getBeijingToday(), buy_price: nextAssetType === 'stock' || nextAssetType === 'crypto_option' ? '' : formData.buyPrice || '', buy_quantity: nextAssetType === 'stock' ? '' : nextAssetType === 'crypto_option' ? String(nextOptionInfo?.buyQty || '') : formData.buyQuantity || '', storage_account: formData.storageAccount || '', broker_name: nextAssetType === 'stock' ? formData.brokerName || '' : '', broker_account: nextAssetType === 'stock' ? formData.brokerAccount || '' : '', principal_lent_out: effectivePrincipalLentOut, show_profit_share: Boolean(displayConfig.profitShare), profit_share_ratio: formData.profitShareRatio || '', profit_share_type: formData.profitShareType === 'coin' ? 'coin' : 'interest', commission_share: formData.commissionShare || '', trading_fee_rate_per_mille: formData.tradingFeeRate || '2', trading_fee_status: formData.tradingFeeStatus || 'unpaid', collateral_assets: [], collateral_share_mode: 'none', display_config: { ...displayConfig, buyDate: true, holdDuration: true } }]); setFloatingPreviewSegmentId(nextSegmentId); setJointOrderSegmentsDirty(true); }} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加第二段</button>
+                          <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-600">{jointOrderSegments.length} 段</span>
+                        </div>
+                        {jointOrderSegments.length === 0 ? (
+                          <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 px-3 py-3 text-xs leading-5 text-indigo-600">尚未添加后续段。点击下方按钮后会直接切换至完整统一表单。</div>
+                        ) : jointOrderSegments.map((segment, index) => {
+                          const segmentId = String(segment.id || `segment-${index + 2}`);
+                          const isActive = activeJointEditorSegmentId === segmentId;
+                          const isSettled = ['settled', 'completed'].includes(String(segment.status || '').toLowerCase());
+                          const segmentTypeLabel = segment.asset_type === 'stock' ? '股票' : segment.asset_type === 'crypto_option' ? '期权' : '数字币';
+                          return <div key={segmentId} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${isActive ? 'border-blue-300 bg-blue-50' : 'border-indigo-100 bg-white'}`}>
+                            <button type="button" onClick={() => selectUnifiedEditorSegment(segmentId)} className="min-w-0 flex-1 text-left">
+                              <div className={`text-sm font-semibold ${isActive ? 'text-blue-700' : 'text-indigo-800'}`}>第 {index + 2} 段{isSettled ? ' · 已结清' : isActive ? ' · 当前编辑' : ''}</div>
+                              <div className="mt-0.5 truncate text-[11px] text-indigo-500">{segmentTypeLabel} · {segment.asset_type === 'crypto_option' ? (segment.option_info?.coin || segment.coin || 'BTC') : (segment.coin || '未选标的')} · {segment.amount || '待填写'}</div>
+                            </button>
+                            <button type="button" disabled={isSettled} onClick={() => {
+                              setJointOrderSegments(current => current.filter(item => String(item.id) !== segmentId));
+                              setJointOrderSegmentsDirty(true);
+                              if (activeJointEditorSegmentId === segmentId) {
+                                setActiveJointEditorSegmentId('__primary__');
+                                setFloatingPreviewSegmentId('__primary__');
+                                restoreUnifiedEditorDraft(primaryEditorDraftRef.current);
+                              }
+                            }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 disabled:cursor-not-allowed disabled:opacity-35" aria-label={isSettled ? `第${index + 2}段已结清，不可删除` : `删除第${index + 2}段`}><Trash2 className="h-4 w-4" /></button>
+                          </div>;
+                        })}
+                        <button type="button" onClick={addUnifiedEditorSegment} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加下一段并使用完整表单</button>
+                      </div>
                     </div>
                   )}
                 </section>

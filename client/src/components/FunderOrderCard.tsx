@@ -948,9 +948,9 @@ export function FunderOrderCard({
   const getManualJointCollateralAssets = (value: unknown) => {
     let assets: any[] = [];
     try { assets = typeof value === 'string' ? JSON.parse(value) : (Array.isArray(value) ? value : []); } catch {}
-    return Array.isArray(assets)
-      // 钱包冻结属于订单级且可能由多位拥有者共同贡献，37号引用也没有段级归属；
-      // 在明确建模前都不能混入某一位用户的联合内部池。
+    // 钱包冻结属于订单级且可能由多位拥有者共同贡献，37号引用也没有段级归属；
+    // 在明确建模前都不能混入某一位用户的联合内部池。
+    return (Array.isArray(assets) ? assets : [])
       .filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'))
       .filter((asset: any) => String(asset?.coin || '').trim() && Number(asset?.qty) > 0);
   };
