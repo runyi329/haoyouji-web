@@ -1732,6 +1732,8 @@ type T0PreviewMember = {
 type T0PreviewMemberCardMetrics = {
   longQuantity: number;
   shortQuantity: number;
+  /** 资金流水尚在读取时保留仓位展示，但不把未加载误报为零。 */
+  fundsLoaded: boolean;
   cumulativeDepositAmount: number;
   /** 累计提现 ÷ 累计投入；无累计投入时不计算百分比。 */
   cashReturnRate: number | null;
@@ -4084,6 +4086,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [profitShareRecipientSearch]);
 
   const viewAsUserId = searchParams.get("viewAs") || (typeof window !== "undefined" ? window.sessionStorage.getItem("view-as-user-id") : null);
+  // 登录代入时，服务端会以目标成员身份返回只读数据。该目标也必须进入 React Query 键，
+  // 否则同一个 SPA 会话切换成员时可能短暂复用上一位成员的账本或周结算回包。
+  const viewAsSessionUserId = Number.parseInt(String(viewAsUserId || ""), 10);
+  const hasViewAsSessionScope = Number.isInteger(viewAsSessionUserId) && viewAsSessionUserId > 0;
+  const viewerScopeUserId = hasViewAsSessionScope ? viewAsSessionUserId : undefined;
   const { data: me, isLoading: meLoading } = trpc.auth.me.useQuery(undefined, { retry: false });
   const { data: ledgerData, isLoading: ledgerLoading } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -4116,7 +4123,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     canUseMemberPreview ? Number((me as any)?.id || 0) : null,
   );
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
-    { ledgerId: 52, previewUserId: previewUserId || undefined },
+    { ledgerId: 52, previewUserId: previewUserId || undefined, viewerScopeUserId },
     {
       enabled: canAccess,
       staleTime: T0_JOURNAL_STALE_TIME_MS,
@@ -4151,9 +4158,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const queriedViewerMode = rawJournalData?.viewerMode;
   const isUserPreview = previewUserId !== null;
   // 管理员切回时不能用上一位成员的缓存数据短暂放开编辑按钮；等待完整管理范围重新返回。
+  const isViewAsSessionSwitching = hasViewAsSessionScope
+    && (rawJournalData?.viewerMode !== "member" || Number(rawJournalData?.viewerRelatedUserId || 0) !== viewerScopeUserId);
   const isPreviewSwitching = isUserPreview
     ? rawJournalData?.viewerMode !== "member" || Number(rawJournalData?.viewerRelatedUserId || 0) !== previewUserId
-    : canUseMemberPreview && queriedViewerMode !== undefined && queriedViewerMode !== "admin";
+    : isViewAsSessionSwitching || (canUseMemberPreview && queriedViewerMode !== undefined && queriedViewerMode !== "admin");
   const activeJournalData = isPreviewSwitching ? undefined : rawJournalData;
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
@@ -4192,7 +4201,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? Number(relatedUserFilterIds[0])
       : undefined);
   const t0WeeklySettlementQuery = trpc.ledger.t0GetWeeklySettlementCenter.useQuery(
-    { ledgerId: 52, previewUserId: weeklySettlementPreviewUserId },
+    { ledgerId: 52, previewUserId: weeklySettlementPreviewUserId, viewerScopeUserId },
     {
       // 成员与管理员都以服务端统一FIFO、冻结分佣快照和共享扣减为周结算权威口径。
       // 成员端已加载的总收益明细只可在本查询返回前临时构造首屏，不能长期覆盖权威周报。
@@ -4538,6 +4547,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       enabled: canManage && (
         (showGlobalLedger && globalLedgerTab === "funds")
         || (showTotalNetProfitDetail && payoutTargetRelatedUserId <= 0)
+        // 用户视角名单的“存 / 回款”直接读取管理员已有权限的真实资金流水；
+        // 仅弹层打开期间加载，不改变全局账本开关，也不会触发任何写入。
+        || (canUseMemberPreview && previewMemberPickerOpen)
       ),
       staleTime: 0,
       refetchOnWindowFocus: true,
@@ -7005,6 +7017,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const previewMemberCardMetricsById = useMemo(() => {
     const metricsById = new Map<number, T0PreviewMemberCardMetrics>();
     if (!canUseMemberPreview || !previewMemberPickerOpen || previewMembers.length === 0) return metricsById;
+    // 只使用全体只读资金流水回包。回包尚未就绪时不能将“未知”显示为 0。
+    const fundsLoaded = Array.isArray(t0GlobalPayoutLogsQuery.data);
+    const cashFlowsByMemberId = new Map<number, T0JournalPayoutLog[]>();
+    if (fundsLoaded) {
+      for (const cashFlow of globalPayoutLogs) {
+        if (!Number.isInteger(cashFlow.relatedUserId) || cashFlow.relatedUserId <= 0) continue;
+        const memberCashFlows = cashFlowsByMemberId.get(cashFlow.relatedUserId);
+        if (memberCashFlows) memberCashFlows.push(cashFlow);
+        else cashFlowsByMemberId.set(cashFlow.relatedUserId, [cashFlow]);
+      }
+    }
 
     for (const member of previewMembers) {
       // 多空仅统计该用户本人实际下单的已成交剩余仓位；分佣受益人不会被误展示成持有整张来源订单。
@@ -7018,19 +7041,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const shortQuantity = ownBuckets
         .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
         .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
-      const cumulativeDepositAmount = Math.max(0, payoutDepositAmountByRelatedUser.get(String(member.id)) || 0);
-      const cumulativeWithdrawalAmount = (payoutCashFlowsByRelatedUser.get(String(member.id)) || [])
+      const memberCashFlows = cashFlowsByMemberId.get(member.id) || [];
+      const cumulativeDepositAmount = memberCashFlows
+        .filter((cashFlow) => cashFlow.direction === "deposit")
+        .reduce((total, cashFlow) => total + cashFlow.amount, 0);
+      const cumulativeWithdrawalAmount = memberCashFlows
         .filter((cashFlow) => cashFlow.direction === "withdrawal")
         .reduce((total, cashFlow) => total + cashFlow.amount, 0);
       metricsById.set(member.id, {
         longQuantity,
         shortQuantity,
+        fundsLoaded,
         cumulativeDepositAmount,
-        cashReturnRate: cumulativeDepositAmount > 0 ? cumulativeWithdrawalAmount / cumulativeDepositAmount : null,
+        cashReturnRate: fundsLoaded && cumulativeDepositAmount > 0 ? cumulativeWithdrawalAmount / cumulativeDepositAmount : null,
       });
     }
     return metricsById;
-  }, [canUseMemberPreview, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, previewMemberPickerOpen, previewMembers, rawJournalTrades]);
+  }, [canUseMemberPreview, globalPayoutLogs, previewMemberPickerOpen, previewMembers, rawJournalTrades, t0GlobalPayoutLogsQuery.data]);
   const globalLedgerSummary = useMemo(() => {
     const summary = globalLedgerRows.reduce((total, row) => ({
       longQuantity: total.longQuantity + row.longQuantity,
@@ -11936,7 +11963,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   : visiblePreviewMembers.length === 0 ? <div className="col-span-2 px-3 py-8 text-center text-sm text-slate-400">没有匹配的可预览成员</div>
                     : visiblePreviewMembers.map((member) => {
                       const metrics = previewMemberCardMetricsById.get(member.id);
-                      const cashReturnRate = metrics?.cashReturnRate ?? null;
+                      const fundsLoaded = Boolean(metrics?.fundsLoaded);
+                      const cashReturnRate = fundsLoaded ? metrics?.cashReturnRate ?? null : null;
                       const cashReturnRateClass = cashReturnRate === null
                         ? "text-slate-400"
                         : "text-slate-700";
@@ -11951,7 +11979,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-slate-100 pt-1.5 text-[10px] leading-none tabular-nums">
                           <span title="该用户本人已成交且未平的多仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">多</span><strong className="truncate font-semibold text-rose-600">{metrics ? formatQuantity(metrics.longQuantity) : "--"}</strong></span>
                           <span title="该用户本人已成交且未平的空仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">空</span><strong className="truncate font-semibold text-emerald-600">{metrics ? formatQuantity(metrics.shortQuantity) : "--"}</strong></span>
-                          <span title="该用户T+0累计存款" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">存</span><strong className="truncate font-semibold text-slate-700">{metrics ? formatAmount(metrics.cumulativeDepositAmount) : "--"}</strong></span>
+                          <span title="该用户T+0累计存款" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">存</span><strong className={`truncate font-semibold ${fundsLoaded ? "text-slate-700" : "text-slate-400"}`}>{fundsLoaded ? formatAmount(metrics!.cumulativeDepositAmount) : "--"}</strong></span>
                           <span title="累计提现除以累计存款；仅统计已登记的提现流水" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">回款</span><strong className={`truncate font-semibold ${cashReturnRateClass}`}>{cashReturnRate === null ? "--" : formatSignedPercent(cashReturnRate)}</strong></span>
                         </span>
                       </button>;

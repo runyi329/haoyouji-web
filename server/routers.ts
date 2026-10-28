@@ -11669,9 +11669,14 @@ ${klinesSummary}
         // 仅用于账本管理员在当前页面内只读核对一位成员实际可见的订单范围。
         // 不是登录代入，不会改变当前会话身份，也不能用于任何写入接口。
         previewUserId: z.number().int().positive().optional(),
+        // 仅用于隔离浏览器查询缓存；必须与当前服务端会话用户一致，不参与授权或范围选择。
+        viewerScopeUserId: z.number().int().positive().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
+        if (input.viewerScopeUserId && input.viewerScopeUserId !== Number(ctx.user.id)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '查询身份作用域与当前会话不一致' });
+        }
         if (input.previewUserId) {
           if (ctx.isViewingAs) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换用户预览' });
@@ -11730,10 +11735,15 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(52),
         previewUserId: z.number().int().positive().optional(),
+        // 仅用于隔离浏览器查询缓存；必须与当前服务端会话用户一致，不参与授权或范围选择。
+        viewerScopeUserId: z.number().int().positive().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
         const weeklySettlement = await import('./ledger52-t0-weekly-settlement');
+        if (input.viewerScopeUserId && input.viewerScopeUserId !== Number(ctx.user.id)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '查询身份作用域与当前会话不一致' });
+        }
         let journalOwnerUserId = 0;
         let targetUserId: number | undefined;
         if (input.previewUserId) {
