@@ -25,6 +25,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
+import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
@@ -272,6 +273,30 @@ function formatAddress(address: any) {
   }${address.district ?? ""}${address.detail ?? ""}`;
 }
 
+function UsdtPrimaryPrice({
+  cnyAmount,
+  usdtCnyRate,
+  color = "#0D7A3E",
+  mainClassName = "text-[16px] font-extrabold",
+}: {
+  cnyAmount: number;
+  usdtCnyRate: number;
+  color?: string;
+  mainClassName?: string;
+}) {
+  return (
+    <span className="flex flex-col items-end leading-none tabular-nums">
+      <span className={mainClassName} style={{ color }}>
+        {cnyToU(cnyAmount, usdtCnyRate).toFixed(2)}
+        <span className="ml-0.5 text-[9px] font-bold">USDT</span>
+      </span>
+      <span className="mt-1 text-[10px] font-medium text-gray-400">
+        ≈ ¥{cnyAmount.toFixed(2)}
+      </span>
+    </span>
+  );
+}
+
 function LimitedProductCartOverlay() {
   const {
     items,
@@ -290,6 +315,7 @@ function LimitedProductCartOverlay() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [userNote, setUserNote] = useState("");
   const [success, setSuccess] = useState<any>(null);
+  const usdtCnyRate = useMibanUsdtCnyRate();
   const payment = useMibanMixedPayment(
     totalCny,
     open && checkoutOpen && isAuthenticated
@@ -496,9 +522,11 @@ function LimitedProductCartOverlay() {
                           {item.unitLabel}
                         </p>
                       </div>
-                      <span className="text-[13px] font-extrabold text-[#0D7A3E]">
-                        ¥{(item.priceCny * item.quantity).toFixed(2)}
-                      </span>
+                      <UsdtPrimaryPrice
+                        cnyAmount={item.priceCny * item.quantity}
+                        usdtCnyRate={usdtCnyRate}
+                        mainClassName="text-[13px] font-extrabold"
+                      />
                     </div>
                   ))}
                 </div>
@@ -584,11 +612,13 @@ function LimitedProductCartOverlay() {
             >
               <div className="mb-2 flex items-center justify-between text-[12px] text-gray-500">
                 <span>合计 {itemCount} 件</span>
-                <span>
-                  应付{" "}
-                  <b className="ml-1 text-[20px] text-[#0D7A3E]">
-                    ¥{totalCny.toFixed(2)}
-                  </b>
+                <span className="flex items-center gap-1">
+                  <span>应付</span>
+                  <UsdtPrimaryPrice
+                    cnyAmount={totalCny}
+                    usdtCnyRate={usdtCnyRate}
+                    mainClassName="text-[20px] font-extrabold"
+                  />
                 </span>
               </div>
               <button
@@ -711,12 +741,11 @@ function LimitedProductCartOverlay() {
                       </button>
                     </div>
                     <div className="mt-3 flex items-end justify-between">
-                      <span
-                        className="text-[16px] font-extrabold"
-                        style={{ color: item.accent }}
-                      >
-                        ¥{item.priceCny.toFixed(2)}
-                      </span>
+                      <UsdtPrimaryPrice
+                        cnyAmount={item.priceCny}
+                        usdtCnyRate={usdtCnyRate}
+                        color={item.accent}
+                      />
                       <div className="flex h-8 items-center rounded-lg border border-gray-200">
                         <button
                           type="button"
@@ -763,11 +792,13 @@ function LimitedProductCartOverlay() {
                 >
                   清空购物车
                 </button>
-                <span className="text-[12px] text-gray-500">
-                  共 {itemCount} 件 · 合计{" "}
-                  <b className="ml-1 text-[20px] text-[#0D7A3E]">
-                    ¥{totalCny.toFixed(2)}
-                  </b>
+                <span className="flex items-center gap-1 text-[12px] text-gray-500">
+                  <span>共 {itemCount} 件 · 合计</span>
+                  <UsdtPrimaryPrice
+                    cnyAmount={totalCny}
+                    usdtCnyRate={usdtCnyRate}
+                    mainClassName="text-[20px] font-extrabold"
+                  />
                 </span>
               </div>
               <button

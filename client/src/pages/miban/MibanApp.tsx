@@ -21,6 +21,7 @@ import TianguiPearDetail from "./TianguiPearDetail";
 import ReviewPage from "./ReviewPage";
 import HerbalifeRedGinsengDetail from "./HerbalifeRedGinsengDetail";
 import LimitedBrandProducts from "./LimitedBrandProducts";
+import SeasonalFruitSelection from "./SeasonalFruitSelection";
 import { LimitedProductCartProvider } from "./LimitedProductCart";
 
 const BASE = "/p/proj_hzxm2t";
@@ -52,6 +53,10 @@ export default function MibanApp() {
             <Route
               path={`${BASE}/limited/tuoquetang`}
               component={LimitedBrandProducts}
+            />
+            <Route
+              path={`${BASE}/limited/fruits`}
+              component={SeasonalFruitSelection}
             />
             <Route
               path={`${BASE}/limited/:productKey`}

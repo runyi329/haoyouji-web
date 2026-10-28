@@ -7,7 +7,9 @@
  */
 import { HERBALIFE_THEME } from "./herbalife-theme";
 import {
+  MAJIAYOU_THEME,
   TUOQUETANG_THEME,
+  majiayouImage,
   tuoquetangImage,
 } from "./miban-limited-brand-config";
 
@@ -19,7 +21,7 @@ export type LimitedProductSku = {
   marketPriceCny?: number;
   featured?: boolean;
   quantityPerOrder: number;
-  unitLabel: "盒" | "瓶" | "套";
+  unitLabel: "盒" | "瓶" | "套" | "箱";
   netContentText: string;
   maxPurchaseQty: number;
   active: boolean;
@@ -52,6 +54,8 @@ export type LimitedProduct = {
     title: string;
     subtitle: string;
     tags: string[];
+    /** 多SKU商品在前台选择区的称呼；食品口味、箱装规格与价格可分别准确表述。 */
+    skuSelectionLabel?: "口味" | "规格" | "价格";
     heroImages: string[];
     /** 首屏使用真实透明产品图时，可单独提供背景层，避免重绘包装。 */
     heroBackgroundImage?: string;
@@ -59,6 +63,15 @@ export type LimitedProduct = {
     detailImages?: string[];
     /** 商品详情图区域的来源说明；未设置时沿用官方资料的通用说明。 */
     detailImagesCaption?: string;
+    /** 无缝衔接的手机端商品故事海报分段，用于承载产地、时令、风味等图文资料。 */
+    storySections?: Array<{
+      eyebrow: string;
+      title: string;
+      body: string;
+      image: string;
+      facts?: string[];
+      align?: "left" | "right";
+    }>;
     /** 置于产品简介内的说明图片，例如使用方法或成分说明。 */
     introImage?: string;
     introImageAlt?: string;
@@ -136,6 +149,27 @@ const tuoquetangLogistics: LimitedProduct["detail"]["logistics"] = [
   {
     title: "使用提示",
     description: "请按商品实物包装及随附说明使用。",
+  },
+];
+
+const majiayouLogistics: LimitedProduct["detail"]["logistics"] = [
+  {
+    title: "产区资料",
+    description:
+      "商品资料参照江西上饶广丰马家柚公开报道整理；实际发货鲜果以当季实物为准。",
+  },
+  {
+    title: "订单处理",
+    description: "付款后由工作人员核对订单并安排后续发货。",
+  },
+  {
+    title: "鲜果收货",
+    description:
+      "鲜果在运输中会有自然成熟度差异，请签收时检查外箱和果品状态；如有问题请通过米伴订单页提交申请。",
+  },
+  {
+    title: "售后咨询",
+    description: "如有订单、物流或售后问题，请通过米伴订单页提交申请。",
   },
 ];
 
@@ -737,6 +771,157 @@ export const mibanLimitedProducts: LimitedProduct[] = [
           tuoquetangImage("revigor-one", "detail-01-origin.jpg"),
           tuoquetangImage("revigor-one", "detail-02-research.jpg"),
         ],
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  },
+  {
+    key: "guangfeng-majiayou",
+    status: "on_sale",
+    brand: "四季水果精选",
+    checkoutGroupKey: "seasonal-fruits",
+    category: "产地鲜果",
+    card: {
+      badge: "产地鲜果",
+      title: "广丰马家柚",
+      subtitle: "江西上饶广丰 · 玫红果肉特色鲜果",
+      highlights: ["5种箱装规格", "玫红果肉", "当季供应"],
+      image: majiayouImage("majiayou-hero.webp"),
+      theme: {
+        accent: MAJIAYOU_THEME.primary,
+        background: MAJIAYOU_THEME.surfaceMuted,
+      },
+    },
+    detail: {
+      title: "广丰马家柚",
+      subtitle: "江西上饶广丰 · 厚皮玫红果肉的当季鲜果",
+      tags: ["产地鲜果", "玫红果肉", "多规格箱装"],
+      skuSelectionLabel: "价格",
+      heroImages: [
+        majiayouImage("majiayou-hero.webp"),
+        majiayouImage("majiayou-flesh-detail.webp"),
+      ],
+      detailImages: [majiayouImage("majiayou-mobile-story.webp")],
+      detailImagesCaption:
+        "连续长图从整果、果肉、果园到鲜食场景自然衔接；果形、果皮与果肉状态以当季收到的鲜果为准。",
+      storySections: [
+        {
+          eyebrow: "产地与地标",
+          title: "长在江西上饶广丰的风土里",
+          body: "马家柚是广丰地方优良品种。公开报道显示，广丰马家柚已获得国家地理标志保护产品和农产品地理标志保护双重认定。",
+          image: majiayouImage("story-v2/origin-orchard.webp"),
+          facts: ["江西上饶广丰", "地方优良品种", "地理标志保护"],
+        },
+        {
+          eyebrow: "打开一颗柚子",
+          title: "厚白果瓤，玫红果肉",
+          body: "黄绿至金黄的果皮、较厚的白色果瓤层、玫红果肉与可见籽粒，是马家柚常见的实物特征。每一颗果实会随自然成熟度呈现不同状态。",
+          image: majiayouImage("story-v2/flesh-anatomy.webp"),
+          facts: ["黄绿果皮", "玫红果肉", "籽粒可见"],
+          align: "right",
+        },
+        {
+          eyebrow: "秋冬时令",
+          title: "等到成熟，才有清甜微酸的平衡",
+          body: "公开报道显示，广丰马家柚通常在11月中旬后陆续采摘上市。日照、降水和成熟度都会影响每一批鲜果的色泽、甜感与酸感，实际口感以收到的当季果实为准。",
+          image: majiayouImage("story-v2/autumn-harvest.webp"),
+          facts: ["秋冬成熟", "按批次上市", "自然风味差异"],
+        },
+        {
+          eyebrow: "日常鲜食",
+          title: "把一份清爽，放进日常餐桌",
+          body: "新鲜水果是平衡膳食的一部分。可将马家柚作为日常鲜果，与多样化的蔬菜、全谷物和奶类搭配；它不是药品，也不能替代正常膳食或专业健康建议。",
+          image: majiayouImage("story-v2/fresh-serving.webp"),
+          facts: ["鲜果为宜", "搭配多样膳食", "不替代正餐"],
+          align: "right",
+        },
+      ],
+      productImage: majiayouImage("majiayou-hero.webp"),
+      sourceNote:
+        "商品资料参照广丰马家柚公开报道整理，规格、果重及外观以实际到货鲜果为准。",
+      description:
+        "广丰马家柚为江西上饶市广丰区地方优良品种。其黄绿果皮、较厚白色果瓤层与玫红果肉是常见外观特点；公开报道将其概括为肉质脆嫩、酸甜适中、清脆爽口。鲜果会随自然成熟度呈现不同的果形、色泽、籽粒和口感。",
+      usage:
+        "鲜果收到后可先置于阴凉通风处短暂静置；食用前清洗果皮外表，剥开后取果肉食用。",
+      warning:
+        "天然鲜果的单果重量、果皮颜色、果肉深浅、籽粒数量及口感存在合理差异。规格标示为整箱参考范围，请以实际到货为准。",
+      logistics: majiayouLogistics,
+      notices: [
+        {
+          label: "规格说明",
+          text: "各规格按整箱销售，页面重量为整箱参考范围，不承诺每个果实重量完全一致。",
+        },
+        {
+          label: "鲜果特点",
+          text: "马家柚果皮和白色果瓤层较厚，玫红果肉及可见籽粒均以实际鲜果状态为准。",
+        },
+        {
+          label: "商品图片",
+          text: "页面为原创视觉及资料图文展示，不代表每一箱鲜果的果形、色泽完全一致。",
+        },
+      ],
+    },
+    skus: [
+      {
+        id: "majiayou-large-6",
+        name: "大果 6个装",
+        subtitle: "约17.5–18斤/箱",
+        priceCny: 188,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        netContentText: "6个装 · 约17.5–18斤/箱",
+        maxPurchaseQty: 10,
+        active: true,
+        image: majiayouImage("majiayou-hero.webp"),
+      },
+      {
+        id: "majiayou-small-4",
+        name: "小果 4个装",
+        subtitle: "约8.5–9.5斤/箱",
+        priceCny: 66,
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        netContentText: "4个装 · 约8.5–9.5斤/箱",
+        maxPurchaseQty: 10,
+        active: true,
+        image: majiayouImage("majiayou-hero.webp"),
+      },
+      {
+        id: "majiayou-medium-2",
+        name: "中果 2个装",
+        subtitle: "约5.0–5.5斤/箱",
+        priceCny: 49,
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        netContentText: "2个装 · 约5.0–5.5斤/箱",
+        maxPurchaseQty: 10,
+        active: true,
+        image: majiayouImage("majiayou-hero.webp"),
+      },
+      {
+        id: "majiayou-small-2",
+        name: "小果 2个装",
+        subtitle: "约3.6–4斤/箱",
+        priceCny: 19.9,
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        netContentText: "2个装 · 约3.6–4斤/箱",
+        maxPurchaseQty: 10,
+        active: true,
+        image: majiayouImage("majiayou-hero.webp"),
+      },
+      {
+        id: "majiayou-large-2",
+        name: "大果 2个装",
+        subtitle: "约6.8–7.5斤/箱",
+        priceCny: 76,
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        netContentText: "2个装 · 约6.8–7.5斤/箱",
+        maxPurchaseQty: 10,
+        active: true,
+        image: majiayouImage("majiayou-hero.webp"),
       },
     ],
     orderPolicy: domesticOrderPolicy,

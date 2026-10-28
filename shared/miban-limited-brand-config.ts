@@ -13,11 +13,29 @@ export const TUOQUETANG_THEME = {
   subtle: "#8BA19A",
 } as const;
 
+export const MAJIAYOU_THEME = {
+  primary: "#566C2D",
+  price: "#C65A42",
+  navy: "#33461F",
+  canvas: "#FAF9F5",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F2F4E8",
+  border: "#DCE5C7",
+  text: "#33461F",
+  muted: "#707B5C",
+  subtle: "#A2AB91",
+} as const;
+
 export const TUOQUETANG_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/tuoquetang/v1";
 
+export const MAJIAYOU_COS_BASE =
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guangfeng-majiayou/v1";
+
 export const tuoquetangImage = (product: string, file: string) =>
   `${TUOQUETANG_COS_BASE}/${product}/${file}`;
+
+export const majiayouImage = (file: string) => `${MAJIAYOU_COS_BASE}/${file}`;
 
 export const mibanLimitedBrands = [
   {
@@ -37,6 +55,15 @@ export const mibanLimitedBrands = [
     description: "蓝布正植物牙膏与复生1号",
     status: "on_sale" as const,
     theme: TUOQUETANG_THEME,
+  },
+  {
+    slug: "fruits",
+    brand: "四季水果精选",
+    eyebrow: "江西上饶广丰",
+    title: "四季水果精选",
+    description: "随季更新，从产地到餐桌的好水果",
+    status: "on_sale" as const,
+    theme: MAJIAYOU_THEME,
   },
 ] as const;
 

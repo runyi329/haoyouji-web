@@ -161,6 +161,9 @@ export default function HerbalifeRedGinsengDetail() {
   const selectedSku = currentProduct
     ? (activeSkus.find(sku => sku.id === activeSkuId) ?? activeSkus[0])
     : undefined;
+  const skuSelectionLabel =
+    currentProduct?.detail.skuSelectionLabel ??
+    (activeSkus.length > 1 ? "口味" : "规格");
   const accent = theme.primary;
   const productHeroImages =
     selectedSku?.heroImages && selectedSku.heroImages.length > 0
@@ -622,12 +625,14 @@ export default function HerbalifeRedGinsengDetail() {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-[17px] font-extrabold text-gray-900">
-              {activeSkus.length > 1 ? "选择口味" : "选择规格"}
+              选择{skuSelectionLabel}
             </h2>
             <p className="mt-0.5 text-[11px] text-gray-400">
-              {activeSkus.length > 1
+              {skuSelectionLabel === "口味"
                 ? "请选择喜欢的口味"
-                : "当前商品提供的现货规格"}
+                : skuSelectionLabel === "价格"
+                  ? "不同箱装规格对应不同价格"
+                  : "当前商品提供的现货规格"}
             </p>
           </div>
           <span className="text-[11px] font-semibold" style={{ color: accent }}>
@@ -704,6 +709,63 @@ export default function HerbalifeRedGinsengDetail() {
             ))}
           </div>
         )}
+        {currentProduct.detail.storySections?.length ? (
+          <div className="bg-[#F8F7F2]">
+            {currentProduct.detail.storySections.map((story, index) => {
+              const rightAligned = story.align === "right";
+              return (
+                <article
+                  key={`${story.title}-${index}`}
+                  className="relative -mt-px min-h-[460px] overflow-hidden bg-[#2F452A]"
+                >
+                  <img
+                    src={story.image}
+                    alt={`${currentProduct.detail.title}${story.title}`}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div
+                    className={`absolute inset-0 ${
+                      rightAligned
+                        ? "bg-gradient-to-l from-black/80 via-black/35 to-transparent"
+                        : "bg-gradient-to-r from-black/80 via-black/35 to-transparent"
+                    }`}
+                  />
+                  <div
+                    className={`relative flex min-h-[460px] flex-col justify-end px-6 py-8 text-white ${
+                      rightAligned
+                        ? "items-end text-right"
+                        : "items-start text-left"
+                    }`}
+                  >
+                    <div className="max-w-[300px]">
+                      <p className="text-[11px] font-bold tracking-[0.18em] text-white/75">
+                        {story.eyebrow}
+                      </p>
+                      <h3 className="mt-2 text-[25px] font-extrabold leading-tight tracking-[-0.03em]">
+                        {story.title}
+                      </h3>
+                      <p className="mt-3 text-[13px] leading-6 text-white/90">
+                        {story.body}
+                      </p>
+                      {story.facts?.length ? (
+                        <div
+                          className={`mt-4 flex max-w-[300px] flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-white/80 ${
+                            rightAligned ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          {story.facts.map(fact => (
+                            <span key={fact}>· {fact}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
         {(currentProduct.detail.description ||
           currentProduct.detail.introImage ||
           currentProduct.detail.usage ||
