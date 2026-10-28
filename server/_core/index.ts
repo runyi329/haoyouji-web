@@ -11,7 +11,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
-import { startPriceScanner } from "../price-scanner";
+import { startPriceScanner, subscribeT0EthPerpetualMark } from "../price-scanner";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
 import { startLedger52T0ExpiredOptionScanner, startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
@@ -269,6 +269,38 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+
+  /**
+   * T+0前台行情只接收服务端统一缓存的ETH永续标记价。SSE为单向流，不向浏览器暴露
+   * 订单、资金、成员或数据库数据；前端在页面隐藏或离开时会主动断开。
+   */
+  app.get('/api/t0/eth-perpetual-mark/stream', (req: any, res: any) => {
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    res.write('retry: 1000\n\n');
+
+    let closed = false;
+    const writeSnapshot = (snapshot: { price: number | null; updatedAt: string | null; source: string; ageMilliseconds: number | null }) => {
+      if (closed || !Number.isFinite(Number(snapshot.price)) || Number(snapshot.price) <= 0) return;
+      res.write(`event: mark\ndata: ${JSON.stringify(snapshot)}\n\n`);
+    };
+    const unsubscribe = subscribeT0EthPerpetualMark(writeSnapshot);
+    const heartbeat = setInterval(() => {
+      if (!closed) res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, 15_000);
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+  });
 
   // 前端错误上报接口
   app.post('/api/log-client-error', (req, res) => {

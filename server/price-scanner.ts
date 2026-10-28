@@ -41,8 +41,16 @@ type PriceHealth = {
   lastError?: string;
 };
 
+export type T0EthPerpetualMarkSnapshot = {
+  price: number | null;
+  updatedAt: string | null;
+  source: string;
+  ageMilliseconds: number | null;
+};
+
 const latestPrices: Record<string, PriceEntry> = {};
 const priceHealth: Record<string, PriceHealth> = {};
+const t0EthPerpetualMarkListeners = new Set<(snapshot: T0EthPerpetualMarkSnapshot) => void>();
 let usdtCnyRate = 6.7;
 let scanInProgress = false;
 let nextScanTimer: NodeJS.Timeout | null = null;
@@ -61,7 +69,13 @@ type PendingOrderMarkTick = { price: number; observedAt: Date; rangeHigh: number
 const pendingOrderMarkTicks: PendingOrderMarkTick[] = [];
 let pendingOrderMarkTriggerRunning = false;
 type CompletedT0MinuteMarkRange = { high: number; low: number; openedAt: Date; observedAt: Date };
+type CompletedT0MarkRange = CompletedT0MinuteMarkRange & { sourceLabel: string };
+type GateT0MarkRangeAccumulator = { openedAtMs: number; high: number; low: number; close: number };
+const GATE_T0_MARK_RANGE_INTERVAL_MS = 10_000;
+const GATE_T0_MARK_RANGE_MAX_AGE_MS = 35_000;
 let latestCompletedT0MinuteMarkRange: CompletedT0MinuteMarkRange | null = null;
+let latestCompletedGateT0MarkRange: CompletedT0MarkRange | null = null;
+let activeGateT0MarkRange: GateT0MarkRangeAccumulator | null = null;
 let completedT0MinuteMarkRangeRefreshInFlight = false;
 let lastCompletedT0MinuteMarkRangeRefreshAt = 0;
 const T0_COMPLETED_MINUTE_RANGE_REFRESH_MS = 3_000;
@@ -155,7 +169,7 @@ function triggerLedger52T0PendingOrders(
     || process.env.FAST_PREVIEW === 'true'
     || process.env.DEV_BYPASS_AUTH === 'true';
   if (isReadOnlyPreview || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
-  // 实时价扫描不等待外部K线请求；已缓存的完整分钟线会被同一次数据库判定作为第二依据带入。
+  // 实时价扫描不等待外部K线请求；已收盘的Gate十秒与HTX一分钟标记价区间会作为后续安全依据带入。
   void refreshLatestCompletedT0MinuteMarkRange();
   const requestedHigh = Number(range.high);
   const requestedLow = Number(range.low);
@@ -187,7 +201,7 @@ function triggerLedger52T0PendingOrders(
           filledAt: tick.observedAt,
           rangeHigh: tick.rangeHigh,
           rangeLow: tick.rangeLow,
-          completedMinuteRange: getLatestCompletedT0MinuteMarkRange() ?? undefined,
+          completedMarkRanges: getCompletedT0MarkRanges(),
         });
         if (result.filled > 0 || result.takeProfit > 0) {
           console.log(`[T0自动订单] 永续扫描区间 ${tick.rangeLow}–${tick.rangeHigh}，挂单成交 ${result.filled} 笔，自动止盈 ${result.takeProfit} 笔`);
@@ -233,6 +247,59 @@ function schedulePerpetualMarkCacheSave() {
     perpetualMarkCacheSaveTimer = null;
     saveCacheToFile();
   }, PERPETUAL_MARK_CACHE_SAVE_DELAY_MS);
+}
+
+function normalizeRemoteTimestampMilliseconds(value: unknown): number {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return Date.now();
+  // Gate部分通道使用秒级时间戳，部分通道使用毫秒级时间戳；统一为毫秒，避免十秒归档落入1970年。
+  return timestamp < 10_000_000_000 ? timestamp * 1_000 : timestamp;
+}
+
+/**
+ * 将Gate实时标记价逐笔归档为十秒标记价K线。它只使用与订单触发完全同口径的 mark_price，
+ * 不把Gate普通成交价K线的短时成交尖刺混入自动成交判定。
+ */
+function recordGateT0MarkRange(price: number, observedAt = new Date()) {
+  if (!isValidPrice(price) || !Number.isFinite(observedAt.getTime())) return;
+  const observedAtMs = observedAt.getTime();
+  const openedAtMs = Math.floor(observedAtMs / GATE_T0_MARK_RANGE_INTERVAL_MS) * GATE_T0_MARK_RANGE_INTERVAL_MS;
+  const active = activeGateT0MarkRange;
+  if (!active) {
+    activeGateT0MarkRange = { openedAtMs, high: price, low: price, close: price };
+    return;
+  }
+  if (openedAtMs < active.openedAtMs) return;
+  if (openedAtMs === active.openedAtMs) {
+    active.high = Math.max(active.high, price);
+    active.low = Math.min(active.low, price);
+    active.close = price;
+    return;
+  }
+  latestCompletedGateT0MarkRange = {
+    high: active.high,
+    low: active.low,
+    openedAt: new Date(active.openedAtMs),
+    observedAt: new Date(active.openedAtMs + GATE_T0_MARK_RANGE_INTERVAL_MS - 1),
+    sourceLabel: "Gate已收盘10秒标记价",
+  };
+  activeGateT0MarkRange = { openedAtMs, high: price, low: price, close: price };
+}
+
+function getLatestCompletedGateT0MarkRange(): CompletedT0MarkRange | null {
+  if (!latestCompletedGateT0MarkRange) return null;
+  const age = Date.now() - latestCompletedGateT0MarkRange.observedAt.getTime();
+  if (!Number.isFinite(age) || age < 0 || age > GATE_T0_MARK_RANGE_MAX_AGE_MS) return null;
+  return latestCompletedGateT0MarkRange;
+}
+
+function getCompletedT0MarkRanges(): CompletedT0MarkRange[] {
+  const ranges: CompletedT0MarkRange[] = [];
+  const gateRange = getLatestCompletedGateT0MarkRange();
+  if (gateRange) ranges.push(gateRange);
+  const htxRange = getLatestCompletedT0MinuteMarkRange();
+  if (htxRange) ranges.push({ ...htxRange, sourceLabel: "HTX已收盘1分钟标记价" });
+  return ranges;
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -967,7 +1034,7 @@ async function updateCryptoFast(coin: string) {
 
 /**
  * 以同一缓存与三秒节拍维护 ETH 永续标记价；失败时保留最近成功值。
- * WebSocket 健康时逐笔处理；流暂不可用时追加一分钟标记价高低区间，避免轮询空档漏触发。
+ * WebSocket 健康时逐笔处理；流暂不可用时由Gate REST补点，并以HTX一分钟标记价区间作最终兜底。
  */
 async function updateEthPerpetualMarkFast() {
   const quote = await fetchEthPerpetualMarkQuote();
@@ -976,6 +1043,8 @@ async function updateEthPerpetualMarkFast() {
     return;
   }
   entryFromPrice(ETH_PERP_MARK_CACHE_KEY, quote.price, quote.source, quote.patch);
+  publishT0EthPerpetualMark();
+  if (quote.source.startsWith('Gate.io ETH/USDT 永续标记价')) recordGateT0MarkRange(quote.price);
   if (hasLedger52T0PendingOrders()) void refreshLatestCompletedT0MinuteMarkRange();
   triggerLedger52T0PendingOrders(quote.price, new Date());
 }
@@ -1074,7 +1143,9 @@ function connectEthPerpetualMarkStream() {
         quoteVolume24h: Number(row?.volume_24h_quote) || 0,
         changePercent: Number.isFinite(changePercent) ? changePercent : undefined,
       });
-      const observedAt = Number.isFinite(Number(row?.t)) ? new Date(Number(row.t)) : new Date();
+      publishT0EthPerpetualMark();
+      const observedAt = new Date(normalizeRemoteTimestampMilliseconds(row?.t));
+      recordGateT0MarkRange(price, observedAt);
       triggerLedger52T0PendingOrders(price, observedAt);
       perpetualMarkStreamLastMessageAt = Date.now();
       schedulePerpetualMarkCacheSave();
@@ -1197,7 +1268,7 @@ export function getLatestPrice(coin: string): number | null {
 }
 
 export function getAllLatestPrices() { return { ...latestPrices }; }
-export function getT0EthPerpetualMark() {
+export function getT0EthPerpetualMark(): T0EthPerpetualMarkSnapshot {
   const entry = latestPrices[ETH_PERP_MARK_CACHE_KEY];
   const health = priceHealth[ETH_PERP_MARK_CACHE_KEY];
   return {
@@ -1206,6 +1277,29 @@ export function getT0EthPerpetualMark() {
     source: health?.source ?? 'none',
     ageMilliseconds: entry ? Math.max(0, Date.now() - new Date(entry.updatedAt).getTime()) : null,
   };
+}
+function publishT0EthPerpetualMark() {
+  if (t0EthPerpetualMarkListeners.size === 0) return;
+  const snapshot = getT0EthPerpetualMark();
+  t0EthPerpetualMarkListeners.forEach((listener) => {
+    try {
+      listener(snapshot);
+    } catch {
+      // 单个浏览器连接失败不能影响服务端行情缓存、自动成交扫描或其余订阅者。
+    }
+  });
+}
+/**
+ * 只发布服务器统一缓存的ETH永续标记价；浏览器不直连交易所，也不会获得订单、用户或账本数据。
+ */
+export function subscribeT0EthPerpetualMark(listener: (snapshot: T0EthPerpetualMarkSnapshot) => void) {
+  t0EthPerpetualMarkListeners.add(listener);
+  try {
+    listener(getT0EthPerpetualMark());
+  } catch {
+    t0EthPerpetualMarkListeners.delete(listener);
+  }
+  return () => t0EthPerpetualMarkListeners.delete(listener);
 }
 export function getLatestChangePercent(coin: string): number | null { return latestPrices[coin.toUpperCase()]?.changePercent ?? null; }
 export function getLatestTickerData(coin: string): Omit<PriceEntry, 'updatedAt'> | null {

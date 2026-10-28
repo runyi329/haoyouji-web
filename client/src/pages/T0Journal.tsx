@@ -4106,6 +4106,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   /** 仅控制整合报价的显示聚合宽度；真实成交、FIFO 与平仓匹配始终使用十美元档。 */
   const [integratedArchiveStep, setIntegratedArchiveStep] = useState<IntegratedArchiveStep>(POSITION_ARCHIVE_STEP);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
+  const [pushedT0MarkPrice, setPushedT0MarkPrice] = useState<number | null>(null);
+  const [t0MarkPricePushConnected, setT0MarkPricePushConnected] = useState(false);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   /** 实时价恰好触及固定档位时，沿用最后一次非持平行情的上下侧。 */
   const [lastMarkPriceMovement, setLastMarkPriceMovement] = useState<"up" | "down" | null>(null);
@@ -4224,12 +4226,71 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const canAccess = ledgerId === 52
     && (hasLedgerMembership || isSuperAdmin)
     && (!viewAsUserId || (embedded && allowAdminViewAs));
+
+  useEffect(() => {
+    if (!canAccess || typeof window === "undefined" || typeof EventSource === "undefined") {
+      setT0MarkPricePushConnected(false);
+      setPushedT0MarkPrice(null);
+      return;
+    }
+    let stream: EventSource | null = null;
+    let disposed = false;
+    const closeStream = () => {
+      if (!stream) return;
+      stream.close();
+      stream = null;
+    };
+    const openStream = () => {
+      if (disposed || document.visibilityState !== "visible" || stream) return;
+      const nextStream = new EventSource("/api/t0/eth-perpetual-mark/stream", { withCredentials: true });
+      stream = nextStream;
+      nextStream.addEventListener("open", () => {
+        if (!disposed && stream === nextStream) setT0MarkPricePushConnected(true);
+      });
+      nextStream.addEventListener("mark", (event) => {
+        if (disposed || stream !== nextStream) return;
+        try {
+          const payload = JSON.parse((event as MessageEvent).data);
+          const price = Number(payload?.price);
+          if (Number.isFinite(price) && price > 0) setPushedT0MarkPrice(price);
+        } catch {
+          // 无效推送直接忽略，由同源tRPC健康查询继续兜底。
+        }
+      });
+      nextStream.addEventListener("error", () => {
+        if (disposed || stream !== nextStream) return;
+        // EventSource会自行重连；重连前临时回到0.5秒查询，不使用可能已过期的推送价格。
+        setT0MarkPricePushConnected(false);
+        setPushedT0MarkPrice(null);
+      });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        openStream();
+        return;
+      }
+      closeStream();
+      setT0MarkPricePushConnected(false);
+      setPushedT0MarkPrice(null);
+    };
+    openStream();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      closeStream();
+      setT0MarkPricePushConnected(false);
+      setPushedT0MarkPrice(null);
+    };
+  }, [canAccess]);
+
   const { data: t0MarkPriceRaw } = trpc.getT0EthPerpetualMark.useQuery(undefined, {
     enabled: canAccess,
-    refetchInterval: T0_PRICE_REFRESH_INTERVAL_MS,
+    // SSE连接正常时以服务端推送为主，查询仅作健康同步；断线才恢复0.5秒高频兜底。
+    refetchInterval: t0MarkPricePushConnected ? 5_000 : T0_PRICE_REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-    staleTime: 250,
+    staleTime: t0MarkPricePushConnected ? 4_000 : 250,
   });
   // 登记投入使用项目统一数字币行情缓存的ETH价；该查询不参与订单成交或收益计算。
   const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, {
@@ -5043,8 +5104,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .sort((a, b) => String(b.lastUsedAt ?? "").localeCompare(String(a.lastUsedAt ?? "")))[0];
   };
   // 合约速记只使用服务端统一缓存的 ETH 永续标记价；Gate实时流断线时由 Gate → HTX REST 保温。
+  const pushedMarkPrice = Number(pushedT0MarkPrice) > 0 ? Number(pushedT0MarkPrice) : null;
   const markPriceRaw = (t0MarkPriceRaw as any)?.price;
-  const fetchedMarkPrice = Number(markPriceRaw) > 0 ? Number(markPriceRaw) : null;
+  const fetchedMarkPrice = pushedMarkPrice ?? (Number(markPriceRaw) > 0 ? Number(markPriceRaw) : null);
   const markPrice = fetchedMarkPrice ?? lastMarkPrice;
   const payoutLiveEthPrice = Number((cryptoPrices as any)?.prices?.ETH) > 0
     ? Number((cryptoPrices as any)?.prices?.ETH)

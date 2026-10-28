@@ -5387,6 +5387,14 @@ async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number
   }
 }
 
+type T0CompletedMarkPriceRange = {
+  high: number;
+  low: number;
+  openedAt: Date;
+  observedAt: Date;
+  sourceLabel: string;
+};
+
 /**
  * 自动订单仅引用T+0统一 ETH 永续标记价：先处理开仓挂单，再处理已成交现货/合约的止盈。
  * 多单挂单向下成交、止盈向上平仓；空单挂单向上成交、止盈向下平仓。止盈从不跳过未成交挂单。
@@ -5397,10 +5405,10 @@ export async function scanLedger52T0PendingOrders(input: {
   rangeHigh?: number;
   rangeLow?: number;
   /**
-   * 与实时标记价并行的最近一根已收盘 HTX 一分钟K线。
-   * 只允许在该分钟开盘前已生效的挂单引用其高低点，避免把挂单创建前或分钟内此前的波动误判成交。
+   * 与实时标记价并行的已收盘标记价区间，按数组顺序依次判定。
+   * 订单必须在区间开盘前已生效，避免把挂单创建前或同一区间内此前的波动误判成交。
    */
-  completedMinuteRange?: { high: number; low: number; openedAt: Date; observedAt: Date };
+  completedMarkRanges?: T0CompletedMarkPriceRange[];
   /** 历史补扫只锁定已被复核命中的指定挂单，绝不让同一根K线影响其他订单。 */
   pendingEntryIds?: number[];
   /** 历史完整K线开盘时点：订单必须在此前已生效，之后若被编辑也会拒绝该补扫。 */
@@ -5428,39 +5436,23 @@ export async function scanLedger52T0PendingOrders(input: {
   const rangeLabel = rangeHigh > rangeLow
     ? `ETH永续扫描区间 ${rangeLow.toFixed(2)}–${rangeHigh.toFixed(2)} U`
     : `ETH永续价 ${markPrice.toFixed(2)} U`;
-  const completedMinuteRange = input.completedMinuteRange;
-  const completedMinuteHigh = Number(completedMinuteRange?.high);
-  const completedMinuteLow = Number(completedMinuteRange?.low);
-  const completedMinuteObservedAt = completedMinuteRange?.observedAt instanceof Date
-    ? completedMinuteRange.observedAt.getTime()
-    : Number.NaN;
-  const completedMinuteOpenedAt = completedMinuteRange?.openedAt instanceof Date
-    ? completedMinuteRange.openedAt.getTime()
-    : Number.NaN;
-  const hasCompletedMinuteRange = Number.isFinite(completedMinuteOpenedAt)
-    && completedMinuteOpenedAt > 0
-    && Number.isFinite(completedMinuteObservedAt)
-    && completedMinuteObservedAt > 0
-    && completedMinuteOpenedAt < completedMinuteObservedAt
-    && Number.isFinite(completedMinuteHigh)
-    && completedMinuteHigh > 0
-    && Number.isFinite(completedMinuteLow)
-    && completedMinuteLow > 0;
-  const normalizedCompletedMinuteHigh = hasCompletedMinuteRange
-    ? Math.max(completedMinuteHigh, completedMinuteLow)
-    : 0;
-  const normalizedCompletedMinuteLow = hasCompletedMinuteRange
-    ? Math.min(completedMinuteHigh, completedMinuteLow)
-    : 0;
-  const completedMinuteObservedDate = hasCompletedMinuteRange
-    ? new Date(completedMinuteObservedAt)
-    : null;
-  const completedMinuteOpenedDate = hasCompletedMinuteRange
-    ? new Date(completedMinuteOpenedAt)
-    : null;
-  const completedMinuteRangeLabel = hasCompletedMinuteRange
-    ? `HTX已收盘1分钟标记价区间 ${normalizedCompletedMinuteLow.toFixed(2)}–${normalizedCompletedMinuteHigh.toFixed(2)} U`
-    : null;
+  const completedMarkRanges: T0CompletedMarkPriceRange[] = [];
+  for (const candidate of input.completedMarkRanges ?? []) {
+    const openedAt = candidate?.openedAt instanceof Date ? candidate.openedAt : null;
+    const observedAt = candidate?.observedAt instanceof Date ? candidate.observedAt : null;
+    const high = Number(candidate?.high);
+    const low = Number(candidate?.low);
+    if (!openedAt || !observedAt || !Number.isFinite(openedAt.getTime()) || !Number.isFinite(observedAt.getTime())
+      || openedAt.getTime() <= 0 || observedAt.getTime() <= openedAt.getTime()
+      || !Number.isFinite(high) || high <= 0 || !Number.isFinite(low) || low <= 0) continue;
+    completedMarkRanges.push({
+      high: Math.max(high, low),
+      low: Math.min(high, low),
+      openedAt,
+      observedAt,
+      sourceLabel: String(candidate?.sourceLabel || "已收盘标记价").trim() || "已收盘标记价",
+    });
+  }
   const pendingEntryIds = Array.from(new Set((input.pendingEntryIds ?? [])
     .map((entryId) => Number(entryId))
     .filter((entryId) => Number.isInteger(entryId) && entryId > 0)));
@@ -5469,13 +5461,15 @@ export async function scanLedger52T0PendingOrders(input: {
     : "";
   const historicalEligibleAt = input.historicalEligibleAt ? mysqlDateTime(input.historicalEligibleAt) : null;
   const historicalEligibilitySql = historicalEligibleAt ? " AND updated_at < ?" : "";
-  const completedMinuteEligibilitySql = completedMinuteOpenedDate
-    ? ` OR (
+  const completedMarkRangeEligibilitySql = completedMarkRanges.map(() => ` OR (
           updated_at < ?
           AND ((action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18)))
             OR (action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))))
-        )`
-    : "";
+        )`).join("");
+  const completedMarkRangeParameters: string[] = [];
+  for (const range of completedMarkRanges) {
+    completedMarkRangeParameters.push(mysqlDateTime(range.openedAt), String(range.low), String(range.high));
+  }
 
   pendingOrderScanInFlight = true;
   const connection = await getDbTransactionConnection();
@@ -5496,7 +5490,7 @@ export async function scanLedger52T0PendingOrders(input: {
           AND (
             (action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))
             OR action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))
-            )${completedMinuteEligibilitySql}
+            )${completedMarkRangeEligibilitySql}
           )
         ORDER BY trade_time ASC, id ASC
         FOR UPDATE`,
@@ -5506,9 +5500,7 @@ export async function scanLedger52T0PendingOrders(input: {
         ...(historicalEligibleAt ? [historicalEligibleAt] : []),
         String(rangeLow),
         String(rangeHigh),
-        ...(completedMinuteOpenedDate
-          ? [mysqlDateTime(completedMinuteOpenedDate), String(normalizedCompletedMinuteLow), String(normalizedCompletedMinuteHigh)]
-          : []),
+        ...completedMarkRangeParameters,
       ],
     );
     let filled = 0;
@@ -5526,26 +5518,24 @@ export async function scanLedger52T0PendingOrders(input: {
         ? pendingPrice >= rangeLow
         : pendingPrice <= rangeHigh;
       const rowUpdatedAt = new Date(row.updated_at).getTime();
-      const completedMinuteTriggered = Boolean(completedMinuteObservedDate)
-        && Number.isFinite(rowUpdatedAt)
-        && rowUpdatedAt < completedMinuteOpenedAt
-        && (isOpenLong
-          ? pendingPrice >= normalizedCompletedMinuteLow
-          : pendingPrice <= normalizedCompletedMinuteHigh);
-      // 历史分钟线仅作为实时扫描的安全兜底；若当前瞬时/区间价也命中，则优先按实时价成交。
-      const matchedByCompletedMinute = !input.historicalRecovery && !currentRangeTriggered && completedMinuteTriggered;
-      const effectiveFilledAt = matchedByCompletedMinute && completedMinuteObservedDate
-        ? completedMinuteObservedDate
+      const completedMarkRangeMatch = !input.historicalRecovery && !currentRangeTriggered && Number.isFinite(rowUpdatedAt)
+        ? completedMarkRanges.find((range) => rowUpdatedAt < range.openedAt.getTime()
+          && (isOpenLong ? pendingPrice >= range.low : pendingPrice <= range.high))
+        : undefined;
+      // 已收盘的标记价区间仅作为实时扫描的安全兜底；若当前瞬时/区间价也命中，则优先按实时价成交。
+      const matchedByCompletedMarkRange = Boolean(completedMarkRangeMatch);
+      const effectiveFilledAt = completedMarkRangeMatch
+        ? completedMarkRangeMatch.observedAt
         : filledAt;
-      // 历史一分钟K线只能确认曾跨价，不能虚构具体撮合点，因此补扫一律按原挂单价成交；
+      // 已收盘区间只能确认曾跨价，不能虚构具体撮合点，因此补扫一律按原挂单价成交；
       // 实时价直接越价时仍按更优的实时标记价成交。
-      const executionPrice = input.historicalRecovery || matchedByCompletedMinute
+      const executionPrice = input.historicalRecovery || matchedByCompletedMarkRange
         ? pendingPrice
         : isOpenLong ? Math.min(markPrice, pendingPrice) : Math.max(markPrice, pendingPrice);
       const systemNote = input.historicalRecovery
         ? `[系统历史补扫成交] ${formatBeijingSystemTime(filledAt)}｜HTX 1分钟标记价${rangeLabel.replace("ETH永续", "")}，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
-        : matchedByCompletedMinute
-          ? `[系统一分钟补扫成交] ${formatBeijingSystemTime(effectiveFilledAt)}｜${completedMinuteRangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
+        : completedMarkRangeMatch
+          ? `[系统区间补扫成交] ${formatBeijingSystemTime(effectiveFilledAt)}｜${completedMarkRangeMatch.sourceLabel}区间 ${completedMarkRangeMatch.low.toFixed(2)}–${completedMarkRangeMatch.high.toFixed(2)} U，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
           : `[系统自动成交] ${formatBeijingSystemTime(effectiveFilledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
       const note = appendSystemSettlementNote(row.note, systemNote);
       await tx.execute(
