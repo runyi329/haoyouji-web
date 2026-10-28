@@ -23428,6 +23428,9 @@ ${klinesSummary}
             for (const row of walletLockRows) appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
           }
           if (walletHoldRowsResult) {
+            // 资金钱包冻结是可选补充数据；先统一解包 mysql2 的 [rows, fields] 结果，
+            // 不能让归集异常阻断订单主体与成员列表。
+            const walletHoldRows = Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []);
             for (const row of walletHoldRows) {
               const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
               appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
@@ -25373,7 +25376,7 @@ ${klinesSummary}
           // 借方模式默认列出普通成员；若用户被设为共同拥有者/参与者，也必须出现在筛选名单中，
           // 否则其独立订单视图虽已保存，管理员却无法按该用户检索。
           const rows = await db.execute(
-            sql`SELECT DISTINCT lm.userId, lm.nickname, u.username, u.name, u.avatar
+            sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
                 FROM ledger_members lm
                 LEFT JOIN users u ON u.id = lm.userId
                 WHERE lm.ledgerId = ${input.ledgerId}
@@ -25386,7 +25389,8 @@ ${klinesSummary}
                         AND lop.role <> 'inactive'
                     )
                   )
-                ORDER BY lm.id ASC`
+                GROUP BY lm.userId, lm.nickname, u.username, u.name, u.avatar
+                ORDER BY MIN(lm.id) ASC`
           ) as any;
           return ((rows[0] || rows) as any[]) || [];
         }
