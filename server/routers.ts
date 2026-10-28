@@ -23283,6 +23283,7 @@ ${klinesSummary}
         const jointOrderSnapshotMetaMap: Record<number, {
           userId: number;
           segments: any[];
+          primaryCollateralShareMode: 'none' | 'self';
           primarySettlement: Record<string, any> | null;
         }> = {};
         const ownerUserIdsMap: Record<number, Set<number>> = {};
@@ -23400,12 +23401,14 @@ ${klinesSummary}
               });
               const ownerSnapshot = parseFunderParticipantSnapshot(row.order_snapshot);
               const jointSegments = parseFunderJsonArray(ownerSnapshot?.joint_order_segments);
-              // 多个拥有者都有历史快照时，按参与关系的既有排序取首个实际携带分段的快照。
-              if (!jointOrderSnapshotMetaMap[oid] && jointSegments.length > 0) {
+              const primaryCollateralShareMode = ownerSnapshot?.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none';
+              // 多个拥有者都有历史快照时，按参与关系的既有排序取首个实际携带分段或第一段
+              // 联合共享状态的快照，避免仅第一段选择参加时刷新后丢失该状态。
+              if (!jointOrderSnapshotMetaMap[oid] && (jointSegments.length > 0 || primaryCollateralShareMode === 'self')) {
                 jointOrderSnapshotMetaMap[oid] = {
                   userId: Number(row.user_id),
                   segments: jointSegments,
-                  primaryCollateralShareMode: ownerSnapshot?.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none',
+                  primaryCollateralShareMode,
                   primarySettlement: ownerSnapshot?.joint_order_primary_settlement && typeof ownerSnapshot.joint_order_primary_settlement === 'object'
                     ? ownerSnapshot.joint_order_primary_settlement
                     : null,
@@ -26752,8 +26755,9 @@ ${klinesSummary}
           ) as any;
           const hasJointInternalMember = (Array.isArray(snapshotRows) ? snapshotRows : []).some((snapshotRow: any) => {
             const snapshot = parseFunderParticipantSnapshot(snapshotRow?.order_snapshot) || {};
-            const primaryInPool = snapshot.joint_order_primary_collateral_share_mode === 'self'
-              && getFunderCollateralRiskFormula(snapshot.principal_lent_out, snapshot.display_config) !== 'full_value';
+            // 只要任一段选择了联合内部共享，就不得同时保留旧跨订单共享模式；
+            // 持仓全额段虽不进入实际担保池，也必须保持这个状态层面的隔离。
+            const primaryInPool = snapshot.joint_order_primary_collateral_share_mode === 'self';
             let segments: any[] = [];
             try {
               const raw = typeof snapshot.joint_order_segments === 'string'
@@ -26761,8 +26765,7 @@ ${klinesSummary}
                 : snapshot.joint_order_segments;
               segments = Array.isArray(raw) ? raw : [];
             } catch {}
-            return primaryInPool || segments.some((segment: any) => segment?.collateral_share_mode === 'self'
-              && getFunderCollateralRiskFormula(segment?.principal_lent_out, segment?.display_config) !== 'full_value');
+            return primaryInPool || segments.some((segment: any) => segment?.collateral_share_mode === 'self');
           });
           if (hasJointInternalMember) {
             await conn.end();
@@ -28393,9 +28396,6 @@ ${klinesSummary}
             }
             const assetType = safeAssetType(raw?.asset_type);
             const segmentDisplayConfig = safeDisplayConfig(raw?.display_config);
-            const segmentCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(segmentDisplayConfig.collateralRiskFormula))
-              ? String(segmentDisplayConfig.collateralRiskFormula)
-              : (safeBoolean(raw?.principal_lent_out) ? 'principal_coverage' : 'floating_pnl');
             const optionInfo = safeOptionInfo(raw?.option_info);
             if (assetType === 'crypto_option' && !optionInfo) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '期权第二段须完整填写Deribit到期日、行权价、权利金和张数' });
@@ -28443,10 +28443,9 @@ ${klinesSummary}
             // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用。
             // self 仅代表同一张联合订单内的分段共享，不会越过当前个人快照进入他人订单。
             collateral_assets: safeAssets(raw?.collateral_assets),
-            // 买入全额完全不使用担保物，服务端不得让客户端绕过界面限制加入内部池。
-            collateral_share_mode: segmentCollateralRiskFormula === 'full_value'
-              ? 'none'
-              : (raw?.collateral_share_mode === 'self' ? 'self' : 'none'),
+            // 参与联合共享是独立的保存状态。持仓全额段不进入实际担保池的计算边界
+            // 由订单卡处理，不能在这里清空用户的选择。
+            collateral_share_mode: raw?.collateral_share_mode === 'self' ? 'self' : 'none',
             display_config: segmentDisplayConfig,
             };
             return nextSegment;
@@ -28460,13 +28459,9 @@ ${klinesSummary}
         }
         // 第一段和后续段都只属于当前 input.userId 的个人快照。第一段的内部共享标记
         // 不复用 ledger_orders.collateral_share_mode，后者是历史“本人所有订单”跨订单池。
-        const primaryDisplayConfig = parseFunderDisplayConfig(mergedSnapshot.display_config);
-        const primaryCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(primaryDisplayConfig.collateralRiskFormula))
-          ? String(primaryDisplayConfig.collateralRiskFormula)
-          : (mergedSnapshot.principal_lent_out === true || mergedSnapshot.principal_lent_out === 1 ? 'principal_coverage' : 'floating_pnl');
-        mergedSnapshot.joint_order_primary_collateral_share_mode = primaryCollateralRiskFormula === 'full_value'
-          ? 'none'
-          : (mergedSnapshot.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none');
+        mergedSnapshot.joint_order_primary_collateral_share_mode = mergedSnapshot.joint_order_primary_collateral_share_mode === 'self'
+          ? 'self'
+          : 'none';
         const hasJointInternalCollateralMember = mergedSnapshot.joint_order_primary_collateral_share_mode === 'self'
           || (Array.isArray(mergedSnapshot.joint_order_segments)
             && mergedSnapshot.joint_order_segments.some((segment: any) => segment?.collateral_share_mode === 'self'));

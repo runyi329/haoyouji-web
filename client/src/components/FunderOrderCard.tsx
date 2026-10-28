@@ -944,8 +944,11 @@ export function FunderOrderCard({
     if (!Array.isArray(raw)) return [];
     return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
   }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
-  const primaryJointInternalShareEnabled = !jointSegmentMode
-    && (order as any).joint_order_primary_collateral_share_mode === 'self'
+  // 联合共享有两层含义：每段“选择参加”的状态须完整保存和展示；只有非持仓全额
+  // 段才实际进入担保物与风险合并池。两者不可混用，否则会重复计值或丢失开关状态。
+  const primaryJointInternalShareSelected = !jointSegmentMode
+    && (order as any).joint_order_primary_collateral_share_mode === 'self';
+  const primaryJointInternalShareEnabled = primaryJointInternalShareSelected
     && getFunderCollateralRiskFormulaForDisplay(order) !== 'full_value';
   const getManualJointCollateralAssets = (value: unknown) => {
     let assets: any[] = [];
@@ -993,6 +996,15 @@ export function FunderOrderCard({
         .map((segment: any, index: number) => String(segment.id || `segment-${index + 2}`)),
     ];
   }, [jointSegmentMode, primaryJointInternalShareEnabled, jointOrderSegments]);
+  const jointInternalSelectedMemberIds = useMemo(() => {
+    if (jointSegmentMode) return [] as string[];
+    return [
+      ...(primaryJointInternalShareSelected ? ['__primary__'] : []),
+      ...jointOrderSegments
+        .filter((segment: any) => segment?.collateral_share_mode === 'self')
+        .map((segment: any, index: number) => String(segment.id || `segment-${index + 2}`)),
+    ];
+  }, [jointSegmentMode, primaryJointInternalShareSelected, jointOrderSegments]);
   const [jointInternalRiskContributions, setJointInternalRiskContributions] = useState<Record<string, number | null>>({});
   const handleJointInternalRiskContributionChange = useCallback((segmentId: string, contribution: number | null) => {
     setJointInternalRiskContributions(current => current[segmentId] === contribution
@@ -3887,26 +3899,28 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               {(showCollateralInfo || showCollateralGapFormulaInfo) && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={closeCollateralInfoDialog}>
                   <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
-                    {usesJointInternalSharedCollateral && !jointSegmentMode ? (
+                    {jointInternalSelectedMemberIds.length > 0 && !jointSegmentMode ? (
                       <div className="p-5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-bold" style={{ color: '#312E81' }}>联合内部共享担保</div>
-                            <div className="mt-0.5 text-[11px]" style={{ color: '#6366F1' }}>每段独立核算，只有明确参加的段进入同一共享池</div>
+                            <div className="mt-0.5 text-[11px]" style={{ color: '#6366F1' }}>每段独立选择参加；持仓全额段保留参加状态，但不进入担保物合并池</div>
                           </div>
                           <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
                         </div>
                         <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs">
-                          <div className="flex justify-between gap-3"><span className="text-indigo-600">共享池担保总额</span><strong className="tabular-nums text-indigo-900">{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
-                          <div className="mt-1 flex justify-between gap-3"><span className="text-indigo-600">合并担保余量</span><strong className="tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                          {jointInternalSharedMemberIds.length > 0 ? <>
+                            <div className="flex justify-between gap-3"><span className="text-indigo-600">共享池担保总额</span><strong className="tabular-nums text-indigo-900">{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                            <div className="mt-1 flex justify-between gap-3"><span className="text-indigo-600">合并担保余量</span><strong className="tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                          </> : <div className="leading-5 text-indigo-700">已选择参加的段均为“持仓全额”，各段按自身市值和利息独立计算，不建立合并担保池。</div>}
                         </div>
                         <div className="mt-3 space-y-2.5">
                           {[
-                            ...(primaryJointInternalShareEnabled ? [{ id: '__primary__', label: '第1段', source: order }] : []),
-                            ...jointOrderSegments.filter((segment: any) => segment?.collateral_share_mode === 'self' && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value').map((segment: any, index: number) => ({ id: String(segment.id || `segment-${index + 2}`), label: `第${index + 2}段`, source: segment })),
+                            ...(primaryJointInternalShareSelected ? [{ id: '__primary__', label: '第1段', source: order, poolEligible: primaryJointInternalShareEnabled }] : []),
+                            ...jointOrderSegments.filter((segment: any) => segment?.collateral_share_mode === 'self').map((segment: any, index: number) => ({ id: String(segment.id || `segment-${index + 2}`), label: `第${index + 2}段`, source: segment, poolEligible: getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value' })),
                           ].map((member: any) => {
-                            const manualAssets = getManualJointCollateralAssets(member.source?.collateral_assets);
-                            const walletAssets = getJointSegmentWalletCollateralAssets(member.id);
+                            const manualAssets = member.poolEligible ? getManualJointCollateralAssets(member.source?.collateral_assets) : [];
+                            const walletAssets = member.poolEligible ? getJointSegmentWalletCollateralAssets(member.id) : [];
                             const assets = [...manualAssets, ...walletAssets];
                             const valueU = assets.reduce<number | null>((total, asset: any) => {
                               if (total === null) return null;
@@ -3919,14 +3933,16 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             return <div key={member.id} className="rounded-xl border border-gray-200 bg-white p-3">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-semibold text-gray-800">{order.order_no} · {member.label}</span>
-                                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">参加共享</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${member.poolEligible ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`}>{member.poolEligible ? '参加共享' : '已参加 · 独立公式'}</span>
                               </div>
-                              <div className="mt-2 flex justify-between gap-3 text-xs"><span className="text-gray-500">本段担保前盈亏 / 风险差额</span><strong className="tabular-nums" style={{ color: risk === null || risk === undefined ? '#9CA3AF' : risk >= 0 ? '#15803D' : '#DC2626' }}>{risk === null || risk === undefined ? '计算中…' : `${risk >= 0 ? '+' : ''}${Number(risk).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
-                              <div className="mt-2 border-t border-gray-100 pt-2 text-xs"><div className="mb-1 text-gray-500">本段担保物</div><div className="flex flex-wrap gap-1">{assets.length > 0 ? assets.map((asset: any, index: number) => <span key={`${member.id}-${asset.coin}-${index}`} className={`rounded px-1.5 py-0.5 ${asset.source === 'wallet' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{asset.source === 'wallet' ? '钱包 ' : '手工 '}{asset.qty} {asset.coin}</span>) : <span className="text-gray-400">暂无担保物</span>}</div><div className="mt-1 text-right font-semibold tabular-nums" style={{ color: '#374151' }}>{valueU === null ? '实时价加载中…' : `本段担保 ≈ ${valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</div></div>
+                              {member.poolEligible ? <>
+                                <div className="mt-2 flex justify-between gap-3 text-xs"><span className="text-gray-500">本段担保前盈亏 / 风险差额</span><strong className="tabular-nums" style={{ color: risk === null || risk === undefined ? '#9CA3AF' : risk >= 0 ? '#15803D' : '#DC2626' }}>{risk === null || risk === undefined ? '计算中…' : `${risk >= 0 ? '+' : ''}${Number(risk).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                                <div className="mt-2 border-t border-gray-100 pt-2 text-xs"><div className="mb-1 text-gray-500">计入共享池的本段担保物</div><div className="flex flex-wrap gap-1">{assets.length > 0 ? assets.map((asset: any, index: number) => <span key={`${member.id}-${asset.coin}-${index}`} className={`rounded px-1.5 py-0.5 ${asset.source === 'wallet' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{asset.source === 'wallet' ? '钱包 ' : '手工 '}{asset.qty} {asset.coin}</span>) : <span className="text-gray-400">暂无担保物</span>}</div><div className="mt-1 text-right font-semibold tabular-nums" style={{ color: '#374151' }}>{valueU === null ? '实时价加载中…' : `本段担保 ≈ ${valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</div></div>
+                              </> : <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">持仓全额：本段只按实时可变现市值与利息独立计算；本段手工和钱包担保不计入共享池，也不向其他段重复分摊。</div>}
                             </div>;
                           })}
                         </div>
-                        <p className="mt-3 text-[11px] leading-4 text-gray-500">共享池总额只将以上各段担保物计一次；37号引用担保不进入本联合池。</p>
+                        <p className="mt-3 text-[11px] leading-4 text-gray-500">共享池总额只将符合担保口径的各段担保物计一次；持仓全额段保留参加状态但不入池，37号引用担保也不进入本联合池。</p>
                       </div>
                     ) : hasExternalCollateral && _parsedCollateralSource && !showCollateralGapFormulaInfo ? (
                       <>
@@ -4998,21 +5014,23 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       </>}
 
-      {!jointSegmentMode && jointInternalSharedMemberIds.length > 0 && (
+      {!jointSegmentMode && jointInternalSelectedMemberIds.length > 0 && (
         <div className="mx-4 mt-3 rounded-xl border px-3 py-2.5" style={{ borderColor: '#C7D2FE', background: '#EEF2FF' }}>
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs font-semibold" style={{ color: '#4338CA' }}>联合内部共享担保</div>
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold" style={{ color: '#6366F1' }}>{jointInternalSharedMemberIds.length} 段参加</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold" style={{ color: '#6366F1' }}>{jointInternalSelectedMemberIds.length} 段参加</span>
           </div>
-          <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
-            <span style={{ color: '#6366F1' }}>手工担保池（仅计一次）</span>
-            <span className="font-semibold tabular-nums" style={{ color: '#312E81' }}>{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-            <span style={{ color: '#6366F1' }}>合并担保余量</span>
-            <span className="font-semibold tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
-          </div>
-          <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>仅合并本订单、当前拥有者明确勾选的段；手工与已归属的钱包冻结均只计一次，37号引用不进入本池。</p>
+          {jointInternalSharedMemberIds.length > 0 ? <>
+            <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
+              <span style={{ color: '#6366F1' }}>手工担保池（仅计一次）</span>
+              <span className="font-semibold tabular-nums" style={{ color: '#312E81' }}>{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+              <span style={{ color: '#6366F1' }}>合并担保余量</span>
+              <span className="font-semibold tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+            </div>
+            <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>仅合并本订单、当前拥有者明确勾选且非持仓全额的段；手工与已归属的钱包冻结均只计一次，37号引用不进入本池。</p>
+          </> : <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>已参加的段均为“持仓全额”，每段仅按自身市值与利息独立计算，不建立合并担保池。</p>}
         </div>
       )}
 

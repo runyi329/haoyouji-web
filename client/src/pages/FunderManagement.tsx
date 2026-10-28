@@ -1171,12 +1171,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     || jointOrderTargets.find(target => target.userId === preferredJointOrderTargetId)
     || jointOrderTargets[0]
     || null;
-  const hasJointInternalCollateralMembers = (
-    jointPrimaryCollateralShareMode === 'self' && collateralRiskFormula !== 'full_value'
-  ) || jointOrderSegments.some(segment => {
-    const segmentFormula = segment.display_config?.collateralRiskFormula;
-    return segment.collateral_share_mode === 'self' && segmentFormula !== 'full_value';
-  });
+  // “参加共享”是每段独立保存的选择状态；持仓全额段也可选择参加。
+  // 是否把该段担保物和风险放进实际合并池，则由订单卡按口径另行判断，不能在此丢失状态。
+  const hasJointInternalCollateralMembers = jointPrimaryCollateralShareMode === 'self'
+    || jointOrderSegments.some(segment => segment.collateral_share_mode === 'self');
   useEffect(() => {
     if (!editingOrder?.id || !activeJointOrderTarget) return;
     const targetUserId = Number(activeJointOrderTarget.userId || 0);
@@ -2010,9 +2008,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.error('该联合订单段已结清，不能再调整共享担保');
       return;
     }
-    if (mode === 'self' && collateralRiskFormula === 'full_value') {
-      toast.error('“持仓全额”只计算本段自身市值，不能参加共享担保');
-      return;
+    // 联合内部共享与历史“本人其他订单共享”互斥。持仓全额段也算已选择联合共享，
+    // 因此同样在选择时退出旧模式；其本段计算仍不会使用联合池担保物。
+    if (mode === 'self' && collateralShareMode === 'self') {
+      setCollateralShareMode('none');
+      primaryOrderDirtyRef.current = true;
     }
     setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId
       ? { ...segment, collateral_share_mode: mode }
@@ -3669,9 +3669,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             ? toUsdtBase(optionTotal, optionInfo.denomination)
             : null;
           const segmentDisplayConfig = segment.display_config || {};
-          const segmentCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(segmentDisplayConfig.collateralRiskFormula))
-            ? String(segmentDisplayConfig.collateralRiskFormula)
-            : (segment.principal_lent_out ? 'principal_coverage' : 'floating_pnl');
           return {
             ...segment,
             id: segment.id || `segment-${index + 2}`,
@@ -3691,10 +3688,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             buy_quantity: optionInfo ? optionInfo.buyQty : String(segment.buy_quantity || '').trim(),
             commission_share: profitShareDraft.commissionShare,
             ...(optionInfo ? { option_info: optionInfo } : {}),
-            // “持仓全额”只计算本段自身市值，不能作为联合内部担保池成员。
-            collateral_share_mode: segmentCollateralRiskFormula === 'full_value'
-              ? 'none'
-              : (segment.collateral_share_mode === 'self' ? 'self' : 'none'),
+            // 参与状态独立保存；持仓全额段是否进入实际担保池由订单卡按公式隔离处理。
+            collateral_share_mode: segment.collateral_share_mode === 'self' ? 'self' : 'none',
             display_config: segmentDisplayConfig,
           };
         })
@@ -3713,9 +3708,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.error('请完整填写每个联合子段的交易参数、计息基数和计息日期；期权须选择Deribit到期日、行权价、权利金和张数');
       return;
     }
-    const hasCurrentJointInternalCollateralMember = (
-      jointPrimaryCollateralShareMode === 'self' && collateralRiskFormula !== 'full_value'
-    ) || normalizedJointOrderSegments.some(segment => segment.collateral_share_mode === 'self');
+    const hasCurrentJointInternalCollateralMember = jointPrimaryCollateralShareMode === 'self'
+      || normalizedJointOrderSegments.some(segment => segment.collateral_share_mode === 'self');
     if (hasCurrentJointInternalCollateralMember && collateralShareMode === 'self') {
       toast.error('本订单已使用联合内部共享担保，请先关闭“本人订单共享”后再保存，避免跨订单混算');
       return;
@@ -6266,10 +6260,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     <div className="text-sm font-medium text-indigo-800">本段担保方式</div>
                     <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-indigo-200 bg-white">
                       <button type="button" onClick={() => setActiveJointSegmentCollateralShareMode('none')} className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold ${activeJointEditorSegment?.collateral_share_mode !== 'self' ? 'bg-white text-indigo-700' : 'bg-indigo-50 text-indigo-400'}`}>独立担保</button>
-                      <button type="button" disabled={collateralRiskFormula === 'full_value' || isActiveJointEditorSegmentSettled} onClick={() => setActiveJointSegmentCollateralShareMode('self')} className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${activeJointEditorSegment?.collateral_share_mode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-600'}`}>参加共享担保</button>
+                      <button type="button" disabled={isActiveJointEditorSegmentSettled} onClick={() => setActiveJointSegmentCollateralShareMode('self')} className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${activeJointEditorSegment?.collateral_share_mode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-600'}`}>参加共享担保</button>
                     </div>
                     <p className="text-[11px] leading-4 text-indigo-600">仅与当前用户、当前订单内同样选择“参加共享担保”的分段合并；本段的手工和钱包担保仍独立归属、独立可编辑。</p>
-                    {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">持仓全额只计算本段自身市值，不使用额外担保物，本段保持独立担保。</p>}
+                    {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">持仓全额也可保留“参加共享担保”状态；本段仍只按自身市值和利息计算，不使用也不计入共享担保池。</p>}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
@@ -6501,19 +6495,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             <button
                               key={option.value}
                               type="button"
-                              onClick={() => {
-                                setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }));
-                                if (option.value === 'full_value') {
-                                  setCollateralShareMode('none');
-                                  if (isEditingJointSegment) {
-                                    setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId ? { ...segment, collateral_share_mode: 'none' } : segment));
-                                    setJointOrderSegmentsDirty(true);
-                                  } else if (jointPrimaryCollateralShareMode === 'self') {
-                                    setJointPrimaryCollateralShareMode('none');
-                                    setJointOrderSegmentsDirty(true);
-                                  }
-                                }
-                              }}
+                              onClick={() => setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }))}
                               className={`rounded-md border px-2 py-1.5 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
                             >
                               <span className="block text-xs font-semibold">{option.label}</span>
@@ -6717,12 +6699,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           >独立担保</button>
                           <button
                             type="button"
-                            disabled={collateralRiskFormula === 'full_value'}
                             onClick={() => {
-                              if (collateralRiskFormula === 'full_value') {
-                                toast.error('“持仓全额”只计算本段自身市值，不能参加共享担保');
-                                return;
-                              }
                               // 旧跨订单共享与联合内部共享互斥。此处显式退出旧模式，
                               // 但不改变任何其他订单，也不自动勾选其他联合分段。
                               if (collateralShareMode === 'self') {
@@ -6733,10 +6710,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                               setJointOrderSegmentsDirty(true);
                               setFloatingPreviewSegmentId('__primary__');
                             }}
-                            className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${jointPrimaryCollateralShareMode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
+                            className={`px-2 py-2.5 text-sm font-semibold ${jointPrimaryCollateralShareMode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
                           >参加共享担保</button>
                         </div>
-                        {collateralRiskFormula === 'full_value' && <p className="mt-1.5 text-[11px] leading-4 text-amber-700">当前第一段为“持仓全额”口径，只计本段自身市值，因此固定为独立担保。</p>}
+                        {collateralRiskFormula === 'full_value' && <p className="mt-1.5 text-[11px] leading-4 text-amber-700">当前第一段为“持仓全额”口径，可保留参加共享状态；本段始终只按自身市值和利息计算，不使用也不计入共享担保池。</p>}
                       </div>
                       )}
                       <div className="space-y-2 rounded-xl border border-indigo-100 bg-white p-2.5">
