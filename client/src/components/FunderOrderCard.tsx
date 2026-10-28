@@ -2501,6 +2501,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 过去第 1 层只计算了持仓盈亏与利息，漏掉本订单的手工/37号担保物，
   // 会让已有充足担保物的订单错误显示为大额缺口。
   const isSharedMode = orderShareMode === 'self';
+  // 编辑器的浮动预览不能被服务端共享池中“上一次保存”的摘要覆盖。
+  // 尤其是第1段切换担保口径时，服务端仍可能返回旧的“担保＋浮盈”，而预览必须
+  // 立即按当前 display_config 与手工担保草稿显示；保存后再恢复服务端池的统一口径。
+  const useLocalSharedPreviewInputs = previewMode === true;
   const sharedPoolLoading = isSharedMode && !sharedPoolInfo;
   // 本金浮动亏损：亏损时取绝对值，盈利时为 0（保留给风险提示扩展使用）。
   const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0;
@@ -2510,6 +2514,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     ? ((sharedPoolInfo as any)?.orders ?? []).find((poolOrder: any) => Number(poolOrder.orderId) === Number(order.id))
     : null;
   const sharedOrderCollateralValueU = (() => {
+    if (useLocalSharedPreviewInputs) return combinedCollateralValueU;
     const serverValue = Number(sharedOrderPoolDetail?.collateralValue);
     if (Number.isFinite(serverValue)) return serverValue;
     return combinedCollateralValueU;
@@ -2535,10 +2540,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     return paidInterestForRisk;
   })();
   const sharedOrderGapBaseU = (() => {
+    if (useLocalSharedPreviewInputs) return collateralGapBaseForRisk;
     const serverValue = Number(sharedOrderPoolDetail?.collateralGapBaseU);
     return Number.isFinite(serverValue) && serverValue > 0 ? serverValue : collateralGapBaseForRisk;
   })();
   const sharedOrderBuyValueU = (() => {
+    if (useLocalSharedPreviewInputs) return buyValueForRisk;
     const raw = Number(sharedOrderPoolDetail?.buyValue);
     const currency = String(sharedOrderPoolDetail?.buyValueCurrency || 'USDT').trim().toUpperCase();
     if (Number.isFinite(raw) && raw > 0) return ['CNY', 'RMB', '人民币'].includes(currency) ? raw / cnyRate : raw;
@@ -2557,7 +2564,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   })();
   // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
-  const sharedOrderRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(sharedOrderPoolDetail?.collateralRiskFormula))
+  const sharedOrderRiskFormula = useLocalSharedPreviewInputs
+    ? collateralRiskFormula
+    : ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(sharedOrderPoolDetail?.collateralRiskFormula))
     ? String(sharedOrderPoolDetail?.collateralRiskFormula)
     : collateralRiskFormula;
   const sharedOrderUsesPrincipalCoverage = sharedOrderRiskFormula === 'principal_coverage';
