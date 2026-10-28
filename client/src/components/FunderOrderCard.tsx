@@ -1175,8 +1175,12 @@ export function FunderOrderCard({
   // 也不能形成或加入当前用户的共享池。
   const orderShareMode = (_isParticipantOrder || _isOtherPerspective) ? 'none' : (order as any).collateral_share_mode;
   // 联合分段的共享只在父订单内部合并，不触发跨订单的共享担保池查询。
+  // “进入计算池”与“已选择参加共享”的红色展示须严格分开：持仓全额段只保留后者。
   const usesJointSegmentSharedCollateral = jointSegmentMode && (order as any).joint_segment_shared_collateral === true;
+  const hasJointSegmentSharedCollateralSelection = jointSegmentMode
+    && ((order as any).joint_segment_shared_collateral_selected === true || usesJointSegmentSharedCollateral);
   const usesJointInternalSharedCollateral = primaryJointInternalShareEnabled || usesJointSegmentSharedCollateral;
+  const showsJointInternalSharedCollateral = primaryJointInternalShareSelected || hasJointSegmentSharedCollateralSelection;
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
@@ -3787,7 +3791,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               );
             })}
             {show('collateralCoin') && !hasExternalCollateral && (
-              (orderShareMode === 'self' || usesJointInternalSharedCollateral)
+              (orderShareMode === 'self' || showsJointInternalSharedCollateral)
                 ? (
                   // 开启了共享担保：标题改为红色“共享担保”
                   collateralAssets.length === 0
@@ -5049,7 +5053,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       let segmentDisplayConfig: Record<string, any> = {};
       try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
       try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
-      const segmentSharesJointCollateral = segment.collateral_share_mode === 'self'
+      const segmentSelectedJointCollateral = segment.collateral_share_mode === 'self';
+      const segmentSharesJointCollateral = segmentSelectedJointCollateral
         && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value';
       const segmentWalletContributors = (Array.isArray((order as any).wallet_collateral_contributors)
         ? (order as any).wallet_collateral_contributors
@@ -5095,6 +5100,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         collateral_source: null,
         collateral_share_mode: 'none',
         joint_segment_shared_collateral: segmentSharesJointCollateral,
+        // 仅供卡片右栏显示红色“共享担保／共享担保物”；持仓全额段不会因此进入计算池。
+        joint_segment_shared_collateral_selected: segmentSelectedJointCollateral,
         principal_lent_out: segment.principal_lent_out ? 1 : 0,
         joint_segment_id: String(segment.id || `segment-${index + 2}`),
         joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
