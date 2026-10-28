@@ -631,6 +631,8 @@ export function OwnerCollaborationInfoButton({ order, ledgerId }: { order: any; 
 export type FunderCollateralFormulaPreview = {
   collateralValueU: number | null;
   baseValueU: number | null;
+  /** 第三种口径：本段可实时平仓的市值；空头按平仓成本记为负值。 */
+  marketValueU: number | null;
   floatingPnlU: number | null;
   pendingInterestU: number | null;
   paidInterestU: number | null;
@@ -966,7 +968,7 @@ export function FunderOrderCard({
       .map((asset: any) => ({ ...asset, source: 'wallet' as const, note: '钱包担保冻结' }));
   };
   // 只在同一张联合订单、同一位拥有者／参与者的分段内汇总。第一段与后续段均须
-  // 显式参加，且“买入全额”永远不进入；资产在父卡只作为一个池估值一次。
+  // 显式参加，且“持仓全额”永远不进入；资产在父卡只作为一个池估值一次。
   const jointSharedCollateralAssets = useMemo(() => {
     if (jointSegmentMode) return [] as any[];
     const primaryAssets = primaryJointInternalShareEnabled
@@ -2422,7 +2424,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     : (spotBuyValueUsdt > 0 ? spotBuyValueUsdt : totalU);
   const collateralGapBaseForRisk = buyValueForRisk;
   const floatPnlForRisk = isStockOrder && floatPnl !== null ? floatPnl / cnyRate : floatPnl;
-  // 三种口径：担保差值、担保物+浮盈、买入价值全额。
+  // 三种口径：担保差值、担保物+浮盈、持仓全额。
   // 外部37号与手工股票的浮盈优先用各自已配置的数据源，普通订单用实时标的浮盈。
   const formulaFloatingPnlU = isExternalStockPnlSource
     ? extTagFloatingPnlU
@@ -2437,6 +2439,19 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const holdingGapForRisk = currentHoldingValueForRisk !== null
     ? currentHoldingValueForRisk - collateralGapBaseForRisk
     : null;
+  // 第三种口径只衡量本段此刻的可变现市值，不把原始买入成本再次当作负债扣除。
+  // 多头按市值计正值，空头按当前平仓成本计负值；股票手工/37号来源优先用其已配置的实际市值。
+  const marketValueForFullValueRisk = isExternalStockPnlSource
+    ? extTagHoldingValueU
+    : isManualStockPnlSource
+      ? (formulaFloatingPnlU === null ? null : buyValueForRisk + formulaFloatingPnlU)
+      : currentValueForRisk;
+  const signedMarketValueForFullValueRisk = marketValueForFullValueRisk === null
+    ? null
+    : (isShort ? -marketValueForFullValueRisk : marketValueForFullValueRisk);
+  const fullValueExposure = signedMarketValueForFullValueRisk === null
+    ? null
+    : signedMarketValueForFullValueRisk - accruedForRisk + paidInterestForRisk;
   // “担保−买入价值”始终扣真实买入价值，不能将计息/融资本金误作买入成本。
   const principalLentOutValueForRisk = collateralGapBaseForRisk;
   const optionExposure = isOptionOrder
@@ -2444,15 +2459,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
       : usesFloatingPnlFormula
         ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
-        : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
+        : fullValueExposure)
     : null;
   const exposure = isOptionOrder
     ? optionExposure
     : usesPrincipalCoverageFormula
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
-      : usesFloatingPnlFormula
-        ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
-        : -collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk;
+    : usesFloatingPnlFormula
+      ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+      : fullValueExposure;
   // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
   const linkedCollateralValueU = combinedCollateralValueU;
@@ -2478,7 +2493,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         ? (linkedCollateralValueU === null || linkedFloatingPnlU === null
           ? null
           : linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + paidInterestForRisk)
-        : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
+        : fullValueExposure
     : null;
   // 共享担保模式分为两层口径：
   // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
@@ -2739,6 +2754,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       : usesConfiguredStockRiskData
         ? linkedFloatingPnlU
         : formulaFloatingPnlU;
+    const previewMarketValueU = signedMarketValueForFullValueRisk;
     const previewPendingInterestU = isSharedMode
       ? sharedOrderPendingInterestU
       : (hasExternalPendingInterest ? linkedPendingInterestForRisk : accruedForRisk);
@@ -2757,12 +2773,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       && previewFloatingPnlU !== null && Number.isFinite(previewFloatingPnlU)
       ? previewCollateralValueU + previewFloatingPnlU - previewPendingInterestU + previewPaidInterestU
       : null;
-    const fullValueGapU = hasBase && hasInterest
-      ? -previewBaseValueU - previewPendingInterestU + previewPaidInterestU
+    const fullValueGapU = hasInterest && previewMarketValueU !== null && Number.isFinite(previewMarketValueU)
+      ? previewMarketValueU - previewPendingInterestU + previewPaidInterestU
       : null;
     return {
       collateralValueU: previewCollateralValueU,
       baseValueU: hasBase ? previewBaseValueU : null,
+      marketValueU: previewMarketValueU,
       floatingPnlU: previewFloatingPnlU,
       pendingInterestU: previewPendingInterestU,
       paidInterestU: previewPaidInterestU,
@@ -2782,6 +2799,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     principalLentOutValueForRisk,
     linkedFloatingPnlU,
     formulaFloatingPnlU,
+    signedMarketValueForFullValueRisk,
     hasExternalPendingInterest,
     linkedPendingInterestForRisk,
     accruedForRisk,
@@ -4424,8 +4442,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                             <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
                             <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。</div>
-                            <div>• <strong>买入价值全额</strong> = −买入价值 − 待结利息 + 已结利息；不计担保物，不能加入共享担保池。</div>
-                            <div>• <strong>共享担保总计</strong>汇总选择“担保差值”或“担保＋浮盈”的订单；全值缺口独立计算。</div>
+                            <div>• <strong>持仓全额</strong> = 本段实时可变现市值 − 待结利息 + 已结利息；不计额外担保物，固定独立计算。</div>
+                            <div>• <strong>共享担保总计</strong>仅汇总选择“担保差值”或“担保＋浮盈”的订单；持仓全额独立计算。</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单缺口基准，负数表示担保不足需补仓</div>
                             <div>• <strong>每张订单的基准选择</strong>在订单编辑页保存后，同步用于共享池和订单卡片。</div>
                           </div>
@@ -4436,19 +4454,19 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>
-                              {usesPrincipalCoverageFormula ? '① 买入价值' : usesFloatingPnlFormula ? '① 浮动盈亏' : '① 买入价值全额'}
+                              {usesPrincipalCoverageFormula ? '① 买入价值' : usesFloatingPnlFormula ? '① 浮动盈亏' : '① 当前持仓市值'}
                             </div>
                             <div>{usesPrincipalCoverageFormula
                               ? '担保差值：担保物可抵扣买入价值及利息'
                               : usesFloatingPnlFormula
                                 ? '担保＋浮盈：担保物与浮动盈亏共同覆盖利息'
-                                : '买入价值全额：本金已借出，买入价值及利息均不以担保物抵扣'}</div>
+                                : '持仓全额：本段仓位按实时可平仓市值计入，扣除利息，不计额外担保物'}</div>
                             <div className="mt-1 font-mono">
                               {usesPrincipalCoverageFormula
                                 ? <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
                                 : usesFloatingPnlFormula
                                   ? <span style={{ color: '#3B82F6' }}>{formulaFloatingPnlU === null ? '浮盈加载中...' : `= ${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`}</span>
-                                  : <span style={{ color: '#3B82F6' }}>全额计入 −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
+                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : `= ${signedMarketValueForFullValueRisk >= 0 ? '+' : ''}${riskValueInOrderCurrency(signedMarketValueForFullValueRisk).toFixed(2)} ${riskDisplayUnit}（当前持仓市值）`}</span>
                               }
                             </div>
                           </div>
@@ -4484,12 +4502,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 ? '担保差值：担保物市值 − 买入价值 − 待结利息 + 已结利息'
                                 : usesFloatingPnlFormula
                                   ? '担保＋浮盈：担保物市值 + 期权浮动盈亏 − 待结利息 + 已结利息'
-                                  : '买入价值全额：−买入价值 − 待结利息 + 已结利息（不计担保物）')
+                                  : '持仓全额：当前可变现市值 − 待结利息 + 已结利息（不计额外担保物）')
                               : usesPrincipalCoverageFormula
                                 ? '担保物市值 − 买入价值 − 待结利息 + 已结利息（正数有余量，负数需补足）'
                                 : usesFloatingPnlFormula
                                   ? '担保物市值 + 浮动盈亏 − 待结利息 + 已结利息（正数有余量，负数需补足）'
-                                  : '−买入价值 − 待结利息 + 已结利息（全值缺口，不计担保物）'}</div>
+                                  : '当前可变现市值 − 待结利息 + 已结利息（不计额外担保物）'}</div>
                             <div className="mt-1 font-mono">
                               {exposure === null
                                 ? <span className="text-gray-400">期权标记价加载中...</span>
@@ -4498,12 +4516,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                                   : usesFloatingPnlFormula
                                     ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） + {(formulaFloatingPnlU ?? 0).toFixed(2)}（期权浮盈） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
-                                    : <span style={{ color: '#3B82F6' }}>= −{principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>)
+                                    : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{signedMarketValueForFullValueRisk.toFixed(2)}（当前可变现市值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></>}</span>)
                                 : usesPrincipalCoverageFormula
                                 ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） − {riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
                                 : usesFloatingPnlFormula
                                   ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） + {formulaFloatingPnlU === null ? '浮盈加载中' : `${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`} − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
-                                  : <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{riskValueInOrderCurrency(signedMarketValueForFullValueRisk).toFixed(2)} {riskDisplayUnit}（当前可变现市值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></>}</span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -4524,13 +4542,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           <>
                             <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
                             <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 期权浮动盈亏 − 待结利息 + 已结利息。</div>
-                            <div>• <strong>买入价值全额</strong> = −买入价值 − 待结利息 + 已结利息；不计担保物或期权市值。</div>
+                            <div>• <strong>持仓全额</strong> = 当前期权标记价 × 张数 − 待结利息 + 已结利息；不计额外担保物。</div>
                             <div>• <strong>行权价</strong>只用于到期行权及 Greeks，不参与当前担保缺口。</div>
                           </>
                         ) : usesPrincipalCoverageFormula ? (
                           <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
                         ) : (
-                          <div>• <strong>买入价值全额</strong> = −买入价值 − 待结利息 + 已结利息；不计担保物。</div>
+                          <div>• <strong>持仓全额</strong> = 当前可变现市值 − 待结利息 + 已结利息；不计额外担保物。</div>
                         )}
                         <div>• <strong>正数表示担保充足</strong>（担保物覆盖了所有风险），负数表示担保不足（需要补充担保物）</div>
                       </div>
