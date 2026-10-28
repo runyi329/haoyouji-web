@@ -23518,22 +23518,68 @@ ${klinesSummary}
           // 协作参与者也不能把订单拥有者的担保物带入自己的共享池。
           // 这条服务端边界同时约束所有旧版/新版订单卡，不能只依赖前端隐藏。
           const [sharedRows] = await conn.execute(
-            `SELECT fo.*
+            `SELECT fo.*, p.order_snapshot AS _shared_pool_order_snapshot
              FROM ledger_orders fo
+             LEFT JOIN ledger_order_participants p
+               ON p.order_id = fo.id AND p.ledger_id = fo.ledger_id
+              AND p.user_id = ? AND p.role <> 'inactive'
              WHERE fo.ledger_id = ?
                AND fo.user_id = ?
                AND fo.status = 'active'
                AND fo.deleted_at IS NULL
                AND (fo.order_perspective IS NULL OR fo.order_perspective <> 'other')`,
-            [input.ledgerId, input.userId]
+            [input.userId, input.ledgerId, input.userId]
           ) as any[];
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
-          const allOwnerOrders = rawOrders
-            .map((o: any) => ({ ...o, _sharedPoolParticipantUserId: null }));
-          // “买入全额”不计担保物，既不能贡献担保，也不能占用共享池。该服务端过滤
-          // 同时兜住历史脏数据或绕过前端的直接接口调用。
-          const isLegacySharedEligible = (order: any) => order?.collateral_share_mode === 'self'
-            && getFunderCollateralRiskFormula(order?.principal_lent_out, order?.display_config) !== 'full_value';
+          // 联合订单不是“六张相同订单”的内部池，而是同一订单号下的独立段成员。
+          // 仅使用当前用户的个人快照：第3、5段可独立加入其全部跨订单共享池，其余段不加入。
+          // memberKey 是跨订单池的稳定身份，不能只用物理 order_id，否则各段会相互覆盖。
+          const allOwnerOrders = rawOrders.flatMap((physicalOrder: any) => {
+            const snapshot = parseFunderParticipantSnapshot(physicalOrder._shared_pool_order_snapshot) || {};
+            const baseOrder = { ...physicalOrder, ...snapshot, _sharedPoolParticipantUserId: null };
+            const memberBase = `${Number(physicalOrder.id)}:`;
+            const rawSegments = Array.isArray(snapshot.joint_order_segments)
+              ? snapshot.joint_order_segments
+              : [];
+            const isJointOrder = rawSegments.length > 0;
+            const primary = {
+              ...baseOrder,
+              id: physicalOrder.id,
+              order_no: physicalOrder.order_no,
+              user_id: physicalOrder.user_id,
+              _sharedPoolMemberKey: `${memberBase}__primary__`,
+              _sharedPoolSegmentId: '__primary__',
+              _sharedPoolSegmentLabel: '第1段',
+              _sharedPoolIsJointOrder: isJointOrder,
+              collateral_share_mode: snapshot.joint_order_primary_collateral_share_mode === 'self'
+                ? 'self'
+                : (baseOrder.collateral_share_mode || 'none'),
+            };
+            const segments = rawSegments
+              .map((segment: any, index: number) => {
+                if (!segment || typeof segment !== 'object' || Number(segment.owner_user_id || input.userId) !== Number(input.userId)) return null;
+                const segmentId = String(segment.id || `segment-${index + 2}`);
+                return {
+                  ...baseOrder,
+                  ...segment,
+                  id: physicalOrder.id,
+                  // 后续段是关联组内的独立订单。历史快照尚未补号时才回退主订单号；
+                  // 新保存的分段会有独立订单号，因此共享池、卡片和明细不会相互覆盖。
+                  order_no: String(segment.order_no || '').trim() || physicalOrder.order_no,
+                  user_id: physicalOrder.user_id,
+                  _sharedPoolMemberKey: `${memberBase}${segmentId}`,
+                  _sharedPoolSegmentId: segmentId,
+                  _sharedPoolSegmentLabel: `第${index + 2}段`,
+                  _sharedPoolIsJointOrder: true,
+                  collateral_share_mode: segment.collateral_share_mode === 'self' ? 'self' : 'none',
+                  // 每段钱包和手工担保均独立；后续段不继承第一段的37号引用。
+                  collateral_source: null,
+                };
+              })
+              .filter(Boolean);
+            return [primary, ...segments];
+          });
+          const isLegacySharedEligible = (order: any) => order?.collateral_share_mode === 'self';
           const orders = allOwnerOrders.filter(isLegacySharedEligible);
 
           // 查询每个订单的已结利息明细；后续按当前视角身份筛选。
@@ -24039,8 +24085,14 @@ ${klinesSummary}
 
           // 汇总每张订单的担保物价值和担保需求
           const orderDetails = allOwnerOrders.map((o: any) => {
+            const sharedPoolSegmentId = String(o._sharedPoolSegmentId || '__primary__');
             const storedCollateralAssets = (() => { try { const raw = o.collateral_assets; if (Array.isArray(raw)) return raw; if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); if (typeof raw === 'string') return JSON.parse(raw || '[]'); return []; } catch { return []; } })();
-            const walletContributors = walletCollateralContributorsMap[Number(o.id)] || [];
+            const walletContributors = (walletCollateralContributorsMap[Number(o.id)] || [])
+              .map((contributor) => ({
+                ...contributor,
+                assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === sharedPoolSegmentId),
+              }))
+              .filter((contributor) => contributor.assets.length > 0);
             // 有冻结台账时，先剔除历史快照里的钱包资产，再加入全部拥有者的真实冻结数额。
             // 这样共同担保既不会漏算，也不会把同一笔冻结重复计值。
             const collateralAssets = walletContributors.length > 0
@@ -24173,6 +24225,10 @@ ${klinesSummary}
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
+              memberKey: String(o._sharedPoolMemberKey || `${Number(o.id)}:${sharedPoolSegmentId}`),
+              jointSegmentId: sharedPoolSegmentId,
+              segmentLabel: String(o._sharedPoolSegmentLabel || '第1段'),
+              isJointMember: o._sharedPoolIsJointOrder === true,
               coin: coinUpper, // 期权订单优先用 option_info.coin
               quantity,
               buyPrice,
@@ -24239,28 +24295,28 @@ ${klinesSummary}
             return difference !== 0 ? difference : String(a.orderNo ?? '').localeCompare(String(b.orderNo ?? ''));
           };
           const sharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode === 'self' && detail.collateralRiskFormula !== 'full_value')
+            .filter((detail: any) => detail.shareMode === 'self')
             .sort(sortByCollateralValue);
           const nonSharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode !== 'self' || detail.collateralRiskFormula === 'full_value')
+            .filter((detail: any) => detail.shareMode !== 'self')
             .sort(sortByCollateralValue);
           // ⑤必须复用原订单卡已展示的最终担保缺口，而非采用上方 nonSharedOrders
           // 的服务端摘要 collateralGap。当前查看者已通过共享池的同一权限校验，故只向
           // 该响应附带对应原订单的输入字段，供前端无界面挂载原订单卡并回传最终值。
           // 将 Buffer / Date 规范成可安全序列化的值，避免不同 MySQL 字段类型导致前端
           // 丢失 collateral_source、display_config 等决定最终缺口的配置。
-          const rawNonSharedById = new Map<number, any>(
+          const rawNonSharedByMemberKey = new Map<string, any>(
             allOwnerOrders
               .filter((raw: any) => !isLegacySharedEligible(raw))
-              .map((raw: any) => [Number(raw.id), raw])
+              .map((raw: any) => [String(raw._sharedPoolMemberKey), raw])
           );
           // 第二层订单详情、⑤的隐藏原订单卡都消费这里的原始订单快照。
           // 它们与订单管理列表不同，不能天然携带 paidTotal；若遗漏，卡片会把
           // 已结利息错误地回退为 0，继而少加这一笔已结利息到担保缺口。
           // 复用上方同一共享池已经按订单实际计息币种和付款汇率换算的 paidInterest。
-          const paidTotalByOrderId = new Map<number, { amount: number; currency: string }>(
+          const paidTotalByMemberKey = new Map<string, { amount: number; currency: string }>(
             orderDetails.map((detail: any) => [
-              Number(detail.orderId),
+              String(detail.memberKey),
               {
                 amount: Number(detail.paidInterest ?? 0),
                 currency: String(detail.interestBaseCurrency || 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
@@ -24280,23 +24336,31 @@ ${klinesSummary}
             ),
             // 和 funderGetAssetOrders 一致的字段结构，供 FunderOrderCard 直接显示、
             // 折算并将已结利息计入最终担保缺口。
-            paidTotal: paidTotalByOrderId.get(Number(raw.id)) ?? null,
-            // 共享区的隐藏订单卡也读取同一份多人冻结台账，确保它回传的缺口与可见卡一致。
-            wallet_collateral_contributors: walletCollateralContributorsMap[Number(raw.id)] || [],
+            paidTotal: paidTotalByMemberKey.get(String(raw._sharedPoolMemberKey)) ?? null,
+            // 本对象只代表共享池中的一个段成员；隐藏卡不能再递归展开物理订单的其他段。
+            joint_order_segments: [],
+            // 共享区的隐藏订单卡也读取同一份多人冻结台账；联合订单只能读取当前段，
+            // 不能因为物理订单号相同而把第1段的冻结重复带到第2至第N段。
+            wallet_collateral_contributors: (walletCollateralContributorsMap[Number(raw.id)] || [])
+              .map((contributor) => ({
+                ...contributor,
+                assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === String(raw._sharedPoolSegmentId || '__primary__')),
+              }))
+              .filter((contributor) => contributor.assets.length > 0),
           });
           const nonSharedOrderCardSources = nonSharedOrderDetails
-            .map((detail: any) => rawNonSharedById.get(Number(detail.orderId)))
+            .map((detail: any) => rawNonSharedByMemberKey.get(String(detail.memberKey)))
             .filter(Boolean)
             .map(toOrderCardSource);
           // 共享区第③项同样必须使用订单卡的最终担保缺口，尤其期权的实时合约价值
           // 不能由服务端的现货价格简化公式代替。因此一并返回已授权的原始订单输入。
-          const rawSharedById = new Map<number, any>(
+          const rawSharedByMemberKey = new Map<string, any>(
             allOwnerOrders
               .filter(isLegacySharedEligible)
-              .map((raw: any) => [Number(raw.id), raw])
+              .map((raw: any) => [String(raw._sharedPoolMemberKey), raw])
           );
           const sharedOrderCardSources = sharedOrderDetails
-            .map((detail: any) => rawSharedById.get(Number(detail.orderId)))
+            .map((detail: any) => rawSharedByMemberKey.get(String(detail.memberKey)))
             .filter(Boolean)
             .map(toOrderCardSource);
 
@@ -26789,6 +26853,13 @@ ${klinesSummary}
         const shouldSyncParticipantPeriodInterestDisplay = input.displayConfig !== undefined
           && (Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotal')
             || Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotalPeriod'));
+        // 物理第一段与其真实拥有者个人快照必须使用同一担保缺口口径。
+        // 共享担保池按个人快照枚举成员；只更新主订单会使打开说明后重新读到旧公式。
+        const requestedCollateralRiskFormula = input.displayConfig !== undefined
+          ? String((input.displayConfig as any).collateralRiskFormula || '')
+          : '';
+        const shouldSyncPrimaryOwnerCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value']
+          .includes(requestedCollateralRiskFormula);
         // 标签是整张订单的页眉信息，而不是某一位协作人的独立约定。
         // 主订单改动（包括删除最后一个标签传入 []）必须同步覆盖所有个人快照，
         // 否则列表会继续读取协作快照中的旧标签，造成“预览已删除、列表仍显示”。
@@ -26797,6 +26868,7 @@ ${klinesSummary}
           || shouldSyncParticipantCollateral
           || shouldSyncParticipantSharedAsset
           || shouldSyncParticipantPeriodInterestDisplay
+          || shouldSyncPrimaryOwnerCollateralRiskFormula
           || shouldSyncParticipantTags;
         try {
           let settlementSnapshot: FunderSettlementSnapshot | null = null;
@@ -26879,7 +26951,7 @@ ${klinesSummary}
             if (!updatedOrder) throw new Error('订单不存在或已删除');
 
             const [participantRows] = await conn.execute(
-              "SELECT id, display_config, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
+              "SELECT id, user_id, role, display_config, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
               [input.id, input.ledgerId]
             ) as any;
             const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
@@ -26910,12 +26982,23 @@ ${klinesSummary}
                   participant.display_config,
                 );
               }
+              const isPhysicalOwnerSnapshot = Number(participant.user_id) === Number(updatedOrder.user_id)
+                && String(participant.role) === 'owner';
+              if (shouldSyncPrimaryOwnerCollateralRiskFormula && isPhysicalOwnerSnapshot) {
+                const ownerDisplayConfig = parseFunderDisplayConfig(snapshot.display_config);
+                // 只同步担保口径，不覆盖拥有者各自的下载、字段显示等个性化开关。
+                snapshot.display_config = JSON.stringify({
+                  ...ownerDisplayConfig,
+                  collateralRiskFormula: requestedCollateralRiskFormula,
+                });
+              }
               if (shouldSyncParticipantTags) {
                 // updatedOrder.tags 是数据库刚保存后的规范值：有标签为 JSON 文本，
                 // 已清空时为 null。直接赋值确保历史快照的旧标签不会反向覆盖它。
                 snapshot.tags = updatedOrder.tags ?? null;
               }
-              if (shouldSyncParticipantPeriodInterestDisplay || shouldSyncParticipantTags) {
+              if (shouldSyncParticipantPeriodInterestDisplay || shouldSyncParticipantTags
+                || (shouldSyncPrimaryOwnerCollateralRiskFormula && isPhysicalOwnerSnapshot)) {
                 await conn.execute(
                   'UPDATE ledger_order_participants SET order_snapshot = ?, display_config = ?, updated_at = NOW() WHERE id = ?',
                   [JSON.stringify(snapshot), snapshot.display_config, participant.id],
@@ -28250,6 +28333,13 @@ ${klinesSummary}
             .filter((segment: any) => ['settled', 'completed'].includes(String(segment?.status || '').toLowerCase()))
             .map((segment: any) => [String(segment.id || ''), segment]),
         );
+        // 关联组的后续段需要有独立订单号，而不是以“第N段”临时区分。
+        // 订单号一经保存不可由普通编辑改写；旧的未结清分段会在用户下一次明确保存时补号。
+        const persistedSegmentOrderNoById = new Map(
+          (Array.isArray(persistedSnapshot.joint_order_segments) ? persistedSnapshot.joint_order_segments : [])
+            .map((segment: any) => [String(segment?.id || ''), String(segment?.order_no || '').trim().toUpperCase()] as const)
+            .filter(([, orderNo]) => /^F[A-Z][0-9]{4}$/.test(orderNo)),
+        );
         const snapshotBase = Object.keys(persistedSnapshot).length > 0
           ? persistedSnapshot
           : buildFunderParticipantSnapshot(row);
@@ -28377,8 +28467,31 @@ ${klinesSummary}
               buyQty,
             };
           };
+          const allocatedSegmentOrderNos = new Set(Array.from(persistedSegmentOrderNoById.values()));
+          const allocateSegmentOrderNo = async () => {
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            for (let attempt = 0; attempt < 160; attempt += 1) {
+              const candidate = `F${letters[Math.floor(Math.random() * letters.length)]}${String(Math.floor(1000 + Math.random() * 9000))}`;
+              if (allocatedSegmentOrderNos.has(candidate)) continue;
+              // 同时避开物理订单与其他个人快照中已经保存的段订单号。
+              allocatedSegmentOrderNos.add(candidate);
+              const [physicalRows] = await conn.execute(
+                'SELECT id FROM ledger_orders WHERE ledger_id = ? AND order_no = ? LIMIT 1',
+                [input.ledgerId, candidate],
+              ) as any;
+              const [snapshotRows] = await conn.execute(
+                'SELECT id FROM ledger_order_participants WHERE ledger_id = ? AND order_snapshot LIKE ? LIMIT 1',
+                [input.ledgerId, `%"order_no":"${candidate}"%`],
+              ) as any;
+              const hasPhysicalMatch = Array.isArray(physicalRows) && physicalRows.length > 0;
+              const hasSnapshotMatch = Array.isArray(snapshotRows) && snapshotRows.length > 0;
+              if (!hasPhysicalMatch && !hasSnapshotMatch) return candidate;
+              allocatedSegmentOrderNos.delete(candidate);
+            }
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '暂时无法分配联合订单编号，请稍后重试' });
+          };
           const { getLatestPrice } = await import('./price-scanner');
-          const normalizedJointOrderSegments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
+          const normalizedJointOrderSegments = await Promise.all(rawSegments.slice(0, 8).map(async (raw: any, index: number) => {
             const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
             const previousSettlement = persistedSettledSegmentsById.get(segmentId);
             // 已结清段是完整历史快照。普通保存绝不能事后改写其利息、担保、展示开关或
@@ -28407,8 +28520,10 @@ ${klinesSummary}
             if (optionInfo && (!Number.isFinite(optionTotal) || optionTotal <= 0 || !Number.isFinite(optionDenominationPrice) || optionDenominationPrice <= 0)) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '期权权利金或计价币实时价格无效，暂不能保存第二段' });
             }
+            const segmentOrderNo = persistedSegmentOrderNoById.get(segmentId) || await allocateSegmentOrderNo();
             const nextSegment = {
             id: segmentId,
+            order_no: segmentOrderNo,
             // 强制以当前参与者为唯一归属，不接受客户端指定他人。
             owner_user_id: Number(input.userId),
             // 缺省时保持旧子段“继承第一段”的兼容行为；新子段可存自己的类型和标的。
@@ -28440,8 +28555,8 @@ ${klinesSummary}
             frontend_placement: ['auto', 'self', 'participant'].includes(String(raw?.frontend_placement))
               ? String(raw?.frontend_placement)
               : 'self',
-            // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用。
-            // self 仅代表同一张联合订单内的分段共享，不会越过当前个人快照进入他人订单。
+            // 后续段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用。
+            // self 表示该段独立加入当前用户的跨订单共享池，绝不会读取其他用户的数据。
             collateral_assets: safeAssets(raw?.collateral_assets),
             // 参与联合共享是独立的保存状态。持仓全额段不进入实际担保池的计算边界
             // 由订单卡处理，不能在这里清空用户的选择。
@@ -28449,7 +28564,7 @@ ${klinesSummary}
             display_config: segmentDisplayConfig,
             };
             return nextSegment;
-          });
+          }));
           // 即使旧版客户端或异常操作没有携带已结清段，也必须将其原样补回，防止历史结算快照被删除。
           const normalizedSegmentIds = new Set(normalizedJointOrderSegments.map((segment: any) => String(segment?.id || '')));
           for (const [segmentId, settledSegment] of persistedSettledSegmentsById) {
@@ -28457,22 +28572,11 @@ ${klinesSummary}
           }
           mergedSnapshot.joint_order_segments = normalizedJointOrderSegments;
         }
-        // 第一段和后续段都只属于当前 input.userId 的个人快照。第一段的内部共享标记
-        // 不复用 ledger_orders.collateral_share_mode，后者是历史“本人所有订单”跨订单池。
+        // 第一段和后续段都只属于当前 input.userId 的个人快照。该段级标记表示
+        // “加入本人跨订单共享池”，不再解释成同一张联合订单内部合并。
         mergedSnapshot.joint_order_primary_collateral_share_mode = mergedSnapshot.joint_order_primary_collateral_share_mode === 'self'
           ? 'self'
           : 'none';
-        const hasJointInternalCollateralMember = mergedSnapshot.joint_order_primary_collateral_share_mode === 'self'
-          || (Array.isArray(mergedSnapshot.joint_order_segments)
-            && mergedSnapshot.joint_order_segments.some((segment: any) => segment?.collateral_share_mode === 'self'));
-        if (hasJointInternalCollateralMember && row.collateral_share_mode === 'self') {
-          // 同一订单不能同时留在旧跨订单池和新联合内部池，自动退出旧池以消除跨订单混算。
-          await conn.execute(
-            'UPDATE ledger_orders SET collateral_share_mode = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ?',
-            ['none', input.orderId, input.ledgerId],
-          );
-          row.collateral_share_mode = 'none';
-        }
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
         // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。
         if ((input.snapshot as any).participant_collateral_override === false) {

@@ -37,6 +37,9 @@ type ManualStockPosition = {
 // 联合订单只存在于某一位拥有者／参与者的个人订单快照；主订单不保存此数组。
 type JointOrderSegmentDraft = {
   id: string;
+  // 后续段是关联关系中的独立订单；由服务端首次保存时分配 F 开头的唯一订单号。
+  // 旧联合订单缺省时仍可读取，下一次明确保存该个人快照才补齐。
+  order_no?: string;
   owner_user_id: number;
   // 旧子段没有此字段时继续继承第一段；新子段可独立选择资产类型和标的。
   asset_type?: 'stock' | 'crypto' | 'crypto_option';
@@ -169,6 +172,10 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
       : undefined;
     return [{
       id: String(item.id || `segment-${index + 2}`).slice(0, 48),
+      order_no: (() => {
+        const orderNo = String(item.order_no || '').trim().toUpperCase();
+        return /^F[A-Z][0-9]{4}$/.test(orderNo) ? orderNo : undefined;
+      })(),
       owner_user_id: Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : 0,
       asset_type: assetType,
       coin: String(item.coin || '').trim().toUpperCase().slice(0, 16) || undefined,
@@ -407,8 +414,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [jointOrderSegmentsDirty, setJointOrderSegmentsDirty] = useState(false);
   // 任何保存回调只能清除它所提交的同一版本；用户保存后又切段输入时，旧请求不能抹掉新草稿的脏状态。
   const jointOrderSegmentsSignatureRef = useRef('');
-  // 第一段同样可独立选择是否进入“当前用户 + 当前联合订单”的内部共享担保池。
-  // 它不复用旧的 collateralShareMode，后者仍只代表跨订单的历史共享功能。
+  // 第一段同样可独立选择是否进入当前用户的跨订单共享担保池。
+  // 该状态保存在个人联合快照中，使一张联合订单里的每段都是独立池成员。
   const [jointPrimaryCollateralShareMode, setJointPrimaryCollateralShareMode] = useState<'none' | 'self'>('none');
   // 仅改联合子段时无需再串行保存一遍主订单。该 ref 由编辑抽屉中的主订单控件捕获，
   // 避免在手机端将一次轻量快照保存放大成两次完整数据库同步。
@@ -900,6 +907,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 共同拥有者和历史参与者共用独立快照保存通道；不会修改主订单本金、钱包或资金流水。
   const persistParticipantViews = async (orderId: number) => {
     if (participants.length === 0) return;
+    const physicalOwnerUserId = Number((editingOrder as any)?.user_id || formData.userId || 0);
     await saveParticipantFormMutation.mutateAsync({
       orderId,
       ledgerId,
@@ -921,6 +929,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         visibleOwnerIds: p.role === 'owner' ? p.visibleOwnerIds : undefined,
         displayConfig: JSON.stringify({
           ...p.displayConfig,
+          // 物理第一段的担保口径是整张订单的事实来源。批量保存协作人关系时，
+          // 不能把表单加载前的旧口径重新写回拥有者个人快照与共享担保池。
+          ...(p.role === 'owner' && Number(p.userId) === physicalOwnerUserId
+            ? { collateralRiskFormula }
+            : {}),
           ownerNameDisplay: 'self',
           // 批量保存成员关系时，每位拥有者保留自己的开关；不能把当前编辑者
           // 的下载权限写给其他人，也不能用 undefined 抹去已保存的预警阈值。
@@ -2008,12 +2021,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.error('该联合订单段已结清，不能再调整共享担保');
       return;
     }
-    // 联合内部共享与历史“本人其他订单共享”互斥。持仓全额段也算已选择联合共享，
-    // 因此同样在选择时退出旧模式；其本段计算仍不会使用联合池担保物。
-    if (mode === 'self' && collateralShareMode === 'self') {
-      setCollateralShareMode('none');
-      primaryOrderDirtyRef.current = true;
-    }
+    // 联合段加入的是同一位用户的跨订单池；不能清除其他订单或第1段的共享状态。
     setJointOrderSegments(current => current.map(segment => String(segment.id) === activeJointEditorSegmentId
       ? { ...segment, collateral_share_mode: mode }
       : segment));
@@ -2733,7 +2741,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       setJointOrderSegmentsDirty(true);
       const targetUserId = Number(activeJointOrderTarget?.userId || editingOrder?.participantInfo?.userId || editingOrder?.participantInfo?.user_id || formData.userId || 0);
       if (targetUserId > 0) {
-        saveJointOrderSegmentsMutation.mutate({
+        enqueueJointOrderSegmentsSave({
           orderId: oid,
           ledgerId,
           userId: targetUserId,
@@ -2915,6 +2923,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             ...participant,
             orderSnapshot: {
               ...(participant.orderSnapshot || {}),
+              // 第一段的交易字段（包括担保口径）也属于当前用户的个人快照。
+              // 不同步会让共享池在打开说明时读到旧公式并覆盖卡片显示。
+              ...(savedSnapshot?.display_config !== undefined ? { display_config: savedSnapshot.display_config } : {}),
               joint_order_segments: savedSnapshot?.joint_order_segments ?? variables.snapshot.joint_order_segments,
               joint_order_primary_collateral_share_mode: savedSnapshot?.joint_order_primary_collateral_share_mode
                 ?? variables.snapshot.joint_order_primary_collateral_share_mode
@@ -2935,6 +2946,42 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     },
     onError: (err) => toast.error(err.message),
   });
+  // 联合段的担保、首段共享开关与统一表单保存都会更新同一份个人快照。
+  // 强制串行，避免首段即时保存和后续段保存的旧数组在网络乱序时互相覆盖。
+  const jointSnapshotSaveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueJointOrderSegmentsSave = (variables: any, options?: any) => {
+    const queued = jointSnapshotSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => saveJointOrderSegmentsMutation.mutateAsync(variables, options));
+    jointSnapshotSaveQueueRef.current = queued.catch(() => undefined);
+    return queued;
+  };
+  // 第1段的“参加共享担保”与后续段一样是段级配置。过去它只在最终整单保存时一并写入，
+  // 用户连续切换第2～N段并保存时，旧的 none 有机会覆盖刚点选的首段状态。
+  // 此处仅写入当前用户的联合快照，不触碰第1段交易字段，也不会关闭编辑器。
+  const setPrimaryJointCollateralShareMode = (mode: 'none' | 'self') => {
+    if (mode === jointPrimaryCollateralShareMode) return;
+    const nextSignature = JSON.stringify({
+      segments: jointOrderSegments,
+      primaryCollateralShareMode: mode,
+    });
+    jointOrderSegmentsSignatureRef.current = nextSignature;
+    setJointPrimaryCollateralShareMode(mode);
+    setJointOrderSegmentsDirty(true);
+    setFloatingPreviewSegmentId('__primary__');
+    const orderId = Number(editingOrder?.id || 0);
+    const targetUserId = Number(activeJointOrderTarget?.userId || editingOrder?.participantInfo?.userId || editingOrder?.participantInfo?.user_id || formData.userId || 0);
+    if (orderId <= 0 || targetUserId <= 0) return;
+    enqueueJointOrderSegmentsSave({
+      orderId,
+      ledgerId,
+      userId: targetUserId,
+      snapshot: {
+        joint_order_segments: jointOrderSegments,
+        joint_order_primary_collateral_share_mode: mode,
+      },
+    });
+  };
   const saveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
     onSuccess: async () => {
       toast.success('参与方配置已保存');
@@ -3653,6 +3700,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         : segment)
       : jointOrderSegments;
     const shouldPersistJointOrderSegments = Boolean(canBuildJointOrderSegments && (isSnapshotScopedEdit || jointOrderSegmentsDirty || isEditingJointSegment));
+    // 第一段的担保口径、金额等由主订单更新保存，但当该订单已有联合段时，也必须同步写入
+    // 当前用户个人快照；跨订单共享池正是按个人快照枚举成员。否则打开缺口说明会读到旧公式。
+    const shouldPersistPrimaryJointSnapshot = Boolean(
+      canBuildJointOrderSegments
+      && jointOrderSegments.length > 0
+      && activeJointEditorSegmentId === '__primary__'
+      && !isEditingJointSegment
+      && primaryOrderDirtyRef.current,
+    );
     // 即使本次不写入，也保留当前第二段供实时预览展示；保存条件仅控制是否发起快照更新。
     const normalizedJointOrderSegments = canBuildJointOrderSegments
       ? jointSegmentsForSave.map((segment, index) => {
@@ -3706,12 +3762,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         || !segment.interest_start_date;
     })) {
       toast.error('请完整填写每个联合子段的交易参数、计息基数和计息日期；期权须选择Deribit到期日、行权价、权利金和张数');
-      return;
-    }
-    const hasCurrentJointInternalCollateralMember = jointPrimaryCollateralShareMode === 'self'
-      || normalizedJointOrderSegments.some(segment => segment.collateral_share_mode === 'self');
-    if (hasCurrentJointInternalCollateralMember && collateralShareMode === 'self') {
-      toast.error('本订单已使用联合内部共享担保，请先关闭“本人订单共享”后再保存，避免跨订单混算');
       return;
     }
     const profitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
@@ -3794,7 +3844,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       }
       // 后续段使用统一表单时，只保存联合段快照。绝不能把当前段的字段覆盖该参与者的第一段。
       if (isEditingJointSegment && shouldPersistJointOrderSegments) {
-        saveJointOrderSegmentsMutation.mutate({
+        enqueueJointOrderSegmentsSave({
           orderId: Number(editingOrder.id),
           ledgerId,
           userId: Number(participantUserId),
@@ -3863,7 +3913,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       // 主订单编辑页也可保存第一位拥有者或任一参与者的第二段。若本次没有动主订单字段，
       // 快照成功后立即完成：不再重复执行主订单的字段迁移、协作人同步和第二次网络往返。
       // 五段期权此前会因此长期停在“提交中”，但实际第一步已经成功写入。
-      if ((jointOrderSegmentsDirty || isEditingJointSegment) && participantUserIdForJointSegments) {
+      if ((shouldPersistJointOrderSegments || shouldPersistPrimaryJointSnapshot) && participantUserIdForJointSegments) {
         const isPrimaryJointOrderTarget = participantUserIdForJointSegments === primaryJointOrderUserId;
         // 后续段的统一表单会临时装载本段字段。无论第一段此前是否被标记为脏，
         // 此时都绝不能调用整单更新，否则会把当前后续段写回物理第一段。
@@ -3871,7 +3921,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         const shouldSaveMainOrder = activeJointEditorSegmentId === '__primary__'
           && !isEditingJointSegment
           && primaryOrderDirtyRef.current;
-        saveJointOrderSegmentsMutation.mutate({
+        enqueueJointOrderSegmentsSave({
           orderId: Number(editingOrder.id),
           ledgerId,
           userId: participantUserIdForJointSegments,
@@ -4088,8 +4138,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     buyQty: optionFormData.buyQty || null,
                   }) : null,
                   collateral_share_mode: collateralShareMode || 'none',
-                  // 第一段仅在本用户当前联合订单内按此标记进入内部共享池；
-                  // 不会复用或触发“本人订单共享”的跨订单池。
+                  // 第一段与后续段相同：按个人快照独立加入当前用户的跨订单共享池。
+                  // 物理订单号相同不会合并担保物，服务端以“订单号·段号”区分成员。
                   joint_order_primary_collateral_share_mode: jointPrimaryCollateralShareMode,
                   // 预览使用与保存完全相同的来源草稿，37号引用和手工股票组合都会即时同步。
                   collateral_source: orderCollateralSourceDraft ? JSON.stringify(orderCollateralSourceDraft) : null,
@@ -6255,15 +6305,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     )}
                 </div>
 
-                {isEditingJointSegment ? (
+                {/* 一旦订单已有联合分段，每段都在这里独立加入当前用户的跨订单共享池。 */}
+                {(isEditingJointSegment || jointOrderSegments.length > 0) ? (
                   <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 space-y-2">
                     <div className="text-sm font-medium text-indigo-800">本段担保方式</div>
                     <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-indigo-200 bg-white">
-                      <button type="button" onClick={() => setActiveJointSegmentCollateralShareMode('none')} className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold ${activeJointEditorSegment?.collateral_share_mode !== 'self' ? 'bg-white text-indigo-700' : 'bg-indigo-50 text-indigo-400'}`}>独立担保</button>
-                      <button type="button" disabled={isActiveJointEditorSegmentSettled} onClick={() => setActiveJointSegmentCollateralShareMode('self')} className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${activeJointEditorSegment?.collateral_share_mode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-600'}`}>参加共享担保</button>
+                      <button
+                        type="button"
+                        disabled={isEditingJointSegment ? isActiveJointEditorSegmentSettled : saveJointOrderSegmentsMutation.isPending}
+                        onClick={() => isEditingJointSegment ? setActiveJointSegmentCollateralShareMode('none') : setPrimaryJointCollateralShareMode('none')}
+                        className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${(isEditingJointSegment ? activeJointEditorSegment?.collateral_share_mode : jointPrimaryCollateralShareMode) !== 'self' ? 'bg-white text-indigo-700' : 'bg-indigo-50 text-indigo-400'}`}
+                      >独立担保</button>
+                      <button
+                        type="button"
+                        disabled={isEditingJointSegment ? isActiveJointEditorSegmentSettled : saveJointOrderSegmentsMutation.isPending}
+                        onClick={() => isEditingJointSegment ? setActiveJointSegmentCollateralShareMode('self') : setPrimaryJointCollateralShareMode('self')}
+                        className={`px-2 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${(isEditingJointSegment ? activeJointEditorSegment?.collateral_share_mode : jointPrimaryCollateralShareMode) === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-600'}`}
+                      >参加共享担保</button>
                     </div>
-                    <p className="text-[11px] leading-4 text-indigo-600">仅与当前用户、当前订单内同样选择“参加共享担保”的分段合并；本段的手工和钱包担保仍独立归属、独立可编辑。</p>
-                    {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">持仓全额也可保留“参加共享担保”状态；本段仍只按自身市值和利息计算，不使用也不计入共享担保池。</p>}
+                    <p className="text-[11px] leading-4 text-indigo-600">每段独立选择是否加入当前用户的全部共享订单。加入后以“订单号 · 第N段”单独列入共享池；本段手工和钱包担保仍按段归属、独立可编辑。</p>
+                    {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">持仓全额仍按本段市值与利息计算；若选择参加共享，本段担保物和缺口会作为独立成员列入跨订单共享明细。</p>}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
@@ -6495,7 +6556,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             <button
                               key={option.value}
                               type="button"
-                              onClick={() => setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }))}
+                              onClick={() => {
+                                setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }));
+                                // 按钮不是 input，编辑抽屉的 change capture 不会标记它。
+                                // 联合订单第一段改口径时显式标脏，保存时即可同步个人快照。
+                                if (activeJointEditorSegmentId === '__primary__' && jointOrderSegments.length > 0) {
+                                  primaryOrderDirtyRef.current = true;
+                                }
+                              }}
                               className={`rounded-md border px-2 py-1.5 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
                             >
                               <span className="block text-xs font-semibold">{option.label}</span>
@@ -6677,44 +6745,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             {jointOrderTargets.map(target => <option key={target.userId} value={target.userId}>{target.userName} · {target.role === 'owner' ? '拥有者' : '参与者'}</option>)}
                           </select>
                         </label>
-                      )}
-                      {!isEditingJointSegment && (
-                      <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-indigo-900">第一段 · 联合内部共享担保</div>
-                            <p className="mt-1 text-[11px] leading-4 text-indigo-600">只与当前用户在本订单内勾选的后续段共享；不会引用其他订单、其他拥有者的钱包冻结或37号担保。</p>
-                          </div>
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${jointPrimaryCollateralShareMode === 'self' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-500'}`}>{jointPrimaryCollateralShareMode === 'self' ? '已参加' : '未参加'}</span>
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-xl border border-indigo-200 bg-white">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setJointPrimaryCollateralShareMode('none');
-                              setJointOrderSegmentsDirty(true);
-                              setFloatingPreviewSegmentId('__primary__');
-                            }}
-                            className={`border-r border-indigo-200 px-2 py-2.5 text-sm font-semibold ${jointPrimaryCollateralShareMode !== 'self' ? 'bg-white text-indigo-700' : 'bg-indigo-50 text-indigo-400'}`}
-                          >独立担保</button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // 旧跨订单共享与联合内部共享互斥。此处显式退出旧模式，
-                              // 但不改变任何其他订单，也不自动勾选其他联合分段。
-                              if (collateralShareMode === 'self') {
-                                setCollateralShareMode('none');
-                                primaryOrderDirtyRef.current = true;
-                              }
-                              setJointPrimaryCollateralShareMode('self');
-                              setJointOrderSegmentsDirty(true);
-                              setFloatingPreviewSegmentId('__primary__');
-                            }}
-                            className={`px-2 py-2.5 text-sm font-semibold ${jointPrimaryCollateralShareMode === 'self' ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
-                          >参加共享担保</button>
-                        </div>
-                        {collateralRiskFormula === 'full_value' && <p className="mt-1.5 text-[11px] leading-4 text-amber-700">当前第一段为“持仓全额”口径，可保留参加共享状态；本段始终只按自身市值和利息计算，不使用也不计入共享担保池。</p>}
-                      </div>
                       )}
                       <div className="space-y-2 rounded-xl border border-indigo-100 bg-white p-2.5">
                         <div className="flex items-center justify-between gap-3 px-0.5">

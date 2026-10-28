@@ -830,14 +830,14 @@ export function FunderOrderCard({
   } | null>(null);
   // ⑤的数字只保存在当前共享担保弹窗内：每张候选订单都由其原订单卡直接回传
   // 最终“担保缺口”。不经父页面映射、不读取服务端摘要，也不以浮动盈亏作回退。
-  const [popupFinalGapByOrderId, setPopupFinalGapByOrderId] = useState<Record<number, number>>({});
-  const handlePopupFinalGapChange = useCallback((orderId: number, gap: number) => {
-    const normalizedOrderId = Number(orderId);
-    if (!Number.isFinite(normalizedOrderId) || !Number.isFinite(gap)) return;
+  const [popupFinalGapByOrderId, setPopupFinalGapByOrderId] = useState<Record<string, number>>({});
+  const handlePopupFinalGapChange = useCallback((memberKey: string | number, gap: number) => {
+    const normalizedMemberKey = String(memberKey || '').trim();
+    if (!normalizedMemberKey || !Number.isFinite(gap)) return;
     setPopupFinalGapByOrderId(previous => (
-      previous[normalizedOrderId] === gap
+      previous[normalizedMemberKey] === gap
         ? previous
-        : { ...previous, [normalizedOrderId]: gap }
+        : { ...previous, [normalizedMemberKey]: gap }
     ));
   }, []);
   // 担保说明状态前置：共享担保完整池只在用户打开说明时读取，避免长列表逐卡轮询。
@@ -944,12 +944,12 @@ export function FunderOrderCard({
     if (!Array.isArray(raw)) return [];
     return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
   }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
-  // 联合共享有两层含义：每段“选择参加”的状态须完整保存和展示；只有非持仓全额
-  // 段才实际进入担保物与风险合并池。两者不可混用，否则会重复计值或丢失开关状态。
-  const primaryJointInternalShareSelected = !jointSegmentMode
+  // 联合订单的每段都是跨订单共享池的独立成员，不能再把同一订单的多个段合并为内部池。
+  const primaryJointCrossOrderShareSelected = !jointSegmentMode
     && (order as any).joint_order_primary_collateral_share_mode === 'self';
-  const primaryJointInternalShareEnabled = primaryJointInternalShareSelected
-    && getFunderCollateralRiskFormulaForDisplay(order) !== 'full_value';
+  // 保留以下旧变量仅为兼容已存在的卡片结构；内部合并池永久关闭。
+  const primaryJointInternalShareSelected = false;
+  const primaryJointInternalShareEnabled = false;
   const getManualJointCollateralAssets = (value: unknown) => {
     let assets: any[] = [];
     try { assets = typeof value === 'string' ? JSON.parse(value) : (Array.isArray(value) ? value : []); } catch {}
@@ -970,8 +970,7 @@ export function FunderOrderCard({
       .filter((asset: any) => String(asset?.coin || '').trim() && Number(asset?.qty) > 0)
       .map((asset: any) => ({ ...asset, source: 'wallet' as const, note: '钱包担保冻结' }));
   };
-  // 只在同一张联合订单、同一位拥有者／参与者的分段内汇总。第一段与后续段均须
-  // 显式参加，且“持仓全额”永远不进入；资产在父卡只作为一个池估值一次。
+  // 旧版订单内部合并池已废弃；担保物仅由各段自身参与当前用户的跨订单共享池。
   const jointSharedCollateralAssets = useMemo(() => {
     if (jointSegmentMode) return [] as any[];
     const primaryAssets = primaryJointInternalShareEnabled
@@ -986,25 +985,9 @@ export function FunderOrderCard({
       ]);
     return [...primaryAssets, ...segmentAssets];
   }, [jointSegmentMode, primaryJointInternalShareEnabled, (order as any).collateral_assets, (order as any).wallet_collateral_contributors, _jointSegmentScopeUserId, jointOrderSegments]);
-  const jointInternalSharedMemberIds = useMemo(() => {
-    if (jointSegmentMode) return [] as string[];
-    return [
-      ...(primaryJointInternalShareEnabled ? ['__primary__'] : []),
-      ...jointOrderSegments
-        .filter((segment: any) => segment?.collateral_share_mode === 'self'
-          && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value')
-        .map((segment: any, index: number) => String(segment.id || `segment-${index + 2}`)),
-    ];
-  }, [jointSegmentMode, primaryJointInternalShareEnabled, jointOrderSegments]);
-  const jointInternalSelectedMemberIds = useMemo(() => {
-    if (jointSegmentMode) return [] as string[];
-    return [
-      ...(primaryJointInternalShareSelected ? ['__primary__'] : []),
-      ...jointOrderSegments
-        .filter((segment: any) => segment?.collateral_share_mode === 'self')
-        .map((segment: any, index: number) => String(segment.id || `segment-${index + 2}`)),
-    ];
-  }, [jointSegmentMode, primaryJointInternalShareSelected, jointOrderSegments]);
+  // 已废弃“本订单内部共享池”：任何段的 self 都只代表加入该用户的跨订单共享池。
+  const jointInternalSharedMemberIds = useMemo(() => [] as string[], []);
+  const jointInternalSelectedMemberIds = useMemo(() => [] as string[], []);
   const [jointInternalRiskContributions, setJointInternalRiskContributions] = useState<Record<string, number | null>>({});
   const handleJointInternalRiskContributionChange = useCallback((segmentId: string, contribution: number | null) => {
     setJointInternalRiskContributions(current => current[segmentId] === contribution
@@ -1171,17 +1154,19 @@ export function FunderOrderCard({
   const cnyRate = isPricingFrozen && Number.isFinite(frozenCnyRate) && frozenCnyRate > 0
     ? frozenCnyRate
     : (parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8);
-  // 共享担保只属于归属为本人的订单拥有者。参与者或「他人」订单即使快照带有 self，
-  // 也不能形成或加入当前用户的共享池。
-  const orderShareMode = (_isParticipantOrder || _isOtherPerspective) ? 'none' : (order as any).collateral_share_mode;
-  // 联合分段的共享只在父订单内部合并，不触发跨订单的共享担保池查询。
-  // “进入计算池”与“已选择参加共享”的红色展示须严格分开：持仓全额段只保留后者。
-  const usesJointSegmentSharedCollateral = jointSegmentMode && (order as any).joint_segment_shared_collateral === true;
-  const hasJointSegmentSharedCollateralSelection = jointSegmentMode
-    && ((order as any).joint_segment_shared_collateral_selected === true || usesJointSegmentSharedCollateral);
-  const usesJointInternalSharedCollateral = primaryJointInternalShareEnabled || usesJointSegmentSharedCollateral;
-  const showsJointInternalSharedCollateral = primaryJointInternalShareSelected || hasJointSegmentSharedCollateralSelection;
-  const sharedCollateralViewUserId = Number(order.user_id);
+  // 当前个人视角的第一段和后续段均可独立加入该用户全部跨订单共享订单。
+  // 参与者自己的快照同样只进入参与者自己的池；“他人”视角则永不加入。
+  const isSharedPoolSegmentView = String((order as any)._sharedPoolSegmentId || (order as any).joint_segment_id || '__primary__') !== '__primary__';
+  const orderShareMode = _isOtherPerspective
+    ? 'none'
+    : (jointSegmentMode || isSharedPoolSegmentView
+      ? ((order as any).collateral_share_mode || 'none')
+      : (primaryJointCrossOrderShareSelected ? 'self' : ((order as any).collateral_share_mode || 'none')));
+  const usesJointSegmentSharedCollateral = false;
+  const hasJointSegmentSharedCollateralSelection = false;
+  const usesJointInternalSharedCollateral = false;
+  const showsJointInternalSharedCollateral = false;
+  const sharedCollateralViewUserId = Number(_jointSegmentScopeUserId || order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
     {
@@ -1191,19 +1176,18 @@ export function FunderOrderCard({
       refetchOnWindowFocus: false,
     }
   );
-  // ⑤的展示摘要与原订单卡输入由同一次共享池权限查询返回。两份数据按订单 id
-  // 一一匹配；若原卡尚未完成37号/手工股票/利息查询，只显示加载中，绝不回退。
-  const nonSharedOrderSourcesById = new Map<number, any>(
+  // 联合订单可在共享池中出现多段，因此弹窗映射使用“订单ID:段ID”。
+  const nonSharedOrderSourcesByMemberKey = new Map<string, any>(
     (Array.isArray((sharedPoolInfo as any)?.nonSharedOrderCardSources)
       ? (sharedPoolInfo as any).nonSharedOrderCardSources
       : []
-    ).map((sourceOrder: any) => [Number(sourceOrder.id), sourceOrder])
+    ).map((sourceOrder: any) => [String(sourceOrder._sharedPoolMemberKey || `${Number(sourceOrder.id)}:${String(sourceOrder._sharedPoolSegmentId || '__primary__')}`), sourceOrder])
   );
-  const sharedOrderSourcesById = new Map<number, any>(
+  const sharedOrderSourcesByMemberKey = new Map<string, any>(
     (Array.isArray((sharedPoolInfo as any)?.sharedOrderCardSources)
       ? (sharedPoolInfo as any).sharedOrderCardSources
       : []
-    ).map((sourceOrder: any) => [Number(sourceOrder.id), sourceOrder])
+    ).map((sourceOrder: any) => [String(sourceOrder._sharedPoolMemberKey || `${Number(sourceOrder.id)}:${String(sourceOrder._sharedPoolSegmentId || '__primary__')}`), sourceOrder])
   );
   // 第③项的每笔持仓差额由同一张订单卡回传：订单卡最终缺口中已包含该笔担保物，
   // 因此统一扣除本笔担保物，并在第④项统一加回；资金属性仅影响展示标签。
@@ -1212,12 +1196,14 @@ export function FunderOrderCard({
     : []
   ).map((summaryOrder: any) => {
     const orderId = Number(summaryOrder.orderId ?? summaryOrder.id);
-    const sourceOrder = sharedOrderSourcesById.get(orderId) ?? null;
-    const finalGap = readConfirmedExposureGap(popupFinalGapByOrderId[orderId]);
+    const memberKey = String(summaryOrder.memberKey || `${orderId}:${String(summaryOrder.jointSegmentId || '__primary__')}`);
+    const sourceOrder = sharedOrderSourcesByMemberKey.get(memberKey) ?? null;
+    const finalGap = readConfirmedExposureGap(popupFinalGapByOrderId[memberKey as any]);
     const collateralValue = Number(summaryOrder.collateralValue ?? 0);
     return {
       ...summaryOrder,
       orderId,
+      memberKey,
       sourceOrder,
       finalGap,
       holdingGap: finalGap === null ? null : finalGap - (Number.isFinite(collateralValue) ? collateralValue : 0),
@@ -1234,11 +1220,13 @@ export function FunderOrderCard({
     : []
   ).map((summaryOrder: any) => {
     const orderId = Number(summaryOrder.orderId ?? summaryOrder.id);
+    const memberKey = String(summaryOrder.memberKey || `${orderId}:${String(summaryOrder.jointSegmentId || '__primary__')}`);
     return {
       ...summaryOrder,
       orderId,
-      sourceOrder: nonSharedOrderSourcesById.get(orderId) ?? null,
-      collateralGap: readConfirmedExposureGap(popupFinalGapByOrderId[orderId]),
+      memberKey,
+      sourceOrder: nonSharedOrderSourcesByMemberKey.get(memberKey) ?? null,
+      collateralGap: readConfirmedExposureGap(popupFinalGapByOrderId[memberKey as any]),
     };
   }).filter((candidate: any) => Number.isFinite(candidate.orderId));
   const nonSharedGapReady = nonSharedOwnerOrders.every((candidate: any) => readConfirmedExposureGap(candidate.collateralGap) !== null);
@@ -2517,74 +2505,26 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 过去第 1 层只计算了持仓盈亏与利息，漏掉本订单的手工/37号担保物，
   // 会让已有充足担保物的订单错误显示为大额缺口。
   const isSharedMode = orderShareMode === 'self';
-  // 编辑器的浮动预览不能被服务端共享池中“上一次保存”的摘要覆盖。
-  // 尤其是第1段切换担保口径时，服务端仍可能返回旧的“担保＋浮盈”，而预览必须
-  // 立即按当前 display_config 与手工担保草稿显示；保存后再恢复服务端池的统一口径。
-  const useLocalSharedPreviewInputs = previewMode === true;
   const sharedPoolLoading = isSharedMode && !sharedPoolInfo;
   // 本金浮动亏损：亏损时取绝对值，盈利时为 0（保留给风险提示扩展使用）。
   const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0;
-  // 共享池服务端已按当前市价计算每张订单的实际担保物价值；优先采用它，
-  // 以便37号担保物、人民币担保物和本地手工担保物使用一致口径。
-  const sharedOrderPoolDetail = isSharedMode
-    ? ((sharedPoolInfo as any)?.orders ?? []).find((poolOrder: any) => Number(poolOrder.orderId) === Number(order.id))
-    : null;
-  const sharedOrderCollateralValueU = (() => {
-    if (useLocalSharedPreviewInputs) return combinedCollateralValueU;
-    const serverValue = Number(sharedOrderPoolDetail?.collateralValue);
-    if (Number.isFinite(serverValue)) return serverValue;
-    return combinedCollateralValueU;
-  })();
-  // 37号标签订单在共享池中由服务端返回浮盈、实际持仓值与已结利息；
-  // 行内展示也复用这一口径，避免与池总计出现不同的股票风险数值。
-  const sharedOrderFloatingPnlU = (() => {
-    const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
-    const serverValue = Number(sharedOrderPoolDetail?.linked37FloatingPnl);
-    if (hasLinkedTag && Number.isFinite(serverValue)) return serverValue;
-    // 手工股票组合的浮盈来自保存的盘尾价与组合口径；共享池摘要不会携带这项
-    // 估值，不能退回成订单币种的简化实时价，否则打开共享担保说明后主卡会跳数。
-    return formulaFloatingPnlU;
-  })();
-  const sharedOrderPendingInterestU = (() => {
-    const serverCny = sharedOrderPoolDetail?.linked37PendingInterestCny;
-    if (serverCny !== null && serverCny !== undefined && Number.isFinite(Number(serverCny))) return Number(serverCny) / cnyRate;
-    return accruedForRisk;
-  })();
-  const sharedOrderPaidInterestU = (() => {
-    const serverCny = sharedOrderPoolDetail?.linked37PaidInterestCny;
-    if (serverCny !== null && serverCny !== undefined && Number.isFinite(Number(serverCny))) return Number(serverCny) / cnyRate;
-    return paidInterestForRisk;
-  })();
-  const sharedOrderGapBaseU = (() => {
-    if (useLocalSharedPreviewInputs) return collateralGapBaseForRisk;
-    const serverValue = Number(sharedOrderPoolDetail?.collateralGapBaseU);
-    return Number.isFinite(serverValue) && serverValue > 0 ? serverValue : collateralGapBaseForRisk;
-  })();
-  const sharedOrderBuyValueU = (() => {
-    if (useLocalSharedPreviewInputs) return buyValueForRisk;
-    const raw = Number(sharedOrderPoolDetail?.buyValue);
-    const currency = String(sharedOrderPoolDetail?.buyValueCurrency || 'USDT').trim().toUpperCase();
-    if (Number.isFinite(raw) && raw > 0) return ['CNY', 'RMB', '人民币'].includes(currency) ? raw / cnyRate : raw;
-    return buyValueForRisk;
-  })();
+  // 当前卡片始终以自身订单数据计算本段缺口。共享池接口只服务于问号弹窗的“跨订单汇总”，
+  // 绝不能在打开弹窗后把个人快照里的旧公式、旧利息或旧担保物反向覆盖列表卡片。
+  const sharedOrderCollateralValueU = combinedCollateralValueU;
+  const sharedOrderFloatingPnlU = formulaFloatingPnlU;
+  const sharedOrderPendingInterestU = accruedForRisk;
+  const sharedOrderPaidInterestU = paidInterestForRisk;
+  const sharedOrderGapBaseU = collateralGapBaseForRisk;
+  const sharedOrderBuyValueU = buyValueForRisk;
   const sharedOrderHoldingValueU = (() => {
-    const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
-    const serverValue = Number(sharedOrderPoolDetail?.linked37HoldingValue);
-    if (hasLinkedTag) return Number.isFinite(serverValue) ? serverValue : null;
     return sharedOrderFloatingPnlU === null ? null : sharedOrderBuyValueU + sharedOrderFloatingPnlU;
   })();
   const sharedOrderStockContributionU = (() => {
-    const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
-    if (hasLinkedTag) return sharedOrderFloatingPnlU;
     return sharedOrderHoldingValueU === null ? null : sharedOrderHoldingValueU - sharedOrderGapBaseU;
   })();
   // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
-  const sharedOrderRiskFormula = useLocalSharedPreviewInputs
-    ? collateralRiskFormula
-    : ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(sharedOrderPoolDetail?.collateralRiskFormula))
-    ? String(sharedOrderPoolDetail?.collateralRiskFormula)
-    : collateralRiskFormula;
+  const sharedOrderRiskFormula = collateralRiskFormula;
   const sharedOrderUsesPrincipalCoverage = sharedOrderRiskFormula === 'principal_coverage';
   const sharedOrderUsesFloatingPnl = sharedOrderRiskFormula === 'floating_pnl';
   const sharedOrderBorrowedValueU = (() => {
@@ -2698,12 +2638,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     }
     return remaining;
   })();
-  const externalCollateralValueU = isSharedMode
-    // 列表卡仅展示本订单即时担保；完整共享池总额按需在说明弹窗中读取。
-    ? (sharedPoolInfo && Number.isFinite(Number((sharedPoolInfo as any).totalCollateralValue))
-      ? Number((sharedPoolInfo as any).totalCollateralValue)
-      : sharedOrderCollateralValueU)
-    : combinedCollateralValueU;
+  // 列表卡只展示本段担保物；共享池总担保仅在问号弹窗中汇总，避免打开弹窗后卡片跳数。
+  const externalCollateralValueU = isSharedMode ? sharedOrderCollateralValueU : combinedCollateralValueU;
   const externalCollateralValueCny = externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
       ? externalCollateralValueU * cnyRate
       : null;
@@ -4230,7 +4166,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
                           {/* ③ 所有共享订单的持仓差额（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各订单持仓差额</div>
+                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各共享成员持仓差额</div>
                                     <div className="mb-1" style={{ color: '#9CA3AF' }}>浮盈亏口径：当前持有资产 − 缺口基准；担保减买入价值口径：−买入价值；均再减待结、加已结，且此处不含担保物</div>
                                     {sharedPoolInfo ? (
                                       <>
@@ -4238,7 +4174,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
                                     // balance = 当前持有资产市值 − 所选基准 − 待结利息 + 已结利息。
                                     // 此处不含担保物，担保物统一在第④项只加一次。
-                                    const canonicalOrder = sharedOwnerOrders.find((candidate: any) => Number(candidate.orderId) === Number(o.orderId));
+                                    const memberKey = String(o.memberKey || `${Number(o.orderId)}:${String(o.jointSegmentId || '__primary__')}`);
+                                    const canonicalOrder = sharedOwnerOrders.find((candidate: any) => String(candidate.memberKey) === memberKey);
                                     const canonicalHoldingGap = readConfirmedExposureGap(canonicalOrder?.holdingGap);
                                     const oQty = Number(o.quantity ?? 0);
                                     const oPrincipal = Number(o.principal ?? 0);
@@ -4270,7 +4207,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                       const oGapBase = Number.isFinite(oServerGapBase) && oServerGapBase > 0 ? oServerGapBase : oPrincipalUOpt;
                                       const gap = canonicalHoldingGap;
                                       return (
-                                        <div key={o.orderId} className="flex justify-between items-center">
+                                        <div key={memberKey} className="flex justify-between items-center">
                                           <div>
                                             <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
                                             <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
@@ -4315,7 +4252,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     void simplifiedGap;
                                     const gap = canonicalHoldingGap;
                                     return (
-                                      <div key={o.orderId} className="flex justify-between items-center">
+                                      <div key={memberKey} className="flex justify-between items-center">
                                         <div>
                                           <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
                                           <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
@@ -4338,7 +4275,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   const totalHoldingGap = sharedHoldingGapTotal;
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
-                                  <span style={{ color: '#374151' }}>合计持仓差额</span>
+                                  <span style={{ color: '#374151' }}>合计共享成员持仓差额</span>
                                       {allKnown
                                         ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{totalHoldingGap.toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
@@ -4360,6 +4297,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
                                     const collateralAssets = Array.isArray(o.collateralAssets) ? o.collateralAssets : [];
                                     const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
+                                    const memberKey = String(o.memberKey || `${Number(o.orderId)}:${String(o.jointSegmentId || '__primary__')}`);
+                                    const cashFlowLabel = o.isJointMember === true
+                                      ? (String(o.jointSegmentId || '__primary__') === '__primary__' ? '资金流出' : '资金流入')
+                                      : (o.principalLentOut === true || o.principalLentOut === 1 ? '资金流出' : '资金流入');
                                     const collateralItems = collateralAssets.map((asset: any) => {
                                       const coin = String(asset?.coin || '').trim().toUpperCase();
                                       const qty = String(asset?.qty ?? asset?.amount ?? '').trim();
@@ -4379,11 +4320,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                       ? formatWalletStyleAssetAmount(primaryCollateral.coin, primaryCollateral.qty)
                                       : '';
                                     return (
-                                      <div key={o.orderId} className="flex justify-between items-center gap-2">
+                                      <div key={memberKey} className="flex justify-between items-center gap-2">
                                         <div className="min-w-0 flex flex-wrap items-baseline">
                                           <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
                                           <span className="mr-1.5 text-[10px] font-medium shrink-0" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer shrink-0" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <span className="ml-1 text-[10px] shrink-0" style={{ color: '#6B7280' }}>{cashFlowLabel}</span>
                                           {collateralItems.length > 1 ? (
                                             <button
                                               type="button"
@@ -4421,7 +4363,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             <div aria-hidden="true" style={{ display: 'none' }}>
                               {[...sharedOwnerOrders, ...nonSharedOwnerOrders].map((sourceCandidate: any) => sourceCandidate.sourceOrder ? (
                                 <FunderOrderCard
-                                  key={`popup-final-gap-${order.id}-${sourceCandidate.orderId}`}
+                                  key={`popup-final-gap-${order.id}-${sourceCandidate.memberKey || sourceCandidate.orderId}`}
                                   order={sourceCandidate.sourceOrder}
                                   ledgerId={ledgerId}
                                   livePrices={livePrices}
@@ -4430,7 +4372,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   isAdmin={false}
                                   membersData={membersData}
                                   allOrders={[]}
-                                  onExposureGapChange={handlePopupFinalGapChange}
+                                  onExposureGapChange={(_orderId, gap) => handlePopupFinalGapChange(sourceCandidate.memberKey || `${sourceCandidate.orderId}:__primary__`, gap)}
                                 />
                               ) : null)}
                             </div>
@@ -4444,14 +4386,17 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   const assetType = nonSharedOrder.assetType ?? nonSharedOrder.asset_type;
                                   const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
                                   const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
+                                  const cashFlowLabel = nonSharedOrder.isJointMember === true
+                                    ? (String(nonSharedOrder.jointSegmentId || '__primary__') === '__primary__' ? '资金流出' : '资金流入')
+                                    : (nonSharedOrder.principalLentOut === true || nonSharedOrder.principalLentOut === 1 ? '资金流出' : '资金流入');
                                   const gap = readConfirmedExposureGap(nonSharedOrder.collateralGap);
                                   const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '加载中...';
-                                  return <div key={nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
+                                  return <div key={nonSharedOrder.memberKey ?? nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex items-center gap-1.5">
                                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
                                       <span className="text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                       <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{orderNo}</button>
-                                      <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
+                                      <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>{cashFlowLabel} · 独立担保</span>
                                     </div>
                                     <span className="font-mono font-semibold shrink-0" style={{ color: gap === null ? '#9CA3AF' : gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
                                   </div>;
@@ -5053,9 +4998,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       let segmentDisplayConfig: Record<string, any> = {};
       try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
       try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
-      const segmentSelectedJointCollateral = segment.collateral_share_mode === 'self';
-      const segmentSharesJointCollateral = segmentSelectedJointCollateral
-        && getFunderCollateralRiskFormulaForDisplay(segment) !== 'full_value';
+      const segmentSelectedCrossOrderCollateral = segment.collateral_share_mode === 'self';
       const segmentWalletContributors = (Array.isArray((order as any).wallet_collateral_contributors)
         ? (order as any).wallet_collateral_contributors
         : [])
@@ -5083,25 +5026,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         trade_direction: segmentAssetType === 'crypto'
           ? (segmentHasExplicitAssetType ? (segment.trade_direction || null) : order.trade_direction)
           : null,
-        order_no: order.order_no,
+        // 后续段是关联组内的独立订单，优先显示并参与共享池匹配其自身的订单号。
+        order_no: String(segment.order_no || '').trim() || order.order_no,
         paidTotal: null,
         joint_order_segments: [],
-        // 每段保留自己的资金属性；选择“共享担保”时，只合并同一张订单内其他已选择
-        // 共享的分段担保物，不继承主单37号引用，也不跨订单或跨用户读取担保。
-        collateral_assets: (segmentSharesJointCollateral
-          ? jointSharedCollateralAssets
-          : (Array.isArray(segment.collateral_assets) ? segment.collateral_assets : [])).length > 0
-          ? JSON.stringify(segmentSharesJointCollateral
-            ? jointSharedCollateralAssets
-            : segment.collateral_assets)
+        // 每段担保物始终独立，参加共享后由跨订单共享池统一汇总，绝不在当前联合订单内合并。
+        collateral_assets: (Array.isArray(segment.collateral_assets) ? segment.collateral_assets : []).length > 0
+          ? JSON.stringify(segment.collateral_assets)
           : null,
         // 仅附加当前拥有者在本段实际冻结的资产，绝不继承其他段或其他拥有者的钱包冻结。
-        wallet_collateral_contributors: segmentSharesJointCollateral ? [] : segmentWalletContributors,
+        wallet_collateral_contributors: segmentWalletContributors,
         collateral_source: null,
-        collateral_share_mode: 'none',
-        joint_segment_shared_collateral: segmentSharesJointCollateral,
-        // 仅供卡片右栏显示红色“共享担保／共享担保物”；持仓全额段不会因此进入计算池。
-        joint_segment_shared_collateral_selected: segmentSelectedJointCollateral,
+        collateral_share_mode: segmentSelectedCrossOrderCollateral ? 'self' : 'none',
         principal_lent_out: segment.principal_lent_out ? 1 : 0,
         joint_segment_id: String(segment.id || `segment-${index + 2}`),
         joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
@@ -5143,7 +5079,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             previewMode={previewMode}
             jointSegmentMode={true}
             jointInternalRiskSegmentId={segmentId}
-            onJointInternalRiskContributionChange={segmentSharesJointCollateral ? handleJointInternalRiskContributionChange : undefined}
           />
         </div>
       );
