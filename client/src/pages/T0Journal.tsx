@@ -2510,7 +2510,11 @@ function getLadderReferenceBand(markPrice: number | null, step: number) {
  * 根据当前可见的上下相邻价格行，确定实时标记应贴在哪一侧。
  * 标记本身位于两行的交界处，因此视觉上始终处于两档数字的居中位置。
  */
-function resolveLadderLivePriceMarker(markPrice: number | null, prices: number[]): LadderLivePriceMarker | null {
+function resolveLadderLivePriceMarker(
+  markPrice: number | null,
+  prices: number[],
+  exactBoundaryMovement: "up" | "down" | null = null,
+): LadderLivePriceMarker | null {
   if (markPrice === null || !Number.isFinite(markPrice) || markPrice <= 0) return null;
   const normalizedMarkPrice = Number(markPrice.toFixed(2));
   const visiblePrices = Array.from(new Set(
@@ -2519,7 +2523,18 @@ function resolveLadderLivePriceMarker(markPrice: number | null, prices: number[]
       .map((price) => Number(price.toFixed(2))),
   )).sort((left, right) => right - left);
   const exactPrice = visiblePrices.find((price) => priceKey(price) === priceKey(normalizedMarkPrice));
-  if (exactPrice !== undefined) return { anchorPrice: exactPrice, placement: "center" };
+  if (exactPrice !== undefined) {
+    // 撞档不增加新标志：下跌触及仍贴在该档上侧，向上触及仍贴在该档下侧；
+    // 只有首个行情无方向可参考时才居中显示，避免刚加载就臆测涨跌路径。
+    return {
+      anchorPrice: exactPrice,
+      placement: exactBoundaryMovement === "down"
+        ? "above"
+        : exactBoundaryMovement === "up"
+          ? "below"
+          : "center",
+    };
+  }
 
   // visiblePrices 为从高到低：上档取“刚好高于”的最后一个，下档取“刚好低于”的第一个。
   const upperPrice = [...visiblePrices].reverse().find((price) => price > normalizedMarkPrice);
@@ -4092,6 +4107,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [integratedArchiveStep, setIntegratedArchiveStep] = useState<IntegratedArchiveStep>(POSITION_ARCHIVE_STEP);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
+  /** 实时价恰好触及固定档位时，沿用最后一次非持平行情的上下侧。 */
+  const [lastMarkPriceMovement, setLastMarkPriceMovement] = useState<"up" | "down" | null>(null);
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const settlementPeriodRefreshRef = useRef<string | null>(null);
@@ -5038,6 +5055,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const previous = previousFetchedMarkPriceRef.current;
     if (previous !== null) {
       setPreviousMarkPrice(previous);
+      if (fetchedMarkPrice > previous) setLastMarkPriceMovement("up");
+      if (fetchedMarkPrice < previous) setLastMarkPriceMovement("down");
     }
     previousFetchedMarkPriceRef.current = fetchedMarkPrice;
     setLastMarkPrice(fetchedMarkPrice);
@@ -8619,9 +8638,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const sortedRows = actualRows.sort((left, right) => right.price - left.price || left.key.localeCompare(right.key));
     return applyLadderLivePriceMarker(
       sortedRows,
-      resolveLadderLivePriceMarker(individualMarkLadderPrice, sortedRows.map((row) => row.price)),
+      resolveLadderLivePriceMarker(individualMarkLadderPrice, sortedRows.map((row) => row.price), lastMarkPriceMovement),
     );
-  }, [ladderIntegratedDisplayBuckets, integratedMarkAnchorPrice, integratedArchiveStep, individualMarkLadderPrice]);
+  }, [ladderIntegratedDisplayBuckets, integratedMarkAnchorPrice, integratedArchiveStep, individualMarkLadderPrice, lastMarkPriceMovement]);
   const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
     const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
     for (const trade of selectedTrades) {
@@ -8671,7 +8690,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 若其位于所有现有行之外，才补一对十美元参考档，以保留可见的上下价格刻度。
     const individualLevels = new Set<number>(individualBuckets.map((item) => item.bucket.price));
     for (const reminder of visibleReopenReminders) individualLevels.add(reminder.anchorPrice);
-    const existingIndividualMarker = resolveLadderLivePriceMarker(individualMarkLadderPrice, Array.from(individualLevels));
+    const existingIndividualMarker = resolveLadderLivePriceMarker(individualMarkLadderPrice, Array.from(individualLevels), lastMarkPriceMovement);
     if (!existingIndividualMarker && individualLiveReferenceBand) {
       individualLevels.add(individualLiveReferenceBand.lowerPrice);
       individualLevels.add(individualLiveReferenceBand.upperPrice);
@@ -8719,9 +8738,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     });
     return applyLadderLivePriceMarker(
       rows,
-      resolveLadderLivePriceMarker(individualMarkLadderPrice, individualLevelPrices),
+      resolveLadderLivePriceMarker(individualMarkLadderPrice, individualLevelPrices, lastMarkPriceMovement),
     );
-  }, [selectedTrades, ladderOpeningClosingAllocations, individualLiveReferenceBand, individualMarkLadderPrice, visibleReopenReminders]);
+  }, [selectedTrades, ladderOpeningClosingAllocations, individualLiveReferenceBand, individualMarkLadderPrice, lastMarkPriceMovement, visibleReopenReminders]);
   const isIndividualLadderView = adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
