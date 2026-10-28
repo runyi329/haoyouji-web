@@ -1210,6 +1210,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     }));
   }, [editingOrder?.id, activeJointOrderTarget, jointOrderSegmentsDirty, (editingOrder as any)?.joint_order_segments, (editingOrder as any)?._jointSnapshotUserId, (editingOrder as any)?.participantInfo]);
   const selectJointOrderTarget = (userId: number) => {
+    // 编辑对象切换会清空并异步重载分段数组。不能在后续段表单仍挂在界面上时把状态重置为
+    // “第一段”，否则用户随后保存会将旧段的字段误写为物理主订单。
+    if (activeJointEditorSegmentId !== '__primary__') {
+      toast.error('请先保存当前后续段并切回第1段后，再切换编辑对象');
+      return;
+    }
+    if (primaryOrderDirtyRef.current) {
+      toast.error('第1段有未保存修改，请先保存第1段后再切换编辑对象');
+      return;
+    }
     // 立即清空旧拥有者的局部草稿，避免在 effect 装载新快照前出现串读闪屏。
     setJointOrderSegments([]);
     setJointPrimaryCollateralShareMode('none');
@@ -1964,6 +1974,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       setFloatingPreviewSegmentId(segmentId);
       return;
     }
+    // 第一段的实体字段与后续段快照必须分开保存。若第一段有尚未保存的编辑，
+    // 不能带着它切换到后续段再用当前表单提交，否则后续段表单可能被误写为第一段。
+    if (activeJointEditorSegmentId === '__primary__' && segmentId !== '__primary__' && primaryOrderDirtyRef.current) {
+      toast.error('第1段有未保存修改，请先保存第1段后再切换到其他段');
+      return;
+    }
     if (activeJointEditorSegmentId === '__primary__') {
       primaryEditorDraftRef.current = buildUnifiedEditorDraft();
     } else if (activeJointEditorSegment) {
@@ -2007,6 +2023,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const addUnifiedEditorSegment = () => {
     const newSegmentId = `segment-${Date.now()}`;
     const ownerUserId = Number(activeJointOrderTarget?.userId || formData.userId || 0);
+    // 新增段同样属于切换编辑对象；先要求第一段落库，避免第1段草稿在保存新段时串写。
+    if (activeJointEditorSegmentId === '__primary__' && primaryOrderDirtyRef.current) {
+      toast.error('第1段有未保存修改，请先保存第1段后再添加下一段');
+      return;
+    }
     if (activeJointEditorSegmentId === '__primary__') {
       primaryEditorDraftRef.current = buildUnifiedEditorDraft();
     } else if (activeJointEditorSegment) {
@@ -3567,6 +3588,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.error('该联合订单段已结清，历史数据已锁定；如需更正请使用结清更正流程');
       return;
     }
+    // 段ID不是第一段、但数组尚未水合出对应草稿时，必须中止保存。
+    // 这是一道最后防线：任何异步切换或未来重构都不能把后续段表单降级为主订单更新。
+    if (activeJointEditorSegmentId !== '__primary__' && !isEditingJointSegment) {
+      toast.error('当前后续段正在加载，请稍后确认段内容后再保存');
+      return;
+    }
     // 新建模式必须选择用户
     if (!editingOrder && !formData.userId) {
       toast.error('请选择用户');
@@ -3844,7 +3871,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       // 五段期权此前会因此长期停在“提交中”，但实际第一步已经成功写入。
       if ((jointOrderSegmentsDirty || isEditingJointSegment) && participantUserIdForJointSegments) {
         const isPrimaryJointOrderTarget = participantUserIdForJointSegments === primaryJointOrderUserId;
-        const shouldSaveMainOrder = primaryOrderDirtyRef.current;
+        // 后续段的统一表单会临时装载本段字段。无论第一段此前是否被标记为脏，
+        // 此时都绝不能调用整单更新，否则会把当前后续段写回物理第一段。
+        // 第一段修改必须停留在第一段时单独保存，之后才允许切换到其他段。
+        const shouldSaveMainOrder = activeJointEditorSegmentId === '__primary__'
+          && !isEditingJointSegment
+          && primaryOrderDirtyRef.current;
         saveJointOrderSegmentsMutation.mutate({
           orderId: Number(editingOrder.id),
           ledgerId,
