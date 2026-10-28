@@ -5,13 +5,10 @@
 // @since FV0245（2026-06-25）之后的新订单使用此组件
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
-import { RightMarginDetail } from "@/components/RightMarginDetail";
-import { RightInterestDetail } from "@/components/RightInterestDetail";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
-import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
@@ -19,6 +16,20 @@ import {
   getTagMarginStockSymbols,
   parseTagMarginRecords,
 } from "@shared/tag-margin-assets";
+
+// 这些组件只在用户主动下载图片或打开37号明细时才需要，不能拖慢整张订单列表的首次解析。
+const OrderCardImageDownload = React.lazy(async () => {
+  const module = await import("@/components/OrderCardImageDownload");
+  return { default: module.OrderCardImageDownload };
+});
+const RightMarginDetail = React.lazy(async () => {
+  const module = await import("@/components/RightMarginDetail");
+  return { default: module.RightMarginDetail };
+});
+const RightInterestDetail = React.lazy(async () => {
+  const module = await import("@/components/RightInterestDetail");
+  return { default: module.RightInterestDetail };
+});
 
 // 以 SVG viewBox 的中心放置文本；无论父圆标缩放到何种尺寸，37 都保持几何居中。
 function Linked37BadgeText() {
@@ -2932,12 +2943,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           </button>
         )}
         {allowImageDownload && (
-          <OrderCardImageDownload
-            targetRef={cardExportRef}
-            currentUser={currentUser}
-            orderNo={order.order_no || order.id}
-            color="#64748B"
-          />
+          <React.Suspense fallback={null}>
+            <OrderCardImageDownload
+              targetRef={cardExportRef}
+              currentUser={currentUser}
+              orderNo={order.order_no || order.id}
+              color="#64748B"
+            />
+          </React.Suspense>
         )}
       </div>
       </>}
@@ -3192,21 +3205,23 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             {showManualStockPnlDetail && isManualStockPnlSource && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowManualStockPnlDetail(false)}>
                 <div ref={manualStockPnlDetailExportRef} className="mx-3 w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white" style={{ boxShadow: '0 16px 42px rgba(15,23,42,0.24)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
-                  <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
-                    <div className="text-sm font-bold" style={{ color: '#1A2340' }}>股票浮动盈亏明细</div>
-                    <div className="flex items-center gap-1">
-                      <OrderCardImageDownload
-                        targetRef={manualStockPnlDetailExportRef}
-                        currentUser={currentUser}
-                        orderNo={order.order_no || order.id}
-                        color="#64748B"
-                        outerPadding={12}
-                        captureFullContent
-                        exportBackground="#FFFFFF"
-                        filenamePrefix="股票浮盈明细"
-                        previewTitle="股票浮盈明细图片预览"
-                        previewHint="预览与当前股票浮盈明细使用同一张图片"
-                      />
+	                  <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
+	                    <div className="text-sm font-bold" style={{ color: '#1A2340' }}>股票浮动盈亏明细</div>
+	                    <div className="flex items-center gap-1">
+	                      <React.Suspense fallback={null}>
+	                        <OrderCardImageDownload
+	                          targetRef={manualStockPnlDetailExportRef}
+	                          currentUser={currentUser}
+	                          orderNo={order.order_no || order.id}
+	                          color="#64748B"
+	                          outerPadding={12}
+	                          captureFullContent
+	                          exportBackground="#FFFFFF"
+	                          filenamePrefix="股票浮盈明细"
+	                          previewTitle="股票浮盈明细图片预览"
+	                          previewHint="预览与当前股票浮盈明细使用同一张图片"
+	                        />
+	                      </React.Suspense>
                       <button type="button" onClick={() => setShowManualStockPnlDetail(false)} aria-label="关闭股票浮动盈亏明细" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"><X size={18} strokeWidth={2.25} /></button>
                     </div>
                   </div>
@@ -3348,9 +3363,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               </div>
             )}
             {/* 付息方式已移至右侧（计息时长下面） */}
-            {order.storage_account && (
+            {show('tradingAccount') && order.storage_account && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">存放账号</span>
+                <span className="text-gray-400 shrink-0">交易账户</span>
                 <span className="font-medium truncate ml-2" style={{ color: '#4B5563' }}>{order.storage_account}</span>
               </div>
             )}
@@ -3472,10 +3487,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       : '本订单只引用“计入已付”的手工减息绝对值；自动计息、手工加息与欠息/上欠均不计入已结。'}
                   </div>
                   <div className="px-2 pb-4">
-                    <RightInterestDetail
-                      ledgerId={_parsedCollateralSource.ledgerId}
-                      tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
-                    />
+                    <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载利息明细...</div>}>
+                      <RightInterestDetail
+                        ledgerId={_parsedCollateralSource.ledgerId}
+                        tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
+                      />
+                    </React.Suspense>
                   </div>
                 </div>
               </div>
@@ -3891,7 +3908,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
                         </div>
                         <div className="px-2 pb-4">
-                          <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={linkedCollateralTagName} />
+                          <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载担保明细...</div>}>
+                            <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={linkedCollateralTagName} />
+                          </React.Suspense>
                         </div>
                       </>
                     ) : (

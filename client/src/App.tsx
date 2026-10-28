@@ -418,7 +418,12 @@ function ActiveLedgerPagePolling() {
   // 分红管理属于人工核对、回填操作页，不展示实时行情；若也按两秒轮询会不断重拉
   // 全部成员和分红汇总，移动网络下反而可能让首屏长期停在加载状态。
   const isDividendManagementPage = /^\/ledger\/(?:37|52)\/aa-dividend-manage$/.test(pathname);
-  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname) && !isDividendManagementPage;
+  // 融资复息管理页会读取完整订单、参与者、付款与担保台账；其自身已按15秒定向刷新，
+  // 不应再被这里的两秒全量 invalidate 打断首屏或编辑器内的并行读取。
+  const isFunderManagementPage = /^\/ledger\/(?:37|52)\/(?:finance-unified|funder-management)$/.test(pathname);
+  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname)
+    && !isDividendManagementPage
+    && !isFunderManagementPage;
 
   useEffect(() => {
     if (!isRealtimeLedgerPage || typeof document === "undefined") return;

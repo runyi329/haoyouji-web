@@ -5,9 +5,20 @@ import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
-import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 
+// 银卡只用于编辑中的特定实时预览。首屏订单列表不再下载和解析其完整实现。
+const FunderOrderCardV2Silver = React.lazy(async () => {
+  const module = await import("@/components/FunderOrderCardV2");
+  return { default: module.FunderOrderCardV2Silver };
+});
+const FunderLenderCardSilver = React.lazy(async () => {
+  const module = await import("@/components/FunderOrderCardV2");
+  return { default: module.FunderLenderCardSilver };
+});
+
+const INITIAL_VISIBLE_FUNDER_ORDERS = 12;
+const FUNDER_ORDER_RENDER_BATCH_SIZE = 12;
 
 
 interface FunderManagementProps {
@@ -788,6 +799,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
+    // 所有资产类型共用的可选交易账户；实际值沿用段级 storage_account 保存。
+    tradingAccount: true,
     // 多空方向标签显示开关
     showTradeDirection: true,
     // 期权 Greeks 面板
@@ -1066,6 +1079,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
   // 类型筛选：资产类型或已结清状态；左侧用户筛选由订单查询接口先行处理。
   const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option' | 'settled'>();
+  // 订单卡包含担保、协作、期权等完整交互。长列表先挂载首批卡片，避免手机首次进入时同时初始化全部卡片。
+  const [visibleFunderOrderCount, setVisibleFunderOrderCount] = useState(INITIAL_VISIBLE_FUNDER_ORDERS);
+  useEffect(() => {
+    setVisibleFunderOrderCount(INITIAL_VISIBLE_FUNDER_ORDERS);
+  }, [selectedUserId, assetTypeFilter, employeeNameFilter, orderSearchText, adminOnly, financeOnly]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleOrder, setConfirmSettleOrder] = useState<any | null>(null);
   // 仅在转结清时使用；清空后默认回到当前北京日期。
@@ -1082,7 +1100,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
   // 当前登录用户信息（用于备注权限控制）
-  const { data: currentUser } = trpc.auth.me.useQuery();
+  // 路由层刚完成认证后直接复用短时缓存，避免进入融资页后重复一次 auth.me 往返。
+  const { data: currentUser } = trpc.auth.me.useQuery(undefined, { staleTime: 30_000, refetchOnWindowFocus: false });
   const { data: ledgerData } = trpc.ledger.getLedger.useQuery({ id: ledgerId }, { enabled: ledgerId > 0 });
   const isAdminUser = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
   const ownerRecencyStorageKey = `${FUNDER_OWNER_RECENCY_KEY_PREFIX}:ledger:${ledgerId}:admin:${Number((currentUser as any)?.id || 0)}`;
@@ -1559,9 +1578,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
     {
       enabled: ledgerId > 0 && !adminOnly,
-      // 订单创建、编辑、结息与结清后都会显式失效并刷新；首屏无需每两秒重新读取整张订单表。
+      // 订单创建、编辑、结息与结清后都会显式失效并刷新；52号页单独每15秒同步，避免全局两秒失效反复重扫整张订单表。
       staleTime: usesActivePagePolling ? 15_000 : 10_000,
-      refetchInterval: usesActivePagePolling ? false : 3_000,
+      refetchInterval: usesActivePagePolling ? 15_000 : 3_000,
       refetchOnWindowFocus: false,
       placeholderData: (prev: any) => prev,
     }
@@ -1571,7 +1590,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     {
       enabled: ledgerId > 0 && !!adminOnly && isAdminUser,
       staleTime: usesActivePagePolling ? 15_000 : 10_000,
-      refetchInterval: usesActivePagePolling ? false : 3_000,
+      refetchInterval: usesActivePagePolling ? 15_000 : 3_000,
       refetchOnWindowFocus: false,
       placeholderData: (prev: any) => prev,
     }
@@ -4193,29 +4212,31 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         onCollateralFormulaPreviewChange={handleCollateralFormulaPreviewChange}
                       />
                     ) : (
-                      rateValPreview > 0 ? (
-                        <FunderLenderCardSilver
-                          key={previewDisplayKey}
-                          order={previewOrder}
-                          ledgerId={ledgerId}
-                          livePrices={formLivePrices}
-                          priceDirection={priceDirection}
-                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                          isAdmin={isAdminUser}
-                        />
-                      ) : (
-                        <FunderOrderCardV2Silver
-                          key={previewDisplayKey}
-                          order={previewOrder}
-                          ledgerId={ledgerId}
-                          livePrices={formLivePrices}
-                          priceDirection={priceDirection}
-                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                          isAdmin={isAdminUser}
-                        />
-                      )
+                      <React.Suspense fallback={<div className="rounded-2xl border border-slate-100 bg-white py-8 text-center text-sm text-slate-400">加载订单预览...</div>}>
+                        {rateValPreview > 0 ? (
+                          <FunderLenderCardSilver
+                            key={previewDisplayKey}
+                            order={previewOrder}
+                            ledgerId={ledgerId}
+                            livePrices={formLivePrices}
+                            priceDirection={priceDirection}
+                            membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                            currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                            isAdmin={isAdminUser}
+                          />
+                        ) : (
+                          <FunderOrderCardV2Silver
+                            key={previewDisplayKey}
+                            order={previewOrder}
+                            ledgerId={ledgerId}
+                            livePrices={formLivePrices}
+                            priceDirection={priceDirection}
+                            membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                            currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                            isAdmin={isAdminUser}
+                          />
+                        )}
+                      </React.Suspense>
                     )}
                   </>
                 );
@@ -4391,13 +4412,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 : toTimestamp(b.created_at || b.createdAt || b.updated_at);
               return bTime - aTime;
             });
+            const visibleOrders = filteredOrders.slice(0, visibleFunderOrderCount);
+            const remainingOrderCount = Math.max(0, filteredOrders.length - visibleOrders.length);
             return filteredOrders.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
                 <div className="text-gray-400 text-sm">{adminOnly && orderSearchText ? '未找到匹配的订单或关联订单组' : '暂无订单'}</div>
               </div>
             ) : (
             <div className="space-y-3">
-              {filteredOrders.map((order: any) => {
+              {visibleOrders.map((order: any) => {
                 // 主拥有者自动加入协作组只是保存独立视图，不应被当作“受邀订单”而隐藏主单操作。
                 const isInvited = !!order.participantInfo && String(order.participantInfo?.role || '') !== 'owner';
                 return (
@@ -4465,6 +4488,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   />
                 );
               })}
+              {remainingOrderCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleFunderOrderCount(current => Math.min(filteredOrders.length, current + FUNDER_ORDER_RENDER_BATCH_SIZE))}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-white px-3 py-3 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                  继续加载 {Math.min(FUNDER_ORDER_RENDER_BATCH_SIZE, remainingOrderCount)} 笔（剩余 {remainingOrderCount} 笔）
+                </button>
+              )}
             </div>
             );
           })()}
@@ -4984,6 +5017,20 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </div>
                 </>
               )}
+              </div>
+              {/* 所有资产类型通用：按当前订单段独立保存；空值不在订单模式左栏显示。 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  交易账户<span className="ml-1 font-normal text-gray-400">（可选）</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.storageAccount}
+                  onChange={e => setFormData(d => ({ ...d, storageAccount: e.target.value.slice(0, 120) }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：交易所、证券或资金账户"
+                  maxLength={120}
+                />
               </div>
               {/* 非期权订单：数字币使用三字段联动；股票仅录入人民币融资金额。 */}
               {formData.assetType !== 'crypto_option' && (
@@ -6498,6 +6545,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       { key: 'orderNo', label: '订单编号' },
                       { key: 'assetType', label: '资产标签' },
                       { key: 'showOwnerName', label: '显示名字' },
+                      { key: 'tradingAccount', label: '交易账户' },
                       ...(formData.assetType === 'crypto' ? [
                         { key: 'showTradeDirection', label: '多空标签' },
                       ] : []),
