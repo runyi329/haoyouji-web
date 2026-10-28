@@ -2097,12 +2097,15 @@ type PositionBucket = {
 
 type AdminLadderDisplayMode = "integrated" | "individual";
 
+type LadderLivePriceMarkerPlacement = "above" | "below" | "center";
+
 type LadderPriceRow = {
   key: string;
   price: number;
   long?: PositionBucket;
   short?: PositionBucket;
-  isMark: boolean;
+  /** 实时价仅作为价格轴标记，绝不伪装成真实订单或独立档位行。 */
+  livePriceMarkerPlacement?: LadderLivePriceMarkerPlacement;
   /** 管理员“逐笔报价”模式中，左右两侧各自对应的独立未平仓主单。 */
   longOpeningTrade?: PreviewTrade;
   shortOpeningTrade?: PreviewTrade;
@@ -2478,19 +2481,82 @@ function splitLadderMarkPrice(value: number) {
   return { integerPart, fractionalPart };
 }
 
+type LadderLivePriceMarker = {
+  anchorPrice: number;
+  placement: LadderLivePriceMarkerPlacement;
+};
+
+/**
+ * 实时价所在的标准相邻档。中点明确归入低档：例如 2300 / 2400 时，
+ * 2300–2350 均归 2300，2351 起归 2400。此函数只服务价格簿展示，
+ * 不参与真实成交、FIFO、仓位或任何资金计算。
+ */
+function getLadderReferenceBand(markPrice: number | null, step: number) {
+  if (markPrice === null || !Number.isFinite(markPrice) || markPrice <= 0) return null;
+  const safeStep = Number.isFinite(step) && step > 0 ? step : LADDER_STEP;
+  const normalizedMarkPrice = Number(markPrice.toFixed(2));
+  const lowerPrice = Number((Math.floor(normalizedMarkPrice / safeStep) * safeStep).toFixed(2));
+  const upperPrice = Number((lowerPrice + safeStep).toFixed(2));
+  const midpoint = lowerPrice + safeStep / 2;
+  return {
+    lowerPrice,
+    upperPrice,
+    // 不能使用 Math.round：它会把恰好处于中点的 2350 错归至 2400。
+    anchorPrice: normalizedMarkPrice > midpoint ? upperPrice : lowerPrice,
+  };
+}
+
+/**
+ * 根据当前可见的上下相邻价格行，确定实时标记应贴在哪一侧。
+ * 标记本身位于两行的交界处，因此视觉上始终处于两档数字的居中位置。
+ */
+function resolveLadderLivePriceMarker(markPrice: number | null, prices: number[]): LadderLivePriceMarker | null {
+  if (markPrice === null || !Number.isFinite(markPrice) || markPrice <= 0) return null;
+  const normalizedMarkPrice = Number(markPrice.toFixed(2));
+  const visiblePrices = Array.from(new Set(
+    prices
+      .filter((price) => Number.isFinite(price) && price > 0)
+      .map((price) => Number(price.toFixed(2))),
+  )).sort((left, right) => right - left);
+  const exactPrice = visiblePrices.find((price) => priceKey(price) === priceKey(normalizedMarkPrice));
+  if (exactPrice !== undefined) return { anchorPrice: exactPrice, placement: "center" };
+
+  // visiblePrices 为从高到低：上档取“刚好高于”的最后一个，下档取“刚好低于”的第一个。
+  const upperPrice = [...visiblePrices].reverse().find((price) => price > normalizedMarkPrice);
+  const lowerPrice = visiblePrices.find((price) => price < normalizedMarkPrice);
+  if (upperPrice === undefined || lowerPrice === undefined) return null;
+
+  const midpoint = lowerPrice + (upperPrice - lowerPrice) / 2;
+  // 恰好在中点时归低档；高于中点才贴到上档下方。
+  return normalizedMarkPrice > midpoint
+    ? { anchorPrice: upperPrice, placement: "below" }
+    : { anchorPrice: lowerPrice, placement: "above" };
+}
+
+/** 将实时标记挂到同价位的第一条行，避免逐笔同价多行时重复绘制。 */
+function applyLadderLivePriceMarker(rows: LadderPriceRow[], marker: LadderLivePriceMarker | null) {
+  if (!marker) return rows;
+  let markerApplied = false;
+  return rows.map((row) => {
+    if (markerApplied || priceKey(row.price) !== priceKey(marker.anchorPrice)) return row;
+    markerApplied = true;
+    return { ...row, livePriceMarkerPlacement: marker.placement };
+  });
+}
+
 /**
  * 只保留必要价格档：
- * - 实时价所在十元档上下各 3 档，便于快速开平；
+ * - 实时价展示归属档上下各 3 档，便于快速开平；
  * - 每个已有未平仓的归属档，无论距离当前价多远都固定保留；
  * - 没有仓位、且不在实时价附近的空白档自动隐藏。
  */
-function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = [], step = LADDER_STEP) {
+function buildAdaptiveLadderLevels(markAnchorPrice: number | null, positionPrices: number[] = [], step = LADDER_STEP) {
   const safeStep = Number.isFinite(step) && step > 0 ? step : LADDER_STEP;
   const defaultCenter = Math.round(LADDER_DEFAULT_CENTER_PRICE / safeStep) * safeStep;
-  // 实时价是价格簿的坐标基准，不能再限制在旧的 2500–3000 区间。
+  // 实时价归属档是价格簿的坐标基准，不能再限制在旧的 2500–3000 区间。
   // 只排除非正数，既能覆盖 ETH 当前的低价区间，也保留极端行情的真实顺序。
-  const center = markLadderPrice !== null && Number.isFinite(markLadderPrice) && markLadderPrice > 0
-    ? markLadderPrice
+  const center = markAnchorPrice !== null && Number.isFinite(markAnchorPrice) && markAnchorPrice > 0
+    ? markAnchorPrice
     : defaultCenter;
   const levels = new Set<number>();
 
@@ -2498,7 +2564,6 @@ function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrice
     const price = center + offset * safeStep;
     if (price > 0) levels.add(price);
   }
-  if (markLadderPrice !== null && Number.isFinite(markLadderPrice) && markLadderPrice > 0) levels.add(markLadderPrice);
   // 远端空白价位可以折叠，但已有仓位的十元归档档位必须始终可见。
   // 不能复用实时价格的2500–3000展示边界：旧仓可能在区间外，
   // 仍须保留为一个独立档位，且不补齐两者之间的数百个空白档。
@@ -8511,14 +8576,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && entryForm.reminderTemplateId
     && !entryForm.keepReopenReminder,
   );
-  // 逐笔报价的订单按分位精确排布，实时价也必须作为独立精确参考行插入；
-  // 不能再先归入十美元档，否则例如 2546.03 会视觉上覆盖 2550.00 的真实订单行。
+  // 逐笔报价的订单继续按分位精确排布；实时价仅为档间标记，不能再伪装成订单价格行。
   const individualMarkLadderPrice = markPrice && Number.isFinite(markPrice) && markPrice > 0
     ? Number(markPrice.toFixed(2))
     : null;
-  const integratedMarkLadderPrice = markPrice && Number.isFinite(markPrice) && markPrice > 0
-    ? Math.round(markPrice / integratedArchiveStep) * integratedArchiveStep
-    : null;
+  const integratedLiveReferenceBand = getLadderReferenceBand(individualMarkLadderPrice, integratedArchiveStep);
+  const integratedMarkAnchorPrice = integratedLiveReferenceBand?.anchorPrice ?? null;
+  const individualLiveReferenceBand = getLadderReferenceBand(individualMarkLadderPrice, POSITION_ARCHIVE_STEP);
   // 平仓百分比快捷键以“本张开仓主单尚未平掉的数量”和当前价档可平数量两者较小者为基数。
   // 因此同价位存在多张订单或已有部分平仓时，快捷键也不会超过本次实际可平上限。
   const closingAvailableQuantity = useMemo(() => {
@@ -8546,15 +8610,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const activePositionPrices = ladderIntegratedDisplayBuckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
       .map((bucket) => bucket.price);
-    const actualRows = buildAdaptiveLadderLevels(integratedMarkLadderPrice, activePositionPrices, integratedArchiveStep).map((price) => ({
+    const actualRows = buildAdaptiveLadderLevels(integratedMarkAnchorPrice, activePositionPrices, integratedArchiveStep).map((price) => ({
       key: `integrated-${priceKey(price)}`,
       price,
       long: ladderIntegratedDisplayBuckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
       short: ladderIntegratedDisplayBuckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
-      isMark: integratedMarkLadderPrice === price,
     }));
-    return actualRows.sort((left, right) => right.price - left.price || left.key.localeCompare(right.key));
-  }, [ladderIntegratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep]);
+    const sortedRows = actualRows.sort((left, right) => right.price - left.price || left.key.localeCompare(right.key));
+    return applyLadderLivePriceMarker(
+      sortedRows,
+      resolveLadderLivePriceMarker(individualMarkLadderPrice, sortedRows.map((row) => row.price)),
+    );
+  }, [ladderIntegratedDisplayBuckets, integratedMarkAnchorPrice, integratedArchiveStep, individualMarkLadderPrice]);
   const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
     const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
     for (const trade of selectedTrades) {
@@ -8600,12 +8667,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       rows.push(item);
       rowsByPrice.set(key, rows);
     }
-    // 逐笔报价只展示每笔未平仓订单的实际成交价位；不沿用整合报价的实时价邻近空档。
-    // 为确认当前市场位置，若实时价档尚无订单，只额外保留这一条可为空的参考价档。
+    // 逐笔报价只展示每笔未平仓订单的实际成交价位。实时价不再插入为独立精确价位；
+    // 若其位于所有现有行之外，才补一对十美元参考档，以保留可见的上下价格刻度。
     const individualLevels = new Set<number>(individualBuckets.map((item) => item.bucket.price));
     for (const reminder of visibleReopenReminders) individualLevels.add(reminder.anchorPrice);
-    if (individualMarkLadderPrice !== null) individualLevels.add(individualMarkLadderPrice);
-    return Array.from(individualLevels).sort((a, b) => b - a).flatMap((price) => {
+    const existingIndividualMarker = resolveLadderLivePriceMarker(individualMarkLadderPrice, Array.from(individualLevels));
+    if (!existingIndividualMarker && individualLiveReferenceBand) {
+      individualLevels.add(individualLiveReferenceBand.lowerPrice);
+      individualLevels.add(individualLiveReferenceBand.upperPrice);
+    }
+    const individualLevelPrices = Array.from(individualLevels).sort((a, b) => b - a);
+    const rows = individualLevelPrices.flatMap((price) => {
       const rowsAtPrice = [...(rowsByPrice.get(priceKey(price)) ?? [])]
         .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
       const reminders = visibleReopenReminders.filter((item) => priceKey(item.anchorPrice) === priceKey(price));
@@ -8613,13 +8685,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         if (reminders.length > 0) return reminders.map((reminder) => ({
           key: `individual-reopen-reminder-${reminder.id}`,
           price,
-          isMark: false,
           ...(reminder.side === 'long' ? { longReminder: reminder } : { shortReminder: reminder }),
         }));
         return [{
           key: `individual-empty-${priceKey(price)}`,
           price,
-          isMark: individualMarkLadderPrice === price,
         }];
       }
       // 同一显示价格的左右订单应在同一行视觉配对；每一笔仍独立保留自己的 bucket、标记及操作入口。
@@ -8635,8 +8705,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           price,
           long: longRow?.bucket,
           short: shortRow?.bucket,
-          // 同一报价档可能向下延展多行；实时价只强调第一对，避免连续高亮干扰阅读。
-          isMark: individualMarkLadderPrice === price && index === 0,
           longOpeningTrade: longRow?.trade,
           shortOpeningTrade: shortRow?.trade,
         };
@@ -8646,11 +8714,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return [...actualRows, ...reminders.map((reminder) => ({
         key: `individual-reopen-reminder-${reminder.id}`,
         price,
-        isMark: false,
         ...(reminder.side === 'long' ? { longReminder: reminder } : { shortReminder: reminder }),
       }))];
     });
-  }, [selectedTrades, ladderOpeningClosingAllocations, individualMarkLadderPrice, visibleReopenReminders]);
+    return applyLadderLivePriceMarker(
+      rows,
+      resolveLadderLivePriceMarker(individualMarkLadderPrice, individualLevelPrices),
+    );
+  }, [selectedTrades, ladderOpeningClosingAllocations, individualLiveReferenceBand, individualMarkLadderPrice, visibleReopenReminders]);
   const isIndividualLadderView = adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
@@ -11292,7 +11363,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className="text-slate-500">实时参考价</span>
               {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
               {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
-              <span>{formatPrice(markPrice)}</span>
             </div>
           </div>
           <div
@@ -11354,6 +11424,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               };
               const longHasProfitSharing = hasProfitSharingAtSlot(row.long, "long", row.longOpeningTrade);
               const shortHasProfitSharing = hasProfitSharingAtSlot(row.short, "short", row.shortOpeningTrade);
+              const isExactLivePrice = row.livePriceMarkerPlacement === "center";
+              const isFloatingLivePrice = Boolean(
+                markPrice
+                && row.livePriceMarkerPlacement
+                && row.livePriceMarkerPlacement !== "center",
+              );
+              const floatingMarkerStyle = row.livePriceMarkerPlacement === "above"
+                ? { top: 0, transform: "translate(-50%, -50%)" }
+                : { bottom: 0, transform: "translate(-50%, 50%)" };
               return (
                 <div
                   key={row.key}
@@ -11390,9 +11469,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   onOpen={() => openEntrySheet("openLong", row.price, isIndividualLadderView ? "individual" : "integrated")}
                 />}
                 <div
-                  className="flex items-center justify-center border-x border-[#b9c2ca] px-0.5"
+                  className="relative flex items-center justify-center overflow-visible border-x border-[#b9c2ca] px-0.5"
                   style={{
-                    background: row.isMark
+                    background: isExactLivePrice
                       ? priceTrend === "down"
                         ? [
                           "linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0) 45%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.20) 100%)",
@@ -11407,15 +11486,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           "linear-gradient(160deg, #7f1d1d 0%, #991b1b 18%, #b91c1c 40%, #dc2626 62%, #b91c1c 80%, #7f1d1d 100%)",
                         ].join(", ")
                       : "linear-gradient(90deg, rgba(210,217,224,0.94), rgba(244,247,249,0.98) 48%, rgba(205,213,220,0.94))",
-                    boxShadow: row.isMark
+                    boxShadow: isExactLivePrice
                       ? priceTrend === "down"
                         ? "inset 0 1.5px 0 rgba(167,243,208,0.88), inset 0 -1.5px 0 rgba(2,44,34,0.62), inset 1.5px 0 rgba(110,231,183,0.28), inset -1.5px 0 rgba(0,0,0,0.16)"
                         : "inset 0 1.5px 0 rgba(254,202,202,0.88), inset 0 -1.5px 0 rgba(69,10,10,0.62), inset 1.5px 0 rgba(252,165,165,0.28), inset -1.5px 0 rgba(0,0,0,0.16)"
                       : "inset 1px 0 0 rgba(255,255,255,0.84), inset -1px 0 0 rgba(71,85,105,0.22), inset 0 1px 0 rgba(255,255,255,0.76)",
                   }}
                 >
-                  <span className={`text-[13px] tabular-nums font-bold ${row.isMark ? (priceTrend === "down" ? "text-emerald-50" : "text-rose-50") : "text-slate-800"}`} style={{ textShadow: row.isMark ? "0 1px 2px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)" : "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(71,85,105,0.28)" }}>
-                    {row.isMark && markPrice ? (() => {
+                  <span className={`text-[13px] tabular-nums font-bold ${isExactLivePrice ? (priceTrend === "down" ? "text-emerald-50" : "text-rose-50") : "text-slate-800"}`} style={{ textShadow: isExactLivePrice ? "0 1px 2px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)" : "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(71,85,105,0.28)" }}>
+                    {isExactLivePrice && markPrice ? (() => {
                       const { integerPart, fractionalPart } = splitLadderMarkPrice(markPrice);
                       return (
                         <span className="inline-flex items-baseline whitespace-nowrap" aria-label={`${integerPart}.${fractionalPart}`}>
@@ -11433,6 +11512,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       );
                     })() : formatLadderPrice(row.price)}
                   </span>
+                  {isFloatingLivePrice && markPrice && (() => {
+                    const { integerPart, fractionalPart } = splitLadderMarkPrice(markPrice);
+                    const isDown = priceTrend === "down";
+                    return (
+                      <span
+                        aria-label={`实时参考价 ${integerPart}.${fractionalPart}`}
+                        className={`pointer-events-none absolute left-1/2 z-10 inline-flex items-baseline whitespace-nowrap rounded-[3px] border px-1 py-px text-[10px] font-bold tabular-nums ${isDown ? "border-emerald-900 bg-emerald-700 text-emerald-50" : "border-rose-900 bg-rose-700 text-rose-50"}`}
+                        style={{
+                          ...floatingMarkerStyle,
+                          boxShadow: isDown
+                            ? "0 1px 2px rgba(2,44,34,0.48), inset 0 1px 0 rgba(167,243,208,0.34)"
+                            : "0 1px 2px rgba(69,10,10,0.48), inset 0 1px 0 rgba(254,202,202,0.34)",
+                          textShadow: "0 1px 1px rgba(0,0,0,0.42)",
+                        }}
+                      >
+                        <span>{integerPart}</span>
+                        <span className="-ml-px text-[8px] font-semibold leading-none tracking-tight opacity-95">.{fractionalPart}</span>
+                      </span>
+                    );
+                  })()}
                 </div>
                 {row.shortReminder ? <ReminderPlaceholderCell reminder={row.shortReminder} side="short" readOnly={!canManage} onActivate={() => openReopenReminderEntrySheet(row.shortReminder!, isIndividualLadderView ? "individual" : "integrated")} /> : <LadderCell
                   bucket={row.short}
