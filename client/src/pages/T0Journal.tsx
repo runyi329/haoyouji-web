@@ -1615,10 +1615,17 @@ function persistT0TopFilters(storageKey: string | null, filters: T0PersistedTopF
 }
 
 const T0_PREVIEW_MEMBER_RECENT_LIMIT = 12;
+const T0_PREVIEW_MEMBER_SELECTION_COUNT_LIMIT = 9999;
 
 function getT0PreviewMemberRecentStorageKey(managerUserId: number | null) {
   return Number.isInteger(managerUserId) && Number(managerUserId) > 0
     ? `t0-preview-member-recents:52:${managerUserId}`
+    : null;
+}
+
+function getT0PreviewMemberSelectionCountStorageKey(managerUserId: number | null) {
+  return Number.isInteger(managerUserId) && Number(managerUserId) > 0
+    ? `t0-preview-member-selection-counts:52:${managerUserId}`
     : null;
 }
 
@@ -1642,6 +1649,34 @@ function persistT0PreviewMemberRecentIds(storageKey: string | null, memberIds: n
     window.localStorage.setItem(storageKey, JSON.stringify(memberIds.slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT)));
   } catch {
     // 私密模式或浏览器存储不可用时，当前页面的最近排序仍可正常使用。
+  }
+}
+
+function readT0PreviewMemberSelectionCounts(storageKey: string | null): Record<number, number> {
+  if (!storageKey || typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const result: Record<number, number> = {};
+    for (const [memberId, rawCount] of Object.entries(parsed)) {
+      const id = Number(memberId);
+      const count = Number(rawCount);
+      if (Number.isInteger(id) && id > 0 && Number.isFinite(count) && count > 0) {
+        result[id] = Math.min(T0_PREVIEW_MEMBER_SELECTION_COUNT_LIMIT, Math.floor(count));
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function persistT0PreviewMemberSelectionCounts(storageKey: string | null, selectionCounts: Record<number, number>) {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(selectionCounts));
+  } catch {
+    // 私密模式或浏览器存储不可用时，当前页面的常用排序仍可正常使用。
   }
 }
 
@@ -3858,8 +3893,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 管理员的“用户视角预览”只影响当前T+0页面读取范围，不改变登录会话身份。
   const [previewUserId, setPreviewUserId] = useState<number | null>(() => previewUserIdFromUrl);
   const [previewMemberPickerOpen, setPreviewMemberPickerOpen] = useState(false);
+  // 管理员的“筛选用户”和“选择用户视角”复用同一张成员卡片名单；普通用户仍使用原有下拉筛选。
+  const [previewMemberPickerMode, setPreviewMemberPickerMode] = useState<"preview" | "filter">("preview");
+  const [adminUnifiedSelectedMemberId, setAdminUnifiedSelectedMemberId] = useState<number | null>(() => previewUserIdFromUrl);
   const [previewMemberSearch, setPreviewMemberSearch] = useState("");
   const [previewMemberRecentIds, setPreviewMemberRecentIds] = useState<number[]>([]);
+  const [previewMemberSelectionCounts, setPreviewMemberSelectionCounts] = useState<Record<number, number>>({});
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientPickerOpen, setProfitShareRecipientPickerOpen] = useState(false);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
@@ -4122,6 +4161,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const previewMemberRecentStorageKey = getT0PreviewMemberRecentStorageKey(
     canUseMemberPreview ? Number((me as any)?.id || 0) : null,
   );
+  const previewMemberSelectionCountStorageKey = getT0PreviewMemberSelectionCountStorageKey(
+    canUseMemberPreview ? Number((me as any)?.id || 0) : null,
+  );
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
     { ledgerId: 52, previewUserId: previewUserId || undefined, viewerScopeUserId },
     {
@@ -4166,6 +4208,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const activeJournalData = isPreviewSwitching ? undefined : rawJournalData;
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
+  // 管理员无论从筛选框还是用户视角入口选人，都记住同一位成员；用户视角期间不改动成员端自身的下拉条件。
+  useEffect(() => {
+    if (!canUseMemberPreview) return;
+    if (isUserPreview) {
+      setAdminUnifiedSelectedMemberId(previewUserId);
+      return;
+    }
+    if (!canManage) return;
+    const filterUserId = relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
+      ? Number(relatedUserFilterIds[0])
+      : null;
+    setAdminUnifiedSelectedMemberId((current) => current === filterUserId ? current : filterUserId);
+  }, [canManage, canUseMemberPreview, isUserPreview, previewUserId, relatedUserFilterIds]);
   // 普通成员（含管理员代入成员后的同一只读呈现）与管理员全局视图均用独立路由展示总收益。
   // 页面顶部的“结算”Tab按同一权限自动切为个人结算或全局结算中心。
   const isTotalProfitPage = isTotalProfitPageRoute && (isMemberView || canManage);
@@ -4431,6 +4486,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   useEffect(() => {
     setPreviewMemberRecentIds(readT0PreviewMemberRecentIds(previewMemberRecentStorageKey));
   }, [previewMemberRecentStorageKey]);
+  useEffect(() => {
+    setPreviewMemberSelectionCounts(readT0PreviewMemberSelectionCounts(previewMemberSelectionCountStorageKey));
+  }, [previewMemberSelectionCountStorageKey]);
   const previewMembers = useMemo<T0PreviewMember[]>(() => Array.isArray(t0PreviewMembersQuery.data)
     ? t0PreviewMembersQuery.data.map((member: any) => ({
       id: Number(member.id),
@@ -4452,6 +4510,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return previewMembers
       .filter((member) => !keyword || `${member.name} ${member.username || ""} ${member.id}`.toLowerCase().includes(keyword))
       .sort((left, right) => {
+        const selectionCountOrder = (previewMemberSelectionCounts[right.id] || 0) - (previewMemberSelectionCounts[left.id] || 0);
+        if (selectionCountOrder !== 0) return selectionCountOrder;
         const leftRecentIndex = recentIndexByMemberId.get(left.id) ?? Number.POSITIVE_INFINITY;
         const rightRecentIndex = recentIndexByMemberId.get(right.id) ?? Number.POSITIVE_INFINITY;
         if (leftRecentIndex !== rightRecentIndex) return leftRecentIndex - rightRecentIndex;
@@ -4459,7 +4519,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         if (activityOrder !== 0) return activityOrder;
         return left.name.localeCompare(right.name, "zh-CN") || left.id - right.id;
       });
-  }, [previewMemberRecentIds, previewMemberSearch, previewMembers]);
+  }, [previewMemberRecentIds, previewMemberSearch, previewMemberSelectionCounts, previewMembers]);
   // 预览切换不能把上一位成员的分佣快照、订单投影或来源筛选带给下一位成员。
   // 新成员数据返回前保持“切换中”，返回后再统一投影，避免分佣偶发被旧筛选隐藏。
   const resetPreviewMemberDerivedView = () => {
@@ -4483,17 +4543,58 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setLastRelatedUserId("");
     setRecentJournalPage(1);
   };
+  const openAdminMemberPicker = (mode: "preview" | "filter") => {
+    setPreviewMemberPickerMode(mode);
+    setPreviewMemberSearch("");
+    setPreviewMemberPickerOpen(true);
+  };
+  const recordPreviewMemberSelection = (memberId: number) => {
+    setPreviewMemberSelectionCounts((current) => {
+      const next = {
+        ...current,
+        [memberId]: Math.min(T0_PREVIEW_MEMBER_SELECTION_COUNT_LIMIT, (current[memberId] || 0) + 1),
+      };
+      persistT0PreviewMemberSelectionCounts(previewMemberSelectionCountStorageKey, next);
+      return next;
+    });
+    setPreviewMemberRecentIds((current) => {
+      const next = [memberId, ...current.filter((currentMemberId) => currentMemberId !== memberId)]
+        .slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT);
+      persistT0PreviewMemberRecentIds(previewMemberRecentStorageKey, next);
+      return next;
+    });
+  };
+  const selectAdminMemberFilter = (member: T0PreviewMember | null) => {
+    const selectedMemberId = member?.id ?? null;
+    if (selectedMemberId) recordPreviewMemberSelection(selectedMemberId);
+    setAdminUnifiedSelectedMemberId(selectedMemberId);
+    setRelatedUserFilterIds(selectedMemberId ? [String(selectedMemberId)] : []);
+    // 项目从属于用户；筛选对象切换时不能保留上一位用户的项目条件。
+    setRelatedFundFilterIds([]);
+    setRecentJournalPage(1);
+    setPreviewMemberPickerOpen(false);
+    setPreviewMemberSearch("");
+  };
   const openPreviewMember = (member: T0PreviewMember) => {
-    const nextRecentIds = [member.id, ...previewMemberRecentIds.filter((memberId) => memberId !== member.id)]
-      .slice(0, T0_PREVIEW_MEMBER_RECENT_LIMIT);
-    persistT0PreviewMemberRecentIds(previewMemberRecentStorageKey, nextRecentIds);
-    setPreviewMemberRecentIds(nextRecentIds);
+    recordPreviewMemberSelection(member.id);
+    setAdminUnifiedSelectedMemberId(member.id);
     resetPreviewMemberDerivedView();
     setPreviewUserId(member.id);
     setPreviewMemberPickerOpen(false);
     setPreviewMemberSearch("");
     setShowEntrySheet(false);
     setShowPayoutLog(false);
+  };
+  const returnToAdminFromPreview = () => {
+    const nextFilterIds = adminUnifiedSelectedMemberId ? [String(adminUnifiedSelectedMemberId)] : [];
+    resetPreviewMemberDerivedView();
+    // 保留刚才代入的同一位用户，使管理员筛选框与用户视角选择器回到同一对象。
+    setRelatedUserFilterIds(nextFilterIds);
+    setPreviewUserId(null);
+    setPreviewMemberPickerOpen(false);
+    setShowEntrySheet(false);
+    setShowPayoutLog(false);
+    setLocation(`/ledger/${ledgerId}/t0-journal`);
   };
   // 仅管理员已在顶部筛选出一位真实用户时，才允许将“历史记录”切换为该用户登录后的呈现。
   const historyPerspectiveTargetUserId = canManage
@@ -6552,6 +6653,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     topSelectableRelatedUserIds,
     isMemberView ? false : hasUnlinkedTrades,
   );
+  // 管理员筛选改为单选成员卡；旧浏览器若残留多选，保留当前筛选结果直到管理员重新在名单中选择。
+  const adminFilterSelectedMemberId = canManage
+    && relatedUserFilterIds.length === 1
+    && /^\d+$/.test(relatedUserFilterIds[0])
+    ? Number(relatedUserFilterIds[0])
+    : null;
+  const adminFilterSelectedMember = previewMembers.find((member) => member.id === adminFilterSelectedMemberId) ?? null;
+  const adminFilterSummary = topRelatedUserSelectionIsAll || relatedUserFilterIds.length === 0
+    ? "全部"
+    : adminFilterSelectedMember?.name
+      || relatedUserFilterOptions.find((option) => option.id === relatedUserFilterIds[0])?.summaryLabel
+      || (relatedUserFilterIds.length === 1 ? `用户#${relatedUserFilterIds[0]}` : `已选 ${relatedUserFilterIds.length} 项`);
+  const isAdminFilterMemberPicker = previewMemberPickerMode === "filter";
+  const activeAdminMemberPickerId = isAdminFilterMemberPicker
+    ? adminFilterSelectedMemberId
+    : (previewUserId ?? adminUnifiedSelectedMemberId);
   const historyFilterGridTemplateColumns = useMemo(() => {
     const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
     if (label === "用户" && historyRelatedUserSelectionIsAll) return "用户全部";
@@ -7694,53 +7811,48 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     if (activeTotalProfitDetailTab === "deposit") {
       const uDeposits = deposits.filter((log) => log.depositInputMode !== "eth");
-      const ethDeposits = deposits.filter((log) => log.depositInputMode === "eth");
       const uTotal = sumAmounts(uDeposits);
-      const ethTotal = sumAmounts(ethDeposits);
-      const total = uTotal + ethTotal;
+      const total = sumAmounts(deposits);
       const uRatio = total > 0 ? uTotal / total : 0;
       const sumEthQuantity = (rows: typeof deposits) => rows.reduce((sum, log) => {
         const quantity = Number(log.ethQuantity);
         return Number.isFinite(quantity) ? sum + quantity : sum;
       }, 0);
-      const uEquivalentEth = sumEthQuantity(uDeposits);
-      const ethInputQuantity = sumEthQuantity(ethDeposits);
-      const hasOnlyUInput = uDeposits.length > 0 && ethDeposits.length === 0;
-      const hasOnlyEthInput = ethDeposits.length > 0 && uDeposits.length === 0;
-      const uItem: T0TotalProfitContextSummaryItem = {
-        id: "u-input",
-        label: "U",
-        value: formatPrice(uTotal),
-        detail: uEquivalentEth > 0 ? `≈ ${formatPayoutEthQuantity(String(uEquivalentEth))} ETH` : "未填写参考币数",
-        detailBelow: true,
-        color: "#0284c7",
-        trackColor: "#e0f2fe",
-        gradient: "linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)",
-        progress: uRatio,
-      };
-      const ethItem: T0TotalProfitContextSummaryItem = {
-        id: "eth-input",
-        label: "ETH",
-        value: ethInputQuantity > 0 ? formatPayoutEthQuantity(String(ethInputQuantity)) : "—",
-        detail: `= ${formatPrice(ethTotal)} U`,
-        detailBelow: true,
-        color: "#4f46e5",
-        trackColor: "#e0e7ff",
-        gradient: "linear-gradient(90deg, #4f46e5 0%, #818cf8 100%)",
-        progress: total > 0 ? ethTotal / total : 0,
-      };
+      const fixedEthQuantity = sumEthQuantity(deposits);
+      const fixedEthCount = deposits.filter((log) => Number.isFinite(Number(log.ethQuantity)) && Number(log.ethQuantity) > 0).length;
+      // 每笔充值保存时已固定ETH数量和参考价；只有每笔都具备快照时，才展示全口径ETH和加权均价。
+      const hasCompleteFixedEthSnapshot = deposits.length > 0 && fixedEthCount === deposits.length && fixedEthQuantity > 0;
+      const weightedAverageReferencePrice = hasCompleteFixedEthSnapshot ? total / fixedEthQuantity : null;
       return {
         title: "充值摘要",
-        subtitle: "按每笔填写币种展示",
-        centerLabel: hasOnlyUInput || hasOnlyEthInput || deposits.length === 0 ? "累计充值" : "累计折算",
-        totalText: hasOnlyEthInput ? (ethInputQuantity > 0 ? formatPayoutEthQuantity(String(ethInputQuantity)) : "0.00") : formatPrice(total),
-        centerUnit: hasOnlyEthInput ? "ETH" : "U",
-        totalToneClass: hasOnlyEthInput ? "text-indigo-700" : "text-sky-700",
-        ringBackground: total > 0 ? hasOnlyUInput ? "conic-gradient(#0284c7 0 100%)" : hasOnlyEthInput ? "conic-gradient(#4f46e5 0 100%)" : makeSplitRing(uRatio, "#0284c7", "#4f46e5", "#e0f2fe") : "#e0f2fe",
+        subtitle: "按逐笔固定参考价汇总",
+        centerLabel: "累计充值",
+        totalText: formatPrice(total),
+        centerUnit: "U",
+        totalToneClass: "text-sky-700",
+        ringBackground: total > 0 ? makeSplitRing(uRatio, "#0284c7", "#4f46e5", "#e0f2fe") : "#e0f2fe",
         items: [
-          ...(uDeposits.length > 0 ? [uItem] : []),
-          ...(ethDeposits.length > 0 ? [ethItem] : []),
-          { id: "count", label: "充值笔数", value: String(deposits.length), unit: "笔", detail: hasOnlyUInput ? "均按 U 填写" : hasOnlyEthInput ? "均按 ETH 填写" : `U ${uDeposits.length} · ETH ${ethDeposits.length}`, color: "#64748b", trackColor: "#e2e8f0", gradient: "linear-gradient(90deg, #64748b 0%, #94a3b8 100%)" },
+          {
+            id: "fixed-total",
+            label: "累计充值",
+            value: formatPrice(total),
+            unit: "U",
+            detail: hasCompleteFixedEthSnapshot ? `${formatPayoutEthQuantity(String(fixedEthQuantity))} ETH` : deposits.length === 0 ? "暂无充值" : "部分历史ETH快照缺失",
+            color: "#0284c7",
+            trackColor: "#e0f2fe",
+            gradient: "linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)",
+            progress: total > 0 ? 1 : 0,
+          },
+          {
+            id: "fixed-average-price",
+            label: "固定均价",
+            value: weightedAverageReferencePrice === null ? "—" : formatPrice(weightedAverageReferencePrice),
+            unit: "U/ETH",
+            detail: weightedAverageReferencePrice === null ? "需补齐逐笔ETH快照" : `按 ${deposits.length} 笔充值加权`,
+            color: "#4f46e5",
+            trackColor: "#e0e7ff",
+            gradient: "linear-gradient(90deg, #4f46e5 0%, #818cf8 100%)",
+          },
         ],
       };
     }
@@ -8090,6 +8202,43 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isEditingPendingOpening = Boolean(isEditingOriginalPendingOpening && entryForm.isPending);
   const isPendingFillConfirmationQueued = Boolean(isEditingOriginalPendingOpening && !entryForm.isPending);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
+  /**
+   * 管理员在录入或编辑开仓时，项目下方直接说明“谁分多少”。
+   * 原项目的既有开仓优先展示本单冻结快照；若切换到另一项目，则展示该项目当前规则，
+   * 只做可见性提示，不参与任何保存载荷，也不改写历史分配。
+   */
+  const selectedProjectProfitSharePreview = useMemo(() => {
+    const relatedFundId = Number(entryForm.relatedFundId);
+    if (!canManage || !Number.isInteger(relatedFundId) || relatedFundId <= 0) return null;
+    const selectedFund = entryRelatedFunds.find((fund) => Number(fund.id) === relatedFundId);
+    const isOriginalProject = Boolean(
+      isEditingEntry
+      && editingOriginalTrade
+      && Number(editingOriginalTrade.relatedFundId) === relatedFundId,
+    );
+    const frozenAllocations = isOriginalProject && editingOriginalTrade && !editingOriginalTrade.isPending
+      ? getOpeningProfitShareSnapshotAllocations(profitShareSnapshots, getStoredEntryId(editingOriginalTrade))
+      : [];
+    const rows = frozenAllocations.length > 0
+      ? frozenAllocations.map((allocation) => ({
+        beneficiaryUserId: allocation.beneficiaryUserId,
+        beneficiaryUserName: allocation.beneficiaryUserName || `用户#${allocation.beneficiaryUserId}`,
+        percentage: allocation.percentage,
+      }))
+      : profitShareRules
+        .filter((rule) => rule.relatedFundId === relatedFundId)
+        .map((rule) => ({
+          beneficiaryUserId: rule.beneficiaryUserId,
+          beneficiaryUserName: rule.beneficiaryUserName,
+          percentage: rule.percentage,
+        }));
+    return {
+      projectName: selectedFund?.name || entryForm.relatedFundName.trim() || `项目#${relatedFundId}`,
+      sourceLabel: frozenAllocations.length > 0 ? "本单已固化" : "项目当前规则",
+      rows: rows.slice().sort((left, right) => right.percentage - left.percentage || left.beneficiaryUserName.localeCompare(right.beneficiaryUserName, "zh-CN")),
+      totalPercentage: rows.reduce((total, row) => total + row.percentage, 0),
+    };
+  }, [canManage, editingOriginalTrade, entryForm.relatedFundId, entryForm.relatedFundName, entryRelatedFunds, isEditingEntry, profitShareRules, profitShareSnapshots]);
   const selectOpeningInstrumentType = (instrument: (typeof T0_INSTRUMENT_TYPES)[number]) => {
     if (instrument.value === "option" && !entryForm.editingEntryId) {
       setEntrySide(getOptionLadderSide(entryForm.optionDirection));
@@ -10859,24 +11008,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPreviewMemberSearch("");
-                    setPreviewMemberPickerOpen(true);
-                  }}
+                  onClick={() => openAdminMemberPicker("preview")}
                   className="h-7 rounded border border-indigo-200 bg-white px-2 text-[11px] font-semibold text-indigo-700 active:scale-95"
                 >
                   换用户
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    resetPreviewMemberDerivedView();
-                    setPreviewUserId(null);
-                    setPreviewMemberPickerOpen(false);
-                    setShowEntrySheet(false);
-                    setShowPayoutLog(false);
-                    setLocation(`/ledger/${ledgerId}/t0-journal`);
-                  }}
+                  onClick={returnToAdminFromPreview}
                   className="h-7 rounded bg-indigo-700 px-2 text-[11px] font-semibold text-white active:scale-95"
                 >
                   返回管理员
@@ -10886,10 +11025,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="min-w-0 text-slate-500"><span className="font-semibold text-slate-700">管理员视角</span><span className="ml-1.5">可核对成员实际可见的整页数据与展示规则</span></div>
               <button
                 type="button"
-                onClick={() => {
-                  setPreviewMemberSearch("");
-                  setPreviewMemberPickerOpen(true);
-                }}
+                onClick={() => openAdminMemberPicker("preview")}
                 className="h-7 shrink-0 rounded border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 active:scale-95"
               >
                 选择用户
@@ -11025,7 +11161,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }}
                 />
               )}
-              <T0MultiSelect
+              {canManage ? <button
+                type="button"
+                onClick={() => openAdminMemberPicker("filter")}
+                aria-haspopup="dialog"
+                aria-expanded={previewMemberPickerOpen && isAdminFilterMemberPicker}
+                aria-label={`筛选用户：${adminFilterSummary}`}
+                title={`筛选用户：${adminFilterSummary}`}
+                className="flex h-10 w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2.5 text-[13px] font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white"
+                style={{
+                  textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+                }}
+              >
+                <span className="shrink-0 text-[12px] font-semibold tracking-wide text-slate-500">用户</span>
+                <span className={`min-w-0 flex-1 truncate ${adminFilterSummary === "全部" ? "text-left" : "text-center"}`}>{adminFilterSummary}</span>
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${previewMemberPickerOpen && isAdminFilterMemberPicker ? "rotate-180" : ""}`} />
+              </button> : <T0MultiSelect
                 label="用户"
                 options={relatedUserFilterOptions}
                 selectedIds={relatedUserFilterIds}
@@ -11042,7 +11194,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   setRelatedFundFilterIds([]);
                   setRecentJournalPage(1);
                 }}
-              />
+              />}
               {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
                 <T0MultiSelect
                   label="项目"
@@ -11933,17 +12085,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       </main>
 
       {canUseMemberPreview && previewMemberPickerOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end bg-slate-950/45 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label="选择用户视角">
+        <div className="fixed inset-0 z-[70] flex items-end bg-slate-950/45 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={isAdminFilterMemberPicker ? "筛选用户" : "选择用户视角"}>
           <div className="w-full max-h-[82vh] overflow-y-auto rounded-t-xl bg-white p-4 shadow-2xl sm:max-w-md sm:rounded-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">选择用户视角</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">最近点入的用户优先；直接点击用户名进入该用户视角。不会切换登录身份，全部编辑入口保持只读。</p>
+                <h2 className="text-base font-semibold text-slate-900">{isAdminFilterMemberPicker ? "筛选用户" : "选择用户视角"}</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{isAdminFilterMemberPicker
+                  ? "直接点击用户筛选管理员账本；选择会与用户视角保持同一对象。"
+                  : "最近点入的用户优先；直接点击用户名进入该用户视角。当前对象会与管理员筛选同步，全部编辑入口保持只读。"}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setPreviewMemberPickerOpen(false)}
-                aria-label="关闭用户选择"
+                aria-label={isAdminFilterMemberPicker ? "关闭用户筛选" : "关闭用户选择"}
                 className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 active:bg-slate-100"
               >
                 <X className="h-5 w-5" />
@@ -11954,9 +12108,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               onChange={(event) => setPreviewMemberSearch(event.target.value)}
               autoFocus
               placeholder="搜索姓名、账号或用户编号"
-              aria-label="搜索可预览用户"
+              aria-label={isAdminFilterMemberPicker ? "搜索可筛选用户" : "搜索可预览用户"}
               className="mt-4 h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
             />
+            {isAdminFilterMemberPicker && <button
+              type="button"
+              onClick={() => selectAdminMemberFilter(null)}
+              aria-pressed={activeAdminMemberPickerId === null}
+              className={`mt-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border px-3 text-left text-xs transition active:scale-[0.99] ${activeAdminMemberPickerId === null ? "border-indigo-400 bg-indigo-50 text-indigo-800" : "border-slate-200 bg-slate-50 text-slate-700 active:bg-white"}`}
+            >
+              <span className="font-semibold">全部用户</span>
+              <span className="text-[11px] font-medium opacity-75">恢复管理员全量账本</span>
+            </button>}
             <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
               {t0PreviewMembersQuery.isLoading ? <div className="col-span-2 px-3 py-8 text-center text-sm text-slate-400">正在读取可预览成员…</div>
                 : t0PreviewMembersQuery.isError ? <div className="col-span-2 px-3 py-8 text-center text-sm text-rose-600">成员名单加载失败，请关闭后重试</div>
@@ -11968,19 +12131,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       const cashReturnRateClass = cashReturnRate === null
                         ? "text-slate-400"
                         : "text-slate-700";
+                      const isSelected = activeAdminMemberPickerId === member.id;
                       return <button
                         key={member.id}
                         type="button"
-                        onClick={() => openPreviewMember(member)}
-                        className="flex min-h-[86px] min-w-0 flex-col justify-center bg-white px-3 py-2.5 text-left transition-colors active:bg-indigo-50"
+                        aria-pressed={isSelected}
+                        onClick={() => isAdminFilterMemberPicker ? selectAdminMemberFilter(member) : openPreviewMember(member)}
+                        className={`flex min-h-[86px] min-w-0 flex-col justify-center px-3 py-2.5 text-left transition-colors active:bg-indigo-50 ${isSelected ? "bg-indigo-50 ring-1 ring-inset ring-indigo-400" : "bg-white"}`}
                       >
                         <span className="block truncate text-sm font-semibold text-slate-800">{member.name}</span>
                         <span className="mt-0.5 block truncate text-[11px] text-slate-500">{member.username ? member.username : `用户编号 ${member.id}`}</span>
                         <span className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-slate-100 pt-1.5 text-[10px] leading-none tabular-nums">
                           <span title="该用户本人已成交且未平的多仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">多</span><strong className="truncate font-semibold text-rose-600">{metrics ? formatQuantity(metrics.longQuantity) : "--"}</strong></span>
                           <span title="该用户本人已成交且未平的空仓" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">空</span><strong className="truncate font-semibold text-emerald-600">{metrics ? formatQuantity(metrics.shortQuantity) : "--"}</strong></span>
-                          <span title="该用户T+0累计存款" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">存</span><strong className={`truncate font-semibold ${fundsLoaded ? "text-slate-700" : "text-slate-400"}`}>{fundsLoaded ? formatAmount(metrics!.cumulativeDepositAmount) : "--"}</strong></span>
-                          <span title="累计提现除以累计存款；仅统计已登记的提现流水" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">回款</span><strong className={`truncate font-semibold ${cashReturnRateClass}`}>{cashReturnRate === null ? "--" : formatSignedPercent(cashReturnRate)}</strong></span>
+                          <span title="该用户T+0累计存款" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">存</span><strong className={`truncate font-semibold ${fundsLoaded ? "text-slate-700" : "text-slate-400"}`}>{fundsLoaded ? metrics!.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 0 }) : "--"}</strong></span>
+                          <span title="累计提现除以累计存款；仅统计已登记的提现流水" className="flex min-w-0 items-center justify-between gap-1"><span className="text-slate-400">回</span><strong className={`truncate font-semibold ${cashReturnRateClass}`}>{cashReturnRate === null ? "--" : formatSignedPercent(cashReturnRate)}</strong></span>
                         </span>
                       </button>;
                     })}
@@ -12690,6 +12855,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   )}
                   {entryForm.relatedFundId === "legacy" && (
                     <div className="mt-1.5 text-[10px] leading-4 text-amber-700">这是功能上线前的未区分专项款记录；编辑时可改为该用户的专项款。</div>
+                  )}
+                  {canManage && selectedProjectProfitSharePreview && (
+                    <div className={`mt-2 rounded border px-2.5 py-2 ${selectedProjectProfitSharePreview.rows.length > 0 ? "border-indigo-100 bg-indigo-50/60" : "border-amber-200 bg-amber-50/70"}`} aria-label={`${selectedProjectProfitSharePreview.projectName}收益分配摘要`}>
+                      <div className="flex items-center justify-between gap-2 text-[10px] leading-4">
+                        <span className={`font-semibold ${selectedProjectProfitSharePreview.rows.length > 0 ? "text-indigo-800" : "text-amber-800"}`}>项目分配</span>
+                        <span className="min-w-0 truncate text-slate-500">{selectedProjectProfitSharePreview.sourceLabel}</span>
+                        {selectedProjectProfitSharePreview.rows.length > 0 && <span className={`shrink-0 font-semibold tabular-nums ${selectedProjectProfitSharePreview.totalPercentage === 100 ? "text-emerald-700" : "text-rose-600"}`}>合计 {selectedProjectProfitSharePreview.totalPercentage}%</span>}
+                      </div>
+                      {selectedProjectProfitSharePreview.rows.length > 0 ? (
+                        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] leading-4 text-slate-700">
+                          {selectedProjectProfitSharePreview.rows.map((allocation) => (
+                            <span key={allocation.beneficiaryUserId} className="inline-flex max-w-full items-baseline gap-1 rounded bg-white/85 px-1.5 py-0.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)]">
+                              <span className="max-w-[9.5rem] truncate font-medium">{allocation.beneficiaryUserName}</span>
+                              <span className="shrink-0 font-bold tabular-nums text-indigo-700">{allocation.percentage}%</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[10px] leading-4 text-amber-800">该项目尚未设置收益分配。请点击上方“收益分配”完成配置后再保存订单。</div>
+                      )}
+                    </div>
                   )}
                 </Field>
 
@@ -14698,6 +14884,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
 }) {
   const doubleTapProps = useReliableDoubleTap(onClick);
   const isLong = side === "long";
+  /** 右侧空单列按中轴与左侧多单列镜像：数量靠右、盈亏靠左，归属字段与图标也反向。 */
+  const isShort = side === "short";
   const isOption = bucket.instrumentType === "option";
   const isGrid = bucket.instrumentType === "grid";
   // 有订单元数据即逐笔报价；整合报价只用灰字摘要表达挂/锁，始终保留基础多红空绿底色。
@@ -14821,23 +15009,28 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const pnlTextStyle = { textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" };
   const content = (
     <div className="w-full min-w-0">
-      <div className={`flex w-full min-w-0 justify-between gap-2 tabular-nums ${metadata ? "items-center" : "items-start"}`}>
-        <div className={metadata ? "flex min-w-0 items-center gap-1.5" : "flex min-h-[30px] min-w-0 flex-col justify-between"}>
+      {/* 固定报价卡上半区高度：即使某一侧没有浮动盈亏，下面的账户/用户/项目也与对侧同价位严格齐平。 */}
+      <div className={`flex w-full min-w-0 justify-between gap-2 tabular-nums ${metadata ? "min-h-[30px] items-center" : "items-start"} ${isShort ? "flex-row-reverse" : ""}`}>
+        <div className={metadata
+          // 数量容器占满盈亏双行带，并在其中垂直居中；左右两侧的数量基线始终一致。
+          ? `flex min-h-[30px] min-w-0 self-stretch items-center gap-1.5 ${isShort ? "flex-row-reverse justify-start text-right" : ""}`
+          : `flex min-h-[30px] min-w-0 flex-col justify-between ${isShort ? "items-end text-right" : "items-start"}`
+        }>
           <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
           {!metadata && integratedStatusSummary && <span className="shrink-0 whitespace-nowrap text-[9px] font-medium leading-none text-slate-400" title={`本档${integratedStatusSummary}`} aria-label={`本档${integratedStatusSummary}`}>{integratedStatusSummary}</span>}
           {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
         </div>
         {floatingPnl !== null && (
-          <span className={`flex min-h-[30px] shrink-0 flex-col items-end justify-between text-right ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
+          <span className={`flex h-[30px] shrink-0 flex-col justify-center gap-[2px] ${isShort ? "items-start text-left" : "items-end text-right"} ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
             <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
-              <span className={`${metadata ? "mt-0.5 text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
+              <span className={`${metadata ? "text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
             )}
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPendingOnly ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`${metadata.accountName ? `账户 ${metadata.accountName}，` : ""}用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPendingOnly ? "，挂单待成交" : ""}`}>
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-[9px] font-medium leading-none ${isShort ? "flex-row-reverse text-right" : "text-left"} ${isLocked && !isPendingOnly ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`${metadata.accountName ? `账户 ${metadata.accountName}，` : ""}用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPendingOnly ? "，挂单待成交" : ""}`}>
+        <div className={`flex min-w-0 flex-1 items-center overflow-hidden ${isShort ? "flex-row-reverse justify-start" : ""}`}>
           {metadata.accountName && <>
             <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
             <span className="shrink-0">·</span>
@@ -14846,7 +15039,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className={`${isShort ? "mr-1" : "ml-1"} flex shrink-0 items-center gap-0.5`}>
           {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 -translate-y-px text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
           {isPendingOnly && <Clock3 className="h-[9px] w-[9px] shrink-0 -translate-y-px text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
