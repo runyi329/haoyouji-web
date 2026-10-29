@@ -121,15 +121,19 @@ export const rechargeRouter = router({
   adminConfirmRecharge: protectedProcedure
     .input(z.object({
       orderId: z.number(),
+      chainEventId: z.number().int().positive().optional(),
       txnHash: z.string().optional(),
-      actualAmount: z.number().min(0.01),
+      actualAmount: z.number().min(0.01).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
         throw new Error("无权限");
       }
+      if (!input.chainEventId) {
+        throw new Error("请从待核对的链上到账记录选择证据；无链上凭证请使用人工调账");
+      }
       return await dbRecharge.adminConfirmRecharge(
-        ctx.user.id, input.orderId, input.txnHash, input.actualAmount
+        ctx.user.id, input.orderId, input.chainEventId
       );
     }),
 

@@ -3,6 +3,7 @@ import type { RechargeScanTarget } from "./db-recharge";
 import { getDb } from "./db";
 import { scannerHeartbeat } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { fetchWithTimeout } from "./scanners/fetch-with-timeout";
 
 // TronGrid API配置
 const TRONGRID_API_URL = 'https://api.trongrid.io';
@@ -96,7 +97,7 @@ export async function scanTRC20Transactions(targets?: RechargeScanTarget[]) {
   lastScanTimestamp = Date.now() - 24 * 60 * 60 * 1000;
   
   try {
-    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+    const wallets = (targets ?? await dbRecharge.getActiveRechargeScanTargets())
       .filter((target) => target.network === 'TRC20');
     
     if (wallets.length === 0) {
@@ -139,7 +140,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
         'TRON-PRO-API-KEY': TRONGRID_API_KEY
       };
     }
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${TRONGRID_API_URL}/v1/accounts/${walletAddress}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT_ADDRESS}`,
       fetchOptions
     );
@@ -165,6 +166,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 
   } catch (error) {
     console.error(`[Scanner] Error scanning ${label}:`, error);
+    throw error;
   }
 }
 
@@ -198,6 +200,20 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
 
     console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} to ${walletAddress.slice(0, 8)}... (tx: ${txnHash})`);
 
+    const chainEvent = await dbRecharge.recordRechargeChainEvent({
+      network: 'TRC20',
+      transactionId: txnHash,
+      eventId: String(tx.event_index ?? tx.id ?? 'transfer'),
+      walletAddress,
+      fromAddress,
+      tokenContract: USDT_CONTRACT_ADDRESS,
+      assetType: 'USDT',
+      amount,
+      blockHeight: tx.block_number ?? null,
+      blockTimestamp: timestamp,
+      matchReason: '等待订单核对',
+    });
+
     // 使用改进的匹配算法查找订单（传入txnHash + blockTimestamp双重防重复）
     const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, timestamp, {
       network: 'TRC20',
@@ -205,9 +221,8 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
     });
 
     if (!matchResult) {
-      // 未匹配时不加入 processedTxns，下次扫描会重试
-      // 只有成功完成订单后才加入，防止重复入账
-      console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT, will retry next scan`);
+      // 链上到账已持久化为待核对证据；重复扫描只更新最后发现时间。
+      console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT; recorded chain event #${chainEvent.id}`);
       currentScanStats.unmatchedTransactions++;
       return;
     }
@@ -221,7 +236,7 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
     }
 
     // 完成订单（按实际到账金额入账）
-    const success = await dbRecharge.completeRechargeOrder(order.id, txnHash, amount, matchType);
+    const success = await dbRecharge.completeRechargeOrder(order.id, txnHash, amount, matchType, Number(chainEvent.id));
 
     if (success) {
       console.log(`[Scanner] ✅ Order ${order.orderNo} completed! User ${order.userId} +${amount} USDT (match: ${matchType})`);
@@ -231,6 +246,7 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
 
   } catch (error) {
     console.error('[Scanner] Process transaction error:', error);
+    throw error;
   }
 }
 
@@ -240,9 +256,9 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
 export function startScanner() {
   console.log('[Scanner] Starting order-driven multi-chain blockchain scanner...');
   console.log('[Scanner] Supported chains: TRC20, APTOS, SOLANA, ERC20, BEP20');
-  console.log('[Scanner] Scan targets: active recharge orders only');
+  console.log('[Scanner] Scan targets: active orders and submitted reconciliation orders');
   console.log('[Scanner] Scan interval: 60 seconds');
-  console.log('[Scanner] Match strategy: exact (±0.000001) → one active order fuzzy (≤1.01 USDT) → record unmatched');
+  console.log('[Scanner] Match strategy: submitted TxID proof → active exact/fuzzy → persist chain evidence');
 
   // 立即执行一次（异步导入多链扫描器）
   (async () => {

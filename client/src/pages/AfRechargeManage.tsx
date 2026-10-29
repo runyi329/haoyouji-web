@@ -1534,15 +1534,10 @@ export default function AfRechargeManage() {
                       {(order.status === 'pending' || order.status === 'submitted') && (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setActualAmount(order.amount);
-                              setTxnHash(order.userTxnHash || order.user_txn_hash || "");
-                              setShowManualConfirmDialog(true);
-                            }}
+                            onClick={() => setLocation('/admin/recharge/unmatched')}
                             className="flex-1 py-2 text-xs font-medium text-[#D32F2F] border border-[#D32F2F] rounded-xl hover:bg-red-50 active:scale-[0.98] transition-all"
                           >
-                            手动确认到账
+                            核对链上到账
                           </button>
                           <button
                             onClick={() => { setCancelTarget(order); setShowCancelConfirm(true); }}
@@ -1852,11 +1847,11 @@ export default function AfRechargeManage() {
                       </div>
                       {/* 手动确认按钮 */}
                       <button
-                        onClick={() => openMonitorConfirm(order)}
+                        onClick={() => setLocation('/admin/recharge/unmatched')}
                         className="w-full py-2 text-xs font-medium text-[#D32F2F] border border-[#D32F2F] rounded-xl hover:bg-red-50 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                       >
                         <CheckCheck className="w-3.5 h-3.5" />
-                        手动确认此订单
+                        核对链上到账
                       </button>
                     </div>
                   );

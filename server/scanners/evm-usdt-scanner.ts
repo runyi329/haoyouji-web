@@ -1,5 +1,6 @@
 import * as dbRecharge from "../db-recharge";
 import type { RechargeNetwork, RechargeScanTarget } from "../db-recharge";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const ERC20_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
@@ -13,7 +14,7 @@ type ScanStats = {
 type EvmUsdtScannerConfig = {
   network: Extract<RechargeNetwork, "ERC20" | "BEP20">;
   label: string;
-  rpcUrl: string;
+  rpcUrls: string[];
   contractAddress: string;
   decimals: number;
   minConfirmations: number;
@@ -29,6 +30,8 @@ type EvmLog = {
   address?: string;
   blockNumber?: string;
   data?: string;
+  topics?: string[];
+  logIndex?: string;
   removed?: boolean;
   transactionHash?: string;
 };
@@ -81,17 +84,40 @@ function toAddressTopic(address: string): string | null {
   return `0x${normalized.slice(2).padStart(64, "0")}`;
 }
 
-async function rpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  });
-  if (!response.ok) throw new Error(`RPC HTTP ${response.status}`);
-  const payload = await response.json() as RpcResponse<T>;
-  if (payload.error) throw new Error(payload.error.message || "RPC 返回错误");
-  if (payload.result === undefined) throw new Error("RPC 未返回结果");
-  return payload.result;
+function topicToAddress(topic: string | undefined): string | null {
+  const normalized = String(topic ?? '').toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/.test(normalized)) return null;
+  return `0x${normalized.slice(-40)}`;
+}
+
+async function rpcCall<T>(rpcUrls: string[], method: string, params: unknown[]): Promise<T> {
+  const failures: string[] = [];
+  for (const rpcUrl of rpcUrls) {
+    try {
+      const response = await fetchWithTimeout(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      if (!response.ok) {
+        failures.push(`${new URL(rpcUrl).host}: HTTP ${response.status}`);
+        continue;
+      }
+      const payload = await response.json() as RpcResponse<T>;
+      if (payload.error) {
+        failures.push(`${new URL(rpcUrl).host}: ${payload.error.message || 'RPC 返回错误'}`);
+        continue;
+      }
+      if (payload.result === undefined) {
+        failures.push(`${new URL(rpcUrl).host}: RPC 未返回结果`);
+        continue;
+      }
+      return payload.result;
+    } catch (error: any) {
+      failures.push(`${new URL(rpcUrl).host}: ${error?.message || String(error)}`);
+    }
+  }
+  throw new Error(`${method} 在所有RPC节点失败：${failures.join(' | ')}`);
 }
 
 /**
@@ -126,7 +152,7 @@ export async function scanEvmUsdtTransactions(
     return stats;
   }
 
-  const latestBlockHex = await rpcCall<string>(config.rpcUrl, "eth_blockNumber", []);
+  const latestBlockHex = await rpcCall<string>(config.rpcUrls, "eth_blockNumber", []);
   const latestBlock = hexToNumber(latestBlockHex);
   if (latestBlock === null) throw new Error("无法解析最新区块高度");
 
@@ -143,7 +169,7 @@ export async function scanEvmUsdtTransactions(
     }
 
     stats.scannedAddresses++;
-    const logs = await rpcCall<EvmLog[]>(config.rpcUrl, "eth_getLogs", [{
+    const logs = await rpcCall<EvmLog[]>(config.rpcUrls, "eth_getLogs", [{
       address: config.contractAddress,
       fromBlock: `0x${fromBlock.toString(16)}`,
       toBlock: `0x${finalizedBlock.toString(16)}`,
@@ -161,13 +187,26 @@ export async function scanEvmUsdtTransactions(
       const cacheKey = log.blockNumber!;
       let blockTimestamp = blockTimestampCache.get(cacheKey);
       if (blockTimestamp === undefined && !blockTimestampCache.has(cacheKey)) {
-        const block = await rpcCall<EvmBlock | null>(config.rpcUrl, "eth_getBlockByNumber", [log.blockNumber, false]);
+        const block = await rpcCall<EvmBlock | null>(config.rpcUrls, "eth_getBlockByNumber", [log.blockNumber, false]);
         const timestampSeconds = hexToNumber(block?.timestamp);
         blockTimestamp = timestampSeconds === null ? undefined : timestampSeconds * 1000;
         blockTimestampCache.set(cacheKey, blockTimestamp);
       }
 
       stats.foundTransactions++;
+      const chainEvent = await dbRecharge.recordRechargeChainEvent({
+        network: config.network,
+        transactionId: log.transactionHash,
+        eventId: log.logIndex ?? `${log.blockNumber ?? 'block'}:${stats.foundTransactions}`,
+        walletAddress: wallet.walletAddress,
+        fromAddress: topicToAddress(log.topics?.[1]),
+        tokenContract: config.contractAddress,
+        assetType: 'USDT',
+        amount,
+        blockHeight: logBlock,
+        blockTimestamp,
+        matchReason: '等待订单核对',
+      });
       const matchResult = await dbRecharge.findOrderByAmount(amount, log.transactionHash, blockTimestamp, {
         network: config.network,
         walletAddress: wallet.walletAddress,
@@ -183,6 +222,7 @@ export async function scanEvmUsdtTransactions(
         log.transactionHash,
         amount,
         matchResult.matchType,
+        Number(chainEvent.id),
       );
       if (completed) {
         stats.matchedOrders++;

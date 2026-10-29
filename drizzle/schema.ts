@@ -1423,6 +1423,40 @@ export const rechargeOrders = mysqlTable("recharge_orders", {
 	index("recharge_orders_user_txn_hash_idx").on(table.userTxnHash),
 ]);
 
+// 扫描器发现的链上USDT到账事件。先持久化链上证据，再决定自动匹配或管理员核对，
+// 避免扫描失败、并行订单或服务重启后出现“只剩日志、无法回溯”的资金风险。
+export const rechargeChainEvents = mysqlTable("recharge_chain_events", {
+	id: bigint({ mode: "number" }).autoincrement().notNull().primaryKey(),
+	network: varchar({ length: 20 }).notNull(),
+	transactionId: varchar("transaction_id", { length: 128 }).notNull(),
+	eventId: varchar("event_id", { length: 128 }).default("").notNull(),
+	walletAddress: varchar("wallet_address", { length: 255 }).notNull(),
+	fromAddress: varchar("from_address", { length: 255 }),
+	tokenContract: varchar("token_contract", { length: 255 }),
+	assetType: varchar("asset_type", { length: 255 }),
+	amount: decimal({ precision: 20, scale: 8 }).notNull(),
+	blockHeight: varchar("block_height", { length: 80 }),
+	blockTimestamp: timestamp("block_timestamp", { mode: "string" }),
+	status: mysqlEnum(["pending", "matched", "ignored"]).default("pending").notNull(),
+	matchReason: varchar("match_reason", { length: 120 }),
+	resolvedOrderId: int("resolved_order_id"),
+	resolvedByAdminId: int("resolved_by_admin_id"),
+	resolvedAt: timestamp("resolved_at", { mode: "string" }),
+	firstSeenAt: timestamp("first_seen_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+	lastSeenAt: timestamp("last_seen_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+	createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("recharge_chain_events_network_tx_event_unique").on(table.network, table.transactionId, table.eventId),
+	index("recharge_chain_events_status_seen_idx").on(table.status, table.lastSeenAt),
+	index("recharge_chain_events_wallet_network_idx").on(table.walletAddress, table.network),
+	index("recharge_chain_events_order_idx").on(table.resolvedOrderId),
+]);
+
+export type RechargeChainEvent = typeof rechargeChainEvents.$inferSelect;
+export type InsertRechargeChainEvent = typeof rechargeChainEvents.$inferInsert;
+
 // 余额变动记录表
 export const balanceHistory = mysqlTable("balance_history", {
 	id: int().autoincrement().notNull().primaryKey(),

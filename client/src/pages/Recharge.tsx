@@ -93,9 +93,17 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
     { orderNo: resumeOrderNo ?? '' },
     { enabled: !!resumeOrderNo }
   );
+  const currentOrderQuery = trpc.recharge.getOrder.useQuery(
+    { orderNo: order?.orderNo ?? '' },
+    {
+      enabled: submitted && !!order?.orderNo,
+      refetchInterval: submitted && order?.status !== 'completed' ? 10_000 : false,
+      refetchOnWindowFocus: true,
+    },
+  );
   const activeOrdersQuery = trpc.recharge.getMyOrders.useQuery(
     { limit: 10 },
-    { enabled: !fromLedgerId && !resumeOrderNo }
+    { enabled: !fromLedgerId && !resumeOrderNo, refetchInterval: 10_000, refetchOnWindowFocus: true }
   );
   const balanceQuery = trpc.recharge.getBalance.useQuery(
     fromLedgerId
@@ -105,7 +113,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
   const displayBalance = balanceQuery.data;
   const activeRechargeOrder = ((activeOrdersQuery.data as any[]) || []).find((item: any) => {
     return (item.status === 'pending' || item.status === 'submitted')
-      && new Date(item.expiresAt).getTime() > Date.now();
+      && (item.status === 'submitted' || new Date(item.expiresAt).getTime() > Date.now());
   });
   const activeOrderHint = activeRechargeOrder?.status === 'submitted'
     ? '当前有一笔确认中的订单，请等待到账结果后再充值'
@@ -145,7 +153,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
         : Math.max(0, Math.floor((parsedExpiresAt - Date.now()) / 1000));
       setTimeLeft(initialTimeLeft);
       setOrder(result);
-      setShowPaymentProof(false);
+      setShowPaymentProof(true);
       setUserTxnHash("");
       setPaymentProofImage("");
       setPaymentProofPreview("");
@@ -166,11 +174,16 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
 
   const handleSubmitTransfer = async () => {
     if (!order?.orderNo) return;
+    if (!userTxnHash.trim()) {
+      setShowPaymentProof(true);
+      alert('请粘贴本笔转账的链上 TxID 后再提交。共享收款地址不能只凭金额或截图确认到账。');
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await submitTransferMutation.mutateAsync({
         orderNo: order.orderNo,
-        ...(userTxnHash.trim() ? { userTxnHash: userTxnHash.trim() } : {}),
+        userTxnHash: userTxnHash.trim(),
         ...(paymentProofImage ? { paymentProofImage } : {}),
       });
       setOrder((current: any) => current ? {
@@ -184,6 +197,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
         referenceNo: String(order.orderNo),
       });
       setSubmitted(true);
+      activeOrdersQuery.refetch();
     } catch (error: any) {
       alert(error.message || "提交失败，请重试");
     } finally {
@@ -268,6 +282,16 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
     return () => { cancelled = true; };
   }, [resumeOrderNo, resumeOrderQuery.data]);
 
+  useEffect(() => {
+    const latestOrder = currentOrderQuery.data as any;
+    if (!latestOrder || !order?.orderNo || latestOrder.orderNo !== order.orderNo) return;
+    setOrder((current: any) => current ? { ...current, ...latestOrder } : latestOrder);
+    if (latestOrder.status === 'completed') {
+      activeOrdersQuery.refetch();
+      balanceQuery.refetch();
+    }
+  }, [currentOrderQuery.data, order?.orderNo]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -293,8 +317,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
               <Link2 className="h-4 w-4" style={{ color: accent }} />
             </span>
             <span className="min-w-0">
-              <span className={`block text-sm font-medium ${dark ? "text-gray-200" : "text-gray-600"}`}>提交付款凭证 <span className="font-normal text-xs">（可选）</span></span>
-              <span className={`block truncate text-[11px] ${muted}`}>粘贴 TxID 可加速核对；支持附付款截图</span>
+              <span className={`block text-sm font-medium ${dark ? "text-gray-200" : "text-gray-600"}`}>提交链上 TxID <span className="font-normal text-xs text-red-500">（必填）</span></span>
+              <span className={`block text-[11px] ${muted}`}>地址可能同时服务其他订单；截图仅作异常协助材料</span>
             </span>
           </span>
           {showPaymentProof ? <ChevronUp className="h-4 w-4 shrink-0" style={{ color: accent }} /> : <ChevronDown className="h-4 w-4 shrink-0" style={{ color: accent }} />}
@@ -303,11 +327,11 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
         {showPaymentProof && (
           <div className="mt-3 space-y-2.5">
             <div>
-              <label className={`mb-1 block text-xs font-medium ${dark ? "text-gray-300" : "text-gray-600"}`}>交易哈希（TxID）或 Aptos 交易版本号</label>
+              <label className={`mb-1 block text-xs font-medium ${dark ? "text-gray-300" : "text-gray-600"}`}>交易哈希（TxID）或 Aptos 交易版本号 <span className="text-red-500">*</span></label>
               <input
                 value={userTxnHash}
                 onChange={(event) => setUserTxnHash(event.target.value)}
-                placeholder="复制后粘贴，选填"
+                placeholder="从提币记录复制后粘贴"
                 maxLength={100}
                 className={`w-full rounded-xl border px-3 py-2.5 font-mono text-xs outline-none placeholder:font-sans ${dark ? "bg-black/30 text-gray-100 placeholder:text-gray-600" : "bg-white text-gray-700 placeholder:text-gray-400"}`}
                 style={{ borderColor: border }}
@@ -328,7 +352,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
                 </div>
               )}
             </div>
-            <p className={`text-[10px] leading-4 ${muted}`}>订单创建后 30 分钟内持续扫描。截图仅用于异常核验，最终以链上交易为准。</p>
+            <p className={`text-[10px] leading-4 ${muted}`}>付款倒计时为30分钟；提交TxID后，系统还会保留72小时受限链上核对期。截图仅用于异常协助，最终以链上交易为准。</p>
           </div>
         )}
       </div>
@@ -362,8 +386,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(34,197,94,0.12)" }}>
                 <CheckCircle2 className="w-9 h-9 text-green-500" />
               </div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">转账确认已提交</h2>
-              <p className="text-sm text-gray-500">系统将在订单创建后的 30 分钟内扫描链上交易，确认到账后自动入账</p>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">{order.status === 'completed' ? '充值已到账' : '链上凭证已提交'}</h2>
+              <p className="text-sm text-gray-500">{order.status === 'completed' ? '余额已自动更新，您可以继续创建下一笔充值。' : '正在按TxID、网络和收款地址核对；付款窗口30分钟，提交凭证后可受限补偿核对72小时。'}</p>
             </div>
             <div className="rounded-2xl p-4 space-y-3 bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -386,8 +410,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
               )}
               <div className="flex justify-between items-center py-2">
                 <span className="text-gray-400 text-sm">状态</span>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-[#1E88D6]">
-                  <Clock className="w-3 h-3 mr-1" />确认中
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${order.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-[#1E88D6]'}`}>
+                  {order.status === 'completed' ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}{order.status === 'completed' ? '已到账' : '确认中'}
                 </span>
               </div>
             </div>
@@ -472,7 +496,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
                 {cancelPendingOrderMutation.isPending ? '取消中...' : '取消订单'}
               </button>
               <button onClick={handleSubmitTransfer} disabled={submitting || timeLeft === 0} className={blueBtn + " py-3.5 disabled:opacity-50"} style={blueBtnStyle}>
-                {submitting ? '提交中...' : '我已完成转账'}
+                {submitting ? '提交中...' : '提交 TxID 并核验'}
               </button>
             </div>
             <div className="rounded-xl p-3" style={{ background: "#FDECEC", border: "1px solid #F7C5C5" }}>
@@ -599,8 +623,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{background:'linear-gradient(135deg,#1a3a1a,#2d5a2d)'}}>
               <CheckCircle2 className="w-9 h-9 text-green-400" />
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">转账确认已提交</h2>
-            <p className="text-sm text-gray-400">系统将在订单创建后的 30 分钟内扫描链上交易，确认到账后自动入账</p>
+            <h2 className="text-lg font-bold text-white mb-2">{order.status === 'completed' ? '充值已到账' : '链上凭证已提交'}</h2>
+            <p className="text-sm text-gray-400">{order.status === 'completed' ? '余额已自动更新，您可以继续创建下一笔充值。' : '正在按TxID、网络和收款地址核对；提交凭证后可受限补偿核对72小时。'}</p>
           </div>
           <div className="rounded-2xl p-4 space-y-3" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
             <div className="flex justify-between items-center py-2 border-b border-[#2a2a2a]">
@@ -623,8 +647,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
             )}
             <div className="flex justify-between items-center py-2">
               <span className="text-gray-400 text-sm">状态</span>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50">
-                <Clock className="w-3 h-3 mr-1" />确认中
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${order.status === 'completed' ? 'bg-green-900/30 text-green-300 border-green-700/50' : 'bg-blue-900/40 text-blue-300 border-blue-700/50'}`}>
+                {order.status === 'completed' ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}{order.status === 'completed' ? '已到账' : '确认中'}
               </span>
             </div>
           </div>
@@ -752,7 +776,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
               className="rounded-xl py-3.5 font-semibold text-black tracking-widest disabled:opacity-50"
               style={{background:'linear-gradient(135deg,#CBA471,#e8c98a,#CBA471)',boxShadow:'0 4px 20px rgba(203,164,113,0.4)'}}
             >
-              {submitting ? '提交中...' : '我已完成转账'}
+              {submitting ? '提交中...' : '提交 TxID 并核验'}
             </button>
           </div>
           <div className="rounded-xl p-3" style={{background:'rgba(244,67,54,0.08)',border:'1px solid rgba(244,67,54,0.25)'}}>

@@ -1,5 +1,6 @@
 import * as dbRecharge from "../db-recharge";
 import type { RechargeScanTarget } from "../db-recharge";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 // Solana RPC配置：公共主节点被限流时，自动退回至可读取签名与交易详情的备用节点。
 const SOLANA_RPC_URLS = Array.from(new Set([
@@ -15,7 +16,7 @@ async function callSolanaRpc(method: string, params: unknown[]): Promise<any | n
   const failures: string[] = [];
   for (const rpcUrl of SOLANA_RPC_URLS) {
     try {
-      const response = await fetch(rpcUrl, {
+      const response = await fetchWithTimeout(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
@@ -28,7 +29,7 @@ async function callSolanaRpc(method: string, params: unknown[]): Promise<any | n
     }
   }
   console.error(`[Solana Scanner] RPC ${method} failed on all endpoints: ${failures.join(' | ')}`);
-  return null;
+  throw new Error(`Solana ${method} 在所有RPC节点失败：${failures.join(' | ')}`);
 }
 
 // 已处理的交易签名
@@ -56,7 +57,7 @@ export async function scanSolanaTransactions(targets?: RechargeScanTarget[]) {
   };
 
   try {
-    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+    const wallets = (targets ?? await dbRecharge.getActiveRechargeScanTargets())
       .filter((target) => target.network === 'SOLANA');
     
     if (wallets.length === 0) {
@@ -208,6 +209,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 
   } catch (error) {
     console.error(`[Solana Scanner] Error scanning ${label}:`, error);
+    throw error;
   }
 }
 
@@ -258,7 +260,7 @@ async function processTransaction(signature: string, tokenAccount: string | null
     const instructions = tx.transaction?.message?.instructions || [];
 
     // 查找SPL Token转账指令
-    for (const instruction of instructions) {
+    for (const [instructionIndex, instruction] of instructions.entries()) {
       // 修复：正确的逻辑运算符优先级
       if (instruction.program === 'spl-token' && 
           (instruction.parsed?.type === 'transfer' || 
@@ -281,6 +283,19 @@ async function processTransaction(signature: string, tokenAccount: string | null
           if (amount > 0) {
             scanStats.foundTransactions++;
             console.log(`[Solana Scanner] ✅ Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${signature.slice(0, 10)}...)`);
+            const chainEvent = await dbRecharge.recordRechargeChainEvent({
+              network: 'SOLANA',
+              transactionId: signature,
+              eventId: String(instructionIndex),
+              walletAddress,
+              fromAddress: info.source || null,
+              tokenContract: USDT_MINT_ADDRESS,
+              assetType: 'USDT',
+              amount,
+              blockHeight: tx.slot ?? null,
+              blockTimestamp,
+              matchReason: '等待订单核对',
+            });
             
             // 匹配订单（传入signature + blockTimestamp双重防重复）
             const matchResult = await dbRecharge.findOrderByAmount(amount, signature, blockTimestamp, {
@@ -294,6 +309,7 @@ async function processTransaction(signature: string, tokenAccount: string | null
                 signature,
                 amount,
                 matchResult.matchType,
+                Number(chainEvent.id),
               );
               if (completed) {
                 scanStats.matchedOrders++;
@@ -311,5 +327,6 @@ async function processTransaction(signature: string, tokenAccount: string | null
 
   } catch (error) {
     console.error('[Solana Scanner] Error processing transaction:', error);
+    throw error;
   }
 }

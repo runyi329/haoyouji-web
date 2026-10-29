@@ -435,10 +435,10 @@ export default function RechargeMonitor() {
         {/* 快捷操作 */}
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => setLocation("/admin/recharge/manual-confirm")}
+            onClick={() => setLocation("/admin/recharge/unmatched")}
             className="bg-[#D32F2F] text-white py-3 rounded-lg font-medium text-sm hover:bg-[#B71C1C]"
           >
-            手动确认
+            核对链上到账
           </button>
           <button
             onClick={() => setLocation("/admin/wallet-addresses")}

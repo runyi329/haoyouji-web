@@ -200,10 +200,10 @@ export default function RechargeOrders() {
                     {(order.status === 'pending' || order.status === 'submitted') && (
                       <div className="flex gap-2 mt-2">
                         <button
-                          onClick={() => setLocation("/admin/recharge/manual-confirm")}
+                          onClick={() => setLocation("/admin/recharge/unmatched")}
                           className="flex-1 py-1.5 text-xs text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
                         >
-                          手动确认
+                          核对链上到账
                         </button>
                         <button
                           onClick={() => { setCancelTarget(order); setShowCancelConfirm(true); }}

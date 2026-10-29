@@ -1,251 +1,185 @@
-import { useLocation } from "wouter";
-import { ArrowLeft, CheckCircle2, AlertCircle, Search, ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { ArrowLeft, CheckCircle2, AlertTriangle, ExternalLink, Link2, WalletCards } from "lucide-react";
 import { trpc } from "../../lib/trpc";
-import { useState } from "react";
 import { toast } from "sonner";
+
+function explorerUrl(network: string, transactionId: string) {
+  const encoded = encodeURIComponent(transactionId);
+  switch (network) {
+    case "TRC20": return `https://tronscan.org/#/transaction/${encoded}`;
+    case "ERC20": return `https://etherscan.io/tx/${encoded}`;
+    case "BEP20": return `https://bscscan.com/tx/${encoded}`;
+    case "APTOS": return `https://explorer.aptoslabs.com/txn/${encoded}?network=mainnet`;
+    case "SOLANA": return `https://solscan.io/tx/${encoded}`;
+    default: return null;
+  }
+}
+
+function normalizedAddress(network: string, value: unknown) {
+  const address = String(value ?? "").trim();
+  return network === "SOLANA" ? address : address.toLowerCase();
+}
+
+function formatDate(value: unknown) {
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "--";
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
 
 export default function RechargeManualConfirm() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const initialEventId = Number(new URLSearchParams(search).get("eventId") || 0);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [txnHash, setTxnHash] = useState("");
-  const [actualAmount, setActualAmount] = useState("");
-
   const utils = trpc.useUtils();
+  const eventsQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery(undefined, { refetchInterval: 15_000 });
+  const ordersQuery = trpc.recharge.adminGetPendingOrders.useQuery(undefined, { refetchInterval: 15_000 });
+  const allOrdersQuery = trpc.recharge.adminGetAllOrders.useQuery({ limit: 200 }, { refetchInterval: 30_000 });
 
-  // 获取所有待处理订单（pending + submitted）
-  const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery();
-  const allOrdersQuery = trpc.recharge.adminGetAllOrders.useQuery({ limit: 50 });
+  const events = (eventsQuery.data ?? []) as any[];
+  const orders = (ordersQuery.data ?? []) as any[];
+  const recentlyExpiredOrders = ((allOrdersQuery.data ?? []) as any[]).filter((order) => {
+    if (String(order.status) !== "expired") return false;
+    const expiresAt = new Date(String(order.expiresAt ?? order.expires_at)).getTime();
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() - 72 * 60 * 60 * 1000;
+  });
+  const reconcilableOrders = [...orders, ...recentlyExpiredOrders].filter((order, index, list) => index === list.findIndex((candidate) => Number(candidate.id) === Number(order.id)));
 
-  // 合并pending和submitted状态的订单
-  const ordersToConfirm = [
-    ...(pendingOrdersQuery.data || []),
-    ...(allOrdersQuery.data || []).filter((o: any) => o.status === 'submitted')
-  ].filter((order: any, index: number, self: any[]) => 
-    // 去重
-    index === self.findIndex((o: any) => o.id === order.id)
-  ).sort((a: any, b: any) => 
-    // 按创建时间倒序
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  useEffect(() => {
+    if (!initialEventId || selectedEvent || events.length === 0) return;
+    const matched = events.find((event) => Number(event.id) === initialEventId);
+    if (matched) setSelectedEvent(matched);
+  }, [initialEventId, selectedEvent, events]);
 
-  // 手动确认充值
+  const candidateOrders = useMemo(() => {
+    if (!selectedEvent) return [];
+    return reconcilableOrders.filter((order) => (
+      String(order.network) === String(selectedEvent.network)
+      && normalizedAddress(String(order.network), order.walletAddress ?? order.wallet_address) === normalizedAddress(String(selectedEvent.network), selectedEvent.wallet_address)
+      && ["pending", "submitted"].includes(String(order.status))
+    ));
+  }, [reconcilableOrders, selectedEvent]);
+
   const confirmMutation = trpc.recharge.adminConfirmRecharge.useMutation({
     onSuccess: (data) => {
-      toast.success(`充值确认成功！用户ID ${data.userId} 已到账 ${data.amount} USDT`);
+      toast.success(`链上到账已确认：用户 ${data.userId} 已到账 ${Number(data.amount).toFixed(4)} USDT`);
       setSelectedOrder(null);
-      setTxnHash("");
-      setActualAmount("");
+      setSelectedEvent(null);
+      utils.recharge.adminGetUnmatchedTransactions.invalidate();
       utils.recharge.adminGetPendingOrders.invalidate();
       utils.recharge.adminGetAllOrders.invalidate();
       utils.recharge.adminGetSystemStats.invalidate();
     },
-    onError: (err) => {
-      toast.error(err.message || "确认失败");
-    },
+    onError: (error) => toast.error(error.message || "确认失败"),
   });
 
   const handleConfirm = () => {
-    if (!selectedOrder) return;
-    if (!actualAmount || parseFloat(actualAmount) <= 0) {
-      toast.error("请输入实际到账金额");
-      return;
-    }
-
-    confirmMutation.mutate({
-      orderId: selectedOrder.id,
-      txnHash: txnHash.trim(),
-      actualAmount: parseFloat(actualAmount),
-    });
-  };
-
-  const handleSelectOrder = (order: any) => {
-    setSelectedOrder(order);
-    setActualAmount(order.amount);
-    setTxnHash("");
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}-${day} ${hours}:${minutes}`;
-  };
-
-  const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-    pending: { label: '待支付', color: 'text-orange-700', bgColor: 'bg-orange-100' },
-    submitted: { label: '确认中', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+    if (!selectedEvent || !selectedOrder) return;
+    const message = `将链上到账证据 #${selectedEvent.id}（${Number(selectedEvent.amount).toFixed(4)} USDT）关联至订单 ${selectedOrder.orderNo ?? selectedOrder.order_no}。金额与TxID均来自链上证据，确认后不可重复入账。`;
+    if (!window.confirm(message)) return;
+    confirmMutation.mutate({ orderId: Number(selectedOrder.id), chainEventId: Number(selectedEvent.id) });
   };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 顶部导航 */}
-      <div className="bg-white border-b sticky top-0 z-10">
+      <div className="sticky top-0 z-10 border-b bg-white">
         <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation("/admin/recharge-monitor")} className="mr-3">
-            <ArrowLeft className="w-6 h-6" />
+          <button onClick={() => window.history.back()} className="mr-3" aria-label="返回">
+            <ArrowLeft className="h-6 w-6" />
           </button>
-          <h1 className="text-lg font-semibold">手动确认充值</h1>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-900">链上到账核对</h1>
+            <p className="text-[11px] text-gray-400">仅可从扫描到的链上证据完成充值</p>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* 提示信息 */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-          <p className="font-medium mb-1">使用说明：</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>选择需要确认的订单</li>
-            <li>到区块链浏览器查询交易哈希</li>
-            <li>填写交易哈希和实际到账金额</li>
-            <li>点击"确认充值"完成操作</li>
-          </ol>
+      <div className="space-y-4 p-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold"><WalletCards className="h-4 w-4" />安全核对流程</div>
+          <p className="leading-5">先选择链上到账记录，再选择同网络、同收款地址的订单。TxID与实际到账金额由系统锁定，不能手动填写或修改。无链上凭证的业务款项请走独立人工调账，不会完成充值订单。</p>
         </div>
 
-        {/* 待确认订单列表 */}
-        <div className="bg-white rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <h2 className="font-semibold text-gray-900">待确认订单 ({ordersToConfirm.length})</h2>
+        <section className="overflow-hidden rounded-xl bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3">
+            <h2 className="font-semibold text-gray-900">待核对链上到账</h2>
+            <span className="text-xs text-gray-400">{events.length} 条</span>
           </div>
-
-          {ordersToConfirm.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <CheckCircle2 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-              <p>暂无待确认订单</p>
+          {events.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gray-300" />
+              暂无待核对链上到账记录
             </div>
           ) : (
             <div className="divide-y">
-              {ordersToConfirm.map((order: any) => {
-                const config = statusConfig[order.status] || statusConfig.pending;
-                const isSelected = selectedOrder?.id === order.id;
-                
+              {events.map((event) => {
+                const selected = Number(selectedEvent?.id) === Number(event.id);
+                const url = explorerUrl(String(event.network), String(event.transaction_id));
                 return (
-                  <div
-                    key={order.id}
-                    onClick={() => handleSelectOrder(order)}
-                    className={`px-4 py-3 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50'
-                    }`}
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => { setSelectedEvent(event); setSelectedOrder(null); }}
+                    className={`block w-full px-4 py-3 text-left transition-colors ${selected ? "border-l-4 border-blue-500 bg-blue-50" : "hover:bg-gray-50"}`}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{order.amount} USDT</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
-                          {config.label}
-                        </span>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="font-semibold tabular-nums text-gray-900">{Number(event.amount).toFixed(4)} USDT</span>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">{event.network}</span>
+                    </div>
+                    <div className="space-y-0.5 text-xs text-gray-500">
+                      <div className="flex items-center justify-between gap-2"><span>事件 #{event.id}</span><span>{formatDate(event.block_timestamp ?? event.first_seen_at)}</span></div>
+                      <div className="truncate font-mono">收款：{event.wallet_address}</div>
+                      <div className="flex items-center gap-1.5 text-blue-600" onClick={(click) => click.stopPropagation()}>
+                        {url ? <a href={url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 hover:underline"><span className="truncate font-mono">TxID：{event.transaction_id}</span><ExternalLink className="h-3 w-3 shrink-0" /></a> : <span className="truncate font-mono">TxID：{event.transaction_id}</span>}
                       </div>
-                      <span className="text-xs text-gray-400">{order.network}</span>
                     </div>
-                    <div className="text-xs text-gray-500 space-y-0.5">
-                      <div>订单号: {order.orderNo}</div>
-                      <div>用户ID: {order.userId}</div>
-                      <div>创建时间: {formatDate(order.createdAt)}</div>
-                    </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* 确认表单 */}
-        {selectedOrder && (
-          <div className="bg-white rounded-lg p-4 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b">
-              <h3 className="font-semibold text-gray-900">确认订单</h3>
-              <button
-                onClick={() => {
-                  setSelectedOrder(null);
-                  setTxnHash("");
-                  setActualAmount("");
-                }}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                取消
-              </button>
+        {selectedEvent && (
+          <section className="overflow-hidden rounded-xl bg-white shadow-sm">
+            <div className="border-b bg-gray-50 px-4 py-3">
+              <h2 className="font-semibold text-gray-900">选择对应订单</h2>
+              <p className="mt-0.5 text-xs text-gray-500">只展示网络和收款地址均一致、仍可核对的订单</p>
             </div>
-
-            {/* 订单信息 */}
-            <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">订单号</span>
-                <span className="font-mono text-xs">{selectedOrder.orderNo}</span>
+            {candidateOrders.length === 0 ? (
+              <div className="p-5 text-center text-sm text-amber-700">
+                <AlertTriangle className="mx-auto mb-2 h-6 w-6" />
+                未找到可安全匹配的订单。请勿改用自由TxID确认；若无证据可匹配，请转人工调账。
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">订单金额</span>
-                <span className="font-medium">{selectedOrder.amount} USDT</span>
+            ) : (
+              <div className="divide-y">
+                {candidateOrders.map((order) => {
+                  const selected = Number(selectedOrder?.id) === Number(order.id);
+                  return (
+                    <button key={order.id} type="button" onClick={() => setSelectedOrder(order)} className={`block w-full px-4 py-3 text-left ${selected ? "border-l-4 border-emerald-500 bg-emerald-50" : "hover:bg-gray-50"}`}>
+                      <div className="mb-1 flex items-center justify-between"><span className="font-semibold text-gray-900">{Number(order.amount).toFixed(4)} USDT</span><span className="text-xs text-gray-500">{order.status === "submitted" ? "确认中" : "待支付"}</span></div>
+                      <div className="text-xs text-gray-500">订单：{order.orderNo ?? order.order_no} · 用户：{order.realName ?? order.userName ?? order.username ?? order.userId ?? order.user_id}</div>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">用户ID</span>
-                <span className="font-medium">{selectedOrder.userId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">网络</span>
-                <span className="font-medium">{selectedOrder.network}</span>
-              </div>
-            </div>
-
-            {/* 区块链浏览器链接 */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <div className="flex items-start">
-                <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
-                <div className="flex-1 text-sm text-yellow-800">
-                  <p className="font-medium mb-1">查询交易记录</p>
-                  <a
-                    href={`https://tronscan.org/#/address/TTHZ7NvpKSMCyU3JNLLN6zZNruysy5emQJ`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-blue-600 hover:underline"
-                  >
-                    在 TronScan 查看收款地址
-                    <ExternalLink className="w-3 h-3 ml-1" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* 交易哈希 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                交易哈希 <span className="text-gray-400 text-xs font-normal">（选填）</span>
-              </label>
-              <input
-                type="text"
-                value={txnHash}
-                onChange={(e) => setTxnHash(e.target.value)}
-                placeholder="粘贴区块链交易哈希"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#D32F2F] focus:border-transparent"
-              />
-            </div>
-
-            {/* 实际到账金额 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                实际到账金额 (USDT) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                value={actualAmount}
-                onChange={(e) => setActualAmount(e.target.value)}
-                placeholder="输入实际到账金额"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D32F2F] focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                如果金额与订单金额不同（如扣除了手续费），请填写实际到账金额
-              </p>
-            </div>
-
-            {/* 确认按钮 */}
-            <button
-              onClick={handleConfirm}
-              disabled={confirmMutation.isPending}
-              className="w-full py-3 bg-[#D32F2F] text-white rounded-lg font-medium hover:bg-[#B71C1C] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {confirmMutation.isPending ? "处理中..." : "确认充值"}
-            </button>
-          </div>
+            )}
+          </section>
         )}
+
+        {selectedEvent && selectedOrder && (
+          <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="mb-2 flex items-center gap-2 font-semibold text-emerald-900"><Link2 className="h-4 w-4" />确认链上证据关联</div>
+            <p className="text-sm leading-5 text-emerald-800">将 <strong>{Number(selectedEvent.amount).toFixed(4)} USDT</strong> 的链上到账证据关联到订单 <strong>{selectedOrder.orderNo ?? selectedOrder.order_no}</strong>。系统会在一个事务内完成订单、钱包和流水入账。</p>
+            <button type="button" onClick={handleConfirm} disabled={confirmMutation.isPending} className="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-50">
+              {confirmMutation.isPending ? "正在确认…" : "确认链上到账并入账"}
+            </button>
+          </section>
+        )}
+
+        <button type="button" onClick={() => setLocation("/admin/wallet-adjust") } className="w-full rounded-xl border border-gray-300 bg-white py-3 text-sm text-gray-600">无链上凭证，转人工调账</button>
       </div>
     </div>
   );

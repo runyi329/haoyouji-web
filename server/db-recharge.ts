@@ -14,6 +14,9 @@ const SMS_TEMPLATE_ORDER_UPDATE = '2630924'; // 账本订单信息有新更新
 const YJH_USER_ID_SMS = 4957151;
 const LEDGER_52_ID = 52;
 const RECHARGE_ORDER_EXPIRY_MINUTES = 30;
+// 用户付款倒计时仍为30分钟；提交付款凭证后保留有限补偿扫描窗口，
+// 防止节点抖动、确认延迟或服务短暂重启把已付款订单永久漏掉。
+export const RECHARGE_RECONCILIATION_HOURS = 72;
 export const MIN_RECHARGE_AMOUNT = 500;
 
 // 仅作为订单与扫描器之间的内部枚举；前端实际开放网络仍由充值路由单独控制。
@@ -24,11 +27,29 @@ export interface RechargeScanTarget {
   network: RechargeNetwork;
   walletAddress: string;
   label: string | null;
+  scanSince: string | null;
+  hasActiveOrder: boolean;
 }
 
 export interface RechargeOrderMatchContext {
   network: RechargeNetwork;
   walletAddress: string;
+}
+
+export type RechargeMatchType = 'exact' | 'fuzzy' | 'proof' | 'manual';
+
+export interface RechargeChainEventInput {
+  network: RechargeNetwork;
+  transactionId: string;
+  eventId?: string | null;
+  walletAddress: string;
+  fromAddress?: string | null;
+  tokenContract?: string | null;
+  assetType?: string | null;
+  amount: number;
+  blockHeight?: string | number | null;
+  blockTimestamp?: number | string | Date | null;
+  matchReason?: string | null;
 }
 
 function isRechargeNetwork(value: string): value is RechargeNetwork {
@@ -61,18 +82,20 @@ function asUtcIsoString(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? raw : date.toISOString();
 }
 
-function normalizeChainTransactionId(value: string | undefined | null): string | null {
+export function normalizeChainTransactionId(value: string | undefined | null, network?: RechargeNetwork): string | null {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
   const normalized = raw.replace(/^0x/i, '');
   if (/^[0-9a-f]{64}$/i.test(normalized)) return normalized.toLowerCase();
   // Aptos Indexer 当前向扫描器返回 transaction_version，因此兼容用户提交版本号。
   if (/^\d{1,20}$/.test(raw)) return raw;
+  // Solana 签名为 Base58 且大小写敏感；不得转小写。
+  if (network === 'SOLANA' && /^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(raw)) return raw;
   return null;
 }
 
-function normalizeUserSubmittedTransactionId(value: string | undefined | null): string | null {
-  const normalized = normalizeChainTransactionId(value);
+function normalizeUserSubmittedTransactionId(value: string | undefined | null, network?: RechargeNetwork): string | null {
+  const normalized = normalizeChainTransactionId(value, network);
   if (value?.trim() && !normalized) {
     throw new Error('交易哈希格式不正确，请粘贴完整的 TxID 或 Aptos 交易版本号');
   }
@@ -88,6 +111,112 @@ function validateRechargeProofImage(imageData: string | undefined | null): strin
   const byteLength = Buffer.byteLength(match[1], 'base64');
   if (byteLength > MAX_RECHARGE_PROOF_BYTES) throw new Error('付款截图压缩后不能超过 1MB');
   return imageData;
+}
+
+let rechargeChainEventInfrastructureReady: Promise<void> | null = null;
+
+/**
+ * 链上到账事件是充值审计的事实来源。使用独立表而非旧 unmatched_transactions，
+ * 因为旧表缺少网络、收款地址和事件粒度，不能安全作为人工确认依据。
+ */
+async function ensureRechargeChainEventInfrastructure(): Promise<void> {
+  if (!rechargeChainEventInfrastructureReady) {
+    rechargeChainEventInfrastructureReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS recharge_chain_events (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          network VARCHAR(20) NOT NULL,
+          transaction_id VARCHAR(128) NOT NULL,
+          event_id VARCHAR(128) NOT NULL DEFAULT '',
+          wallet_address VARCHAR(255) NOT NULL,
+          from_address VARCHAR(255) NULL,
+          token_contract VARCHAR(255) NULL,
+          asset_type VARCHAR(255) NULL,
+          amount DECIMAL(20,8) NOT NULL,
+          block_height VARCHAR(80) NULL,
+          block_timestamp DATETIME NULL,
+          status ENUM('pending','matched','ignored') NOT NULL DEFAULT 'pending',
+          match_reason VARCHAR(120) NULL,
+          resolved_order_id INT NULL,
+          resolved_by_admin_id INT NULL,
+          resolved_at DATETIME NULL,
+          first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_recharge_chain_event (network, transaction_id, event_id),
+          KEY idx_recharge_chain_event_status_seen (status, last_seen_at),
+          KEY idx_recharge_chain_event_wallet_network (wallet_address, network),
+          KEY idx_recharge_chain_event_order (resolved_order_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+    })().catch((error) => {
+      rechargeChainEventInfrastructureReady = null;
+      throw error;
+    });
+  }
+  await rechargeChainEventInfrastructureReady;
+}
+
+function toUtcSqlDate(value: RechargeChainEventInput['blockTimestamp']): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const date = value instanceof Date
+    ? value
+    : typeof value === 'number'
+      ? new Date(value)
+      : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** 扫描器每次发现到账均调用；同链同交易同事件只更新最后发现时间，不会重复入账。 */
+export async function recordRechargeChainEvent(input: RechargeChainEventInput): Promise<any> {
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('链上到账金额无效');
+  const transactionId = normalizeChainTransactionId(input.transactionId, input.network) ?? String(input.transactionId ?? '').trim();
+  const eventId = String(input.eventId ?? '').trim();
+  const walletAddress = String(input.walletAddress ?? '').trim();
+  if (!transactionId || !eventId || !walletAddress) throw new Error('链上到账事件缺少交易标识、事件标识或收款地址');
+
+  await ensureRechargeChainEventInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const blockTimestamp = toUtcSqlDate(input.blockTimestamp);
+  await (conn as any).execute(
+    `INSERT INTO recharge_chain_events
+      (network, transaction_id, event_id, wallet_address, from_address, token_contract, asset_type, amount, block_height, block_timestamp, match_reason, first_seen_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+     ON DUPLICATE KEY UPDATE
+       id = LAST_INSERT_ID(id),
+       last_seen_at = UTC_TIMESTAMP(),
+       from_address = COALESCE(VALUES(from_address), from_address),
+       token_contract = COALESCE(VALUES(token_contract), token_contract),
+       asset_type = COALESCE(VALUES(asset_type), asset_type),
+       block_height = COALESCE(VALUES(block_height), block_height),
+       block_timestamp = COALESCE(VALUES(block_timestamp), block_timestamp),
+       match_reason = CASE WHEN status = 'matched' THEN match_reason ELSE COALESCE(VALUES(match_reason), match_reason) END`,
+    [
+      input.network,
+      transactionId,
+      eventId,
+      walletAddress,
+      input.fromAddress?.trim() || null,
+      input.tokenContract?.trim() || null,
+      input.assetType?.trim() || null,
+      Number(input.amount).toFixed(8),
+      input.blockHeight === undefined || input.blockHeight === null ? null : String(input.blockHeight),
+      blockTimestamp,
+      input.matchReason?.trim() || null,
+    ],
+  );
+  const [rows] = await (conn as any).execute(
+    `SELECT * FROM recharge_chain_events WHERE network = ? AND transaction_id = ? AND event_id = ? LIMIT 1`,
+    [input.network, transactionId, eventId],
+  );
+  const event = (rows as any[])[0];
+  if (!event) throw new Error('链上到账事件保存后读取失败');
+  return event;
 }
 
 function serializeRechargeOrderForClient(order: any) {
@@ -231,21 +360,33 @@ export async function getEnabledWalletAddresses(network?: string) {
     .where(eq(walletAddresses.enabled, 1));
 }
 
-// 扫描器只读取仍处于支付窗口内订单绑定的网络和收款地址，绝不遍历所有启用钱包。
-// 收款地址即便在订单创建后被停用，仍需在该订单剩余窗口内被精确扫描，避免已创建订单漏记。
+// 扫描器只读取订单绑定的网络和收款地址，绝不遍历所有启用钱包。
+// 除30分钟支付窗口外，已提交转账凭证的订单保留有限补偿扫描期；普通未提交订单过期后仍不扫描，
+// 以免共享地址上的历史交易按金额误配到新订单。
 export async function getActiveRechargeScanTargets(): Promise<RechargeScanTarget[]> {
   const connection = await getDbConnection();
   if (!connection) throw new Error('数据库连接失败');
 
   const [rows] = await (connection as any).execute(
-    `SELECT DISTINCT r.network, r.wallet_address AS walletAddress, w.label
+    `SELECT r.network,
+            r.wallet_address AS walletAddress,
+            w.label,
+            MIN(r.created_at) AS scanSince,
+            MAX(CASE WHEN r.expires_at > UTC_TIMESTAMP() THEN 1 ELSE 0 END) AS hasActiveOrder
      FROM recharge_orders r
      LEFT JOIN wallet_addresses w
        ON w.network = r.network AND w.address = r.wallet_address
-     WHERE r.status IN ('pending', 'submitted')
-       AND r.expires_at > UTC_TIMESTAMP()
+     WHERE (
+       (r.status IN ('pending', 'submitted') AND r.expires_at > UTC_TIMESTAMP())
+       OR (
+         r.status = 'submitted'
+         AND r.expires_at <= UTC_TIMESTAMP()
+         AND r.expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR)
+       )
+     )
        AND r.wallet_address IS NOT NULL
        AND r.wallet_address <> ''
+     GROUP BY r.network, r.wallet_address, w.label
      ORDER BY r.network ASC, r.wallet_address ASC`
   ) as any[];
 
@@ -255,6 +396,8 @@ export async function getActiveRechargeScanTargets(): Promise<RechargeScanTarget
       network: String(row.network) as RechargeNetwork,
       walletAddress: String(row.walletAddress).trim(),
       label: row.label ? String(row.label) : null,
+      scanSince: asUtcIsoString(row.scanSince),
+      hasActiveOrder: Number(row.hasActiveOrder || 0) === 1,
     }));
 }
 
@@ -360,13 +503,15 @@ export async function createRechargeOrder(
   if (acquired !== 1) throw new Error('订单处理繁忙，请稍后重试');
 
   try {
-    // 待支付与确认中订单共用同一条30分钟扫描窗口，过期后均不再阻塞下一笔充值。
-    // 历史上 created_at 使用数据库本地时钟、expires_at 使用 UTC 时钟，造成两列相差 8 小时；
-    // 兼容清理这类 expires_at 早于 created_at 的错误旧订单，避免其继续占用用户的建单入口。
+    // 待支付订单在30分钟后过期；已提交链上凭证的订单保留有限补偿扫描期，
+    // 防止用户已经付款却因为节点/服务短暂异常而永远无法自动核对。
     await (guardConnection as any).execute(
       `UPDATE recharge_orders SET status = 'expired'
-       WHERE user_id = ? AND status IN ('pending', 'submitted')
-         AND (expires_at <= UTC_TIMESTAMP() OR expires_at <= created_at)`,
+       WHERE user_id = ?
+         AND (
+           (status = 'pending' AND (expires_at <= UTC_TIMESTAMP() OR expires_at <= created_at))
+           OR (status = 'submitted' AND expires_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR))
+         )`,
       [userId]
     );
 
@@ -436,32 +581,41 @@ export async function submitTransferConfirmation(
   const connection = await getDbConnection();
   if (!connection) throw new Error('数据库连接失败');
 
-  const normalizedUserTxnHash = normalizeUserSubmittedTransactionId(userTxnHash);
   const validProofImage = validateRechargeProofImage(paymentProofImage);
 
-  // 先校验订单归属、状态与有效期，避免为无效订单上传孤立付款截图。
-  const [eligibleRows] = await (connection as any).execute(
-    `SELECT id FROM recharge_orders
-     WHERE order_no = ? AND user_id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP()
-     LIMIT 1`,
-    [orderNo, userId]
+  // 先读取订单网络并完成网络对应的凭证格式校验。截图仅是辅助材料，不能替代链上凭证。
+  const [orderRows] = await (connection as any).execute(
+    `SELECT id, network, status, expires_at, user_txn_hash
+       FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+    [orderNo, userId],
   );
-  if ((eligibleRows as any[]).length === 0) {
-    const [rows] = await (connection as any).execute(
-      `SELECT id, status FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
-      [orderNo, userId]
-    );
-    const order = (rows as any[])[0];
-    if (!order) throw new Error('订单不存在或无权限');
+  const order = (orderRows as any[])[0];
+  if (!order) throw new Error('订单不存在或无权限');
+  const network = String(order.network) as RechargeNetwork;
+  const normalizedUserTxnHash = normalizeUserSubmittedTransactionId(userTxnHash, network);
+  if (!normalizedUserTxnHash) throw new Error('请粘贴本笔转账的链上 TxID；Aptos 可填写交易版本号');
+
+  const [eligibilityRows] = await (connection as any).execute(
+    `SELECT id FROM recharge_orders
+      WHERE id = ? AND (
+        (status = 'pending' AND expires_at > UTC_TIMESTAMP())
+        OR (status = 'submitted' AND expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR))
+      ) LIMIT 1`,
+    [order.id],
+  );
+  if ((eligibilityRows as any[]).length === 0) {
     if (order.status === 'pending') {
       await (connection as any).execute(
         `UPDATE recharge_orders SET status = 'expired'
          WHERE id = ? AND status = 'pending' AND expires_at <= UTC_TIMESTAMP()`,
-        [order.id]
+        [order.id],
       );
-      throw new Error('订单已过期，请重新创建充值订单');
+      throw new Error('订单已过期；如已付款，请联系管理员并提供 TxID 核对');
     }
-    throw new Error('订单当前状态不允许确认');
+    throw new Error('该订单已超过链上核对期限，请联系管理员处理');
+  }
+  if (order.user_txn_hash && String(order.user_txn_hash) !== normalizedUserTxnHash) {
+    throw new Error('该订单已提交其他 TxID，不能直接覆盖；请联系管理员核对');
   }
 
   if (normalizedUserTxnHash) {
@@ -481,29 +635,21 @@ export async function submitTransferConfirmation(
     paymentProofUrl = await uploadImageToCOS(validProofImage, 'recharge-proofs');
   }
 
-  // 同一条条件更新同时校验归属、状态和到期时间，避免临界点确认已过期订单。
+  // 同一条条件更新同时校验归属、状态和支付/补偿窗口；只允许为旧订单补填同一笔 TxID。
   const [result] = await (connection as any).execute(
     `UPDATE recharge_orders
-     SET status = 'submitted', user_txn_hash = ?, payment_proof_url = ?
-     WHERE order_no = ? AND user_id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP()`,
+     SET status = CASE WHEN status = 'pending' THEN 'submitted' ELSE status END,
+         user_txn_hash = ?,
+         payment_proof_url = COALESCE(?, payment_proof_url)
+     WHERE order_no = ? AND user_id = ?
+       AND (
+         (status = 'pending' AND expires_at > UTC_TIMESTAMP())
+         OR (status = 'submitted' AND expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR))
+       )`,
     [normalizedUserTxnHash, paymentProofUrl, orderNo, userId]
   );
   if (Number((result as any).affectedRows || 0) !== 1) {
-    const [rows] = await (connection as any).execute(
-      `SELECT id, status FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
-      [orderNo, userId]
-    );
-    const order = (rows as any[])[0];
-    if (!order) throw new Error('订单不存在或无权限');
-    if (order.status === 'pending') {
-      await (connection as any).execute(
-        `UPDATE recharge_orders SET status = 'expired'
-         WHERE id = ? AND status = 'pending' AND expires_at <= UTC_TIMESTAMP()`,
-        [order.id]
-      );
-      throw new Error('订单已过期，请重新创建充值订单');
-    }
-    throw new Error('订单当前状态不允许确认');
+    throw new Error('订单状态已变化，请刷新后重试');
   }
   
   console.log(`[Recharge] User ${userId} submitted transfer confirmation for order ${orderNo}`);
@@ -601,7 +747,7 @@ export async function findOrderByAmount(
   context: RechargeOrderMatchContext,
 ): Promise<{
   order: any;
-  matchType: 'exact' | 'fuzzy';
+  matchType: RechargeMatchType;
   amountDiff: number;
 } | null> {
   const db = await getDb();
@@ -644,8 +790,8 @@ export async function findOrderByAmount(
     }
   }
 
-  // 用户已提交交易哈希/版本号时，先将扫描到的链上交易与该凭证比对。
-  // 仍要求实际到账金额落在既有容差内，防止凭证正确但金额不属于该订单时提前结单。
+  // 用户已提交交易哈希/版本号时，先按链上凭证精确归属。
+  // 这一条是补偿扫描期唯一允许自动入账的路径，绝不在过期订单上按金额猜测归属。
   const normalizedScannedTxnId = normalizeChainTransactionId(txnHash) ?? String(txnHash ?? '').trim();
   if (normalizedScannedTxnId) {
     const proofMatchedOrders = await db
@@ -654,8 +800,8 @@ export async function findOrderByAmount(
       .where(and(
         eq(rechargeOrders.userTxnHash, normalizedScannedTxnId),
         ...orderScope,
-        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
-        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
+        eq(rechargeOrders.status, 'submitted'),
+        sql`${rechargeOrders.expiresAt} > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR)`
       ))
       .limit(1);
     if (proofMatchedOrders.length > 0) {
@@ -665,7 +811,7 @@ export async function findOrderByAmount(
         console.log(`[Recharge] User-submitted transaction identifier matched order ${proofMatchedOrder.orderNo}`);
         return {
           order: proofMatchedOrder,
-          matchType: amountDiff <= exactTolerance ? 'exact' : 'fuzzy',
+          matchType: 'proof',
           amountDiff: Number((Number(proofMatchedOrder.amount) - amount).toFixed(4)),
         };
       }
@@ -772,169 +918,197 @@ export async function findOrderByAmount(
   return null;
 }
 
-// 记录未匹配的交易（供管理员手动处理）
-export async function recordUnmatchedTransaction(
-  txnHash: string,
-  amount: number,
-  fromAddress: string
-) {
-  const db = await getDb();
-  
-  // 检查是否已记录
-  const existing = await db.execute(
-    sql`SELECT id FROM unmatched_transactions WHERE txn_hash = ${txnHash} LIMIT 1`
-  );
-  
-  if ((existing as any)[0]?.length > 0 || (existing as any)?.length > 0) {
-    return;
-  }
-  
+function normalizeWalletAddressForNetwork(network: RechargeNetwork, address: unknown): string {
+  const value = String(address ?? '').trim();
+  return network === 'SOLANA' ? value : value.toLowerCase();
+}
+
+function utcMillis(value: unknown): number | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const parsed = new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw.replace(' ', 'T')}Z`).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isEventTimeAllowedForOrder(event: any, order: any): boolean {
+  const blockTime = utcMillis(event.block_timestamp);
+  if (blockTime === null) return true;
+  const createdAt = utcMillis(order.created_at);
+  const expiresAt = utcMillis(order.expires_at);
+  if (createdAt !== null && blockTime < createdAt - 30 * 60 * 1000) return false;
+  if (expiresAt !== null && blockTime > expiresAt + RECHARGE_RECONCILIATION_HOURS * 60 * 60 * 1000) return false;
+  return true;
+}
+
+type RechargeSettlementParams = {
+  orderId: number;
+  transactionId: string;
+  actualAmount: number;
+  matchType: RechargeMatchType;
+  chainEventId?: number;
+  resolvedByAdminId?: number;
+};
+
+/**
+ * 订单完成、余额基数、余额流水、52号映射流水和链上证据状态必须在同一数据库事务内提交。
+ * 任意一步失败即回滚，避免发生“订单已完成但钱包未到账”或并发双入账。
+ */
+async function settleVerifiedRecharge(params: RechargeSettlementParams): Promise<{ success: boolean; userId?: number; amount?: number }> {
+  if (!Number.isFinite(params.actualAmount) || params.actualAmount <= 0) throw new Error('实际到账金额无效');
+  await ensureRechargeChainEventInfrastructure();
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new Error('数据库连接失败');
+  const tx = connection as any;
+  const release = () => tx.release?.();
+
   try {
-    await db.execute(sql`
-      INSERT INTO unmatched_transactions (txn_hash, amount, from_address, status, created_at)
-      VALUES (${txnHash}, ${amount}, ${fromAddress}, 'pending', NOW())
-    `);
-    console.log(`[Recharge] Recorded unmatched transaction: ${txnHash}, ${amount} USDT`);
+    await tx.beginTransaction();
+    const [orderRows] = await tx.execute(
+      `SELECT * FROM recharge_orders WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [params.orderId],
+    );
+    const order = (orderRows as any[])[0];
+    if (!order) throw new Error('订单不存在');
+    if (order.status === 'completed') throw new Error('订单已完成，已拒绝重复入账');
+
+    let chainEvent: any = null;
+    if (params.chainEventId) {
+      const [eventRows] = await tx.execute(
+        `SELECT * FROM recharge_chain_events WHERE id = ? LIMIT 1 FOR UPDATE`,
+        [params.chainEventId],
+      );
+      chainEvent = (eventRows as any[])[0];
+      if (!chainEvent) throw new Error('链上到账证据不存在');
+      if (chainEvent.status !== 'pending') throw new Error('该链上到账证据已处理，不能重复入账');
+      if (String(chainEvent.network) !== String(order.network)) throw new Error('链上到账网络与订单不一致');
+      if (normalizeWalletAddressForNetwork(String(order.network) as RechargeNetwork, chainEvent.wallet_address) !== normalizeWalletAddressForNetwork(String(order.network) as RechargeNetwork, order.wallet_address)) {
+        throw new Error('链上到账收款地址与订单不一致');
+      }
+      if (!isEventTimeAllowedForOrder(chainEvent, order)) throw new Error('链上到账时间不在该订单允许核对范围内');
+      if (Math.abs(Number(chainEvent.amount) - params.actualAmount) > 1e-8) throw new Error('到账金额必须以链上证据为准');
+      const normalizedEventTxnId = normalizeChainTransactionId(String(chainEvent.transaction_id), String(chainEvent.network) as RechargeNetwork) ?? String(chainEvent.transaction_id);
+      const normalizedRequestedTxnId = normalizeChainTransactionId(params.transactionId, String(chainEvent.network) as RechargeNetwork) ?? params.transactionId;
+      if (normalizedEventTxnId !== normalizedRequestedTxnId) throw new Error('链上到账证据与交易标识不一致');
+    }
+
+    const isNormalSettlement = params.matchType === 'exact' || params.matchType === 'fuzzy';
+    const isProofSettlement = params.matchType === 'proof';
+    const isManualEventSettlement = params.matchType === 'manual';
+    const eligibilityCondition = isNormalSettlement
+      ? `status IN ('pending', 'submitted') AND expires_at > UTC_TIMESTAMP()`
+      : isProofSettlement
+        ? `status = 'submitted' AND expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR)`
+        : isManualEventSettlement
+          ? `status IN ('pending', 'submitted', 'expired') AND expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR)`
+          : '1 = 0';
+    const [eligibilityRows] = await tx.execute(
+      `SELECT id FROM recharge_orders WHERE id = ? AND ${eligibilityCondition} LIMIT 1 FOR UPDATE`,
+      [params.orderId],
+    );
+    if ((eligibilityRows as any[]).length === 0) throw new Error('订单不在允许的自动/人工链上核对期限内');
+
+    const [userRows] = await tx.execute(
+      `SELECT id, COALESCE(balance, 0) AS balance FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [order.user_id],
+    );
+    const user = (userRows as any[])[0];
+    if (!user) throw new Error('订单用户不存在');
+
+    const normalizedTxnId = normalizeChainTransactionId(params.transactionId, String(order.network) as RechargeNetwork) ?? String(params.transactionId).trim();
+    const [orderUpdate] = await tx.execute(
+      `UPDATE recharge_orders
+          SET status = 'completed', txn_hash = ?, completed_at = UTC_TIMESTAMP()
+        WHERE id = ? AND status <> 'completed'`,
+      [normalizedTxnId, params.orderId],
+    );
+    if (Number((orderUpdate as any).affectedRows || 0) !== 1) throw new Error('订单状态已变化，已拒绝重复入账');
+
+    await tx.execute(`UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`, [params.actualAmount.toFixed(8), order.user_id]);
+    const [balanceRows] = await tx.execute(`SELECT balance FROM users WHERE id = ? LIMIT 1`, [order.user_id]);
+    const newBalance = Number((balanceRows as any[])[0]?.balance || 0);
+    const orderAmount = Number(order.amount || 0);
+    const amountDiff = Number((params.actualAmount - orderAmount).toFixed(8));
+    const modeLabel = params.matchType === 'manual'
+      ? `管理员按链上到账证据确认（操作人ID:${params.resolvedByAdminId}）`
+      : params.matchType === 'proof'
+        ? '链上凭证补偿核对到账'
+        : params.matchType === 'fuzzy'
+          ? `链上到账（订单${orderAmount} USDT，实际${params.actualAmount} USDT，差额${amountDiff >= 0 ? '+' : ''}${amountDiff}）`
+          : '链上到账';
+    const description = `${modeLabel}；${String(order.network)}；TxID:${normalizedTxnId}`;
+    await tx.execute(
+      `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
+       VALUES (?, ?, 'recharge', ?, ?, ?)`,
+      [order.user_id, params.actualAmount.toFixed(8), params.orderId, newBalance.toFixed(8), description],
+    );
+    const ledgerId = Number(order.ledger_id || LEDGER_52_ID);
+    await tx.execute(
+      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+      [ledgerId, order.user_id, params.actualAmount.toFixed(6), `[BALANCE_BASE][充值] ${description}`],
+    );
+    if (chainEvent) {
+      const [eventUpdate] = await tx.execute(
+        `UPDATE recharge_chain_events
+            SET status = 'matched',
+                match_reason = ?,
+                resolved_order_id = ?,
+                resolved_by_admin_id = ?,
+                resolved_at = UTC_TIMESTAMP()
+          WHERE id = ? AND status = 'pending'`,
+        [params.matchType, params.orderId, params.resolvedByAdminId ?? null, params.chainEventId],
+      );
+      if (Number((eventUpdate as any).affectedRows || 0) !== 1) throw new Error('链上到账证据状态已变化，已拒绝重复入账');
+    }
+    await tx.commit();
+    notifyIfYJHDownline(Number(order.user_id), 'recharge', params.actualAmount).catch(() => {});
+    return { success: true, userId: Number(order.user_id), amount: params.actualAmount };
   } catch (error) {
-    // 表可能不存在，忽略错误
-    console.error('[Recharge] Failed to record unmatched transaction:', error);
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    release();
   }
 }
 
-// 完成充值订单（改进版：支持按实际到账金额入账）
+// 扫描器自动完成的唯一入口。所有支持链在调用前已幂等写入链上到账事件。
 export async function completeRechargeOrder(
   orderId: number,
   txnHash: string,
   actualAmount: number,
-  matchType: 'exact' | 'fuzzy' = 'exact'
+  matchType: RechargeMatchType = 'exact',
+  chainEventId?: number,
 ) {
-  if (!Number.isFinite(actualAmount) || actualAmount <= 0) {
-    console.error(`[Recharge] completeRechargeOrder: invalid actual amount for order ${orderId}`);
+  try {
+    const result = await settleVerifiedRecharge({ orderId, transactionId: txnHash, actualAmount, matchType, chainEventId });
+    return result.success;
+  } catch (error: any) {
+    console.error(`[Recharge] 结算订单 ${orderId} 失败:`, error?.message || error);
     return false;
   }
-  const db = await getDb();
-  
-  // ⚠️ 安全检查：先查订单当前状态，只允许对 submitted/pending 状态的订单入账
-  // 严禁对 expired/completed/cancelled 状态的订单操作，防止重复入账
-  const orderCheck = await db
-    .select()
-    .from(rechargeOrders)
-    .where(eq(rechargeOrders.id, orderId))
-    .limit(1);
-  
-  if (orderCheck.length === 0) {
-    console.error(`[Recharge] completeRechargeOrder: order ${orderId} not found`);
-    return false;
-  }
-  
-  const currentStatus = orderCheck[0].status;
-  if (currentStatus !== 'submitted' && currentStatus !== 'pending') {
-    console.error(`[Recharge] ⛔ BLOCKED: order ${orderId} is in status '${currentStatus}', NOT submitted/pending. Refusing to credit to prevent duplicate payment.`);
-    return false;
-  }
-  
-  // 更新订单状态（使用 WHERE 条件限制，防止并发重复处理）
-  const updateResult = await db
-    .update(rechargeOrders)
-    .set({
-      status: 'completed',
-      txnHash,
-      completedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    })
-    .where(
-      and(
-        eq(rechargeOrders.id, orderId),
-        sql`${rechargeOrders.status} IN ('submitted', 'pending')`,
-        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
-      )
-    );
-  
-  // 获取订单信息
-  const order = await db
-    .select()
-    .from(rechargeOrders)
-    .where(eq(rechargeOrders.id, orderId))
-    .limit(1);
-  
-  if (order.length === 0) return false;
-  
-  // 再次确认订单已被成功更新为 completed（防止并发竞争）
-  if (order[0].status !== 'completed' || order[0].txnHash !== txnHash) {
-    console.error(`[Recharge] ⛔ BLOCKED: order ${orderId} status update failed (concurrent processing?). Refusing to credit.`);
-    return false;
-  }
-  
-  // 按实际到账金额入账（而不是订单金额）
-  const creditAmount = actualAmount;
-  const orderAmt = parseFloat(order[0].amount);
-  const diffAmt = parseFloat((actualAmount - orderAmt).toFixed(4));
-  const description = matchType === 'fuzzy'
-    ? `充値到账（订单金额${orderAmt} USDT，实际到账${actualAmount} USDT，${diffAmt >= 0 ? '多' : '少'}${Math.abs(diffAmt)} USDT）`
-    : `充値到账`;
-  
-  await addUserBalance(order[0].userId, creditAmount, 'recharge', orderId, description);
-  
-  // 短信通知：如果是52号账本YJH下线，发送短信
-  notifyIfYJHDownline(order[0].userId, 'recharge', creditAmount).catch(() => {});
-  
-  return true;
 }
 
-// 管理员手动确认充值（将未匹配交易关联到指定订单或用户）
-export async function adminConfirmRecharge(
-  adminId: number,
-  orderId: number,
-  txnHash: string | undefined,
-  actualAmount: number
-) {
-  const db = await getDb();
-  
-  // 检查订单是否存在且状态为pending或submitted
-  const order = await db
-    .select()
-    .from(rechargeOrders)
-    .where(eq(rechargeOrders.id, orderId))
-    .limit(1);
-  
-  if (order.length === 0) {
-    throw new Error('订单不存在');
-  }
-  
-  if (order[0].status === 'completed') {
-    throw new Error('订单已完成');
-  }
-  
-  // 完成订单
-  await db
-    .update(rechargeOrders)
-    .set({
-      status: 'completed',
-      ...(txnHash ? { txnHash } : {}),
-      completedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    })
-    .where(eq(rechargeOrders.id, orderId));
-  
-  // 按实际到账金额入账
-  const description = txnHash
-    ? `管理员手动确认充值（操作人ID:${adminId}，交易哈希:${txnHash}）`
-    : `管理员手动确认充值（操作人ID:${adminId}）`;
-  await addUserBalance(order[0].userId, actualAmount, 'recharge', orderId, description);
-  
-  // 更新未匹配交易状态（如果有）
-  if (txnHash) {
-    try {
-      await db.execute(sql`
-        UPDATE unmatched_transactions SET status = 'resolved' WHERE txn_hash = ${txnHash}
-      `);
-    } catch (e) {
-      // 忽略
-    }
-  }
-  
-  // 短信通知：如果是52号账本YJH下线，发送短信
-  notifyIfYJHDownline(order[0].userId, 'recharge', actualAmount).catch(() => {});
-
-  return { success: true, userId: order[0].userId, amount: actualAmount };
+/** 管理员只能从已扫描并待处理的链上到账证据完成订单，不能再手填金额或TxID入账。 */
+export async function adminConfirmRecharge(adminId: number, orderId: number, chainEventId: number) {
+  await ensureRechargeChainEventInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const [eventRows] = await (conn as any).execute(
+    `SELECT id, transaction_id, amount FROM recharge_chain_events WHERE id = ? AND status = 'pending' LIMIT 1`,
+    [chainEventId],
+  );
+  const event = (eventRows as any[])[0];
+  if (!event) throw new Error('请从待核对的链上到账记录中选择证据；无链上凭证请使用人工调账');
+  const result = await settleVerifiedRecharge({
+    orderId,
+    transactionId: String(event.transaction_id),
+    actualAmount: Number(event.amount),
+    matchType: 'manual',
+    chainEventId: Number(event.id),
+    resolvedByAdminId: adminId,
+  });
+  if (!result.success || !result.userId || !result.amount) throw new Error('链上到账确认失败');
+  return { success: true, userId: result.userId, amount: result.amount };
 }
 
 // 后台直接给用户充值（无需链上交易）
@@ -950,7 +1124,7 @@ export async function adminDirectRecharge(
   return { success: true, userId, amount, newBalance };
 }
 
-// 获取当前30分钟自动扫描窗口内的待处理订单（管理员用）
+// 获取待处理订单：待支付仅30分钟；已提交链上凭证的订单保留有限补偿核对期。
 export async function getAllPendingOrders() {
   const conn = await getDbConnection();
   if (!conn) return [];
@@ -958,7 +1132,8 @@ export async function getAllPendingOrders() {
     SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone
     FROM recharge_orders r
     LEFT JOIN users u ON r.user_id = u.id
-    WHERE r.status IN ('pending', 'submitted') AND r.expires_at > UTC_TIMESTAMP()
+    WHERE (r.status = 'pending' AND r.expires_at > UTC_TIMESTAMP())
+       OR (r.status = 'submitted' AND r.expires_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR))
     ORDER BY r.created_at DESC
   `) as any[];
   return rows as any[];
@@ -979,21 +1154,18 @@ export async function getAllOrders(limit: number = 200) {
   return rows as any[];
 }
 
-// 获取未匹配交易列表（管理员用）
+// 获取扫描到、尚未归属订单的链上到账证据（管理员用）。
 export async function getUnmatchedTransactions() {
-  const db = await getDb();
-  
-  try {
-    const result = await db.execute(sql`
-      SELECT * FROM unmatched_transactions 
-      WHERE status = 'pending' 
-      ORDER BY created_at DESC 
-      LIMIT 50
-    `);
-    return (result as any)[0] || [];
-  } catch (e) {
-    return [];
-  }
+  await ensureRechargeChainEventInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await (conn as any).execute(`
+    SELECT * FROM recharge_chain_events
+     WHERE status = 'pending'
+     ORDER BY last_seen_at DESC, id DESC
+     LIMIT 100
+  `);
+  return rows as any[];
 }
 
 // type 标签映射（用于 af_manual_balances note 前缀）
@@ -1693,7 +1865,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   }));
 }
 
-// 定期清理过期订单：待支付与确认中均只在创建后的30分钟内参与扫描。
+// 定期清理：pending 维持30分钟支付窗口；submitted 保留72小时补偿扫描窗口。
 export async function cleanExpiredOrders() {
   const db = await getDb();
 
@@ -1701,16 +1873,20 @@ export async function cleanExpiredOrders() {
     .update(rechargeOrders)
     .set({ status: 'expired' })
     .where(
-      and(
-        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
-        sql`${rechargeOrders.expiresAt} <= UTC_TIMESTAMP()`
-      )
+      sql`(
+        (${rechargeOrders.status} = 'pending' AND ${rechargeOrders.expiresAt} <= UTC_TIMESTAMP())
+        OR (
+          ${rechargeOrders.status} = 'submitted'
+          AND ${rechargeOrders.expiresAt} <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${RECHARGE_RECONCILIATION_HOURS} HOUR)
+        )
+      )`
     );
 }
 
 // 获取系统统计信息（管理员用）— 从数据库读取收款地址配置
 export async function getSystemStats() {
   const db = await getDb();
+  await ensureRechargeChainEventInfrastructure();
   
   // 从数据库获取收款地址配置
   const enabledAddresses = await getEnabledWalletAddresses();
@@ -1727,20 +1903,16 @@ export async function getSystemStats() {
     .from(rechargeOrders)
     .groupBy(rechargeOrders.status);
   
-  // 统计未匹配交易数量
+  // 统计已落库但尚未归属订单的链上到账证据。
   let unmatchedCount = 0;
   let unmatchedTotalAmount = 0;
-  try {
-    const unmatchedResult = await db.execute(sql`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as totalAmount 
-      FROM unmatched_transactions WHERE status = 'pending'
-    `);
-    const row = (unmatchedResult as any)[0]?.[0];
-    unmatchedCount = Number(row?.count || 0);
-    unmatchedTotalAmount = parseFloat(row?.totalAmount || '0');
-  } catch (e) {
-    // 表可能不存在
-  }
+  const unmatchedResult = await db.execute(sql`
+    SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as totalAmount
+    FROM recharge_chain_events WHERE status = 'pending'
+  `);
+  const row = (unmatchedResult as any)[0]?.[0];
+  unmatchedCount = Number(row?.count || 0);
+  unmatchedTotalAmount = parseFloat(row?.totalAmount || '0');
   
   // 统计已匹配订单数（completed状态的订单）
   const [matchedStats] = await db

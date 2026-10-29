@@ -4316,15 +4316,20 @@ ${klinesSummary}
     adminConfirmRecharge: protectedProcedure
       .input(z.object({
         orderId: z.number(),
-        txnHash: z.string(),
-        actualAmount: z.number().min(0.01)
+        // 兼容旧客户端字段用于平滑升级，但服务端只以已扫描链上事件作为入账凭证。
+        chainEventId: z.number().int().positive().optional(),
+        txnHash: z.string().optional(),
+        actualAmount: z.number().min(0.01).optional()
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new Error('无权限');
         }
+        if (!input.chainEventId) {
+          throw new Error('请从待核对的链上到账记录选择证据；无链上凭证请使用人工调账');
+        }
         return await dbRecharge.adminConfirmRecharge(
-          ctx.user.id, input.orderId, input.txnHash, input.actualAmount
+          ctx.user.id, input.orderId, input.chainEventId
         );
       }),
     // 管理员直接给用户充值
@@ -4945,21 +4950,16 @@ ${klinesSummary}
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
         return await dbRecharge.getUserCnyHistory(input.userId, input.limit ?? 20);
       }),
-    // 管理员取消充值订单（将 submitted/pending 改为 cancelled）
-    // 管理员批量删除已过期/已取消订单
+    // 充值订单与链上证据均属资金审计记录，不允许后台物理批量删除。
     adminBulkClearOrders: protectedProcedure
       .input(z.object({ status: z.enum(["expired", "cancelled"]) }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
           throw new Error("无权限");
         }
-        const conn = await getDbConnection();
-        const [result] = await (conn as any).execute(
-          `DELETE FROM recharge_orders WHERE status = ?`,
-          [input.status]
-        );
-        return { success: true, count: (result as any).affectedRows };
+        throw new Error('为保留链上到账与晚到账核对证据，充值订单不再支持物理删除；请保留归档状态。');
       }),
+    // 管理员取消仅限尚未提交链上TxID的待支付订单；确认中订单必须保留给补偿扫描或链上证据核对。
         adminCancelOrder: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -4969,7 +4969,7 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new Error('数据库连接失败');
         const [result] = await (conn as any).execute(
-          `UPDATE recharge_orders SET status='cancelled' WHERE id=? AND status IN ('submitted','pending')`,
+          `UPDATE recharge_orders SET status='cancelled' WHERE id=? AND status = 'pending'`,
           [input.id]
         );
         if ((result as any).affectedRows === 0) {
