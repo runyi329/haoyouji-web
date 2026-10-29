@@ -144,6 +144,13 @@ function normalizeT0MarketPriceInput(value: string, prefix = "", autoAppendDecim
   const fullValue = `${fullInteger}${hasDecimal ? `.${fractionalPart}` : ""}`;
   return autoAppendDecimal && /^\d{4}$/.test(fullValue) ? `${fullValue}.` : fullValue;
 }
+
+/** 灰色 .00 只是输入框的视觉补位；提交时必须写成服务端认可的完整金额。 */
+function normalizeT0PriceForSubmission(value: string): string {
+  const normalized = value.trim();
+  return /^\d+\.$/.test(normalized) ? `${normalized}00` : normalized;
+}
+
 type SharedIncomeTransfer = {
   id: string;
   closingEntryId: string;
@@ -9958,9 +9965,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       showSaveValidationError(`请在实时价前缀 ${smartOpeningPricePrefix} 后补齐成交价后两位`);
       return;
     }
-    const effectivePriceInput = isGridOpening && gridReferencePrice !== null
+    const effectivePriceInput = normalizeT0PriceForSubmission(isGridOpening && gridReferencePrice !== null
       ? String(gridReferencePrice)
-      : entryForm.price.trim();
+      : entryForm.price);
     const price = Number(effectivePriceInput);
     const fee = estimatedFeeUsdt ?? 0;
     const normalizedAccountName = entryForm.accountName.trim();
