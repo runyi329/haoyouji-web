@@ -33,9 +33,15 @@ function toCNY(margin: string | number, coin: string, prices: Record<string, num
 interface Props {
   ledgerId: number;
   tagName: string;
+  /**
+   * 52号订单已显式引用37号标签利息时，由订单卡传入已使用的实时结果。
+   * undefined 代表本次订单未引用该项；null 代表数据尚在读取。
+   */
+  linkedPendingInterestCny?: number | null;
+  linkedPaidInterestCny?: number | null;
 }
 
-export function RightMarginDetail({ ledgerId, tagName }: Props) {
+export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny, linkedPaidInterestCny }: Props) {
   // ── 数据查询 ──
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null },
@@ -187,6 +193,9 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
   const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
   const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
   const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
+  const shouldShowLinkedPaidInterest = linkedPaidInterestCny === null
+    || (linkedPaidInterestCny !== undefined && Number(linkedPaidInterestCny) > 0);
+  const hasLinkedInterestAdjustment = linkedPendingInterestCny !== undefined || shouldShowLinkedPaidInterest;
 
   return (
     <div className="text-xs space-y-3" style={{ color: "#4B5563" }}>
@@ -291,6 +300,35 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
                   <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">≈ {(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
                   <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}</span>
                 </div>
+                {hasLinkedInterestAdjustment && (
+                  <div className="mt-2 rounded-lg px-2.5 py-2" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                    {linkedPendingInterestCny !== undefined && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-medium" style={{ color: '#9A3412' }}>待结利息（37号引用）</span>
+                        <span className="shrink-0 text-xs font-bold tabular-nums" style={{ color: '#DC2626' }}>
+                          {linkedPendingInterestCny === null
+                            ? '读取中...'
+                            : `−¥${Math.max(0, Number(linkedPendingInterestCny) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </span>
+                      </div>
+                    )}
+                    {shouldShowLinkedPaidInterest && (
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-xs text-amber-800">已结利息（37号引用）</span>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: '#15803D' }}>
+                          {linkedPaidInterestCny === null
+                            ? '读取中...'
+                            : `+¥${Math.max(0, Number(linkedPaidInterestCny) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-1.5 text-[10px] leading-4" style={{ color: '#9A3412' }}>
+                      {linkedPendingInterestCny !== undefined
+                        ? '待结利息已在本订单的担保缺口中单独扣减，不计入上方“总担保价值”，避免重复计算。'
+                        : '已结利息已在本订单的担保缺口中单独加回，不计入上方“总担保价值”。'}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

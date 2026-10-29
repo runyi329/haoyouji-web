@@ -3909,7 +3909,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </div>
                         <div className="px-2 pb-4">
                           <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载担保明细...</div>}>
-                            <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={linkedCollateralTagName} />
+                            <RightMarginDetail
+                              ledgerId={_parsedCollateralSource.ledgerId}
+                              tagName={linkedCollateralTagName}
+                              linkedPendingInterestCny={hasExternalPendingInterest ? linked37PendingInterestCny : undefined}
+                              linkedPaidInterestCny={hasExternalPaidInterest ? linked37PaidInterestCny : undefined}
+                            />
                           </React.Suspense>
                         </div>
                       </>
