@@ -7013,15 +7013,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isGridOpeningEntry = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "grid";
   // 只在新建普通开仓中启用：历史订单编辑、平仓、期权、网格均保留原始完整价格输入，避免误改成交事实。
   const smartOpeningPricePrefix = entryForm.priceInputPrefix ?? "";
-  const isSmartOpeningPriceInput = ACTIONS[entryForm.action].opening
+  const isNewMarketOpeningPriceInput = ACTIONS[entryForm.action].opening
     && !entryForm.editingEntryId
-    && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract")
+    && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
+  const isSmartOpeningPriceInput = isNewMarketOpeningPriceInput
     && Boolean(smartOpeningPricePrefix);
   const smartOpeningPriceUsesPrefix = isSmartOpeningPriceInput
     && (entryForm.price === "" || entryForm.price.startsWith(smartOpeningPricePrefix));
   const smartOpeningPriceDisplayValue = smartOpeningPriceUsesPrefix
     ? (entryForm.price || smartOpeningPricePrefix)
     : entryForm.price;
+  // .00 仅是视觉默认补位，不写入订单草稿；点击后输入的位数按正常文字显示，未填位仍保持灰色。
+  const entryPriceDisplayValue = isSmartOpeningPriceInput ? smartOpeningPriceDisplayValue : entryForm.price;
+  const entryPriceFractionPlaceholderMatch = isNewMarketOpeningPriceInput
+    ? entryPriceDisplayValue.match(/^(\d{4})\.(\d{0,2})$/)
+    : null;
+  const entryPriceFractionPlaceholder = entryPriceFractionPlaceholderMatch
+    ? "0".repeat(2 - entryPriceFractionPlaceholderMatch[2].length)
+    : "";
   const smartOpeningPriceIsIncomplete = smartOpeningPriceUsesPrefix
     && entryForm.price !== ""
     && !/^\d{4}(?:\.\d*)?$/.test(entryForm.price);
@@ -12537,14 +12546,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       value={gridReferencePrice === null ? "" : formatPrice(gridReferencePrice)}
                       placeholder={entryForm.gridDirection === "long" ? "填写网格下限后生成" : "填写网格上限后生成"}
                       className="h-14 w-full rounded border border-cyan-200 bg-cyan-50/70 px-3 text-xl font-semibold tabular-nums text-cyan-950 outline-none placeholder:text-cyan-500/65"
-                    /> : <input
+                    /> : <div className="relative">
+                      <input
                       id="t0-entry-price"
                       inputMode="decimal"
                       disabled={isCloseReview || hasDependentCloseOpeningEdit}
                       aria-label={ACTIONS[entryForm.action].opening ? "成交价" : "平仓价"}
-                      value={isSmartOpeningPriceInput ? smartOpeningPriceDisplayValue : entryForm.price}
+                      value={entryPriceDisplayValue}
                       onKeyDown={(event) => {
-                        smartOpeningPriceBackspaceRef.current = event.key === "Backspace";
+                        smartOpeningPriceBackspaceRef.current = event.key === "Backspace" || event.key === "Delete";
                       }}
                       onKeyUp={() => {
                         smartOpeningPriceBackspaceRef.current = false;
@@ -12553,25 +12563,52 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         smartOpeningPriceBackspaceRef.current = false;
                       }}
                       onChange={(event) => setEntryForm((current) => {
-                        if (!isSmartOpeningPriceInput) return { ...current, price: limitT0ManualDecimalInput(event.target.value, 2) };
+                        const inputType = (event.nativeEvent as InputEvent).inputType ?? "";
+                        const isDeleting = smartOpeningPriceBackspaceRef.current || inputType.startsWith("delete");
+                        const autoAppendDecimal = !isDeleting;
+                        if (!isSmartOpeningPriceInput) {
+                          smartOpeningPriceBackspaceRef.current = false;
+                          const isNewMarketOpening = ACTIONS[current.action].opening
+                            && !current.editingEntryId
+                            && (current.instrumentType === "spot" || current.instrumentType === "contract");
+                          return {
+                            ...current,
+                            price: isNewMarketOpening
+                              ? normalizeT0MarketPriceInput(event.target.value, "", autoAppendDecimal)
+                              : limitT0ManualDecimalInput(event.target.value, 2),
+                          };
+                        }
                         const prefix = current.priceInputPrefix ?? "";
                         const rawValue = event.target.value;
-                        const rawIntegerLength = rawValue.replace(/,/g, ".").split(".")[0].replace(/\D/g, "").length;
-                        const autoAppendDecimal = !smartOpeningPriceBackspaceRef.current;
-                        // 前缀在视觉上与正常数字完全一致，但不足四位时不允许误删成独立价格。
-                        const nextPrice = !rawValue
-                          ? ""
-                          : rawValue.startsWith(prefix)
-                            ? normalizeT0MarketPriceInput(rawValue.slice(prefix.length), prefix, autoAppendDecimal)
-                            : rawIntegerLength >= 4
-                              ? normalizeT0MarketPriceInput(rawValue, "", autoAppendDecimal)
-                              : "";
+                        // 前两位仅是首次录入的快捷提示，绝不能锁住管理员改价：
+                        // 退格删回默认值、全选替换、粘贴或在前面插入数字时，立即切为完整自由输入。
+                        const keepsPrefixAssist = Boolean(prefix)
+                          && rawValue.startsWith(prefix)
+                          && !(isDeleting && rawValue === prefix);
                         smartOpeningPriceBackspaceRef.current = false;
-                        return { ...current, price: nextPrice };
+                        if (!rawValue || !keepsPrefixAssist) {
+                          return {
+                            ...current,
+                            price: limitT0ManualDecimalInput(rawValue, 2),
+                            priceInputPrefix: "",
+                          };
+                        }
+                        return {
+                          ...current,
+                          price: normalizeT0MarketPriceInput(rawValue.slice(prefix.length), prefix, autoAppendDecimal),
+                        };
                       })}
                       placeholder={isSmartOpeningPriceInput ? undefined : "0.00"}
-                      className="min-w-0 w-full h-14 rounded border border-slate-200 px-2.5 text-[19px] font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
-                    />}
+                      className={`min-w-0 w-full h-14 rounded border border-slate-200 px-2.5 text-[19px] font-semibold tabular-nums outline-none placeholder:text-slate-400 focus:border-indigo-500 ${entryPriceFractionPlaceholder ? "text-transparent caret-slate-900" : "text-slate-900"}`}
+                      />
+                      {entryPriceFractionPlaceholder && <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap px-2.5 text-[19px] font-semibold tabular-nums"
+                      >
+                        <span className="text-slate-900">{entryPriceDisplayValue}</span>
+                        <span className="text-slate-300">{entryPriceFractionPlaceholder}</span>
+                      </span>}
+                    </div>}
                     {!isOptionOpeningEntry && openingArchivePrice !== null && (
                       <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
                         {isGridOpeningEntry
