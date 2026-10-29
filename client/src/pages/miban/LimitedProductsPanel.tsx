@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowDownUp,
   BarChart3,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ClipboardList,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: "待处理",
+  pending: "已付款·待处理",
   confirmed: "已确认",
   packing: "打包中",
   shipped: "已发货",
@@ -120,6 +121,22 @@ export default function LimitedProductsPanel() {
         ),
     [catalog, selectedBrand, category]
   );
+  const selectedCategoryProduct = useMemo(
+    () =>
+      category === "全部"
+        ? null
+        : (catalog.find(
+            (item: any) =>
+              item.brand === selectedBrand && item.category === category
+          ) ?? null),
+    [catalog, selectedBrand, category]
+  );
+  const categoryCommissionEnabled =
+    selectedCategoryProduct?.categoryCommissionEnabled === true;
+  const categoryAllSkuCommissionEnabled =
+    categoryCommissionEnabled &&
+    skuRows.length > 0 &&
+    skuRows.every((row: any) => row.commissionEnabled === true);
 
   const ordersQuery = mtrpc.limitedProduct.adminOrders.useQuery(
     selectedSku
@@ -145,6 +162,18 @@ export default function LimitedProductsPanel() {
     mtrpc.limitedProduct.adminUpdateSkuState.useMutation({
       onSuccess: () => {
         toast.success("商品运营状态已保存");
+        refreshAll();
+      },
+      onError: (error: any) => toast.error(error.message || "保存失败"),
+    });
+  const updateCategoryCommissionMutation =
+    mtrpc.limitedProduct.adminUpdateCategoryCommissionState.useMutation({
+      onSuccess: (_result: any, variables: any) => {
+        toast.success(
+          variables.commissionEnabled
+            ? "分类全部商品已开启奖金"
+            : "分类全部商品已关闭奖金"
+        );
         refreshAll();
       },
       onError: (error: any) => toast.error(error.message || "保存失败"),
@@ -217,6 +246,25 @@ export default function LimitedProductsPanel() {
             current ? { ...current, isActive: !current.isActive } : current
           );
           toast.success(selectedSku.isActive ? "商品已下架" : "商品已上架");
+          refreshAll();
+        },
+      }
+    );
+  };
+
+  const toggleRowCommission = (row: any) => {
+    const nextValue = !row.commissionEnabled;
+    updateSkuMutation.mutate(
+      {
+        productKey: row.product.key,
+        skuId: row.id,
+        isActive: row.isActive,
+        stockQty: row.stockQty,
+        commissionEnabled: nextValue,
+      },
+      {
+        onSuccess: () => {
+          toast.success(nextValue ? "该商品已开启奖金" : "该商品已关闭奖金");
           refreshAll();
         },
       }
@@ -410,6 +458,26 @@ export default function LimitedProductsPanel() {
             </button>
           ))}
         </div>
+        {selectedCategoryProduct && (
+          <div className="mt-2.5 flex items-center justify-between gap-3 px-1">
+            <p className="text-[11px] text-gray-500">{category} · 奖金总开关</p>
+            <button
+              disabled={updateCategoryCommissionMutation.isPending}
+              onClick={() =>
+                updateCategoryCommissionMutation.mutate({
+                  brand: selectedBrand,
+                  category,
+                  commissionEnabled: !categoryAllSkuCommissionEnabled,
+                })
+              }
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition disabled:opacity-50 ${categoryAllSkuCommissionEnabled ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-500"}`}
+            >
+              {categoryAllSkuCommissionEnabled
+                ? "全部关闭奖金"
+                : "全部开启奖金"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2.5">
@@ -417,44 +485,64 @@ export default function LimitedProductsPanel() {
           const displayStock =
             row.stockQty < 0 ? "不限" : `${row.stockQty}${row.unitLabel}`;
           return (
-            <button
+            <div
               key={`${row.product.key}:${row.id}`}
-              onClick={() => openSku(row)}
               className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-gray-100 active:scale-[0.99]"
             >
-              <img
-                src={cosImg(row.image, 72)}
-                alt=""
-                className="h-[64px] w-[64px] rounded-xl bg-gray-50 object-contain"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-bold text-gray-900">
-                    {row.product.title}
-                  </span>
-                  <span className="shrink-0 text-[10px] text-gray-400">
-                    · {row.product.category}
-                  </span>
+              <button
+                onClick={() => openSku(row)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <img
+                  src={cosImg(row.image, 72)}
+                  alt=""
+                  className="h-[64px] w-[64px] rounded-xl bg-gray-50 object-contain"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-[13px] font-bold text-gray-900">
+                      {row.product.title}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-gray-400">
+                      · {row.product.category}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-[11px] text-gray-500">
+                    {row.name}{" "}
+                    {row.netContentText ? `· ${row.netContentText}` : ""}
+                  </p>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${row.isActive ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-400"}`}
+                    >
+                      {row.isActive ? "在售" : "已下架"}
+                    </span>
+                    <span
+                      className={`text-[11px] font-semibold ${row.stockQty === 0 ? "text-red-500" : "text-gray-700"}`}
+                    >
+                      库存 {displayStock}
+                    </span>
+                  </div>
                 </div>
-                <p className="mt-1 truncate text-[11px] text-gray-500">
-                  {row.name}{" "}
-                  {row.netContentText ? `· ${row.netContentText}` : ""}
-                </p>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${row.isActive ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-400"}`}
-                  >
-                    {row.isActive ? "在售" : "已下架"}
-                  </span>
-                  <span
-                    className={`text-[11px] font-semibold ${row.stockQty === 0 ? "text-red-500" : "text-gray-700"}`}
-                  >
-                    库存 {displayStock}
-                  </span>
-                </div>
-              </div>
-              <ChevronDown className="h-4 w-4 -rotate-90 text-gray-300" />
-            </button>
+              </button>
+              <button
+                disabled={
+                  !row.product.categoryCommissionEnabled ||
+                  updateSkuMutation.isPending
+                }
+                onClick={() => toggleRowCommission(row)}
+                className={`flex h-11 w-[58px] shrink-0 flex-col items-center justify-center rounded-xl text-[10px] font-bold transition disabled:cursor-not-allowed ${row.product.categoryCommissionEnabled && row.commissionEnabled ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-400"}`}
+              >
+                <span>奖金</span>
+                <span className="mt-0.5 text-[9px] font-medium">
+                  {row.product.categoryCommissionEnabled &&
+                  row.commissionEnabled
+                    ? "已开启"
+                    : "已关闭"}
+                </span>
+              </button>
+              <ChevronDown className="h-4 w-4 shrink-0 -rotate-90 text-gray-300" />
+            </div>
           );
         })}
         {!skuRows.length && (
@@ -529,6 +617,60 @@ export default function LimitedProductsPanel() {
                 >
                   {selectedSku.isActive ? "下架此规格" : "重新上架此规格"}
                 </button>
+              </div>
+
+              <div className="rounded-2xl bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-bold text-gray-800">
+                      奖金制度
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-gray-400">
+                      {selectedSku.product.categoryCommissionEnabled
+                        ? "开启后，本规格新订单将按已设置的销售制度参与奖金计算。"
+                        : "请先在本分类顶部开启奖金制度总开关，再为规格单独开启。"}
+                    </p>
+                  </div>
+                  <button
+                    disabled={
+                      !selectedSku.product.categoryCommissionEnabled ||
+                      updateSkuMutation.isPending
+                    }
+                    onClick={() => {
+                      const nextValue = !selectedSku.commissionEnabled;
+                      updateSkuMutation.mutate(
+                        {
+                          productKey: selectedSku.product.key,
+                          skuId: selectedSku.id,
+                          isActive: selectedSku.isActive,
+                          stockQty: selectedSku.stockQty,
+                          commissionEnabled: nextValue,
+                        },
+                        {
+                          onSuccess: () => {
+                            setSelectedSku((current: any) =>
+                              current
+                                ? { ...current, commissionEnabled: nextValue }
+                                : current
+                            );
+                            toast.success(
+                              nextValue
+                                ? "该规格已开启奖金参与"
+                                : "该规格已关闭奖金参与"
+                            );
+                            refreshAll();
+                          },
+                        }
+                      );
+                    }}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-50 ${selectedSku.product.categoryCommissionEnabled && selectedSku.commissionEnabled ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-400"}`}
+                  >
+                    {selectedSku.commissionEnabled ? "参与奖金" : "不参与"}
+                  </button>
+                </div>
+                <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-2 text-[10px] leading-4 text-gray-500">
+                  订单会固化本次资格与成交金额；以后调整分类或规格开关，不会追溯影响已下订单。
+                </div>
               </div>
 
               <div className="rounded-2xl bg-white p-3 shadow-sm">
@@ -653,6 +795,21 @@ export default function LimitedProductsPanel() {
                         "shipped",
                         "delivered",
                       ].includes(order.status);
+                      const paidCny = Math.max(
+                        0,
+                        Number(order.walletDeductCny ?? 0)
+                      );
+                      const paidUsdt = Math.max(
+                        0,
+                        Number(order.walletDeductUsdt ?? 0)
+                      );
+                      const paymentSummary = [
+                        paidCny > 0.001 ? moneyCny(paidCny) : "",
+                        paidUsdt > 0.000001 ? moneyUsdt(paidUsdt) : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" + ");
+                      const wasRefunded = order.status === "cancelled";
                       return (
                         <div
                           key={order.id}
@@ -692,6 +849,23 @@ export default function LimitedProductsPanel() {
                               </p>
                             )}
                           </div>
+                          <div
+                            className={`mt-2 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-[10px] ${
+                              wasRefunded
+                                ? "bg-red-50 text-red-600"
+                                : "bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            <span className="inline-flex shrink-0 items-center gap-1 font-semibold">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {wasRefunded
+                                ? "已取消 · 已原路退款"
+                                : "付款已完成 · 钱包已扣款"}
+                            </span>
+                            <span className="min-w-0 text-right font-medium">
+                              {paymentSummary || "扣款金额已记录"}
+                            </span>
+                          </div>
                           <p className="mt-1 flex gap-1 text-[11px] text-gray-500">
                             <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
                             <span>
@@ -700,6 +874,16 @@ export default function LimitedProductsPanel() {
                               {order.receiverAddress}
                             </span>
                           </p>
+                          {String(order.userNote ?? "").trim() && (
+                            <p className="mt-1 flex gap-1 text-[11px] leading-4 text-amber-700">
+                              <span className="shrink-0 font-semibold">
+                                顾客备注：
+                              </span>
+                              <span className="break-words">
+                                {String(order.userNote).trim()}
+                              </span>
+                            </p>
+                          )}
                           <div className="mt-2 flex gap-2">
                             {addressEditable && (
                               <button

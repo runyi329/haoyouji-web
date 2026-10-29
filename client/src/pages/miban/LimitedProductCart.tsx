@@ -576,21 +576,21 @@ function LimitedProductCartOverlay() {
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
-              </section>
-
-              <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-                <label className="text-[14px] font-extrabold text-gray-900">
-                  订单备注{" "}
-                  <span className="font-normal text-gray-400">（选填）</span>
-                </label>
-                <textarea
-                  value={userNote}
-                  onChange={event =>
-                    setUserNote(event.target.value.slice(0, 500))
-                  }
-                  placeholder="如有配送或商品备注请填写"
-                  className="mt-3 min-h-18 w-full resize-none rounded-xl bg-gray-50 p-3 text-[13px] outline-none"
-                />
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <label className="text-[12px] font-bold text-gray-600">
+                    顾客备注{" "}
+                    <span className="font-normal text-gray-400">（选填）</span>
+                  </label>
+                  <textarea
+                    value={userNote}
+                    onChange={event =>
+                      setUserNote(event.target.value.slice(0, 500))
+                    }
+                    placeholder="如有配送或商品备注请填写"
+                    maxLength={500}
+                    className="mt-2 min-h-18 w-full resize-none rounded-xl bg-gray-50 p-3 text-[13px] outline-none"
+                  />
+                </div>
               </section>
 
               <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm">

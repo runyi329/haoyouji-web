@@ -75,54 +75,28 @@ export default function LimitedBrandProducts() {
   return (
     <div className="min-h-screen pb-8" style={{ background: theme.canvas }}>
       <header
-        className="border-b bg-white px-5 pb-4 pt-5"
+        className="grid h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b bg-white px-4"
         style={{ borderColor: theme.border }}
       >
         <Link
           href="/p/proj_hzxm2t/limited"
-          className="inline-flex items-center gap-1 text-[12px] font-medium active:opacity-65"
+          className="inline-flex h-8 items-center gap-1 text-[12px] font-medium active:opacity-65"
           style={{ color: theme.muted }}
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.2} />
           返回
         </Link>
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <span
-              className="text-[11px] font-bold tracking-[0.12em]"
-              style={{ color: theme.primary }}
-            >
-              {brand.eyebrow}
-            </span>
-            <h1
-              className="mt-1 text-[22px] font-extrabold tracking-tight"
-              style={{ color: theme.navy }}
-            >
-              {brand.title}
-            </h1>
-            <p className="mt-1 text-[11px]" style={{ color: theme.muted }}>
-              {localPreviewMode
-                ? "本地上架预览，不会初始化库存状态"
-                : "点击商品查看完整图文详情"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <LimitedCartButton compact accent={theme.primary} />
-            <span
-              className="rounded-full px-2.5 py-1 text-[10px] font-bold"
-              style={{
-                background: theme.surfaceMuted,
-                color: theme.primary,
-              }}
-            >
-              {`${brandProducts.length} 件在售`}
-            </span>
-          </div>
-        </div>
+        <h1
+          className="min-w-0 truncate text-center text-[17px] font-extrabold tracking-tight"
+          style={{ color: theme.navy }}
+        >
+          {brand.title}
+        </h1>
+        <LimitedCartButton compact accent={theme.primary} />
       </header>
 
       <section
-        className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-[480px]"
+        className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-[480px]"
         aria-label={`${brand.title}商品`}
       >
         {brandProducts.length > 0 ? (
@@ -256,15 +230,6 @@ export default function LimitedBrandProducts() {
           </div>
         )}
       </section>
-
-      <p
-        className="px-5 pt-5 text-center text-[11px]"
-        style={{ color: theme.subtle }}
-      >
-        {localPreviewMode
-          ? "本地上架预览 · 不会初始化库存状态"
-          : "点击商品可查看完整图文介绍、规格并购买"}
-      </p>
     </div>
   );
 }

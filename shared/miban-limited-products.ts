@@ -106,6 +106,21 @@ const herbalifeTeaLemonDetailImage = (file: string) =>
   herbalifeImage("herbal-tea-lemon/user-detail-v2", file);
 const herbalifeAloeDetailImage = (file: string) =>
   herbalifeImage("aloe-nutrition/user-detail-v2", file);
+const herbalifeNingyouranDetailImage = (file: string) =>
+  herbalifeImage("ningyouran-sleep-5in1/user-detail-v3", file);
+const NINGYOURAN_DETAIL_IMAGES = [
+  herbalifeNingyouranDetailImage("detail-01.jpg"),
+  herbalifeNingyouranDetailImage("detail-02.jpg"),
+  herbalifeNingyouranDetailImage("detail-03.jpg"),
+  herbalifeNingyouranDetailImage("detail-04.jpg"),
+  herbalifeNingyouranDetailImage("detail-05.jpg"),
+  herbalifeNingyouranDetailImage("detail-06.jpg"),
+  herbalifeNingyouranDetailImage("detail-07.jpg"),
+  herbalifeNingyouranDetailImage("detail-08.jpg"),
+  herbalifeNingyouranDetailImage("detail-09.jpg"),
+  herbalifeNingyouranDetailImage("detail-10.jpg"),
+  herbalifeNingyouranDetailImage("detail-11.jpg"),
+];
 const herbalifeRedBeanShakeDetailImage = (file: string) =>
   herbalifeImage("shake-red-bean/user-detail-v2", file);
 const youthProteinMobileDetailImage = (file: string) =>
@@ -509,9 +524,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       subtitle: "1.5g × 30条/盒 · 低糖0脂肪",
       tags: ["每日一条", "五合一科学复配", "睡前食用"],
       heroImages: [herbalifeImage("ningyouran-sleep-5in1", "product-main.png")],
-      detailImages: [
-        herbalifeImage("ningyouran-sleep-5in1", "product-main.png"),
-      ],
+      detailImages: NINGYOURAN_DETAIL_IMAGES,
       productImage: herbalifeImage("ningyouran-sleep-5in1", "product-main.png"),
       description:
         "本品采用 PQQ、GABA（γ-氨基丁酸）、茶叶茶氨酸、酸枣仁粉及葡萄糖酸镁五重科学复配，支持身心舒缓与安享宁静时光。",
@@ -539,9 +552,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         maxPurchaseQty: 10,
         active: true,
         image: herbalifeImage("ningyouran-sleep-5in1", "product-main.png"),
-        detailImages: [
-          herbalifeImage("ningyouran-sleep-5in1", "product-main.png"),
-        ],
+        detailImages: NINGYOURAN_DETAIL_IMAGES,
       },
     ],
     orderPolicy: domesticOrderPolicy,

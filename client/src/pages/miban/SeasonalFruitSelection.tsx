@@ -1,7 +1,8 @@
 import { Link } from "wouter";
-import { Apple, ArrowLeft, ChevronRight, MapPin } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
+import { LimitedCartButton } from "./LimitedProductCart";
 
 const PEAR_DEADLINE = new Date("2026-07-25T00:00:00+08:00").getTime();
 const TIANGUI_PEAR_IMAGE =
@@ -27,51 +28,24 @@ export default function SeasonalFruitSelection() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F5] pb-8">
-      <header className="border-b border-[#E9E6DA] bg-white px-5 pb-4 pt-5">
+      <header className="grid h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#E9E6DA] bg-white px-4">
         <Link
           href="/p/proj_hzxm2t/limited"
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-[#8A7B57] active:opacity-65"
+          className="inline-flex h-8 items-center gap-1 text-[12px] font-medium text-[#8A7B57] active:opacity-65"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.2} />
           返回
         </Link>
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-[0.12em] text-[#9B8552]">
-              <Apple className="h-3.5 w-3.5" strokeWidth={2.2} />
-              四季鲜果
-            </div>
-            <h1 className="mt-1 text-[22px] font-extrabold tracking-tight text-[#2E3C30]">
-              四季水果精选
-            </h1>
-            <p className="mt-1 text-[11px] text-[#908A7C]">
-              随季更新，从产地到餐桌的好水果。
-            </p>
-          </div>
-          <span className="rounded-full bg-[#F3EFE2] px-2.5 py-1 text-[10px] font-bold text-[#88713E]">
-            2 款精选
-          </span>
-        </div>
+        <h1 className="min-w-0 truncate text-center text-[17px] font-extrabold tracking-tight text-[#2E3C30]">
+          四季水果精选
+        </h1>
+        <LimitedCartButton compact accent="#647B35" />
       </header>
 
       <section
-        className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-[480px]"
+        className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-[480px]"
         aria-label="四季水果精选商品"
       >
-        <div className="mb-3 flex items-end justify-between">
-          <div>
-            <h2 className="text-[15px] font-extrabold text-[#35352F]">
-              当季鲜果
-            </h2>
-            <p className="mt-1 text-[11px] text-[#A39C8C]">
-              供应状态以当季实际供应为准
-            </p>
-          </div>
-          <span className="text-[10px] font-medium text-[#9B8552]">
-            随季更新
-          </span>
-        </div>
-
         <div className="space-y-3">
           <Link
             href="/p/proj_hzxm2t/limited/guangfeng-majiayou"
@@ -196,10 +170,6 @@ export default function SeasonalFruitSelection() {
           </Link>
         </div>
       </section>
-
-      <p className="px-5 pt-6 text-center text-[11px] text-[#B6B0A3]">
-        更多应季水果正在甄选中
-      </p>
     </div>
   );
 }

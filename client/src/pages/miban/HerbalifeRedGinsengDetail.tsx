@@ -183,6 +183,8 @@ export default function HerbalifeRedGinsengDetail() {
       : currentProduct?.detail.detailImage
         ? [currentProduct.detail.detailImage]
         : []);
+  const isContinuousDetailPoster =
+    currentProduct?.key === "herbalife-ningyouran-sleep-5in1";
   const checkoutProductImage =
     selectedSku?.image ?? currentProduct?.detail.productImage;
   const isOnSale = currentProduct?.status === "on_sale" && !!selectedSku;
@@ -408,7 +410,7 @@ export default function HerbalifeRedGinsengDetail() {
       `收货人：${receiverName.trim()}`,
       `手机号：${receiverPhone.trim()}`,
       `收货地址：${receiverAddress}`,
-      userNote.trim() ? `订单备注：${userNote.trim()}` : null,
+      userNote.trim() ? `顾客备注：${userNote.trim()}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -697,7 +699,13 @@ export default function HerbalifeRedGinsengDetail() {
           </p>
         </div>
         {detailImages.length > 0 && (
-          <div className="space-y-px bg-gray-100">
+          <div
+            className={
+              isContinuousDetailPoster
+                ? "bg-[#252A78]"
+                : "space-y-px bg-gray-100"
+            }
+          >
             {detailImages.map((image, index) => (
               <img
                 key={image}
@@ -1177,6 +1185,22 @@ export default function HerbalifeRedGinsengDetail() {
                     className="w-full rounded-lg border border-gray-100 bg-white px-3 py-2 text-[13px] outline-none"
                   />
                 </div>
+                <div className="border-b border-gray-100 px-4 py-3">
+                  <label className="text-[12px] font-semibold text-gray-500">
+                    顾客备注{" "}
+                    <span className="font-normal text-gray-400">（选填）</span>
+                  </label>
+                  <textarea
+                    value={userNote}
+                    onChange={event =>
+                      setUserNote(event.target.value.slice(0, 500))
+                    }
+                    placeholder="如有配送或商品备注请填写"
+                    rows={2}
+                    maxLength={500}
+                    className="mt-2 w-full resize-none rounded-lg bg-gray-50 px-3 py-2.5 text-[13px] leading-5 outline-none"
+                  />
+                </div>
                 {currentProduct.orderPolicy.allowAddressBook && (
                   <button
                     onClick={() => setSaveToBook(value => !value)}
@@ -1206,14 +1230,6 @@ export default function HerbalifeRedGinsengDetail() {
                   </button>
                 )}
               </div>
-
-              <textarea
-                value={userNote}
-                onChange={event => setUserNote(event.target.value)}
-                placeholder="订单备注（可选）"
-                rows={2}
-                className="mt-3 w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-[13px] outline-none"
-              />
             </div>
             <div
               className="border-t border-gray-100 px-5 py-3"
@@ -1497,7 +1513,7 @@ export default function HerbalifeRedGinsengDetail() {
                   </div>
                   {userNote.trim() && (
                     <div className="mt-2 break-all text-gray-500">
-                      备注：{userNote.trim()}
+                      顾客备注：{userNote.trim()}
                     </div>
                   )}
                 </div>
@@ -1520,23 +1536,25 @@ export default function HerbalifeRedGinsengDetail() {
                 <Copy size={14} />
                 复制订单详情
               </button>
-              <OrderCardImageDownload
-                targetRef={orderReceiptRef}
-                currentUser={user}
-                orderNo={orderSuccess.orderNo}
-                color={accent}
-                outerPadding={12}
-                captureFullContent
-                fullContentHorizontalBleed={0}
-                fullContentBottomPadding={12}
-                exportBackground="#F6F8F5"
-                watermarkMode="time-only"
-                watermarkOpacity={0.04}
-                filenamePrefix="米伴订单详情"
-                previewTitle="订单详情图片预览"
-                previewHint="高清 PNG，保存或分享前可确认全部订单内容"
-                buttonLabel="保存订单图片"
-              />
+              <div className="flex w-full [&>button]:h-10 [&>button]:w-full [&>button]:gap-1.5 [&>button]:rounded-xl [&>button]:text-[12px] [&>button]:font-bold">
+                <OrderCardImageDownload
+                  targetRef={orderReceiptRef}
+                  currentUser={user}
+                  orderNo={orderSuccess.orderNo}
+                  color={accent}
+                  outerPadding={12}
+                  captureFullContent
+                  fullContentHorizontalBleed={0}
+                  fullContentBottomPadding={12}
+                  exportBackground="#F6F8F5"
+                  watermarkMode="time-only"
+                  watermarkOpacity={0.04}
+                  filenamePrefix="米伴订单详情"
+                  previewTitle="订单详情图片预览"
+                  previewHint="高清 PNG，保存或分享前可确认全部订单内容"
+                  buttonLabel="保存订单图片"
+                />
+              </div>
             </div>
             <Link
               href="/p/proj_hzxm2t/my-orders"

@@ -534,6 +534,9 @@ async function startServer() {
   app.use(foodCalorieModule.default);
   const energyProxyModule = await import('../energy-proxy-router.js');
   app.use(energyProxyModule.default);
+  // 米伴订单 PNG 导出：将固定白名单内的 COS 商品图同源返回，避免浏览器画布跨域丢图。
+  const mibanExportImageModule = await import('../miban-export-image-router.js');
+  app.use(mibanExportImageModule.default);
   // 黄金行情路由（Yahoo Finance）
   const goldTrackerModule = await import('../gold-tracker-router.js');
   app.use(goldTrackerModule.default);

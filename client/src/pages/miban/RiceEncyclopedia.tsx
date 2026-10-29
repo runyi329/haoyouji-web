@@ -26,8 +26,13 @@ export default function RiceEncyclopedia() {
     { staleTime: 60_000 }
   );
 
+  // 天桂梨属于四季水果精选，不应作为米类出现在百科中。
+  const encyclopediaList = (catalogList ?? []).filter(
+    (rice: any) => rice.stdName !== "天桂梨"
+  );
+
   // 按分类和搜索词过滤
-  const filtered = (catalogList ?? []).filter((r: any) => {
+  const filtered = encyclopediaList.filter((r: any) => {
     const matchCategory = !category || r.category === category;
     const matchSearch = !search
       || r.stdName.includes(search)
@@ -46,7 +51,7 @@ export default function RiceEncyclopedia() {
             <span className="text-foreground">米粒百科</span>
           </div>
           <h1 className="font-serif text-3xl font-bold text-foreground mb-2">米粒百科</h1>
-          <p className="text-muted-foreground text-sm">精选 {catalogList?.length ?? 0} 种优质米 · 粒粒皆精选</p>
+          <p className="text-muted-foreground text-sm">精选 {encyclopediaList.length} 种优质米 · 粒粒皆精选</p>
         </div>
       </section>
 

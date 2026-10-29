@@ -556,10 +556,12 @@ export default function Home() {
         color: r.colorHex,
       }))
     : RICE_TYPES;
+  // 天桂梨属于四季水果精选，不应进入“我的饭碗我做主”的米类卡片网格。
+  const homeRiceList = riceList.filter((rice) => rice.name !== "天桂梨");
 
   const filteredRice = activeFilter === "全部"
-    ? riceList
-    : riceList.filter((r) => r.categories.includes(activeFilter));
+    ? homeRiceList
+    : homeRiceList.filter((r) => r.categories.includes(activeFilter));
 
   return (
     <div className="min-h-screen bg-white pb-20">
@@ -587,11 +589,11 @@ export default function Home() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {(catalogLoading && (!catalogData || catalogData.length === 0)
             ? Array.from({ length: 12 }).map((_, i) => ({ id: `sk-${i}`, name: "", origin: "", img: "", color: "" }))
-            : riceList
+            : homeRiceList
           ).map((rice) => (
             <div
               key={rice.id}
-              onClick={() => { const r = riceList.find(x => x.id === rice.id); if (r) setActiveRice(r); }}
+              onClick={() => { const r = homeRiceList.find(x => x.id === rice.id); if (r) setActiveRice(r); }}
               style={{
                 borderRadius: 16,
                 overflow: "hidden",

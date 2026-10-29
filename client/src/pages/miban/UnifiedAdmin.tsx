@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import InventoryPanel from "./InventoryPanel";
 import LimitedProductsPanel from "./LimitedProductsPanel";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import {
   Package,
   Wheat,
@@ -36,7 +37,6 @@ import {
   ClipboardList,
   RotateCcw,
   AlertCircle,
-  ChevronDown,
   ChevronUp,
   Edit3,
   Check,
@@ -69,6 +69,10 @@ function CommissionPreviewBadge({ orderId }: { orderId: number }) {
         <div className="mt-2 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2.5 space-y-1.5">
           {isLoading ? (
             <p className="text-[11px] text-gray-400">计算中...</p>
+          ) : data?.notEligible ? (
+            <p className="text-[11px] leading-5 text-gray-400">
+              此商品下单时未开启奖金制度，不触发分佣。
+            </p>
           ) : !data || data.noConfig ? (
             <p className="text-[11px] text-gray-400">
               未配置奖金制度，此订单不触发分佣
@@ -122,7 +126,9 @@ function CommissionPreviewBadge({ orderId }: { orderId: number }) {
               {/* 合计 */}
               <div className="pt-1 border-t border-orange-100 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-400">订单金额</span>
+                  <span className="text-[11px] text-gray-400">
+                    {data.limitedCommission ? "参与奖金金额" : "订单金额"}
+                  </span>
                   <span className="text-[11px] text-gray-500">
                     ¥{(data.orderAmount ?? 0).toFixed(2)}
                   </span>
@@ -225,6 +231,9 @@ function OrdersPanel() {
     Record<number, string>
   >({});
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [statusMenuOrderId, setStatusMenuOrderId] = useState<number | null>(
+    null
+  );
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchText, setSearchText] = useState<string>("");
   const [showAdvFilter, setShowAdvFilter] = useState(false);
@@ -250,6 +259,15 @@ function OrdersPanel() {
     done: number;
     total: number;
   } | null>(null);
+  const orderCardRefs = useRef<
+    Record<number, { current: HTMLDivElement | null }>
+  >({});
+  const getOrderCardRef = (orderId: number) => {
+    if (!orderCardRefs.current[orderId]) {
+      orderCardRefs.current[orderId] = { current: null };
+    }
+    return orderCardRefs.current[orderId];
+  };
 
   // 上传回传CSV快递单号
   const [showImportModal, setShowImportModal] = useState(false);
@@ -897,22 +915,74 @@ function OrdersPanel() {
           (item: any) => item?.kind === "limited_product"
         );
         const isLimitedProduct = limitedProductLines.length > 0;
-        const limitedProductQuantity = limitedProductLines.reduce(
-          (sum: number, item: any) => sum + Number(item.quantity || 0),
-          0
-        );
-        const itemQuantityLabel = isLimitedProduct
-          ? limitedProductLines.length === 1
-            ? `${limitedProductLines[0].quantity}${limitedProductLines[0].unitLabel}`
-            : `${limitedProductLines.length}款 · 共${limitedProductQuantity}件`
-          : `${order.totalWeightJin}斤`;
-        const statusColor =
-          STATUS_COLORS[order.status] ?? "text-gray-500 bg-gray-100";
+        const orderTotalCny = Number(order.totalPrice ?? 0);
+        const singleLimitedLine =
+          isLimitedProduct && limitedProductLines.length === 1
+            ? limitedProductLines[0]
+            : null;
+        const singleLimitedQuantity = Number(singleLimitedLine?.quantity ?? 0);
+        const singleLimitedUnit = singleLimitedLine?.unitLabel || "件";
         const isSelected = selectedIds.has(order.id);
+        const paidCny = Math.max(0, Number(order.walletDeductCny ?? 0));
+        const paidUsdt = Math.max(0, Number(order.walletDeductUsdt ?? 0));
+        const orderRateSnapshot = Math.max(
+          0,
+          Number(order.usdtCnyRateAtOrder ?? 0)
+        );
+        const impliedOrderRate =
+          paidUsdt > 0 && orderTotalCny > paidCny
+            ? (orderTotalCny - paidCny) / paidUsdt
+            : 0;
+        const displayOrderRate = orderRateSnapshot || impliedOrderRate;
+        const orderTotalUsdt =
+          displayOrderRate > 0 ? orderTotalCny / displayOrderRate : null;
+        const orderAmountSummary =
+          orderTotalUsdt !== null
+            ? singleLimitedLine && singleLimitedQuantity > 0
+              ? `${(orderTotalUsdt / singleLimitedQuantity).toFixed(2)}U/${singleLimitedUnit} × ${singleLimitedQuantity}${singleLimitedUnit} = ${orderTotalUsdt.toFixed(2)}U`
+              : `= ${orderTotalUsdt.toFixed(2)}U`
+            : "待核实";
+        const hasWalletPaymentRecord = paidCny > 0.001 || paidUsdt > 0.000001;
+        const walletDeductUsdtEquivalent =
+          displayOrderRate > 0
+            ? paidUsdt + paidCny / displayOrderRate
+            : paidCny <= 0.001 && paidUsdt > 0
+              ? paidUsdt
+              : null;
+        const walletPaymentSummary =
+          walletDeductUsdtEquivalent !== null
+            ? `${walletDeductUsdtEquivalent.toFixed(2)}U`
+            : "待核实";
+        const customerNote = String(order.userNote ?? "").trim();
+        const paymentWasRefunded = order.status === "cancelled";
+        const isShippingConfirmed = order.status === "confirmed";
+        const isShipped = ["shipped", "delivered"].includes(order.status);
+        const statusMenuLabel = isShipped
+          ? "已发货"
+          : isShippingConfirmed
+            ? "确认发货"
+            : "已付款";
+        const statusMenuColor = isShipped
+          ? "bg-sky-700"
+          : isShippingConfirmed
+            ? "bg-violet-700"
+            : "bg-emerald-700";
+        const createdAtLabel = order.createdAt
+          ? new Intl.DateTimeFormat("zh-CN", {
+              timeZone: "Asia/Shanghai",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hourCycle: "h23",
+            }).format(new Date(order.createdAt))
+          : "--";
         return (
           <div
             key={order.id}
-            className="bg-white border rounded-2xl p-4 shadow-sm overflow-hidden transition-all"
+            ref={getOrderCardRef(order.id)}
+            className="relative bg-white border rounded-2xl p-4 shadow-sm overflow-hidden transition-all"
             style={{
               borderColor: batchMode && isSelected ? "#FF6900" : "#f3f4f6",
               borderWidth: batchMode && isSelected ? 1.5 : 1,
@@ -921,7 +991,10 @@ function OrdersPanel() {
           >
             {/* 批量模式复选框行 */}
             {batchMode && (
-              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-50">
+              <div
+                data-card-export-hide="true"
+                className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-50"
+              >
                 {isSelected ? (
                   <CheckSquare
                     className="w-4 h-4 flex-shrink-0"
@@ -935,98 +1008,253 @@ function OrdersPanel() {
                 </span>
               </div>
             )}
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="flex-1 min-w-0">
-                <h3 className="text-[14px] font-bold text-black">
-                  {order.recipeName || "定制米"}
-                </h3>
-                <p className="text-[11px] text-gray-400">
-                  #{order.id} · {order.receiverName} · {order.receiverPhone}
-                </p>
-                <p className="text-[11px] text-gray-400 truncate">
-                  {order.receiverAddress}
-                </p>
-              </div>
-              <select
-                value={order.status}
-                onChange={e => {
-                  if (e.target.value === "cancelled") {
-                    setConfirmAction({
-                      type: "cancel",
-                      orderId: order.id,
-                      orderNo: order.orderNo,
-                    });
-                    return;
-                  }
-                  updateMutation.mutate({
-                    id: order.id,
-                    status: e.target.value as any,
-                  });
-                }}
-                className={`text-[11px] border-0 rounded-full px-2.5 py-1 font-medium flex-shrink-0 focus:outline-none ${statusColor}`}
-              >
-                {ORDER_STATUS_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {isLimitedProduct ? (
-              <div className="mb-2 space-y-2 rounded-lg bg-rose-50 px-2.5 py-2 text-[11px]">
-                {limitedProductLines.map((line: any, index: number) => (
-                  <div
-                    key={`${line.productKey || line.name}-${line.skuId || index}`}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-gray-700">
-                        {line.skuName || line.name}
-                      </div>
-                      {line.netContentText && (
-                        <div className="mt-0.5 text-gray-400">
-                          {line.netContentText}
-                        </div>
-                      )}
-                    </div>
-                    <span className="shrink-0 font-bold text-rose-700">
-                      {line.quantity}
-                      {line.unitLabel}
-                    </span>
+            <OrderCardImageDownload
+              targetRef={getOrderCardRef(order.id)}
+              orderNo={order.orderNo || order.id}
+              triggerMode="long-press"
+              outerPadding={12}
+              captureFullContent
+              fullContentHorizontalBleed={0}
+              fullContentBottomPadding={12}
+              exportBackground="#FFFFFF"
+              watermarkMode="time-only"
+              filenamePrefix="米伴精选订单"
+              previewTitle="管理员订单图片"
+              previewHint="长按订单卡后生成的订单图片"
+            />
+
+            <div className="overflow-hidden rounded-xl border border-gray-100 bg-[#fcfcfc]">
+              <div className="flex min-h-[64px]">
+                {order.productImg ? (
+                  <img
+                    src={order.productImg}
+                    alt={order.recipeName || "商品缩略图"}
+                    className="w-[76px] shrink-0 self-stretch object-cover"
+                  />
+                ) : (
+                  <div className="flex w-[76px] shrink-0 self-stretch items-center justify-center bg-orange-50 text-orange-300">
+                    <Package className="h-6 w-6" />
                   </div>
-                ))}
-              </div>
-            ) : (
-              ingredients.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {ingredients.map((ing: any, i: number) => (
-                    <span
-                      key={i}
-                      className="flex items-center gap-1 text-[11px] bg-gray-50 px-2 py-0.5 rounded-full text-gray-500"
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: ing.colorHex ?? "#C8A87A" }}
-                      />
-                      {ing.name} {ing.weightJin?.toFixed(1)}斤
-                    </span>
-                  ))}
+                )}
+                <div className="min-w-0 flex-1 py-2.5 pl-2.5 pr-2.5">
+                  <div className="break-words text-[13px] font-bold leading-5 text-gray-800">
+                    {order.recipeName || "定制米"}
+                  </div>
+                  {isLimitedProduct ? (
+                    <div className="mt-1 space-y-0.5">
+                      {limitedProductLines.map((line: any, index: number) => (
+                        <div
+                          key={`${line.productKey || line.name}-${line.skuId || index}`}
+                          className="flex min-w-0 items-center gap-1 text-[10px]"
+                        >
+                          <span className="min-w-0 truncate text-gray-500">
+                            {line.netContentText || line.skuName || line.name}
+                          </span>
+                          {index === 0 && (
+                            <span className="shrink-0 whitespace-nowrap font-bold text-[#FF6900]">
+                              {limitedProductLines.length > 1 ? "合计 " : ""}¥
+                              {Number(order.totalPrice).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    ingredients.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {ingredients.map((ing: any, i: number) => (
+                          <span
+                            key={i}
+                            className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500"
+                          >
+                            {ing.name} {ing.weightJin?.toFixed(1)}斤
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  )}
+                  {!isLimitedProduct && (
+                    <div className="mt-1 text-[11px] font-bold text-[#FF6900]">
+                      ¥{Number(order.totalPrice).toFixed(2)}
+                    </div>
+                  )}
                 </div>
-              )
-            )}
-            <div className="flex items-center gap-2">
-              <span
-                className="text-[14px] font-bold"
-                style={{ color: "#FF6900" }}
-              >
-                ¥{Number(order.totalPrice).toFixed(2)}
-              </span>
-              <span className="text-[11px] text-gray-400">
-                · {itemQuantityLabel}
-              </span>
+              </div>
             </div>
+
+            <div className="mt-3 space-y-2 border-t border-gray-100 pt-2.5">
+              <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
+                <span className="pt-px font-medium text-gray-400">收货人</span>
+                <span className="min-w-0 break-words text-right font-semibold text-gray-700">
+                  {order.receiverName || "未填写收货人"}
+                  {order.receiverPhone ? `　${order.receiverPhone}` : ""}
+                </span>
+              </div>
+              <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
+                <span className="pt-px font-medium text-gray-400">
+                  收货地址
+                </span>
+                <span className="min-w-0 break-words text-right font-semibold text-gray-700">
+                  {order.receiverAddress || "未填写收货地址"}
+                </span>
+              </div>
+              {customerNote && (
+                <div
+                  data-card-export-hide="true"
+                  className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4"
+                >
+                  <span className="pt-px font-medium text-gray-400">
+                    顾客备注
+                  </span>
+                  <span className="min-w-0 break-words text-right font-medium text-amber-700">
+                    {customerNote}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2.5 text-[11px] leading-4">
+              <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2">
+                <span className="pt-px font-medium text-gray-400">
+                  订单金额
+                </span>
+                <span className="min-w-0 break-words text-right font-semibold text-gray-700">
+                  {orderAmountSummary}
+                </span>
+              </div>
+              <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2">
+                <span className="pt-px font-medium text-gray-400">
+                  {paymentWasRefunded
+                    ? "已原路退款"
+                    : hasWalletPaymentRecord
+                      ? "钱包实扣"
+                      : "支付记录"}
+                </span>
+                <span
+                  className={`min-w-0 break-words text-right font-semibold ${
+                    paymentWasRefunded ? "text-red-600" : "text-gray-700"
+                  }`}
+                >
+                  {hasWalletPaymentRecord ? walletPaymentSummary : "待核实"}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
+              <div className="min-w-0 flex-1 space-y-1 text-[11px] leading-4">
+                <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">
+                  <span className="pt-px font-medium text-gray-400">
+                    订单号
+                  </span>
+                  <span className="min-w-0 break-all text-right font-semibold text-gray-600">
+                    {order.orderNo || `#${order.id}`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">
+                  <span className="pt-px font-medium text-gray-400">
+                    下单时间
+                  </span>
+                  <span className="min-w-0 text-right font-semibold text-gray-600">
+                    {createdAtLabel}
+                  </span>
+                </div>
+              </div>
+              <div className="relative flex shrink-0 items-end">
+                {paymentWasRefunded ? (
+                  <span className="flex min-h-[40px] min-w-[58px] items-center justify-center rounded-md bg-red-700 px-3 text-[12px] font-bold text-white">
+                    已取消
+                  </span>
+                ) : hasWalletPaymentRecord ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation();
+                        setStatusMenuOrderId(current =>
+                          current === order.id ? null : order.id
+                        );
+                      }}
+                      disabled={updateMutation.isPending}
+                      className={`flex min-h-[40px] min-w-[76px] items-center justify-center rounded-md px-3 text-[12px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60 ${statusMenuColor}`}
+                      title="点击管理订单状态"
+                      aria-expanded={statusMenuOrderId === order.id}
+                    >
+                      {statusMenuLabel}
+                    </button>
+                    {statusMenuOrderId === order.id && (
+                      <div
+                        data-card-export-hide="true"
+                        className="absolute bottom-full right-0 z-20 mb-2 w-36 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-xl"
+                        onClick={event => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatusMenuOrderId(null);
+                            updateMutation.mutate({
+                              id: order.id,
+                              status: "pending",
+                            });
+                          }}
+                          className="flex w-full items-center px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-gray-50"
+                        >
+                          已付款
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatusMenuOrderId(null);
+                            updateMutation.mutate({
+                              id: order.id,
+                              status: "confirmed",
+                            });
+                          }}
+                          className="flex w-full items-center px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-violet-50"
+                        >
+                          确认发货
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatusMenuOrderId(null);
+                            updateMutation.mutate({
+                              id: order.id,
+                              status: "shipped",
+                            });
+                          }}
+                          className="flex w-full items-center px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-sky-50"
+                        >
+                          已发货
+                        </button>
+                        {!isShipped && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStatusMenuOrderId(null);
+                              setConfirmAction({
+                                type: "cancel",
+                                orderId: order.id,
+                                orderNo: order.orderNo,
+                              });
+                            }}
+                            className="flex w-full items-center border-t border-gray-100 px-3 py-2 text-left text-[12px] text-red-600 hover:bg-red-50"
+                          >
+                            取消订单（退款）
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span className="flex min-h-[40px] min-w-[58px] items-center justify-center rounded-md bg-gray-600 px-3 text-[12px] font-semibold text-white">
+                    待核实
+                  </span>
+                )}
+              </div>
+            </div>
+
             {order.status === "confirmed" && (
-              <div className="mt-2 space-y-1.5">
+              <div data-card-export-hide="true" className="mt-2 space-y-1.5">
                 {/* 快递公司下拉 */}
                 <select
                   value={courierInputs[order.id] ?? ""}
@@ -1084,7 +1312,10 @@ function OrdersPanel() {
               </p>
             )}
             {/* 管理员备注区域 */}
-            <div className="mt-2 pt-2 border-t border-gray-50">
+            <div
+              data-card-export-hide="true"
+              className="mt-2 pt-2 border-t border-gray-50"
+            >
               {editingNoteId === order.id ? (
                 <div className="flex items-center gap-1.5">
                   <MessageSquare className="w-3 h-3 flex-shrink-0 text-orange-400" />
@@ -1136,24 +1367,18 @@ function OrdersPanel() {
                 </button>
               )}
             </div>
-            <CommissionPreviewBadge orderId={order.id} />
-            {/* 取消 / 删除 按鈕（批量模式下隐藏） */}
+            {order.commissionPreviewVisible !== false &&
+              order.commissionTrigger !== "not_eligible" && (
+                <div data-card-export-hide="true">
+                  <CommissionPreviewBadge orderId={order.id} />
+                </div>
+              )}
+            {/* 删除操作仍保留在底部；取消订单已收纳进右侧状态菜单并保留退款二次确认。 */}
             {!batchMode && !["delivered", "shipped"].includes(order.status) && (
-              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
-                {order.status !== "cancelled" && (
-                  <button
-                    onClick={() =>
-                      setConfirmAction({
-                        type: "cancel",
-                        orderId: order.id,
-                        orderNo: order.orderNo,
-                      })
-                    }
-                    className="flex-1 text-[11px] py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
-                  >
-                    取消订单（退款）
-                  </button>
-                )}
+              <div
+                data-card-export-hide="true"
+                className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50"
+              >
                 <button
                   onClick={() =>
                     setConfirmAction({
