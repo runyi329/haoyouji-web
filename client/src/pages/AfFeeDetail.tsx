@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, DollarSign, X } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
 import { trpc } from "@/lib/trpc";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
@@ -15,6 +15,24 @@ function formatQty(val: string | number, coin?: string): string {
   const intLen = intPart === '0' ? 1 : intPart.length;
   const decLen = Math.max(0, 5 - intLen);
   return n.toFixed(decLen);
+}
+
+function formatWalletAssetAmount(value: string | number, assetCode: string): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '—';
+  const normalizedCode = String(assetCode || '').toUpperCase();
+  if (normalizedCode === 'USDT' || normalizedCode === 'CNY') {
+    return amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  const absolute = Math.abs(amount);
+  const maximumFractionDigits = absolute >= 1000 ? 2 : absolute >= 1 ? 4 : 8;
+  return amount.toLocaleString('zh-CN', { maximumFractionDigits });
+}
+
+function formatWalletUsdtValue(value: number | null | undefined): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '估值待报价';
+  return `≈ ${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U`;
 }
 
 const now = new Date();
@@ -89,6 +107,7 @@ export default function AfFeeDetail() {
   };
   const [expandedPersons, setExpandedPersons] = useState<Set<string>>(new Set());
   const togglePerson = (uid: string) => setExpandedPersons(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; });
+  const [walletAssetDetail, setWalletAssetDetail] = useState<{ userId: number; name: string; focus: 'total' | 'available' } | null>(null);
   const [aprInfo, setAprInfo] = useState<any | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [finDetailOrder, setFinDetailOrder] = useState<any | null>(null);
@@ -311,7 +330,25 @@ export default function AfFeeDetail() {
   );
   const { data: memberBalances } = trpc.recharge.getMembersBalance.useQuery(
     { ledgerId: 52, userIds: memberUserIds },
-    { enabled: ledgerId === 52 && memberUserIds.length > 0 }
+    { enabled: ledgerId === 52 && mainTab === 'finance' && memberUserIds.length > 0 }
+  );
+  // 谷底增筹管理费：缺口抵扣必须使用钱包未冻结的可用余额，不能把其他订单的冻结资金再计入。
+  const { data: gujianMemberWallets } = trpc.recharge.getMembersBalanceSummary.useQuery(
+    { ledgerId: 52, userIds: memberUserIds },
+    {
+      enabled: ledgerId === 52 && mainTab === 'gujian' && memberUserIds.length > 0,
+      // 钱包总额、冻结和可用估值统一跟随服务器价格缓存的30秒刷新节拍。
+      refetchInterval: 30_000,
+      staleTime: 25_000,
+    }
+  );
+  const { data: walletAssetSummary, isLoading: walletAssetSummaryLoading } = trpc.recharge.getMemberWalletAssetSummary.useQuery(
+    { ledgerId: 52, userId: walletAssetDetail?.userId ?? 0 },
+    {
+      enabled: ledgerId === 52 && mainTab === 'gujian' && !!walletAssetDetail?.userId,
+      refetchInterval: 30_000,
+      staleTime: 25_000,
+    }
   );
 
   const totalOngoing = feeItems.filter(f => f.feeType === 'ongoing').reduce((s, f) => s + f.totalFee, 0);
@@ -413,18 +450,25 @@ export default function AfFeeDetail() {
             gjPersonOrders.get(userKey)!.orders.push(item);
           }
           let gjWalletBalanceTotal = 0;
+          let gjWalletFrozenTotal = 0;
+          let gjWalletAvailableTotal = 0;
           let gjShortfallTotal = 0;
           let gjShortfallUserCount = 0;
           for (const person of Array.from(gjPersonOrders.values())) {
-            const walletBalance = person.userId > 0 && memberBalances ? Number(memberBalances[person.userId] ?? 0) : 0;
-            gjWalletBalanceTotal += walletBalance;
+            const wallet = person.userId > 0 ? gujianMemberWallets?.[person.userId] : undefined;
+            const walletTotal = Number(wallet?.total ?? 0);
+            const walletFrozen = Number(wallet?.frozen ?? 0);
+            const walletAvailable = Math.max(0, Number(wallet?.available ?? 0));
+            gjWalletBalanceTotal += walletTotal;
+            gjWalletFrozenTotal += walletFrozen;
+            gjWalletAvailableTotal += walletAvailable;
             const pendingFee = person.orders.reduce((sum: number, order: any) => {
               const prepaid = parseFloat(order.prepaidFee || '0');
               return sum + (-Number(order.totalFee || 0) + prepaid);
             }, 0);
             const pendingAbs = Math.abs(pendingFee);
-            if (pendingFee < 0 && walletBalance < pendingAbs) {
-              gjShortfallTotal += pendingAbs - walletBalance;
+            if (pendingFee < 0 && walletAvailable < pendingAbs) {
+              gjShortfallTotal += pendingAbs - walletAvailable;
               gjShortfallUserCount += 1;
             }
           }
@@ -480,18 +524,19 @@ export default function AfFeeDetail() {
                 </div>
               </div>
 
-              {/* 资金概况：钱包余额与人员缺口汇总 */}
-              <div className="grid grid-cols-2 overflow-hidden rounded" style={{ border: '1px solid #d1d5db', background: '#fff' }}>
+              {/* 资金概况：缺口仅以钱包未冻结的可用余额抵扣 */}
+              <div className="grid grid-cols-3 overflow-hidden rounded" style={{ border: '1px solid #d1d5db', background: '#fff' }}>
                 {[
-                  { label: '钱包余额总额(U)', value: gjWalletBalanceTotal.toFixed(2), color: gjWalletBalanceTotal > 0 ? '#dc2626' : '#94a3b8', hint: `${gjPersonOrders.size} 人` },
+                  { label: '钱包总额(U)', value: gjWalletBalanceTotal.toFixed(2), color: gjWalletBalanceTotal > 0 ? '#dc2626' : '#94a3b8', hint: `${gjPersonOrders.size} 人` },
+                  { label: '钱包可用(U)', value: gjWalletAvailableTotal.toFixed(2), color: gjWalletAvailableTotal > 0 ? '#dc2626' : '#94a3b8', hint: `冻结 ${gjWalletFrozenTotal.toFixed(2)} U` },
                   { label: '缺口总额(U)', value: gjShortfallTotal > 0 ? `-${gjShortfallTotal.toFixed(2)}` : '0.00', color: gjShortfallTotal > 0 ? '#16a34a' : '#94a3b8', hint: gjShortfallUserCount > 0 ? `${gjShortfallUserCount} 人存在缺口` : '暂无缺口' },
                 ].map((item, index) => (
-                  <div key={item.label} className="flex items-center justify-between gap-2 px-3 py-2" style={{ background: index === 1 && gjShortfallTotal > 0 ? '#fff7f7' : '#fff', borderRight: index === 0 ? '1px solid #e5e7eb' : 'none' }}>
+                  <div key={item.label} className="flex flex-col items-center justify-center gap-0.5 px-1 py-2" style={{ background: index === 2 && gjShortfallTotal > 0 ? '#fff7f7' : '#fff', borderRight: index < 2 ? '1px solid #e5e7eb' : 'none' }}>
                     <div className="min-w-0">
                       <div className="text-[10px] font-medium text-gray-500 whitespace-nowrap">{item.label}</div>
-                      <div className="text-[9px] text-gray-400 mt-0.5 whitespace-nowrap">{item.hint}</div>
                     </div>
-                    <div className="text-sm font-bold tabular-nums whitespace-nowrap" style={{ color: item.color }}>{item.value}</div>
+                    <div className="text-[12px] font-bold tabular-nums whitespace-nowrap" style={{ color: item.color }}>{item.value}</div>
+                    <div className="text-[9px] text-gray-400 whitespace-nowrap">{item.hint}</div>
                   </div>
                 ))}
               </div>
@@ -922,54 +967,78 @@ export default function AfFeeDetail() {
           return (
             <div className="space-y-2">
               {persons.map((person) => {
-                const uid = person.nickname;
-                const isOpen = expandedPersons.has(uid);
+                const personKey = `gj_${person.userId}`;
+                const isOpen = expandedPersons.has(personKey);
                 // 应收待收之和：负数=还没收，正数=多收（与展开订单口径一致）
                 const gjPendingFee = person.orders.reduce((s, o) => {
                   const prepaid = parseFloat((o as any).prepaidFee || '0');
                   // accInterestSigned = -totalFee， remainingFee = -totalFee + prepaid
                   return s + (-o.totalFee + prepaid);
                 }, 0);
-                const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
-                const wBal = walletBal !== null ? walletBal : 0;
-                // 还没收时（负数），用绝对值与錢包比较缺口
-                const isShortfall = gjPendingFee < 0 && (walletBal === null || wBal < Math.abs(gjPendingFee));
-                const shortfall = isShortfall ? (Math.abs(gjPendingFee) - wBal) : 0;
+                const walletSummary = person.userId > 0 ? gujianMemberWallets?.[person.userId] : undefined;
+                const walletTotal = Number(walletSummary?.total ?? 0);
+                const walletAvailable = Math.max(0, Number(walletSummary?.available ?? 0));
+                const walletKnown = Boolean(walletSummary);
+                // 还没收时（负数），仅用未被冻结的可用余额比较缺口。
+                const isShortfall = walletKnown && gjPendingFee < 0 && walletAvailable < Math.abs(gjPendingFee);
+                const shortfall = isShortfall ? (Math.abs(gjPendingFee) - walletAvailable) : 0;
                 return (
-                  <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
+                  <div key={personKey} className="bg-white rounded shadow-sm overflow-hidden">
                     {/* 收缩行：两行4格表格 */}
                     {(() => {
                       const gjRow1 = [
-                        { label: '姓名', value: person.nickname, color: '#0f172a', bold: true, bg: undefined },
-                        { label: '錢包(U)', value: wBal.toFixed(2), color: wBal > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
-                        { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + gjPendingFee.toFixed(2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
-                        { label: '缺口(U)', value: isShortfall ? '-' + shortfall.toFixed(2) : '0.00', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined },
+                        { label: '姓名', value: <><span>{person.nickname}</span><span className="ml-0.5 text-[9px] font-normal text-gray-400">（{person.orders.length}单）</span></>, color: '#0f172a', bold: true, bg: undefined, action: 'orders' as const },
+                        { label: '日费(U)', value: person.dailyTotal.toFixed(2), color: '#334155', bg: undefined, action: 'orders' as const },
+                        { label: '月费(U)', value: Math.round(person.dailyTotal * 30).toString(), color: '#475569', bg: undefined, action: 'orders' as const },
+                        { label: '年费(U)', value: Math.round(person.dailyTotal * 365).toString(), color: '#475569', bg: undefined, action: 'orders' as const },
                       ];
                       const gjRow2 = [
-                        { label: '单数', value: person.orders.length + '单', color: '#475569', bg: undefined },
-                        { label: '日费(U)', value: person.dailyTotal.toFixed(2), color: '#334155', bg: undefined },
-                        { label: '月预测(U)', value: Math.round(person.dailyTotal * 30).toString(), color: '#475569', bg: undefined },
-                        { label: '年预测(U)', value: Math.round(person.dailyTotal * 365).toString(), color: '#475569', bg: undefined },
+                        { label: '钱包(U)', value: walletKnown ? walletTotal.toFixed(2) : '--', color: walletTotal > 0 ? '#dc2626' : '#94a3b8', bg: '#f8fbff', action: 'wallet' as const },
+                        { label: '可用(U)', value: walletKnown ? walletAvailable.toFixed(2) : '--', color: walletAvailable > 0 ? '#dc2626' : '#94a3b8', bg: '#f8fbff', action: 'available' as const },
+                        { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + gjPendingFee.toFixed(2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined, action: 'orders' as const },
+                        { label: '缺口(U)', value: walletKnown ? (isShortfall ? '-' + shortfall.toFixed(2) : '0.00') : '--', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined, action: 'orders' as const },
                       ];
+                      const handleCellClick = (action: 'orders' | 'wallet' | 'available') => {
+                        if (action === 'wallet' || action === 'available') {
+                          setWalletAssetDetail({ userId: person.userId, name: person.nickname, focus: action === 'available' ? 'available' : 'total' });
+                          return;
+                        }
+                        togglePerson(personKey);
+                      };
                       return (
-                        <button onClick={() => togglePerson(uid)} className="w-full">
+                        <div>
                           <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid #e2e8f0' }}>
                             {gjRow1.map((col, ci) => (
-                              <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                              <button
+                                type="button"
+                                key={ci}
+                                onClick={() => handleCellClick(col.action)}
+                                aria-expanded={isOpen}
+                                className="flex flex-col items-center px-1 py-1.5 active:opacity-70"
+                                style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}
+                              >
                                 <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
                                 <span className={`text-[11px] leading-tight w-full text-center truncate ${(col as any).bold ? 'font-bold' : 'font-semibold'} tabular-nums`} style={{ color: col.color }}>{col.value}</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                           <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                             {gjRow2.map((col, ci) => (
-                              <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                              <button
+                                type="button"
+                                key={ci}
+                                onClick={() => handleCellClick(col.action)}
+                                aria-label={col.action === 'wallet' || col.action === 'available' ? `查看${person.nickname}的钱包资产明细` : undefined}
+                                aria-expanded={col.action === 'orders' ? isOpen : undefined}
+                                className="flex flex-col items-center px-1 py-1.5 active:opacity-70"
+                                style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}
+                              >
                                 <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
                                 <span className="text-[11px] font-semibold tabular-nums leading-tight w-full text-center" style={{ color: col.color }}>{col.value}</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
-                        </button>
+                        </div>
                       );
                     })()}
                     {/* 展开：每条订单 8格网格布局 */}
@@ -2309,6 +2378,92 @@ export default function AfFeeDetail() {
         })()}
       </div>
       )}
+
+      {/* 谷底增筹人员钱包明细：仅查看余额分层和统一行情估值，不展示或操作流水。 */}
+      {walletAssetDetail && (() => {
+        const loadedSummary = Number((walletAssetSummary as any)?.userId) === walletAssetDetail.userId
+          ? walletAssetSummary as any
+          : null;
+        const assets: any[] = Array.isArray(loadedSummary?.assets) ? loadedSummary.assets : [];
+        const unpricedAssets: string[] = Array.isArray(loadedSummary?.unpricedAssetCodes) ? loadedSummary.unpricedAssetCodes : [];
+        const isAvailableFocus = walletAssetDetail.focus === 'available';
+        const summaryRows = [
+          { label: '钱包', value: loadedSummary?.total, color: '#0f172a' },
+          { label: '冻结', value: loadedSummary?.frozen, color: '#d97706' },
+          { label: '可用', value: loadedSummary?.available, color: '#2563eb' },
+        ];
+        return (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(15,23,42,0.48)' }} onClick={() => setWalletAssetDetail(null)}>
+            <div className="w-full rounded-t-2xl bg-white shadow-2xl" style={{ maxWidth: 480, maxHeight: '82vh', overflowY: 'auto' }} onClick={(event) => event.stopPropagation()}>
+              <div className="sticky top-0 z-10 bg-white px-4 pt-3 pb-3" style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <div className="mx-auto mb-3 h-1 w-9 rounded-full" style={{ background: '#cbd5e1' }} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-semibold text-slate-800">{walletAssetDetail.name} · {isAvailableFocus ? '可用资产' : '钱包资产'}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">按统一实时行情折算 USDT；冻结资产不计入可用</div>
+                  </div>
+                  <button type="button" onClick={() => setWalletAssetDetail(null)} aria-label="关闭资产明细" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 active:bg-slate-100">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-lg" style={{ border: '1px solid #e2e8f0' }}>
+                  {summaryRows.map((item, index) => (
+                    <div key={item.label} className="px-1 py-2 text-center" style={{ background: isAvailableFocus && item.label === '可用' ? '#eff6ff' : '#fff', borderRight: index < 2 ? '1px solid #e2e8f0' : 'none' }}>
+                      <div className="text-[10px] text-slate-400">{item.label}(U)</div>
+                      <div className="mt-0.5 text-xs font-bold tabular-nums" style={{ color: item.color }}>
+                        {loadedSummary ? Number(item.value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2 px-3 py-3">
+                {walletAssetSummaryLoading || !loadedSummary ? (
+                  <div className="py-10 text-center text-sm text-slate-400">正在读取资产明细…</div>
+                ) : assets.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-slate-400">暂无钱包资产</div>
+                ) : assets.map((asset: any) => {
+                  const assetCode = String(asset.assetCode || '').toUpperCase();
+                  const fields = [
+                    { label: '总额', amount: asset.total, value: asset.totalValueUsdt, color: '#0f172a' },
+                    { label: '冻结', amount: asset.frozen, value: asset.frozenValueUsdt, color: '#d97706' },
+                    { label: '可用', amount: asset.available, value: asset.availableValueUsdt, color: '#2563eb' },
+                  ];
+                  return (
+                    <div key={assetCode} className="overflow-hidden rounded-xl" style={{ border: '1px solid #e2e8f0', background: isAvailableFocus && Number(asset.available || 0) > 0 ? '#fbfdff' : '#fff' }}>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2.5" style={{ borderBottom: '1px solid #edf2f7' }}>
+                        <div className="min-w-0">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-sm font-bold text-slate-800">{assetCode}</span>
+                            <span className="truncate text-[10px] text-slate-400">{asset.assetName || assetCode}</span>
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-slate-400">{asset.source === 'funding' ? '资金账户' : '资产账户'}</div>
+                        </div>
+                        <div className="shrink-0 text-right text-xs font-semibold tabular-nums" style={{ color: '#475569' }}>{formatWalletUsdtValue(asset.totalValueUsdt)}</div>
+                      </div>
+                      <div className="grid grid-cols-3">
+                        {fields.map((field, index) => (
+                          <div key={field.label} className="px-1.5 py-2 text-center" style={{ background: isAvailableFocus && field.label === '可用' ? '#eff6ff' : 'transparent', borderRight: index < 2 ? '1px solid #edf2f7' : 'none' }}>
+                            <div className="text-[10px] text-slate-400">{field.label}</div>
+                            <div className="mt-0.5 truncate text-[11px] font-semibold tabular-nums" style={{ color: field.color }}>{formatWalletAssetAmount(field.amount, assetCode)}</div>
+                            <div className="mt-0.5 truncate text-[9px] tabular-nums text-slate-400">{formatWalletUsdtValue(field.value)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {unpricedAssets.length > 0 && (
+                  <div className="rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: '#fff7ed', color: '#9a3412' }}>
+                    {unpricedAssets.join('、')} 暂无统一行情，数量仍已展示，但未计入钱包与可用的 USDT 估值。
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 已付利息历史记录弹窗 */}
       {finPaidDetailOrderId && (

@@ -85,7 +85,7 @@ import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
 import { zidingCommerceRouter } from "./ziding-commerce-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
-import { AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 import {
   LEDGER_37_ID,
@@ -114,6 +114,175 @@ function asRows(result: any): any[] {
   return Array.isArray(result) ? result : [];
 }
 
+type Ledger52WalletValuationAsset = {
+  assetCode: string;
+  assetName: string;
+  source: "funding" | "market";
+  total: string;
+  frozen: string;
+  available: string;
+  priceUsdt: number | null;
+  totalValueUsdt: number | null;
+  frozenValueUsdt: number | null;
+  availableValueUsdt: number | null;
+};
+
+type Ledger52WalletValuationSummary = {
+  total: number;
+  frozen: number;
+  available: number;
+  assets: Ledger52WalletValuationAsset[];
+  unpricedAssetCodes: string[];
+  usdtCnyRate: number;
+};
+
+/**
+ * 52号账本管理费的全资产钱包估值。
+ *
+ * 资金型 CNY / USDT 使用历史兼容余额和全局项目冻结台账；市场资产直接读取
+ * 多资产钱包当前的可用/冻结分层余额。行情只读 price-scanner 内存缓存，绝不由
+ * 浏览器直连交易所，也绝不把冻结金额重复叠加到市场资产余额上。
+ */
+async function getLedger52WalletValuationSummaries(userIds: number[]): Promise<Map<number, Ledger52WalletValuationSummary>> {
+  const ids = Array.from(new Set(userIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  const result = new Map<number, Ledger52WalletValuationSummary>();
+  if (ids.length === 0) return result;
+  const conn = await getDbConnection();
+  if (!conn) return result;
+
+  const placeholders = ids.map(() => "?").join(",");
+  const [fundingResult, marketResult] = await Promise.all([
+    (conn as any).execute(
+      `SELECT u.id AS user_id,
+              COALESCE(u.balance, 0) + COALESCE(m.usdt_manual, 0) AS usdt_total,
+              COALESCE(h.usdt_frozen, 0) AS usdt_frozen,
+              COALESCE(u.cny_balance, 0) + COALESCE(m.cny_manual, 0) AS cny_total,
+              COALESCE(h.cny_frozen, 0) AS cny_frozen
+         FROM users u
+         INNER JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = 52
+         LEFT JOIN (
+           SELECT user_id,
+                  COALESCE(SUM(CASE WHEN COALESCE(note, '') LIKE '[CNY]%' THEN amount ELSE 0 END), 0) AS cny_manual,
+                  COALESCE(SUM(CASE WHEN COALESCE(note, '') NOT LIKE '[CNY]%' AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%' THEN amount ELSE 0 END), 0) AS usdt_manual
+             FROM af_manual_balances
+            WHERE user_id IN (${placeholders})
+            GROUP BY user_id
+         ) m ON m.user_id = u.id
+         LEFT JOIN (
+           SELECT user_id,
+                  COALESCE(SUM(CASE WHEN asset_code = 'USDT' THEN amount - COALESCE(released_amount, 0) ELSE 0 END), 0) AS usdt_frozen,
+                  COALESCE(SUM(CASE WHEN asset_code = 'CNY' THEN amount - COALESCE(released_amount, 0) ELSE 0 END), 0) AS cny_frozen
+             FROM ai_wallet_project_holds
+            WHERE user_id IN (${placeholders}) AND status = 'active'
+            GROUP BY user_id
+         ) h ON h.user_id = u.id
+        WHERE u.id IN (${placeholders})`,
+      [...ids, ...ids, ...ids],
+    ),
+    (conn as any).execute(
+      `SELECT user_id, asset_code, available_balance, frozen_balance,
+              CAST(available_balance + frozen_balance AS CHAR) AS total_balance
+         FROM ai_wallet_asset_balances
+        WHERE user_id IN (${placeholders})
+          AND (available_balance <> 0 OR frozen_balance <> 0)
+        ORDER BY user_id ASC, asset_code ASC`,
+      ids,
+    ),
+  ]);
+
+  const { getLatestPrice, getUsdtCnyRate } = await import("./price-scanner");
+  const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+  const cnyPriceUsdt = usdtCnyRate > 0 ? 1 / usdtCnyRate : null;
+  const assetNameByCode = new Map(AI_WALLET_ASSET_CATALOG.map((asset) => [asset.code, asset.name]));
+  const assetsByUser = new Map<number, Ledger52WalletValuationAsset[]>();
+  const toNumber = (value: unknown) => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const toAmountText = (value: unknown) => String(value ?? "0");
+  const addAsset = (userId: number, input: {
+    assetCode: string;
+    assetName: string;
+    source: "funding" | "market";
+    total: unknown;
+    frozen: unknown;
+  }) => {
+    const assetCode = String(input.assetCode || "").toUpperCase();
+    const total = toNumber(input.total);
+    const frozen = Math.max(0, toNumber(input.frozen));
+    // 历史上极少数资金型账户可能出现“冻结大于总额”。可用价值绝不允许为负，
+    // 也不能以负数冲减其他币种的真实可用余额。
+    const available = Math.max(0, total - frozen);
+    const priceUsdt = assetCode === "USDT"
+      ? 1
+      : assetCode === "CNY"
+        ? cnyPriceUsdt
+        : (() => {
+            const price = Number(getLatestPrice(assetCode) || 0);
+            return price > 0 ? price : null;
+          })();
+    const hasPrice = priceUsdt != null && priceUsdt > 0;
+    const next: Ledger52WalletValuationAsset = {
+      assetCode,
+      assetName: input.assetName || assetNameByCode.get(assetCode) || assetCode,
+      source: input.source,
+      total: toAmountText(input.total),
+      frozen: toAmountText(input.frozen),
+      available: String(available),
+      priceUsdt,
+      totalValueUsdt: hasPrice ? Math.max(0, total) * priceUsdt : null,
+      frozenValueUsdt: hasPrice ? frozen * priceUsdt : null,
+      availableValueUsdt: hasPrice ? available * priceUsdt : null,
+    };
+    const assets = assetsByUser.get(userId) || [];
+    assets.push(next);
+    assetsByUser.set(userId, assets);
+  };
+
+  for (const row of asRows(fundingResult)) {
+    const userId = Number(row.user_id);
+    if (!(userId > 0)) continue;
+    if (Math.abs(toNumber(row.usdt_total)) > 1e-8 || Math.abs(toNumber(row.usdt_frozen)) > 1e-8) {
+      addAsset(userId, { assetCode: "USDT", assetName: "泰达币", source: "funding", total: row.usdt_total, frozen: row.usdt_frozen });
+    }
+    if (Math.abs(toNumber(row.cny_total)) > 1e-8 || Math.abs(toNumber(row.cny_frozen)) > 1e-8) {
+      addAsset(userId, { assetCode: "CNY", assetName: "人民币", source: "funding", total: row.cny_total, frozen: row.cny_frozen });
+    }
+    if (!assetsByUser.has(userId)) assetsByUser.set(userId, []);
+  }
+  for (const row of asRows(marketResult)) {
+    const userId = Number(row.user_id);
+    if (!(userId > 0)) continue;
+    const assetCode = String(row.asset_code || "").toUpperCase();
+    if (!assetCode) continue;
+    addAsset(userId, {
+      assetCode,
+      assetName: assetNameByCode.get(assetCode) || assetCode,
+      source: "market",
+      total: row.total_balance,
+      frozen: row.frozen_balance,
+    });
+  }
+
+  for (const userId of ids) {
+    const assets = (assetsByUser.get(userId) || []).sort((left, right) => {
+      const valueDelta = Number(right.totalValueUsdt || 0) - Number(left.totalValueUsdt || 0);
+      return valueDelta || left.assetCode.localeCompare(right.assetCode);
+    });
+    const unpricedAssetCodes = assets
+      .filter((asset) => asset.priceUsdt == null && (Math.abs(toNumber(asset.total)) > 1e-8 || Math.abs(toNumber(asset.frozen)) > 1e-8))
+      .map((asset) => asset.assetCode);
+    result.set(userId, {
+      total: assets.reduce((sum, asset) => sum + Number(asset.totalValueUsdt || 0), 0),
+      frozen: assets.reduce((sum, asset) => sum + Number(asset.frozenValueUsdt || 0), 0),
+      available: assets.reduce((sum, asset) => sum + Number(asset.availableValueUsdt || 0), 0),
+      assets,
+      unpricedAssetCodes,
+      usdtCnyRate,
+    });
+  }
+  return result;
+}
 type Ledger37PauseHistoryItem = {
   pauseDate?: string;
   resumeDate?: string;
@@ -3970,6 +4139,38 @@ ${klinesSummary}
           result[Number(r.userId)] = parseFloat(r.total?.toString() || '0');
         }
         return result;
+      }),
+
+    // 批量获取52成员全资产的统一USDT估值。管理费缺口只能使用所有币种未被冻结的可用价值抵扣。
+    getMembersBalanceSummary: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), userIds: z.array(z.number()).max(500) }))
+      .query(async ({ ctx, input }) => {
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
+        const result: Record<number, { total: number; frozen: number; available: number; unpricedAssetCodes: string[] }> = {};
+        const ids = Array.from(new Set(input.userIds.filter((n) => Number.isFinite(n) && n > 0)));
+        if (ids.length === 0) return result;
+        const summaries = await getLedger52WalletValuationSummaries(ids);
+        for (const [userId, summary] of summaries) {
+          result[userId] = {
+            total: summary.total,
+            frozen: summary.frozen,
+            available: summary.available,
+            unpricedAssetCodes: summary.unpricedAssetCodes,
+          };
+        }
+        return result;
+      }),
+
+    // 管理费人员卡的按需资产明细：只返回余额分层和统一USDT估值，不返回流水或可操作入口。
+    getMemberWalletAssetSummary: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), userId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
+        const summary = (await getLedger52WalletValuationSummaries([input.userId])).get(input.userId);
+        if (!summary) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该成员的钱包资产' });
+        }
+        return { userId: input.userId, ...summary };
       }),
 
     // 获取余额变动记录
