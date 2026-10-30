@@ -1784,6 +1784,42 @@ export default function LedgerDetailAA({
 
   const chartData = useMemo(() => {
     const { year, month } = calendarDate;
+    // 股票标签没有手工余额流水。成员端的日历、快览和概览走势必须统一复用
+    // “成员 × 持仓批次”的盘尾点，不能因 filteredTransactions 为空而显示 0 或暂无记录。
+    if (isSelectedStockPortfolio) {
+      const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const points = [...stockCalendarPoints].sort((left, right) => left.date.localeCompare(right.date));
+      if (calendarMode === "monthly") {
+        return Array.from({ length: 12 }, (_, index) => {
+          const prefix = `${year}-${String(index + 1).padStart(2, "0")}`;
+          const monthPoints = points.filter((point) => point.date.startsWith(prefix));
+          const latest = monthPoints[monthPoints.length - 1];
+          return {
+            date: `${index + 1}月`,
+            balance: latest?.marketValue ?? null,
+            pnl: monthPoints.reduce((sum, point) => sum + Number(point.dailyPnl || 0), 0),
+          };
+        });
+      }
+      if (calendarMode === "yearly") {
+        return points.map((point) => ({
+          date: point.date.slice(5),
+          balance: point.marketValue,
+          balanceGap: point.marketValue,
+          pnl: point.dailyPnl,
+          isGap: false,
+        }));
+      }
+      return points
+        .filter((point) => point.date.startsWith(monthPrefix))
+        .map((point) => ({
+          date: point.date.slice(5),
+          balance: point.marketValue,
+          balanceGap: point.marketValue,
+          pnl: point.dailyPnl,
+          isGap: false,
+        }));
+    }
     let sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
     // 过滤掉 startDate 前一天之前的数据
     if (chartEffectiveStartDate) {
@@ -1866,7 +1902,7 @@ export default function LedgerDetailAA({
       balance: cumulativeMap.get(d.date) ?? (d.income > 0 ? d.income : d.expense),
       pnl: d.income - d.expense,
     }));
-  }, [filteredTransactions, cumulativeMap, selectedDailyReturnMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
+  }, [filteredTransactions, cumulativeMap, selectedDailyReturnMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate, isSelectedStockPortfolio, stockCalendarPoints]);
 
   // ─── 当前月日历格子（按周分组，周一为第一列）────────────────────────────────
   // calendarWeeks: 每个元素是一周7天（周一到周日），null表示空位
@@ -2962,9 +2998,14 @@ export default function LedgerDetailAA({
             // 日盈亏模式：当月所有交易日的实际回报合计（已剔除本金/提现资金流）。
             const { year, month } = calendarDate;
             const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-            const totalPnl = Array.from(selectedDailyReturnMap.entries())
-              .filter(([date]) => date.startsWith(monthPrefix))
-              .reduce((sum, [, dailyReturn]) => sum + (dailyReturn ?? 0), 0);
+            // R1 等股票标签没有手工余额记录；成员收益必须直接汇总个人对手盘日盈亏。
+            const totalPnl = isSelectedStockPortfolio
+              ? stockCalendarPoints
+                .filter((point) => point.date.startsWith(monthPrefix))
+                .reduce((sum, point) => sum + Number(point.dailyPnl || 0), 0)
+              : Array.from(selectedDailyReturnMap.entries())
+                .filter(([date]) => date.startsWith(monthPrefix))
+                .reduce((sum, [, dailyReturn]) => sum + (dailyReturn ?? 0), 0);
             const isUp = totalPnl >= 0;
             return (
               <div className="text-right">

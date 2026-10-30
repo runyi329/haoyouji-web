@@ -1257,7 +1257,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
         return total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0) * multiplier;
       }, 0)
       : null;
-    const snapshotFloating = snapshotMarket === null ? null : snapshotMarket - snapshotCost;
+    // 成员获配仓位是账户长仓的对手盘：股票账户市值下跌，成员回报应上升。
+    // 必须与当前持仓的 `成本 − 市值` 口径一致，避免概览日历误把账户方向展示给成员。
+    const snapshotFloating = snapshotMarket === null ? null : snapshotCost - snapshotMarket;
     return {
       snapshotDate,
       marketValue: snapshotMarket,
