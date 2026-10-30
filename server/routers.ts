@@ -23743,10 +23743,11 @@ ${klinesSummary}
               ? snapshot.joint_order_segments
               : [];
             const isJointOrder = rawSegments.length > 0;
-            const hasExplicitPrimarySegmentShareMode = Object.prototype.hasOwnProperty.call(
-              snapshot,
-              'joint_order_primary_collateral_share_mode',
-            );
+            // 普通订单的参与者快照也会带联合订单编辑器的默认字段（第1段=none）。
+            // 该默认值不能覆盖订单自身已保存的共享开关；只有真实存在后续段的联合订单，
+            // 才允许第1段的独立开关覆盖历史物理订单字段。
+            const hasExplicitPrimarySegmentShareMode = isJointOrder
+              && Object.prototype.hasOwnProperty.call(snapshot, 'joint_order_primary_collateral_share_mode');
             const primary = {
               ...baseOrder,
               id: physicalOrder.id,
@@ -23756,9 +23757,9 @@ ${klinesSummary}
               _sharedPoolSegmentId: '__primary__',
               _sharedPoolSegmentLabel: '第1段',
               _sharedPoolIsJointOrder: isJointOrder,
-              // 联合订单的第1段与后续段完全同级：只要个人快照已明确保存过
-              // 第1段开关，便不能回退读取物理订单的历史共享字段，否则关掉第1段后
-              // 仍会被旧字段重新加回共享池。尚未迁移的旧快照才兼容回退原字段。
+              // 联合订单的第1段与后续段完全同级：已保存第1段开关时不能回退
+              // 到物理订单的历史共享字段，否则关掉第1段后仍会被旧字段重新加回。
+              // 非联合订单仍只以自身的共享开关为准。
               collateral_share_mode: hasExplicitPrimarySegmentShareMode
                 ? (snapshot.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none')
                 : (baseOrder.collateral_share_mode || 'none'),
