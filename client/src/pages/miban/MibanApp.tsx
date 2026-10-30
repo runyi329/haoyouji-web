@@ -55,6 +55,10 @@ export default function MibanApp() {
               component={LimitedBrandProducts}
             />
             <Route
+              path={`${BASE}/limited/lingchuang`}
+              component={LimitedBrandProducts}
+            />
+            <Route
               path={`${BASE}/limited/fruits`}
               component={SeasonalFruitSelection}
             />

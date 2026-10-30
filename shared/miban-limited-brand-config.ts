@@ -26,6 +26,19 @@ export const MAJIAYOU_THEME = {
   subtle: "#A2AB91",
 } as const;
 
+export const LINGCHUANG_THEME = {
+  primary: "#3E52B8",
+  price: "#4055C7",
+  navy: "#1F2E72",
+  canvas: "#F4F7FF",
+  surface: "#FFFFFF",
+  surfaceMuted: "#EDF2FF",
+  border: "#D9E3FF",
+  text: "#1B2B69",
+  muted: "#5E6D9A",
+  subtle: "#96A2C3",
+} as const;
+
 export const TUOQUETANG_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/tuoquetang/v1";
 
@@ -55,6 +68,15 @@ export const mibanLimitedBrands = [
     description: "蓝布正植物牙膏与复生1号",
     status: "on_sale" as const,
     theme: TUOQUETANG_THEME,
+  },
+  {
+    slug: "lingchuang",
+    brand: "凌创生物",
+    eyebrow: "LINGCHUANG BIO",
+    title: "凌创生物精选",
+    description: "营养固体饮料精选",
+    status: "draft" as const,
+    theme: LINGCHUANG_THEME,
   },
   {
     slug: "fruits",

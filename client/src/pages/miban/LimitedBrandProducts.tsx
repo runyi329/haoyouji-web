@@ -28,7 +28,7 @@ export default function LimitedBrandProducts() {
   const usdtCnyRate = useMibanUsdtCnyRate();
   const path = location.split("?")[0];
   const localPreviewMode = import.meta.env.DEV;
-  const brandSlug = path.endsWith("/tuoquetang") ? "tuoquetang" : "herbalife";
+  const brandSlug = path.split("/").filter(Boolean).pop() ?? "";
   const brand = getMibanLimitedBrandBySlug(brandSlug);
   const { data: availability, isLoading: availabilityLoading } =
     mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
@@ -52,7 +52,8 @@ export default function LimitedBrandProducts() {
       mibanLimitedProducts.filter(
         product =>
           product.brand === brand?.brand &&
-          product.status === "on_sale" &&
+          (product.status === "on_sale" ||
+            (localPreviewMode && product.status === "draft")) &&
           Boolean(
             getActiveSku(
               product,
@@ -64,7 +65,7 @@ export default function LimitedBrandProducts() {
     [availabilityBySku, availabilityLoading, brand?.brand, localPreviewMode]
   );
 
-  if (!brand) {
+  if (!brand || (brand.status !== "on_sale" && !localPreviewMode)) {
     return (
       <div className="min-h-screen bg-white px-5 pt-10 text-center text-sm text-gray-400">
         品牌资料暂不可用
@@ -107,10 +108,13 @@ export default function LimitedBrandProducts() {
                 availabilityBySku,
                 localPreviewMode || availabilityLoading
               );
+              const isDraftPreview =
+                localPreviewMode && product.status === "draft";
               const priceU = sku ? cnyToU(sku.priceCny, usdtCnyRate) : null;
               // 图片按钮自适应融合方案：佗鹊堂商品使用为4:5图槽制作的静物图；
               // 右侧文字、金额与按钮采用独立栅格，不在不同手机宽度下争抢同一行。
-              const useAdaptiveProductCard = brandSlug === "tuoquetang";
+              const useAdaptiveProductCard =
+                brandSlug === "tuoquetang" || brandSlug === "lingchuang";
               return (
                 <Link
                   key={product.key}
@@ -201,7 +205,7 @@ export default function LimitedBrandProducts() {
                             background: theme.surfaceMuted,
                           }}
                         >
-                          购买
+                          {isDraftPreview ? "资料预览" : "购买"}
                           <ChevronRight
                             className="h-3.5 w-3.5"
                             strokeWidth={2.4}

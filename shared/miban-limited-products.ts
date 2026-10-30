@@ -7,6 +7,7 @@
  */
 import { HERBALIFE_THEME } from "./herbalife-theme";
 import {
+  LINGCHUANG_THEME,
   MAJIAYOU_THEME,
   TUOQUETANG_THEME,
   majiayouImage,
@@ -108,6 +109,15 @@ const herbalifeAloeDetailImage = (file: string) =>
   herbalifeImage("aloe-nutrition/user-detail-v2", file);
 const herbalifeNingyouranDetailImage = (file: string) =>
   herbalifeImage("ningyouran-sleep-5in1/user-detail-v3", file);
+const LINGCHUANG_PREVIEW_ASSET_BASE = "/miban-lingchuang-preview/v2";
+const lingchuangPreviewImage = (file: string) =>
+  `${LINGCHUANG_PREVIEW_ASSET_BASE}/${file}`;
+const LINGCHUANG_IMMERSIVE_ASSET_BASE = "/miban-lingchuang-preview/v4";
+const lingchuangImmersiveImage = (file: string) =>
+  `${LINGCHUANG_IMMERSIVE_ASSET_BASE}/${file}`;
+const LINGCHUANG_DETAIL_POSTER_ASSET_BASE = "/miban-lingchuang-preview/v5";
+const lingchuangDetailPosterImage = (file: string) =>
+  `${LINGCHUANG_DETAIL_POSTER_ASSET_BASE}/${file}`;
 const NINGYOURAN_DETAIL_IMAGES = [
   herbalifeNingyouranDetailImage("detail-01.jpg"),
   herbalifeNingyouranDetailImage("detail-02.jpg"),
@@ -194,7 +204,24 @@ const domesticOrderPolicy: LimitedProduct["orderPolicy"] = {
   allowFavorite: true,
   enableReview: false,
 };
-
+const lingchuangLogistics: LimitedProduct["detail"]["logistics"] = [
+  {
+    title: "包装信息",
+    description: "页面依据用户提供的真实商品包装整理，实际到货包装以实物为准。",
+  },
+  {
+    title: "订单处理",
+    description: "商品正式上架后，付款订单将由工作人员核对并安排后续发货。",
+  },
+  {
+    title: "售后咨询",
+    description: "如有订单、物流或售后问题，请通过米伴订单页提交申请。",
+  },
+  {
+    title: "食用提示",
+    description: "请按商品销售包装标注的食用方法、食用量及注意事项使用。",
+  },
+];
 export const mibanLimitedProducts: LimitedProduct[] = [
   {
     key: "herbalife-red-ginseng",
@@ -782,6 +809,113 @@ export const mibanLimitedProducts: LimitedProduct[] = [
           tuoquetangImage("revigor-one", "detail-01-origin.jpg"),
           tuoquetangImage("revigor-one", "detail-02-research.jpg"),
         ],
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  },
+  {
+    key: "lingchuang-amino-sugar-hyaluronate",
+    status: "draft",
+    brand: "凌创生物",
+    checkoutGroupKey: "lingchuang-limited",
+    category: "营养固体饮料",
+    card: {
+      badge: "资料核验中",
+      title: "氨糖透明质酸钠营养固体饮料",
+      subtitle: "10g × 30袋 · 盒装独立条包",
+      highlights: ["净含量300g", "温开水冲调", "10g × 30袋"],
+      image: lingchuangPreviewImage("product-card-v2.jpg"),
+      theme: {
+        accent: LINGCHUANG_THEME.primary,
+        background: LINGCHUANG_THEME.surfaceMuted,
+      },
+    },
+    detail: {
+      title: "凌创®氨糖透明质酸钠营养固体饮料",
+      subtitle: "10g × 30袋 · 净含量300g",
+      tags: ["营养固体饮料", "独立袋装", "温开水冲调"],
+      heroImages: [lingchuangImmersiveImage("hero-accepted.jpg")],
+      detailImagesCaption:
+        "以下为二次创作的沉浸式产品故事海报；顶部主视觉保留真实产品外观，页面信息以销售包装标签为准。",
+      storySections: [
+        {
+          eyebrow: "BRAND & RESEARCH",
+          title: "品牌资料中的研发信息",
+          body: "用户提供的包装与品牌资料标示，本品由国际欧亚科学院凌沛院士团队研发；品牌资料聚焦透明质酸系列产品的研发与应用探索。",
+          image: lingchuangDetailPosterImage("01-research-team.jpg"),
+          facts: ["研发信息来自包装与品牌资料", "以正式资料为准"],
+        },
+        {
+          eyebrow: "FORMULA MATERIAL",
+          title: "透明质酸钠配方资料",
+          body: "销售包装配料表列有透明质酸钠、壳寡糖、N-乙酰氨基葡萄糖、全脂乳粉及鳕鱼胶原蛋白肽等，完整配料以销售包装标签为准。",
+          image: lingchuangDetailPosterImage("02-ingredients-water.jpg"),
+          facts: ["透明质酸钠", "壳寡糖", "N-乙酰氨基葡萄糖"],
+        },
+        {
+          eyebrow: "DAILY MOMENT",
+          title: "一袋，融入日常节奏",
+          body: "本品为10g独立袋装营养固体饮料，每盒30袋，净含量300g。日常食用请结合自身饮食习惯，并以销售包装说明为准。",
+          image: lingchuangDetailPosterImage("03-daily-drinking.jpg"),
+          facts: ["10g × 30袋", "净含量300g"],
+        },
+        {
+          eyebrow: "HOW TO PREPARE",
+          title: "温开水冲调，按标签食用",
+          body: "销售包装建议每日食用1袋，用温开水冲调后饮用。请勿超过包装标注的建议食用量。",
+          image: lingchuangDetailPosterImage("04-warm-water-prep.jpg"),
+          facts: ["每日1袋", "温开水冲调"],
+        },
+        {
+          eyebrow: "DAILY ROUTINE",
+          title: "为日常营养留出一份从容",
+          body: "请密封置于阴凉、干燥、通风处。产品含有鱼、大豆、乳、鸡蛋成分；婴幼儿、孕妇和哺乳期妇女不宜食用。",
+          image: lingchuangDetailPosterImage("05-active-daily.jpg"),
+          facts: ["保质期24个月", "以包装提示为准"],
+        },
+      ],
+      productImage: lingchuangPreviewImage("product-card-v2.jpg"),
+      sourceNote:
+        "顶部主视觉以用户提供的真实包装素材为参考；商品信息依据包装标签与用户提供资料整理，配料、生产信息及包装内容以实际销售包装为准。",
+      description:
+        "本品为盒装营养固体饮料，每盒30袋，每袋10g，净含量300g。详情图文依据用户提供的包装与品牌资料整理。",
+      usage: "建议每日食用1袋，用温开水冲调后饮用。",
+      warning:
+        "本品含有鱼、大豆、乳、鸡蛋成分；婴幼儿、孕妇和哺乳期妇女不宜食用。请密封置于阴凉、干燥、通风处。",
+      logistics: lingchuangLogistics,
+      notices: [
+        {
+          label: "保质期",
+          text: "24个月。",
+        },
+        {
+          label: "执行标准",
+          text: "GB/T 29602。",
+        },
+        {
+          label: "生产许可证编号",
+          text: "SC11337132913465。",
+        },
+        {
+          label: "特别提示",
+          text: "本品为营养固体饮料，不能代替特殊医学用途配方食品、婴幼儿配方食品、保健食品等特殊食品。",
+        },
+      ],
+    },
+    skus: [
+      {
+        id: "lingchuang-10g-30",
+        name: "10g × 30袋/盒",
+        subtitle: "净含量300g · ¥1,198/盒",
+        priceCny: 1198,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "盒",
+        netContentText: "10g × 30袋（300g）",
+        maxPurchaseQty: 10,
+        active: true,
+        image: lingchuangPreviewImage("product-card-v2.jpg"),
+        heroImages: [lingchuangImmersiveImage("hero-accepted.jpg")],
       },
     ],
     orderPolicy: domesticOrderPolicy,

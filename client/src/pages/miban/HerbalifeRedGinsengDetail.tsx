@@ -184,7 +184,8 @@ export default function HerbalifeRedGinsengDetail() {
         ? [currentProduct.detail.detailImage]
         : []);
   const isContinuousDetailPoster =
-    currentProduct?.key === "herbalife-ningyouran-sleep-5in1";
+    currentProduct?.key === "herbalife-ningyouran-sleep-5in1" ||
+    currentProduct?.key === "lingchuang-amino-sugar-hyaluronate";
   const checkoutProductImage =
     selectedSku?.image ?? currentProduct?.detail.productImage;
   const isOnSale = currentProduct?.status === "on_sale" && !!selectedSku;
@@ -614,7 +615,7 @@ export default function HerbalifeRedGinsengDetail() {
           </div>
           <p className="mt-2 text-[11px] text-gray-400">
             {isPreviewProduct
-              ? "商品资料来自用户提供的原始素材，包装与规格待实物核验"
+              ? "商品视觉以用户提供的真实包装为参考，当前仅作本地设计与信息核验"
               : currentProduct.detail.sourceNote ||
                 (currentProduct.detail.isOverseas
                   ? "海外购商品，税费以订单实际申报为准"
@@ -691,7 +692,8 @@ export default function HerbalifeRedGinsengDetail() {
           <h2 className="text-[17px] font-extrabold text-gray-900">商品详情</h2>
           <p className="mt-1 text-[11px] text-gray-400">
             {isPreviewProduct
-              ? "以下为供货链路提供的原始资料图，仅供内部核验"
+              ? currentProduct.detail.detailImagesCaption ||
+                "以下为基于真实包装的二次视觉设计，仅供本地设计与信息核验"
               : currentProduct.detail.detailImagesCaption ||
                 (detailImages.length > 0
                   ? "以下图文按官方公开商品资料顺序展示"
@@ -721,10 +723,16 @@ export default function HerbalifeRedGinsengDetail() {
           <div className="bg-[#F8F7F2]">
             {currentProduct.detail.storySections.map((story, index) => {
               const rightAligned = story.align === "right";
+              const isLingchuangImmersiveStory =
+                currentProduct.key === "lingchuang-amino-sugar-hyaluronate";
               return (
                 <article
                   key={`${story.title}-${index}`}
-                  className="relative -mt-px min-h-[460px] overflow-hidden bg-[#2F452A]"
+                  className={`relative -mt-px overflow-hidden bg-[#2F452A] ${
+                    isLingchuangImmersiveStory
+                      ? "min-h-[640px] aspect-[9/16]"
+                      : "min-h-[460px]"
+                  }`}
                 >
                   <img
                     src={story.image}
@@ -734,14 +742,20 @@ export default function HerbalifeRedGinsengDetail() {
                   />
                   <div
                     className={`absolute inset-0 ${
-                      rightAligned
-                        ? "bg-gradient-to-l from-black/80 via-black/35 to-transparent"
-                        : "bg-gradient-to-r from-black/80 via-black/35 to-transparent"
+                      isLingchuangImmersiveStory
+                        ? "bg-gradient-to-t from-[#02091E]/95 via-[#06133F]/45 to-transparent"
+                        : rightAligned
+                          ? "bg-gradient-to-l from-black/80 via-black/35 to-transparent"
+                          : "bg-gradient-to-r from-black/80 via-black/35 to-transparent"
                     }`}
                   />
                   <div
-                    className={`relative flex min-h-[460px] flex-col justify-end px-6 py-8 text-white ${
-                      rightAligned
+                    className={`relative z-10 flex flex-col px-6 text-white ${
+                      isLingchuangImmersiveStory
+                        ? "h-full justify-end pb-10 pt-8"
+                        : "min-h-[460px] justify-end py-8"
+                    } ${
+                      rightAligned && !isLingchuangImmersiveStory
                         ? "items-end text-right"
                         : "items-start text-left"
                     }`}

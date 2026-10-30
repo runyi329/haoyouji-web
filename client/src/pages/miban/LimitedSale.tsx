@@ -1,7 +1,10 @@
 import { Link } from "wouter";
 import { ChevronRight, Sparkles } from "lucide-react";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
-import { TUOQUETANG_THEME } from "../../../../shared/miban-limited-brand-config";
+import {
+  LINGCHUANG_THEME,
+  TUOQUETANG_THEME,
+} from "../../../../shared/miban-limited-brand-config";
 
 const BRAND_CARD_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v2";
@@ -9,8 +12,11 @@ const HERBALIFE_NUTRITION_CARD =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v4/herbalife-nutrition-card-stage.webp";
 const SEASONAL_FRUITS_CARD =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v5/seasonal-fruits-card-rich-stage.webp";
+const LINGCHUANG_PREVIEW_CARD =
+  "/miban-lingchuang-preview/v2/brand-card-v2.jpg";
 
 export default function LimitedSale() {
+  const localPreviewMode = import.meta.env.DEV;
   return (
     <div
       className="min-h-screen pb-8"
@@ -107,6 +113,52 @@ export default function LimitedSale() {
             </div>
           </article>
         </Link>
+
+        {localPreviewMode && (
+          <Link
+            href="/p/proj_hzxm2t/limited/lingchuang?preview=1"
+            className="block active:scale-[0.985]"
+          >
+            <article
+              className="relative min-h-[208px] overflow-hidden rounded-[22px]"
+              style={{
+                background: LINGCHUANG_THEME.primary,
+                boxShadow: "0 14px 32px rgba(43,61,154,0.24)",
+              }}
+            >
+              <img
+                src={LINGCHUANG_PREVIEW_CARD}
+                alt="凌创氨糖透明质酸钠营养固体饮料盒装"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(21,36,111,0.97)_0%,rgba(34,52,139,0.90)_44%,rgba(48,67,161,0.38)_67%,rgba(48,67,161,0.04)_100%)]" />
+              <div className="relative z-10 flex min-h-[208px] max-w-[61%] flex-col justify-between px-5 py-5 text-white">
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
+                    <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    营养固体饮料 · 资料预览
+                  </div>
+                  <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                    凌创生物精选
+                  </h3>
+                  <p className="mt-2 text-[11px] leading-5 text-white/78">
+                    10g × 30袋盒装，查看包装、规格与商品资料。
+                  </p>
+                </div>
+                <span
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
+                  style={{
+                    background: "#F3F6FF",
+                    color: LINGCHUANG_THEME.primary,
+                  }}
+                >
+                  查看资料预览
+                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </span>
+              </div>
+            </article>
+          </Link>
+        )}
 
         <Link
           href="/p/proj_hzxm2t/limited/fruits"
