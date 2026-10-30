@@ -75,7 +75,8 @@ export const mibanLimitedBrands = [
     eyebrow: "LINGCHUANG BIO",
     title: "凌创生物精选",
     description: "营养固体饮料精选",
-    status: "draft" as const,
+    // 品牌入口可公开浏览；具体商品仍由商品自身draft状态控制，不开放交易。
+    status: "on_sale" as const,
     theme: LINGCHUANG_THEME,
   },
   {

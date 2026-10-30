@@ -53,12 +53,15 @@ export default function LimitedBrandProducts() {
         product =>
           product.brand === brand?.brand &&
           (product.status === "on_sale" ||
-            (localPreviewMode && product.status === "draft")) &&
+            (product.status === "draft" &&
+              (localPreviewMode || product.publicPreview === true))) &&
           Boolean(
             getActiveSku(
               product,
               availabilityBySku,
-              localPreviewMode || availabilityLoading
+              localPreviewMode ||
+                availabilityLoading ||
+                product.publicPreview === true
             )
           )
       ),
@@ -106,10 +109,11 @@ export default function LimitedBrandProducts() {
               const sku = getActiveSku(
                 product,
                 availabilityBySku,
-                localPreviewMode || availabilityLoading
+                localPreviewMode ||
+                  availabilityLoading ||
+                  product.publicPreview === true
               );
-              const isDraftPreview =
-                localPreviewMode && product.status === "draft";
+              const isDraftPreview = product.status === "draft";
               const priceU = sku ? cnyToU(sku.priceCny, usdtCnyRate) : null;
               // 图片按钮自适应融合方案：佗鹊堂商品使用为4:5图槽制作的静物图；
               // 右侧文字、金额与按钮采用独立栅格，不在不同手机宽度下争抢同一行。

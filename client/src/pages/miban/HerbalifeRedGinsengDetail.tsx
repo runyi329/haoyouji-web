@@ -152,6 +152,7 @@ export default function HerbalifeRedGinsengDetail() {
       sku =>
         sku.active &&
         (localPreviewMode ||
+          currentProduct.publicPreview === true ||
           availabilityLoading ||
           availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOnSale ===
             true)

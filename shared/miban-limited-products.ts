@@ -39,6 +39,8 @@ export type LimitedProductSku = {
 export type LimitedProduct = {
   key: string;
   status: "draft" | "on_sale" | "off_sale";
+  /** 可在正式前台展示资料页，但仍保持draft，绝不初始化库存或开放购买。 */
+  publicPreview?: boolean;
   brand: string;
   /** 同一键下的商品可加入同一张限时订单；未配置时仅允许本商品自身合单。 */
   checkoutGroupKey?: string;
@@ -816,6 +818,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   {
     key: "lingchuang-amino-sugar-hyaluronate",
     status: "draft",
+    publicPreview: true,
     brand: "凌创生物",
     checkoutGroupKey: "lingchuang-limited",
     category: "营养固体饮料",
