@@ -118,6 +118,25 @@ function limitT0ManualDecimalInput(value: string, maximumFractionDigits: number)
   return `${integerPart}.${fractionalPart}`;
 }
 
+/** 共享收益草案、预算校验和最终提交全部以整数分为准，避免视觉合计与服务端金额不一致。 */
+function limitT0SharedIncomeAmountInput(value: string): string {
+  const normalized = limitT0ManualDecimalInput(value, 2);
+  const firstDecimal = normalized.indexOf(".");
+  const integerPart = (firstDecimal === -1 ? normalized : normalized.slice(0, firstDecimal)).slice(0, 15);
+  const fractionalPart = firstDecimal === -1 ? "" : normalized.slice(firstDecimal + 1);
+  return firstDecimal === -1 ? integerPart : `${integerPart}.${fractionalPart}`;
+}
+
+function getT0SharedIncomeAmountCents(value: unknown): number {
+  const normalized = limitT0SharedIncomeAmountInput(typeof value === "string" ? value : String(value ?? ""));
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? Math.max(0, Math.round(amount * 100)) : 0;
+}
+
+function formatT0SharedIncomeAmountCents(cents: number): string {
+  return (Math.max(0, Math.round(cents)) / 100).toFixed(2);
+}
+
 /** 人工录入ETH数量：最多500.00，整数最多三位，小数最多两位。 */
 function limitT0EthQuantityInput(value: string): string {
   const normalized = limitT0ManualDecimalInput(value, 2);
@@ -224,7 +243,7 @@ const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
   { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人", guideDescription: "历史收到共享金额越少，补差权重越高，避免收益机会长期集中。", guideFormula: "最高已收金额 − 个人已收金额 → 权重", accent: "#e11d48" },
   { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人", guideDescription: "历史收到共享的次数越少，机会补差越多，保障每个人都持续有参与感。", guideFormula: "最高已收次数 − 个人已收次数 → 权重", accent: "#db2777" },
   { id: "withdrawalProgress", label: "按提现进度", category: "回款平衡", compactLabel: "提现占比", emptyMessage: "当前开启的分配人没有可计算的提现进度", guideDescription: "提现占投入比例越低，本维度速度越高；始终保留最低档，不会把有效成员排空。", guideFormula: "权重 = 100 − 提现进度（最低 1）", accent: "#0284c7" },
-  { id: "openingOrderCount", label: "按挂单数量", category: "市场贡献", compactLabel: "挂单数量", emptyMessage: "当前开启的分配人没有可统计的开仓或挂单记录", guideDescription: "统计现货、合约、期权、网格的全部开仓记录；已成交和当前挂单均计入，多空直接相加不抵消。倾斜度100%时，零笔用户不获得本维度份额。", guideFormula: "均分保障 + 挂单数量比例 → 本维度份额", accent: "#4f46e5" },
+  { id: "openingOrderCount", label: "按当前挂单数", category: "市场贡献", compactLabel: "当前挂单", emptyMessage: "当前开启的分配人没有可统计的有效开仓或挂单记录", guideDescription: "统计当前仍挂在报价表的开仓：未成交挂单，以及仍有未平仓数量的已成交开仓；已全部平仓的历史开仓不计入。现货、合约、期权、网格和多空均分别计一笔。倾斜度100%时，零笔用户不获得本维度份额。", guideFormula: "均分保障 + 当前挂单数比例 → 本维度份额", accent: "#4f46e5" },
 ];
 
 function getSharedIncomeAllocationClientVisual(metric: SharedIncomeAllocationMetric): { metricLabel: string; directionLabel: string; priorityLabel: string } {
@@ -4018,7 +4037,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("99");
   /** AI分配可同时选择多个维度；空数组代表保留当前草案做手动调整。 */
   const [sharedIncomeAllocationMetrics, setSharedIncomeAllocationMetrics] = useState<SharedIncomeAllocationMetric[]>([]);
-  /** 0%为此维度全员均分，100%为完全按累计挂单数量比例分配；默认70%保留30%均分保障。 */
+  /** 0%为此维度全员均分，100%为完全按当前有效挂单数量比例分配；默认70%保留30%均分保障。 */
   const [sharedIncomeOpeningOrderCountIntensity, setSharedIncomeOpeningOrderCountIntensity] = useState(70);
   /** 当前仅用于热预览试算；后续发布版会以版本化审计规则替代此本地草案。 */
   const [sharedIncomePrincipalRule, setSharedIncomePrincipalRule] = useState<SharedIncomePrincipalRule>(DEFAULT_SHARED_INCOME_PRINCIPAL_RULE);
@@ -5886,12 +5905,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ];
     const allocations = buildOpeningClosingAllocations(allTrades);
     const managerUserId = Number((me as any)?.id || 0);
-    // 市场参与贡献采用独立、可追溯的订单口径：所有开仓均算一笔，现货/合约/期权/网格、
-    // 已成交/当前挂单全部包含；多空绝不抵消。回退或删除记录已不在权威trades集合中，天然排除。
+    // 市场参与贡献只统计当前仍有效的开仓：未成交挂单直接算一笔；已成交开仓则必须仍有未平仓数量。
+    // 已全部平仓的历史开仓不计入；现货/合约/期权/网格、多空均分别计一笔，回退或删除记录天然不在权威trades集合中。
+    const filledOpeningClosingAllocations = buildOpeningClosingAllocations(
+      trades.filter((trade) => !trade.isSyncing && !trade.isPending),
+    );
     const openingOrderCountByUser = new Map<string, number>();
-    for (const trade of trades) {
-      if (!ACTIONS[trade.action].opening || !trade.relatedUserId) continue;
-      const userId = String(trade.relatedUserId);
+    for (const opening of trades) {
+      if (opening.isSyncing || !ACTIONS[opening.action].opening || !opening.relatedUserId) continue;
+      const userId = String(opening.relatedUserId);
+      if (!opening.isPending) {
+        const closedQuantity = (filledOpeningClosingAllocations.get(opening.id) || [])
+          .reduce((total, allocation) => total + allocation.quantity, 0);
+        if (opening.quantity - closedQuantity <= 0.000001) continue;
+      }
       openingOrderCountByUser.set(userId, (openingOrderCountByUser.get(userId) || 0) + 1);
     }
     let sourceNetPnl = 0;
@@ -6141,11 +6168,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
 	      .map((candidate) => candidate.userId),
 	  ), [sharedIncomeClosePreview.candidates]);
-	  const sharedIncomeAllocatedTotal = useMemo(() => Array.from(sharedIncomeEligibleCandidateIds)
-	    .reduce((total, recipientUserId) => total + (Number(sharedIncomeDrafts[recipientUserId]) || 0), 0), [sharedIncomeDrafts, sharedIncomeEligibleCandidateIds]);
+	  const sharedIncomeAllocatedTotalCents = useMemo(() => Array.from(sharedIncomeEligibleCandidateIds)
+	    .reduce((total, recipientUserId) => total + getT0SharedIncomeAmountCents(sharedIncomeDrafts[recipientUserId]), 0), [sharedIncomeDrafts, sharedIncomeEligibleCandidateIds]);
+	  const sharedIncomeAllocatedTotal = sharedIncomeAllocatedTotalCents / 100;
 	  const sharedIncomeSaveAllocations = useMemo(() => sharedIncomeClosePreview.candidates
 	    .filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
-	    .map((candidate) => ({ recipientUserId: Number(candidate.userId), amount: (Number(sharedIncomeDrafts[candidate.userId]) || 0).toFixed(2) }))
+	    .map((candidate) => ({ recipientUserId: Number(candidate.userId), amount: formatT0SharedIncomeAmountCents(getT0SharedIncomeAmountCents(sharedIncomeDrafts[candidate.userId])) }))
 	    .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0), [sharedIncomeClosePreview.candidates, sharedIncomeDrafts]);
   const buildSharedIncomeAllocationPlan = useCallback((
     metrics: SharedIncomeAllocationMetric[],
@@ -6199,7 +6227,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const normalizedOpeningOrderCountIntensity = Math.min(100, Math.max(0, Number(openingOrderCountIntensity) || 0)) / 100;
         // 0% 明确表示本维度全员均分，即使暂时无人有开仓记录也可成立；只要存在按数量倾斜而又没有任何订单，才提示该维度无数据。
         if (totalOpeningOrderCount <= 0 && normalizedOpeningOrderCountIntensity > 0.000001) return [];
-        // 倾斜度0%时本维度退化为全员均分；100%时完全依挂单数量比例。默认70%意味着30%均分保障。
+        // 倾斜度0%时本维度退化为全员均分；100%时完全依当前有效挂单数量比例。默认70%意味着30%均分保障。
         return getSmoothedWeights(
           eligibleCandidates.map((candidate) => ({ candidate, score: candidate.openingOrderCount })),
           normalizedOpeningOrderCountIntensity,
@@ -6300,10 +6328,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      ? current.filter((currentMetric) => currentMetric !== metric)
 	      : [...current, metric]);
 	  };
-  const takeProfitSharedIncomeAllocatedTotal = useMemo(
-    () => Object.values(takeProfitSharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0),
+  const takeProfitSharedIncomeAllocatedTotalCents = useMemo(
+    () => Object.values(takeProfitSharedIncomeDrafts).reduce((total, amount) => total + getT0SharedIncomeAmountCents(amount), 0),
     [takeProfitSharedIncomeDrafts],
   );
+  const takeProfitSharedIncomeAllocationLimitCents = Math.max(0, Math.floor((Number(sharedIncomeClosePreview.shareableAmount) || 0) * 100 + 1e-9));
+  const takeProfitSharedIncomeAllocatedTotal = takeProfitSharedIncomeAllocatedTotalCents / 100;
+  const takeProfitSharedIncomeAllocationLimit = takeProfitSharedIncomeAllocationLimitCents / 100;
   const openTakeProfitAllocationPanel = (planIndex: number) => {
     const plan = entryForm.takeProfitPlans[planIndex];
     if (!plan) return;
@@ -6322,12 +6353,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
   const saveTakeProfitAllocationPlan = () => {
     if (takeProfitAllocationPlanIndex === null) return;
-    if (takeProfitSharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001) {
-      t0Toast.error(`预分配合计不可超过预计可共享收益 ${sharedIncomeClosePreview.shareableAmount.toFixed(2)} u`);
+    if (takeProfitSharedIncomeAllocatedTotalCents > takeProfitSharedIncomeAllocationLimitCents) {
+      t0Toast.error(`预分配合计不可超过预计可共享收益 ${takeProfitSharedIncomeAllocationLimit.toFixed(2)} u`);
       return;
     }
     const allocations = Object.entries(takeProfitSharedIncomeDrafts)
-      .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: (Number(amount) || 0).toFixed(2) }))
+      .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: formatT0SharedIncomeAmountCents(getT0SharedIncomeAmountCents(amount)) }))
       .filter((allocation) => Number.isInteger(allocation.recipientUserId) && allocation.recipientUserId > 0 && Number(allocation.amount) > 0);
     setEntryForm((current) => ({
       ...current,
@@ -6433,7 +6464,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         : isRealizedAnnualizedMetric
           ? Number(candidate.annualizedReference) < 0 ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"
           : "font-semibold text-slate-700";
-      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : isOpeningOrderCountMetric ? "累计挂单" : compactMetricLabel;
+      const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : isOpeningOrderCountMetric ? "当前挂单" : compactMetricLabel;
       const compactSummaryValueClassName = input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
         : isExternalShareContributionMetric
@@ -6458,7 +6489,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           ? `${Math.round(allocatedMetricTotal)}${compactMetricUnit}`
         : `${formatPrice(allocatedMetricTotal)}${compactMetricUnit}`;
       const updateCompactDraft = (candidate: SharedIncomeCandidate, rawValue: string) => {
-        const nextValue = rawValue.replace(/[^0-9.]/g, "");
+        const nextValue = limitT0SharedIncomeAmountInput(rawValue);
         input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
         input.setDrafts((current) => {
           if (!candidate.hasPrincipal) return current;
@@ -6470,18 +6501,71 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const rawCurrentAmount = Number(input.drafts[candidate.userId] ?? 0);
         const currentAmount = Number.isFinite(rawCurrentAmount) ? Math.max(0, rawCurrentAmount) : 0;
         const currentCents = Math.round(currentAmount * 100);
-        const stepCents = currentCents > 0 ? Math.max(1, Math.round(currentCents * 0.05)) : 0;
-        const reservedForOthersCents = Math.max(0, Math.round((input.allocatedTotal - currentAmount) * 100));
-        const availableCents = Math.max(0, Math.round(allocationLimit * 100) - reservedForOthersCents);
-        return { currentCents, stepCents, availableCents };
+        const allocationLimitCents = Math.max(0, Math.round(allocationLimit * 100));
+        // 快捷加减始终按本次可分配总额的1%计算，不随某一行的微小金额缩小为0.01 U。
+        const stepCents = allocationLimitCents > 0 ? Math.max(1, Math.round(allocationLimitCents * 0.01)) : 0;
+        return { currentCents, stepCents, allocationLimitCents };
       };
-      const adjustCompactDraftByPercent = (candidate: SharedIncomeCandidate, direction: -1 | 1) => {
+      const adjustCompactDraftByAllocationStep = (candidate: SharedIncomeCandidate, direction: -1 | 1) => {
         if (!candidate.hasPrincipal) return;
-        const { currentCents, stepCents, availableCents } = getCompactDraftAdjustment(candidate);
-        if (currentCents <= 0 || stepCents <= 0) return;
-        const nextCents = direction < 0 ? currentCents - stepCents : currentCents + stepCents;
-        if (nextCents < 0 || nextCents > availableCents) return;
-        updateCompactDraft(candidate, (nextCents / 100).toFixed(2));
+        const { currentCents, stepCents, allocationLimitCents } = getCompactDraftAdjustment(candidate);
+        if (stepCents <= 0) return;
+        if (direction < 0) {
+          const nextCents = Math.max(0, currentCents - stepCents);
+          if (nextCents === currentCents) return;
+          updateCompactDraft(candidate, (nextCents / 100).toFixed(2));
+          return;
+        }
+        if (currentCents + stepCents > allocationLimitCents) return;
+        const allocatedCents = Math.max(0, Math.round(input.allocatedTotal * 100));
+        if (allocatedCents > allocationLimitCents) return;
+        const requiredLinkedReductionCents = Math.max(0, stepCents - Math.max(0, allocationLimitCents - allocatedCents));
+        const otherAllocatedCandidates = enabledCandidates
+          .filter((other) => other.userId !== candidate.userId && other.hasPrincipal)
+          .map((other) => ({
+            candidate: other,
+            cents: Math.max(0, Math.round((Number(input.drafts[other.userId]) || 0) * 100)),
+          }))
+          .filter((other) => other.cents > 0);
+        const otherAllocatedCents = otherAllocatedCandidates.reduce((total, other) => total + other.cents, 0);
+        if (requiredLinkedReductionCents > otherAllocatedCents) return;
+
+        // 余额不够时，只在其他已有分配人之间按当前金额比例腾挪；目标成员本次固定增加1%。
+        const reductionsByUserId = new Map<string, number>();
+        if (requiredLinkedReductionCents > 0 && otherAllocatedCents > 0) {
+          const proportionalRows = otherAllocatedCandidates.map((other) => {
+            const exactCents = requiredLinkedReductionCents * other.cents / otherAllocatedCents;
+            const baseCents = Math.min(other.cents, Math.floor(exactCents));
+            return { ...other, exactCents, reductionCents: baseCents };
+          });
+          let remainingReductionCents = requiredLinkedReductionCents - proportionalRows.reduce((total, row) => total + row.reductionCents, 0);
+          proportionalRows
+            .slice()
+            .sort((left, right) => (right.exactCents - right.reductionCents) - (left.exactCents - left.reductionCents) || right.cents - left.cents)
+            .forEach((row) => {
+              if (remainingReductionCents <= 0 || row.reductionCents >= row.cents) return;
+              row.reductionCents += 1;
+              remainingReductionCents -= 1;
+            });
+          for (const row of proportionalRows) {
+            if (row.reductionCents > 0) reductionsByUserId.set(row.candidate.userId, row.reductionCents);
+          }
+        }
+        input.setTargetSelections((current) => {
+          const next = { ...current };
+          delete next[candidate.userId];
+          reductionsByUserId.forEach((_reductionCents, userId) => { delete next[userId]; });
+          return next;
+        });
+        input.setDrafts((current) => {
+          const next = { ...current, [candidate.userId]: ((currentCents + stepCents) / 100).toFixed(2) };
+          reductionsByUserId.forEach((reductionCents, userId) => {
+            const nextCents = Math.max(0, Math.round((Number(current[userId]) || 0) * 100) - reductionCents);
+            if (nextCents <= 0) delete next[userId];
+            else next[userId] = (nextCents / 100).toFixed(2);
+          });
+          return next;
+        });
       };
       return <>
         <div className="overflow-hidden rounded border border-slate-200 bg-white">
@@ -6493,14 +6577,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const candidateDisplayName = getCandidateDisplayName(candidate);
                 const canAdjustCandidate = candidate.hasPrincipal;
                 const canDisplayMetricValue = candidate.hasPrincipal && (!isRealizedAnnualizedMetric || (candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference)));
-                const { currentCents, stepCents, availableCents } = getCompactDraftAdjustment(candidate);
+                const { currentCents, stepCents, allocationLimitCents } = getCompactDraftAdjustment(candidate);
                 const canDecreaseCandidate = canAdjustCandidate && currentCents > 0 && stepCents > 0;
-                const canIncreaseCandidate = canAdjustCandidate && stepCents > 0 && currentCents + stepCents <= availableCents;
+                const canIncreaseCandidate = canAdjustCandidate && stepCents > 0 && currentCents + stepCents <= allocationLimitCents;
                 const adjustmentAmount = stepCents / 100;
                 return <tr key={candidate.userId} className={candidate.hasPrincipal ? "h-10 border-b border-slate-100" : "h-10 border-b border-slate-100 bg-slate-100 opacity-70"}>
                   <td className="w-px whitespace-nowrap px-2 align-middle"><div className="flex min-w-max items-center justify-between gap-1"><span className="whitespace-nowrap text-[11px] font-semibold text-slate-800">{candidateDisplayName}</span>{input.showEligibilityControls && <button type="button" disabled={Boolean(input.eligibilityPendingUserId)} aria-pressed aria-label={`${candidateDisplayName}关闭本单共享资格`} onClick={() => input.onEligibilityChange?.(candidate, false)} className="relative h-4 w-7 shrink-0 rounded-full bg-blue-600 transition disabled:opacity-45"><span className="absolute left-[14px] top-0.5 h-3 w-3 rounded-full bg-white shadow transition" /></button>}</div></td>
                   <td className="w-px whitespace-nowrap px-1 text-left align-middle text-[10px] text-slate-500"><b className={getCompactMetricValueClassName(candidate)}>{canDisplayMetricValue ? formatCompactMetricValue(candidate) : "--"}</b></td>
-                  <td className="px-2 align-middle"><div className="grid h-8 grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded border border-slate-200 bg-white focus-within:border-blue-400"><button type="button" disabled={!canDecreaseCandidate} aria-label={`${candidateDisplayName}分配金额减少当前金额的5%`} title={canDecreaseCandidate ? `减少 ${formatPrice(adjustmentAmount)} u（当前金额的 5%）` : "请先输入分配金额"} onClick={() => adjustCompactDraftByPercent(candidate, -1)} className="flex items-center justify-center border-r border-slate-100 text-slate-500 active:bg-slate-50 disabled:text-slate-300"><Minus className="h-3.5 w-3.5" strokeWidth={2.25} /></button><input aria-label={`${candidateDisplayName}本次共享收益金额`} disabled={!canAdjustCandidate} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => updateCompactDraft(candidate, event.target.value)} inputMode="decimal" className="min-w-0 bg-white px-1 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none disabled:bg-slate-50 disabled:text-slate-300" /><button type="button" disabled={!canIncreaseCandidate} aria-label={`${candidateDisplayName}分配金额增加当前金额的5%`} title={canIncreaseCandidate ? `增加 ${formatPrice(adjustmentAmount)} u（当前金额的 5%）` : "剩余分配额度不足"} onClick={() => adjustCompactDraftByPercent(candidate, 1)} className="flex items-center justify-center border-l border-slate-100 text-blue-600 active:bg-blue-50 disabled:text-slate-300"><Plus className="h-3.5 w-3.5" strokeWidth={2.25} /></button></div></td>
+                  <td className="px-2 align-middle"><div className="grid h-9 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] overflow-hidden rounded border border-slate-200 bg-white focus-within:border-blue-400"><button type="button" disabled={!canDecreaseCandidate} aria-label={`${candidateDisplayName}分配金额减少本次可分配总额的1%`} title={canDecreaseCandidate ? `减少 ${formatPrice(adjustmentAmount)} u（本次可分配总额的 1%）` : "请先输入分配金额"} onClick={() => adjustCompactDraftByAllocationStep(candidate, -1)} className="flex items-center justify-center border-r border-slate-100 text-slate-500 active:bg-slate-50 disabled:text-slate-300"><Minus className="h-4 w-4" strokeWidth={2.5} /></button><input aria-label={`${candidateDisplayName}本次共享收益金额`} disabled={!canAdjustCandidate} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => updateCompactDraft(candidate, event.target.value)} inputMode="decimal" className="min-w-0 bg-white px-1 text-center text-[16px] font-semibold tabular-nums text-slate-800 outline-none disabled:bg-slate-50 disabled:text-slate-300" /><button type="button" disabled={!canIncreaseCandidate} aria-label={`${candidateDisplayName}分配金额增加本次可分配总额的1%`} title={canIncreaseCandidate ? `增加 ${formatPrice(adjustmentAmount)} u（本次可分配总额的 1%；余额不足时按其他已分配人金额比例联动扣减）` : "本次可分配总额不足"} onClick={() => adjustCompactDraftByAllocationStep(candidate, 1)} className="flex items-center justify-center border-l border-slate-100 text-blue-600 active:bg-blue-50 disabled:text-slate-300"><Plus className="h-4 w-4" strokeWidth={2.5} /></button></div></td>
                 </tr>;
               })}
               {enabledCandidates.some((candidate) => candidate.hasPrincipal) && <tr className="h-8 bg-slate-50 text-[10px] tabular-nums text-slate-500"><td className="w-px whitespace-nowrap px-2">共分配 <b className="font-semibold text-slate-800">{allocatedCandidates.length}</b> 人</td><td className="w-px whitespace-nowrap px-1 text-left">{compactSummaryLabel} <b className={compactSummaryValueClassName}>{formatCompactMetricSummary()}</b></td><td className="whitespace-nowrap px-2 text-right">已分 <b className="font-semibold text-rose-600">{input.allocatedTotal.toFixed(2)} u</b></td></tr>}
@@ -6595,7 +6679,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <button type="button" disabled={!canAllocateOrderPoolTwoPercent} aria-label="按本单可共享收益的2%分配" title={canAllocateOrderPoolTwoPercent ? `按本单可共享收益的 2% 分配，即 ${formatPrice(orderPoolTwoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolTwoPercentShareAmount)} U`} onClick={() => { if (!canAllocateOrderPoolTwoPercent) return; input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; }); input.setDrafts((current) => ({ ...current, [candidate.userId]: orderPoolTwoPercentShareAmount.toFixed(2) })); }} style={canAllocateOrderPoolTwoPercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 2%</button>
               </div>}
               <div className={candidate.hasPrincipal ? "absolute bottom-0 right-0 w-full" : "relative w-full"}>{candidate.hasPrincipal && candidateEligible && (input.drafts[candidate.userId] ?? "").trim() !== "" && <button type="button" aria-label={`清零${candidate.name}本单共享收益`} title="清零本单共享收益" onClick={clearCandidate} className="absolute left-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-xl leading-none text-slate-500 active:bg-slate-100 active:text-slate-800">×</button>}<input aria-label={`${candidate.name}共享收益金额`} disabled={!canAdjustCandidate} value={input.drafts[candidate.userId] ?? ""} onChange={(event) => {
-                const nextValue = event.target.value.replace(/[^0-9.]/g, "");
+                const nextValue = limitT0SharedIncomeAmountInput(event.target.value);
                 input.setTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                 input.setDrafts((current) => { if (!canAdjustCandidate) return current; if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; } return { ...current, [candidate.userId]: nextValue }; });
               }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pl-8 pr-2 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-300" /></div>
@@ -13322,17 +13406,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 renderSharedIncomeAllocationCandidates({
                   drafts: takeProfitSharedIncomeDrafts,
                   setDrafts: setTakeProfitSharedIncomeDrafts,
-                  targetSelections: takeProfitSharedIncomeTargetSelections,
-                  setTargetSelections: setTakeProfitSharedIncomeTargetSelections,
-                  allocatedTotal: takeProfitSharedIncomeAllocatedTotal,
-                  emptyMessage: "当前没有符合条件的其他未平仓关联用户；无需设置预分配。",
+	                  targetSelections: takeProfitSharedIncomeTargetSelections,
+	                  setTargetSelections: setTakeProfitSharedIncomeTargetSelections,
+	                  allocatedTotal: takeProfitSharedIncomeAllocatedTotal,
+	                  allocationLimit: takeProfitSharedIncomeAllocationLimit,
+	                  emptyMessage: "当前没有符合条件的其他未平仓关联用户；无需设置预分配。",
                 })
               )}
             </div>
             <div className="sticky bottom-0 flex items-center gap-2 border-t border-slate-100 bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               <button type="button" onClick={() => { setTakeProfitSharedIncomeDrafts({}); setTakeProfitSharedIncomeTargetSelections({}); }} className="h-11 rounded border border-slate-200 px-4 text-sm font-semibold text-slate-600">清空</button>
-              <div className="min-w-0 flex-1 text-right text-[11px] text-slate-500">已分 <span className={takeProfitSharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001 ? "font-semibold text-rose-600" : "font-semibold text-slate-800"}>{takeProfitSharedIncomeAllocatedTotal.toFixed(2)} u</span></div>
-              <button type="button" disabled={takeProfitSharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001} onClick={saveTakeProfitAllocationPlan} className="h-11 rounded bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-40">保存方案</button>
+	              <div className="min-w-0 flex-1 text-right text-[11px] text-slate-500">已分 <span className={takeProfitSharedIncomeAllocatedTotalCents > takeProfitSharedIncomeAllocationLimitCents ? "font-semibold text-rose-600" : "font-semibold text-slate-800"}>{takeProfitSharedIncomeAllocatedTotal.toFixed(2)} u</span></div>
+	              <button type="button" disabled={takeProfitSharedIncomeAllocatedTotalCents > takeProfitSharedIncomeAllocationLimitCents} onClick={saveTakeProfitAllocationPlan} className="h-11 rounded bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-40">保存方案</button>
             </div>
           </div>
         </div>
@@ -13423,7 +13508,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                      return <button key={dimension.id} type="button" aria-pressed={isSelected} onClick={() => toggleSharedIncomeAllocationMetric(dimension.id)} className={`flex min-h-11 flex-col items-center justify-center rounded border px-1 leading-tight ${isSelected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"}`}><span className="flex items-center gap-1 text-[11px] font-semibold">{isSelected && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}{dimension.label}</span><span className={`mt-0.5 text-[9px] font-medium ${isSelected ? "text-blue-500" : "text-slate-400"}`}>{dimension.category}</span></button>;
 	                    })}
 	                  </div>
-	                  {sharedIncomeAllocationMetrics.includes("openingOrderCount") && <div className="mt-2.5 rounded-md border border-indigo-100 bg-indigo-50/55 px-2.5 py-2"><div className="flex items-baseline justify-between gap-2"><div className="text-[11px] font-semibold text-indigo-900">挂单数量倾斜度</div><div className="text-xs font-bold tabular-nums text-indigo-700">{sharedIncomeOpeningOrderCountIntensity}%</div></div><input type="range" min="0" max="100" step="1" value={sharedIncomeOpeningOrderCountIntensity} aria-label="挂单数量倾斜度，0%为全员均分，100%为完全按挂单数量" onChange={(event) => setSharedIncomeOpeningOrderCountIntensity(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} className="mt-1.5 h-3 w-full cursor-pointer accent-indigo-600" /><div className="mt-1 flex justify-between text-[9px] font-medium text-indigo-500"><span>0% 全员均分</span><span>100% 挂单比例</span></div><div className="mt-1.5 text-[10px] leading-4 text-indigo-700/80">当前：{100 - sharedIncomeOpeningOrderCountIntensity}% 均分保障 + {sharedIncomeOpeningOrderCountIntensity}% 按累计挂单数量倾斜。</div></div>}
+	                  {sharedIncomeAllocationMetrics.includes("openingOrderCount") && <div className="mt-2.5 rounded-md border border-indigo-100 bg-indigo-50/55 px-2.5 py-2"><div className="flex items-baseline justify-between gap-2"><div className="text-[11px] font-semibold text-indigo-900">当前挂单数倾斜度</div><div className="text-xs font-bold tabular-nums text-indigo-700">{sharedIncomeOpeningOrderCountIntensity}%</div></div><input type="range" min="0" max="100" step="1" value={sharedIncomeOpeningOrderCountIntensity} aria-label="当前挂单数倾斜度，0%为全员均分，100%为完全按当前挂单数" onChange={(event) => setSharedIncomeOpeningOrderCountIntensity(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} className="mt-1.5 h-3 w-full cursor-pointer accent-indigo-600" /><div className="mt-1 flex justify-between text-[9px] font-medium text-indigo-500"><span>0% 全员均分</span><span>100% 当前挂单比例</span></div><div className="mt-1.5 text-[10px] leading-4 text-indigo-700/80">当前：{100 - sharedIncomeOpeningOrderCountIntensity}% 均分保障 + {sharedIncomeOpeningOrderCountIntensity}% 按当前有效挂单数倾斜。</div></div>}
 	                  {sharedIncomeSelectedDimensions.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-4 text-slate-500"><span>已选 {sharedIncomeSelectedDimensions.length} 个维度：</span>{sharedIncomeSelectedDimensions.map((dimension, index) => <span key={dimension.id} className="whitespace-nowrap font-medium text-blue-700">{index > 0 && <span className="mr-1.5 text-slate-300">·</span>}{dimension.compactLabel} {sharedIncomeDimensionWeightPercentage.toFixed(2)}%</span>)}</div>}
 	                </section>
 	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">{sharedIncomeAllocationMetrics.length === 0 ? "共享分配人" : "共享分配清单"}</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({

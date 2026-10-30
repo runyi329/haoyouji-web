@@ -264,7 +264,7 @@ function normalizeTakeProfitSharedIncomeAllocations(raw: T0TakeProfitSharedIncom
     }
     totals.set(recipientUserId, (totals.get(recipientUserId) || 0) + amountCents);
   }
-  if (totals.size > 20) throw new TRPCError({ code: "BAD_REQUEST", message: "每段止盈最多预分配给20位用户" });
+  // 共享收益没有业务人数上限；同一收款人仍会在此合并为一条，金额与资格将在成交时权威复核。
   return Array.from(totals.entries()).map(([recipientUserId, amountCents]) => ({
     recipientUserId,
     amount: amountCents / 100,
@@ -4121,17 +4121,24 @@ async function writeSharedIncomeTransfers(tx: any, input: {
   }
   if (input.enforceEligibility !== false) {
     const recipientIds = allocations.map((allocation) => allocation.recipientUserId);
-    const [disabledRows] = await tx.execute(
-      `SELECT recipient_user_id
-         FROM ledger52_t0_journal_shared_income_eligibilities
-        WHERE ledger_id = ? AND user_id = ? AND source_user_id = ? AND is_enabled = 0
-          AND recipient_user_id IN (${recipientIds.map(() => "?").join(", ")})
-        FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.sourceUserId, ...recipientIds],
-    );
-    const disabledRecipientIds = asRows(disabledRows)
-      .map((row) => toNumber(row.recipient_user_id))
-      .filter((recipientUserId) => recipientUserId > 0);
+    // 没有共享人数业务上限；仅将资格查询分批，避免大量有效收款人使单条 IN 查询过长。
+    const disabledRecipientIds: number[] = [];
+    const eligibilityQueryBatchSize = 500;
+    for (let start = 0; start < recipientIds.length; start += eligibilityQueryBatchSize) {
+      const recipientIdBatch = recipientIds.slice(start, start + eligibilityQueryBatchSize);
+      const [disabledRows] = await tx.execute(
+        `SELECT recipient_user_id
+           FROM ledger52_t0_journal_shared_income_eligibilities
+          WHERE ledger_id = ? AND user_id = ? AND source_user_id = ? AND is_enabled = 0
+            AND recipient_user_id IN (${recipientIdBatch.map(() => "?").join(", ")})
+          FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.sourceUserId, ...recipientIdBatch],
+      );
+      asRows(disabledRows)
+        .map((row) => toNumber(row.recipient_user_id))
+        .filter((recipientUserId) => recipientUserId > 0)
+        .forEach((recipientUserId) => disabledRecipientIds.push(recipientUserId));
+    }
     if (disabledRecipientIds.length > 0) {
       throw new TRPCError({ code: "CONFLICT", message: "有分配人已关闭本订单使用者的共享资格，请刷新后重新分配" });
     }

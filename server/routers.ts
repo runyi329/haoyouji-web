@@ -12726,7 +12726,7 @@ ${klinesSummary}
         takeProfitEnabled: z.boolean().optional(),
         takeProfitPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0').optional(),
         takeProfitQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0').optional(),
-        takeProfitPlans: z.array(z.object({ price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0'), quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0'), sharedIncomeAllocations: z.array(z.object({ recipientUserId: z.number().int().positive(), amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '止盈预分配金额最多两位小数').refine((value) => Number(value) > 0, '止盈预分配金额必须大于0') })).max(20).optional() })).max(20).optional(),
+        takeProfitPlans: z.array(z.object({ price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0'), quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0'), sharedIncomeAllocations: z.array(z.object({ recipientUserId: z.number().int().positive(), amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '止盈预分配金额最多两位小数').refine((value) => Number(value) > 0, '止盈预分配金额必须大于0') })).optional() })).max(20).optional(),
         optionDirection: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
         optionExpiryDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '到期日格式应为 YYYY-MM-DD').optional(),
         optionPremium: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '权利金格式无效').refine((value) => Number(value) > 0, '权利金必须大于0').optional(),
@@ -12744,7 +12744,7 @@ ${klinesSummary}
         sharedIncomeAllocations: z.array(z.object({
           recipientUserId: z.number().int().positive(),
           amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '共享收益金额最多两位小数').refine((value) => Number(value) > 0, '共享收益金额必须大于0'),
-        })).max(20).optional(),
+        })).optional(),
         clientRequestId: z.string().trim().min(12).max(64),
       }).superRefine((input, issue) => {
         if ((input.action === 'openLong' || input.action === 'openShort') && !input.instrumentType) {
@@ -12838,7 +12838,7 @@ ${klinesSummary}
         takeProfitEnabled: z.boolean().optional(),
         takeProfitPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0').optional(),
         takeProfitQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0').optional(),
-        takeProfitPlans: z.array(z.object({ price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0'), quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0'), sharedIncomeAllocations: z.array(z.object({ recipientUserId: z.number().int().positive(), amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '止盈预分配金额最多两位小数').refine((value) => Number(value) > 0, '止盈预分配金额必须大于0') })).max(20).optional() })).max(20).optional(),
+        takeProfitPlans: z.array(z.object({ price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0'), quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0'), sharedIncomeAllocations: z.array(z.object({ recipientUserId: z.number().int().positive(), amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '止盈预分配金额最多两位小数').refine((value) => Number(value) > 0, '止盈预分配金额必须大于0') })).optional() })).max(20).optional(),
         takeProfitOnly: z.boolean().optional(),
         profitShareAllocations: z.array(z.object({
           beneficiaryUserId: z.number().int().positive(),
