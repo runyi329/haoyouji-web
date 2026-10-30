@@ -23743,6 +23743,10 @@ ${klinesSummary}
               ? snapshot.joint_order_segments
               : [];
             const isJointOrder = rawSegments.length > 0;
+            const hasExplicitPrimarySegmentShareMode = Object.prototype.hasOwnProperty.call(
+              snapshot,
+              'joint_order_primary_collateral_share_mode',
+            );
             const primary = {
               ...baseOrder,
               id: physicalOrder.id,
@@ -23752,8 +23756,11 @@ ${klinesSummary}
               _sharedPoolSegmentId: '__primary__',
               _sharedPoolSegmentLabel: '第1段',
               _sharedPoolIsJointOrder: isJointOrder,
-              collateral_share_mode: snapshot.joint_order_primary_collateral_share_mode === 'self'
-                ? 'self'
+              // 联合订单的第1段与后续段完全同级：只要个人快照已明确保存过
+              // 第1段开关，便不能回退读取物理订单的历史共享字段，否则关掉第1段后
+              // 仍会被旧字段重新加回共享池。尚未迁移的旧快照才兼容回退原字段。
+              collateral_share_mode: hasExplicitPrimarySegmentShareMode
+                ? (snapshot.joint_order_primary_collateral_share_mode === 'self' ? 'self' : 'none')
                 : (baseOrder.collateral_share_mode || 'none'),
             };
             const segments = rawSegments
@@ -27012,31 +27019,6 @@ ${klinesSummary}
         await ensureInterestEndDateColumn();
         await ensureFrontendPlacementColumn();
         await ensureSettlementSnapshotColumn();
-        if (input.collateralShareMode === 'self') {
-          const [snapshotRows] = await conn.execute(
-            `SELECT order_snapshot FROM ledger_order_participants
-             WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'`,
-            [input.id, input.ledgerId],
-          ) as any;
-          const hasJointInternalMember = (Array.isArray(snapshotRows) ? snapshotRows : []).some((snapshotRow: any) => {
-            const snapshot = parseFunderParticipantSnapshot(snapshotRow?.order_snapshot) || {};
-            // 只要任一段选择了联合内部共享，就不得同时保留旧跨订单共享模式；
-            // 持仓全额段虽不进入实际担保池，也必须保持这个状态层面的隔离。
-            const primaryInPool = snapshot.joint_order_primary_collateral_share_mode === 'self';
-            let segments: any[] = [];
-            try {
-              const raw = typeof snapshot.joint_order_segments === 'string'
-                ? JSON.parse(snapshot.joint_order_segments)
-                : snapshot.joint_order_segments;
-              segments = Array.isArray(raw) ? raw : [];
-            } catch {}
-            return primaryInPool || segments.some((segment: any) => segment?.collateral_share_mode === 'self');
-          });
-          if (hasJointInternalMember) {
-            await conn.end();
-            throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单已使用联合订单内部共享担保，不能同时开启本人其他订单共享' });
-          }
-        }
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。

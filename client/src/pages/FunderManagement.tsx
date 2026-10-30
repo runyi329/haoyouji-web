@@ -1203,10 +1203,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     || jointOrderTargets.find(target => target.userId === preferredJointOrderTargetId)
     || jointOrderTargets[0]
     || null;
-  // “参加共享”是每段独立保存的选择状态；持仓全额段也可选择参加。
-  // 是否把该段担保物和风险放进实际合并池，则由订单卡按口径另行判断，不能在此丢失状态。
-  const hasJointInternalCollateralMembers = jointPrimaryCollateralShareMode === 'self'
-    || jointOrderSegments.some(segment => segment.collateral_share_mode === 'self');
   useEffect(() => {
     if (!editingOrder?.id || !activeJointOrderTarget) return;
     const targetUserId = Number(activeJointOrderTarget.userId || 0);
@@ -6383,7 +6379,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       </label>
                       <label className="flex items-center gap-2.5 cursor-pointer">
                         <input type="radio" name="collateralShareMode" value="self" checked={collateralShareMode === 'self'} onChange={() => {
-                          if (hasJointInternalCollateralMembers) { toast.error('当前联合订单已有分段参加内部共享，请勿再开启跨订单共享'); return; }
                           const poolOrders = (sharedPoolData as any)?.orders ?? [];
                           setShareConfirmModal({ mode: 'self', sharedOrders: poolOrders.filter((o: any) => !editingOrder || o.orderId !== editingOrder.id) });
                         }} className="w-4 h-4 accent-blue-600" />
