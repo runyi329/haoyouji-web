@@ -26,6 +26,23 @@ function isChunkLoadError(error: Error): boolean {
   );
 }
 
+const CHUNK_RECOVERY_KEY = 'maidong:chunk-recovery-at';
+const CHUNK_RECOVERY_WINDOW_MS = 60_000;
+
+function canRetryChunkLoadOnce(): boolean {
+  try {
+    const previousAttempt = Number(sessionStorage.getItem(CHUNK_RECOVERY_KEY) || 0);
+    if (Number.isFinite(previousAttempt) && Date.now() - previousAttempt < CHUNK_RECOVERY_WINDOW_MS) {
+      return false;
+    }
+    sessionStorage.setItem(CHUNK_RECOVERY_KEY, String(Date.now()));
+    return true;
+  } catch {
+    // 存储不可用时宁可展示可操作错误页，也不要进入无限刷新。
+    return false;
+  }
+}
+
 // 上报错误到服务器，方便排查
 function reportErrorToServer(error: Error, componentStack?: string) {
   try {
@@ -52,31 +69,25 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-
-    // chunk 加载失败：直接自动刷新，用户无感知
-    if (isChunkLoadError(error)) {
-      console.warn('检测到 chunk 加载失败（可能是新版本部署），自动刷新页面...');
-      window.location.reload();
-      return;
-    }
-
-    // 上报到服务器
     reportErrorToServer(error, errorInfo.componentStack);
 
-    // 不再自动重置（会导致 Safari 检测到循环跳转），由用户手动点刷新
+    // 首次 chunk 失败允许受控重试一次；网络仍不稳定或旧资源已失效时保留可见错误页，
+    // 避免 Safari/PWA 无限刷新后看起来像白屏。
+    if (isChunkLoadError(error) && canRetryChunkLoadOnce()) {
+      console.warn('检测到 chunk 加载失败，执行一次受控刷新...');
+      window.setTimeout(() => window.location.reload(), 120);
+      return;
+    }
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // chunk 加载失败不进入错误展示状态，等 componentDidCatch 里刷新
-    if (isChunkLoadError(error)) {
-      return { hasError: false, error: null };
-    }
     return { hasError: true, error };
   }
 
   render() {
     if (this.state.hasError) {
       const errMsg = this.state.error?.message || '未知错误';
+      const isChunkError = this.state.error ? isChunkLoadError(this.state.error) : false;
 
       return (
         <div className="flex items-center justify-center min-h-screen p-8 bg-background">
@@ -86,8 +97,10 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-2">页面出现错误</h2>
-            <p className="text-sm text-gray-600 mb-4">请点击下方按钮刷新页面</p>
+            <h2 className="text-xl mb-2">{isChunkError ? '页面资源暂时无法连接' : '页面出现错误'}</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              {isChunkError ? '请检查网络后重新连接，若刚更新应用可稍后再试。' : '请点击下方按钮刷新页面'}
+            </p>
 
             {errMsg && (
               <div className="p-3 w-full rounded bg-red-50 border border-red-200 mb-6">

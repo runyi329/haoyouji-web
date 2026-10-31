@@ -86,8 +86,20 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
+  // vite.config.ts 可导出对象或按 command/mode 生成对象的回调。开发服务器嵌入
+  // Express 时需先解析后者，否则 @ 与 @shared 的路径别名会丢失，入口模块被
+  // SPA fallback 错误替换为 HTML。
+  const resolvedViteConfig = typeof viteConfig === "function"
+    ? await viteConfig({
+      command: "serve",
+      mode: process.env.NODE_ENV || "development",
+      isSsrBuild: false,
+      isPreview: false,
+    })
+    : viteConfig;
+
   const vite = await createViteServer({
-    ...viteConfig,
+    ...resolvedViteConfig,
     configFile: false,
     server: serverOptions,
     appType: "custom",
@@ -135,6 +147,8 @@ export function serveStatic(app: Express) {
   }
 
   app.use(express.static(distPath, {
+    // HTML 始终走下方统一 fallback；避免根路径 / 被静态中间件用不同缓存口径返回。
+    index: false,
     setHeaders: (res, filePath) => {
       // 设置正确的MIME类型
       if (filePath.endsWith('.js')) {
@@ -143,6 +157,19 @@ export function serveStatic(app: Express) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       } else if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
+
+      const normalizedPath = filePath.split(path.sep).join('/');
+      const isHashedBuildAsset = normalizedPath.includes('/assets/');
+      const isPwaControlFile = /\/(?:sw\.js|manifest\.json)$/.test(normalizedPath);
+      if (isHashedBuildAsset) {
+        // 文件名含内容哈希；新版本会换地址，可安全让 Safari/PWA 离线复用已下载资源。
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (isPwaControlFile) {
+        // Service Worker 与 manifest 必须每次向网络确认，以便受控更新。
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
       }
     }
   }));

@@ -1,7 +1,7 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
 // 热预览必须立刻拿到最新界面模块；版本变化会让已打开的手机页面主动更新工作线程。
-const CACHE_VERSION = 'v2.3.5';
+const CACHE_VERSION = 'v2.3.6';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 const IS_MANUS_PREVIEW = /\.manus\.computer$/i.test(self.location.hostname);
 
@@ -40,19 +40,16 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName.startsWith('maidong-cache-') && cacheName !== CACHE_NAME) {
             console.log('[Service Worker] 删除旧缓存:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      // 立即接管并刷新所有已打开页面，确保新版本代码立刻替换旧PWA缓存。
-      return self.clients.claim().then(() =>
-        self.clients.matchAll({ type: 'window' }).then((clients) =>
-          Promise.all(clients.map((client) => client.navigate(client.url)))
-        )
-      );
+      // 接管后不强制 navigate：iPhone/PWA 在弱网、后台恢复或资源尚未到齐时
+      // 被二次导航会放大白屏风险。当前页面继续稳定运行，下次正常打开再加载新版入口。
+      return self.clients.claim();
     })
   );
 });
@@ -87,9 +84,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
         .catch(() => {
-          return new Response('Network unavailable', {
+          return new Response(`<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width,initial-scale=1"><title>脉动</title><body style="margin:0;background:#f4f6f8;color:#334155;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif"><main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center"><section><h1 style="font-size:17px;margin:0 0 8px">页面暂时无法连接</h1><p style="font-size:14px;line-height:1.7;color:#64748b;margin:0">请检查网络后重新连接</p><button onclick="location.reload()" style="margin-top:18px;min-height:40px;padding:0 18px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:14px;font-weight:600">重新连接</button></section></main></body></html>`, {
             status: 503,
             statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
           });
         })
     );

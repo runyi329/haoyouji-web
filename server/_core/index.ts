@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerStorageProxy } from "./storageProxy";
+import versionApi from "../version-api";
 import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
@@ -268,6 +269,8 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // 版本检测必须在静态 SPA fallback 之前返回 JSON，避免客户端将首页HTML当作版本响应解析。
+  app.use(versionApi);
   registerStorageProxy(app);
 
   /**

@@ -185,15 +185,18 @@ function vitePluginManusDebugCollector(): Plugin {
 // 稳定热预览只关闭 Manus 容器的远程“刷新”指令监听：
 // 代码仍可按需由开发者重启预览，用户填写表单时不会被容器的周期刷新清空。
 const stablePreview = process.env.MANUS_STABLE_PREVIEW === "true";
-const plugins = [
-  react(),
-  tailwindcss(),
-  jsxLocPlugin(),
-  ...(stablePreview ? [] : [vitePluginManusRuntime(), vitePluginManusDebugCollector()]),
-];
 
-export default defineConfig({
-  plugins,
+export default defineConfig(({ command }) => {
+  // 预览运行时会向 HTML 注入大型同步脚本；它只用于本地调试，不能进入真实用户的首屏。
+  const useManusRuntime = command === "serve" && !stablePreview;
+
+  return {
+  plugins: [
+    react(),
+    tailwindcss(),
+    jsxLocPlugin(),
+    ...(useManusRuntime ? [vitePluginManusRuntime(), vitePluginManusDebugCollector()] : []),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -243,4 +246,5 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  };
 });

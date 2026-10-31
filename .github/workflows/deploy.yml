@@ -75,7 +75,7 @@ jobs:
           SSHEOF
           chmod 600 ~/.ssh/config
 
-      - name: 同步构建产物并重启服务
+      - name: 原子发布构建产物并重启服务
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -90,11 +90,14 @@ jobs:
           REMOTE_LOCK_HASH=$(${SSH_CMD} "${REMOTE}" "md5sum ${APP_DIR}/pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || true")
 
           echo "部署目标提交：${EXPECTED_SHA}"
-          echo "同步构建产物…"
-          ${SSH_CMD} "${REMOTE}" "mkdir -p ${APP_DIR}/dist ${APP_DIR}/server"
-          rsync -az --delete -e "${SSH_CMD}" dist/ "${REMOTE}:${APP_DIR}/dist/"
+          RELEASES_DIR="${APP_DIR}/releases"
+          RELEASE_DIR="${RELEASES_DIR}/${EXPECTED_SHA}"
+          echo "同步构建产物至新发布目录…"
+          ${SSH_CMD} "${REMOTE}" "mkdir -p '${RELEASE_DIR}' '${APP_DIR}/server'"
+          rsync -az --delete -e "${SSH_CMD}" dist/ "${REMOTE}:${RELEASE_DIR}/"
           rsync -az -e "${SSH_CMD}" package.json pnpm-lock.yaml "${REMOTE}:${APP_DIR}/"
           rsync -az -e "${SSH_CMD}" server/git-log.json "${REMOTE}:${APP_DIR}/server/git-log.json"
+          rsync -az -e "${SSH_CMD}" nginx.conf "${REMOTE}:${APP_DIR}/nginx.conf"
 
           # 只有锁文件变化时才同步 node_modules；本次锁文件未变化，不会引入大文件传输。
           if [ "${LOCAL_LOCK_HASH}" != "${REMOTE_LOCK_HASH}" ]; then
@@ -107,9 +110,50 @@ jobs:
           ${SSH_CMD} "${REMOTE}" "EXPECTED_SHA='${EXPECTED_SHA}' bash -s" <<'ENDSSH'
           set -euo pipefail
           APP_DIR=/home/ubuntu/haoyouji-web
-          chown -R ubuntu:ubuntu "$APP_DIR/dist" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml"
-          printf '%s\n' "$EXPECTED_SHA" > "$APP_DIR/dist/.deployed-commit"
-          chown ubuntu:ubuntu "$APP_DIR/dist/.deployed-commit"
+          RELEASES_DIR="$APP_DIR/releases"
+          RELEASE_DIR="$RELEASES_DIR/$EXPECTED_SHA"
+          NGINX_SITE=/etc/nginx/sites-available/haoyouji
+
+          test -f "$RELEASE_DIR/index.js"
+          test -f "$RELEASE_DIR/public/index.html"
+          chown -R ubuntu:ubuntu "$RELEASE_DIR" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml" "$APP_DIR/nginx.conf"
+          printf '%s\n' "$EXPECTED_SHA" > "$RELEASE_DIR/.deployed-commit"
+          chown ubuntu:ubuntu "$RELEASE_DIR/.deployed-commit"
+
+          # 先校验并 reload Nginx。站点文件不存在时只保留现有配置，不猜测生产目录。
+          if sudo test -f "$NGINX_SITE"; then
+            NGINX_BACKUP="$(mktemp /tmp/haoyouji-nginx.XXXXXX)"
+            sudo cp "$NGINX_SITE" "$NGINX_BACKUP"
+            sudo install -m 644 "$APP_DIR/nginx.conf" "$NGINX_SITE"
+            if ! sudo nginx -t; then
+              echo "Nginx 配置校验失败，已恢复原配置。" >&2
+              sudo cp "$NGINX_BACKUP" "$NGINX_SITE"
+              sudo nginx -t || true
+              rm -f "$NGINX_BACKUP"
+              exit 1
+            fi
+            sudo systemctl reload nginx
+            rm -f "$NGINX_BACKUP"
+            echo "Nginx 静态资源配置已安全加载。"
+          else
+            echo "未找到 $NGINX_SITE；未修改 Nginx 配置。"
+          fi
+
+          # 将上一版的内容哈希资源补入新目录。旧会话仍可完成已触发的懒加载，
+          # 而新的 index.html 只会引用本次构建的哈希文件。
+          CURRENT_DIST="$(readlink -f "$APP_DIR/dist" 2>/dev/null || true)"
+          if [ -n "$CURRENT_DIST" ] && [ -d "$CURRENT_DIST/public/assets" ]; then
+            cp -a -n "$CURRENT_DIST/public/assets/." "$RELEASE_DIR/public/assets/"
+          fi
+
+          # 新构建完全同步和校验通过后才原子切换 dist 软链接。
+          if [ ! -L "$APP_DIR/dist" ] && [ -d "$APP_DIR/dist" ]; then
+            LEGACY_RELEASE="$RELEASES_DIR/legacy-before-$EXPECTED_SHA"
+            mv "$APP_DIR/dist" "$LEGACY_RELEASE"
+          fi
+          rm -f "$APP_DIR/.dist-next"
+          ln -s "$RELEASE_DIR" "$APP_DIR/.dist-next"
+          mv -Tf "$APP_DIR/.dist-next" "$APP_DIR/dist"
 
           echo "重启 PM2…"
           if sudo -u ubuntu env HOME=/home/ubuntu pm2 describe haoyouji-web >/dev/null 2>&1; then
@@ -124,12 +168,30 @@ jobs:
 
           echo "校验本机服务响应…"
           for attempt in $(seq 1 8); do
-            if curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null; then
+            if curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null \
+              || curl -fsS --max-time 5 http://127.0.0.1:3001/ >/dev/null; then
               echo "服务健康检查通过。"
-              exit 0
+              break
             fi
             sleep 2
           done
-          echo "PM2 已启动，但本机 HTTP 健康检查未通过。" >&2
-          exit 1
+          if ! curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null \
+            && ! curl -fsS --max-time 5 http://127.0.0.1:3001/ >/dev/null; then
+            echo "PM2 已启动，但本机 HTTP 健康检查未通过。" >&2
+            exit 1
+          fi
+
+          # 仅在本机已加载对应站点配置时检查真实 HTTPS 入口，避免只验证Node而漏掉Nginx反代。
+          if sudo test -f "$NGINX_SITE"; then
+            curl --fail --silent --show-error --max-time 10 \
+              --resolve jiangyuchen.cn:443:127.0.0.1 \
+              https://jiangyuchen.cn/ >/dev/null
+            echo "Nginx HTTPS 健康检查通过。"
+          fi
+
+          # 保留当前与最近三版，兼顾旧分块回退、回滚能力及服务器磁盘空间。
+          find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+            | sort -nr | awk 'NR > 4 {print $2}' | while IFS= read -r old_release; do
+                [ -n "$old_release" ] && rm -rf "$old_release"
+              done
           ENDSSH

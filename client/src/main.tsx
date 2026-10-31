@@ -23,6 +23,42 @@ const queryClient = new QueryClient({
   },
 });
 
+function reportStartupIssue(kind: string, error: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    const normalized = error instanceof Error ? error : new Error(String(error ?? "Unknown startup error"));
+    const payload = JSON.stringify({
+      message: `[${kind}] ${normalized.message}`.slice(0, 300),
+      stack: normalized.stack?.slice(0, 500),
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+    });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon("/api/log-client-error", new Blob([payload], { type: "application/json" }));
+      return;
+    }
+    void fetch("/api/log-client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    });
+  } catch {
+    // 启动期诊断不能影响正常挂载。
+  }
+}
+
+if (typeof window !== "undefined") {
+  // ErrorBoundary 无法捕获入口模块后的未处理 Promise、Effect 与事件回调异常。
+  window.addEventListener("error", (event) => {
+    if (event.error) reportStartupIssue("window.error", event.error);
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    reportStartupIssue("unhandledrejection", event.reason);
+  });
+}
+
 // 防抖锁：防止多个 API 同时失败时触发多次跳转（如 batch 请求中多个接口同时返回 401）。
 // 还必须先二次核验 auth.me：某个页面级接口偶发 401 不等于当前登录会话已失效。
 // 否则管理员在米伴等子项目切换路由时，会被一次背景请求错误直接带到登录页。
@@ -225,13 +261,20 @@ async function bootstrap() {
     console.log('[Auth] 未找到有效 token，需要登录');
   }
 
-  createRoot(document.getElementById("root")!).render(
-    <QueryClientProvider client={queryClient}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <App />
-      </trpc.Provider>
-    </QueryClientProvider>
-  );
+  try {
+    createRoot(document.getElementById("root")!).render(
+      <QueryClientProvider client={queryClient}>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <App />
+        </trpc.Provider>
+      </QueryClientProvider>
+    );
+    // index.html 的静态启动层独立于 React。只有入口脚本已成功执行才允许其退出。
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event("maidong:app-mounted")));
+  } catch (error) {
+    reportStartupIssue("bootstrap", error);
+    throw error;
+  }
 }
 
 bootstrap();
@@ -242,24 +285,17 @@ const isStablePreview = import.meta.env.VITE_MANUS_STABLE_PREVIEW === 'true';
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     if (import.meta.env.PROD && !isStablePreview) {
-      let refreshingForUpdate = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshingForUpdate) return;
-        refreshingForUpdate = true;
-        window.location.reload();
-      });
-
       navigator.serviceWorker
         .register('/sw.js', { updateViaCache: 'none' })
         .then((registration) => {
           console.log('[PWA] Service Worker 注册成功:', registration.scope);
-          void registration.update();
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
             if (newWorker) {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('[PWA] 新版本可用，刷新页面以更新');
+                  // 不在弱网/后台恢复时强制刷新；当前页稳定完成后，用户下次打开自然使用新版本。
+                  console.log('[PWA] 新版本已就绪，将在下次正常打开时生效');
                 }
               });
             }

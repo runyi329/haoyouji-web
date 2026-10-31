@@ -1,25 +1,4 @@
 import { lazy, Suspense, useEffect } from "react";
-// 牙伴高频互跳页改为静态导入,避免互跳时出现Suspense"加载中"过渡闪现
-import YabanProfile from "./pages/yaban/YabanProfile";
-import YabanWallet from "./pages/yaban/YabanWallet";
-import WalletTransactions from "./pages/WalletTransactions";
-import WalletCnyTransactions from "./pages/WalletCnyTransactions";
-import MultiAssetWalletTransactions from "./pages/MultiAssetWalletTransactions";
-import CryptoWalletTransactions from "./pages/CryptoWalletTransactions";
-import YabanSettings from "./pages/yaban/YabanSettings";
-import YabanDataManage from "./pages/yaban/YabanDataManage";
-import YabanBindEmail from "./pages/yaban/YabanBindEmail";
-import YabanRoles from "./pages/yaban/YabanRoles";
-import YabanChargeProducts from "./pages/yaban/YabanChargeProducts";
-import YabanChargeAdd from "./pages/yaban/YabanChargeAdd";
-import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
-import YabanHome from "./pages/yaban/YabanHome";
-import YabanPatientCreate from "./pages/yaban/YabanPatientCreate";
-import YabanPatientList from "./pages/yaban/YabanPatientList";
-import YabanPatientDetail from "./pages/yaban/YabanPatientDetail";
-import YabanMessages from "./pages/yaban/YabanMessages";
-import YabanShop from "./pages/yaban/YabanShop";
-import YabanShopAdmin from "./pages/yaban/YabanShopAdmin";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
@@ -97,6 +76,28 @@ import NbaOddsAdmin from "@/pages/NbaOddsAdmin";
 // const ContactsManagement = lazy(() => import("./pages/ContactsManagement")); - 已废弃
 
 // 其他页面懒加载
+// 这些页面此前为避免路由闪烁被打进入口；在弱网 iPhone 上会显著放大首次白屏概率。
+// 全局 Suspense 已有完整加载态，恢复按需加载能让首页先可用。
+const YabanProfile = lazy(() => import("./pages/yaban/YabanProfile"));
+const YabanWallet = lazy(() => import("./pages/yaban/YabanWallet"));
+const WalletTransactions = lazy(() => import("./pages/WalletTransactions"));
+const WalletCnyTransactions = lazy(() => import("./pages/WalletCnyTransactions"));
+const MultiAssetWalletTransactions = lazy(() => import("./pages/MultiAssetWalletTransactions"));
+const CryptoWalletTransactions = lazy(() => import("./pages/CryptoWalletTransactions"));
+const YabanSettings = lazy(() => import("./pages/yaban/YabanSettings"));
+const YabanDataManage = lazy(() => import("./pages/yaban/YabanDataManage"));
+const YabanBindEmail = lazy(() => import("./pages/yaban/YabanBindEmail"));
+const YabanRoles = lazy(() => import("./pages/yaban/YabanRoles"));
+const YabanChargeProducts = lazy(() => import("./pages/yaban/YabanChargeProducts"));
+const YabanChargeAdd = lazy(() => import("./pages/yaban/YabanChargeAdd"));
+const YabanVerifyRecords = lazy(() => import("./pages/yaban/YabanVerifyRecords"));
+const YabanHome = lazy(() => import("./pages/yaban/YabanHome"));
+const YabanPatientCreate = lazy(() => import("./pages/yaban/YabanPatientCreate"));
+const YabanPatientList = lazy(() => import("./pages/yaban/YabanPatientList"));
+const YabanPatientDetail = lazy(() => import("./pages/yaban/YabanPatientDetail"));
+const YabanMessages = lazy(() => import("./pages/yaban/YabanMessages"));
+const YabanShop = lazy(() => import("./pages/yaban/YabanShop"));
+const YabanShopAdmin = lazy(() => import("./pages/yaban/YabanShopAdmin"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ContactsList = lazy(() => import("./pages/ContactsList"));
 const RegionMap = lazy(() => import("./pages/RegionMap"));
