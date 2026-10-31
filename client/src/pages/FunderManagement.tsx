@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredVa
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search, Pin, PinOff } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
@@ -855,7 +855,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
-  // 手机端实时预览随编辑内容正常滚动。长担保清单不会再以浮窗遮住下方表单。
+  // 默认随页面滚动；需要对照时可临时锁定在编辑区顶部。
+  const [isEditorPreviewPinned, setIsEditorPreviewPinned] = useState(false);
   const [previewViewMode] = useState<'order' | 'card'>('order'); // 编辑预览统一使用订单模式
   const [cardFormulaPreview, setCardFormulaPreview] = useState<FormulaPreviewState | null>(null);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
@@ -4014,6 +4015,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     resetLinkedAmountFields();
     participantsLoadedRef.current = null;
     setShowDatePicker(false);
+    setIsEditorPreviewPinned(false);
   };
 
   useEffect(() => {
@@ -4523,12 +4525,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </select>
                 </div>
               )}
-              <section data-editor-preview className="space-y-1.5">
+              <section
+                data-editor-preview
+                className={`space-y-1.5 ${isEditorPreviewPinned ? 'sticky top-0 z-30 -mx-1 bg-white px-1 pt-1 pb-3 shadow-[0_10px_16px_-16px_rgba(15,23,42,0.5)]' : ''}`}
+              >
                 <div className="flex items-center justify-between px-0.5">
                   <span className="text-xs font-semibold text-slate-600">实时预览</span>
-                  <span className="text-[10px] text-slate-400">随页面滚动</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorPreviewPinned(current => !current)}
+                    aria-pressed={isEditorPreviewPinned}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition-colors ${isEditorPreviewPinned ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                    title={isEditorPreviewPinned ? '点击恢复随页面滚动' : '点击锁定在编辑区顶部'}
+                  >
+                    {isEditorPreviewPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                    {isEditorPreviewPinned ? '已锁定顶部' : '随页面滚动'}
+                  </button>
                 </div>
-                {renderFloatingLiveOrderPreview()}
+                <div className={isEditorPreviewPinned ? 'max-h-[44vh] overflow-y-auto overscroll-contain rounded-2xl' : ''}>
+                  {renderFloatingLiveOrderPreview()}
+                </div>
               </section>
               <>
               {editingOrder?.id && activeJointOrderTarget && (
