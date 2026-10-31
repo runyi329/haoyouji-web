@@ -411,9 +411,10 @@ async function ensureLimitedProductManagementTables() {
     await limitedProductManagementSchemaPromise;
   }
 
-  // 新商品发布后也会在首次管理/下单时自动补齐默认状态。-1 表示不限库存，
-  // 不会因为上线管理功能而意外停售既有商品；管理员设置非负库存后启用自动扣减。
+  // 仅正式上架商品在首次管理/下单时补齐默认状态。草稿资料页不可因前台浏览
+  // 生成库存或奖金记录；-1 表示不限库存，管理员设置非负库存后启用自动扣减。
   for (const product of mibanLimitedProducts) {
+    if (product.status !== "on_sale") continue;
     await (conn as any).execute(
       `INSERT IGNORE INTO miban_limited_category_commission_state
        (brand, category, commission_enabled) VALUES (?, ?, 0)`,

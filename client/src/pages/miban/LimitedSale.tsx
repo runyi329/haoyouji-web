@@ -140,7 +140,7 @@ export default function LimitedSale() {
                   凌创生物精选
                 </h3>
                 <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  10g × 30袋盒装，查看包装、规格与商品资料。
+                  两款独立条包，查看包装、规格与商品资料。
                 </p>
               </div>
               <span

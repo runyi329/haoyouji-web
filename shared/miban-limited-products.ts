@@ -75,6 +75,11 @@ export type LimitedProduct = {
       facts?: string[];
       align?: "left" | "right";
     }>;
+    /** 竖版沉浸式商品故事的画布与文字遮罩；未配置时使用普通图文故事。 */
+    storyPresentation?: {
+      background: string;
+      overlay: string;
+    };
     /** 置于产品简介内的说明图片，例如使用方法或成分说明。 */
     introImage?: string;
     introImageAlt?: string;
@@ -120,6 +125,9 @@ const lingchuangImmersiveImage = (file: string) =>
 const LINGCHUANG_DETAIL_POSTER_ASSET_BASE = "/miban-lingchuang-preview/v5";
 const lingchuangDetailPosterImage = (file: string) =>
   `${LINGCHUANG_DETAIL_POSTER_ASSET_BASE}/${file}`;
+const LINGCHUANG_PQQ_ASSET_BASE = "/miban-lingchuang-preview/pqq-v1";
+const lingchuangPqqImage = (file: string) =>
+  `${LINGCHUANG_PQQ_ASSET_BASE}/${file}`;
 const NINGYOURAN_DETAIL_IMAGES = [
   herbalifeNingyouranDetailImage("detail-01.jpg"),
   herbalifeNingyouranDetailImage("detail-02.jpg"),
@@ -840,6 +848,11 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       heroImages: [lingchuangImmersiveImage("hero-accepted.jpg")],
       detailImagesCaption:
         "以下为二次创作的沉浸式产品故事海报；顶部主视觉保留真实产品外观，页面信息以销售包装标签为准。",
+      storyPresentation: {
+        background: "#252A78",
+        overlay:
+          "linear-gradient(to top, rgba(2, 9, 30, 0.95), rgba(6, 19, 63, 0.45), transparent)",
+      },
       storySections: [
         {
           eyebrow: "BRAND & RESEARCH",
@@ -919,6 +932,127 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         active: true,
         image: lingchuangPreviewImage("product-card-v2.jpg"),
         heroImages: [lingchuangImmersiveImage("hero-accepted.jpg")],
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  },
+  {
+    key: "lingchuang-pqq-sodium-hyaluronate-brightening",
+    status: "draft",
+    publicPreview: true,
+    brand: "凌创生物",
+    checkoutGroupKey: "lingchuang-limited",
+    category: "营养固体饮料",
+    card: {
+      badge: "资料核验中",
+      title: "PQQ透明质酸钠焕亮固体饮料",
+      subtitle: "10g × 30袋 · 红色盒装独立条包",
+      highlights: ["净含量300g", "10g × 30袋", "温开水冲调"],
+      image: lingchuangPqqImage("product-card.png"),
+      theme: {
+        accent: "#A92437",
+        background: "#FFF1F3",
+      },
+    },
+    detail: {
+      title: "凌创®PQQ透明质酸钠焕亮固体饮料",
+      subtitle: "10g × 30袋 · 净含量300g",
+      tags: ["营养固体饮料", "独立袋装", "温开水冲调"],
+      heroImages: [lingchuangPqqImage("hero-real-package.jpg")],
+      detailImagesCaption:
+        "以下为以真实包装外观为基准的二次创作资料页；品名、规格、配料及食用提示以实际销售包装标签为准。",
+      storyPresentation: {
+        background: "#2A0710",
+        overlay:
+          "linear-gradient(to top, rgba(36, 2, 9, 0.96), rgba(79, 9, 22, 0.52), transparent)",
+      },
+      storySections: [
+        {
+          eyebrow: "PRODUCT ARCHIVE",
+          title: "红色独立条包，清晰的包装资料",
+          body: "销售包装标示本品为PQQ透明质酸钠焕亮固体饮料，采用10g独立条包，每盒30袋，净含量300g。",
+          image: lingchuangPqqImage("story-01-research.jpg"),
+          facts: ["10g × 30袋", "净含量300g"],
+        },
+        {
+          eyebrow: "FORMULA LABEL",
+          title: "配料信息，以销售包装标签为准",
+          body: "包装配料表列有D-阿洛酮糖、鳕鱼胶原蛋白肽、塔格糖、白桃粉固体饮料、透明质酸钠、维生素C、PQQ二钠盐及烟酰胺等，完整信息以同批次包装为准。",
+          image: lingchuangPqqImage("story-02-formula.jpg"),
+          facts: ["透明质酸钠", "PQQ二钠盐", "包装配料表列示"],
+        },
+        {
+          eyebrow: "DAILY FORMAT",
+          title: "一袋一包，收纳与携带更从容",
+          body: "盒装内为30袋独立条包，单袋净含量10g。包装形式和具体内容以实际到货商品为准。",
+          image: lingchuangPqqImage("story-03-daily.jpg"),
+          facts: ["独立条包", "30袋/盒"],
+        },
+        {
+          eyebrow: "HOW TO PREPARE",
+          title: "温开水冲调，按包装提示食用",
+          body: "销售包装标示可用温开水冲调后饮用，建议每日食用1袋；请勿超过包装标注的建议食用量。",
+          image: lingchuangPqqImage("story-04-preparation.jpg"),
+          facts: ["温开水冲调", "建议每日1袋"],
+        },
+        {
+          eyebrow: "PACKING NOTES",
+          title: "关键信息，请在下单前核对包装",
+          body: "包装标示本品含鱼成分，婴幼儿、孕妇和哺乳期妇女不宜食用。详细配料、食用量及批次信息请以实际销售包装为准。",
+          image: lingchuangPqqImage("story-05-quality.jpg"),
+          facts: ["含鱼成分", "以同批次包装为准"],
+        },
+      ],
+      productImage: lingchuangPqqImage("product-card.png"),
+      sourceNote:
+        "商品视觉依据用户提供的真实红色包装素材制作；品名、规格、配料和食用信息均以同批次实际销售包装标签为准。",
+      description:
+        "本品为盒装营养固体饮料，每盒30袋，每袋10g，净含量300g。页面资料依据用户提供的包装、侧标实拍和商品长图整理。",
+      usage: "销售包装建议每日食用1袋，用温开水冲调后饮用。",
+      warning:
+        "本品含鱼成分；婴幼儿、孕妇和哺乳期妇女不宜食用。请以同批次实际销售包装的配料、食用方法及注意事项为准。",
+      logistics: lingchuangLogistics,
+      notices: [
+        {
+          label: "食品属性",
+          text: "固体饮料。",
+        },
+        {
+          label: "包装规格",
+          text: "300g（10g × 30袋）。",
+        },
+        {
+          label: "包装列示配料",
+          text: "D-阿洛酮糖、鳕鱼胶原蛋白肽、塔格糖、白桃粉固体饮料、透明质酸钠、维生素C、DL-苹果酸、柠檬酸、PQQ二钠盐、烟酰胺、甜菊糖苷、红曲红及食用香精等；完整配料以同批次销售包装为准。",
+        },
+        {
+          label: "食用方法",
+          text: "温开水冲调后饮用；建议每日食用1袋。",
+        },
+        {
+          label: "生产信息",
+          text: "用户提供侧标实拍显示产地为山东省临沂市，生产商为山东贯天下生物科技有限公司；以实际到货包装为准。",
+        },
+        {
+          label: "特别提示",
+          text: "本产品不能代替特殊医学用途配方食品、婴幼儿配方食品、保健食品等特殊食品。",
+        },
+      ],
+    },
+    skus: [
+      {
+        id: "lingchuang-pqq-10g-30",
+        name: "10g × 30袋/盒",
+        subtitle: "净含量300g · ¥1,398/盒",
+        priceCny: 1398,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "盒",
+        netContentText: "10g × 30袋（300g）",
+        maxPurchaseQty: 10,
+        active: true,
+        image: lingchuangPqqImage("product-card.png"),
+        heroImages: [lingchuangPqqImage("hero-real-package.jpg")],
       },
     ],
     orderPolicy: domesticOrderPolicy,

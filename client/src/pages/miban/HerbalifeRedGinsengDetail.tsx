@@ -111,7 +111,8 @@ export default function HerbalifeRedGinsengDetail() {
   const theme = currentBrand?.theme ?? HERBALIFE_THEME;
   const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${localPreviewMode ? "?preview=1" : ""}`;
   const isPreviewProduct = Boolean(
-    localPreviewMode && currentProduct?.status === "draft"
+    currentProduct?.status === "draft" &&
+      (localPreviewMode || currentProduct?.publicPreview === true)
   );
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const { addItem: addCartItem } = useLimitedProductCart();
@@ -219,7 +220,9 @@ export default function HerbalifeRedGinsengDetail() {
       { productKey },
       {
         enabled:
-          isAuthenticated && Boolean(currentProduct?.orderPolicy.allowFavorite),
+          isAuthenticated &&
+          !isPreviewProduct &&
+          Boolean(currentProduct?.orderPolicy.allowFavorite),
       }
     );
   const favoriteMutation = mtrpc.favorite.toggle.useMutation({
@@ -354,7 +357,12 @@ export default function HerbalifeRedGinsengDetail() {
   };
 
   const handleFavorite = () => {
-    if (favoritePending || !currentProduct.orderPolicy.allowFavorite) return;
+    if (
+      favoritePending ||
+      isPreviewProduct ||
+      !currentProduct.orderPolicy.allowFavorite
+    )
+      return;
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -573,7 +581,7 @@ export default function HerbalifeRedGinsengDetail() {
           }}
         >
           <strong style={{ color: accent }}>资料核验中：</strong>
-          当前为本地设计预览，商品尚未上架；不会创建库存状态、订单或钱包扣款。页面内的包装与图文资料仅供核验，不作为对外功效承诺。
+          当前为商品资料预览，尚未上架；不会创建库存状态、订单或钱包扣款。页面内的包装与图文资料仅供核验，不作为对外功效承诺。
         </div>
       )}
 
@@ -616,7 +624,7 @@ export default function HerbalifeRedGinsengDetail() {
           </div>
           <p className="mt-2 text-[11px] text-gray-400">
             {isPreviewProduct
-              ? "商品视觉以用户提供的真实包装为参考，当前仅作本地设计与信息核验"
+              ? "商品视觉以用户提供的真实包装为参考，当前仅作设计与信息核验"
               : currentProduct.detail.sourceNote ||
                 (currentProduct.detail.isOverseas
                   ? "海外购商品，税费以订单实际申报为准"
@@ -636,7 +644,9 @@ export default function HerbalifeRedGinsengDetail() {
                 ? "请选择喜欢的口味"
                 : skuSelectionLabel === "价格"
                   ? "不同箱装规格对应不同价格"
-                  : "当前商品提供的现货规格"}
+                  : isPreviewProduct
+                    ? "以下为资料核验规格，暂未开放下单"
+                    : "当前商品提供的现货规格"}
             </p>
           </div>
           <span className="text-[11px] font-semibold" style={{ color: accent }}>
@@ -724,16 +734,21 @@ export default function HerbalifeRedGinsengDetail() {
           <div className="bg-[#F8F7F2]">
             {currentProduct.detail.storySections.map((story, index) => {
               const rightAligned = story.align === "right";
-              const isLingchuangImmersiveStory =
-                currentProduct.key === "lingchuang-amino-sugar-hyaluronate";
+              const storyPresentation = currentProduct.detail.storyPresentation;
+              const isImmersiveStory = Boolean(storyPresentation);
               return (
                 <article
                   key={`${story.title}-${index}`}
                   className={`relative -mt-px overflow-hidden bg-[#2F452A] ${
-                    isLingchuangImmersiveStory
+                    isImmersiveStory
                       ? "min-h-[640px] aspect-[9/16]"
                       : "min-h-[460px]"
                   }`}
+                  style={
+                    storyPresentation
+                      ? { background: storyPresentation.background }
+                      : undefined
+                  }
                 >
                   <img
                     src={story.image}
@@ -743,20 +758,25 @@ export default function HerbalifeRedGinsengDetail() {
                   />
                   <div
                     className={`absolute inset-0 ${
-                      isLingchuangImmersiveStory
-                        ? "bg-gradient-to-t from-[#02091E]/95 via-[#06133F]/45 to-transparent"
+                      isImmersiveStory
+                        ? ""
                         : rightAligned
                           ? "bg-gradient-to-l from-black/80 via-black/35 to-transparent"
                           : "bg-gradient-to-r from-black/80 via-black/35 to-transparent"
                     }`}
+                    style={
+                      storyPresentation
+                        ? { background: storyPresentation.overlay }
+                        : undefined
+                    }
                   />
                   <div
                     className={`relative z-10 flex flex-col px-6 text-white ${
-                      isLingchuangImmersiveStory
+                      isImmersiveStory
                         ? "h-full justify-end pb-10 pt-8"
                         : "min-h-[460px] justify-end py-8"
                     } ${
-                      rightAligned && !isLingchuangImmersiveStory
+                      rightAligned && !isImmersiveStory
                         ? "items-end text-right"
                         : "items-start text-left"
                     }`}
@@ -907,7 +927,7 @@ export default function HerbalifeRedGinsengDetail() {
           paddingBottom: "10px",
         }}
       >
-        {currentProduct.orderPolicy.allowFavorite && (
+        {currentProduct.orderPolicy.allowFavorite && !isPreviewProduct && (
           <button
             onClick={handleFavorite}
             disabled={favoritePending}
