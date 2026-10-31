@@ -94,10 +94,11 @@ jobs:
           echo "部署目标提交：${EXPECTED_SHA}"
           RELEASES_DIR="${APP_DIR}/releases"
           RELEASE_DIR="${RELEASES_DIR}/${EXPECTED_SHA}"
-          # 发布目录在同一块磁盘上：按校验和发现未变化文件后直接硬链接旧版，
-          # 避免每次重新跨网传输约百兆静态图片、音频和模型文件。
+          # 发布目录在同一块磁盘上：按校验和发现未变化文件后直接硬链接旧版。
+          # 构建会重置静态文件时间戳，因此明确不保留时间戳；否则内容相同的资源
+          # 仍会因mtime不同而被重新跨网传输约百兆图片、音频和模型文件。
           REMOTE_CURRENT_DIST=$(${SSH_CMD} "${REMOTE}" "readlink -f '${APP_DIR}/dist' 2>/dev/null || true")
-          RSYNC_DIST_ARGS=(-azc --delete --partial --timeout=90 --human-readable --info=progress2)
+          RSYNC_DIST_ARGS=(-azc --no-times --delete --partial --timeout=90 --human-readable --info=progress2)
           if [ -n "${REMOTE_CURRENT_DIST}" ]; then
             RSYNC_DIST_ARGS+=("--link-dest=${REMOTE_CURRENT_DIST}")
             echo "复用当前发布目录：${REMOTE_CURRENT_DIST}"
