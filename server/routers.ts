@@ -1962,10 +1962,12 @@ function normalizeFunderPrincipalLentOut(requested: unknown, displayConfig: unkn
 function getFunderCollateralRiskFormula(
   principalLentOut: unknown,
   displayConfig: unknown,
-): 'principal_coverage' | 'floating_pnl' | 'full_value' {
+): 'principal_coverage' | 'floating_pnl' | 'full_value' | 'initial_principal' {
   const config = parseFunderDisplayConfig(displayConfig);
+  const selected = String(config.collateralRiskFormula || '').trim().toLowerCase();
+  // 初始本金与担保物、浮盈和资金属性均无关，所有订单类型均可显式选择。
+  if (selected === 'initial_principal') return selected;
   if (!isSelfFundedFunderOrder(config)) {
-    const selected = String(config.collateralRiskFormula || '').trim().toLowerCase();
     if (selected === 'principal_coverage' || selected === 'floating_pnl' || selected === 'full_value') return selected;
   }
   // 历史 floating_pnl 代表“担保物+浮动盈亏”，绝不重新解释成全额缺口。
@@ -23788,7 +23790,16 @@ ${klinesSummary}
               .filter(Boolean);
             return [primary, ...segments];
           });
-          const isLegacySharedEligible = (order: any) => order?.collateral_share_mode === 'self';
+          // 初始本金口径只以保存时的本金与利息计算，明确不使用、也不贡献共享担保物。
+          // 即使保存了“参加共享”开关，也不能进入经济合并池；但会在返回值中
+          // 单列为“已选择共享、独立公式”的展示成员，供弹窗明确说明该选择未丢失。
+          const isLegacySharedEligible = (order: any) => {
+            if (order?.collateral_share_mode !== 'self') return false;
+            return getFunderCollateralRiskFormula(
+              order?.principal_lent_out === 1 || order?.principal_lent_out === true,
+              order?.display_config,
+            ) !== 'initial_principal';
+          };
           const orders = allOwnerOrders.filter(isLegacySharedEligible);
 
           // 查询每个订单的已结利息明细；后续按当前视角身份筛选。
@@ -24413,8 +24424,20 @@ ${klinesSummary}
             );
             const usesPrincipalCoverage = collateralRiskFormula === 'principal_coverage';
             const usesFloatingPnl = collateralRiskFormula === 'floating_pnl';
+            const usesInitialPrincipal = collateralRiskFormula === 'initial_principal';
+            // 直接使用订单原始融资金额。数字币和期权的 amount 已按U保存，即使展示币种为
+            // 人民币也不能二次换算；仅股票订单保存人民币 amount 时才折算为统一U。
+            // 没有金额的极早期订单才回退其已保存计息本金，绝不读市价。
+            const rawFinancingAmount = Number(o.amount ?? 0);
+            const rawFinancingCurrency = String(o.amount_currency || 'USDT').trim().toUpperCase();
+            const isCnyStockFinancingAmount = String(o.asset_type || '').trim().toLowerCase() === 'stock'
+              && ['CNY', 'RMB', '人民币', '元'].includes(rawFinancingCurrency);
+            const initialFinancingPrincipalU = Number.isFinite(rawFinancingAmount) && rawFinancingAmount > 0
+              ? (isCnyStockFinancingAmount ? rawFinancingAmount / usdtCnyRate : rawFinancingAmount)
+              : principalU;
             // ①担保差值：担保物 − 买入价值；②担保＋浮盈：担保物 + 浮盈；
-            // ③全额：买入价值已完全借出，不计担保物。
+            // ③全额：买入价值已完全借出，不计担保物；④初始本金：融资金额已借出，
+            // 从零减原融资金额，再扣待结、加已结利息。
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
@@ -24428,7 +24451,9 @@ ${klinesSummary}
               : manualStockFloatingPnlU !== null && Number.isFinite(manualStockFloatingPnlU)
                 ? manualStockFloatingPnlU
               : (holdingValueU !== null && Number.isFinite(holdingValueU) ? holdingValueU - collateralGapBaseU : null);
-            const collateralRequired = usesFloatingPnl
+            const collateralRequired = usesInitialPrincipal
+              ? -initialFinancingPrincipalU - accruedInterestU + paidInterestU
+              : usesFloatingPnl
               ? (riskFloatingPnlU === null ? null : riskFloatingPnlU - accruedInterestU + paidInterestU)
               : -principalLentOutValueU - accruedInterestU + paidInterestU;
             return {
@@ -24448,6 +24473,8 @@ ${klinesSummary}
               principal,
               collateralGapBaseU,
               collateralRiskFormula,
+              initialFinancingPrincipalU,
+              sharedEligible: isLegacySharedEligible(o),
               currentPrice,
               currentPriceUpdatedAt: quoteHealth?.lastSuccessAt || null,
               currentPriceSource: quoteHealth?.source || null,
@@ -24467,9 +24494,9 @@ ${klinesSummary}
               collateralValue,
               manualWalletCollateralValue,
               externalCollateralValue,
-              collateralGap: collateralRequired === null || collateralValue === null
+              collateralGap: collateralRequired === null || (!usesInitialPrincipal && collateralValue === null)
                 ? null
-                : collateralRequired + (collateralRiskFormula === 'full_value' ? 0 : collateralValue),
+                : collateralRequired + (collateralRiskFormula === 'full_value' || usesInitialPrincipal ? 0 : collateralValue),
               collateralAssets,
               externalCollateralAssets: linked37Collateral?.useCollateral ? linked37Collateral.collateralAssets : [],
               externalCollateralTagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
@@ -24504,10 +24531,18 @@ ${klinesSummary}
             return difference !== 0 ? difference : String(a.orderNo ?? '').localeCompare(String(b.orderNo ?? ''));
           };
           const sharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode === 'self')
+            .filter((detail: any) => detail.sharedEligible === true)
+            .sort(sortByCollateralValue);
+          // 该集合仅供前端显示“共享选择仍已保存”及其担保物明细。
+          // 绝不能混入 sharedOrderDetails / totals，否则初始本金口径会再次错误抵扣担保物。
+          const isSelectedButExcluded = (detail: any) => (
+            detail?.shareMode === 'self' && detail?.collateralRiskFormula === 'initial_principal'
+          );
+          const selectedButExcludedOrders = orderDetails
+            .filter(isSelectedButExcluded)
             .sort(sortByCollateralValue);
           const nonSharedOrderDetails = orderDetails
-            .filter((detail: any) => detail.shareMode !== 'self')
+            .filter((detail: any) => detail.sharedEligible !== true && !isSelectedButExcluded(detail))
             .sort(sortByCollateralValue);
           // ⑤必须复用原订单卡已展示的最终担保缺口，而非采用上方 nonSharedOrders
           // 的服务端摘要 collateralGap。当前查看者已通过共享池的同一权限校验，故只向
@@ -24604,6 +24639,9 @@ ${klinesSummary}
 
           return {
             orders: sharedOrderDetails,
+            // 已选择“本人其他订单共享”但采用初始本金口径的成员；仅信息展示，
+            // 不参与后续任何共享担保物、风险或缺口总计。
+            selectedButExcludedOrders,
             nonSharedOrders: nonSharedOrderDetails,
             nonSharedOrderCardSources,
             sharedOrderCardSources,
@@ -27042,7 +27080,7 @@ ${klinesSummary}
         const requestedCollateralRiskFormula = input.displayConfig !== undefined
           ? String((input.displayConfig as any).collateralRiskFormula || '')
           : '';
-        const shouldSyncPrimaryOwnerCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value']
+        const shouldSyncPrimaryOwnerCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value', 'initial_principal']
           .includes(requestedCollateralRiskFormula);
         // 标签是整张订单的页眉信息，而不是某一位协作人的独立约定。
         // 主订单改动（包括删除最后一个标签传入 []）必须同步覆盖所有个人快照，

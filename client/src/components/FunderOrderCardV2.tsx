@@ -1403,6 +1403,7 @@ export function FunderOrderCardV2Silver({
   const cardCollateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
   const cardUsesPrincipalCoverage = cardCollateralRiskFormula === 'principal_coverage';
   const cardUsesFloatingPnl = cardCollateralRiskFormula === 'floating_pnl';
+  const cardUsesInitialPrincipal = cardCollateralRiskFormula === 'initial_principal';
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
     ? cardDisplayConfig.primaryAssetDisplay
@@ -1769,8 +1770,11 @@ export function FunderOrderCardV2Silver({
   const combinedCollateralValueU = localWalletCollateralValueU === null || (hasExternalCollateral && fc2977CollateralValueU === null)
     ? null
     : localWalletCollateralValueU + (hasExternalCollateral ? (fc2977CollateralValueU ?? 0) : 0);
-  // 担保差值、担保物+浮盈、买入价值全额三种口径分别计算；“融”标签不再改变公式。
-  const exposure = _isOptCard
+  // 四种口径分别计算；“初始本金”直接取订单原始融资金额，不读取担保物、行情或浮盈。
+  const cardInitialFinancingPrincipalU = Number.isFinite(storedAmountUsdt) && storedAmountUsdt > 0 ? storedAmountUsdt : null;
+  const exposure = cardUsesInitialPrincipal
+    ? (cardInitialFinancingPrincipalU === null ? null : -cardInitialFinancingPrincipalU - silverAccruedInterestU + silverPaidInterestU)
+    : _isOptCard
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
       : (cardUsesPrincipalCoverage
@@ -1785,7 +1789,9 @@ export function FunderOrderCardV2Silver({
         : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU);
   const fc2977FinalGapU = !hasExternalCollateral
     ? null
-    : cardUsesPrincipalCoverage
+    : cardUsesInitialPrincipal
+      ? (cardInitialFinancingPrincipalU === null ? null : -cardInitialFinancingPrincipalU - fc2977AccruedInterestU + fc2977PaidInterestU)
+      : cardUsesPrincipalCoverage
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU)
       : cardUsesFloatingPnl
         ? (combinedCollateralValueU === null || fc2977FloatingPnlU === null ? null : combinedCollateralValueU + fc2977FloatingPnlU - fc2977AccruedInterestU + fc2977PaidInterestU)
@@ -3585,10 +3591,15 @@ export function FunderLenderCardSilver({
   const lenderCollateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
   const lenderUsesPrincipalCoverage = lenderCollateralRiskFormula === 'principal_coverage';
   const lenderUsesFloatingPnl = lenderCollateralRiskFormula === 'floating_pnl';
+  const lenderUsesInitialPrincipal = lenderCollateralRiskFormula === 'initial_principal';
   // 担保减值口径扣真实买入价值；买入价缺失时才回退保存金额。
   const lenderCoverageBaseU = Number(buyValue || storedAmountUsdt || 0);
-  // 三种口径：担保差值、担保物+浮盈、买入价值全额。
-  const collateralGap = _lnIsOpt
+  // 四种口径：担保差值、担保物+浮盈、买入价值全额、初始融资金额。
+  // 初始本金始终直接使用订单原始 amount 的统一U值，不读取担保物、行情或浮盈。
+  const initialFinancingPrincipalU = Number.isFinite(storedAmountUsdt) && storedAmountUsdt > 0 ? storedAmountUsdt : null;
+  const collateralGap = lenderUsesInitialPrincipal
+    ? (initialFinancingPrincipalU === null ? null : -initialFinancingPrincipalU - accruedInU + paidInU)
+    : _lnIsOpt
     ? (lenderIsSelfFundedOption
       ? optionCurrentValue
       : (lenderUsesPrincipalCoverage
@@ -3606,7 +3617,9 @@ export function FunderLenderCardSilver({
   // 外部37号担保物与浮盈按已选口径组合，不能一律当作“浮盈+担保物”。
   const lnExternalFinalGapU = !hasExternalCollateral
     ? null
-    : lenderUsesPrincipalCoverage
+    : lenderUsesInitialPrincipal
+      ? (initialFinancingPrincipalU === null ? null : -initialFinancingPrincipalU - accruedInU + paidInU)
+      : lenderUsesPrincipalCoverage
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - lenderCoverageBaseU - accruedInU + paidInU)
       : lenderUsesFloatingPnl
         ? (combinedCollateralValueU === null || lnExtFloatingPnlU === null ? null : combinedCollateralValueU + lnExtFloatingPnlU - accruedInU + paidInU)
@@ -4331,7 +4344,9 @@ export function FunderLenderCardSilver({
                               {collateralGap !== null && (
                                 <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                                   <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
-                                  <div>{lenderIsSelfFundedOption
+                                  <div>{lenderUsesInitialPrincipal
+                                    ? '0 − 初始融资金额 − 待结利息(U) + 已结利息(U)（不计担保物、市价或浮动盈亏）'
+                                    : lenderIsSelfFundedOption
                                     ? '自有资产期权仅采用实时合约价值，不扣权利金、不叠加利息或担保物'
                                     : lenderUsesPrincipalCoverage
                                       ? '担保物 − 买入价值 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'
@@ -4342,6 +4357,9 @@ export function FunderLenderCardSilver({
                                   <div className="mt-1 font-mono">
                                     {(() => {
                                       const gap = collateralGap!;
+                                      if (lenderUsesInitialPrincipal) {
+                                        return <span style={{ color: '#3B82F6' }}>= 0 − {(initialFinancingPrincipalU ?? 0).toFixed(2)}（初始融资金额） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
+                                      }
                                       if (lenderIsSelfFundedOption) {
                                         return <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{gap.toFixed(2)} U</strong></span>;
                                       }
@@ -4352,9 +4370,11 @@ export function FunderLenderCardSilver({
                                     })()}
                                   </div>
                                   <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                                    {isSufficient
-                                      ? `担保物充足，还有 ${collateralGap!.toFixed(2)} U 的余量空间`
-                                      : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} U 才能覆盖风险`
+                                    {lenderUsesInitialPrincipal
+                                      ? `初始融资金额口径结果 ${collateralGap! >= 0 ? '为正' : '为负'}，不计担保物`
+                                      : isSufficient
+                                        ? `担保物充足，还有 ${collateralGap!.toFixed(2)} U 的余量空间`
+                                        : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} U 才能覆盖风险`
                                     }
                                   </div>
                                 </div>
