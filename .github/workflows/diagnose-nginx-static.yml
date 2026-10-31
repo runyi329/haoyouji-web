@@ -1,4 +1,4 @@
-name: 诊断生产 Nginx 静态层
+name: 恢复生产 Nginx 服务
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
       - ops/nginx-static-diagnose-20261031
 
 jobs:
-  diagnose:
-    name: 仅读取 Nginx 实际配置与响应头
+  recover:
+    name: 恢复生产反代与静态资源
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: 配置只读 SSH 密钥
+      - name: 配置 SSH 密钥
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -32,118 +32,49 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-      - name: 仅读取实际启用的 Nginx 站点与响应头
+      - name: 上传已修正的Nginx配置
+        run: |
+          set -euo pipefail
+          scp nginx.conf production:/tmp/haoyouji-nginx-recovery.conf
+
+      - name: 带自动回滚恢复生产入口
         run: |
           set -euo pipefail
           ssh production 'bash -s' <<'ENDSSH'
             set -euo pipefail
+            HOST=jiangyuchen.cn
             APP_DIR=/home/ubuntu/haoyouji-web
-            HOST=jiangyuchen.cn
-
-            echo '=== 已启用站点链接 ==='
-            sudo -n find /etc/nginx/sites-enabled -maxdepth 1 -mindepth 1 -printf '%f -> %l\n' | sort
-            echo ''
-
-            echo '=== haoyouji 站点文件与链接 ==='
-            sudo -n ls -l /etc/nginx/sites-available/haoyouji /etc/nginx/sites-enabled/haoyouji 2>&1 || true
-            echo ''
-
-            echo '=== 实际Nginx配置中同域名、静态资源及反代片段 ==='
-            sudo -n nginx -T 2>&1 | awk '
-              /^# configuration file / { source=$0 }
-              /server_name.*jiangyuchen\.cn|listen 443|location \^~ \/assets\/|location = \/sw\.js|proxy_pass http:\/\/127\.0\.0\.1:3001|root \/home\/ubuntu\/haoyouji-web/ {
-                print source
-                print NR ":" $0
-              }
-            ' | awk '!seen[$0]++' | head -n 220
-            echo ''
-
-            echo '=== 当前构建入口与文件存在性 ==='
-            readlink -f "$APP_DIR/dist"
-            entry=$(grep -oE '/assets/[^" ]+\.js' "$APP_DIR/dist/public/index.html" | head -n 1)
-            printf 'entry=%s\n' "$entry"
-            test -f "$APP_DIR/dist/public$entry" && echo 'entry file present=yes'
-            echo ''
-
-            echo '=== 本机HTTPS响应头：首页 ==='
-            curl -k -sSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST/" \
-              | grep -Ei '^(HTTP/|server:|x-powered-by:|cache-control:|expires:|content-type:|content-length:)'
-            echo ''
-
-            echo '=== 本机HTTPS响应头：实际入口脚本 ==='
-            curl -k -sSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST$entry" \
-              | grep -Ei '^(HTTP/|server:|x-powered-by:|cache-control:|expires:|content-type:|content-length:)'
-          ENDSSH
-
-      - name: 带回滚恢复应用反代端口
-        run: |
-          set -euo pipefail
-          ssh production 'bash -s' <<'ENDSSH'
-            set -euo pipefail
-            HOST=jiangyuchen.cn
             NGINX_SITE=/etc/nginx/sites-available/haoyouji
             NGINX_ENABLED=/etc/nginx/sites-enabled/haoyouji
+            CANDIDATE=/tmp/haoyouji-nginx-recovery.conf
 
-            echo '=== 现场配置与监听取证（不修改） ==='
-            sudo -n ls -l "$NGINX_SITE" "$NGINX_ENABLED"
-            printf 'enabled-target='; sudo -n readlink -f "$NGINX_ENABLED" || true
-            printf '%s\n' '--- active upstream declarations ---'
-            sudo -n nginx -T 2>&1 | grep -En 'configuration file /etc/nginx/sites-enabled/haoyouji|proxy_pass http://127\.0\.0\.1|server_name jiangyuchen\.cn|location /' | head -n 80
-            printf '%s\n' '--- local listeners ---'
-            sudo -n ss -ltnp '( sport = :3000 or sport = :3001 or sport = :443 )' || true
-            for target in \
-              'http://127.0.0.1:3000/' \
-              'http://127.0.0.1:3000/api/version' \
-              'http://127.0.0.1:3001/' \
-              'http://127.0.0.1:3001/api/version' \
-              "https://${HOST}/" \
-              "https://${HOST}/api/version"; do
-              echo "--- $target ---"
-              if [[ "$target" = https:* ]]; then
-                curl -k -sSI --max-time 8 --resolve "$HOST:443:127.0.0.1" "$target" | sed -n '1,22p'
-              else
-                curl -sSI --max-time 8 "$target" | sed -n '1,22p'
-              fi
-            done
-            printf '%s\n' '--- recent nginx upstream errors ---'
-            sudo -n tail -n 80 /var/log/nginx/haoyouji_ssl_error.log 2>/dev/null || true
-            exit 0
-
-            status_3000="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3000/api/version || true)"
-            status_3001="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3001/api/version || true)"
-            printf 'local-api-3000=%s local-api-3001=%s\n' "$status_3000" "$status_3001"
-            if [ "$status_3000" = '200' ]; then
-              UPSTREAM_PORT=3000
-            elif [ "$status_3001" = '200' ]; then
-              UPSTREAM_PORT=3001
-            else
-              echo '未发现健康的本机应用端口；为避免扩大影响，未修改Nginx。' >&2
-              exit 1
-            fi
-
-            backup="$(mktemp /tmp/haoyouji-nginx-emergency.XXXXXX)"
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3000/api/version)" = '200'
+            test -f "$CANDIDATE"
+            backup="$(mktemp /tmp/haoyouji-nginx-before-recovery.XXXXXX)"
             sudo -n cp -a "$NGINX_SITE" "$backup"
-            if ! sudo -n sed -E -i "s#127\\.0\\.0\\.1:300[01]#127.0.0.1:${UPSTREAM_PORT}#g" "$NGINX_SITE"; then
-              echo '无法更新Nginx反代端口；未切换服务。' >&2
-              rm -f "$backup"
-              exit 1
-            fi
-            if ! sudo -n nginx -t; then
-              sudo -n cp -a "$backup" "$NGINX_SITE"
-              sudo -n nginx -t || true
-              rm -f "$backup"
-              echo 'Nginx校验失败，已回滚。' >&2
-              exit 1
-            fi
-            sudo -n systemctl reload nginx
-            if ! curl -kfsS --max-time 8 --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/version" >/dev/null; then
+            rollback() {
               sudo -n cp -a "$backup" "$NGINX_SITE"
               sudo -n nginx -t
               sudo -n systemctl reload nginx
               rm -f "$backup"
-              echo '本机HTTPS验证失败，已回滚。' >&2
-              exit 1
-            fi
-            rm -f "$backup"
-            echo "已恢复Nginx反代到健康应用端口 ${UPSTREAM_PORT}。"
+            }
+            trap rollback ERR
+
+            sudo -n install -m 644 "$CANDIDATE" "$NGINX_SITE"
+            sudo -n rm -f "$NGINX_ENABLED"
+            sudo -n ln -s "$NGINX_SITE" "$NGINX_ENABLED"
+            sudo -n nginx -t
+            sudo -n systemctl reload nginx
+            sleep 2
+
+            curl -kfsS --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/version" >/dev/null
+            entry="$(grep -oE '/assets/[^\" ]+\.js' "$APP_DIR/dist/public/index.html" | head -n 1)"
+            test -n "$entry"
+            headers="$(curl -kfsSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST$entry")"
+            printf '%s\n' "$headers"
+            printf '%s\n' "$headers" | grep -qi '^cache-control:.*immutable'
+
+            trap - ERR
+            rm -f "$backup" "$CANDIDATE"
+            echo 'Nginx生产入口已恢复：应用转发到3000，静态资源可直出或安全回退。'
           ENDSSH
