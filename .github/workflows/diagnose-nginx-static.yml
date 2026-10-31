@@ -84,6 +84,31 @@ jobs:
             NGINX_SITE=/etc/nginx/sites-available/haoyouji
             NGINX_ENABLED=/etc/nginx/sites-enabled/haoyouji
 
+            echo '=== 现场配置与监听取证（不修改） ==='
+            sudo -n ls -l "$NGINX_SITE" "$NGINX_ENABLED"
+            printf 'enabled-target='; sudo -n readlink -f "$NGINX_ENABLED" || true
+            printf '%s\n' '--- active upstream declarations ---'
+            sudo -n nginx -T 2>&1 | grep -En 'configuration file /etc/nginx/sites-enabled/haoyouji|proxy_pass http://127\.0\.0\.1|server_name jiangyuchen\.cn|location /' | head -n 80
+            printf '%s\n' '--- local listeners ---'
+            sudo -n ss -ltnp '( sport = :3000 or sport = :3001 or sport = :443 )' || true
+            for target in \
+              'http://127.0.0.1:3000/' \
+              'http://127.0.0.1:3000/api/version' \
+              'http://127.0.0.1:3001/' \
+              'http://127.0.0.1:3001/api/version' \
+              "https://${HOST}/" \
+              "https://${HOST}/api/version"; do
+              echo "--- $target ---"
+              if [[ "$target" = https:* ]]; then
+                curl -k -sSI --max-time 8 --resolve "$HOST:443:127.0.0.1" "$target" | sed -n '1,22p'
+              else
+                curl -sSI --max-time 8 "$target" | sed -n '1,22p'
+              fi
+            done
+            printf '%s\n' '--- recent nginx upstream errors ---'
+            sudo -n tail -n 80 /var/log/nginx/haoyouji_ssl_error.log 2>/dev/null || true
+            exit 0
+
             status_3000="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3000/api/version || true)"
             status_3001="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3001/api/version || true)"
             printf 'local-api-3000=%s local-api-3001=%s\n' "$status_3000" "$status_3001"
