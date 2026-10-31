@@ -74,3 +74,51 @@ jobs:
             curl -k -sSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST$entry" \
               | grep -Ei '^(HTTP/|server:|x-powered-by:|cache-control:|expires:|content-type:|content-length:)'
           ENDSSH
+
+      - name: 带回滚恢复应用反代端口
+        run: |
+          set -euo pipefail
+          ssh production 'bash -s' <<'ENDSSH'
+            set -euo pipefail
+            HOST=jiangyuchen.cn
+            NGINX_SITE=/etc/nginx/sites-available/haoyouji
+            NGINX_ENABLED=/etc/nginx/sites-enabled/haoyouji
+
+            status_3000="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3000/api/version || true)"
+            status_3001="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 http://127.0.0.1:3001/api/version || true)"
+            printf 'local-api-3000=%s local-api-3001=%s\n' "$status_3000" "$status_3001"
+            if [ "$status_3000" = '200' ]; then
+              UPSTREAM_PORT=3000
+            elif [ "$status_3001" = '200' ]; then
+              UPSTREAM_PORT=3001
+            else
+              echo '未发现健康的本机应用端口；为避免扩大影响，未修改Nginx。' >&2
+              exit 1
+            fi
+
+            backup="$(mktemp /tmp/haoyouji-nginx-emergency.XXXXXX)"
+            sudo -n cp -a "$NGINX_SITE" "$backup"
+            if ! sudo -n sed -E -i "s#127\\.0\\.0\\.1:300[01]#127.0.0.1:${UPSTREAM_PORT}#g" "$NGINX_SITE"; then
+              echo '无法更新Nginx反代端口；未切换服务。' >&2
+              rm -f "$backup"
+              exit 1
+            fi
+            if ! sudo -n nginx -t; then
+              sudo -n cp -a "$backup" "$NGINX_SITE"
+              sudo -n nginx -t || true
+              rm -f "$backup"
+              echo 'Nginx校验失败，已回滚。' >&2
+              exit 1
+            fi
+            sudo -n systemctl reload nginx
+            if ! curl -kfsS --max-time 8 --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/version" >/dev/null; then
+              sudo -n cp -a "$backup" "$NGINX_SITE"
+              sudo -n nginx -t
+              sudo -n systemctl reload nginx
+              rm -f "$backup"
+              echo '本机HTTPS验证失败，已回滚。' >&2
+              exit 1
+            fi
+            rm -f "$backup"
+            echo "已恢复Nginx反代到健康应用端口 ${UPSTREAM_PORT}。"
+          ENDSSH
