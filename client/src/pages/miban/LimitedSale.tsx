@@ -90,7 +90,7 @@ export default function LimitedSale() {
               <div>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  草本日用 · 正式上架
+                  草本日用
                 </div>
                 <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
                   佗鹊堂精选
@@ -134,7 +134,7 @@ export default function LimitedSale() {
               <div>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  营养固体饮料 · 正式上架
+                  营养固体饮料
                 </div>
                 <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
                   凌创生物精选
