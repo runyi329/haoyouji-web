@@ -1,0 +1,73 @@
+name: 诊断生产 Nginx 静态层
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: 仅读取 Nginx 实际配置与响应头
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 配置只读 SSH 密钥
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName ${{ secrets.DEPLOY_HOST }}
+            User ${{ secrets.DEPLOY_USER }}
+            Port ${{ secrets.DEPLOY_PORT }}
+            IdentityFile ~/.ssh/deploy_key
+            BatchMode yes
+            ConnectTimeout 20
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+            StrictHostKeyChecking no
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: 仅读取实际启用的 Nginx 站点与响应头
+        run: |
+          set -euo pipefail
+          ssh production 'bash -s' <<'ENDSSH'
+            set -euo pipefail
+            APP_DIR=/home/ubuntu/haoyouji-web
+            HOST=jiangyuchen.cn
+
+            echo '=== 已启用站点链接 ==='
+            sudo -n find /etc/nginx/sites-enabled -maxdepth 1 -mindepth 1 -printf '%f -> %l\n' | sort
+            echo ''
+
+            echo '=== haoyouji 站点文件与链接 ==='
+            sudo -n ls -l /etc/nginx/sites-available/haoyouji /etc/nginx/sites-enabled/haoyouji 2>&1 || true
+            echo ''
+
+            echo '=== 实际Nginx配置中同域名、静态资源及反代片段 ==='
+            sudo -n nginx -T 2>&1 | awk '
+              /^# configuration file / { source=$0 }
+              /server_name.*jiangyuchen\.cn|listen 443|location \^~ \/assets\/|location = \/sw\.js|proxy_pass http:\/\/127\.0\.0\.1:3001|root \/home\/ubuntu\/haoyouji-web/ {
+                print source
+                print NR ":" $0
+              }
+            ' | awk '!seen[$0]++' | head -n 220
+            echo ''
+
+            echo '=== 当前构建入口与文件存在性 ==='
+            readlink -f "$APP_DIR/dist"
+            entry=$(grep -oE '/assets/[^" ]+\.js' "$APP_DIR/dist/public/index.html" | head -n 1)
+            printf 'entry=%s\n' "$entry"
+            test -f "$APP_DIR/dist/public$entry" && echo 'entry file present=yes'
+            echo ''
+
+            echo '=== 本机HTTPS响应头：首页 ==='
+            curl -k -sSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST/" \
+              | grep -Ei '^(HTTP/|server:|x-powered-by:|cache-control:|expires:|content-type:|content-length:)'
+            echo ''
+
+            echo '=== 本机HTTPS响应头：实际入口脚本 ==='
+            curl -k -sSI --max-time 10 --resolve "$HOST:443:127.0.0.1" "https://$HOST$entry" \
+              | grep -Ei '^(HTTP/|server:|x-powered-by:|cache-control:|expires:|content-type:|content-length:)'
+          ENDSSH
