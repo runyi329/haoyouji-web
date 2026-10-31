@@ -141,6 +141,7 @@ jobs:
           RELEASES_DIR="$APP_DIR/releases"
           RELEASE_DIR="$RELEASES_DIR/$EXPECTED_SHA"
           NGINX_SITE=/etc/nginx/sites-available/haoyouji
+          NGINX_ENABLED=/etc/nginx/sites-enabled/haoyouji
 
           test -f "$RELEASE_DIR/index.js"
           test -f "$RELEASE_DIR/public/index.html"
@@ -149,21 +150,34 @@ jobs:
           printf '%s\n' "$EXPECTED_SHA" > "$RELEASE_DIR/.deployed-commit"
           chown ubuntu:ubuntu "$RELEASE_DIR/.deployed-commit"
 
-          # 先校验并 reload Nginx。站点文件不存在时只保留现有配置，不猜测生产目录。
+          # sites-enabled 曾遗留一份独立旧文件，导致更新 sites-available 后实际路由仍未切换。
+          # 每次发布都以通过校验的 sites-available 为唯一来源，并保留两份旧文件以便语法失败时原样回滚。
           if sudo test -f "$NGINX_SITE"; then
-            NGINX_BACKUP="$(mktemp /tmp/haoyouji-nginx.XXXXXX)"
-            sudo cp "$NGINX_SITE" "$NGINX_BACKUP"
+            NGINX_SITE_BACKUP="$(mktemp /tmp/haoyouji-nginx-site.XXXXXX)"
+            NGINX_ENABLED_BACKUP="$(mktemp /tmp/haoyouji-nginx-enabled.XXXXXX)"
+            NGINX_ENABLED_EXISTED=0
+            sudo cp -a "$NGINX_SITE" "$NGINX_SITE_BACKUP"
+            if sudo test -e "$NGINX_ENABLED" || sudo test -L "$NGINX_ENABLED"; then
+              NGINX_ENABLED_EXISTED=1
+              sudo cp -a "$NGINX_ENABLED" "$NGINX_ENABLED_BACKUP"
+            fi
             sudo install -m 644 "$APP_DIR/nginx.conf" "$NGINX_SITE"
+            sudo rm -f "$NGINX_ENABLED"
+            sudo ln -s "$NGINX_SITE" "$NGINX_ENABLED"
             if ! sudo nginx -t; then
-              echo "Nginx 配置校验失败，已恢复原配置。" >&2
-              sudo cp "$NGINX_BACKUP" "$NGINX_SITE"
+              echo "Nginx 配置校验失败，已恢复原站点配置和启用链接。" >&2
+              sudo cp -a "$NGINX_SITE_BACKUP" "$NGINX_SITE"
+              sudo rm -f "$NGINX_ENABLED"
+              if [ "$NGINX_ENABLED_EXISTED" = "1" ]; then
+                sudo cp -a "$NGINX_ENABLED_BACKUP" "$NGINX_ENABLED"
+              fi
               sudo nginx -t || true
-              rm -f "$NGINX_BACKUP"
+              rm -f "$NGINX_SITE_BACKUP" "$NGINX_ENABLED_BACKUP"
               exit 1
             fi
             sudo systemctl reload nginx
-            rm -f "$NGINX_BACKUP"
-            echo "Nginx 静态资源配置已安全加载。"
+            rm -f "$NGINX_SITE_BACKUP" "$NGINX_ENABLED_BACKUP"
+            echo "Nginx 静态资源配置和启用链接已安全加载。"
           else
             echo "未找到 $NGINX_SITE；未修改 Nginx 配置。"
           fi
@@ -219,6 +233,22 @@ jobs:
               --resolve jiangyuchen.cn:443:127.0.0.1 \
               https://jiangyuchen.cn/ >/dev/null
             echo "Nginx HTTPS 健康检查通过。"
+
+            ENTRY_ASSET="$(grep -oE '/assets/[^\" ]+\.js' "$RELEASE_DIR/public/index.html" | head -n 1)"
+            if [ -z "$ENTRY_ASSET" ]; then
+              echo "未能从当前构建入口定位静态脚本。" >&2
+              exit 1
+            fi
+            STATIC_HEADERS="$(curl --fail --silent --show-error --head --max-time 10 \
+              --resolve jiangyuchen.cn:443:127.0.0.1 \
+              "https://jiangyuchen.cn$ENTRY_ASSET")"
+            printf '%s\n' "$STATIC_HEADERS"
+            if printf '%s\n' "$STATIC_HEADERS" | grep -qi '^x-powered-by:' \
+              || ! printf '%s\n' "$STATIC_HEADERS" | grep -qi '^cache-control:.*immutable'; then
+              echo "Nginx 静态资源直出校验失败：入口脚本仍经应用反代或缺少长期缓存。" >&2
+              exit 1
+            fi
+            echo "Nginx 静态资源直出校验通过。"
           fi
 
           # 保留当前与最近三版，兼顾旧分块回退、回滚能力及服务器磁盘空间。
