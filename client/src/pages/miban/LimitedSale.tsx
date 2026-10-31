@@ -12,8 +12,8 @@ const HERBALIFE_NUTRITION_CARD =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v4/herbalife-nutrition-card-stage.webp";
 const SEASONAL_FRUITS_CARD =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/brand-cards/v5/seasonal-fruits-card-rich-stage.webp";
-const LINGCHUANG_PREVIEW_CARD =
-  "/miban-lingchuang-preview/v2/brand-card-v2.jpg";
+const LINGCHUANG_DUO_CARD =
+  "/miban-lingchuang-preview/v6/brand-card-red-white-duo.webp";
 
 export default function LimitedSale() {
   return (
@@ -120,37 +120,37 @@ export default function LimitedSale() {
           <article
             className="relative min-h-[208px] overflow-hidden rounded-[22px]"
             style={{
-              background: LINGCHUANG_THEME.primary,
-              boxShadow: "0 14px 32px rgba(43,61,154,0.24)",
+              background: "#8D2D3A",
+              boxShadow: "0 14px 32px rgba(106,45,51,0.18)",
             }}
           >
             <img
-              src={LINGCHUANG_PREVIEW_CARD}
-              alt="凌创氨糖透明质酸钠营养固体饮料盒装"
+              src={LINGCHUANG_DUO_CARD}
+              alt="凌创PQQ透明质酸钠与氨糖透明质酸钠营养固体饮料"
               className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
             />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(21,36,111,0.97)_0%,rgba(34,52,139,0.90)_44%,rgba(48,67,161,0.38)_67%,rgba(48,67,161,0.04)_100%)]" />
-            <div className="relative z-10 flex min-h-[208px] max-w-[61%] flex-col justify-between px-5 py-5 text-white">
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(101,34,43,0.96)_0%,rgba(126,48,57,0.89)_43%,rgba(143,55,64,0.39)_63%,rgba(143,55,64,0.06)_80%,rgba(143,55,64,0)_100%)]" />
+            <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
               <div>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  营养固体饮料 · 资料预览
+                  营养固体饮料 · 正式上架
                 </div>
                 <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
                   凌创生物精选
                 </h3>
                 <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  两款独立条包，查看包装、规格与商品资料。
+                  两款独立条包，进入专区查看在售商品。
                 </p>
               </div>
               <span
                 className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
                 style={{
-                  background: "#F3F6FF",
-                  color: LINGCHUANG_THEME.primary,
+                  background: "#FFFDF9",
+                  color: "#8D2D3A",
                 }}
               >
-                查看资料预览
+                查看凌创精选
                 <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
               </span>
             </div>

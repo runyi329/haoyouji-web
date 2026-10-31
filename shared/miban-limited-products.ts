@@ -221,7 +221,7 @@ const lingchuangLogistics: LimitedProduct["detail"]["logistics"] = [
   },
   {
     title: "订单处理",
-    description: "商品正式上架后，付款订单将由工作人员核对并安排后续发货。",
+    description: "付款订单将由工作人员核对并安排后续发货。",
   },
   {
     title: "售后咨询",
@@ -825,13 +825,12 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   },
   {
     key: "lingchuang-amino-sugar-hyaluronate",
-    status: "draft",
-    publicPreview: true,
+    status: "on_sale",
     brand: "凌创生物",
     checkoutGroupKey: "lingchuang-limited",
     category: "营养固体饮料",
     card: {
-      badge: "资料核验中",
+      badge: "新品上架",
       title: "氨糖透明质酸钠营养固体饮料",
       subtitle: "10g × 30袋 · 盒装独立条包",
       highlights: ["净含量300g", "温开水冲调", "10g × 30袋"],
@@ -938,13 +937,12 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   },
   {
     key: "lingchuang-pqq-sodium-hyaluronate-brightening",
-    status: "draft",
-    publicPreview: true,
+    status: "on_sale",
     brand: "凌创生物",
     checkoutGroupKey: "lingchuang-limited",
     category: "营养固体饮料",
     card: {
-      badge: "资料核验中",
+      badge: "新品上架",
       title: "PQQ透明质酸钠焕亮固体饮料",
       subtitle: "10g × 30袋 · 红色盒装独立条包",
       highlights: ["净含量300g", "10g × 30袋", "温开水冲调"],
@@ -960,7 +958,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
       tags: ["营养固体饮料", "独立袋装", "温开水冲调"],
       heroImages: [lingchuangPqqImage("hero-real-package.jpg")],
       detailImagesCaption:
-        "以下为以真实包装外观为基准的二次创作资料页；品名、规格、配料及食用提示以实际销售包装标签为准。",
+        "以下为以真实包装外观为基准的二次创作商品详情；品名、规格、配料及食用提示以实际销售包装标签为准。",
       storyPresentation: {
         background: "#2A0710",
         overlay:
