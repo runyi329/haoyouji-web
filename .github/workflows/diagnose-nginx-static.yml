@@ -2,6 +2,9 @@ name: 诊断生产 Nginx 静态层
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ops/nginx-static-diagnose-20261031
 
 jobs:
   diagnose:
