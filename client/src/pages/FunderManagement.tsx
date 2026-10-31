@@ -855,12 +855,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
-  // 编辑抽屉中的唯一实时预览：默认随滚动上下避让；管理员拖动后固定在指定高度。
-  const editorDrawerRef = useRef<HTMLDivElement>(null);
-  const floatingPreviewRef = useRef<HTMLDivElement>(null);
-  const floatingPreviewDragRef = useRef<{ pointerId: number; startY: number; startTop: number; dragged: boolean } | null>(null);
-  const floatingPreviewPinnedRef = useRef(false);
-  const [floatingPreviewTop, setFloatingPreviewTop] = useState<number | null>(null);
+  // 手机端实时预览随编辑内容正常滚动。长担保清单不会再以浮窗遮住下方表单。
   const [previewViewMode] = useState<'order' | 'card'>('order'); // 编辑预览统一使用订单模式
   const [cardFormulaPreview, setCardFormulaPreview] = useState<FormulaPreviewState | null>(null);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
@@ -4019,66 +4014,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     resetLinkedAmountFields();
     participantsLoadedRef.current = null;
     setShowDatePicker(false);
-    floatingPreviewPinnedRef.current = false;
-    setFloatingPreviewTop(null);
   };
 
   useEffect(() => {
     if (!showForm) return;
-    floatingPreviewPinnedRef.current = false;
-    setFloatingPreviewTop(null);
     setFloatingPreviewSegmentId('__primary__');
   }, [showForm]);
-
-  const clampFloatingPreviewTop = (requestedTop: number) => {
-    const drawer = editorDrawerRef.current;
-    const preview = floatingPreviewRef.current;
-    if (!drawer || !preview) return Math.max(8, requestedTop);
-    const visibleHeight = Math.min(preview.offsetHeight, Math.max(0, drawer.clientHeight - 16));
-    const maxTop = Math.max(8, drawer.clientHeight - visibleHeight - 8);
-    return Math.min(Math.max(8, requestedTop), maxTop);
-  };
-
-  const handleFloatingPreviewPointerDown = (event: any) => {
-    if (event.button !== undefined && event.button !== 0) return;
-    const drawer = editorDrawerRef.current;
-    const preview = floatingPreviewRef.current;
-    if (!drawer || !preview) return;
-    const drawerRect = drawer.getBoundingClientRect();
-    const previewRect = preview.getBoundingClientRect();
-    floatingPreviewDragRef.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      startTop: previewRect.top - drawerRect.top,
-      dragged: false,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const handleFloatingPreviewPointerMove = (event: any) => {
-    const drag = floatingPreviewDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const offsetY = event.clientY - drag.startY;
-    if (!drag.dragged && Math.abs(offsetY) < 4) return;
-    drag.dragged = true;
-    floatingPreviewPinnedRef.current = true;
-    event.preventDefault();
-    setFloatingPreviewTop(clampFloatingPreviewTop(drag.startTop + offsetY));
-  };
-
-  const finishFloatingPreviewDrag = (event: any) => {
-    const drag = floatingPreviewDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    floatingPreviewDragRef.current = null;
-  };
-
-  const handleEditorContentScroll = (event: any) => {
-    if (floatingPreviewPinnedRef.current) return;
-    // 编辑上半段时卡片靠下，滚入下半段后自动靠上，始终让当前输入区留出空间。
-    const nextTop = event.currentTarget.scrollTop > 280 ? 12 : null;
-    setFloatingPreviewTop(current => current === nextTop ? current : nextTop);
-  };
 
   const renderFloatingLiveOrderPreview = () => {
                 // 构造预览用的 order 对象，字段名与数据库/后端返回保持一致
@@ -4504,7 +4445,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
           <div
-            ref={editorDrawerRef}
             className="relative bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden"
             style={{ overscrollBehavior: 'contain' }}
             onChangeCapture={event => {
@@ -4543,7 +4483,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </button>
               </div>
             )}
-            <div onScroll={handleEditorContentScroll} className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
               {isCollaborativeOrderEdit && editorViewTargets.length > 0 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
                   <div className="mb-1 flex items-center justify-between gap-3">
@@ -4583,6 +4523,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </select>
                 </div>
               )}
+              <section data-editor-preview className="space-y-1.5">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-xs font-semibold text-slate-600">实时预览</span>
+                  <span className="text-[10px] text-slate-400">随页面滚动</span>
+                </div>
+                {renderFloatingLiveOrderPreview()}
+              </section>
               <>
               {editingOrder?.id && activeJointOrderTarget && (
                 <section data-joint-order-segments className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3">
@@ -7140,28 +7087,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       ? '保存修改'
                       : '确认添加'}
               </button>
-            </div>
-            </div>
-            <div
-              ref={floatingPreviewRef}
-              data-editor-preview
-              className="absolute left-5 right-5 z-30"
-              style={{
-                top: floatingPreviewTop === null ? undefined : floatingPreviewTop,
-                bottom: floatingPreviewTop === null ? 14 : undefined,
-                maxHeight: 'calc(100% - 28px)',
-                overflowY: 'auto',
-                overscrollBehavior: 'contain',
-                touchAction: 'none',
-                cursor: 'ns-resize',
-              }}
-              onPointerDown={handleFloatingPreviewPointerDown}
-              onPointerMove={handleFloatingPreviewPointerMove}
-              onPointerUp={finishFloatingPreviewDrag}
-              onPointerCancel={finishFloatingPreviewDrag}
-              aria-label="实时订单预览，可上下拖动定位"
-            >
-              {renderFloatingLiveOrderPreview()}
+              </div>
             </div>
           </div>
         </div>
