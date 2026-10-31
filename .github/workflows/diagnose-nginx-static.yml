@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: 检出恢复配置
+        uses: actions/checkout@v4
+
       - name: 配置 SSH 密钥
         run: |
           set -euo pipefail
