@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-01
+// 生成时间：2026-11-02
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9852,5 +9852,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-31T13:28:17Z", type: "fix", cleanMessage: "reuse stable artifacts on release" },
     { date: "2026-10-31T13:37:38Z", type: "fix", cleanMessage: "hardlink unchanged build assets" },
     { date: "2026-10-31T13:53:13Z", type: "fix", cleanMessage: "activate managed nginx static route" },
+  ],
+  "2026-11-01": [
+    { date: "2026-10-31T20:42:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-01T04:05:18Z", type: "feat", cleanMessage: "add segment display controls" },
+    { date: "2026-11-01T04:40:42Z", type: "fix", cleanMessage: "align nginx app upstream port" },
+    { date: "2026-11-01T04:45:06Z", type: "fix", cleanMessage: "serve release assets through app" },
+    { date: "2026-11-01T07:06:50Z", type: "feat", cleanMessage: "add coin-native collateral mode" },
+  ],
+  "2026-11-02": [
+    { date: "2026-11-01T18:56:36Z", type: "feat", cleanMessage: "add OKX commission workspace" },
   ],
 };
