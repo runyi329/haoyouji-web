@@ -27,6 +27,7 @@ import {
   copyFunderNoteText,
   NoteAvatar,
   FunderOrderCard,
+  formatFunderCollateralGap,
   getFunderCollateralRiskFormulaForDisplay,
   OwnerCollaborationInfoButton,
 } from "./FunderOrderCard";
@@ -1405,6 +1406,7 @@ export function FunderOrderCardV2Silver({
   const cardUsesPrincipalCoverage = cardCollateralRiskFormula === 'principal_coverage';
   const cardUsesFloatingPnl = cardCollateralRiskFormula === 'floating_pnl';
   const cardUsesInitialPrincipal = cardCollateralRiskFormula === 'initial_principal';
+  const cardUsesCoinNativeCollateral = cardCollateralRiskFormula === 'coin_native_collateral';
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
     ? cardDisplayConfig.primaryAssetDisplay
@@ -1771,9 +1773,11 @@ export function FunderOrderCardV2Silver({
   const combinedCollateralValueU = localWalletCollateralValueU === null || (hasExternalCollateral && fc2977CollateralValueU === null)
     ? null
     : localWalletCollateralValueU + (hasExternalCollateral ? (fc2977CollateralValueU ?? 0) : 0);
-  // 四种口径分别计算；“初始本金”直接取订单原始融资金额，不读取担保物、行情或浮盈。
+  // 五种口径分别计算；“初始本金”直接取订单原始融资金额；币本位担保暂只读取真实担保物。
   const cardInitialFinancingPrincipalU = Number.isFinite(storedAmountUsdt) && storedAmountUsdt > 0 ? storedAmountUsdt : null;
-  const exposure = cardUsesInitialPrincipal
+  const exposure = cardUsesCoinNativeCollateral
+    ? localWalletCollateralValueU
+    : cardUsesInitialPrincipal
     ? (cardInitialFinancingPrincipalU === null ? null : -cardInitialFinancingPrincipalU - silverAccruedInterestU + silverPaidInterestU)
     : _isOptCard
     ? (isSelfFundedOption
@@ -1790,6 +1794,8 @@ export function FunderOrderCardV2Silver({
         : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU);
   const fc2977FinalGapU = !hasExternalCollateral
     ? null
+    : cardUsesCoinNativeCollateral
+      ? combinedCollateralValueU
     : cardUsesInitialPrincipal
       ? (cardInitialFinancingPrincipalU === null ? null : -cardInitialFinancingPrincipalU - fc2977AccruedInterestU + fc2977PaidInterestU)
       : cardUsesPrincipalCoverage
@@ -2692,7 +2698,7 @@ export function FunderOrderCardV2Silver({
                                 <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
                                 <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                   {allHaveGap
-                                    ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                    ? <>{formatFunderCollateralGap(totalColl)} + ({totalRequired >= 0 ? '+' : ''}{formatFunderCollateralGap(totalRequired)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} u</span></>
                                     : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                 </div>
                               </div>
@@ -2701,7 +2707,7 @@ export function FunderOrderCardV2Silver({
                                 <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价値</div>
                                 <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                   {allHaveGap
-                                    ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                    ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                     : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                 </div>
                                 <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
@@ -2719,6 +2725,7 @@ export function FunderOrderCardV2Silver({
                               <div className="space-y-0">
                                 {((sharedPoolInfo as any).orders ?? []).map((o: any, _idx: number, _arr: any[]) => {
                                   const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
+                                  const isCoinNativeCollateral = o.collateralRiskFormula === 'coin_native_collateral';
                                   const gap = Number(o.collateralRequired);
                                   const gapKnown = Number.isFinite(gap);
                                   return (
@@ -2729,8 +2736,10 @@ export function FunderOrderCardV2Silver({
                                         <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                         {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {String(o.coin).toUpperCase() === 'BTC' ? Number(o.quantity).toFixed(2) : formatCoinQtyFunder(o.quantity, String(o.coin || ''))}</span> : null}
+                                        {isCoinNativeCollateral && <div className="ml-5 mt-0.5 text-[10px]" style={{ color: '#6B7280' }}>订单盈亏 0.00 u</div>}
                                       </div>
                                       <div className="text-right">
+                                        {isCoinNativeCollateral && gapKnown && <div className="text-[10px]" style={{ color: '#6B7280' }}>利息暂不计入</div>}
                                         {gapKnown
                                           ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                           : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
@@ -2746,7 +2755,7 @@ export function FunderOrderCardV2Silver({
                                   <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                     <span style={{ color: '#374151' }}>合计持仓差额</span>
                                     {allKnown
-                                      ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)} u</span>
+                                      ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{formatFunderCollateralGap(totalRequired)} u</span>
                                       : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                   </div>
                                 );
@@ -2841,7 +2850,7 @@ export function FunderOrderCardV2Silver({
                             <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
                               <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
                               {nonSharedGapReady
-                                ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                                ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{formatFunderCollateralGap(nonSharedGapTotal)} u</span>
                                 : <span className="font-mono shrink-0" style={{ color: '#9CA3AF' }}>加载中...</span>}
                             </div>
                           </div>
@@ -2849,7 +2858,7 @@ export function FunderOrderCardV2Silver({
                         {/* 共享担保计算说明：与订单模式保持一致 */}
                         <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                           <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                          <div>• <strong>每张订单缺口</strong>：担保差值 = 担保物 − 买入价值 − 待结利息 + 已结利息；买入价值全额 = −买入价值 − 待结利息 + 已结利息。</div>
+                          <div>• <strong>每张订单缺口</strong>：担保差值 = 担保物 − 买入价值 − 待结利息 + 已结利息；币本位担保 = 第③项订单盈亏与利息均固定为0，真实担保物仍在第④项汇总。</div>
                           <div>• <strong>总计风险敞口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
                           <div>• <strong>保证金比例</strong> = 风险敞口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
                           <div>• <strong>共享担保</strong>仅适用于“担保差值”订单；“买入价值全额”不以担保物抵扣。</div>
@@ -2884,7 +2893,7 @@ export function FunderOrderCardV2Silver({
                                 <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
                                 <div className="font-mono text-xs" style={{ color: '#6B7280' }}>
                                   {allHaveGap
-                                    ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                    ? <>{formatFunderCollateralGap(totalColl)} + ({totalRequired >= 0 ? '+' : ''}{formatFunderCollateralGap(totalRequired)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} u</span></>
                                     : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                 </div>
                               </div>
@@ -2893,7 +2902,7 @@ export function FunderOrderCardV2Silver({
                                 <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敎口 ÷ 总订单买入价値</div>
                                 <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                   {allHaveGap
-                                    ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                    ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                     : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                 </div>
                                 <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
@@ -2962,7 +2971,7 @@ export function FunderOrderCardV2Silver({
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
                   <span className="inline-block text-right leading-tight" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {finalExposureGapU === null ? <span className="block text-[10px]" style={{ color: TXT_SEC }}>加载中...</span> : <><span className="block">{isSufficient ? '+' : '-'}{Math.abs(finalExposureGapU).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                    {finalExposureGapU === null ? <span className="block text-[10px]" style={{ color: TXT_SEC }}>加载中...</span> : <><span className="block">{isSufficient ? '+' : '-'}{formatFunderCollateralGap(Math.abs(finalExposureGapU))} u</span>
                     {cardCollateralGapApprox !== 'hidden' && (
                       <span className="block mt-0.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>≈ {cardCollateralGapApprox === 'CNY'
                         ? `${(finalExposureGapU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
@@ -2985,6 +2994,13 @@ export function FunderOrderCardV2Silver({
                               = {(optCurrentValue ?? 0).toFixed(2)}（期权标记价 × 持有张数） = <strong style={{ color: '#16A34A' }}>+{(finalExposureGapU ?? 0).toFixed(2)} u</strong>
                             </div>
                           </>
+                        ) : cardUsesCoinNativeCollateral ? (
+                          <>
+                            <div>币本位担保：只计真实担保物；订单盈亏与正负利息均固定为 0</div>
+                            <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
+                              = {finalExposureGapU === null ? '---' : formatFunderCollateralGap(finalExposureGapU)}（真实担保物） + 0.00（订单盈亏；利息暂不计入） = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{finalExposureGapU === null ? '加载中...' : `${finalExposureGapU >= 0 ? '+' : ''}${formatFunderCollateralGap(finalExposureGapU)} u`}</strong>
+                            </div>
+                          </>
                         ) : (
                           <>
                             <div>担保缺口 = 担保总值 + 浮动盈亏 − 待结利息 + 已结利息</div>
@@ -2994,7 +3010,7 @@ export function FunderOrderCardV2Silver({
                               {` − ${displayAccrued.toFixed(2)}`}
                               {` + ${displayPaid.toFixed(2)}`}
                               {` = `}
-                              <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{finalExposureGapU === null ? '加载中...' : `${finalExposureGapU >= 0 ? '+' : ''}${finalExposureGapU.toFixed(2)} u`}</strong>
+                              <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{finalExposureGapU === null ? '加载中...' : `${finalExposureGapU >= 0 ? '+' : ''}${formatFunderCollateralGap(finalExposureGapU)} u`}</strong>
                             </div>
                           </>
                         )}
@@ -3593,12 +3609,15 @@ export function FunderLenderCardSilver({
   const lenderUsesPrincipalCoverage = lenderCollateralRiskFormula === 'principal_coverage';
   const lenderUsesFloatingPnl = lenderCollateralRiskFormula === 'floating_pnl';
   const lenderUsesInitialPrincipal = lenderCollateralRiskFormula === 'initial_principal';
+  const lenderUsesCoinNativeCollateral = lenderCollateralRiskFormula === 'coin_native_collateral';
   // 担保减值口径扣真实买入价值；买入价缺失时才回退保存金额。
   const lenderCoverageBaseU = Number(buyValue || storedAmountUsdt || 0);
   // 四种口径：担保差值、担保物+浮盈、买入价值全额、初始融资金额。
   // 初始本金始终直接使用订单原始 amount 的统一U值，不读取担保物、行情或浮盈。
   const initialFinancingPrincipalU = Number.isFinite(storedAmountUsdt) && storedAmountUsdt > 0 ? storedAmountUsdt : null;
-  const collateralGap = lenderUsesInitialPrincipal
+  const collateralGap = lenderUsesCoinNativeCollateral
+    ? collateralValue
+    : lenderUsesInitialPrincipal
     ? (initialFinancingPrincipalU === null ? null : -initialFinancingPrincipalU - accruedInU + paidInU)
     : _lnIsOpt
     ? (lenderIsSelfFundedOption
@@ -3618,6 +3637,8 @@ export function FunderLenderCardSilver({
   // 外部37号担保物与浮盈按已选口径组合，不能一律当作“浮盈+担保物”。
   const lnExternalFinalGapU = !hasExternalCollateral
     ? null
+    : lenderUsesCoinNativeCollateral
+      ? combinedCollateralValueU
     : lenderUsesInitialPrincipal
       ? (initialFinancingPrincipalU === null ? null : -initialFinancingPrincipalU - accruedInU + paidInU)
       : lenderUsesPrincipalCoverage
@@ -4233,7 +4254,7 @@ export function FunderLenderCardSilver({
                                         <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                           <span style={{ color: '#374151' }}>合计缺口需求</span>
                                           {allKnown
-                                            ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)} u</span>
+                                            ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{formatFunderCollateralGap(totalRequired)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                         </div>
                                       );
@@ -4280,7 +4301,7 @@ export function FunderLenderCardSilver({
                                       <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
                                       <div className="font-mono text-xs" style={{ color: '#6B7280' }}>
                                         {allHaveGap
-                                          ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                          ? <>{formatFunderCollateralGap(totalColl)} + ({totalRequired >= 0 ? '+' : ''}{formatFunderCollateralGap(totalRequired)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} u</span></>
                                           : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                       </div>
                                     </div>
@@ -4289,7 +4310,7 @@ export function FunderLenderCardSilver({
                                       <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敎口 ÷ 总订单买入价値</div>
                                       <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                         {allHaveGap
-                                          ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                          ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                           : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                       </div>
                                       <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
@@ -4302,14 +4323,18 @@ export function FunderLenderCardSilver({
                             <>
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderUsesPrincipalCoverage ? '① 买入价值' : lenderUsesFloatingPnl ? '① 浮动盈亏' : '① 买入价值全额'}</div>
-                                <div>{lenderUsesPrincipalCoverage
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderUsesCoinNativeCollateral ? '① 订单盈亏' : lenderUsesPrincipalCoverage ? '① 买入价值' : lenderUsesFloatingPnl ? '① 浮动盈亏' : '① 买入价值全额'}</div>
+                                <div>{lenderUsesCoinNativeCollateral
+                                  ? '币本位担保：订单本金、币价涨跌与正负利息均暂不计入'
+                                  : lenderUsesPrincipalCoverage
                                   ? '担保差值：担保物可抵扣买入价值及利息'
                                   : lenderUsesFloatingPnl
                                     ? '担保＋浮盈：担保物与浮动盈亏共同覆盖利息'
                                     : '买入价值全额：本金已借出，买入价值及利息不以担保物抵扣'}</div>
                                 <div className="mt-1 font-mono">
-                                  {lenderUsesPrincipalCoverage
+                                  {lenderUsesCoinNativeCollateral
+                                    ? <span style={{ color: '#3B82F6' }}>= 0.00 U（订单盈亏）</span>
+                                    : lenderUsesPrincipalCoverage
                                     ? <span style={{ color: '#3B82F6' }}>= −{lenderCoverageBaseU.toFixed(2)} U（买入价值）</span>
                                     : lenderUsesFloatingPnl
                                       ? <span style={{ color: '#3B82F6' }}>{floatPnl === null ? '浮盈加载中...' : `= ${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)} U`}</span>
@@ -4345,7 +4370,9 @@ export function FunderLenderCardSilver({
                               {collateralGap !== null && (
                                 <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                                   <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
-                                  <div>{lenderUsesInitialPrincipal
+                                  <div>{lenderUsesCoinNativeCollateral
+                                    ? '担保物市值 + 订单盈亏 0（利息暂不计入）'
+                                    : lenderUsesInitialPrincipal
                                     ? '0 − 初始融资金额 − 待结利息(U) + 已结利息(U)（不计担保物、市价或浮动盈亏）'
                                     : lenderIsSelfFundedOption
                                     ? '自有资产期权仅采用实时合约价值，不扣权利金、不叠加利息或担保物'
@@ -4358,6 +4385,9 @@ export function FunderLenderCardSilver({
                                   <div className="mt-1 font-mono">
                                     {(() => {
                                       const gap = collateralGap!;
+                                      if (lenderUsesCoinNativeCollateral) {
+                                        return <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)}（担保物） + 0.00（订单盈亏；利息暂不计入） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralGap(gap)} U</strong></span>;
+                                      }
                                       if (lenderUsesInitialPrincipal) {
                                         return <span style={{ color: '#3B82F6' }}>= 0 − {(initialFinancingPrincipalU ?? 0).toFixed(2)}（初始融资金额） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
                                       }
@@ -4404,7 +4434,7 @@ export function FunderLenderCardSilver({
                         lenderFinalGapU !== null ? (
                           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                             <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lenderFinalGapU >= 0 ? '充足' : '不足'}</span>
-                            <span style={{ color: TXT_PRI }}>{lenderFinalGapU >= 0 ? '+' : '-'}{Math.abs(lenderFinalGapU).toFixed(2)} U</span>
+                            <span style={{ color: TXT_PRI }}>{lenderFinalGapU >= 0 ? '+' : '-'}{formatFunderCollateralGap(Math.abs(lenderFinalGapU))} U</span>
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
@@ -4416,13 +4446,13 @@ export function FunderLenderCardSilver({
                         return gapKnown
                           ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                               <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{gapSufficient ? '充足' : '不足'}</span>
-                              <span style={{ color: TXT_PRI }}>{gapSufficient ? '+' : ''}{Number(displayGap).toFixed(2)} U</span>
+                              <span style={{ color: TXT_PRI }}>{gapSufficient ? '+' : ''}{formatFunderCollateralGap(Number(displayGap))} U</span>
                             </span>
                           : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>;
                       })() : (
                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                           <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
-                          <span style={{ color: TXT_PRI }}>{isSufficient ? '+' : ''}{fmt(lenderFinalGapU, 2)} U</span>
+                          <span style={{ color: TXT_PRI }}>{isSufficient ? '+' : ''}{formatFunderCollateralGap(lenderFinalGapU)} U</span>
                         </span>
                       )}
                     </div>

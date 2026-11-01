@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search, Pin, PinOff } from "lucide-react";
 import { toast } from "sonner";
-import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
+import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { calculateFunderInterestDays, formatFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
 
@@ -841,13 +841,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const effectivePrincipalLentOut = formData.principalLentOut && !isSelfFundedAsset;
   // “本金状态”只决定订单标题；担保缺口另由管理员保存的计算口径决定。
   // 历史订单未保存新字段时，严格按过去的本金状态回退，避免余额跳变。
+  // 第五种“币本位担保”只适用于52号账本的数字币现货订单。资产切换后不保留
+  // 无效选择，保存时会使用下方回退后的有效口径，避免股票/期权误写入该值。
+  const canUseCoinNativeCollateralFormula = ledgerId === 52 && formData.assetType === 'crypto';
   const explicitCollateralRiskFormula = displayConfig.collateralRiskFormula === 'principal_coverage'
     || displayConfig.collateralRiskFormula === 'floating_pnl'
     || displayConfig.collateralRiskFormula === 'full_value'
     || displayConfig.collateralRiskFormula === 'initial_principal'
     ? displayConfig.collateralRiskFormula
-    : null;
-  // 四种担保口径：担保差值、担保物+浮盈、持仓全额、初始本金。旧的 floating_pnl
+    : canUseCoinNativeCollateralFormula && displayConfig.collateralRiskFormula === 'coin_native_collateral'
+      ? 'coin_native_collateral'
+      : null;
+  // 五种担保口径：担保差值、担保物+浮盈、持仓全额、初始本金、币本位担保。旧的 floating_pnl
   // 保持“担保物+浮盈”的既有含义，避免37号引用订单的风险数值被改写。
   // 资金属性只负责顶部展示标签，不能覆盖管理员在此处选择的担保计算口径。
   const collateralRiskFormula = explicitCollateralRiskFormula
@@ -855,6 +860,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
   const usesInitialPrincipalFormula = collateralRiskFormula === 'initial_principal';
+  const usesCoinNativeCollateralFormula = collateralRiskFormula === 'coin_native_collateral';
   const amountDisplayLabel = effectivePrincipalLentOut
     ? '借出本金'
     : isSelfFundedAsset
@@ -2406,6 +2412,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 本金状态只负责标题；此处严格依照担保缺口所选公式计算。
   const previewUsesPrincipalCoverage = usesPrincipalCoverageFormula;
   const previewUsesFloatingPnl = usesFloatingPnlFormula;
+  const previewUsesCoinNativeCollateral = usesCoinNativeCollateralFormula;
   const previewFloatingPnlU = useMemo(() => {
     // 股票的37号引用与手工组合需要异步行情；由下方实时订单卡计算，避免先以0误导。
     if (formData.assetType === 'stock' || formData.assetType === 'crypto_option') return null;
@@ -2459,7 +2466,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
 
   // 担保差值：担保物 − 买入价值 − 待结 + 已结；浮盈口径：担保物 + 浮盈 − 待结 + 已结；
-  // 持仓全额：当前可变现市值 − 待结 + 已结；初始本金：0 − 初始融资金额 − 待结 + 已结。
+  // 持仓全额：当前可变现市值 − 待结 + 已结；初始本金：0 − 初始融资金额 − 待结 + 已结；
+  // 币本位担保：仅真实担保物（订单盈亏与正负利息暂不计入）。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -2469,6 +2477,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewPaidInterest / cnyRate : previewPaidInterest;
   }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
   const computedCollateralGap = useMemo(() => {
+    if (previewUsesCoinNativeCollateral) {
+      return computedCollateralValue;
+    }
     if (usesInitialPrincipalFormula) {
       return initialFinancingPrincipalU === null
         ? null
@@ -2489,7 +2500,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         : computedCollateralValue + previewFloatingPnlU - previewPendingInterestU + previewPaidInterestU;
     }
     return null;
-  }, [computedCollateralValue, collateralGapBaseValue, initialFinancingPrincipalU, previewUsesPrincipalCoverage, previewUsesFloatingPnl, previewFloatingPnlU, previewMarketValueU, previewPendingInterestU, previewPaidInterestU, usesInitialPrincipalFormula]);
+  }, [computedCollateralValue, collateralGapBaseValue, initialFinancingPrincipalU, previewUsesPrincipalCoverage, previewUsesFloatingPnl, previewUsesCoinNativeCollateral, previewFloatingPnlU, previewMarketValueU, previewPendingInterestU, previewPaidInterestU, usesInitialPrincipalFormula]);
 
   // 先用编辑器已知数据即时试算；订单卡完成股票、期权或37号实时数据加载后，会以同源结果覆盖。
   const localFormulaPreview = useMemo<FunderCollateralFormulaPreview>(() => {
@@ -2506,6 +2517,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const initialPrincipalGapU = initialFinancingPrincipalU !== null
       ? -initialFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU
       : null;
+    const coinNativeCollateralGapU = computedCollateralValue;
     return {
       collateralValueU: computedCollateralValue,
       baseValueU: hasBase ? collateralGapBaseValue : null,
@@ -2518,6 +2530,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       floatingPnlGapU,
       fullValueGapU,
       initialPrincipalGapU,
+      coinNativeCollateralGapU,
     };
   }, [computedCollateralValue, collateralGapBaseValue, initialFinancingPrincipalU, previewMarketValueU, previewFloatingPnlU, previewPendingInterestU, previewPaidInterestU]);
   const formulaPreviewInputKey = useMemo(() => JSON.stringify({
@@ -2557,7 +2570,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         && currentValues?.principalCoverageGapU === next.values.principalCoverageGapU
         && currentValues?.floatingPnlGapU === next.values.floatingPnlGapU
         && currentValues?.fullValueGapU === next.values.fullValueGapU
-        && currentValues?.initialPrincipalGapU === next.values.initialPrincipalGapU;
+        && currentValues?.initialPrincipalGapU === next.values.initialPrincipalGapU
+        && currentValues?.coinNativeCollateralGapU === next.values.coinNativeCollateralGapU;
       return unchanged ? current : next;
     });
   }, [formulaPreviewInputKey]);
@@ -4177,6 +4191,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const previewProfitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
                 const previewOrder: any = {
                   id: editingOrder?.id ?? -1,
+                  ledger_id: ledgerId,
                   order_no: editingOrder?.order_no ?? null,
                   user_id: formData.userId,
                   owner_label: isSnapshotScopedEdit ? ((editingOrder as any)?.owner_label || ownerLabel) : ownerLabel,
@@ -6540,7 +6555,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             ? '当前为担保＋浮盈：担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。'
                             : usesInitialPrincipalFormula
                               ? '当前为初始本金：0 − 订单原始融资金额 − 待结利息 + 已结利息；不计担保物、市价或浮动盈亏。'
-                              : '当前为持仓全额：当前可变现市值 − 待结利息 + 已结利息；不计额外担保物。'}
+                              : usesCoinNativeCollateralFormula
+                                ? '当前为币本位担保：只计真实担保物；订单盈亏与正负利息暂不计入，均固定为0。'
+                                : '当前为持仓全额：当前可变现市值 − 待结利息 + 已结利息；不计额外担保物。'}
                       </div>
                     )}
                 </div>
@@ -6566,6 +6583,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     <p className="text-[11px] leading-4 text-indigo-600">每段独立选择是否加入当前用户的全部共享订单。加入后以“订单号 · 第N段”单独列入共享池；本段手工和钱包担保仍按段归属、独立可编辑。</p>
                     {collateralRiskFormula === 'full_value' && <p className="text-[11px] leading-4 text-amber-700">持仓全额仍按本段市值与利息计算；若选择参加共享，本段会以独立口径列入跨订单共享明细，担保物不进入共享池。</p>}
                     {usesInitialPrincipalFormula && <p className="text-[11px] leading-4 text-amber-700">初始本金按 0 减订单原始融资金额，再减待结、加已结利息独立计算；可保留共享标记以便在说明中列示，但本段手工、钱包和37号担保均不进入共享池。</p>}
+                    {usesCoinNativeCollateralFormula && <p className="text-[11px] leading-4 text-indigo-700">币本位担保的订单盈亏与正负利息均固定为0；参加共享后，本段手工、钱包和37号担保仍会进入第④项共享担保物汇总。</p>}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 space-y-2">
@@ -6792,7 +6810,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           { value: 'floating_pnl', label: '担保＋浮盈', detail: '担保物 + 浮盈 ± 利息' },
                           { value: 'full_value', label: '持仓全额', detail: '实时市值 ± 利息，不计额外担保' },
                           { value: 'initial_principal', label: '初始本金', detail: '0 − 初始融资金额 ± 利息，不计担保/市价/盈亏' },
-                        ] as const).map(option => {
+                          ...(canUseCoinNativeCollateralFormula ? [{ value: 'coin_native_collateral', label: '币本位担保', detail: '仅真实担保物，本金/币价盈亏/利息均为0' }] : []),
+                        ]).map(option => {
                           const active = collateralRiskFormula === option.value;
                           return (
                             <button
@@ -6817,7 +6836,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <div className="mt-2 rounded-md border border-blue-100 bg-white p-2">
                         <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
                           <span>实时试算（U）</span>
-                          <span className="tabular-nums">担保 {formulaPreview.collateralValueU === null ? '加载中' : formulaPreview.collateralValueU.toFixed(2)} · 买入 {formulaPreview.baseValueU === null ? '待填写' : formulaPreview.baseValueU.toFixed(2)} · 本金 {formulaPreview.initialPrincipalU === null ? '待填写' : formulaPreview.initialPrincipalU.toFixed(2)} · 市值 {formulaPreview.marketValueU === null ? '加载中' : formulaPreview.marketValueU.toFixed(2)} · 待结 {formulaPreview.pendingInterestU === null ? '加载中' : formulaPreview.pendingInterestU.toFixed(2)} · 已结 {formulaPreview.paidInterestU === null ? '加载中' : formulaPreview.paidInterestU.toFixed(2)}</span>
+                          <span className="tabular-nums">担保 {formulaPreview.collateralValueU === null ? '加载中' : formulaPreview.collateralValueU.toFixed(2)} · 买入 {formulaPreview.baseValueU === null ? '待填写' : formulaPreview.baseValueU.toFixed(2)} · 本金 {formulaPreview.initialPrincipalU === null ? '待填写' : formulaPreview.initialPrincipalU.toFixed(2)} · 市值 {formulaPreview.marketValueU === null ? '加载中' : formulaPreview.marketValueU.toFixed(2)} · 待结 {formulaPreview.pendingInterestU === null ? '加载中' : formulaPreview.pendingInterestU.toFixed(2)} · 已结 {formulaPreview.paidInterestU === null ? '加载中' : formulaPreview.paidInterestU.toFixed(2)}{canUseCoinNativeCollateralFormula ? ' · 币本位订单盈亏 0.00' : ''}</span>
                         </div>
                         <div className="space-y-1.5 text-[10px] leading-4">
                           {([
@@ -6825,14 +6844,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             { value: 'floating_pnl', label: '担保＋浮盈', formula: `担保物 + ${formulaPreview.floatingPnlU === null ? '实时浮盈' : `${formulaPreview.floatingPnlU >= 0 ? '+' : ''}${formulaPreview.floatingPnlU.toFixed(2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.floatingPnlGapU },
                             { value: 'full_value', label: '持仓全额', formula: `${formulaPreview.marketValueU === null ? '实时可变现市值' : `${formulaPreview.marketValueU >= 0 ? '+' : ''}${formulaPreview.marketValueU.toFixed(2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.fullValueGapU },
                             { value: 'initial_principal', label: '初始本金', formula: `0 − ${formulaPreview.initialPrincipalU === null ? '初始融资金额' : `${formulaPreview.initialPrincipalU.toFixed(2)} u`} − 待结利息 + 已结利息（不计担保/市价/盈亏）`, result: formulaPreview.initialPrincipalGapU },
-                          ] as const).map(item => {
+                            ...(canUseCoinNativeCollateralFormula ? [{ value: 'coin_native_collateral', label: '币本位担保', formula: `担保物 + 订单盈亏 0.00 u（利息暂不计入）`, result: formulaPreview.coinNativeCollateralGapU }] : []),
+                          ]).map(item => {
                             const active = collateralRiskFormula === item.value;
                             const resultColor = item.result === null ? 'text-slate-400' : item.result >= 0 ? 'text-red-600' : 'text-emerald-600';
                             return (
                               <div key={`formula-preview-${item.value}`} className={`rounded px-1.5 py-1 ${active ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50'}`}>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className={`font-semibold ${active ? 'text-blue-700' : 'text-slate-600'}`}>{item.label}{active ? '（已选）' : ''}</span>
-                                  <span className={`shrink-0 font-mono font-semibold tabular-nums ${resultColor}`}>{item.result === null ? '实时数据加载中' : `${item.result >= 0 ? '+' : ''}${item.result.toFixed(2)} u`}</span>
+                                  <span className={`shrink-0 font-mono font-semibold tabular-nums ${resultColor}`}>{item.result === null ? '实时数据加载中' : `${item.result >= 0 ? '+' : ''}${formatFunderCollateralGap(item.result)} u`}</span>
                                 </div>
                                 <div className="text-slate-500">{item.formula}</div>
                               </div>

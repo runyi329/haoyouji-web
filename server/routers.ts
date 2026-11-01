@@ -1955,26 +1955,32 @@ function normalizeFunderPrincipalLentOut(requested: unknown, displayConfig: unkn
   return !isSelfFundedFunderOrder(displayConfig) && requested === true;
 }
 
+type FunderCollateralRiskFormula = 'principal_coverage' | 'floating_pnl' | 'full_value' | 'initial_principal' | 'coin_native_collateral';
+function canUseCoinNativeCollateralFormula(ledgerId: unknown, assetType: unknown): boolean {
+  return Number(ledgerId) === 52 && String(assetType || '').trim().toLowerCase() === 'crypto';
+}
+function normalizeFunderCollateralRiskFormulaDisplayConfig(displayConfig: unknown, ledgerId: unknown, assetType: unknown, options: { rejectInvalid?: boolean } = {}): Record<string, any> {
+  const config = { ...parseFunderDisplayConfig(displayConfig) };
+  if (String(config.collateralRiskFormula || '').trim().toLowerCase() === 'coin_native_collateral' && !canUseCoinNativeCollateralFormula(ledgerId, assetType)) {
+    if (options.rejectInvalid) throw new TRPCError({ code: 'BAD_REQUEST', message: '币本位担保仅适用于52号账本的数字币订单' });
+    delete config.collateralRiskFormula;
+  }
+  return config;
+}
 /**
  * 担保计算口径独立于“本金状态”。新订单由管理员在
  * display_config.collateralRiskFormula 中明确选择；没有该字段的历史订单
  * 继续按原 principal_lent_out 回退，避免历史订单的担保余额发生跳变。
  */
-function getFunderCollateralRiskFormula(
-  principalLentOut: unknown,
-  displayConfig: unknown,
-): 'principal_coverage' | 'floating_pnl' | 'full_value' | 'initial_principal' {
+function getFunderCollateralRiskFormula(principalLentOut: unknown, displayConfig: unknown, assetType?: unknown, ledgerId?: unknown): FunderCollateralRiskFormula {
   const config = parseFunderDisplayConfig(displayConfig);
   const selected = String(config.collateralRiskFormula || '').trim().toLowerCase();
-  // 初始本金与担保物、浮盈和资金属性均无关，所有订单类型均可显式选择。
   if (selected === 'initial_principal') return selected;
+  if (selected === 'coin_native_collateral' && canUseCoinNativeCollateralFormula(ledgerId, assetType)) return selected;
   if (!isSelfFundedFunderOrder(config)) {
     if (selected === 'principal_coverage' || selected === 'floating_pnl' || selected === 'full_value') return selected;
   }
-  // 历史 floating_pnl 代表“担保物+浮动盈亏”，绝不重新解释成全额缺口。
-  return normalizeFunderPrincipalLentOut(principalLentOut, config)
-    ? 'principal_coverage'
-    : 'floating_pnl';
+  return normalizeFunderPrincipalLentOut(principalLentOut, config) ? 'principal_coverage' : 'floating_pnl';
 }
 
 // 默认情况下，参与者与主订单共用同一组担保物。参与者的金额、利率、展示配置、备注等
@@ -23740,7 +23746,21 @@ ${klinesSummary}
           // memberKey 是跨订单池的稳定身份，不能只用物理 order_id，否则各段会相互覆盖。
           const allOwnerOrders = rawOrders.flatMap((physicalOrder: any) => {
             const snapshot = parseFunderParticipantSnapshot(physicalOrder._shared_pool_order_snapshot) || {};
-            const baseOrder = { ...physicalOrder, ...snapshot, _sharedPoolParticipantUserId: null };
+            // 共享池是订单拥有者本人视图时，担保口径必须以主订单刚保存的配置为准。
+            // 旧拥有者快照可能遗留上一种公式；只让它保留个人展示字段，不能反向覆盖主订单口径。
+            const snapshotDisplayConfig = parseFunderDisplayConfig(snapshot.display_config);
+            const physicalFormula = getFunderCollateralRiskFormula(
+              physicalOrder.principal_lent_out === 1 || physicalOrder.principal_lent_out === true,
+              physicalOrder.display_config,
+              physicalOrder.asset_type,
+              input.ledgerId,
+            );
+            const baseOrder = {
+              ...physicalOrder,
+              ...snapshot,
+              display_config: JSON.stringify({ ...snapshotDisplayConfig, collateralRiskFormula: physicalFormula }),
+              _sharedPoolParticipantUserId: null,
+            };
             const memberBase = `${Number(physicalOrder.id)}:`;
             const rawSegments = Array.isArray(snapshot.joint_order_segments)
               ? snapshot.joint_order_segments
@@ -23798,7 +23818,7 @@ ${klinesSummary}
             if (order?.collateral_share_mode !== 'self') return false;
             return getFunderCollateralRiskFormula(
               order?.principal_lent_out === 1 || order?.principal_lent_out === true,
-              order?.display_config,
+              order?.display_config, order?.asset_type, input.ledgerId,
             ) !== 'initial_principal';
           };
           const orders = allOwnerOrders.filter(isLegacySharedEligible);
@@ -24415,11 +24435,12 @@ ${klinesSummary}
             );
             const collateralRiskFormula = getFunderCollateralRiskFormula(
               o.principal_lent_out === 1 || o.principal_lent_out === true,
-              displayConfig,
+              displayConfig, o.asset_type, input.ledgerId,
             );
             const usesPrincipalCoverage = collateralRiskFormula === 'principal_coverage';
             const usesFloatingPnl = collateralRiskFormula === 'floating_pnl';
             const usesInitialPrincipal = collateralRiskFormula === 'initial_principal';
+            const usesCoinNativeCollateral = collateralRiskFormula === 'coin_native_collateral';
             // 直接使用订单原始融资金额。数字币和期权的 amount 已按U保存，即使展示币种为
             // 人民币也不能二次换算；仅股票订单保存人民币 amount 时才折算为统一U。
             // 没有金额的极早期订单才回退其已保存计息本金，绝不读市价。
@@ -24446,7 +24467,9 @@ ${klinesSummary}
               : manualStockFloatingPnlU !== null && Number.isFinite(manualStockFloatingPnlU)
                 ? manualStockFloatingPnlU
               : (holdingValueU !== null && Number.isFinite(holdingValueU) ? holdingValueU - collateralGapBaseU : null);
-            const collateralRequired = usesInitialPrincipal
+            const collateralRequired = usesCoinNativeCollateral
+              ? 0
+              : usesInitialPrincipal
               ? -initialFinancingPrincipalU - accruedInterestU + paidInterestU
               : usesFloatingPnl
               ? (riskFloatingPnlU === null ? null : riskFloatingPnlU - accruedInterestU + paidInterestU)
@@ -24630,7 +24653,10 @@ ${klinesSummary}
           const totalGap = totalCollateralRequired === null || totalCollateralValue === null
             ? null
             : totalCollateralRequired + totalCollateralValue;
-          const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => s + (Number(o.collateralGapBaseU) || Number(o.buyValue) || 0), 0);
+          const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => {
+            if (o.collateralRiskFormula === 'coin_native_collateral') return s;
+            return s + (Number(o.collateralGapBaseU) || Number(o.buyValue) || 0);
+          }, 0);
 
           return {
             orders: sharedOrderDetails,
@@ -25089,7 +25115,8 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_source JSON DEFAULT NULL`).catch(() => {});
-        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
+        const normalizedDisplayConfig = normalizeFunderCollateralRiskFormulaDisplayConfig(input.displayConfig, input.ledgerId, input.assetType, { rejectInvalid: input.displayConfig !== undefined });
+        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, normalizedDisplayConfig);
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -25105,7 +25132,7 @@ ${klinesSummary}
         }
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, collateral_source, principal_lent_out, option_info, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(normalizedDisplayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -26776,14 +26803,15 @@ ${klinesSummary}
           const exists = ((existRows[0] || existRows) as any[]).length > 0;
           if (!exists) isUnique = true;
         }
-        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
+        const normalizedDisplayConfig = normalizeFunderCollateralRiskFormulaDisplayConfig(input.displayConfig, input.ledgerId, input.assetType, { rejectInvalid: input.displayConfig !== undefined });
+        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, normalizedDisplayConfig);
         const frontendPlacement = normalizeFunderFrontendPlacement(input.frontendPlacement);
         if (!isValidFunderContractInterestPeriod(input.interestStartDate, input.contractInterestEndDate)) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '约定计息结束日不能早于计息开始日期' });
         }
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, contract_interest_end_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, frontend_placement, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.contractInterestEndDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${frontendPlacement}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.contractInterestEndDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(normalizedDisplayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${frontendPlacement}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
         const newOrderId = (insertResult as any)?.insertId || ((insertResult as any)?.[0] as any)?.insertId;
         return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
@@ -26870,13 +26898,15 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS contract_interest_end_date DATE DEFAULT NULL`).catch(() => {});
         const existingOrderRows = await db.execute(
-          sql`SELECT display_config, principal_lent_out, interest_start_date FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT display_config, principal_lent_out, asset_type, interest_start_date FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const existingOrder = (existingOrderRows[0]?.[0] ?? existingOrderRows[0]) as any;
-        const effectiveDisplayConfig = input.displayConfig !== undefined
-          ? input.displayConfig
-          : existingOrder?.display_config;
-        const isSelfFundedOrder = isSelfFundedFunderOrder(effectiveDisplayConfig);
+        const effectiveAssetType = input.assetType !== undefined ? input.assetType : existingOrder?.asset_type;
+        const effectiveDisplayConfig = input.displayConfig !== undefined ? input.displayConfig : existingOrder?.display_config;
+        const normalizedEffectiveDisplayConfig = normalizeFunderCollateralRiskFormulaDisplayConfig(effectiveDisplayConfig, input.ledgerId, effectiveAssetType, { rejectInvalid: input.displayConfig !== undefined });
+        const existingDisplayConfig = parseFunderDisplayConfig(existingOrder?.display_config);
+        const shouldPersistNormalizedDisplayConfig = input.displayConfig !== undefined || JSON.stringify(existingDisplayConfig) !== JSON.stringify(normalizedEffectiveDisplayConfig);
+        const isSelfFundedOrder = isSelfFundedFunderOrder(normalizedEffectiveDisplayConfig);
         const normalizedPrincipalLentOut = isSelfFundedOrder
           ? false
           : (input.principalLentOut === undefined
@@ -26910,7 +26940,7 @@ ${klinesSummary}
         // 特殊处理 showProfitShare
         if (input.showProfitShare !== undefined) { updateCols.push('show_profit_share = ?'); updateVals.push(input.showProfitShare ? 1 : 0); }
         if (input.commissionShare !== undefined) { updateCols.push('commission_share = ?'); updateVals.push(input.commissionShare || null); }
-        if (input.displayConfig !== undefined) { updateCols.push('display_config = ?'); updateVals.push(input.displayConfig ? JSON.stringify(input.displayConfig) : null); }
+        if (shouldPersistNormalizedDisplayConfig) { updateCols.push('display_config = ?'); updateVals.push(JSON.stringify(normalizedEffectiveDisplayConfig)); }
         if (input.assetType !== undefined) { updateCols.push('asset_type = ?'); updateVals.push(input.assetType || null); }
         if (input.ownerLabel !== undefined) { updateCols.push('owner_label = ?'); updateVals.push(input.ownerLabel || null); }
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
@@ -27110,11 +27140,9 @@ ${klinesSummary}
         const shouldSyncParticipantContractInterest = input.contractInterestEndDate !== undefined;
         // 物理第一段与其真实拥有者个人快照必须使用同一担保缺口口径。
         // 共享担保池按个人快照枚举成员；只更新主订单会使打开说明后重新读到旧公式。
-        const requestedCollateralRiskFormula = input.displayConfig !== undefined
-          ? String((input.displayConfig as any).collateralRiskFormula || '')
-          : '';
-        const shouldSyncPrimaryOwnerCollateralRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value', 'initial_principal']
-          .includes(requestedCollateralRiskFormula);
+        // displayConfig 被明确保存时，无论是切换、规范化大小写，还是清空显式口径，
+        // 都要以订单最终规范化后的实际公式覆盖主拥有者快照，不能让旧快照残留。
+        const shouldSyncPrimaryOwnerCollateralRiskFormula = input.displayConfig !== undefined;
         // 标签是整张订单的页眉信息，而不是某一位协作人的独立约定。
         // 主订单改动（包括删除最后一个标签传入 []）必须同步覆盖所有个人快照，
         // 否则列表会继续读取协作快照中的旧标签，造成“预览已删除、列表仍显示”。
@@ -27205,6 +27233,12 @@ ${klinesSummary}
             ) as any;
             const updatedOrder = Array.isArray(orderRows) ? orderRows[0] : null;
             if (!updatedOrder) throw new Error('订单不存在或已删除');
+            const authoritativeCollateralRiskFormula = getFunderCollateralRiskFormula(
+              updatedOrder.principal_lent_out === 1 || updatedOrder.principal_lent_out === true,
+              updatedOrder.display_config,
+              updatedOrder.asset_type,
+              input.ledgerId,
+            );
 
             const [participantRows] = await conn.execute(
               "SELECT id, user_id, role, display_config, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
@@ -27250,7 +27284,7 @@ ${klinesSummary}
                 // 只同步担保口径，不覆盖拥有者各自的下载、字段显示等个性化开关。
                 snapshot.display_config = JSON.stringify({
                   ...ownerDisplayConfig,
-                  collateralRiskFormula: requestedCollateralRiskFormula,
+                  collateralRiskFormula: authoritativeCollateralRiskFormula,
                 });
               }
               if (shouldSyncParticipantTags) {
@@ -28377,6 +28411,16 @@ ${klinesSummary}
             }, parentOrder),
             parentOrder,
           );
+          // 完整参与者保存也必须遵守与主订单相同的口径限制：第五类只允许52号数字币。
+          // 当本次显式提交无效值时返回错误；历史快照中的无效值则在下一次保存时安全清除。
+          const participantAssetType = snapshot.asset_type ?? parentOrder.asset_type;
+          const normalizedParticipantDisplayConfig = normalizeFunderCollateralRiskFormulaDisplayConfig(
+            snapshot.display_config,
+            input.ledgerId,
+            participantAssetType,
+            { rejectInvalid: p.displayConfig !== undefined },
+          );
+          snapshot.display_config = JSON.stringify(normalizedParticipantDisplayConfig);
           // 共同拥有者的个人订单页固定显示本人姓名；不再提供“显示全体拥有者”这一分支。
           if (isOwnerRole) {
             let ownerDisplayConfig: Record<string, any> = {};
@@ -28477,6 +28521,7 @@ ${klinesSummary}
         if (!snapshotSource) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
         // 此接口常被“佣金保存”单独调用。未携带的业务字段必须严格保留本人快照，
         // 不能因为 input.x 为 undefined 而被写成 null，进而造成其他开关/利息配置回退。
+        const normalizedParticipantDisplayConfig = input.displayConfig === undefined ? undefined : normalizeFunderCollateralRiskFormulaDisplayConfig(input.displayConfig, input.ledgerId, snapshotSource.asset_type, { rejectInvalid: true });
         const partialSnapshot: Record<string, any> = {
           ...(input.interestRate !== undefined ? { interest_rate_annual: input.interestRate || null } : {}),
           ...(input.interestBase !== undefined ? { interest_base: input.interestBase || null } : {}),
@@ -28485,7 +28530,7 @@ ${klinesSummary}
           ...(input.interestStartDate !== undefined ? { interest_start_date: input.interestStartDate || null } : {}),
           ...(input.contractInterestEndDate !== undefined ? { contract_interest_end_date: input.contractInterestEndDate || null } : {}),
           ...(input.interestRateCurrency !== undefined ? { interest_rate_currency: input.interestRateCurrency || null } : {}),
-          ...(input.displayConfig !== undefined ? { display_config: input.displayConfig || null } : {}),
+          ...(input.displayConfig !== undefined ? { display_config: JSON.stringify(normalizedParticipantDisplayConfig) } : {}),
           ...(input.buyDateOverride !== undefined ? { buy_date: input.buyDateOverride || null } : {}),
           ...(input.brokerNameOverride !== undefined ? { broker_name: input.brokerNameOverride || null } : {}),
           ...(input.brokerAccountOverride !== undefined ? { broker_account: input.brokerAccountOverride || null } : {}),
@@ -28802,7 +28847,7 @@ ${klinesSummary}
               };
             }
             const assetType = safeAssetType(raw?.asset_type);
-            const segmentDisplayConfig = safeDisplayConfig(raw?.display_config);
+            const segmentDisplayConfig = normalizeFunderCollateralRiskFormulaDisplayConfig(safeDisplayConfig(raw?.display_config), input.ledgerId, assetType, { rejectInvalid: true });
             const optionInfo = safeOptionInfo(raw?.option_info);
             if (assetType === 'crypto_option' && !optionInfo) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '期权第二段须完整填写Deribit到期日、行权价、权利金和张数' });
@@ -28885,6 +28930,8 @@ ${klinesSummary}
             ? mergedSnapshot.personal_header_label.replace(/\s+/g, ' ').trim().slice(0, 32)
             : null;
         }
+        const requestedSnapshotAssetType = (input.snapshot as any).asset_type ?? mergedSnapshot.asset_type ?? row.asset_type;
+        mergedSnapshot.display_config = normalizeFunderCollateralRiskFormulaDisplayConfig(mergedSnapshot.display_config, input.ledgerId, requestedSnapshotAssetType, { rejectInvalid: Object.prototype.hasOwnProperty.call(input.snapshot, 'display_config') });
         if (isSelfFundedFunderOrder(mergedSnapshot.display_config)) {
           mergedSnapshot.principal_lent_out = 0;
         }

@@ -118,19 +118,37 @@ function formatFunderFloatingPnlForDisplay(
 }
 
 /**
+ * 担保缺口显示专用：绝对值达到六位数时不再显示小数，避免手机端长数字挤压或换行。
+ * 只影响 UI 文案，不改变任何金额、计算或保存值；人民币沿用原先整数显示。
+ */
+export function formatFunderCollateralGap(value: unknown, currency: 'U' | 'CNY' = 'U'): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '--';
+  const fractionDigits = currency === 'CNY' || Math.abs(amount) >= 100_000 ? 0 : 2;
+  return amount.toLocaleString('zh-CN', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+/**
  * 本金状态只影响标题；担保缺口先读取单独保存的公式。
  * 未保存该字段的历史订单，继续以原“本金已借出”状态作为回退，避免历史数据跳变。
  */
-export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal_coverage' | 'floating_pnl' | 'full_value' | 'initial_principal' {
+export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal_coverage' | 'floating_pnl' | 'full_value' | 'initial_principal' | 'coin_native_collateral' {
   const rawPrincipalLentOut = order?.principal_lent_out === 1 || order?.principal_lent_out === true;
   try {
     const rawConfig = order?.display_config;
     const config = rawConfig ? (typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig) : {};
-    return config?.collateralRiskFormula === 'principal_coverage'
-      || config?.collateralRiskFormula === 'floating_pnl'
-      || config?.collateralRiskFormula === 'full_value'
-      || config?.collateralRiskFormula === 'initial_principal'
-      ? config.collateralRiskFormula
+    const selected = String(config?.collateralRiskFormula || '').trim().toLowerCase();
+    const assetType = String(order?.asset_type || order?.assetType || 'crypto').trim().toLowerCase();
+    const sourceLedgerId = Number(order?.ledger_id ?? order?.ledgerId ?? 52);
+    if (selected === 'coin_native_collateral' && sourceLedgerId === 52 && assetType === 'crypto') return selected;
+    return selected === 'principal_coverage'
+      || selected === 'floating_pnl'
+      || selected === 'full_value'
+      || selected === 'initial_principal'
+      ? selected
       : rawPrincipalLentOut
         ? 'principal_coverage'
         : 'floating_pnl';
@@ -678,6 +696,8 @@ export type FunderCollateralFormulaPreview = {
   floatingPnlGapU: number | null;
   fullValueGapU: number | null;
   initialPrincipalGapU: number | null;
+  /** 第五种口径：只计真实担保物；订单盈亏与正负利息暂不计入，固定为0。 */
+  coinNativeCollateralGapU: number | null;
 };
 
 export interface FunderOrderCardProps {
@@ -2141,6 +2161,7 @@ export function FunderOrderCard({
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
   const usesInitialPrincipalFormula = collateralRiskFormula === 'initial_principal';
+  const usesCoinNativeCollateralFormula = collateralRiskFormula === 'coin_native_collateral';
   // 初始本金直接读取订单已保存的融资金额，不复制到 display_config；它不是实时市价、
   // 浮盈或担保物，所有订单类型均沿用左侧融资金额的统一U值。
   const initialFinancingPrincipalU = Number.isFinite(financingAmountUsdt) && financingAmountUsdt > 0
@@ -2586,10 +2607,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const initialPrincipalExposure = initialFinancingPrincipalU === null
     ? null
     : -initialFinancingPrincipalU - accruedForRisk + paidInterestForRisk;
+  // 币本位担保暂只计真实担保物：本金、标的币价盈亏与正负利息均固定不计入。
+  // 因而共享弹框第③项固定为0，真实担保物仅在第④项统一汇总。
+  const coinNativeCollateralExposure = combinedCollateralValueU;
   // “担保−买入价值”始终扣真实买入价值，不能将计息/融资本金误作买入成本。
   const principalLentOutValueForRisk = collateralGapBaseForRisk;
   const optionExposure = isOptionOrder
-    ? (usesInitialPrincipalFormula
+    ? (usesCoinNativeCollateralFormula
+      ? coinNativeCollateralExposure
+      : usesInitialPrincipalFormula
       ? initialPrincipalExposure
       : usesPrincipalCoverageFormula
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
@@ -2599,6 +2625,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     : null;
   const exposure = isOptionOrder
     ? optionExposure
+    : usesCoinNativeCollateralFormula
+      ? coinNativeCollateralExposure
     : usesInitialPrincipalFormula
       ? initialPrincipalExposure
     : usesPrincipalCoverageFormula
@@ -2625,7 +2653,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const externalNonSharedGapU = usesConfiguredStockRiskData
     && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
-    ? usesInitialPrincipalFormula
+    ? usesCoinNativeCollateralFormula
+      ? linkedCollateralValueU
+      : usesInitialPrincipalFormula
       ? initialPrincipalExposure
       : usesPrincipalCoverageFormula
       ? (linkedCollateralValueU === null ? null : linkedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
@@ -2673,11 +2703,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const sharedOrderRiskFormula = collateralRiskFormula;
   const sharedOrderUsesPrincipalCoverage = sharedOrderRiskFormula === 'principal_coverage';
   const sharedOrderUsesFloatingPnl = sharedOrderRiskFormula === 'floating_pnl';
+  const sharedOrderUsesCoinNativeCollateral = sharedOrderRiskFormula === 'coin_native_collateral';
   const sharedOrderBorrowedValueU = (() => {
     // 两种口径均以真实买入价值为本金额度，不能改用标的实时市值。
     return sharedOrderGapBaseU > 0 ? sharedOrderGapBaseU : principalLentOutValueForRisk;
   })();
-  const sharedOrderExposure = usesInitialPrincipalFormula
+  const sharedOrderExposure = sharedOrderUsesCoinNativeCollateral
+    ? sharedOrderCollateralValueU
+    : usesInitialPrincipalFormula
     ? initialPrincipalExposure
     : isOptionOrder
     // 期权共享担保复用同一单订单口径。
@@ -2733,6 +2766,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           paidInterestU = Number(linkedPaidInterestCny) / cnyRate;
         }
       }
+      // 币本位担保的第③项固定为0；本金、标的行情和正负利息均暂不参与。
+      // 真实担保物仅在第④项统一加回，不能在这里重复计值。
+      if (poolOrder.collateralRiskFormula === 'coin_native_collateral') {
+        continue;
+      }
       const serverGapBaseU = Number(poolOrder.collateralGapBaseU);
       const gapBaseU = Number.isFinite(serverGapBaseU) && serverGapBaseU > 0
         ? serverGapBaseU
@@ -2775,7 +2813,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         holdingValueU = currentValue;
         stockContributionU = currentValue - (gapBaseU > 0 ? gapBaseU : buyValueU);
       }
-      const poolFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(poolOrder.collateralRiskFormula))
+      const poolFormula = ['principal_coverage', 'floating_pnl', 'full_value', 'coin_native_collateral'].includes(String(poolOrder.collateralRiskFormula))
         ? String(poolOrder.collateralRiskFormula)
         : ((poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1) ? 'principal_coverage' : 'floating_pnl');
       // 共享担保物会在循环外统一加一次：差值／全额先扣买入价值，浮盈口径先计浮动盈亏。
@@ -2802,7 +2840,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const jointInternalAccruedForRisk = hasExternalPendingInterest ? automaticAccruedForRisk : accruedForRisk;
   const jointInternalPaidForRisk = hasExternalPaidInterest ? totalPaidForRisk : paidInterestForRisk;
   const jointInternalRiskContribution = usesJointInternalSharedCollateral && collateralRiskFormula !== 'full_value' && !usesInitialPrincipalFormula
-    ? (usesPrincipalCoverageFormula
+    ? (usesCoinNativeCollateralFormula
+      ? 0
+      : usesPrincipalCoverageFormula
       ? -principalLentOutValueForRisk - jointInternalAccruedForRisk + jointInternalPaidForRisk
       : jointInternalFloatingPnlU === null
         ? null
@@ -2888,6 +2928,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const initialPrincipalGapU = hasInterest && initialFinancingPrincipalU !== null && Number.isFinite(initialFinancingPrincipalU)
       ? -initialFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU
       : null;
+    const coinNativeCollateralGapU = previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
+      ? previewCollateralValueU
+      : null;
     return {
       collateralValueU: previewCollateralValueU,
       baseValueU: hasBase ? previewBaseValueU : null,
@@ -2900,6 +2943,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       floatingPnlGapU,
       fullValueGapU,
       initialPrincipalGapU,
+      coinNativeCollateralGapU,
     };
   }, [
     isSharedMode,
@@ -2952,7 +2996,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         : gapU;
     const primaryUnit = primaryIsCny ? '元' : 'u';
     const approxUnit = approxCollateralGap === 'CNY' ? '元' : 'u';
-    const format = (value: number, isCny: boolean) => `${value >= 0 ? '+' : ''}${value.toLocaleString(undefined, { maximumFractionDigits: isCny ? 0 : 2 })}`;
+    const format = (value: number, isCny: boolean) => `${value >= 0 ? '+' : ''}${formatFunderCollateralGap(value, isCny ? 'CNY' : 'U')}`;
     return (
       <span className="inline-block text-right leading-tight tabular-nums" style={{ color }}>
         <span className="block font-medium">{format(primaryValue, primaryIsCny)} {primaryUnit}</span>
@@ -3329,12 +3373,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 </span>
               </div>
             )}
-            {show('floatPnl') && (isOptionOrder || isConfiguredStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
+            {show('floatPnl') && (usesCoinNativeCollateralFormula || isOptionOrder || isConfiguredStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0 inline-flex items-center gap-1">浮动盈亏
                   {isManualStockPnlSource && <button type="button" onClick={() => setShowManualStockPnlDetail(true)} className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none" style={SOFT_BLUE_INDICATOR_STYLE} title="查看股票组合盘中参考价、盘尾价与浮动盈亏"><HelpMarkerText symbol="!" /></button>}
                 </span>
-                {isConfiguredStockPnlSource ? (
+                {usesCoinNativeCollateralFormula ? (
+                  <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: '#6B7280' }}>0.00 u</span>
+                ) : isConfiguredStockPnlSource ? (
                   configuredStockFloatPnlCny !== null ? (
                     <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: configuredStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
                       {configuredStockFloatPnlCny >= 0 ? '+' : ''}{formatFunderFloatingPnlForDisplay(configuredStockFloatPnlCny, true)} 元
@@ -4335,6 +4381,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               : serverTotalGap;
                             // 浮盈亏口径与担保减买入价值口径均以订单真实买入价值为基准。
                             const totalGapBase = orders.reduce((sum: number, o: any) => {
+                              // 币本位订单的本金和标的市价均不构成风险基准，分母不能重新混入其买入价值。
+                              if (o.collateralRiskFormula === 'coin_native_collateral') return sum;
                               const usesPrincipalCoverage = o.collateralRiskFormula === 'principal_coverage'
                                 || (o.collateralRiskFormula !== 'floating_pnl' && (o.principalLentOut === true || o.principalLentOut === 1));
                               if (usesPrincipalCoverage) {
@@ -4359,7 +4407,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>各订单持有资产差额合计 + 共享担保物</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{holdingBalance.toFixed(2)} + {totalColl.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                      ? <>{formatFunderCollateralGap(holdingBalance)} + {formatFunderCollateralGap(totalColl)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} u</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                 </div>
@@ -4368,7 +4416,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保缺口 ÷ 总风险基准</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalGapBase.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} ÷ {totalGapBase.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                   <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {totalGapBase.toFixed(2)} u（担保减买入价值按真实买入价值；其余按保存口径）</div>
@@ -4380,7 +4428,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           {/* ③ 所有共享订单的持仓差额（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                             <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各共享成员持仓差额</div>
-                                    <div className="mb-1" style={{ color: '#9CA3AF' }}>浮盈亏口径：当前持有资产 − 缺口基准；担保减买入价值口径：−买入价值；均再减待结、加已结，且此处不含担保物</div>
+                                    <div className="mb-1" style={{ color: '#9CA3AF' }}>浮盈亏口径：当前持有资产 − 缺口基准；担保减买入价值口径：−买入价值；币本位担保：订单盈亏与利息均固定为0；本项均不含担保物</div>
                                     {sharedPoolInfo ? (
                                       <>
                                         <div className="space-y-1.5">
@@ -4400,6 +4448,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     const canonicalOrder = sharedOwnerOrders.find((candidate: any) => String(candidate.memberKey) === memberKey);
                                     const canonicalHoldingGap = readConfirmedExposureGap(canonicalOrder?.holdingGap);
                                     const isInitialPrincipalDisplayOnly = o.initialPrincipalDisplayOnly === true || o.collateralRiskFormula === 'initial_principal';
+                                    const isCoinNativeCollateral = o.collateralRiskFormula === 'coin_native_collateral';
                                     // 初始本金订单不挂载到经济共享池的隐藏订单卡；服务端已按同一公式
                                     // 返回 collateralRequired，仅用于第③项展示，绝不参与底部合计。
                                     const displayedHoldingGap = isInitialPrincipalDisplayOnly
@@ -4441,10 +4490,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                             <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                             <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                             <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                            {isCoinNativeCollateral && <div className="ml-5 mt-0.5 text-[10px]" style={{ color: '#6B7280' }}>订单盈亏 0.00 u</div>}
                                           </div>
                                           <div className="text-right">
+                                            {isCoinNativeCollateral && gap !== null && <div className="text-[10px]" style={{ color: '#6B7280' }}>利息暂不计入</div>}
                                             {gap !== null
-                                              ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                              ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralGap(gap)} u</span>
                                               : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                           </div>
                                         </div>
@@ -4487,10 +4538,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : formatCoinQtyFunder(o.quantity, oCoin)}</span> : null}
+                                          {isCoinNativeCollateral && <div className="ml-5 mt-0.5 text-[10px]" style={{ color: '#6B7280' }}>订单盈亏 0.00 u</div>}
                                         </div>
                                         <div className="text-right">
+                                          {isCoinNativeCollateral && gap !== null && <div className="text-[10px]" style={{ color: '#6B7280' }}>利息暂不计入</div>}
                                           {gap !== null
-                                            ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                            ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralGap(gap)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                           </div>
                                         </div>
@@ -4506,7 +4559,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计共享成员持仓差额</span>
                                       {allKnown
-                                        ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{totalHoldingGap.toFixed(2)} u</span>
+                                        ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{formatFunderCollateralGap(totalHoldingGap)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );
@@ -4527,9 +4580,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     const collateralAssets = Array.isArray(o.collateralAssets) ? o.collateralAssets : [];
                                     const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
                                     const memberKey = String(o.memberKey || `${Number(o.orderId)}:${String(o.jointSegmentId || '__primary__')}`);
-                                    const cashFlowLabel = o.isJointMember === true
-                                      ? (String(o.jointSegmentId || '__primary__') === '__primary__' ? '资金流出' : '资金流入')
-                                      : (o.principalLentOut === true || o.principalLentOut === 1 ? '资金流出' : '资金流入');
                                     const collateralItems = collateralAssets.map((asset: any) => {
                                       const coin = String(asset?.coin || '').trim().toUpperCase();
                                       const qty = String(asset?.qty ?? asset?.amount ?? '').trim();
@@ -4554,7 +4604,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                           <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
                                           <span className="mr-1.5 text-[10px] font-medium shrink-0" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer shrink-0" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                          <span className="ml-1 text-[10px] shrink-0" style={{ color: '#6B7280' }}>{cashFlowLabel}</span>
                                           {collateralItems.length > 1 ? (
                                             <button
                                               type="button"
@@ -4567,7 +4616,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                             </button>
                                           ) : collateralItems.length === 1
                                             ? <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{primaryCollateral?.coin || '担保物'}{primaryCollateralQuantity ? ` × ${primaryCollateralQuantity}` : ''}</span>
-                                            : <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>无担保物</span>}
+                                            : null}
                                         </div>
                                         <span className="font-mono font-semibold shrink-0" style={{ color: '#DC2626' }}>
                                           {collateralAssets.length > 0 && o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '0.00 u'}
@@ -4619,7 +4668,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     ? (String(nonSharedOrder.jointSegmentId || '__primary__') === '__primary__' ? '资金流出' : '资金流入')
                                     : (nonSharedOrder.principalLentOut === true || nonSharedOrder.principalLentOut === 1 ? '资金流出' : '资金流入');
                                   const gap = readConfirmedExposureGap(nonSharedOrder.collateralGap);
-                                  const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '加载中...';
+                                  const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${formatFunderCollateralGap(gap)} u` : '加载中...';
                                   return <div key={nonSharedOrder.memberKey ?? nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex items-center gap-1.5">
                                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
@@ -4634,7 +4683,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
                                 <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
                                 {nonSharedGapReady
-                                  ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                                  ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{formatFunderCollateralGap(nonSharedGapTotal)} u</span>
                                   : <span className="font-mono shrink-0" style={{ color: '#9CA3AF' }}>加载中...</span>}
                               </div>
                             </div>
@@ -4646,7 +4695,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
                             <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。</div>
                             <div>• <strong>持仓全额</strong> = 本段实时可变现市值 − 待结利息 + 已结利息；不计额外担保物，固定独立计算。</div>
-                            <div>• <strong>共享担保总计</strong>仅汇总选择“担保差值”或“担保＋浮盈”的订单；持仓全额独立计算。</div>
+                            <div>• <strong>币本位担保</strong> = 第③项订单盈亏与利息均固定为0；真实担保物仍在第④项汇总。</div>
+                            <div>• <strong>共享担保总计</strong>汇总经济共享成员的第③项持仓差额与第④项担保物；持仓全额和初始本金仍按各自独立规则处理。</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单缺口基准，负数表示担保不足需补仓</div>
                             <div>• <strong>每张订单的基准选择</strong>在订单编辑页保存后，同步用于共享池和订单卡片。</div>
                           </div>
@@ -4657,9 +4707,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>
-                              {usesInitialPrincipalFormula ? '① 初始融资本金' : usesPrincipalCoverageFormula ? '① 买入价值' : usesFloatingPnlFormula ? '① 浮动盈亏' : '① 当前持仓市值'}
+                              {usesCoinNativeCollateralFormula ? '① 订单盈亏' : usesInitialPrincipalFormula ? '① 初始融资本金' : usesPrincipalCoverageFormula ? '① 买入价值' : usesFloatingPnlFormula ? '① 浮动盈亏' : '① 当前持仓市值'}
                             </div>
-                            <div>{usesInitialPrincipalFormula
+                            <div>{usesCoinNativeCollateralFormula
+                              ? '币本位担保：订单本金与标的币价盈亏均固定为0'
+                              : usesInitialPrincipalFormula
                               ? '初始本金：从零减订单保存的初始融资金额，再减待结、加已结利息；不计担保物、市价或浮动盈亏'
                               : usesPrincipalCoverageFormula
                               ? '担保差值：担保物可抵扣买入价值及利息'
@@ -4667,7 +4719,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 ? '担保＋浮盈：担保物与浮动盈亏共同覆盖利息'
                                 : '持仓全额：本段仓位按实时可平仓市值计入，扣除利息，不计额外担保物'}</div>
                             <div className="mt-1 font-mono">
-                              {usesInitialPrincipalFormula
+                              {usesCoinNativeCollateralFormula
+                                ? <span style={{ color: '#3B82F6' }}>= 0.00 {riskDisplayUnit}（订单盈亏）</span>
+                                : usesInitialPrincipalFormula
                                 ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : `= 0 − ${riskValueInOrderCurrency(initialFinancingPrincipalU).toFixed(2)} ${riskDisplayUnit}（初始融资金额）`}</span>
                                 : usesPrincipalCoverageFormula
                                 ? <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
@@ -4704,7 +4758,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           </div>
                           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                             <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 担保缺口</div>
-                            <div>{usesInitialPrincipalFormula
+                            <div>{usesCoinNativeCollateralFormula
+                              ? '担保物市值 + 订单盈亏 0（利息暂不计入）'
+                              : usesInitialPrincipalFormula
                               ? '0 − 初始融资金额 − 待结利息 + 已结利息（不计担保物、市价或浮动盈亏）'
                               : isOptionOrder
                               ? (usesPrincipalCoverageFormula
@@ -4720,6 +4776,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             <div className="mt-1 font-mono">
                               {exposure === null
                                 ? <span className="text-gray-400">期权标记价加载中...</span>
+                                : usesCoinNativeCollateralFormula
+                                ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） + 0.00 {riskDisplayUnit}（订单盈亏；利息暂不计入） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
                                 : usesInitialPrincipalFormula
                                 ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : <> = 0 − {riskValueInOrderCurrency(initialFinancingPrincipalU).toFixed(2)} {riskDisplayUnit}（初始融资金额） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></>}</span>
                                 : isOptionOrder
@@ -4749,7 +4807,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       {/* 计算说明注释 */}
                       <div className="mt-3 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                        {usesInitialPrincipalFormula ? (
+                        {usesCoinNativeCollateralFormula ? (
+                          <div>• <strong>币本位担保</strong> = 担保物市值 + 订单盈亏 0。标的本金、币价涨跌及正负利息暂不参与；若参加共享，第③项固定为0，真实担保物仍进入第④项共享担保物汇总。</div>
+                        ) : usesInitialPrincipalFormula ? (
                           <div>• <strong>初始本金</strong> = 0 − 订单保存的初始融资金额 − 待结利息 + 已结利息；不计担保物、实时市价或浮动盈亏。选择共享时会列示共享状态，但不参与共享担保合计。</div>
                         ) : isOptionOrder ? (
                           <>
@@ -4856,9 +4916,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               {show('marginRate') && (() => {
                 const usesExternalMarginRate = hasExternalMarginRateReference;
                 const uses52ExternalInputs = hasExternalCollateral;
-                const effectiveCollateral = floatPnlForRisk !== null
-                  ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
-                  : collateralValue - accruedForRisk + paidInterestForRisk;
+                const effectiveCollateral = usesCoinNativeCollateralFormula
+                  ? collateralValue
+                  : floatPnlForRisk !== null
+                    ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
+                    : collateralValue - accruedForRisk + paidInterestForRisk;
                 // 手动基数与“担保缺口”采用相同主展示单位；内部仅为运算而换回 U，
                 // 避免人民币、U 或其他订单计价币种出现卡片数字和百分比口径不一致。
                 const rawManualMarginRateBase = dc ? (dc as any).marginRateBase : null;
@@ -4962,6 +5024,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
                                   </div>
                                   <div className="mt-1 text-[10px] text-gray-400">当前未引用37号原始比例，按52号订单自身担保缺口口径计算。</div>
+                                </>
+                              ) : usesCoinNativeCollateralFormula ? (
+                                <>
+                                  <div>保证金率 = 担保物市值 ÷ 计息基数 × 100%（订单盈亏与利息暂不计入）</div>
+                                  <div className="mt-1 font-mono text-[10px]">
+                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)} + 0.00 − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                  </div>
                                 </>
                               ) : usesPrincipalCoverageFormula ? (
                                 <>
