@@ -82,7 +82,9 @@ function escapeHtml(str: string): string {
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    // 公开热链接经HTTPS反向代理访问；若不明确指定，手机端会错误尝试直连本地ws端口，
+    // 从而只能手动刷新。host保持由当前公开域名自动推断，443/WSS由边缘代理终结。
+    hmr: { server, protocol: "wss" as const, clientPort: 443 },
     allowedHosts: true as const,
   };
 

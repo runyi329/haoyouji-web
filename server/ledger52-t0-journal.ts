@@ -3218,6 +3218,39 @@ async function assertExistingGlobalUser(tx: any, userId: number, label: string) 
 }
 
 /**
+ * T+0从全局用户目录选择客户后，首笔开仓同时把该普通用户加入52号账本。
+ * 与佣金客户保存使用同一成员权限基线；不会影响已有真实成员，也不会改写既有AI成员记录。
+ */
+async function ensureLedger52T0RelatedUserMembership(tx: any, userId: number): Promise<boolean> {
+  const [userRows] = await tx.execute(
+    `SELECT id, role FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+    [userId],
+  );
+  const user = asRows(userRows)[0];
+  if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新搜索选择" });
+  const role = String(user.role || "").trim().toLowerCase();
+  if (role === "super_admin" || role === "admin" || role === "owner") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择全局普通用户作为T+0业务客户" });
+  }
+  const [memberRows] = await tx.execute(
+    `SELECT id, member_type FROM ledger_members
+      WHERE ledgerId = ? AND userId = ?
+      ORDER BY CASE WHEN member_type = 'real' OR member_type IS NULL THEN 0 ELSE 1 END, id ASC
+      FOR UPDATE`,
+    [LEDGER_52_T0_JOURNAL_ID, userId],
+  );
+  // 同一用户可同时存在AI和真实成员记录；仅真实成员已经存在时跳过，绝不修改AI记录。
+  if (asRows(memberRows).some((member) => String(member.member_type || 'real') !== 'ai')) return false;
+  await tx.execute(
+    `INSERT INTO ledger_members
+       (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite)
+     VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0)`,
+    [LEDGER_52_T0_JOURNAL_ID, userId],
+  );
+  return true;
+}
+
+/**
  * 共享收益候选资格是“订单使用者 × 分配人”维度的未来设置。
  * 它绝不回写项目比例规则、开平仓流水、既有分佣快照或历史共享转账。
  */
@@ -4661,6 +4694,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     await tx.beginTransaction();
 
     const relatedUserId = Number(input.relatedUserId || 0);
+    let relatedUserJoinedLedger = false;
     if (relatedUserId > 0) {
       if (!Number.isInteger(relatedUserId)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "关联用户信息无效" });
@@ -4671,14 +4705,6 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       );
       if (!asRows(relatedUserRows)[0]) {
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
-      }
-      // 新开仓再次明确选择该用户时才恢复目录可见性；旧仓平仓沿用ID时保持删除状态。
-      if (isOpeningAction(input.action)) {
-        await tx.execute(
-          `DELETE FROM ledger52_t0_journal_deleted_dimensions
-            WHERE ledger_id = ? AND user_id = ? AND dimension = 'related_user' AND dimension_id = ?`,
-          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedUserId],
-        );
       }
     }
     const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
@@ -4740,6 +4766,17 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.clientRequestId],
     );
     const isRetryOfExistingEntry = Boolean(asRows(existingRequestRows)[0]?.id);
+
+    // 先锁定本次请求的幂等结果，再执行加入账本等额外副作用。
+    // 重试请求即使错误带入了其他关联用户，也不能改变任何成员资格或目录可见性。
+    if (!isRetryOfExistingEntry && isOpeningAction(input.action) && relatedUserId > 0) {
+      relatedUserJoinedLedger = await ensureLedger52T0RelatedUserMembership(tx, relatedUserId);
+      await tx.execute(
+        `DELETE FROM ledger52_t0_journal_deleted_dimensions
+          WHERE ledger_id = ? AND user_id = ? AND dimension = 'related_user' AND dimension_id = ?`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedUserId],
+      );
+    }
 
     if (reminderTemplateId > 0) {
       keepReopenReminder = 1;
@@ -5009,7 +5046,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     await tx.commit();
     if (isPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
-    return { account: mapAccount(account), entry: mapEntry(entry) };
+    return { account: mapAccount(account), entry: mapEntry(entry), relatedUserJoinedLedger };
   } catch (error) {
     try { await tx.rollback(); } catch {}
     throw error;

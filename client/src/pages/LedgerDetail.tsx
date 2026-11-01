@@ -5643,6 +5643,24 @@ export default function LedgerDetail() {
                 </div>
               </button>}
 
+              {/* 52号账本交易所佣金业务：管理员使用独立工作台维护客户与返佣。 */}
+              {isCustomAF && Number(ledgerId) === 52 && (isOwner || isAdmin) && !viewAsUserId && <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?tab=finance&hideTab=1&commissionAdmin=1&section=commission`)}
+                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #1D4E5C 0%, #276B78 52%, #315D84 100%)', border: '1px solid #4A8791', boxShadow: '0 2px 12px rgba(31,97,111,0.2)' }}
+              >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-xl font-bold text-white" style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                  C
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-base text-white">交易所佣金业务</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>OKX · 统一按挂单结算</div>
+                </div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>}
+
               {/* GTO 德州扑克入口 - 仅创建者/管理员可见，视角查看时隐藏 */}
               {(isOwner || isAdmin) && !viewAsUserId && <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/gto`)}

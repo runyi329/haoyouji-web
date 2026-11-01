@@ -37,7 +37,7 @@ import * as dbAIEmployee from "./db-ai-employee";
 import * as dbCrypto from "./db-crypto";
 import { callDataApi } from "./_core/dataApi";
 import { macroRouter } from "./routers/macro-router";
-import { getDb, getDbConnection, getLedgerDb } from "./db";
+import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, ledgerMembers, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
@@ -11869,6 +11869,132 @@ ${klinesSummary}
       }))
       .query(async ({ ctx, input }) => {
         return await dbLedger.getLedgerById(input.id, ctx.user.id);
+      }),
+
+    // 52号账本OKX交易所佣金：管理员读取完整登记目录；成员只读取本人已登记的交易量历史。
+    // 管理员代入成员时沿用成员严格只读范围，不能借由前端viewAs获得写权限。
+	    okxCommissionGetDashboard: protectedProcedure
+	      .input(z.object({
+	        ledgerId: z.literal(52),
+	        // 管理员的用户视角；仅查询，实际权限仍由服务端账本角色校验。
+	        viewAsUserId: z.number().int().positive().optional(),
+	        // 仅隔离管理员代入不同成员时的客户端查询缓存，不参与任何权限或读取范围判断。
+	        viewerScopeUserId: z.number().int().positive().optional(),
+	      }))
+	      .query(async ({ ctx, input }) => {
+	        const commission = await import('./ledger52-okx-commission');
+	        const requestedViewAsUserId = input.viewAsUserId ? Number(input.viewAsUserId) : null;
+	        if (ctx.isViewingAs || requestedViewAsUserId !== null) {
+	          let targetUserId = requestedViewAsUserId ?? ctx.user.id;
+	          const realUser = ctx.realUser;
+	          if (ctx.isViewingAs) {
+	            if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+	            const realScope = await commission.resolveLedger52OkxCommissionScope({
+	              id: realUser.id,
+	              role: realUser.role,
+	            });
+	            if (realScope.mode !== 'admin') {
+	              throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看佣金业务' });
+	            }
+	            if (requestedViewAsUserId !== null && requestedViewAsUserId !== ctx.user.id) {
+	              throw new TRPCError({ code: 'FORBIDDEN', message: '代入身份与请求视角不一致' });
+	            }
+	            targetUserId = ctx.user.id;
+	          } else if (targetUserId !== ctx.user.id) {
+	            const scope = await commission.resolveLedger52OkxCommissionScope({ id: ctx.user.id, role: ctx.user.role });
+	            if (scope.mode !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可切换佣金用户视角' });
+	          }
+	          const membership = await dbLedger.getUserMembership(52, targetUserId);
+	          const memberType = String((membership as any)?.memberType ?? (membership as any)?.member_type ?? '').toLowerCase();
+	          if (!membership || memberType === 'ai') throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本普通成员' });
+	          return await commission.getLedger52OkxCommissionDashboard({ mode: 'member', memberUserId: targetUserId });
+	        }
+        const scope = await commission.resolveLedger52OkxCommissionScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+        });
+        return await commission.getLedger52OkxCommissionDashboard(scope);
+      }),
+
+    // 单一步骤保存客户资料与当前返佣分配；服务端校验52号成员、全局推荐链及100%分配总额。
+    okxCommissionUpsertCustomer: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        memberUserId: z.number().int().positive(),
+        okxUid: z.string().trim().regex(/^\d{17,20}$/, 'OKX UID需填写17至20位数字'),
+        okxLogin: z.string().trim().max(128).optional(),
+        vipTier: z.enum(['regular', 'vip1', 'vip2', 'vip3', 'vip4', 'vip5']),
+        allocations: z.array(z.object({
+          beneficiaryUserId: z.number().int().positive(),
+          percentage: z.string().trim().regex(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/, '返佣比例最多8位小数'),
+        })).min(1).max(21),
+        clientRequestId: z.string().trim().regex(/^[A-Za-z0-9_-]{12,64}$/, '保存请求无效，请刷新后重试'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可保存佣金客户资料' });
+        const commission = await import('./ledger52-okx-commission');
+        const scope = await commission.resolveLedger52OkxCommissionScope({ id: ctx.user.id, role: ctx.user.role });
+        if (scope.mode !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可保存佣金客户资料' });
+        return await commission.upsertLedger52OkxCommissionAccount({
+          actorUserId: ctx.user.id,
+          memberUserId: input.memberUserId,
+          okxUid: input.okxUid,
+          okxLogin: input.okxLogin,
+          vipTier: input.vipTier,
+          allocations: input.allocations,
+          clientRequestId: input.clientRequestId,
+        });
+      }),
+
+    // 每次登记保存累计交易量与当前分配快照；服务端基于上一笔真实登记计算本次新增，历史不会被后续配置覆盖。
+    okxCommissionCreateRegistration: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        accountId: z.string().trim().regex(/^\d+$/, '客户资料无效'),
+        recordedAt: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2})?$/, '登记时间格式无效'),
+        cumulativeTurnover: z.string().trim().regex(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/, '累计交易额最多8位小数'),
+        clientRequestId: z.string().trim().regex(/^[A-Za-z0-9_-]{12,64}$/, '登记请求无效，请刷新后重试'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可登记交易量' });
+        const commission = await import('./ledger52-okx-commission');
+        const scope = await commission.resolveLedger52OkxCommissionScope({ id: ctx.user.id, role: ctx.user.role });
+        if (scope.mode !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可登记交易量' });
+        return await commission.createLedger52OkxCommissionRecord({
+          actorUserId: ctx.user.id,
+          accountId: Number(input.accountId),
+          recordedAt: input.recordedAt,
+          cumulativeTurnover: input.cumulativeTurnover,
+          clientRequestId: input.clientRequestId,
+        });
+      }),
+
+    // 待发清单与实际钱包发放均由52号账本资金管理权限保护；代入成员视角绝不允许读取或执行。
+    okxCommissionGetPendingPayouts: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可查看待发佣金' });
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
+        const commission = await import('./ledger52-okx-commission');
+        return await commission.getLedger52OkxCommissionPendingPayouts();
+      }),
+
+    // 发放动作需前端二次确认，并由服务端行锁、批次幂等键和钱包流水关联共同防止重复入账。
+    okxCommissionIssuePayouts: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        allocationIds: z.array(z.string().trim().regex(/^\d+$/, '待发佣金记录无效')).min(1).max(2000),
+        clientRequestId: z.string().trim().regex(/^[A-Za-z0-9_-]{12,64}$/, '发放请求无效，请刷新后重试'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可发放佣金' });
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
+        const commission = await import('./ledger52-okx-commission');
+        return await commission.issueLedger52OkxCommissionPayouts({
+          actorUserId: ctx.user.id,
+          allocationIds: input.allocationIds,
+          clientRequestId: input.clientRequestId,
+        });
       }),
 
     // 52号账本 T+0 速记账本：管理员读取完整管理视图；普通成员仅读取本人订单及明确分层给本人的订单。

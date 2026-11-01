@@ -9533,11 +9533,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       t0Toast.success(isClosingEntry
         ? `已确认${ACTIONS[entry.action].label} ${formatQuantity(entry.quantity)} ETH`
-        : entry.isPending
-          ? "挂单已保存，等待统一参考价触发成交"
-          : entry.isLocked
-            ? "速记已保存，逐笔报价将显示黑金锁标"
-            : "速记已保存");
+        : data.relatedUserJoinedLedger
+          ? "速记已保存，关联用户已自动加入52号账本"
+          : entry.isPending
+            ? "挂单已保存，等待统一参考价触发成交"
+            : entry.isLocked
+              ? "速记已保存，逐笔报价将显示黑金锁标"
+              : "速记已保存");
     },
     onError: (error, variables: any) => {
       // 失败后允许修正或重试；平仓的 request ID 刻意保留，避免“服务端已写入但响应丢失”时生成第二笔流水。

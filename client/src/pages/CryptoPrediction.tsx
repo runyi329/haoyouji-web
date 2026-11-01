@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
+import { OkxCommissionPreview } from "@/components/OkxCommissionPreview";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -2357,6 +2358,9 @@ export default function CryptoPrediction() {
   const [tab, setTab] = useState<"contract" | "spot" | "market" | "finance" | "gujian">(initialTab);
   // 首页分流进入时隐藏 Tab 切换区（hideTab=1）
   const hideTab = urlParams.get("hideTab") === "1";
+  // 交易所佣金仅在52号账本启用；C入口仍由服务端返回的真实业务资格决定是否显示。
+  const showExchangeCommissionPreview = ledgerId === 52;
+  const requestedFinanceSection = urlParams.get('section');
   // 谷底增筹建仓表单抽屉状态
   const [showOrderForm, setShowOrderForm] = useState(false);
   // 谷底增筹订单列表筛选
@@ -2398,6 +2402,42 @@ export default function CryptoPrediction() {
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
   const isOwner = (ledgerInfo as any)?.userRole === 'owner';
+  const isLedgerCommissionManager = ['owner', 'admin'].includes(String((ledgerInfo as any)?.userRole || '').toLowerCase());
+  const commissionAdminWorkspaceRequested = showExchangeCommissionPreview && urlParams.get('commissionAdmin') === '1';
+  // 管理员从账本首页进入的是独立工作页；代入用户视角时回到融资付息页内的 C 标签。
+  const isCommissionAdminWorkspace = commissionAdminWorkspaceRequested && !viewAsUserId && isLedgerCommissionManager;
+  // 管理员从佣金工作台明确选择成员后，必须直接进入该成员的C页，不受融资订单角色判断影响。
+  const isCommissionMemberViewRequested = Boolean(viewAsUserId) && requestedFinanceSection === 'commission';
+  // 即使用户尚未具备业务资格，也先读取一次本人的佣金摘要；C入口据此决定是否显示。
+  // 服务端的hasCommissionBusiness仅在「本人已登记」或「存在实际团队分佣」时为true。
+  const commissionTabDashboardQuery = trpc.ledger.okxCommissionGetDashboard.useQuery(
+    {
+      ledgerId: 52,
+      viewAsUserId: viewAsUserId || undefined,
+      viewerScopeUserId: viewAsUserId || undefined,
+    },
+    { enabled: showExchangeCommissionPreview && !isCommissionAdminWorkspace, staleTime: 10_000, refetchOnWindowFocus: false },
+  );
+  const hasCommissionBusiness = Boolean((commissionTabDashboardQuery.data as any)?.hasCommissionBusiness);
+  const canShowCommissionFinanceTab = showExchangeCommissionPreview
+    && !isCommissionAdminWorkspace
+    && (isLedgerCommissionManager || hasCommissionBusiness || isCommissionMemberViewRequested);
+  // C入口旁的团队人数与佣金页采用同一服务端口径：仅统计当前用户实际有分佣关系的成员，不含本人。
+  const commissionTeamMemberCount = Number((commissionTabDashboardQuery.data as any)?.team?.summary?.customerCount || 0);
+  // 退出佣金用户视角时必须回到固定的管理员工作台地址，不能沿用成员页的
+  // viewAs、二级页签或其他查询状态，否则可能短暂显示刚才成员的个人数据。
+  const exitCommissionMemberView = () => {
+    const currentParams = new URLSearchParams(window.location.search);
+    const nextParams = new URLSearchParams({
+      tab: 'finance',
+      hideTab: '1',
+      commissionAdmin: '1',
+      section: 'commission',
+    });
+    const preview = currentParams.get('preview');
+    if (preview) nextParams.set('preview', preview);
+    setLocation(`/ledger/${ledgerId}/crypto-prediction?${nextParams.toString()}`);
+  };
   // 非管理员成员的 T+0 入口统一放在融资付息的“本人 / 参与 / T”二级页签中。
   // 服务端仍按当前用户（或经校验的代入用户）强制隔离为个人只读数据。
   const canLoadMemberT0Tab = ledgerId === 52
@@ -2434,11 +2474,15 @@ export default function CryptoPrediction() {
   const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
   // 融资订单子tab：全部 / 股 / 币 / 共享
   // 融资订单三层筛选
-  const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared' | 't0'>('mine');
+  const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared' | 't0' | 'commission'>(
+    () => canShowCommissionFinanceTab && requestedFinanceSection === 'commission' ? 'commission' : 'mine',
+  );
   const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
   useEffect(() => {
+    if (requestedFinanceSection === 'commission' && canShowCommissionFinanceTab) setFinanceL2Tab('commission');
     if (financeL2Tab === 't0' && !memberHasT0Orders) setFinanceL2Tab('mine');
-  }, [financeL2Tab, memberHasT0Orders]);
+    if (financeL2Tab === 'commission' && !canShowCommissionFinanceTab) setFinanceL2Tab('mine');
+  }, [canShowCommissionFinanceTab, financeL2Tab, memberHasT0Orders, requestedFinanceSection]);
   const [financeOrderSearch, setFinanceOrderSearch] = useState('');
   const financeOrderSearchTokens = useMemo(
     () => financeOrderSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
@@ -2721,36 +2765,38 @@ export default function CryptoPrediction() {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
-      {/* 顶部导航 */}
-      <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="p-1 -ml-1">
-            <ChevronLeft className="w-5 h-5 text-white" />
-          </button>
-          <img src={coin.imgUrl} alt={coin.name} className="w-6 h-6 object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          <span className="text-base font-semibold">{coin.fullName}（{coin.name}）</span>
-        </div>
-        {/* 谷底增筹：产品演示 + 新建订单按钮 */}
-        {tab === 'contract' && (
+      {!isCommissionAdminWorkspace && <>
+        {/* 顶部导航 */}
+        <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/product-demo${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold"
-              style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
-            >
-              产品演示
+            <button onClick={() => setLocation(`/ledger/${ledgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="p-1 -ml-1">
+              <ChevronLeft className="w-5 h-5 text-white" />
             </button>
-            <button
-              onClick={() => setShowOrderForm(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold"
-              style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
-            >
-              + 新建订单
-            </button>
+            <img src={coin.imgUrl} alt={coin.name} className="w-6 h-6 object-contain"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <span className="text-base font-semibold">{coin.fullName}（{coin.name}）</span>
           </div>
-        )}
-      </div>
+          {/* 谷底增筹：产品演示 + 新建订单按钮 */}
+          {tab === 'contract' && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/product-demo${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
+              >
+                产品演示
+              </button>
+              <button
+                onClick={() => setShowOrderForm(true)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+              >
+                + 新建订单
+              </button>
+            </div>
+          )}
+        </div>
+      </>}
 
       {/* 视角切换横幅（固定底部） */}
       {viewAsUserId && (
@@ -3714,7 +3760,23 @@ export default function CryptoPrediction() {
         {/* 融资付息 */}
         {tab === "finance" && (
           <div className="pb-4">
-            {financeOrdersPending ? (
+            {isCommissionAdminWorkspace ? (
+              <OkxCommissionPreview
+                ledgerId={ledgerId}
+                ledgerInfo={ledgerInfo}
+                currentUser={meData}
+                viewAsUserId={viewAsUserId}
+                onEnterUserView={(userId) => {
+                  const nextParams = new URLSearchParams(window.location.search);
+                  nextParams.set('tab', 'finance');
+                  nextParams.set('hideTab', '1');
+                  nextParams.set('section', 'commission');
+                  nextParams.set('viewAs', String(userId));
+                  setLocation(`/ledger/${ledgerId}/crypto-prediction?${nextParams.toString()}`);
+                }}
+                onExitUserView={exitCommissionMemberView}
+              />
+            ) : financeOrdersPending ? (
               /* 加载中骨架屏，避免误以为暂无订单 */
               <div className="space-y-3 mt-2">
                 {[1, 2, 3].map(i => (
@@ -3845,8 +3907,38 @@ export default function CryptoPrediction() {
               const financeLevelTwoTabs = [
                 { key: 'mine' as const, label: '本人', count: cntMine },
                 { key: 'shared' as const, label: '参与', count: cntShared },
+                ...(canShowCommissionFinanceTab ? [{ key: 'commission' as const, label: 'C', count: commissionTeamMemberCount }] : []),
                 ...(memberHasT0Orders ? [{ key: 't0' as const, label: 'T', count: memberT0OrderCount }] : []),
               ];
+
+              if (financeL2Tab === 'commission' && canShowCommissionFinanceTab) {
+                return (
+                  <>
+                    <div className="mb-3 flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
+                      {financeLevelTwoTabs.map(({ key, label, count }) => (
+                        <button key={key} onClick={() => { setFinanceL2Tab(key); setFinanceL3Tab('all'); }} style={tabBtnStyle(financeL2Tab === key)}>
+                          {label}{count !== undefined && <span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <OkxCommissionPreview
+                      ledgerId={ledgerId}
+                      ledgerInfo={ledgerInfo}
+                      currentUser={meData}
+                      viewAsUserId={viewAsUserId}
+                      onEnterUserView={(userId) => {
+                        const nextParams = new URLSearchParams(window.location.search);
+                        nextParams.set('tab', 'finance');
+                        nextParams.set('hideTab', '1');
+                        nextParams.set('section', 'commission');
+                        nextParams.set('viewAs', String(userId));
+                        setLocation(`/ledger/${ledgerId}/crypto-prediction?${nextParams.toString()}`);
+                      }}
+                      onExitUserView={exitCommissionMemberView}
+                    />
+                  </>
+                );
+              }
 
               if (financeL2Tab === 't0' && memberHasT0Orders) {
                 return (
@@ -3854,7 +3946,7 @@ export default function CryptoPrediction() {
                     <div className="mb-3 flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                       {financeLevelTwoTabs.map(({ key, label, count }) => (
                         <button key={key} onClick={() => { setFinanceL2Tab(key); setFinanceL3Tab('all'); }} style={tabBtnStyle(financeL2Tab === key)}>
-                          {label}<span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>
+                          {label}{count !== undefined && <span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>}
                         </button>
                       ))}
                     </div>
@@ -3879,13 +3971,13 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层统一展示本人、参与与有 T+0 流水时的 T 页签。 */}
+                  {/* 第2层展示本人、参与，以及具备对应资格的 C、T 页签。 */}
                   <div className="flex items-center gap-2 mb-3">
                     <div className="flex min-w-0 flex-1 rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                       {financeLevelTwoTabs.map(({ key, label, count }) => (
                         <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                           style={tabBtnStyle(financeL2Tab === key)}>
-                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{count}</span>
+                          {label}{count !== undefined && <span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>}
                         </button>
                       ))}
                     </div>
