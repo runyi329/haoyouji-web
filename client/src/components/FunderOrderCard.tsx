@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
+import { calculateFunderInterestDays, formatFunderPendingInterest, getFunderJointSegmentDisplayOrder, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
 import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
@@ -72,14 +73,18 @@ export function formatOptionPremium(value: unknown, denomination: unknown): stri
 }
 
 // 担保说明中的币种数量与全局钱包保持同一显示规则：USDT/人民币两位，
-// 其余数字资产按数量级保留 2/4/6/8 位；仅影响显示，绝不改变担保数量或估值。
+// 但绝对值达到五位数时不显示小数，避免移动端拥挤或换行；其余数字资产
+// 按数量级保留 2/4/6/8 位。仅影响显示，绝不改变担保数量或估值。
 function formatWalletStyleAssetAmount(assetCode: unknown, value: unknown): string {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return String(value ?? '');
   const code = String(assetCode || '').trim().toUpperCase();
   const absoluteAmount = Math.abs(amount);
-  const maximumFractionDigits = ['USDT', 'CNY'].includes(code)
-    ? 2
+  const hideFraction = absoluteAmount >= 10_000;
+  const maximumFractionDigits = hideFraction
+    ? 0
+    : ['USDT', 'CNY'].includes(code)
+      ? 2
     : absoluteAmount >= 1_000
       ? 2
       : absoluteAmount >= 1
@@ -88,8 +93,27 @@ function formatWalletStyleAssetAmount(assetCode: unknown, value: unknown): strin
           ? 6
           : 8;
   return amount.toLocaleString('zh-CN', {
-    minimumFractionDigits: ['USDT', 'CNY'].includes(code) ? 2 : 0,
+    minimumFractionDigits: hideFraction ? 0 : ['USDT', 'CNY'].includes(code) ? 2 : 0,
     maximumFractionDigits,
+  });
+}
+
+/**
+ * 左栏主卡的浮动盈亏：六位数及以上不显示小数，避免移动端数值拥挤或换行。
+ * 仅改变可见文本；担保、风险敞口和所有内部计算继续使用完整精度。
+ */
+function formatFunderFloatingPnlForDisplay(
+  value: number,
+  keepTwoDecimalsBelowThreshold = false
+): string {
+  const hideFraction = Math.abs(value) >= 100_000;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: hideFraction
+      ? 0
+      : keepTwoDecimalsBelowThreshold
+        ? 2
+        : 0,
+    maximumFractionDigits: hideFraction ? 0 : 2,
   });
 }
 
@@ -712,6 +736,8 @@ export interface FunderOrderCardProps {
   previewSegmentFocusId?: string;
   /** 编辑页浮动预览专用：在浮窗内切换要展开的订单段。 */
   onPreviewSegmentFocusChange?: (segmentId: string) => void;
+  /** 管理端选择的纯展示排序；不写入订单、钱包、结息或结清记录。 */
+  jointSegmentDisplayOrderMode?: FunderJointSegmentDisplayOrderMode;
   /** 共享担保弹窗点击订单号时，用于查找完整订单数据 */
   allOrders?: any[];
   /** 联合订单的子段卡片：只展示本段，禁止再递归读取下一层子段。 */
@@ -780,6 +806,7 @@ export function FunderOrderCard({
   previewMode = false,
   previewSegmentFocusId = '__primary__',
   onPreviewSegmentFocusChange,
+  jointSegmentDisplayOrderMode = 'ascending',
   allOrders,
   jointSegmentMode = false,
   onJointInternalRiskContributionChange,
@@ -959,6 +986,19 @@ export function FunderOrderCard({
     if (!Array.isArray(raw)) return [];
     return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
   }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
+  // 历史数组偶有缺失 id 的段：回退键只使用物理原序，绝不使用会随展示排序变化的 displayIndex。
+  const getJointSegmentStableId = (segment: Record<string, any>, sourceIndex: number) => String(segment.id || `segment-${sourceIndex + 2}`);
+  const findJointOrderSegmentByStableId = (segmentId: string) => jointOrderSegments.find(
+    (segment, sourceIndex) => getJointSegmentStableId(segment, sourceIndex) === segmentId,
+  ) || null;
+  // 这里只生成显示包装对象；jointOrderSegments 继续保持数据库的原数组顺序，供保存和资金操作使用。
+  const jointSegmentDisplayEntries = useMemo(() => getFunderJointSegmentDisplayOrder(
+    (order as any).interest_start_date,
+    jointOrderSegments,
+    getJointSegmentStableId,
+    (segment) => segment.interest_start_date,
+    jointSegmentDisplayOrderMode,
+  ), [jointOrderSegments, jointSegmentDisplayOrderMode, (order as any).interest_start_date]);
   // 联合订单的每段都是跨订单共享池的独立成员，不能再把同一订单的多个段合并为内部池。
   const primaryJointCrossOrderShareSelected = !jointSegmentMode
     && (order as any).joint_order_primary_collateral_share_mode === 'self';
@@ -994,9 +1034,9 @@ export function FunderOrderCard({
     const segmentAssets = jointOrderSegments
       .filter((segment: any) => segment?.collateral_share_mode === 'self'
         && !['full_value', 'initial_principal'].includes(getFunderCollateralRiskFormulaForDisplay(segment)))
-      .flatMap((segment: any) => [
+      .flatMap((segment: any, sourceIndex: number) => [
         ...getManualJointCollateralAssets(segment?.collateral_assets),
-        ...getJointSegmentWalletCollateralAssets(String(segment?.id || '')),
+        ...getJointSegmentWalletCollateralAssets(getJointSegmentStableId(segment, sourceIndex)),
       ]);
     return [...primaryAssets, ...segmentAssets];
   }, [jointSegmentMode, primaryJointInternalShareEnabled, (order as any).collateral_assets, (order as any).wallet_collateral_contributors, _jointSegmentScopeUserId, jointOrderSegments]);
@@ -1014,11 +1054,11 @@ export function FunderOrderCard({
     && !jointSegmentMode
     && jointOrderSegments.length > 0
     && typeof onPreviewSegmentFocusChange === 'function';
-  const previewFocusedSegmentId = previewSegmentFocusId === '__primary__'
-    || jointOrderSegments.some((segment, index) => String(segment.id || `segment-${index + 2}`) === previewSegmentFocusId)
+  const previewFocusedSegmentId = jointSegmentDisplayEntries.some((entry) => entry.id === previewSegmentFocusId)
     ? previewSegmentFocusId
     : '__primary__';
   const isPrimaryPreviewSegmentExpanded = !isPreviewSegmentAccordion || previewFocusedSegmentId === '__primary__';
+  const primaryJointSegmentDisplayNumber = (jointSegmentDisplayEntries.find((entry) => entry.isPrimary)?.displayIndex ?? 0) + 1;
   // 「他人」只是一张可查看的订单，不属于当前订单拥有者的任何担保池。
   // 即使历史数据仍保存了“本人订单共享”，也不能从该卡片打开本人共享担保弹窗。
   const _isOtherPerspective = String((order as any).order_perspective || 'self') === 'other';
@@ -1060,7 +1100,7 @@ export function FunderOrderCard({
     { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: _participantUserId },
     { enabled: _activeShowPaymentPanelForQuery === order.id && (_participantUserId !== undefined || interestPayments === undefined) && !selectedJointPaymentSegmentId }
   );
-  const selectedJointPaymentSegment = jointOrderSegments.find(segment => String(segment.id || '') === selectedJointPaymentSegmentId) || null;
+  const selectedJointPaymentSegment = findJointOrderSegmentByStableId(selectedJointPaymentSegmentId);
   const selectedJointPaymentUserId = selectedJointPaymentSegment ? Number(selectedJointPaymentSegment.owner_user_id || _jointSegmentScopeUserId || 0) : _participantUserId;
   const { data: _jointSegmentInterestPayments, refetch: refetchJointSegmentInterestPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: selectedJointPaymentUserId, jointSegmentId: selectedJointPaymentSegmentId || undefined },
@@ -1622,7 +1662,7 @@ export function FunderOrderCard({
       note: asset.note || '',
       ...(asset.source === 'wallet' ? { source: 'wallet' as const } : {}),
     }));
-  const selectedJointCollateralSegment = jointOrderSegments.find(segment => String(segment.id || '') === selectedJointCollateralSegmentId) || null;
+  const selectedJointCollateralSegment = findJointOrderSegmentByStableId(selectedJointCollateralSegmentId);
   const getSegmentWalletCollateralItems = (segmentId: string, sourceOwnerUserId?: unknown): QuickCollateralItem[] => {
     const ownerId = Number(sourceOwnerUserId || selectedJointCollateralSegment?.owner_user_id || quickWalletCollateralUserId || 0);
     const contributors = Array.isArray((order as any).wallet_collateral_contributors) ? (order as any).wallet_collateral_contributors : [];
@@ -1707,7 +1747,7 @@ export function FunderOrderCard({
   };
   const selectJointCollateralSegment = (segmentId: string) => {
     setSelectedJointCollateralSegmentId(segmentId);
-    const segment = jointOrderSegments.find(item => String(item.id || '') === segmentId);
+    const segment = findJointOrderSegmentByStableId(segmentId);
     loadQuickCollateralEditor(segment || order, segmentId || '__primary__');
   };
   const handleOpenCollateralPanel = () => {
@@ -1751,9 +1791,9 @@ export function FunderOrderCard({
     }
     const collateralAssetsChanged = JSON.stringify(validManual) !== initialCollateralSignature;
     if (selectedJointCollateralSegment) {
-      const selectedSegmentId = String(selectedJointCollateralSegment.id || '');
-      const nextSegments = jointOrderSegments.map((segment) => {
-        if (String(segment.id || '') !== selectedSegmentId) return segment;
+      const selectedSegmentId = selectedJointCollateralSegmentId;
+      const nextSegments = jointOrderSegments.map((segment, sourceIndex) => {
+        if (getJointSegmentStableId(segment, sourceIndex) !== selectedSegmentId) return segment;
         return {
           ...segment,
           display_config: newDC,
@@ -1815,9 +1855,9 @@ export function FunderOrderCard({
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
-  // 已结订单优先使用管理员保存的结息截止日；老订单回退至实际结清时点，绝不继续算至今天。
+  // 已结订单优先使用冻结的实际结清日期；未结订单填写合同截止日后按完整期限固定。
   const settlementState = isPrimaryJointSegmentSettled ? primaryJointSettlement : null;
-  const interestEndAt = settlementSnapshot?.interestEndDate || settlementState?.interest_end_date || (order as any).interest_end_date || order.settled_at || null;
+  const interestEndAt = resolveFunderInterestEndDate(order, settlementSnapshot?.interestEndDate || settlementState?.interest_end_date);
   const holdingEndAt = settlementSnapshot?.holdingEndAt || settlementState?.interest_end_date || order.settled_at || null;
   const isInterestFrozen = isPricingFrozen || isPhysicalOrderSettled;
   const accrued = useAccruedInterestFunder(
@@ -2038,6 +2078,65 @@ export function FunderOrderCard({
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // “融”及本金状态仅用于展示；担保缺口独立读取管理员选择的公式。
   const principalLentOut = hasExplicitPrincipalLentOut;
+  const [jointSegmentsCollapsed, setJointSegmentsCollapsed] = useState(false);
+  // 多段订单折叠时只汇总明确标为“借出”的合同本金。优先使用保存时的原始输入快照，
+  // 不用实时汇率换算，更不混入待结利息、担保物或浮盈亏。
+  const jointLentPrincipalSummary = useMemo(() => {
+    const normalizeCurrency = (value: unknown) => {
+      const raw = String(value || '').trim().toUpperCase();
+      if (['CNY', 'RMB', '人民币', '元'].includes(raw)) return 'CNY';
+      if (['USDT', 'U'].includes(raw)) return 'USDT';
+      return raw || 'USDT';
+    };
+    const parseConfig = (entry: any): Record<string, any> => {
+      try {
+        return typeof entry?.display_config === 'string'
+          ? JSON.parse(entry.display_config)
+          : (entry?.display_config || {});
+      } catch {
+        return {};
+      }
+    };
+    const entries = [order, ...jointOrderSegments];
+    const totals = new Map<string, number>();
+    let settledSegmentCount = 0;
+    entries.forEach((entry, index) => {
+      const settled = index === 0
+        ? isPrimaryJointSegmentSettled
+        : String(entry?.status || '').toLowerCase() === 'settled';
+      if (settled) settledSegmentCount += 1;
+      const config = parseConfig(entry);
+      const isLentPrincipal = (entry?.principal_lent_out === true || Number(entry?.principal_lent_out) === 1)
+        && config.assetFundingType !== 'self'
+        && config.selfFundedAsset !== true
+        && config.selfFundedAsset !== 'true';
+      if (!isLentPrincipal) return;
+      const snapshotAmount = Number(config.financingInputAmount);
+      const storedAmount = Number(entry?.amount);
+      const amount = Number.isFinite(snapshotAmount) && snapshotAmount > 0 ? snapshotAmount : storedAmount;
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      const currency = normalizeCurrency(
+        Number.isFinite(snapshotAmount) && snapshotAmount > 0
+          ? (config.financingInputCurrency || entry?.amount_currency)
+          : entry?.amount_currency,
+      );
+      totals.set(currency, (totals.get(currency) || 0) + amount);
+    });
+    const currencyOrder = (currency: string) => currency === 'CNY' ? 0 : currency === 'USDT' ? 1 : 2;
+    return {
+      segmentCount: entries.length,
+      settledSegmentCount,
+      totals: Array.from(totals.entries())
+        .sort(([left], [right]) => currencyOrder(left) - currencyOrder(right) || left.localeCompare(right))
+        .map(([currency, amount]) => ({ currency, amount })),
+    };
+  }, [order, jointOrderSegments, isPrimaryJointSegmentSettled]);
+  const formatJointLentPrincipal = (amount: number, currency: string) => {
+    const precision = currency === 'CNY' || currency === 'USDT' ? 2 : 8;
+    return `${amount.toLocaleString(undefined, { maximumFractionDigits: precision })} ${currency === 'CNY' ? '元' : currency === 'USDT' ? 'U' : currency}`;
+  };
+  const hasJointSegments = !jointSegmentMode && jointOrderSegments.length > 0;
+  const shouldRenderJointSegmentDetails = !hasJointSegments || !jointSegmentsCollapsed;
   const collateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
@@ -2089,6 +2188,9 @@ export function FunderOrderCard({
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
+  // 仅改变未结整期预收的可见精度；担保缺口、公式及账务计算仍使用 displayAccrued 原值。
+  const usesContractInterestPrepaymentForDisplay = !hasExternalPendingInterest
+    && usesFunderContractInterestPrepayment(order);
   // 37号待结/已结是两个可独立启用的人民币口径来源；未启用的一边继续沿用52号订单自身计算。
   const displayedAccruedValue = hasExternalPendingInterest ? linked37PendingInterestCny : displayAccrued;
   const displayedAccruedUnit = hasExternalPendingInterest ? '元' : interestUnit;
@@ -2885,7 +2987,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       {!jointSegmentMode && !isSettled && isPrimaryJointSegmentSettled && (
         <div className="border-b px-4 py-1.5 text-center text-xs font-semibold" style={{ borderColor: '#FECACA', color: '#B91C1C', backgroundColor: '#FFF1F2' }}>
-          第一段已结清{settledTimestamp ? ` · 结算日 ${settledTimestamp}` : ''}，其余关联分段继续持有
+          订单主体段已结清{settledTimestamp ? ` · 结算日 ${settledTimestamp}` : ''}，其余关联分段继续持有
         </div>
       )}
       {!jointSegmentMode && <>
@@ -2983,6 +3085,19 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
           </button>
         )}
+        {hasJointSegments && (
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); setJointSegmentsCollapsed((collapsed) => !collapsed); }}
+            className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-[11px] font-semibold"
+            style={{ color: '#526A9D' }}
+            aria-expanded={!jointSegmentsCollapsed}
+            aria-label={jointSegmentsCollapsed ? `展开${jointLentPrincipalSummary.segmentCount}段订单明细` : `收起${jointLentPrincipalSummary.segmentCount}段订单明细`}
+          >
+            <span>{jointSegmentsCollapsed ? '展开' : '收起'}</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${jointSegmentsCollapsed ? '-rotate-90' : 'rotate-90'}`} />
+          </button>
+        )}
         {allowImageDownload && (
           <React.Suspense fallback={null}>
             <OrderCardImageDownload
@@ -2996,35 +3111,43 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       </div>
       </>}
 
-      {isPreviewSegmentAccordion && (
+      {hasJointSegments && jointSegmentsCollapsed && (
+        <div className="border-b px-4 py-2.5" style={{ borderColor: '#E4E8F5', backgroundColor: '#F8FAFC' }}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="shrink-0 text-xs font-medium text-slate-500">{jointLentPrincipalSummary.segmentCount} 段 · 借出本金合计</span>
+            <span className="min-w-0 text-right text-sm font-semibold tabular-nums text-slate-800">
+              {jointLentPrincipalSummary.totals.length > 0
+                ? jointLentPrincipalSummary.totals.map(({ currency, amount }) => formatJointLentPrincipal(amount, currency)).join(' · ')
+                : '暂无借出本金'}
+            </span>
+          </div>
+          {jointLentPrincipalSummary.settledSegmentCount > 0 && (
+            <p className="mt-1 text-[10px] text-slate-400">含已结清 {jointLentPrincipalSummary.settledSegmentCount} 段；仅合计各段保存的借出本金，不含利息、担保和浮盈亏。</p>
+          )}
+        </div>
+      )}
+
+      {shouldRenderJointSegmentDetails && isPreviewSegmentAccordion && (
         <div className="flex items-center gap-1 overflow-x-auto border-b px-3 py-1.5" style={{ borderColor: '#E4E8F5', backgroundColor: '#F8FAFC' }}>
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onPreviewSegmentFocusChange?.('__primary__'); }}
-            className={`shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${previewFocusedSegmentId === '__primary__' ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-            aria-pressed={previewFocusedSegmentId === '__primary__'}
-          >
-            第 1 段
-          </button>
-          {jointOrderSegments.map((segment, index) => {
-            const segmentId = String(segment.id || `segment-${index + 2}`);
-            const active = previewFocusedSegmentId === segmentId;
+          {jointSegmentDisplayEntries.map((entry) => {
+            const active = previewFocusedSegmentId === entry.id;
             return (
               <button
-                key={segmentId}
+                key={entry.id}
                 type="button"
-                onClick={(event) => { event.stopPropagation(); onPreviewSegmentFocusChange?.(segmentId); }}
-                className={`shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+                onClick={(event) => { event.stopPropagation(); onPreviewSegmentFocusChange?.(entry.id); }}
+                className={`shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? (entry.isPrimary ? 'border-blue-500 bg-blue-500 text-white' : 'border-indigo-500 bg-indigo-500 text-white') : 'border-slate-200 bg-white text-slate-600'}`}
                 aria-pressed={active}
               >
-                第 {index + 2} 段
+                第 {entry.displayIndex + 1} 段{entry.isPrimary ? '（订单主体）' : ''}
               </button>
             );
           })}
         </div>
       )}
 
-      {isPrimaryPreviewSegmentExpanded && <>
+      <div className={!jointSegmentMode && jointOrderSegments.length > 0 ? 'flex flex-col' : undefined}>
+      {shouldRenderJointSegmentDetails && isPrimaryPreviewSegmentExpanded && <div style={!jointSegmentMode && jointOrderSegments.length > 0 ? { order: primaryJointSegmentDisplayNumber } : undefined}>
       {/* 主体：左右两栏布局 */}
       <div className="flex">
 
@@ -3214,7 +3337,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 {isConfiguredStockPnlSource ? (
                   configuredStockFloatPnlCny !== null ? (
                     <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: configuredStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
-                      {configuredStockFloatPnlCny >= 0 ? '+' : ''}{configuredStockFloatPnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元
+                      {configuredStockFloatPnlCny >= 0 ? '+' : ''}{formatFunderFloatingPnlForDisplay(configuredStockFloatPnlCny, true)} 元
                     </span>
                   ) : (
                     <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取股票报价...' : '等待股票报价') : (_pnlTagSummary ? '暂无37号数据' : '加载37号数据...')}</span>
@@ -3235,7 +3358,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     />
                   ) : (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
-                    {floatPnl >= 0 ? '+' : ''}{riskValueInOrderCurrency(floatPnl).toLocaleString(undefined, { maximumFractionDigits: 2 })} {riskDisplayUnit}
+                    {floatPnl >= 0 ? '+' : ''}{formatFunderFloatingPnlForDisplay(riskValueInOrderCurrency(floatPnl))} {riskDisplayUnit}
                   </span>
                   )
                 ) : (
@@ -3540,9 +3663,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             )}
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
-              // 已结订单显示冻结的结息日期；进行中订单显示当前北京日期。
+              // 已结订单显示冻结的结息日期；普通进行中订单填写合同期后按完整期间预收。
               const todayStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-              const interestEndDate = (order as any).interest_end_date || order.settled_at || null;
+              const interestEndDate = resolveFunderInterestEndDate(order, settlementSnapshot?.interestEndDate || settlementState?.interest_end_date);
+              const usesContractInterestPrepayment = !isInvited
+                && order.status === 'active'
+                && Boolean((order as any).contract_interest_end_date)
+                && Boolean(interestEndDate);
               const _tipEndTs = interestEndDate ? new Date(interestEndDate).getTime() : Date.now();
               // 按北京时间自然日计算天数：开始日期当天算1天，每过零点+1天
               const _endDateStr = new Date(_tipEndTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -3567,23 +3694,28 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
                         <div className="space-y-1">
                           <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{fmtDate(startDate)}</span></div>
-                          <div className="flex justify-between"><span>{interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{fmtDate(interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr)}</span></div>
-                          <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
+                          <div className="flex justify-between"><span>{usesContractInterestPrepayment ? '约定结束日（约定不可提前结束）' : interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{fmtDate(interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr)}</span></div>
+                          <div className="flex justify-between"><span>{usesContractInterestPrepayment ? '合同整期天数' : '累计计息天数'}</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
-                        <div>计息基数 × 年化利率 ÷ 365天 × 已过天数</div>
+                        <div>计息基数 × 年化利率 ÷ 365天 × {usesContractInterestPrepayment ? '合同整期天数' : '累计至今日天数'}</div>
                         <div className="mt-1 font-mono">
                           <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {formatFunderAnnualRate(rate)}% ÷ 365天 × {elapsedDays}天</span>
                         </div>
                       </div>
+                      {!usesContractInterestPrepayment && (
+                        <div className="rounded-lg px-2.5 py-2 text-[11px] leading-4" style={{ background: '#F8FAFC', color: '#64748B' }}>
+                          未设置约定结束日，待结利息按开始日至当前日期的自然日累计；担保缺口及担保公式同步采用当前累计金额。
+                        </div>
+                      )}
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计息结果</div>
                         <div className="font-mono flex items-baseline gap-1">
-                          <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {displayAccrued.toFixed(2)} {interestUnit}</span>
+                          <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {formatFunderPendingInterest(displayAccrued, usesContractInterestPrepayment)} {interestUnit}</span>
                         </div>
-                        <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
+                        <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {formatFunderPendingInterest(altAccruedTip, usesContractInterestPrepayment)} {altUnit}</div>
                       </div>
                     </div>
                   </div>
@@ -3592,9 +3724,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             })()}
           </div>}
           {show('accruedInterest') && (
-          <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
+              <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
                 <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayedAccruedValue === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {displayedAccruedValue === null ? '加载中' : <>{displayedAccruedValue === 0 ? '' : (isNegRate ? '-' : '+')}{displayedAccruedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>}
+                  {displayedAccruedValue === null ? '加载中' : <>{displayedAccruedValue === 0 ? '' : (isNegRate ? '-' : '+')}{formatFunderPendingInterest(displayedAccruedValue, usesContractInterestPrepaymentForDisplay)}</>}
                 </span>
                 <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{displayedAccruedUnit}</span>
                 {(() => {
@@ -3605,7 +3737,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     ? (showU ? displayedAccruedAltValue : displayedAccruedValue)
                     : (showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate));
                   const unit = showU ? 'u' : '元';
-                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFunderPendingInterest(val, usesContractInterestPrepaymentForDisplay)} {unit}</span>;
                 })()}
           </div>
           )}
@@ -3613,7 +3745,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             {show('paidInterest') && (
             <>
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1">
+              <span className="grid grid-cols-[3rem_0.875rem] items-center gap-1">
                 <span className="whitespace-nowrap">已结利息</span>
                 <button
                   type="button"
@@ -3719,14 +3851,17 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   </div>
                 );
               }
+              const usesContractPrepaymentDuration = usesFunderContractInterestPrepayment(order) && Boolean(interestEndAt);
               const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
               const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00+08:00').getTime();
-              const label = elapsed <= 0 ? '0小时' : (() => {
-                const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
-                const days = Math.floor(totalHours / 24);
-                const hours = totalHours % 24;
-                return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
-              })();
+              const label = usesContractPrepaymentDuration
+                ? `${calculateFunderInterestDays(order.interest_start_date, interestEndAt)}天`
+                : (elapsed <= 0 ? '0小时' : (() => {
+                    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                    const days = Math.floor(totalHours / 24);
+                    const hours = totalHours % 24;
+                    return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                  })());
               return (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">计息时长</span>
@@ -3838,7 +3973,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               ><HelpMarkerText symbol="!" /></button>
                             )}
                           </span>
-                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>{formatWalletStyleAssetAmount(a.coin, a.qty)} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
                         {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
                           const aciRaw = dc?.approxCollateralItem;
@@ -3914,8 +4049,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </div>
                         <div className="mt-3 space-y-2.5">
                           {[
-                            ...(primaryJointInternalShareSelected ? [{ id: '__primary__', label: '第1段', source: order, poolEligible: primaryJointInternalShareEnabled }] : []),
-                            ...jointOrderSegments.filter((segment: any) => segment?.collateral_share_mode === 'self').map((segment: any, index: number) => ({ id: String(segment.id || `segment-${index + 2}`), label: `第${index + 2}段`, source: segment, poolEligible: !['full_value', 'initial_principal'].includes(getFunderCollateralRiskFormulaForDisplay(segment)) })),
+                            ...(primaryJointInternalShareSelected
+                              ? [{ id: '__primary__', label: `第${(jointSegmentDisplayEntries.find((entry) => entry.isPrimary)?.displayIndex ?? 0) + 1}段（订单主体）`, source: order, poolEligible: primaryJointInternalShareEnabled }]
+                              : []),
+                            ...jointSegmentDisplayEntries
+                              .filter((entry) => !entry.isPrimary && entry.segment?.collateral_share_mode === 'self')
+                              .map((entry) => ({ id: entry.id, label: `第${entry.displayIndex + 1}段`, source: entry.segment, poolEligible: !['full_value', 'initial_principal'].includes(getFunderCollateralRiskFormulaForDisplay(entry.segment)) })),
                           ].map((member: any) => {
                             const manualAssets = member.poolEligible ? getManualJointCollateralAssets(member.source?.collateral_assets) : [];
                             const walletAssets = member.poolEligible ? getJointSegmentWalletCollateralAssets(member.id) : [];
@@ -4685,7 +4824,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 </div>
               )}
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-0.5 pt-px">
+                <div className="grid grid-cols-[3rem_0.875rem] items-center gap-1 pt-px">
                   <span className="text-gray-400">担保缺口</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralGapFormulaInfo(true); }}
@@ -4720,10 +4859,35 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 const effectiveCollateral = floatPnlForRisk !== null
                   ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
                   : collateralValue - accruedForRisk + paidInterestForRisk;
-                const marginRateNumerator = uses52ExternalInputs ? externalNonSharedGapU : effectiveCollateral;
-                const marginRateBaseU = uses52ExternalInputs ? collateralGapBaseForRisk : interestBaseForRisk;
+                // 手动基数与“担保缺口”采用相同主展示单位；内部仅为运算而换回 U，
+                // 避免人民币、U 或其他订单计价币种出现卡片数字和百分比口径不一致。
+                const rawManualMarginRateBase = dc ? (dc as any).marginRateBase : null;
+                const manualMarginRateBaseDisplay = Number(rawManualMarginRateBase);
+                const hasManualMarginRateBase = !usesExternalMarginRate
+                  && Number.isFinite(manualMarginRateBaseDisplay)
+                  && manualMarginRateBaseDisplay > 0;
+                const displayedCollateralGapU = isConfiguredStockPnlSource
+                  ? (isSharedMode ? effectiveExposure : externalNonSharedGapU)
+                  : effectiveExposure;
+                const manualMarginRateBaseU = hasManualMarginRateBase
+                  ? (collateralGapPrimaryDisplay === 'CNY'
+                    ? (cnyRate > 0 ? manualMarginRateBaseDisplay / cnyRate : 0)
+                    : amountCurrency === 'USDT'
+                      ? manualMarginRateBaseDisplay
+                      : (amountCurrencyPrice && amountCurrencyPrice > 0
+                        ? manualMarginRateBaseDisplay * amountCurrencyPrice
+                        : 0))
+                  : 0;
+                const marginRateNumerator = hasManualMarginRateBase
+                  ? displayedCollateralGapU
+                  : (uses52ExternalInputs ? externalNonSharedGapU : effectiveCollateral);
+                const marginRateBaseU = hasManualMarginRateBase
+                  ? manualMarginRateBaseU
+                  : (uses52ExternalInputs ? collateralGapBaseForRisk : interestBaseForRisk);
                 const canShowMarginRate = usesExternalMarginRate
                   ? true
+                  : hasManualMarginRateBase
+                    ? marginRateNumerator !== null && Number.isFinite(marginRateNumerator) && marginRateBaseU > 0
                   : uses52ExternalInputs
                     ? marginRateNumerator !== null && Number.isFinite(marginRateNumerator) && marginRateBaseU > 0
                     : collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0;
@@ -4734,16 +4898,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   : (marginRateBaseU > 0 ? resolvedMarginRateNumerator / marginRateBaseU : 0);
                 const marginColor = marginRatio === null ? '#9CA3AF' : marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                 const marginRiskRatio = marginRatio ?? 0;
-                const alertThreshold = (dc && typeof (dc as any).marginAlertThreshold === 'number') ? (dc as any).marginAlertThreshold as number : null;
+                // 旧订单和编辑器实时预览可能把阈值保存为字符串（例如 "10"）。
+                // 统一按可解析数值读取，避免比例已经低于预警线却不显示红色告警。
+                const parsedAlertThreshold = Number(dc ? (dc as any).marginAlertThreshold : NaN);
+                const alertThreshold = Number.isFinite(parsedAlertThreshold) && parsedAlertThreshold >= 0
+                  ? parsedAlertThreshold
+                  : null;
                 const isAlerting = marginRatio !== null && alertThreshold !== null && (marginRatio * 100) < alertThreshold;
                 return (
                   <>
                     <div className="flex items-center justify-between mt-0.5">
-                      <div className="flex items-center gap-1">
+                      <div className="grid grid-cols-[3rem_0.875rem] items-center gap-1">
                         <span className="text-gray-400">保证金率</span>
-                        {isAlerting && (
-                          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex-shrink-0 animate-pulse" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
-                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowMarginInfo(true); }}
                           className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none"
@@ -4770,6 +4936,17 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     <strong style={{ color: marginColor }}>{marginRatio === null ? '加载中...' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
                                   </div>
                                   <div className="mt-1 text-[10px] text-gray-400">{referencedMarginRate.denominator === 'balance' ? '37号未设置保证金基数，已按其原页面的“占余额”备用口径显示。' : '直接引用37号原始比例，不混入52号订单的本金、利息或担保缺口。'}</div>
+                                </>
+                              ) : hasManualMarginRateBase ? (
+                                <>
+                                  <div>保证金率 = 担保缺口 ÷ 保证金率计算基数 × 100%</div>
+                                  <div className="mt-1 font-mono text-[10px]">
+                                    <span style={{ color: '#3B82F6' }}>
+                                      = {marginRateNumerator === null ? '担保缺口加载中' : `${riskValueInOrderCurrency(marginRateNumerator).toFixed(2)} ${riskDisplayUnit}`} ÷ {manualMarginRateBaseDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} {riskDisplayUnit} × 100% =
+                                    </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                  </div>
+                                  <div className="mt-1 text-[10px] text-gray-400">计算基数由管理员录入，单位自动与本订单担保缺口保持一致。</div>
                                 </>
                               ) : uses52ExternalInputs ? (
                                 <>
@@ -5061,9 +5238,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         </div>
       )}
 
-      </>}
+      </div>}
 
-      {!jointSegmentMode && jointInternalSelectedMemberIds.length > 0 && (
+      {shouldRenderJointSegmentDetails && !jointSegmentMode && jointInternalSelectedMemberIds.length > 0 && (
         <div className="mx-4 mt-3 rounded-xl border px-3 py-2.5" style={{ borderColor: '#C7D2FE', background: '#EEF2FF' }}>
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs font-semibold" style={{ color: '#4338CA' }}>联合内部共享担保</div>
@@ -5084,8 +5261,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       )}
 
         {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
-    {jointOrderSegments.map((segment, index) => {
-      const segmentId = String(segment.id || `segment-${index + 2}`);
+    {shouldRenderJointSegmentDetails && jointSegmentDisplayEntries.filter((entry) => !entry.isPrimary).map((entry) => {
+      const segment = entry.segment;
+      if (!segment) return null;
+      const segmentId = entry.id;
+      const displaySegmentNumber = entry.displayIndex + 1;
       // 浮动预览中只完整展示当前编辑段；其他段由上方小切换条代表，避免多段订单撑满手机屏幕。
       if (isPreviewSegmentAccordion && previewFocusedSegmentId !== segmentId) return null;
       // 历史子段没有 asset_type 时才兼容展示第一段；显式的新子段绝不再继承其类型或期权参数。
@@ -5139,11 +5319,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         collateral_source: null,
         collateral_share_mode: segmentSelectedCrossOrderCollateral ? 'self' : 'none',
         principal_lent_out: segment.principal_lent_out ? 1 : 0,
-        joint_segment_id: String(segment.id || `segment-${index + 2}`),
+        joint_segment_id: segmentId,
         joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
         public_note: null,
         admin_note: null,
-        personal_header_label: `${String((order as any).participant_name || (order as any).owner_label || '个人订单')} · 联合第${index + 2}段`,
+        personal_header_label: String((order as any).participant_name || (order as any).owner_label || '个人订单'),
         display_config: JSON.stringify({
           ...parentDisplayConfig,
           ...segmentDisplayConfig,
@@ -5155,7 +5335,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         <div
           key={`joint-segment-${order.id}-${segmentId}`}
           className="w-full"
-          style={{ background: String(segment.status || '').toLowerCase() === 'settled' ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff') }}
+          style={{ order: displaySegmentNumber, background: String(segment.status || '').toLowerCase() === 'settled' ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff') }}
         >
           <div className="relative mx-4 flex h-6 items-center justify-center">
             <div className="absolute inset-x-0 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
@@ -5183,6 +5363,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         </div>
       );
     })}
+      </div>
 
       {/* 底部操作栏：仅管理员可见 */}
       {!previewMode && !jointSegmentMode && isAdmin && (
@@ -5270,8 +5451,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             <div className="mb-2 rounded-lg border border-blue-100 bg-white px-2.5 py-2">
               <div className="mb-1.5 text-[11px] text-gray-500">担保归属</div>
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => selectJointCollateralSegment('')} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${!selectedJointCollateralSegmentId ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第一段</button>
-                {jointOrderSegments.map((segment, index) => <button key={String(segment.id)} type="button" onClick={() => selectJointCollateralSegment(String(segment.id || ''))} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${selectedJointCollateralSegmentId === String(segment.id || '') ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第 {index + 2} 段</button>)}
+                {jointSegmentDisplayEntries.map((entry) => {
+                  const active = entry.isPrimary ? !selectedJointCollateralSegmentId : selectedJointCollateralSegmentId === entry.id;
+                  return <button key={entry.id} type="button" onClick={() => selectJointCollateralSegment(entry.isPrimary ? '' : entry.id)} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${active ? (entry.isPrimary ? 'border-blue-500 bg-blue-500 text-white' : 'border-indigo-500 bg-indigo-500 text-white') : 'border-gray-200 bg-white text-gray-600'}`}>第 {entry.displayIndex + 1} 段{entry.isPrimary ? '（订单主体）' : ''}</button>;
+                })}
               </div>
             </div>
           )}
@@ -5597,8 +5780,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               <div>
                 <div className="mb-1 text-xs text-gray-500">结息归属</div>
                 <div className="flex flex-wrap gap-1.5">
-                  <button type="button" onClick={() => setSelectedJointPaymentSegmentId('')} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${!selectedJointPaymentSegmentId ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第一段</button>
-                  {jointOrderSegments.map((segment, index) => <button key={String(segment.id)} type="button" onClick={() => setSelectedJointPaymentSegmentId(String(segment.id))} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${selectedJointPaymentSegmentId === String(segment.id) ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第 {index + 2} 段</button>)}
+                  {jointSegmentDisplayEntries.map((entry) => {
+                    const active = entry.isPrimary ? !selectedJointPaymentSegmentId : selectedJointPaymentSegmentId === entry.id;
+                    return <button key={entry.id} type="button" onClick={() => setSelectedJointPaymentSegmentId(entry.isPrimary ? '' : entry.id)} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${active ? (entry.isPrimary ? 'border-blue-500 bg-blue-500 text-white' : 'border-indigo-500 bg-indigo-500 text-white') : 'border-gray-200 bg-white text-gray-600'}`}>第 {entry.displayIndex + 1} 段{entry.isPrimary ? '（订单主体）' : ''}</button>;
+                  })}
                 </div>
               </div>
             )}

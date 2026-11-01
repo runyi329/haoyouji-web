@@ -9,6 +9,7 @@ import { Router, Request, Response } from "express";
 import { getDbConnection } from "./db";
 import { sdk } from "./_core/sdk";
 import { getLatestPrice } from "./price-scanner";
+import { calculateFunderInterestDays, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 
 const router = Router();
 
@@ -959,7 +960,6 @@ async function calcCollateralRatio(
   let totalCollateralValue = 0;
   let totalCollateralRequired = 0;
   let totalBuyValue = 0;
-  const bjOffset = 8 * 60 * 60 * 1000;
 
   for (const o of orders) {
     // 担保物市值
@@ -984,15 +984,10 @@ async function calcCollateralRatio(
     // 待结利息
     const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
     const annualRate = parseFloat(String(o.interest_rate_annual || 0)) || 0;
-    const startDate = o.interest_start_date ? new Date(o.interest_start_date) : null;
-    const holdDays = (() => {
-      if (!startDate) return 0;
-      const startBJ = new Date(startDate.getTime() + bjOffset);
-      const nowBJ = new Date(Date.now() + bjOffset);
-      const startDay = Math.floor(startBJ.getTime() / 86400000);
-      const nowDay = Math.floor(nowBJ.getTime() / 86400000);
-      return Math.max(0, nowDay - startDay + 1);
-    })();
+    const holdDays = calculateFunderInterestDays(
+      o.interest_start_date,
+      resolveFunderInterestEndDate(o),
+    );
     const totalInterest = principal * (annualRate / 100) * holdDays / 365;
     const paidInterest = paidMap[Number(o.id)] || 0;
     const pendingInterest = Math.max(0, totalInterest - paidInterest);

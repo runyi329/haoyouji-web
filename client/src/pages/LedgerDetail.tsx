@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
+import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { matchesUserSearch } from "@/lib/userIdentity";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import Lottie from "lottie-react";
@@ -567,8 +568,8 @@ function FunderOrderCardLegacy({
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
-  // 已结订单优先使用保存的结息截止日；老订单回退实际结清时间，绝不继续计算至今天。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  // 已结订单使用冻结的实际结清日期；未结订单填写合同截止日后按完整期限固定。
+  const interestEndAt = resolveFunderInterestEndDate(order);
   const accrued = useAccruedInterestFunder(
     (order.status === 'active' || interestEndAt) ? order.interest_base : null,
     (order.status === 'active' || interestEndAt) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
@@ -1046,7 +1047,11 @@ function FunderOrderCardLegacy({
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
               const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-              const interestEndDate = (order as any).interest_end_date || order.settled_at || null;
+              const interestEndDate = resolveFunderInterestEndDate(order);
+              const usesContractInterestPrepayment = !isInvited
+                && order.status === 'active'
+                && Boolean((order as any).contract_interest_end_date)
+                && Boolean(interestEndDate);
               const _tipEndTs = interestEndDate ? new Date(interestEndDate).getTime() : Date.now();
               // 与 useAccruedInterestFunder 一致：按北京时间自然日，开始日与截止日均计入。
               const endDateStr = new Date(_tipEndTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -1070,23 +1075,28 @@ function FunderOrderCardLegacy({
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
                         <div className="space-y-1">
                           <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startDate || '--'}</span></div>
-                          <div className="flex justify-between"><span>{interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr}</span></div>
-                          <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
+                          <div className="flex justify-between"><span>{usesContractInterestPrepayment ? '约定结束日（约定不可提前结束）' : interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr}</span></div>
+                          <div className="flex justify-between"><span>{usesContractInterestPrepayment ? '合同整期天数' : '累计计息天数'}</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
-                        <div>计息基数 × 年化利率 ÷ 365天 × 计息天数</div>
+                        <div>计息基数 × 年化利率 ÷ 365天 × {usesContractInterestPrepayment ? '合同整期天数' : '累计至今日天数'}</div>
                         <div className="mt-1 font-mono">
                           <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 × {elapsedDays}天</span>
                         </div>
                       </div>
+                      {!usesContractInterestPrepayment && (
+                        <div className="rounded-lg px-2.5 py-2 text-[11px] leading-4" style={{ background: '#F8FAFC', color: '#64748B' }}>
+                          未设置约定结束日，待结利息按开始日至当前日期的自然日累计；担保缺口及担保公式同步采用当前累计金额。
+                        </div>
+                      )}
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计息结果</div>
                         <div className="font-mono flex items-baseline gap-1">
-                          <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {displayAccrued.toFixed(6)} {interestUnit}</span>
+                          <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {formatFunderPendingInterest(displayAccrued, usesContractInterestPrepayment)} {interestUnit}</span>
                         </div>
-                        <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
+                        <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {formatFunderPendingInterest(altAccruedTip, usesContractInterestPrepayment)} {altUnit}</div>
                       </div>
                     </div>
                   </div>
@@ -1097,11 +1107,11 @@ function FunderOrderCardLegacy({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-0.5">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{formatFunderPendingInterest(displayAccrued, !isInvited && usesFunderContractInterestPrepayment(order))}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
             </div>
-            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFunderPendingInterest(altAccrued, !isInvited && usesFunderContractInterestPrepayment(order))} {altUnit}</div>
           </div>
           <div className="space-y-0.5 text-xs">
             {show('paidInterest') && (

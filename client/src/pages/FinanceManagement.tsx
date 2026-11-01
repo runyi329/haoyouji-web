@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { trpc } from "@/lib/trpc";
+import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
@@ -282,12 +283,13 @@ function FinanceOrderCard({
   const _accBase = _isGreen ? (order.participantInfo?.commissionBase ?? order.interest_base) : order.interest_base;
   const _accRate = _isGreen ? (order.participantInfo?.commissionRate ?? order.interest_rate_annual) : order.interest_rate_annual;
   const _accStart = _isGreen ? (order.participantInfo?.commissionStartDate ?? order.interest_start_date) : order.interest_start_date;
+  const interestEndAt = resolveFunderInterestEndDate(order);
   // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
   const accrued = useAccruedInterest(
-    (order.status === 'active' || order.settled_at) ? _accBase : null,
-    (order.status === 'active' || order.settled_at) ? _accRate : null,
-    (order.status === 'active' || order.settled_at) ? _accStart : null,
-    order.settled_at
+    (order.status === 'active' || interestEndAt) ? _accBase : null,
+    (order.status === 'active' || interestEndAt) ? _accRate : null,
+    (order.status === 'active' || interestEndAt) ? _accStart : null,
+    interestEndAt
   );
 
   const rateStr = String((_isGreen ? (order.participantInfo?.commissionRate ?? order.interest_rate_annual) : order.interest_rate_annual) || '');
@@ -340,6 +342,7 @@ function FinanceOrderCard({
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
+  const usesContractInterestPrepayment = !_isGreen && usesFunderContractInterestPrepayment(order);
 
   // 持有时长——已结清订单冻结在 settled_at 时刻
   const holdDurationLabel = (() => {
@@ -680,11 +683,11 @@ function FinanceOrderCard({
                   <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                     {isGreenOrder
                       ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))
-                      : (displayAccrued > 0 ? '-' : '')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      : (displayAccrued > 0 ? '-' : '')}{formatFunderPendingInterest(displayAccrued, usesContractInterestPrepayment)}
                   </span>
                   <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
                 </div>
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{isGreenOrder ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')) : (altAccrued > 0 ? '-' : '')}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{isGreenOrder ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')) : (altAccrued > 0 ? '-' : '')}{formatFunderPendingInterest(altAccrued, usesContractInterestPrepayment)} {altUnit}</div>
               </div>
             </>
           ) : <div style={{ height: '16px' }} />}
@@ -758,8 +761,8 @@ function FinanceOrderCard({
               </div>
             )}
             {/* 计息时长（绿色订单显示，与 FunderManagement 一致） */}
-            {isGreenOrder && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
-              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+            {isGreenOrder && order.interest_start_date && (order.status === 'active' || interestEndAt) && (() => {
+              const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
               const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
               const totalHours = Math.floor(elapsed / (1000 * 60 * 60));

@@ -1,5 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
+import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHash, createHmac } from "crypto";
@@ -1704,7 +1705,7 @@ async function ensureFunderParticipantSnapshotColumnsInternal(): Promise<void> {
 const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'coin', 'amount', 'amount_currency', 'buy_price', 'buy_date', 'buy_quantity', 'storage_account', 'status',
   'admin_note', 'public_note', 'interest_rate_annual', 'interest_payment_type', 'interest_base',
-  'interest_base_currency', 'interest_rate_currency', 'interest_start_date', 'collateral_coin', 'collateral_qty',
+  'interest_base_currency', 'interest_rate_currency', 'interest_start_date', 'contract_interest_end_date', 'collateral_coin', 'collateral_qty',
   'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
@@ -1885,7 +1886,7 @@ function resolveFunderOwnerVisibilitySnapshot(snapshot: Record<string, any> | nu
 
 const FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS = [
   'interest_rate_annual', 'interest_base', 'interest_base_currency',
-  'interest_rate_currency', 'interest_payment_type', 'interest_start_date',
+  'interest_rate_currency', 'interest_payment_type', 'interest_start_date', 'contract_interest_end_date',
 ] as const;
 
 /** 共同拥有者的两项利息口径由物理主订单决定；历史订单缺省时继续各自计算。 */
@@ -23287,7 +23288,7 @@ ${klinesSummary}
         // 日期字段保持兼容的 yyyy-MM-dd 格式；结清时间则保留时分秒，供列表按实际结清先后排序。
         const orders = filteredOrders.map((o: any) => {
           const result = { ...o };
-          const dateFields = ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date'];
+          const dateFields = ['interest_start_date', 'contract_interest_end_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date'];
           for (const field of dateFields) {
             if (result[field] instanceof Date) {
               const d = result[field] as Date;
@@ -24352,17 +24353,11 @@ ${klinesSummary}
             const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
             // 年利率取绝对值：负利率（付息型）和正利率（收息型）利息金额都是正数
             const annualRate = Math.abs(parseFloat(String(o.interest_rate_annual || 0)) || 0);
-            const startDate = o.interest_start_date ? new Date(o.interest_start_date) : null;
-            // 按北京时间自然日计天，开始当天算1天
-            const holdDays = (() => {
-              if (!startDate) return 0;
-              const bjOffset = 8 * 60 * 60 * 1000;
-              const startBJ = new Date(startDate.getTime() + bjOffset);
-              const nowBJ = new Date(Date.now() + bjOffset);
-              const startDay = Math.floor(startBJ.getTime() / 86400000);
-              const nowDay = Math.floor(nowBJ.getTime() / 86400000);
-              return Math.max(0, nowDay - startDay + 1);
-            })();
+            // 未结订单填写合同截止日后，待结利息按完整合同期间预收；旧订单继续累计到今天。
+            const holdDays = calculateFunderInterestDays(
+              o.interest_start_date,
+              resolveFunderInterestEndDate(o),
+            );
             const totalInterest = principal * (annualRate / 100) * holdDays / 365;
             const expectedParticipantUserId = o._sharedPoolParticipantUserId == null ? null : Number(o._sharedPoolParticipantUserId);
             const baseCurrencyRaw = String(o.interest_base_currency || 'USDT').toUpperCase();
@@ -24712,7 +24707,7 @@ ${klinesSummary}
         }
         const serializeDates = (source: any) => {
           const next = { ...source };
-          for (const field of ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'interest_end_date']) {
+          for (const field of ['interest_start_date', 'contract_interest_end_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'interest_end_date']) {
             if (next[field] instanceof Date) {
               const date = next[field] as Date;
               next[field] = field === 'settled_at'
@@ -25588,7 +25583,7 @@ ${klinesSummary}
         ) as any;
         const rawOrders = (rows[0] ?? rows) as any[];
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace()/.split() 崩溃
-        const dateFields = ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'deleted_at'];
+        const dateFields = ['interest_start_date', 'contract_interest_end_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'deleted_at'];
         return rawOrders.map((o: any) => {
           const result = { ...o };
           for (const field of dateFields) {
@@ -26658,6 +26653,8 @@ ${klinesSummary}
         interestBase: z.string().optional(),
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
+        // 合同周期用，不等同于实际结清时冻结的 interestEndDate。
+        contractInterestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
@@ -26711,7 +26708,7 @@ ${klinesSummary}
           const [columnRows] = await orderSchemaConn.execute(
             `SELECT COLUMN_NAME FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_orders'
-               AND COLUMN_NAME IN ('trading_fee_rate_per_mille', 'trading_fee_status', 'frontend_placement')`
+               AND COLUMN_NAME IN ('trading_fee_rate_per_mille', 'trading_fee_status', 'frontend_placement', 'contract_interest_end_date')`
           ) as any;
           const existingColumns = new Set((columnRows || []).map((row: any) => String(row.COLUMN_NAME)));
           const addColumnIfMissing = async (columnName: string, definition: string) => {
@@ -26726,6 +26723,7 @@ ${klinesSummary}
           await addColumnIfMissing('trading_fee_rate_per_mille', 'trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000');
           await addColumnIfMissing('trading_fee_status', "trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
           await addColumnIfMissing('frontend_placement', "frontend_placement VARCHAR(16) DEFAULT NULL COMMENT '用户前端强制分栏：self/participant；NULL为自动'");
+          await addColumnIfMissing('contract_interest_end_date', "contract_interest_end_date DATE DEFAULT NULL COMMENT '约定计息合同截止日，仅锁定未结订单待结利息周期'");
         } catch (e: any) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '初始化订单手续费字段失败: ' + (e?.message || '未知错误') });
         }
@@ -26762,6 +26760,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS contract_interest_end_date DATE DEFAULT NULL`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -26779,9 +26778,12 @@ ${klinesSummary}
         }
         const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
         const frontendPlacement = normalizeFunderFrontendPlacement(input.frontendPlacement);
+        if (!isValidFunderContractInterestPeriod(input.interestStartDate, input.contractInterestEndDate)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '约定计息结束日不能早于计息开始日期' });
+        }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, frontend_placement, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${frontendPlacement}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, contract_interest_end_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, frontend_placement, trading_fee_rate_per_mille, trading_fee_status, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.contractInterestEndDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${frontendPlacement}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
         const newOrderId = (insertResult as any)?.insertId || ((insertResult as any)?.[0] as any)?.insertId;
         return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
@@ -26808,6 +26810,8 @@ ${klinesSummary}
         interestBase: z.string().optional(),
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
+        // 合同周期结束日，和结清操作专用的 interestEndDate 分开保存。
+        contractInterestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         // 结清时按北京自然日冻结利息；未传时默认结清当日。
         interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         // 当天由服务器行情缓存取价；历史结算日要求管理员录入当日最终价与汇率。
@@ -26864,8 +26868,9 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS contract_interest_end_date DATE DEFAULT NULL`).catch(() => {});
         const existingOrderRows = await db.execute(
-          sql`SELECT display_config, principal_lent_out FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT display_config, principal_lent_out, interest_start_date FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const existingOrder = (existingOrderRows[0]?.[0] ?? existingOrderRows[0]) as any;
         const effectiveDisplayConfig = input.displayConfig !== undefined
@@ -26877,6 +26882,12 @@ ${klinesSummary}
           : (input.principalLentOut === undefined
             ? (existingOrder?.principal_lent_out === 1 || existingOrder?.principal_lent_out === true)
             : input.principalLentOut);
+        const effectiveInterestStartDate = input.interestStartDate === undefined
+          ? existingOrder?.interest_start_date
+          : input.interestStartDate;
+        if (!isValidFunderContractInterestPeriod(effectiveInterestStartDate, input.contractInterestEndDate)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '约定计息结束日不能早于计息开始日期' });
+        }
         // 52号账本共享备注由 funderUpdatePublicNote 的逐条事务接口专管。
         // 兼容旧前端携带的整个表单，同时杜绝普通订单保存将备注 JSON 整段覆盖。
         if (input.ledgerId === 52 && input.publicNote !== undefined) {
@@ -26890,6 +26901,7 @@ ${klinesSummary}
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
+          contractInterestEndDate: 'contract_interest_end_date',
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
           financeType: 'finance_type', interestRateCurrency: 'interest_rate_currency',
           brokerName: 'broker_name', brokerAccount: 'broker_account',
@@ -27035,6 +27047,24 @@ ${klinesSummary}
             }
           }
         };
+        // 合同计息结束日是普通编辑直接写入的字段。旧库不支持前置的
+        // ADD COLUMN IF NOT EXISTS 时，不能静默继续，否则前端会看似保存成功、重新打开却为空。
+        const ensureContractInterestEndDateColumn = async () => {
+          const [columns] = await conn.query(`
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = 'ledger_orders'
+              AND column_name = 'contract_interest_end_date' LIMIT 1
+          `) as any;
+          if (!Array.isArray(columns) || columns.length === 0) {
+            try {
+              await conn.query(
+                "ALTER TABLE ledger_orders ADD COLUMN contract_interest_end_date DATE DEFAULT NULL COMMENT '约定计息合同截止日，仅锁定未结订单待结利息周期'",
+              );
+            } catch (error: any) {
+              if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+            }
+          }
+        };
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
         try {
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
@@ -27058,6 +27088,7 @@ ${klinesSummary}
         await ensureInterestEndDateColumn();
         await ensureFrontendPlacementColumn();
         await ensureSettlementSnapshotColumn();
+        await ensureContractInterestEndDateColumn();
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。
@@ -27075,6 +27106,8 @@ ${klinesSummary}
         const shouldSyncParticipantPeriodInterestDisplay = input.displayConfig !== undefined
           && (Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotal')
             || Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotalPeriod'));
+        // 合同截止日属于待结利息期间。物理订单拥有者与选择统一待结利息的拥有者必须同步。
+        const shouldSyncParticipantContractInterest = input.contractInterestEndDate !== undefined;
         // 物理第一段与其真实拥有者个人快照必须使用同一担保缺口口径。
         // 共享担保池按个人快照枚举成员；只更新主订单会使打开说明后重新读到旧公式。
         const requestedCollateralRiskFormula = input.displayConfig !== undefined
@@ -27090,6 +27123,7 @@ ${klinesSummary}
           || shouldSyncParticipantCollateral
           || shouldSyncParticipantSharedAsset
           || shouldSyncParticipantPeriodInterestDisplay
+          || shouldSyncParticipantContractInterest
           || shouldSyncPrimaryOwnerCollateralRiskFormula
           || shouldSyncParticipantTags;
         try {
@@ -27206,6 +27240,11 @@ ${klinesSummary}
               }
               const isPhysicalOwnerSnapshot = Number(participant.user_id) === Number(updatedOrder.user_id)
                 && String(participant.role) === 'owner';
+              // 合同结束日是一张融资订单的统一预收期限，不能因个人快照残留旧值
+              // 在列表重新读取时又覆盖主订单的新日期。
+              if (shouldSyncParticipantContractInterest) {
+                snapshot.contract_interest_end_date = updatedOrder.contract_interest_end_date ?? null;
+              }
               if (shouldSyncPrimaryOwnerCollateralRiskFormula && isPhysicalOwnerSnapshot) {
                 const ownerDisplayConfig = parseFunderDisplayConfig(snapshot.display_config);
                 // 只同步担保口径，不覆盖拥有者各自的下载、字段显示等个性化开关。
@@ -28245,6 +28284,7 @@ ${klinesSummary}
           interestBaseCurrency: z.string().optional(),
           interestPaymentType: z.string().optional(),
           interestStartDate: z.string().optional(),
+          contractInterestEndDate: z.string().nullable().optional(),
           interestRateCurrency: z.string().optional(),
           displayConfig: z.string().optional(),
           note: z.string().optional(),
@@ -28330,6 +28370,7 @@ ${klinesSummary}
               interest_base_currency: p.interestBaseCurrency === undefined ? (snapshotBase.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
               interest_payment_type: p.interestPaymentType === undefined ? (snapshotBase.interest_payment_type ?? null) : (p.interestPaymentType || null),
               interest_start_date: p.interestStartDate === undefined ? (snapshotBase.interest_start_date ?? null) : (p.interestStartDate || null),
+              contract_interest_end_date: p.contractInterestEndDate === undefined ? (snapshotBase.contract_interest_end_date ?? null) : (p.contractInterestEndDate || null),
               interest_rate_currency: p.interestRateCurrency === undefined ? (snapshotBase.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
               display_config: p.displayConfig === undefined ? (snapshotBase.display_config ?? null) : (p.displayConfig || null),
               public_note: p.note === undefined ? (snapshotBase.public_note ?? null) : p.note,
@@ -28403,6 +28444,7 @@ ${klinesSummary}
         interestBaseCurrency: z.string().optional(),
         interestPaymentType: z.string().optional(),
         interestStartDate: z.string().optional(),
+        contractInterestEndDate: z.string().nullable().optional(),
         interestRateCurrency: z.string().optional(),
         displayConfig: z.string().optional(),
         orderNoOverride: z.string().optional(),
@@ -28441,6 +28483,7 @@ ${klinesSummary}
           ...(input.interestBaseCurrency !== undefined ? { interest_base_currency: input.interestBaseCurrency || null } : {}),
           ...(input.interestPaymentType !== undefined ? { interest_payment_type: input.interestPaymentType || null } : {}),
           ...(input.interestStartDate !== undefined ? { interest_start_date: input.interestStartDate || null } : {}),
+          ...(input.contractInterestEndDate !== undefined ? { contract_interest_end_date: input.contractInterestEndDate || null } : {}),
           ...(input.interestRateCurrency !== undefined ? { interest_rate_currency: input.interestRateCurrency || null } : {}),
           ...(input.displayConfig !== undefined ? { display_config: input.displayConfig || null } : {}),
           ...(input.buyDateOverride !== undefined ? { buy_date: input.buyDateOverride || null } : {}),
@@ -28569,6 +28612,35 @@ ${klinesSummary}
           ...snapshotBase,
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
+        // 管理员可能从某位拥有者或参与者的个人视图打开同一张订单。
+        // 合同结束日属于整张订单的预收期限：个人视图保存时同时回写主订单，
+        // 否则关闭编辑器后主订单重新取数会把已选日期带回空值。
+        const hasContractInterestEndDateInput = Object.prototype.hasOwnProperty.call(
+          input.snapshot,
+          'contract_interest_end_date',
+        );
+        if (hasContractInterestEndDateInput) {
+          const rawContractInterestEndDate = (input.snapshot as any).contract_interest_end_date;
+          const nextContractInterestEndDate = rawContractInterestEndDate === null
+            || String(rawContractInterestEndDate).trim() === ''
+            ? null
+            : String(rawContractInterestEndDate).trim();
+          if (nextContractInterestEndDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextContractInterestEndDate)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '约定计息结束日格式无效' });
+          }
+          const effectiveInterestStartDate = String(
+            mergedSnapshot.interest_start_date ?? row.interest_start_date ?? '',
+          ).slice(0, 10);
+          if (!isValidFunderContractInterestPeriod(effectiveInterestStartDate, nextContractInterestEndDate)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '约定计息结束日不能早于计息开始日期' });
+          }
+          mergedSnapshot.contract_interest_end_date = nextContractInterestEndDate;
+          await conn.execute(
+            'UPDATE ledger_orders SET contract_interest_end_date = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ?',
+            [nextContractInterestEndDate, input.orderId, input.ledgerId],
+          );
+          row.contract_interest_end_date = nextContractInterestEndDate;
+        }
         // 52号账本的共享备注已拆为独立记录，参与者整份快照只能保留现有值，
         // 不能随着其他字段保存而重新覆盖或删除备注。
         if (input.ledgerId === 52) {

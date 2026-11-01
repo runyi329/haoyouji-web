@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
+import { resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import { OrderCardImageDownload } from "./OrderCardImageDownload";
@@ -665,7 +666,7 @@ export function FunderOrderCardV2({
   const rateStr = getRateStr(order);
   const rateAbs = formatFunderAnnualRate(rateStr);
   // 已结订单按保存的结息截止日冻结；旧单回退实际结清时点，避免继续计算到今天。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  const interestEndAt = resolveFunderInterestEndDate(order);
   const hasInterestEnd = order.status === "active" || !!interestEndAt;
   const accrued = useAccruedInterestFunder(
     hasInterestEnd ? order.interest_base : null,
@@ -1000,7 +1001,7 @@ export function FunderOrderCardV2Light({
   const rateStr = getRateStr(order);
   const rateAbs = formatFunderAnnualRate(rateStr);
   // 已结订单按保存的结息截止日冻结；旧单回退实际结清时点，避免继续计算到今天。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  const interestEndAt = resolveFunderInterestEndDate(order);
   const hasInterestEnd = order.status === "active" || !!interestEndAt;
   const accrued = useAccruedInterestFunder(
     hasInterestEnd ? order.interest_base : null,
@@ -1503,7 +1504,7 @@ export function FunderOrderCardV2Silver({
   const rateStr = getRateStr(order);
   const rateAbs = formatFunderAnnualRate(rateStr);
   // 已结订单按保存的结息截止日冻结；旧单回退实际结清时点，避免继续计算到今天。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  const interestEndAt = resolveFunderInterestEndDate(order);
   const hasInterestEnd = order.status === 'active' || !!interestEndAt;
   const accrued = useAccruedInterestFunder(
     hasInterestEnd ? order.interest_base : null,
@@ -2532,7 +2533,7 @@ export function FunderOrderCardV2Silver({
             </div>
             {order.interest_start_date && (() => {
               const startD = new Date(order.interest_start_date + 'T00:00:00+08:00');
-              const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+              const interestEndAt = resolveFunderInterestEndDate(order);
               const endD = interestEndAt ? new Date(interestEndAt) : new Date();
               const toBeijing = (d: Date) => new Date(d.getTime() + (8 * 60 - (-d.getTimezoneOffset())) * 60000);
               const s = toBeijing(startD);
@@ -2552,7 +2553,7 @@ export function FunderOrderCardV2Silver({
               <span style={{ color: TXT_SEC }}>待付利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
               <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {rateAbs && interestBase > 0 ? (() => {
-                  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+                  const interestEndAt = resolveFunderInterestEndDate(order);
                   const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
                   const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
                   return (
@@ -3516,7 +3517,7 @@ export function FunderLenderCardSilver({
   const _effectiveInterestBase = _isParticipantLn ? ((order as any).participantInfo?.commissionBase || order.interest_base) : order.interest_base;
   const _effectiveInterestRate = _isParticipantLn && _hasParticipantInterestRate ? _participantInterestRate : order.interest_rate_annual;
   // 参与者已结订单同样使用主订单同步的结息截止日。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  const interestEndAt = resolveFunderInterestEndDate(order);
   const hasInterestEnd = order.status === 'active' || !!interestEndAt;
   const accrued = useAccruedInterestFunder(
     hasInterestEnd ? _effectiveInterestBase : null,
@@ -3940,7 +3941,7 @@ export function FunderLenderCardSilver({
           <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>计息天数 (天)</div>
           <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
             {order.interest_start_date
-              ? calcDays(order.interest_start_date, ((order as any).interest_end_date || order.settled_at) ? new Date((order as any).interest_end_date || order.settled_at).getTime() : Date.now())
+              ? calcDays(order.interest_start_date, resolveFunderInterestEndDate(order) ? new Date(resolveFunderInterestEndDate(order) as string).getTime() : Date.now())
               : '--'}
           </div>
         </div>
@@ -4025,7 +4026,7 @@ export function FunderLenderCardSilver({
               const startStr = order.interest_start_date || order.buy_date;
               if (!startStr) return null;
               const startD = new Date(startStr + 'T00:00:00+08:00');
-              const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+              const interestEndAt = resolveFunderInterestEndDate(order);
               const endD = interestEndAt ? new Date(interestEndAt) : new Date();
               const toBeijing = (d: Date) => new Date(d.getTime() + (8 * 60 - (-d.getTimezoneOffset())) * 60000);
               const s = toBeijing(startD);
@@ -4102,7 +4103,7 @@ export function FunderLenderCardSilver({
               <span style={{ color: TXT_SEC }}>待收利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
               <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {rateAbs && interestBase > 0 ? (() => {
-                  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+                  const interestEndAt = resolveFunderInterestEndDate(order);
                   const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
                   const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
                   return (

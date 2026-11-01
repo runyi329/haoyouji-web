@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLef
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
+import { calculateFunderInterestDays, formatFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
 
 // 银卡只用于编辑中的特定实时预览。首屏订单列表不再下载和解析其完整实现。
 const FunderOrderCardV2Silver = React.lazy(async () => {
@@ -80,6 +81,7 @@ type JointOrderSegmentDraft = {
   interest_rate_currency: 'USDT' | 'CNY';
   interest_payment_type: string;
   interest_start_date: string;
+  contract_interest_end_date?: string | null;
   principal_lent_out: boolean;
   show_profit_share: boolean;
   profit_share_ratio: string;
@@ -206,6 +208,7 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
       interest_rate_currency: ['CNY', 'RMB', '人民币'].includes(String(item.interest_rate_currency || '').toUpperCase()) ? 'CNY' : 'USDT',
       interest_payment_type: String(item.interest_payment_type || ''),
       interest_start_date: String(item.interest_start_date || '').slice(0, 10),
+      contract_interest_end_date: item.contract_interest_end_date ? String(item.contract_interest_end_date).slice(0, 10) : null,
       principal_lent_out: item.principal_lent_out === true || item.principal_lent_out === 1 || item.principal_lent_out === '1',
       show_profit_share: item.show_profit_share === true || item.show_profit_share === 1 || item.show_profit_share === '1',
       profit_share_ratio: String(item.profit_share_ratio ?? ''),
@@ -415,6 +418,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 联合订单子段保存到指定拥有者／参与者的个人快照；主订单不保存、不共享。
   const [jointOrderSegments, setJointOrderSegments] = useState<JointOrderSegmentDraft[]>([]);
   const [jointOrderPanelExpanded, setJointOrderPanelExpanded] = useState(false);
+  // 默认顺排；仅保存于当前管理页面的展示状态，不会改变订单/快照中的原始分段数组。
+  const [jointSegmentDisplayOrderMode, setJointSegmentDisplayOrderMode] = useState<FunderJointSegmentDisplayOrderMode>('ascending');
   // 编辑器只有一套主表单。切换段时仅替换这套表单绑定的草稿，而不再渲染第二套简化字段。
   const [activeJointEditorSegmentId, setActiveJointEditorSegmentId] = useState('__primary__');
   const primaryEditorDraftRef = useRef<any>(null);
@@ -497,6 +502,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
     interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: getBeijingToday(),
+    // 仅锁定待结利息的合同周期；实际结清仍由单独结清日期记录。
+    interestEndDate: '',
     showProfitShare: true,
     commissionShare: '',
     profitShareRatio: '', // 收益分成比例（百分数，如 20 表示 20%）
@@ -880,6 +887,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     interestRateCurrency: string;
     interestPaymentType: string;
     interestStartDate: string;
+    interestEndDate: string;
     displayConfig: Record<string, boolean | string>;
     marginAlertThreshold: string;
     orderSnapshot: Record<string, any>;
@@ -935,6 +943,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         interestBaseCurrency: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestBaseCurrency || undefined : p.interestBaseCurrency || undefined,
         interestPaymentType: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestPaymentType || undefined : p.interestPaymentType || undefined,
         interestStartDate: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestStartDate || undefined : p.interestStartDate || undefined,
+        contractInterestEndDate: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestEndDate || undefined : p.interestEndDate || undefined,
         interestRateCurrency: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestRateCurrency || undefined : p.interestRateCurrency || undefined,
         visibilityMode: p.role === 'owner' ? p.visibilityMode : undefined,
         visibleOwnerIds: p.role === 'owner' ? p.visibleOwnerIds : undefined,
@@ -1015,6 +1024,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestRateCurrency: String(snapshotValue('interest_rate_currency', p.interest_rate_currency || 'USDT') || 'USDT'),
       interestPaymentType: String(snapshotValue('interest_payment_type', p.interest_payment_type || '') || ''),
       interestStartDate: String(snapshotValue('interest_start_date', p.interest_start_date || '') || ''),
+      interestEndDate: String(snapshotValue('contract_interest_end_date', p.contract_interest_end_date || '') || ''),
       displayConfig: (() => {
         try {
           const rawConfig = snapshot?.display_config ?? p.display_config;
@@ -1237,11 +1247,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 编辑对象切换会清空并异步重载分段数组。不能在后续段表单仍挂在界面上时把状态重置为
     // “第一段”，否则用户随后保存会将旧段的字段误写为物理主订单。
     if (activeJointEditorSegmentId !== '__primary__') {
-      toast.error('请先保存当前后续段并切回第1段后，再切换编辑对象');
+      toast.error('请先保存当前后续段并切回订单主体后，再切换编辑对象');
       return;
     }
     if (primaryOrderDirtyRef.current) {
-      toast.error('第1段有未保存修改，请先保存第1段后再切换编辑对象');
+      toast.error('订单主体有未保存修改，请先保存后再切换编辑对象');
       return;
     }
     // 立即清空旧拥有者的局部草稿，避免在 effect 装载新快照前出现串读闪屏。
@@ -1293,6 +1303,28 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jointSegmentRealtimeShareSignature]);
   const jointOrderSegmentCount = jointOrderSegments.length;
+  // 主订单的开始日只能取其自身草稿：编辑主体时是当前表单，编辑后续段时来自离开主体前的草稿。
+  // 不能把当前后续段的开始日误用为主体日期，否则展示排序会把稳定身份和日期错配。
+  const primaryInterestStartDateForSegmentDisplay = activeJointEditorSegmentId === '__primary__'
+    ? formData.interestStartDate
+    : primaryEditorDraftRef.current?.formData?.interestStartDate !== undefined
+      ? primaryEditorDraftRef.current.formData.interestStartDate
+      : (editingOrder as any)?.interest_start_date;
+  const jointSegmentDisplayEntries = useMemo(() => getFunderJointSegmentDisplayOrder(
+    primaryInterestStartDateForSegmentDisplay,
+    jointOrderSegments,
+    (segment, index) => String(segment.id || `segment-${index + 2}`),
+    (segment) => segment.interest_start_date,
+    jointSegmentDisplayOrderMode,
+  ), [primaryInterestStartDateForSegmentDisplay, jointOrderSegments, jointSegmentDisplayOrderMode]);
+  const jointSegmentDisplayNumberById = useMemo(() => new Map(
+    jointSegmentDisplayEntries.map((entry) => [entry.id, entry.displayIndex + 1]),
+  ), [jointSegmentDisplayEntries]);
+  const activeJointEditorDisplayEntry = jointSegmentDisplayEntries.find((entry) => entry.id === activeJointEditorSegmentId);
+  const activeJointEditorDisplayNumber = jointSegmentDisplayNumberById.get(activeJointEditorSegmentId);
+  const activeJointEditorDisplayLabel = activeJointEditorDisplayEntry && activeJointEditorDisplayNumber
+    ? `第${activeJointEditorDisplayNumber}段${activeJointEditorDisplayEntry.isPrimary ? '（订单主体）' : ''}`
+    : '订单主体';
   // 实时预览不能依赖保存函数内的局部变量；始终从当前固定区所选用户的草稿生成。
   const previewJointOrderSegments = useMemo(() => editingOrder?.id && activeJointOrderTarget
     ? (deferredJointOrderSegments.length === jointOrderSegmentCount ? deferredJointOrderSegments : jointOrderSegments).map((segment, index) => {
@@ -1386,6 +1418,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         interestRateCurrency: String(snapshot.interest_rate_currency ?? rawParticipant?.interest_rate_currency ?? ''),
         interestPaymentType: String(snapshot.interest_payment_type ?? rawParticipant?.interest_payment_type ?? ''),
         interestStartDate: String(snapshot.interest_start_date ?? rawParticipant?.interest_start_date ?? ''),
+        interestEndDate: String(snapshot.contract_interest_end_date ?? rawParticipant?.contract_interest_end_date ?? ''),
         displayConfig: (() => { try { const value = snapshot.display_config ?? rawParticipant?.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })(),
         marginAlertThreshold: (() => { try { const value = snapshot.display_config ?? rawParticipant?.display_config; const config = value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; return config?.marginAlertThreshold != null && config.marginAlertThreshold !== '' ? String(config.marginAlertThreshold) : ''; } catch { return ''; } })(),
         orderSnapshot: snapshot,
@@ -1528,14 +1561,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     role: string;
     assets: Array<{ coin: string; qty: string; source: 'wallet'; jointSegmentId?: string }>;
   }>;
-  const walletCollateralSegmentOptions = [
-    { id: '__primary__', label: '第1段' },
-    ...jointOrderSegments.map((segment, index) => ({ id: String(segment.id || `segment-${index + 2}`), label: `第${index + 2}段` })),
-  ];
+  const walletCollateralSegmentOptions = jointSegmentDisplayEntries.map((entry) => ({
+    id: entry.id,
+    label: `第${entry.displayIndex + 1}段${entry.isPrimary ? '（订单主体）' : ''}`,
+  }));
   const activeWalletCollateralSegmentId = walletCollateralSegmentOptions.some((option) => option.id === floatingPreviewSegmentId)
     ? floatingPreviewSegmentId
     : '__primary__';
-  const activeWalletCollateralSegmentLabel = walletCollateralSegmentOptions.find((option) => option.id === activeWalletCollateralSegmentId)?.label || '第1段';
+  const activeWalletCollateralSegmentLabel = walletCollateralSegmentOptions.find((option) => option.id === activeWalletCollateralSegmentId)?.label || '订单主体';
   const currentSegmentWalletCollateralContributors = walletCollateralContributors
     .map((contributor) => ({
       ...contributor,
@@ -1907,6 +1940,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interest_rate_currency: formData.interestRateCurrency,
       interest_payment_type: String(formData.interestPaymentType || ''),
       interest_start_date: String(formData.interestStartDate || '').slice(0, 10),
+      contract_interest_end_date: String(formData.interestEndDate || '').slice(0, 10) || null,
       principal_lent_out: effectivePrincipalLentOut,
       show_profit_share: profitShareDraft.enabled,
       profit_share_ratio: String(formData.profitShareRatio || ''),
@@ -1962,6 +1996,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestBaseCurrency: segment.interest_base_currency === 'CNY' ? 'CNY' : 'USDT',
       interestRateCurrency: segment.interest_rate_currency === 'CNY' ? 'CNY' : 'USDT',
       interestStartDate: String(segment.interest_start_date || getBeijingToday()).slice(0, 10),
+      interestEndDate: String(segment.contract_interest_end_date || '').slice(0, 10),
       showProfitShare: Boolean(segment.show_profit_share),
       commissionShare: String(segment.commission_share || ''),
       profitShareRatio: String(segment.profit_share_ratio || ''),
@@ -2012,7 +2047,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 第一段的实体字段与后续段快照必须分开保存。若第一段有尚未保存的编辑，
     // 不能带着它切换到后续段再用当前表单提交，否则后续段表单可能被误写为第一段。
     if (activeJointEditorSegmentId === '__primary__' && segmentId !== '__primary__' && primaryOrderDirtyRef.current) {
-      toast.error('第1段有未保存修改，请先保存第1段后再切换到其他段');
+      toast.error('订单主体有未保存修改，请先保存后再切换到其他段');
       return;
     }
     if (activeJointEditorSegmentId === '__primary__') {
@@ -2057,7 +2092,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const ownerUserId = Number(activeJointOrderTarget?.userId || formData.userId || 0);
     // 新增段同样属于切换编辑对象；先要求第一段落库，避免第1段草稿在保存新段时串写。
     if (activeJointEditorSegmentId === '__primary__' && primaryOrderDirtyRef.current) {
-      toast.error('第1段有未保存修改，请先保存第1段后再添加下一段');
+      toast.error('订单主体有未保存修改，请先保存后再添加下一段');
       return;
     }
     if (activeJointEditorSegmentId === '__primary__') {
@@ -2404,16 +2439,24 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       const base = parseFloat(formData.interestBase || '0');
       const rate = parseFloat(formData.interestRateAnnual || '0');
       if (!base || !rate || !formData.interestStartDate) { setPreviewAccrued(0); return; }
-      const startTs = new Date(formData.interestStartDate + 'T00:00:00').getTime();
-      if (isNaN(startTs)) { setPreviewAccrued(0); return; }
-      const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
-      const perSecond = (base * rate / 100) / (365 * 24 * 3600);
-      setPreviewAccrued(perSecond * elapsedSeconds);
+      const days = calculateFunderInterestDays(formData.interestStartDate, formData.interestEndDate || undefined);
+      setPreviewAccrued((base * rate / 100) * days / 365);
     };
     compute();
-    const timer = setInterval(compute, 1000);
+    // 填写约定结束日后金额已固定；未填写的历史订单仍按北京时间自然日更新。
+    if (formData.interestEndDate) return undefined;
+    const timer = setInterval(compute, 60 * 1000);
     return () => clearInterval(timer);
-  }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
+  }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate, formData.interestEndDate]);
+
+  const applyContractInterestTermPreset = (durationMonths: number) => {
+    const interestEndDate = resolveFunderInterestPresetEndDate(formData.interestStartDate, durationMonths);
+    if (!interestEndDate) {
+      toast.error('请先填写有效的计息开始日期');
+      return;
+    }
+    setFormData(current => ({ ...current, interestEndDate }));
+  };
 
   // 担保差值：担保物 − 买入价值 − 待结 + 已结；浮盈口径：担保物 + 浮盈 − 待结 + 已结；
   // 持仓全额：当前可变现市值 − 待结 + 已结；初始本金：0 − 初始融资金额 − 待结 + 已结。
@@ -2486,11 +2529,19 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     financingAmountUsdt,
     collateralRiskFormula,
     initialFinancingPrincipalU,
+    interestBase: formData.interestBase,
+    interestBaseCurrency: formData.interestBaseCurrency,
+    interestRateAnnual: formData.interestRateAnnual,
+    interestRateCurrency: formData.interestRateCurrency,
+    interestStartDate: formData.interestStartDate,
+    contractInterestEndDate: formData.interestEndDate,
+    paidInterest: previewPaidInterest,
+    paidInterestCurrency: previewPaidInterestCurrency,
     collateralAssets,
     collateralShareMode,
     collateralSource: orderCollateralSourceDraft,
     option: optionFormData,
-  }), [formData.assetType, formData.coin, formData.buyPrice, formData.buyQuantity, formData.tradeDirection, financingAmountUsdt, collateralAssets, collateralShareMode, orderCollateralSourceDraft, optionFormData]);
+  }), [formData.assetType, formData.coin, formData.buyPrice, formData.buyQuantity, formData.tradeDirection, financingAmountUsdt, collateralRiskFormula, initialFinancingPrincipalU, formData.interestBase, formData.interestBaseCurrency, formData.interestRateAnnual, formData.interestRateCurrency, formData.interestStartDate, formData.interestEndDate, previewPaidInterest, previewPaidInterestCurrency, collateralAssets, collateralShareMode, orderCollateralSourceDraft, optionFormData]);
   const handleCollateralFormulaPreviewChange = useCallback((_orderId: number, values: FunderCollateralFormulaPreview) => {
     setCardFormulaPreview(current => {
       const next: FormulaPreviewState = { inputKey: formulaPreviewInputKey, values };
@@ -2889,7 +2940,21 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   });
   const updateParticipantOrderMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
     onSuccess: (result, variables) => {
-      toast.success('参与者子订单已保存');
+      const savedSnapshot = (result as any)?.snapshot;
+      const submittedSnapshot = (variables as any)?.snapshot || {};
+      const submittedContractInterestEndDate = Object.prototype.hasOwnProperty.call(submittedSnapshot, 'contract_interest_end_date')
+        ? String(submittedSnapshot.contract_interest_end_date ?? '')
+        : null;
+      if (
+        submittedContractInterestEndDate !== null
+        && String(savedSnapshot?.contract_interest_end_date ?? '') !== submittedContractInterestEndDate
+      ) {
+        toast.error('约定计息结束日未被服务器确认，请勿关闭编辑器后重试');
+        return;
+      }
+      toast.success(submittedContractInterestEndDate === null
+        ? '参与者子订单已保存'
+        : (submittedContractInterestEndDate ? `约定结束日已保存：${submittedContractInterestEndDate}` : '约定结束日已清空'));
       setShowForm(false);
       setEditingOrder(null);
       setParticipants([]);
@@ -2897,7 +2962,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       participantsLoadedRef.current = null;
       // 保存接口回传服务端最终快照后，立即写回当前订单的关系缓存。
       // 这样重新打开同一张订单不会被一条保存前已经发出的旧查询覆盖，避免出现“提示成功但又变回原值”。
-      const savedSnapshot = (result as any)?.snapshot;
       if (savedSnapshot && typeof savedSnapshot === 'object') {
         trpcUtils.ledger.funderGetOrderParticipants.setData(
           { orderId: variables.orderId, ledgerId: variables.ledgerId },
@@ -3173,6 +3237,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
       interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
       interestStartDate: getBeijingToday(),
+      interestEndDate: '',
       showProfitShare: true,
       commissionShare: '',
       profitShareRatio: '',
@@ -3311,6 +3376,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(order.interest_base_currency || '') ? 'CNY' : 'USDT') as 'USDT' | 'CNY',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
+      interestEndDate: order.contract_interest_end_date ? String(order.contract_interest_end_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
       profitShareRatio: (() => { const m = String(order.commission_share || '').match(/(\d+(?:\.\d+)?)/); return m ? m[1] : ''; })(),
@@ -3626,6 +3692,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interest_rate_currency: isPendingInterestUnified ? rootOrder.interest_rate_currency : snapshotValue('interest_rate_currency', participant.interestRateCurrency || rootOrder.interest_rate_currency),
       interest_payment_type: isPendingInterestUnified ? rootOrder.interest_payment_type : snapshotValue('interest_payment_type', participant.interestPaymentType || rootOrder.interest_payment_type),
       interest_start_date: isPendingInterestUnified ? rootOrder.interest_start_date : snapshotValue('interest_start_date', participant.interestStartDate || rootOrder.interest_start_date),
+      contract_interest_end_date: isPendingInterestUnified
+        ? rootOrder.contract_interest_end_date
+        : snapshotValue('contract_interest_end_date', participant.interestEndDate || rootOrder.contract_interest_end_date),
       display_config: JSON.stringify({
         // 展示开关属于当前拥有者；主订单只提供两项明确的组级利息模式。
         ...personalDisplayConfig,
@@ -3684,6 +3753,17 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     if (!editingOrder && !formData.userId) {
       toast.error('请选择用户');
       return;
+    }
+    // iOS 日期控件确认后可能与 React 状态批次同时提交。
+    // 保存时以当前可见输入值为准，避免“预览已联动、请求却仍携带空日期”。
+    const contractInterestEndDateInput = typeof document === 'undefined'
+      ? null
+      : document.getElementById('funder-contract-interest-end-date') as HTMLInputElement | null;
+    const submittedContractInterestEndDate = String(
+      contractInterestEndDateInput?.value ?? formData.interestEndDate ?? '',
+    ).trim();
+    if (submittedContractInterestEndDate !== formData.interestEndDate) {
+      setFormData((current) => ({ ...current, interestEndDate: submittedContractInterestEndDate }));
     }
     // 股票历史订单的 amount 按所选融资币种原值保存；数字币和期权统一保存USDT基准。
     // 三种类型都支持融资金额、买入价格、币数任选两项推算第三项。
@@ -3779,6 +3859,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             interest_rate_annual: normalizeFunderAnnualRate(segment.interest_rate_annual),
             buy_date: String(segment.buy_date || '').slice(0, 10),
             interest_start_date: String(segment.interest_start_date || '').slice(0, 10),
+            contract_interest_end_date: String(segment.contract_interest_end_date || '').slice(0, 10) || null,
             buy_price: optionInfo ? optionInfo.premium : String(segment.buy_price || '').trim(),
             buy_quantity: optionInfo ? optionInfo.buyQty : String(segment.buy_quantity || '').trim(),
             commission_share: profitShareDraft.commissionShare,
@@ -3804,6 +3885,22 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       return;
     }
     const profitShareDraft = buildProfitShareDraft(displayConfig.profitShare, formData.profitShareType, formData.profitShareRatio);
+    if (!isValidFunderContractInterestPeriod(formData.interestStartDate, submittedContractInterestEndDate)) {
+      toast.error('约定计息结束日不能早于计息开始日期');
+      return;
+    }
+    const marginRateBaseText = typeof displayConfig.marginRateBase === 'string'
+      ? displayConfig.marginRateBase.trim()
+      : '';
+    const marginRateBaseNumber = Number(marginRateBaseText);
+    const shouldPersistMarginRateBase = displayConfig.marginRate === true
+      && marginRateBaseText !== ''
+      && Number.isFinite(marginRateBaseNumber)
+      && marginRateBaseNumber > 0;
+    if (displayConfig.marginRate === true && marginRateBaseText !== '' && !shouldPersistMarginRateBase) {
+      toast.error('保证金率计算基数须为大于 0 的数字');
+      return;
+    }
     const payload = {
       ledgerId,
       coin: isOptionOrder ? optionFormData.optionCurrency : formData.coin,
@@ -3820,6 +3917,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interestBaseCurrency: formData.interestBaseCurrency,
       interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
+      contractInterestEndDate: submittedContractInterestEndDate || null,
       showProfitShare: profitShareDraft.enabled,
       commissionShare: profitShareDraft.commissionShare || undefined,
       // 新建订单仅先写入手工担保；钱包担保在订单创建后走原子冻结接口。
@@ -3832,9 +3930,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       // 提交前确保 displayConfig 所有値都是 boolean
       displayConfig: {
         ...Object.fromEntries(
-          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean' || typeof v === 'string')
+          Object.entries(displayConfig).filter(([key, v]) => (typeof v === 'boolean' || typeof v === 'string') && key !== 'marginRateBase')
         ),
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
+        ...(shouldPersistMarginRateBase ? { marginRateBase: marginRateBaseText } : {}),
         rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
         ownerNameDisplay: 'self',
         // 与本金状态分开保存：该字段优先决定担保缺口公式。
@@ -3920,6 +4019,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           interest_base_currency: payload.interestBaseCurrency || null,
           interest_rate_currency: payload.interestRateCurrency || null,
           interest_start_date: payload.interestStartDate || null,
+          contract_interest_end_date: payload.contractInterestEndDate || null,
           ...(payload.collateralAssets !== undefined ? { collateral_assets: payload.collateralAssets ? JSON.stringify(payload.collateralAssets) : null } : {}),
           show_profit_share: payload.showProfitShare ? 1 : 0,
           commission_share: payload.commissionShare || null,
@@ -3979,6 +4079,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               interest_base_currency: payload.interestBaseCurrency || null,
               interest_rate_currency: payload.interestRateCurrency || null,
               interest_start_date: payload.interestStartDate || null,
+              contract_interest_end_date: payload.contractInterestEndDate || null,
               display_config: payload.displayConfig,
             } : {}),
             joint_order_segments: normalizedJointOrderSegments,
@@ -4105,6 +4206,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   interest_base_currency: formData.interestBaseCurrency || 'USDT',
                   interest_rate_currency: formData.interestRateCurrency || 'USDT',
                   interest_start_date: formData.interestStartDate || null,
+                  // 预览卡须接收草稿结束日，才能在尚未保存时也将整期预收利息扣入担保缺口。
+                  contract_interest_end_date: formData.interestEndDate || null,
                   show_profit_share: previewProfitShareDraft.enabled ? 1 : 0,
                   commission_share: previewProfitShareDraft.commissionShare || null,
                   profit_share_ratio: formData.profitShareRatio || null,
@@ -4136,6 +4239,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     collateralRiskFormula,
                     ownerNameDisplay: 'self',
                     marginAlertThreshold: marginAlertThreshold || undefined,
+                    marginRateBase: displayConfig.marginRate === true && typeof displayConfig.marginRateBase === 'string'
+                      ? displayConfig.marginRateBase.trim() || undefined
+                      : undefined,
                     rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
                     financingInputAmount: previewDisplayInputAmount,
                     financingInputCurrency: previewAmountCurrency,
@@ -4154,7 +4260,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
                 // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
-                const previewDisplayKey = `floating-preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${initialFinancingPrincipalU ?? ''}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${String(previewProfitShareDraft.enabled)}-${previewProfitShareDraft.commissionShare}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
+                const previewDisplayKey = `floating-preview-${jointSegmentDisplayOrderMode}-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${initialFinancingPrincipalU ?? ''}-${String(displayConfig.floatPnl)}-${String(displayConfig.marginRate)}-${String(displayConfig.marginRateBase || '')}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${String(previewProfitShareDraft.enabled)}-${previewProfitShareDraft.commissionShare}-${formData.interestBase}-${formData.interestBaseCurrency}-${formData.interestRateAnnual}-${formData.interestRateCurrency}-${formData.interestStartDate}-${formData.interestEndDate}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <>
                     {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
@@ -4170,6 +4276,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         previewMode={true}
                         previewSegmentFocusId={floatingPreviewSegmentId}
                         onPreviewSegmentFocusChange={handlePreviewSegmentFocusChange}
+                        jointSegmentDisplayOrderMode={jointSegmentDisplayOrderMode}
                         showCollateralInfo={showPreviewCollateralInfo}
                         setShowCollateralInfo={setShowPreviewCollateralInfo}
                         showMarginInfo={showPreviewMarginInfo}
@@ -4434,10 +4541,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       };
                       const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
                       const primaryAlreadySettled = String(targetOrder?.joint_order_primary_settlement?.status || '').toLowerCase() === 'settled';
-                      const activeJointSegmentIds = [
-                        ...(primaryAlreadySettled ? [] : ['__primary__']),
-                        ...jointSegments.filter((segment) => String(segment.status || '').toLowerCase() !== 'settled').map((segment) => segment.id),
-                      ];
+                      const activeJointSegmentIds = getFunderJointSegmentDisplayOrder(
+                        targetOrder?.interest_start_date,
+                        jointSegments,
+                        (segment, index) => String(segment.id || `segment-${index + 2}`),
+                        (segment) => segment.interest_start_date,
+                        jointSegmentDisplayOrderMode,
+                      ).filter((entry) => entry.isPrimary
+                        ? !primaryAlreadySettled
+                        : String(entry.segment?.status || '').toLowerCase() !== 'settled')
+                        .map((entry) => entry.id);
                       setSettleInterestEndDate('');
                       setSettleValuation(baseDraft);
                       setSelectedSettleUserIds(currentViewUserId > 0 ? [currentViewUserId] : []);
@@ -4452,6 +4565,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     showMarginInfo={marginInfoOrderId === order.id}
                     setShowMarginInfo={(v) => setMarginInfoOrderId(v ? order.id : null)}
                     allOrders={managementCardLookupOrders}
+                    jointSegmentDisplayOrderMode={jointSegmentDisplayOrderMode}
                   />
                 );
               })}
@@ -4579,14 +4693,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 <section data-joint-order-segments className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3">
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-indigo-900">联合订单分段</div>
-                      <p className="mt-0.5 text-[11px] leading-4 text-indigo-600">当前编辑 {activeJointEditorSegmentId === '__primary__' ? '第1段' : `第${jointOrderSegments.findIndex(segment => String(segment.id) === activeJointEditorSegmentId) + 2}段`}。所有段共用下方这一套完整订单表单。</p>
+                      <div className="text-sm font-semibold text-indigo-900">订单分段（可选）</div>
+                      <p className="mt-0.5 text-[11px] leading-4 text-indigo-600">{jointOrderSegments.length > 0 ? `当前编辑 ${activeJointEditorDisplayLabel}。所有段共用下方这一套完整订单表单。` : '当前编辑订单主体；添加第2段后可切换分段展示顺序。'}</p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-semibold text-indigo-600">{jointOrderSegments.length + 1} 段</span>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-semibold text-indigo-600">{jointOrderSegments.length > 0 ? `${jointOrderSegments.length + 1} 段` : '未分段'}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    <button type="button" onClick={() => selectUnifiedEditorSegment('__primary__')} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${activeJointEditorSegmentId === '__primary__' ? 'border-blue-600 bg-blue-600 text-white' : 'border-indigo-200 bg-white text-indigo-700'}`}>第1段</button>
-                    {jointOrderSegments.map((segment, index) => <button key={segment.id} type="button" onClick={() => selectUnifiedEditorSegment(String(segment.id))} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${activeJointEditorSegmentId === String(segment.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-indigo-200 bg-white text-indigo-700'}`}>第{index + 2}段</button>)}
+                    {jointOrderSegments.length > 0 && jointSegmentDisplayEntries.map((entry) => <button key={entry.id} type="button" onClick={() => selectUnifiedEditorSegment(entry.id)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${activeJointEditorSegmentId === entry.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-indigo-200 bg-white text-indigo-700'}`}>第{entry.displayIndex + 1}段{entry.isPrimary ? '（订单主体）' : ''}</button>)}
                     <button type="button" onClick={addUnifiedEditorSegment} className="rounded-full border border-dashed border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600"><Plus className="mr-0.5 inline h-3.5 w-3.5" />添加段</button>
                   </div>
                   {isEditingJointSegment && <div className="mt-2 rounded-lg border border-indigo-100 bg-white/80 px-2.5 py-2 text-[11px] leading-4 text-indigo-700">本段的类型、期权参数、利息、手工/钱包担保、担保口径和展示开关均独立保存；切换到其他段不会带入本段输入。</div>}
@@ -4768,9 +4881,39 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
                             style={formData.frontendPlacement === opt.value ? opt.active : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
                           >
-                            {opt.label}
-                          </button>
-                        ))}
+                          {opt.label}
+                        </button>
+                      ))}
+                      </div>
+                      <div className="mt-2">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">分段排序</label>
+                        <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                          {([
+                            { value: 'ascending', label: '顺排' },
+                            { value: 'descending', label: '倒排' },
+                            { value: 'automatic', label: '自动' },
+                          ] as Array<{ value: FunderJointSegmentDisplayOrderMode; label: string }>).map((option) => {
+                            const enabled = jointOrderSegments.length > 0;
+                            const selected = jointSegmentDisplayOrderMode === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                disabled={!enabled}
+                                onClick={() => setJointSegmentDisplayOrderMode(option.value)}
+                                aria-pressed={selected}
+                                title={enabled
+                                  ? option.value === 'automatic'
+                                    ? '自动：按管理员原添加先后展示'
+                                    : `${option.label}只调整本订单的分段展示和编号`
+                                  : '尚未添加第2段，暂不可切换'}
+                                className={`min-w-0 flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0 disabled:cursor-not-allowed ${selected && enabled ? 'bg-indigo-600 text-white border-transparent' : enabled ? 'bg-gray-100 text-gray-600' : 'bg-slate-100 text-slate-400'}`}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                     {showPrimaryDisplay && (
@@ -5441,6 +5584,67 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       onChange={v => { setFormData(d => ({ ...d, interestStartDate: v })); setShowInterestDatePicker(false); }}
                     />
                   </div>
+                )}
+              </div>
+
+              {/* 约定计息结束日：只锁定待结利息合同周期，不改变真实结清日期。 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  约定计息结束日
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">可选 · 手动输入或选择期限</span>
+                </label>
+                <div className="mb-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <div className="mb-2 text-[11px] leading-4 text-slate-500">快捷期限从开始日计算，结束日为满期前一天。</div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { months: 1, label: '1个月' },
+                      { months: 3, label: '3个月' },
+                      { months: 6, label: '半年' },
+                      { months: 12, label: '一年' },
+                    ].map(option => (
+                      <button
+                        key={option.months}
+                        type="button"
+                        onClick={() => applyContractInterestTermPreset(option.months)}
+                        className="rounded-lg border border-slate-200 bg-white px-1 py-2 text-xs font-semibold text-slate-700 transition-colors active:border-blue-400 active:bg-blue-50 active:text-blue-700"
+                      >{option.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="relative">
+                  <input
+                    id="funder-contract-interest-end-date"
+                    type="date"
+                    value={formData.interestEndDate}
+                    min={formData.interestStartDate || undefined}
+                    onChange={e => setFormData(d => ({ ...d, interestEndDate: e.target.value }))}
+                    aria-label="手动输入约定计息结束日"
+                    className="w-full px-4 py-3 pr-16 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    style={{ display: 'block', boxSizing: 'border-box', color: formData.interestEndDate ? '#1A2340' : '#9CA3AF' }}
+                  />
+                  {formData.interestEndDate && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, interestEndDate: '' }))}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 active:bg-slate-200"
+                    >清空</button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs leading-5 text-gray-400">
+                  {formData.interestEndDate
+                    ? `待结利息将按 ${formData.interestStartDate || '开始日'} 至 ${formData.interestEndDate} 的完整周期固定计算；实际结清仍单独记录。`
+                    : '不填则沿用原规则，待结利息按当前日期累计。'}
+                </p>
+                {formData.interestEndDate && Number(formData.interestBase) > 0 && Number(formData.interestRateAnnual) !== 0 && (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs">
+                    <span className="text-blue-700">预收整期待结利息</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-blue-800">
+                      {formatFunderPendingInterest(previewAccrued, true)} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}
+                    </span>
+                  </div>
+                )}
+                {formData.interestEndDate && (
+                  <p className="mt-1.5 text-[11px] leading-4 text-blue-600">该整期金额已同步扣入下方担保缺口试算。</p>
                 )}
               </div>
 
@@ -6667,23 +6871,58 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   )}
                   {/* 保证金率预警阈值输入框（仅在保证金率开关打开时显示） */}
                   {displayConfig.marginRate && (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-orange-50 px-2.5 py-2">
-                      <span className="text-xs text-orange-600 shrink-0">低于</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="200"
-                        step="1"
-                        value={marginAlertThreshold}
-                        onChange={e => setMarginAlertThreshold(e.target.value)}
-                        placeholder="80"
-                        className="w-14 rounded-md border border-orange-200 bg-white px-1.5 py-1 text-center text-xs focus:outline-none focus:border-orange-400"
-                        style={{ color: '#D97706' }}
-                      />
-                      <span className="text-xs text-orange-600 shrink-0">% 时预警</span>
-                      {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
-                        <span className="text-xs text-orange-500 font-medium">已设</span>
+                    <div className="mt-2 space-y-2 rounded-lg bg-orange-50 px-2.5 py-2">
+                      {ledgerId === 52 && (
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 text-xs text-orange-700">保证金率基数</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={typeof displayConfig.marginRateBase === 'string' ? displayConfig.marginRateBase : ''}
+                            aria-label="保证金率计算基数"
+                            onChange={e => {
+                              setDisplayConfig(current => ({ ...current, marginRateBase: e.target.value }));
+                              if (activeJointEditorSegmentId === '__primary__' && jointOrderSegments.length > 0) {
+                                primaryOrderDirtyRef.current = true;
+                              }
+                            }}
+                            placeholder={formData.assetType === 'stock' || String(formData.amountCurrency).toUpperCase() === 'CNY' ? '500000' : '50000'}
+                            className="min-w-0 flex-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-right text-xs tabular-nums focus:border-orange-400 focus:outline-none"
+                            style={{ color: '#B45309' }}
+                          />
+                          <span className="shrink-0 text-xs text-orange-700">
+                            {formData.assetType === 'stock' || ['CNY', 'RMB', '人民币'].includes(String(formData.amountCurrency).toUpperCase())
+                              ? '元'
+                              : String(formData.amountCurrency).toUpperCase() === 'USDT'
+                                ? 'U'
+                                : String(formData.amountCurrency || 'U').toUpperCase()}
+                          </span>
+                        </div>
                       )}
+                      {ledgerId === 52 && (
+                        <p className="text-[10px] leading-4 text-orange-600">
+                          单位自动跟随担保缺口；填写后按“担保缺口 ÷ 此基数”计算保证金率，留空则兼容原有口径。
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 text-xs text-orange-600">低于</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="1"
+                          value={marginAlertThreshold}
+                          onChange={e => setMarginAlertThreshold(e.target.value)}
+                          placeholder="80"
+                          className="w-14 rounded-md border border-orange-200 bg-white px-1.5 py-1 text-center text-xs focus:border-orange-400 focus:outline-none"
+                          style={{ color: '#D97706' }}
+                        />
+                        <span className="shrink-0 text-xs text-orange-600">% 时预警</span>
+                        {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
+                          <span className="text-xs font-medium text-orange-500">已设</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -6763,7 +7002,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     aria-expanded={jointOrderPanelExpanded}
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-indigo-700">联合订单分段管理</div>
+                      <div className="text-sm font-semibold text-indigo-700">订单分段管理</div>
                       <p className="mt-0.5 truncate text-[11px] leading-4 text-indigo-500">每段均使用同一套完整表单；页眉、备注和关联关系共用</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -6795,14 +7034,17 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         </div>
                         {jointOrderSegments.length === 0 ? (
                           <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 px-3 py-3 text-xs leading-5 text-indigo-600">尚未添加后续段。点击下方按钮后会直接切换至完整统一表单。</div>
-                        ) : jointOrderSegments.map((segment, index) => {
-                          const segmentId = String(segment.id || `segment-${index + 2}`);
+                        ) : jointSegmentDisplayEntries.filter((entry) => !entry.isPrimary).map((entry) => {
+                          const segment = entry.segment;
+                          if (!segment) return null;
+                          const segmentId = entry.id;
+                          const displaySegmentNumber = entry.displayIndex + 1;
                           const isActive = activeJointEditorSegmentId === segmentId;
                           const isSettled = ['settled', 'completed'].includes(String(segment.status || '').toLowerCase());
                           const segmentTypeLabel = segment.asset_type === 'stock' ? '股票' : segment.asset_type === 'crypto_option' ? '期权' : '数字币';
                           return <div key={segmentId} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${isActive ? 'border-blue-300 bg-blue-50' : 'border-indigo-100 bg-white'}`}>
                             <button type="button" onClick={() => selectUnifiedEditorSegment(segmentId)} className="min-w-0 flex-1 text-left">
-                              <div className={`text-sm font-semibold ${isActive ? 'text-blue-700' : 'text-indigo-800'}`}>第 {index + 2} 段{isSettled ? ' · 已结清' : isActive ? ' · 当前编辑' : ''}</div>
+                              <div className={`text-sm font-semibold ${isActive ? 'text-blue-700' : 'text-indigo-800'}`}>第 {displaySegmentNumber} 段{isSettled ? ' · 已结清' : isActive ? ' · 当前编辑' : ''}</div>
                               <div className="mt-0.5 truncate text-[11px] text-indigo-500">{segmentTypeLabel} · {segment.asset_type === 'crypto_option' ? (segment.option_info?.coin || segment.coin || 'BTC') : (segment.coin || '未选标的')} · {segment.amount || '待填写'}</div>
                             </button>
                             <button type="button" disabled={isSettled} onClick={() => {
@@ -6813,7 +7055,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                 setFloatingPreviewSegmentId('__primary__');
                                 restoreUnifiedEditorDraft(primaryEditorDraftRef.current);
                               }
-                            }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 disabled:cursor-not-allowed disabled:opacity-35" aria-label={isSettled ? `第${index + 2}段已结清，不可删除` : `删除第${index + 2}段`}><Trash2 className="h-4 w-4" /></button>
+                            }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 disabled:cursor-not-allowed disabled:opacity-35" aria-label={isSettled ? `第${displaySegmentNumber}段已结清，不可删除` : `删除第${displaySegmentNumber}段`}><Trash2 className="h-4 w-4" /></button>
                           </div>;
                         })}
                         <button type="button" onClick={addUnifiedEditorSegment} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加下一段并使用完整表单</button>
@@ -6950,6 +7192,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       interestRateCurrency: formData.interestRateCurrency || 'USDT',
                       interestPaymentType: formData.interestPaymentType || '',
                       interestStartDate: formData.interestStartDate || '',
+                      interestEndDate: formData.interestEndDate || '',
                       displayConfig: { ...displayConfig },
                       marginAlertThreshold: marginAlertThreshold || '',
                       orderSnapshot: {},
@@ -7202,20 +7445,20 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         const hasOtherCollaborators = otherUserCount > 0;
         const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
         const primaryJointSettlement = targetOrder?.joint_order_primary_settlement || {};
-        const jointSettlementEntries = [
-          {
-            segmentId: '__primary__',
-            label: '第一段（订单主体）',
-            interestStartDate: String(targetOrder?.interest_start_date || '').slice(0, 10),
-            isSettled: String(primaryJointSettlement?.status || '').toLowerCase() === 'settled',
-          },
-          ...jointSegments.map((segment, index) => ({
-            segmentId: segment.id,
-            label: `关联第${index + 2}段`,
-            interestStartDate: String(segment.interest_start_date || targetOrder?.interest_start_date || '').slice(0, 10),
-            isSettled: String((segment as any).status || '').toLowerCase() === 'settled',
-          })),
-        ];
+        const jointSettlementEntries = getFunderJointSegmentDisplayOrder(
+          targetOrder?.interest_start_date,
+          jointSegments,
+          (segment, index) => String(segment.id || `segment-${index + 2}`),
+          (segment) => segment.interest_start_date,
+          jointSegmentDisplayOrderMode,
+        ).map((entry) => ({
+          segmentId: entry.id,
+          label: `第${entry.displayIndex + 1}段${entry.isPrimary ? '（订单主体）' : ''}`,
+          interestStartDate: String(entry.interestStartDate || targetOrder?.interest_start_date || '').slice(0, 10),
+          isSettled: entry.isPrimary
+            ? String(primaryJointSettlement?.status || '').toLowerCase() === 'settled'
+            : String(entry.segment?.status || '').toLowerCase() === 'settled',
+        }));
         const hasJointSegments = jointSegments.length > 0;
         const selectedJointEntries = jointSettlementEntries.filter((entry) => selectedJointSettleSegmentIds.includes(entry.segmentId) && !entry.isSettled);
         const allActiveJointSelected = jointSettlementEntries.filter((entry) => !entry.isSettled).length > 0
