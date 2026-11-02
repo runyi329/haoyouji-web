@@ -120,6 +120,8 @@ type SettlementDraft = {
   interestEndDate: string;
   settlementPrice: string;
   settlementExchangeRate: string;
+  // 历史日期无法从当前期权市场回溯，必须由管理员录入当日合约标记价（每张、U）。
+  settlementOptionMarkPrice: string;
 };
 
 const formatTradingFeeRate = (value: unknown) => {
@@ -1102,7 +1104,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [confirmSettleOrder, setConfirmSettleOrder] = useState<any | null>(null);
   // 仅在转结清时使用；清空后默认回到当前北京日期。
   const [settleInterestEndDate, setSettleInterestEndDate] = useState('');
-  const [settleValuation, setSettleValuation] = useState<SettlementDraft>({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' });
+  const [settleValuation, setSettleValuation] = useState<SettlementDraft>({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '', settlementOptionMarkPrice: '' });
   const [selectedSettleUserIds, setSelectedSettleUserIds] = useState<number[]>([]);
   // 联合订单的第一段使用 __primary__ 标记，第二段使用各自稳定 ID；每段独立日期和结算价。
   const [selectedJointSettleSegmentIds, setSelectedJointSettleSegmentIds] = useState<string[]>([]);
@@ -4553,6 +4555,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         interestEndDate: today,
                         settlementPrice: Number.isFinite(livePrice) && livePrice > 0 ? String(livePrice) : '',
                         settlementExchangeRate: String(cnyRate || ''),
+                        settlementOptionMarkPrice: '',
                       };
                       const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
                       const primaryAlreadySettled = String(targetOrder?.joint_order_primary_settlement?.status || '').toLowerCase() === 'settled';
@@ -7535,7 +7538,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   <div className="divide-y divide-indigo-100">
                     {jointSettlementEntries.map((entry) => {
                       const checked = selectedJointSettleSegmentIds.includes(entry.segmentId) && !entry.isSettled;
-                      const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: String(cnyRate || '') };
+                      const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: String(cnyRate || ''), settlementOptionMarkPrice: '' };
                       const isHistorical = (draft.interestEndDate || getBeijingToday()) !== getBeijingToday();
                       return (
                         <div key={entry.segmentId} className={entry.isSettled ? 'bg-red-50/60' : 'bg-white'}>
@@ -7561,10 +7564,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                 onChange={(e) => setJointSettlementDrafts((current) => ({
                                   ...current,
                                   [entry.segmentId]: {
-                                    ...draft,
-                                    interestEndDate: e.target.value,
-                                    settlementPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementPrice,
-                                  },
+                                  ...draft,
+                                  interestEndDate: e.target.value,
+                                  settlementPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementPrice,
+                                  settlementOptionMarkPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementOptionMarkPrice,
+                                },
                                 }))}
                                 className="mt-1.5 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
                               />
@@ -7576,6 +7580,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   <label className="block text-[11px] text-amber-900">USDT兑人民币
                                     <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementExchangeRate} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementExchangeRate: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
                                   </label>
+                                  {targetOrder?.asset_type === 'crypto_option' && <label className="col-span-2 block text-[11px] text-amber-900">期权结算价（u/张）
+                                    <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementOptionMarkPrice} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementOptionMarkPrice: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                                  </label>}
                                 </div>
                               ) : <p className="mt-2 text-[11px] leading-4 text-indigo-700">当天结清时，系统会立即冻结当前结算币价与 USDT 兑人民币汇率。</p>}
                             </div>
@@ -7643,19 +7650,22 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <label className="block text-[11px] text-amber-900">USDT兑人民币
                         <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementExchangeRate} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementExchangeRate: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
                       </label>
+                      {targetOrder?.asset_type === 'crypto_option' && <label className="col-span-2 block text-[11px] text-amber-900">期权结算价（u/张）
+                        <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementOptionMarkPrice} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementOptionMarkPrice: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                      </label>}
                     </div>
                   ) : <p className="mt-2 text-[11px] leading-4 text-amber-800">确认时系统会从服务器行情缓存锁定当前结算币价和汇率。</p>}
                 </div>
               )}
               {hasJointSegments ? <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedJointEntries.length}</span> 段；未勾选的分段会继续持有并保持实时计算。</p> : hasOtherCollaborators && <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedIds.length}</span> 位。未勾选的拥有者或参与者继续保持持有中。</p>}
               <div className="flex gap-2.5">
-                <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' }); setSelectedSettleUserIds([]); setSelectedJointSettleSegmentIds([]); setJointSettlementDrafts({}); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
+                <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '', settlementOptionMarkPrice: '' }); setSelectedSettleUserIds([]); setSelectedJointSettleSegmentIds([]); setJointSettlementDrafts({}); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
                 <button
                   onClick={() => {
                     const closeSettlementDialog = () => {
                       setConfirmSettleOrder(null);
                       setSettleInterestEndDate('');
-                      setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' });
+                      setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '', settlementOptionMarkPrice: '' });
                       setSelectedSettleUserIds([]);
                       setSelectedJointSettleSegmentIds([]);
                       setJointSettlementDrafts({});
@@ -7666,13 +7676,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         return;
                       }
                       const segments = selectedJointEntries.map((entry) => {
-                        const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: '' };
+                        const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: '', settlementOptionMarkPrice: '' };
                         return { segmentId: entry.segmentId, ...draft };
                       });
                       const incompleteHistory = segments.some((segment) => segment.interestEndDate !== getBeijingToday()
-                        && (!(Number(segment.settlementPrice) > 0) || !(Number(segment.settlementExchangeRate) > 0)));
+                        && (!(Number(segment.settlementPrice) > 0)
+                          || !(Number(segment.settlementExchangeRate) > 0)
+                          || (targetOrder?.asset_type === 'crypto_option' && !(Number(segment.settlementOptionMarkPrice) > 0))));
                       if (incompleteHistory) {
-                        toast.error('历史结算日请逐段填写最终结算价和 USDT 兑人民币汇率');
+                        toast.error(targetOrder?.asset_type === 'crypto_option' ? '历史期权结算日请填写标的价、汇率和期权结算价' : '历史结算日请逐段填写最终结算价和 USDT 兑人民币汇率');
                         return;
                       }
                       settleJointSegmentsMutation.mutate({
@@ -7684,18 +7696,20 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           interestEndDate: segment.interestEndDate || getBeijingToday(),
                           ...(segment.settlementPrice ? { settlementPrice: segment.settlementPrice } : {}),
                           ...(segment.settlementExchangeRate ? { settlementExchangeRate: segment.settlementExchangeRate } : {}),
+                          ...(segment.settlementOptionMarkPrice ? { settlementOptionMarkPrice: segment.settlementOptionMarkPrice } : {}),
                         })),
                       }, { onSuccess: closeSettlementDialog });
                       return;
                     }
                     const interestEndDate = settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday();
-                    if (interestEndDate !== getBeijingToday() && (!(Number(settleValuation.settlementPrice) > 0) || !(Number(settleValuation.settlementExchangeRate) > 0))) {
-                      toast.error('历史结算日请填写最终结算价和 USDT 兑人民币汇率');
+                    if (interestEndDate !== getBeijingToday() && (!(Number(settleValuation.settlementPrice) > 0) || !(Number(settleValuation.settlementExchangeRate) > 0) || (targetOrder?.asset_type === 'crypto_option' && !(Number(settleValuation.settlementOptionMarkPrice) > 0)))) {
+                      toast.error(targetOrder?.asset_type === 'crypto_option' ? '历史期权结算日请填写标的价、汇率和期权结算价' : '历史结算日请填写最终结算价和 USDT 兑人民币汇率');
                       return;
                     }
                     const valuation = {
                       ...(settleValuation.settlementPrice ? { settlementPrice: settleValuation.settlementPrice } : {}),
                       ...(settleValuation.settlementExchangeRate ? { settlementExchangeRate: settleValuation.settlementExchangeRate } : {}),
+                      ...(settleValuation.settlementOptionMarkPrice ? { settlementOptionMarkPrice: settleValuation.settlementOptionMarkPrice } : {}),
                     };
                     if (isWholeOrderSettlement) {
                       updateMutation.mutate({ id: Number(targetOrder.id), ledgerId, status: 'settled', interestEndDate, ...valuation }, { onSuccess: closeSettlementDialog });

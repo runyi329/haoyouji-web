@@ -159,9 +159,11 @@ export function useOptionGreeks({
   }, [contractKey, currentMarkPrice, enabled]);
 
   return {
-    data,
-    loading: query.isLoading || query.isFetching,
-    error: query.error?.message ?? null,
-    markPriceDirection,
+    // 已结清订单会传入 enabled=false。此时不仅要停止请求，还必须屏蔽
+    // React Query / localStorage 中残留的实时标记价，避免它被误显示为结算价格。
+    data: enabled ? data : null,
+    loading: enabled && (query.isLoading || query.isFetching),
+    error: enabled ? (query.error?.message ?? null) : null,
+    markPriceDirection: enabled ? markPriceDirection : 'same',
   };
 }

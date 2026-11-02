@@ -852,7 +852,11 @@ export function FunderOrderCard({
       ? (order as any).settlement_snapshot
       : (isPrimaryJointSegmentSettled ? primaryJointSettlement?.settlement_snapshot : (order as any).settlement_snapshot),
   );
-  const isPricingFrozen = (isPhysicalOrderSettled || isPrimaryJointSegmentSettled) && !!settlementSnapshot;
+  // 已结清即进入历史只读模式：旧订单即使没有快照，也绝不能退回当前实时行情。
+  // hasSettlementSnapshot 只决定是否能展示冻结数值，不决定是否继续请求外部数据。
+  const isSettlementFinal = isPhysicalOrderSettled || isPrimaryJointSegmentSettled;
+  const hasSettlementSnapshot = isSettlementFinal && !!settlementSnapshot;
+  const isPricingFrozen = hasSettlementSnapshot;
   const frozenPrices: Record<string, number> = {};
   if (isPricingFrozen) {
     for (const [symbol, price] of Object.entries(settlementSnapshot?.priceBySymbol || {})) {
@@ -863,7 +867,9 @@ export function FunderOrderCard({
     if (Number.isFinite(primaryPrice) && primaryPrice > 0) frozenPrices[String(order.coin || '').toUpperCase()] = primaryPrice;
   }
   // 已结清的段绝不再回退到实时行情；缺少历史报价时显示为空，比持续跳动更安全。
-  const livePrices: Record<string, number> = isPricingFrozen ? frozenPrices : sourceLivePrices;
+  const livePrices: Record<string, number> = isSettlementFinal
+    ? (isPricingFrozen ? frozenPrices : {})
+    : sourceLivePrices;
   // 长列表中不让每张卡片同时请求37号标签、股票盘尾价与期权 Greeks。
   // 卡片进入视窗（提前 600px 预取）后才读详情；编辑预览仍保持即时联动。
   const [cardNearViewport, setCardNearViewport] = useState(previewMode || jointSegmentMode);
@@ -883,7 +889,7 @@ export function FunderOrderCard({
     observer.observe(node);
     return () => observer.disconnect();
   }, [previewMode, jointSegmentMode, cardNearViewport]);
-  const shouldLoadRemoteDetails = !isPricingFrozen && (previewMode || jointSegmentMode || cardNearViewport);
+  const shouldLoadRemoteDetails = !isSettlementFinal && (previewMode || jointSegmentMode || cardNearViewport);
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [collateralDetail, setCollateralDetail] = useState<{
@@ -1223,7 +1229,7 @@ export function FunderOrderCard({
   // ===== END 内部 fallback =====
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: "USD", tocoin: "CNY", money: 1 },
-    { enabled: !isPricingFrozen, staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
+    { enabled: !isSettlementFinal, staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
   const frozenCnyRate = Number(settlementSnapshot?.usdtCnyRate);
   const cnyRate = isPricingFrozen && Number.isFinite(frozenCnyRate) && frozenCnyRate > 0
@@ -1248,7 +1254,7 @@ export function FunderOrderCard({
       // 共享池汇总仅供担保缺口说明弹窗使用；长列表不再逐卡请求/轮询完整池。
       // 初始本金口径同样要读取共享选择的成员与担保物；仅用于展示，
       // 其最终缺口仍由本订单的本金与利息独立计算。
-      enabled: ledgerId > 0 && orderShareMode === 'self' && (showCollateralInfo || showCollateralGapFormulaInfo),
+      enabled: !isSettlementFinal && ledgerId > 0 && orderShareMode === 'self' && (showCollateralInfo || showCollateralGapFormulaInfo),
       staleTime: 30_000,
       refetchOnWindowFocus: false,
     }
@@ -1453,25 +1459,38 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
     { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false }
   );
+  // 结清时37引用全部改读快照，不能由当前账本数据重建历史余额、担保或利息。
+  const frozenExternal37Tags = isPricingFrozen && settlementSnapshot?.external37?.tags && typeof settlementSnapshot.external37.tags === 'object'
+    ? settlementSnapshot.external37.tags as Record<string, any>
+    : null;
+  const frozenExternal37Tag = (tagName: string) => frozenExternal37Tags?.[tagName] ?? null;
+  const effectivePnlTagConfig = isPricingFrozen ? frozenExternal37Tag(linkedPnlTagName)?.config : _pnlTagConfig;
+  const effectivePnlTagSummary = isPricingFrozen ? frozenExternal37Tag(linkedPnlTagName)?.summary : _pnlTagSummary;
+  const effectiveCollateralTagConfig = isPricingFrozen ? frozenExternal37Tag(linkedCollateralTagName)?.config : _collateralTagConfig;
+  const effectiveCollateralTagSummary = isPricingFrozen ? frozenExternal37Tag(linkedCollateralTagName)?.summary : _collateralTagSummary;
+  const effectiveCollateralValuation = isPricingFrozen ? frozenExternal37Tag(linkedCollateralTagName)?.marginValuation : _canonicalCollateralValuation;
+  const effectiveMarginRateTagConfig = isPricingFrozen ? frozenExternal37Tag(linkedMarginRateTagName)?.config : _marginRateTagConfig;
+  const effectiveMarginRateTagSummary = isPricingFrozen ? frozenExternal37Tag(linkedMarginRateTagName)?.summary : _marginRateTagSummary;
+  const effectiveMarginRateValuation = isPricingFrozen ? frozenExternal37Tag(linkedMarginRateTagName)?.marginValuation : _canonicalMarginRateValuation;
   // 与37号右侧“剩余保证金占基数比”完全一致：
   // (最新余额 − 初始金额) × 账号倍率 + 已付保证金，再除以37号保证金基数；
   // 未设置基数时，沿用37号页的“占余额”降级口径。
   const referencedMarginRate = useMemo(() => {
     if (!hasExternalMarginRateReference) return { percent: null as number | null, denominator: 'base' as 'base' | 'balance' | null };
-    const canonicalTotalCny = Number((_canonicalMarginRateValuation as any)?.totalCny);
-    const valuationReady = _canonicalMarginRateValuation !== undefined;
-    const latestBalance = Number((_marginRateTagSummary as any)?.latestBalance?.balance);
+    const canonicalTotalCny = Number((effectiveMarginRateValuation as any)?.totalCny);
+    const valuationReady = effectiveMarginRateValuation !== undefined;
+    const latestBalance = Number((effectiveMarginRateTagSummary as any)?.latestBalance?.balance);
     if (!valuationReady || !Number.isFinite(canonicalTotalCny) || !Number.isFinite(latestBalance)) {
       return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
     }
-    const initialAmount = Number((_marginRateTagConfig as any)?.initial_amount ?? 0) || 0;
-    const accountMultiplier = Number((_marginRateTagConfig as any)?.account_multiplier ?? 1) || 1;
+    const initialAmount = Number((effectiveMarginRateTagConfig as any)?.initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((effectiveMarginRateTagConfig as any)?.account_multiplier ?? 1) || 1;
     const remainingMarginCny = (latestBalance - initialAmount) * accountMultiplier + canonicalTotalCny;
-    const marginBase = Number((_marginRateTagConfig as any)?.margin_base ?? 0) || 0;
+    const marginBase = Number((effectiveMarginRateTagConfig as any)?.margin_base ?? 0) || 0;
     if (marginBase > 0) return { percent: remainingMarginCny / marginBase * 100, denominator: 'base' as const };
     if (latestBalance > 0) return { percent: canonicalTotalCny / latestBalance * 100, denominator: 'balance' as const };
     return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
-  }, [hasExternalMarginRateReference, _canonicalMarginRateValuation, _marginRateTagConfig, _marginRateTagSummary]);
+  }, [hasExternalMarginRateReference, effectiveMarginRateValuation, effectiveMarginRateTagConfig, effectiveMarginRateTagSummary]);
   // 与 RightInterestDetail 共用同一份标签分段；待结、已结分别拉取，允许引用不同标签。
   const { data: _linkedPendingInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName },
@@ -1485,11 +1504,14 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '' },
     { enabled: shouldLoadRemoteDetails && hasExternalPendingInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
+  const effectivePendingInterestPeriods = isPricingFrozen ? frozenExternal37Tag(linkedPendingInterestTagName)?.interestPeriods : _linkedPendingInterestPeriods;
+  const effectivePaidInterestPeriods = isPricingFrozen ? frozenExternal37Tag(linkedPaidInterestTagName)?.interestPeriods : _linkedPaidInterestPeriods;
+  const effectivePendingInterestTagConfig = isPricingFrozen ? frozenExternal37Tag(linkedPendingInterestTagName)?.config : _pendingInterestTagConfig;
   const linkedCollateralMarginRecords = useMemo(() => {
-    const configured = parseTagMarginRecords((_collateralTagConfig as any)?.margin_by_coin);
+    const configured = parseTagMarginRecords((effectiveCollateralTagConfig as any)?.margin_by_coin);
     if (configured.length > 0) return configured;
-    return parseTagMarginRecords((_collateralTagSummary as any)?.marginByCoin);
-  }, [_collateralTagConfig, _collateralTagSummary]);
+    return parseTagMarginRecords((effectiveCollateralTagSummary as any)?.marginByCoin);
+  }, [effectiveCollateralTagConfig, effectiveCollateralTagSummary]);
   const linkedCollateralMarginStockSymbols = useMemo(
     () => getTagMarginStockSymbols(linkedCollateralMarginRecords),
     [linkedCollateralMarginRecords],
@@ -1506,7 +1528,7 @@ export function FunderOrderCard({
   // 以及37标签自己的真实当前持仓值。最后一项不能由倍率后浮盈反推。
   // 52订单的利息和借出本金不属于37号标签，仍在风险公式中另行处理。
   const { extValuationCnyRate: extTagValuationCnyRate, extCollateralValueU: extTagCollateralValueU, extCollateralValueCny: extTagCollateralValueCny, extFloatingPnlU: extTagFloatingPnlU, extHoldingValueU: extTagHoldingValueU, extHoldingValueCny: extTagHoldingValueCny, extHoldingValueDate: extTagHoldingValueDate } = useMemo(() => {
-    const _canonicalCnyRate = Number((_canonicalCollateralValuation as any)?.usdtCnyRate || 0);
+    const _canonicalCnyRate = Number((effectiveCollateralValuation as any)?.usdtCnyRate || 0);
     const _cnyR = _canonicalCnyRate > 0 ? _canonicalCnyRate : ((_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0);
     const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
@@ -1520,10 +1542,10 @@ export function FunderOrderCard({
       if (['CNY', 'RMB', '人民币', '元'].includes(normalizedCoin)) return n;
       return n * (_prices[normalizedCoin] ?? 0);
     };
-    const canonicalMarginTotalCny = Number((_canonicalCollateralValuation as any)?.totalCny);
-    const canonicalMarginValuationReady = _canonicalCollateralValuation !== undefined;
+    const canonicalMarginTotalCny = Number((effectiveCollateralValuation as any)?.totalCny);
+    const canonicalMarginValuationReady = effectiveCollateralValuation !== undefined;
     const locallyComputedMarginTotalCny = (() => {
-      if (!linkedCollateralTagName || !_collateralTagConfig || _cnyR <= 0) return null;
+      if (!linkedCollateralTagName || !effectiveCollateralTagConfig || _cnyR <= 0) return null;
       let allKnown = true;
       const total = linkedCollateralMarginRecords.reduce((sum, item) => {
         if (item.assetType === 'stock') {
@@ -1542,24 +1564,24 @@ export function FunderOrderCard({
       ? canonicalMarginTotalCny
       : locallyComputedMarginTotalCny;
     const floatingPnlCny = (() => {
-      if (!linkedPnlTagName || !_pnlTagConfig || _cnyR <= 0) return null;
-      const latestBalance = (_pnlTagSummary as any)?.currentHoldingValue?.value
-        ?? (_pnlTagSummary as any)?.latestBalance?.balance;
+      if (!linkedPnlTagName || !effectivePnlTagConfig || _cnyR <= 0) return null;
+      const latestBalance = (effectivePnlTagSummary as any)?.currentHoldingValue?.value
+        ?? (effectivePnlTagSummary as any)?.latestBalance?.balance;
       const balanceNum = latestBalance === undefined || latestBalance === null || latestBalance === '' ? null : Number(latestBalance);
       if (balanceNum === null || !Number.isFinite(balanceNum)) return null;
-      const initialNum = Number((_pnlTagConfig as any).initial_amount || 0) || 0;
-      const multiplierNum = Number((_pnlTagConfig as any).account_multiplier || 1) || 1;
+      const initialNum = Number((effectivePnlTagConfig as any).initial_amount || 0) || 0;
+      const multiplierNum = Number((effectivePnlTagConfig as any).account_multiplier || 1) || 1;
       return floatingPnlCalculationMode === 'leveraged_net_pnl'
         ? (balanceNum - initialNum) * multiplierNum
         : balanceNum - initialNum;
     })();
     const holdingValueCny = (() => {
       if (!linkedPnlTagName || _cnyR <= 0) return null;
-      const explicitValue = (_pnlTagSummary as any)?.currentHoldingValue?.value;
+      const explicitValue = (effectivePnlTagSummary as any)?.currentHoldingValue?.value;
       const explicitNumber = explicitValue === undefined || explicitValue === null || explicitValue === '' ? null : Number(explicitValue);
       // 兼容尚未更新到新接口的服务端：旧summary的余额本身就是手工标签实际市值，
       // 只允许直接使用，绝不能叠加初始金额或账号倍率。
-      const legacyBalance = (_pnlTagSummary as any)?.latestBalance?.balance;
+      const legacyBalance = (effectivePnlTagSummary as any)?.latestBalance?.balance;
       const legacyNumber = legacyBalance === undefined || legacyBalance === null || legacyBalance === '' ? null : Number(legacyBalance);
       return explicitNumber !== null && Number.isFinite(explicitNumber)
         ? explicitNumber
@@ -1575,28 +1597,29 @@ export function FunderOrderCard({
       extHoldingValueU: holdingValueCny === null ? null : holdingValueCny / _cnyR,
       // 人民币视图必须直接展示37返回的原始市值，不能经不同汇率源往返折算。
       extHoldingValueCny: holdingValueCny,
-      extHoldingValueDate: String((_pnlTagSummary as any)?.currentHoldingValue?.updatedDate ?? (_pnlTagSummary as any)?.latestBalance?.recordDate ?? '').slice(0, 10) || null,
+      extHoldingValueDate: String((effectivePnlTagSummary as any)?.currentHoldingValue?.updatedDate ?? (effectivePnlTagSummary as any)?.latestBalance?.recordDate ?? '').slice(0, 10) || null,
     };
-  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _canonicalCollateralValuation, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
+  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, effectivePnlTagConfig, effectivePnlTagSummary, effectiveCollateralTagConfig, effectiveCollateralTagSummary, effectiveCollateralValuation, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
 
   // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结，
   // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
   // 两者均不读取37号页面的净欠息/上欠，避免把已付后的余额错显示成任一独立字段。
   const linked37PendingInterestCny = useMemo(() => {
     if (!hasExternalPendingInterest) return null;
-    if (!Array.isArray(_linkedPendingInterestPeriods)) return null;
-    const pauseDate = (_pendingInterestTagConfig as any)?.pause_date || null;
+    if (!Array.isArray(effectivePendingInterestPeriods)) return null;
+    const pauseDate = (effectivePendingInterestTagConfig as any)?.pause_date || null;
+    const settlementInterestEndDate = isPricingFrozen ? String(settlementSnapshot?.interestEndDate || '').slice(0, 10) : null;
     const calcPeriodDays = (startDate: unknown, endDate: unknown) => {
       const startText = String(startDate || '').slice(0, 10);
       const beijingToday = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const endText = String(endDate || pauseDate || beijingToday).slice(0, 10);
+      const endText = String(endDate || pauseDate || settlementInterestEndDate || beijingToday).slice(0, 10);
       const [sy, sm, sd] = startText.split('-').map(Number);
       const [ey, em, ed] = endText.split('-').map(Number);
       const start = new Date(sy, sm - 1, sd).getTime();
       const end = new Date(ey, em - 1, ed).getTime();
       return Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 86_400_000) + 1 : 0;
     };
-    return (_linkedPendingInterestPeriods as any[])
+    return (effectivePendingInterestPeriods as any[])
       .filter((period: any) => period?.tag_name === linkedPendingInterestTagName)
       .reduce((sum: number, period: any) => {
         const principal = Number(period?.principal || 0);
@@ -1606,11 +1629,11 @@ export function FunderOrderCard({
         const days = calcPeriodDays(period?.start_date, period?.end_date || null);
         return principal > 0 && annualRate > 0 && days > 0 ? sum + principal * (annualRate / 100 / 365) * days : sum;
       }, 0);
-  }, [hasExternalPendingInterest, _linkedPendingInterestPeriods, _pendingInterestTagConfig, linkedPendingInterestTagName]);
+  }, [hasExternalPendingInterest, effectivePendingInterestPeriods, effectivePendingInterestTagConfig, linkedPendingInterestTagName, isPricingFrozen, settlementSnapshot]);
   const linked37PaidInterestCny = useMemo(() => {
     if (!hasExternalPaidInterest) return null;
-    if (!Array.isArray(_linkedPaidInterestPeriods)) return null;
-    return (_linkedPaidInterestPeriods as any[])
+    if (!Array.isArray(effectivePaidInterestPeriods)) return null;
+    return (effectivePaidInterestPeriods as any[])
       .filter((period: any) => {
         const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
         return period?.tag_name === linkedPaidInterestTagName && isManual && Number(period?.principal || 0) < 0;
@@ -1619,7 +1642,7 @@ export function FunderOrderCard({
         const principal = Number(period?.principal || 0);
         return sum + Math.abs(principal);
       }, 0);
-  }, [hasExternalPaidInterest, _linkedPaidInterestPeriods, linkedPaidInterestTagName]);
+  }, [hasExternalPaidInterest, effectivePaidInterestPeriods, linkedPaidInterestTagName]);
 
   // ===== 担保物快捷编辑面板 =====
   type QuickCollateralItem = { coin: string; qty: string; note?: string; source?: 'wallet' };
@@ -1924,20 +1947,24 @@ export function FunderOrderCard({
     && Number(_parsedCollateralSource?.ledgerId) === 37
     && !!linkedPnlTagName;
   const externalStockFloatPnlCny = useMemo(() => {
-    if (!isExternalStockPnlSource || !_pnlTagConfig) return null;
-    const rawBalance = (_pnlTagSummary as any)?.currentHoldingValue?.value
-      ?? (_pnlTagSummary as any)?.latestBalance?.balance;
+    if (!isExternalStockPnlSource || !effectivePnlTagConfig) return null;
+    const rawBalance = (effectivePnlTagSummary as any)?.currentHoldingValue?.value
+      ?? (effectivePnlTagSummary as any)?.latestBalance?.balance;
     if (rawBalance === undefined || rawBalance === null || rawBalance === '') return null;
     const latestBalance = Number(rawBalance);
     if (!Number.isFinite(latestBalance)) return null;
-    const initialAmount = Number((_pnlTagConfig as any).initial_amount ?? 0) || 0;
-    const accountMultiplier = Number((_pnlTagConfig as any).account_multiplier ?? 1) || 1;
+    const initialAmount = Number((effectivePnlTagConfig as any).initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((effectivePnlTagConfig as any).account_multiplier ?? 1) || 1;
     return floatingPnlCalculationMode === 'leveraged_net_pnl'
       ? (latestBalance - initialAmount) * accountMultiplier
       : latestBalance - initialAmount;
-  }, [isExternalStockPnlSource, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary]);
+  }, [isExternalStockPnlSource, floatingPnlCalculationMode, effectivePnlTagConfig, effectivePnlTagSummary]);
   const manualStockPnlDetail = useMemo(() => {
-    const quotes = (manualStockCloseQuery.data as any)?.quotes ?? {};
+    const frozenQuotes = isPricingFrozen && settlementSnapshot?.manualStockQuotes && typeof settlementSnapshot.manualStockQuotes === 'object'
+      ? settlementSnapshot.manualStockQuotes as Record<string, any>
+      : null;
+    // v1快照没有逐只股票结算价；历史卡片宁可标为缺失，不能偷用开仓时保存的参考价。
+    const quotes = isSettlementFinal ? (frozenQuotes ?? {}) : ((manualStockCloseQuery.data as any)?.quotes ?? {});
     return manualStockPositions.map((position) => {
       const quote = quotes[position.symbol];
       const snapshotPrice = Number(quote?.price);
@@ -1947,7 +1974,7 @@ export function FunderOrderCard({
       // 新增当日先用选股时带入的最新价；后续优先使用服务端保存的盘中参考价或盘尾收盘价。
       const currentPrice = Number.isFinite(snapshotPrice) && snapshotPrice > 0
         ? snapshotPrice
-        : (Number.isFinite(storedLatestPrice) && storedLatestPrice > 0 ? storedLatestPrice : null);
+        : (!isSettlementFinal && Number.isFinite(storedLatestPrice) && storedLatestPrice > 0 ? storedLatestPrice : null);
       const currency = String(quote?.currency || 'CNY').toUpperCase() === 'CNY' ? 'CNY' : 'USD';
       // “账户初始总额度”模式只使用第三方盘尾价和持股数量，不允许单只卖出价改变整体市值口径。
       const valuationPrice = manualStockPnlCalculationMode === 'total_capital'
@@ -1969,16 +1996,16 @@ export function FunderOrderCard({
         priceDate: String(quote?.priceDate || position.latestPriceDate || ''),
         updatedAt: String(quote?.updatedAt || position.latestPriceUpdatedAt || ''),
         isCloseSnapshot: Number.isFinite(snapshotPrice) && snapshotPrice > 0,
-        isIntradayQuote,
-        quoteLabel: isIntradayQuote ? '盘中参考价' : '盘尾收盘价',
+        isIntradayQuote: !isPricingFrozen && isIntradayQuote,
+        quoteLabel: isPricingFrozen ? '结算快照价' : (isIntradayQuote ? '盘中参考价' : '盘尾收盘价'),
       };
     });
-  }, [manualStockPositions, manualStockCloseQuery.data, cnyRate, manualStockPnlCalculationMode]);
+  }, [manualStockPositions, manualStockCloseQuery.data, cnyRate, manualStockPnlCalculationMode, isPricingFrozen, isSettlementFinal, settlementSnapshot]);
   const manualStockLastUpdatedAt = manualStockPnlDetail.reduce((latest, position) => {
     const updatedAt = position.updatedAt;
     return updatedAt && (!latest || new Date(updatedAt).getTime() > new Date(latest).getTime()) ? updatedAt : latest;
   }, '');
-  const manualStockMarketStatus = getAshareMarketStatus();
+  const manualStockMarketStatus = isSettlementFinal ? '已结清' : getAshareMarketStatus();
   const manualStockMarketValueCny = manualStockPnlDetail.every((position) => position.marketValueCny !== null)
     ? manualStockPnlDetail.reduce((sum, position) => sum + (position.marketValueCny ?? 0), 0)
     : null;
@@ -2034,6 +2061,27 @@ export function FunderOrderCard({
     direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
     enabled: shouldLoadRemoteDetails && isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
   });
+  // 结算快照优先级高于任何浏览器缓存。期权到期/下架后不再向 Gate.io 或 Deribit 请求。
+  const frozenOptionQuote = isPricingFrozen && settlementSnapshot?.optionQuote && typeof settlementSnapshot.optionQuote === 'object'
+    ? settlementSnapshot.optionQuote as Record<string, any>
+    : null;
+  const optionGreeksData = isPricingFrozen
+    ? (frozenOptionQuote ? {
+      instrumentName: frozenOptionQuote.instrumentName || '',
+      markPrice: Number.isFinite(Number(frozenOptionQuote.markPriceUsdt)) ? Number(frozenOptionQuote.markPriceUsdt) : null,
+      indexPrice: Number.isFinite(Number(frozenOptionQuote.indexPriceUsdt)) ? Number(frozenOptionQuote.indexPriceUsdt) : null,
+      delta: Number.isFinite(Number(frozenOptionQuote.delta)) ? Number(frozenOptionQuote.delta) : null,
+      gamma: Number.isFinite(Number(frozenOptionQuote.gamma)) ? Number(frozenOptionQuote.gamma) : null,
+      theta: Number.isFinite(Number(frozenOptionQuote.theta)) ? Number(frozenOptionQuote.theta) : null,
+      vega: Number.isFinite(Number(frozenOptionQuote.vega)) ? Number(frozenOptionQuote.vega) : null,
+      iv: Number.isFinite(Number(frozenOptionQuote.iv)) ? Number(frozenOptionQuote.iv) : null,
+      source: frozenOptionQuote.source || null,
+      quotedAt: frozenOptionQuote.quotedAt || settlementSnapshot?.capturedAt || null,
+      error: frozenOptionQuote.unavailableReason || null,
+    } : null)
+    : greeksResult.data;
+  const hasOptionSettlementQuote = isPricingFrozen && optionGreeksData?.markPrice !== null && optionGreeksData?.markPrice !== undefined;
+  const isOptionSettlementQuoteMissing = isSettlementFinal && isOptionOrder && !hasOptionSettlementQuote;
   // 融资金额统一以 order.amount 的 USDT 基准值保存；amount_currency 表示买入价格和融资金额的计价币种。
   const storedAmount = parseFloat(order.amount || '0');
   const rawAmountCurrency = String(order.amount_currency || (isStockOrder ? 'CNY' : 'USDT')).toUpperCase();
@@ -2506,7 +2554,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     ? (storedAmount > 0 ? storedAmount : optionPremiumTotalFromUnit)
     : null;
   // deribitGetGreeks 已将主备来源的合约 markPrice 统一折算为 USDT/张。
-  const optionMarkPrice = greeksResult.data?.markPrice ?? null;
+  const optionMarkPrice = optionGreeksData?.markPrice ?? null;
   // 比较同一份期权合约的上一次标记价；不能使用 ETH/BTC 标的现货的涨跌方向。
   const optionMarkPriceDirection = greeksResult.markPriceDirection;
   const optionMarkPriceTone = optionMarkPriceDirection === 'up'
@@ -3314,11 +3362,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   </div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 shrink-0">期权价格</span>
+                  <span className="text-gray-400 shrink-0">{isSettlementFinal ? '结算期权价' : '期权价格'}</span>
                   <span className="font-medium flex items-center gap-0.5" style={{ color: optionMarkPriceTone }}>
                     {optionMarkPriceDirection === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                     {optionMarkPriceDirection === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${optionMarkPrice.toFixed(2)} u` : '--'}
+                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${optionMarkPrice.toFixed(2)} u` : (isOptionSettlementQuoteMissing ? '快照缺失' : '--')}
                   </span>
                 </div>
               </>
@@ -3386,7 +3434,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       {configuredStockFloatPnlCny >= 0 ? '+' : ''}{formatFunderFloatingPnlForDisplay(configuredStockFloatPnlCny, true)} 元
                     </span>
                   ) : (
-                    <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取股票报价...' : '等待股票报价') : (_pnlTagSummary ? '暂无37号数据' : '加载37号数据...')}</span>
+                    <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取股票报价...' : '等待股票报价') : (effectivePnlTagSummary ? '暂无37号数据' : (isSettlementFinal ? '结算快照未保留37号数据' : '加载37号数据...'))}</span>
                   )
                 ) : floatPnl !== null ? (
                   isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionFloatPnl !== null ? (
@@ -3408,7 +3456,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   </span>
                   )
                 ) : (
-                  <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
+                  <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : (isOptionSettlementQuoteMissing ? '结算快照未保留合约报价' : '暂无合约报价')}</span>
                 )}
               </div>
             )}
@@ -3697,12 +3745,16 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       : '本订单只引用“计入已付”的手工减息绝对值；自动计息、手工加息与欠息/上欠均不计入已结。'}
                   </div>
                   <div className="px-2 pb-4">
-                    <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载利息明细...</div>}>
-                      <RightInterestDetail
-                        ledgerId={_parsedCollateralSource.ledgerId}
-                        tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
-                      />
-                    </React.Suspense>
+                    {isSettlementFinal ? (
+                      <div className="mx-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 text-center text-xs leading-5 text-amber-800">订单已结清，37号标签利息不再按今天重新计算；历史订单未保存逐期明细。</div>
+                    ) : (
+                      <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载利息明细...</div>}>
+                        <RightInterestDetail
+                          ledgerId={_parsedCollateralSource.ledgerId}
+                          tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
+                        />
+                      </React.Suspense>
+                    )}
                   </div>
                 </div>
               </div>
@@ -4134,14 +4186,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
                         </div>
                         <div className="px-2 pb-4">
-                          <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载担保明细...</div>}>
-                            <RightMarginDetail
-                              ledgerId={_parsedCollateralSource.ledgerId}
-                              tagName={linkedCollateralTagName}
-                              linkedPendingInterestCny={hasExternalPendingInterest ? linked37PendingInterestCny : undefined}
-                              linkedPaidInterestCny={hasExternalPaidInterest ? linked37PaidInterestCny : undefined}
-                            />
-                          </React.Suspense>
+                          {isSettlementFinal ? (
+                            <div className="mx-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 text-center text-xs leading-5 text-amber-800">订单已结清，37号担保不再读取当前币价或股票报价；历史订单未保存逐项担保快照。</div>
+                          ) : (
+                            <React.Suspense fallback={<div className="py-6 text-center text-sm text-gray-400">加载担保明细...</div>}>
+                              <RightMarginDetail
+                                ledgerId={_parsedCollateralSource.ledgerId}
+                                tagName={linkedCollateralTagName}
+                                linkedPendingInterestCny={hasExternalPendingInterest ? linked37PendingInterestCny : undefined}
+                                linkedPaidInterestCny={hasExternalPaidInterest ? linked37PaidInterestCny : undefined}
+                              />
+                            </React.Suspense>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -4164,8 +4220,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           const paidInterestU = paidInterestForRisk;
                           const gapBaseU = collateralGapBaseForRisk;
                           const interestDifferenceU = paidInterestU - pendingInterestU;
-                          const pnlInitialAmountCny = Number((_pnlTagConfig as any)?.initial_amount ?? 0) || 0;
-                          const pnlMultiplier = Number((_pnlTagConfig as any)?.account_multiplier ?? 1) || 1;
+                          const pnlInitialAmountCny = Number((effectivePnlTagConfig as any)?.initial_amount ?? 0) || 0;
+                          const pnlMultiplier = Number((effectivePnlTagConfig as any)?.account_multiplier ?? 1) || 1;
                           const pnlInitialAmountDisplay = showCny
                             ? pnlInitialAmountCny
                             : pnlInitialAmountCny / (extTagValuationCnyRate || cnyRate);
@@ -4359,6 +4415,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             </>
                           );
                         })()
+                      ) : isSettlementFinal && useUnifiedSharedDialog ? (
+                        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 text-center leading-5 text-amber-800">
+                          订单已结清，跨订单共享担保不再读取当前共享池或其他订单的实时数据。该历史订单未保存池级结算明细，无法可靠回溯。
+                        </div>
                       ) : useUnifiedSharedDialog ? (
                         <>
                           {/* ①② 总计风险敎口 + 保证金比例（移到最上面） */}
@@ -5111,8 +5171,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   {greeksResult.loading && !greeksResult.data && <div className="text-xs text-gray-400">加载中...</div>}
                   {greeksResult.error && !greeksResult.data && <div className="text-xs" style={{ color: '#DC2626' }}>获取失败: {greeksResult.error}</div>}
                   {(() => {
-                    const d = greeksResult.data;
-                    if (!d) return null;
+                    const d = optionGreeksData;
+                    if (!d) return isOptionSettlementQuoteMissing ? <div className="text-xs text-gray-400">结算快照未保留 Greeks</div> : null;
                     const hasData = d.delta != null || d.gamma != null || d.markPrice != null;
                     const fmtN = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '---';
                     if (!hasData) return (

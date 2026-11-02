@@ -1736,7 +1736,7 @@ function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | n
 }
 
 type FunderSettlementSnapshot = {
-  version: 1;
+  version: 1 | 2;
   effectiveDate: string;
   holdingEndAt: string;
   interestEndDate: string;
@@ -1746,6 +1746,37 @@ type FunderSettlementSnapshot = {
   priceMode: 'manual_historical' | 'live_confirmed';
   capturedAt: string;
   capturedBy: number;
+  // v2：期权合约价格不能用标的现货价替代；结清时把同一份合约标记价与 Greeks 固化。
+  optionQuote?: {
+    instrumentName: string | null;
+    markPriceUsdt: string | null;
+    indexPriceUsdt: string | null;
+    delta: number | null;
+    gamma: number | null;
+    theta: number | null;
+    vega: number | null;
+    iv: number | null;
+    source: string | null;
+    quotedAt: string;
+    unavailableReason?: string;
+  };
+  // v2：52号手工股票只取服务器已保存的盘中/盘尾价；结清后不可被后续报价覆盖。
+  manualStockQuotes?: Record<string, {
+    price: string | null;
+    currency: 'CNY' | 'USD' | null;
+    priceDate: string | null;
+    updatedAt: string | null;
+    source: string | null;
+  }>;
+  // v2：37号引用是另一套动态账本，结清时同时冻结其余额、保证金和利息输入。
+  external37?: {
+    tags: Record<string, {
+      config: Record<string, any> | null;
+      summary: { currentHoldingValue: { value: number; updatedDate: string | null } | null; latestBalance: { balance: number; recordDate: string | null } | null; marginByCoin: unknown };
+      marginValuation: { totalCny: number | null; itemValuesCny: Array<number | null>; usdtCnyRate: number | null; valuationUpdatedAt: string | null };
+      interestPeriods: Array<Record<string, any>>;
+    }>;
+  };
 };
 
 function getBeijingDateString(date = new Date()): string {
@@ -1761,6 +1792,281 @@ function parseFunderJsonArray(value: unknown): any[] {
   }
 }
 
+function parseFunderJsonObject(value: unknown): Record<string, any> | null {
+  try {
+    const parsed = Buffer.isBuffer(value)
+      ? JSON.parse(value.toString('utf8'))
+      : (typeof value === 'string' ? JSON.parse(value) : value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 将期权配置转换为行情服务使用的唯一合约名；期权过期后也保留该身份供结算快照审计。 */
+function buildFunderOptionInstrument(optionInfo: Record<string, any> | null): {
+  currency: 'BTC' | 'ETH'; instrumentName: string; gateSymbol: string; cacheKey: string;
+} | null {
+  const currency = String(optionInfo?.coin || '').toUpperCase();
+  const exerciseDate = normalizeOptionExerciseDateInBeijing(optionInfo?.exerciseDate);
+  const strikePrice = Number(optionInfo?.strikePrice);
+  const direction = String(optionInfo?.direction || '');
+  if ((currency !== 'BTC' && currency !== 'ETH') || !exerciseDate || !Number.isFinite(strikePrice) || strikePrice <= 0) return null;
+  const date = new Date(`${exerciseDate}T08:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const isCall = direction === 'long_call' || direction === 'short_call';
+  const optionType = isCall ? 'C' : 'P';
+  const dd = date.getUTCDate();
+  const mon = DERIBIT_MONTHS[date.getUTCMonth()];
+  const yy = String(date.getUTCFullYear()).slice(2);
+  const instrumentName = `${currency}-${dd}${mon}${yy}-${strikePrice}-${optionType}`;
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return {
+    currency: currency as 'BTC' | 'ETH',
+    instrumentName,
+    gateSymbol: `${currency}_USDT-${yyyy}${mm}${day}-${strikePrice}-${optionType}`,
+    cacheKey: `greeks:${instrumentName}`,
+  };
+}
+
+/**
+ * 结清时主动取得一次期权合约报价；失败时明确存为不可用，绝不用结清后的实时行情补写。
+ */
+async function captureFunderOptionSettlementQuote(
+  optionInfo: Record<string, any> | null,
+  options: { isHistorical: boolean; manualMarkPrice?: unknown },
+): Promise<FunderSettlementSnapshot['optionQuote'] | undefined> {
+  const instrument = buildFunderOptionInstrument(optionInfo);
+  if (!instrument) return undefined;
+  const capturedAt = new Date().toISOString();
+  const manualMarkPrice = Number(options.manualMarkPrice);
+  // 历史日期只能信任管理员确认的当日期权合约价；严禁用今天的市场报价回填过去。
+  if (options.isHistorical) {
+    if (Number.isFinite(manualMarkPrice) && manualMarkPrice > 0) {
+      return {
+        instrumentName: instrument.instrumentName,
+        markPriceUsdt: String(manualMarkPrice),
+        indexPriceUsdt: null,
+        delta: null,
+        gamma: null,
+        theta: null,
+        vega: null,
+        iv: null,
+        source: 'manual_historical',
+        quotedAt: capturedAt,
+      };
+    }
+    return {
+      instrumentName: instrument.instrumentName,
+      markPriceUsdt: null,
+      indexPriceUsdt: null,
+      delta: null,
+      gamma: null,
+      theta: null,
+      vega: null,
+      iv: null,
+      source: 'manual_historical',
+      quotedAt: capturedAt,
+      unavailableReason: '历史结算未填写期权合约结算价',
+    };
+  }
+  const cached = await deribitDbGet(instrument.cacheKey);
+  const quote = await refreshOptionGreeksQuote({ ...instrument, cached });
+  const markPrice = Number(quote?.markPrice);
+  return {
+    instrumentName: instrument.instrumentName,
+    markPriceUsdt: Number.isFinite(markPrice) && markPrice > 0 ? String(markPrice) : null,
+    indexPriceUsdt: Number.isFinite(Number(quote?.indexPrice)) && Number(quote.indexPrice) > 0 ? String(quote.indexPrice) : null,
+    delta: Number.isFinite(Number(quote?.delta)) ? Number(quote.delta) : null,
+    gamma: Number.isFinite(Number(quote?.gamma)) ? Number(quote.gamma) : null,
+    theta: Number.isFinite(Number(quote?.theta)) ? Number(quote.theta) : null,
+    vega: Number.isFinite(Number(quote?.vega)) ? Number(quote.vega) : null,
+    iv: Number.isFinite(Number(quote?.iv)) ? Number(quote.iv) : null,
+    source: typeof quote?.source === 'string' ? quote.source : null,
+    quotedAt: capturedAt,
+    ...(Number.isFinite(markPrice) && markPrice > 0 ? {} : { unavailableReason: String(quote?.error || '结清时未取得有效合约报价') }),
+  };
+}
+
+/** 结清时捕获每只手工股票实际采用的已保存报价，不调用客户端或第三方行情。 */
+async function captureFunderManualStockSettlementQuotes(sourceOrder: Record<string, any>): Promise<FunderSettlementSnapshot['manualStockQuotes'] | undefined> {
+  const source = parseFunderJsonObject(sourceOrder.collateral_source);
+  if (source?.stockPnlSource !== 'manual_positions' || !Array.isArray(source.stockPositions)) return undefined;
+  const positions = source.stockPositions as any[];
+  const symbols = Array.from(new Set(positions
+    .map((position) => String(position?.symbol || '').trim().toUpperCase())
+    .filter((symbol) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol))));
+  if (symbols.length === 0) return undefined;
+  let quotes: Record<string, any> = {};
+  try {
+    const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+    quotes = await getManualStockCloseSnapshots(symbols);
+  } catch (error) {
+    console.warn('[SettlementSnapshot] 读取手工股票报价失败:', error);
+  }
+  const result: NonNullable<FunderSettlementSnapshot['manualStockQuotes']> = {};
+  for (const symbol of symbols) {
+    const quote = quotes[symbol];
+    const storedPosition = positions.find((position) => String(position?.symbol || '').trim().toUpperCase() === symbol);
+    const storedPrice = Number(storedPosition?.latestPrice ?? storedPosition?.initialPrice);
+    const quotePrice = Number(quote?.price);
+    const price = Number.isFinite(quotePrice) && quotePrice > 0
+      ? quotePrice
+      : (Number.isFinite(storedPrice) && storedPrice > 0 ? storedPrice : null);
+    result[symbol] = {
+      price: price === null ? null : String(price),
+      currency: price === null ? null : (String(quote?.currency || 'CNY').toUpperCase() === 'CNY' ? 'CNY' : 'USD'),
+      priceDate: String(quote?.priceDate || storedPosition?.latestPriceDate || storedPosition?.initialPriceDate || '').slice(0, 10) || null,
+      updatedAt: String(quote?.updatedAt || storedPosition?.latestPriceUpdatedAt || '') || null,
+      source: String(quote?.source || (price === null ? '' : '订单保存参考价')) || null,
+    };
+  }
+  return result;
+}
+
+/**
+ * 37号标签在52号订单中属于外部动态来源。结清时只读取一次服务器保存的数据并落盘，
+ * 后续绝不由前端再次按当前余额、当前价格或今天的利息重建历史担保结果。
+ */
+async function captureFunderExternal37SettlementSnapshot(
+  sourceOrder: Record<string, any>,
+  frozenUsdtCnyRate: number,
+): Promise<FunderSettlementSnapshot['external37'] | undefined> {
+  const source = parseFunderJsonObject(sourceOrder.collateral_source);
+  if (Number(source?.ledgerId) !== 37) return undefined;
+  const names = Array.from(new Set([
+    source?.tagName,
+    source?.floatingPnlTagName,
+    source?.collateralTagName,
+    source?.marginRateTagName,
+    source?.pendingInterestTagName,
+    source?.paidInterestTagName,
+    source?.interestTagName,
+  ].map((name) => String(name || '').trim()).filter(Boolean)));
+  if (names.length === 0) return undefined;
+  const conn = await getDbConnection();
+  if (!conn) return undefined;
+  try {
+    const placeholders = names.map(() => '?').join(',');
+    const [configRows] = await (conn as any).execute(
+      `SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, pause_date, margin_pause_date
+       FROM ledger_tag_config WHERE ledger_id = 37 AND tag_name IN (${placeholders})`, names,
+    );
+    const configs = new Map<string, any>((Array.isArray(configRows) ? configRows : []).map((row: any) => [String(row.tag_name), row]));
+    const [categoryRows] = await (conn as any).execute(
+      `SELECT id, name, accounting_mode FROM ledger_categories WHERE ledgerId = 37 AND name IN (${placeholders})`, names,
+    );
+    const categories = new Map<string, any>((Array.isArray(categoryRows) ? categoryRows : []).map((row: any) => [String(row.name), row]));
+    const [balanceRows] = await (conn as any).execute(
+      `SELECT ranked.tag_name, ranked.amount, ranked.recordDate FROM (
+         SELECT lc.name AS tag_name, lr.amount, lr.recordDate,
+                ROW_NUMBER() OVER (PARTITION BY lc.name ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC) AS row_num
+         FROM ledger_records lr
+         INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
+         WHERE lr.ledgerId = 37 AND lc.name IN (${placeholders})
+           AND lc.accounting_mode = 'manual_balance' AND lr.type <> 'transfer' AND lr.deleted_at IS NULL
+       ) ranked WHERE ranked.row_num = 1`, names,
+    );
+    const balances = new Map<string, any>((Array.isArray(balanceRows) ? balanceRows : []).map((row: any) => [String(row.tag_name), row]));
+    const [periodRows] = await (conn as any).execute(
+      `SELECT tag_name, principal, annual_rate, start_date, end_date, is_manual, period_label, sort_order
+       FROM tag_interest_periods WHERE ledger_id = 37 AND tag_name IN (${placeholders})
+       ORDER BY start_date ASC, sort_order ASC, id ASC`, names,
+    );
+    const periodsByName = new Map<string, Array<Record<string, any>>>();
+    for (const row of (Array.isArray(periodRows) ? periodRows : [])) {
+      const name = String(row.tag_name);
+      periodsByName.set(name, [...(periodsByName.get(name) || []), row]);
+    }
+    const allMarginRecords = names.flatMap((name) => parseTagMarginRecords(configs.get(name)?.margin_by_coin));
+    const stockSymbols = getTagMarginStockSymbols(allMarginRecords);
+    let stockQuotes: Record<string, any> = {};
+    if (stockSymbols.length > 0) {
+      try {
+        const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+        stockQuotes = await getManualStockCloseSnapshots(stockSymbols);
+      } catch (error) {
+        console.warn('[SettlementSnapshot] 读取37股票保证金报价失败:', error);
+      }
+    }
+    const { getAllLatestPrices, getLatestPrice } = await import('./price-scanner');
+    const allPrices = getAllLatestPrices();
+    const tags: NonNullable<FunderSettlementSnapshot['external37']>['tags'] = {};
+    for (const name of names) {
+      const config = configs.get(name) ?? null;
+      const category = categories.get(name) ?? null;
+      let holdingValue: number | null = null;
+      let holdingDate: string | null = null;
+      const balance = balances.get(name) ?? null;
+      if (balance && Number.isFinite(Number(balance.amount))) {
+        holdingValue = Number(balance.amount);
+        holdingDate = String(balance.recordDate || '').slice(0, 10) || null;
+      } else if (String(category?.accounting_mode) === 'stock_portfolio') {
+        try {
+          const { getStockTagCurrentMarketValue } = await import('./ledger-stock-portfolio');
+          const marketValue = await getStockTagCurrentMarketValue({ ledgerId: 37, categoryId: Number(category.id) });
+          if (marketValue && Number.isFinite(Number(marketValue.value))) {
+            holdingValue = Number(marketValue.value);
+            holdingDate = String(marketValue.priceDate || marketValue.updatedAt || '').slice(0, 10) || null;
+          }
+        } catch (error) {
+          console.warn('[SettlementSnapshot] 读取37股票标签市值失败:', error);
+        }
+      }
+      const marginRecords = parseTagMarginRecords(config?.margin_by_coin);
+      let fullyValued = frozenUsdtCnyRate > 0;
+      let totalCny = 0;
+      const itemValuesCny = marginRecords.map((record) => {
+        if (record.assetType === 'stock') {
+          const value = getTagMarginStockMarketValue(record, stockQuotes);
+          if (value === null) fullyValued = false; else totalCny += value;
+          return value;
+        }
+        const coin = String(record.coin || 'CNY').trim().toUpperCase();
+        const amount = Number(record.amount);
+        if (!Number.isFinite(amount)) { fullyValued = false; return null; }
+        if (['CNY', 'RMB', '人民币', '元'].includes(coin)) { totalCny += amount; return amount; }
+        const priceU = Number(getLatestPrice(coin) || 0);
+        if (!Number.isFinite(priceU) || priceU <= 0 || frozenUsdtCnyRate <= 0) { fullyValued = false; return null; }
+        const value = amount * priceU * frozenUsdtCnyRate;
+        totalCny += value;
+        return value;
+      });
+      const valuationUpdatedAt = marginRecords
+        .filter((record) => record.assetType === 'currency' && !['CNY', 'RMB', '人民币', '元'].includes(String(record.coin || '').trim().toUpperCase()))
+        .map((record) => allPrices[String(record.coin || '').trim().toUpperCase()]?.updatedAt)
+        .filter(Boolean).sort().at(-1) ?? null;
+      const serializedConfig = config ? {
+        initial_amount: config.initial_amount ?? null,
+        account_multiplier: config.account_multiplier ?? null,
+        margin_base: config.margin_base ?? null,
+        margin_by_coin: config.margin_by_coin ?? null,
+        pause_date: config.pause_date ?? null,
+        margin_pause_date: config.margin_pause_date ?? null,
+      } : null;
+      tags[name] = {
+        config: serializedConfig,
+        summary: {
+          currentHoldingValue: holdingValue === null ? null : { value: holdingValue, updatedDate: holdingDate },
+          latestBalance: holdingValue === null ? null : { balance: holdingValue, recordDate: holdingDate },
+          marginByCoin: config?.margin_by_coin ?? null,
+        },
+        marginValuation: { totalCny: fullyValued ? totalCny : null, itemValuesCny, usdtCnyRate: frozenUsdtCnyRate || null, valuationUpdatedAt },
+        interestPeriods: periodsByName.get(name) || [],
+      };
+    }
+    return { tags };
+  } catch (error) {
+    console.warn('[SettlementSnapshot] 读取37引用数据失败:', error);
+    return undefined;
+  } finally {
+    if (typeof (conn as any).release === 'function') (conn as any).release();
+    else await (conn as any).end?.().catch(() => {});
+  }
+}
+
 /** 每次结清只从服务器行情缓存取一次报价，历史结算日必须由管理员填入价格和汇率。 */
 async function buildFunderSettlementSnapshot(
   sourceOrder: Record<string, any>,
@@ -1768,10 +2074,12 @@ async function buildFunderSettlementSnapshot(
   actorUserId: number,
   manualPrimaryPrice?: unknown,
   manualUsdtCnyRate?: unknown,
+  manualOptionMarkPrice?: unknown,
 ): Promise<FunderSettlementSnapshot> {
   const isHistorical = effectiveDate !== getBeijingDateString();
   const suppliedPrice = Number(manualPrimaryPrice);
   const suppliedRate = Number(manualUsdtCnyRate);
+  const suppliedOptionMarkPrice = Number(manualOptionMarkPrice);
   const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
   const liveRate = Number(getUsdtCnyRate() || 0);
   const usdtCnyRate = isHistorical ? suppliedRate : (liveRate || suppliedRate);
@@ -1792,14 +2100,17 @@ async function buildFunderSettlementSnapshot(
       message: isHistorical ? '历史结算日请填写该标的的最终结算价格' : '当前标的价格暂不可用，请稍后重试',
     });
   }
+  if (isHistorical && String(sourceOrder.asset_type || '') === 'crypto_option'
+    && (!Number.isFinite(suppliedOptionMarkPrice) || suppliedOptionMarkPrice <= 0)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: '历史期权结算日请填写期权合约结算价（u/张）' });
+  }
 
   const symbols = new Set<string>(['USDT', 'CNY', primarySymbol]);
   for (const asset of [...parseFunderJsonArray(sourceOrder.collateral_assets), ...parseFunderJsonArray(sourceOrder.lent_out_assets)]) {
     const symbol = String(asset?.coin || '').trim().toUpperCase();
     if (symbol) symbols.add(symbol);
   }
-  let optionInfo: any = null;
-  try { optionInfo = typeof sourceOrder.option_info === 'string' ? JSON.parse(sourceOrder.option_info) : sourceOrder.option_info; } catch {}
+  const optionInfo = parseFunderJsonObject(sourceOrder.option_info);
   [optionInfo?.coin, optionInfo?.premiumCurrency, optionInfo?.denomination]
     .map((value) => String(value || '').trim().toUpperCase())
     .filter(Boolean)
@@ -1818,8 +2129,18 @@ async function buildFunderSettlementSnapshot(
     if (Number.isFinite(price) && price > 0) priceBySymbol[symbol] = String(price);
   }
 
+  const [optionQuote, manualStockQuotes, external37] = await Promise.all([
+    String(sourceOrder.asset_type || '') === 'crypto_option'
+      ? captureFunderOptionSettlementQuote(optionInfo, { isHistorical, manualMarkPrice: manualOptionMarkPrice })
+      : Promise.resolve(undefined),
+    String(sourceOrder.asset_type || '') === 'stock'
+      ? captureFunderManualStockSettlementQuotes(sourceOrder)
+      : Promise.resolve(undefined),
+    captureFunderExternal37SettlementSnapshot(sourceOrder, usdtCnyRate),
+  ]);
+
   return {
-    version: 1,
+    version: 2,
     effectiveDate,
     // 业务结算只选择日期，统一按北京时间当天结束冻结持有时长，避免浏览器时区差异。
     holdingEndAt: `${effectiveDate}T23:59:59+08:00`,
@@ -1830,6 +2151,9 @@ async function buildFunderSettlementSnapshot(
     priceMode: isHistorical ? 'manual_historical' : 'live_confirmed',
     capturedAt: new Date().toISOString(),
     capturedBy: actorUserId,
+    ...(optionQuote ? { optionQuote } : {}),
+    ...(manualStockQuotes ? { manualStockQuotes } : {}),
+    ...(external37 ? { external37 } : {}),
   };
 }
 
@@ -26971,6 +27295,7 @@ ${klinesSummary}
         // 当天由服务器行情缓存取价；历史结算日要求管理员录入当日最终价与汇率。
         settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
         settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+        settlementOptionMarkPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
@@ -27295,6 +27620,7 @@ ${klinesSummary}
               ctx.user.id,
               input.settlementPrice,
               input.settlementExchangeRate,
+              input.settlementOptionMarkPrice,
             );
             updateCols.push('settlement_snapshot = ?');
             updateVals.push(JSON.stringify(settlementSnapshot));
@@ -27497,6 +27823,7 @@ ${klinesSummary}
         interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
         settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+        settlementOptionMarkPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
       }).refine((value) => Boolean(value.userId || value.userIds?.length), {
         message: '请至少选择一位拥有者或参与者',
       }))
@@ -27592,6 +27919,7 @@ ${klinesSummary}
               ctx.user.id,
               input.settlementPrice,
               input.settlementExchangeRate,
+              input.settlementOptionMarkPrice,
             );
             snapshotsToSave.push({
               participantId: Number(participant.id),
@@ -27639,6 +27967,7 @@ ${klinesSummary}
           interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
           settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+          settlementOptionMarkPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
         })).min(1).max(9),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -27710,6 +28039,7 @@ ${klinesSummary}
               ctx.user.id,
               primaryRequest.settlementPrice,
               primaryRequest.settlementExchangeRate,
+              primaryRequest.settlementOptionMarkPrice,
             );
           }
 
@@ -27733,6 +28063,7 @@ ${klinesSummary}
                 ctx.user.id,
                 request.settlementPrice,
                 request.settlementExchangeRate,
+                request.settlementOptionMarkPrice,
               );
             }
             nextSegments.push(nextSegment);
