@@ -26,9 +26,9 @@ interface OrderCardImageDownloadProps {
   exportBackground?: string;
   /** 卡片页眉使用无圆形容器的纯下载箭头；其他入口保持默认样式。 */
   variant?: "default" | "bare";
-  /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
+  /** 默认显示固定R1标识和时间；可改为只显示截图时间。 */
   watermarkMode?: "user-and-time" | "time-only";
-  /** 指定水印中的保存者名称；传入时始终与截图时间一起显示。旧版固定R1会自动回退为实际保存者。 */
+  /** @deprecated 水印标识已统一固定为R1，传入值不再使用。 */
   watermarkLabel?: string;
   /** 水印文字不透明度；默认保持卡片下载的轻量水印。 */
   watermarkOpacity?: number;
@@ -168,29 +168,6 @@ function formatBeijingTime(date: Date): string {
     type: "year" | "month" | "day" | "hour" | "minute" | "second"
   ) => parts.find(part => part.type === type)?.value || "";
   return `${value("year")}-${value("month")}-${value("day")} ${value("hour")}:${value("minute")}:${value("second")}`;
-}
-
-function getStoredSnapshotUser(): SnapshotUser | null {
-  try {
-    const raw = localStorage.getItem("manus-runtime-user-info");
-    return raw ? (JSON.parse(raw) as SnapshotUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getSaverLabel(user?: SnapshotUser | null): string {
-  if (!user) return "当前用户";
-  const username = String(user.username || "").trim();
-  const displayName = String(
-    user.name ||
-      user.nickname ||
-      user.displayName ||
-      username ||
-      `用户${user.id || ""}`
-  ).trim();
-  // 水印重复铺满图片时只保留操作人的显示名，既可追溯又避免“姓名（用户名）”过长遮挡账目。
-  return displayName;
 }
 
 function sanitizeFilename(value: string): string {
@@ -515,7 +492,6 @@ function getErrorMessage(error: unknown): string {
 
 export function OrderCardImageDownload({
   targetRef,
-  currentUser,
   orderNo,
   color = "#64748B",
   outerPadding = 16,
@@ -525,7 +501,6 @@ export function OrderCardImageDownload({
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
-  watermarkLabel,
   watermarkOpacity = 0.07,
   filenamePrefix = "订单",
   previewTitle = "订单图片预览",
@@ -558,15 +533,9 @@ export function OrderCardImageDownload({
 
     setGenerating(true);
     const timestamp = formatBeijingTime(new Date());
-    const requestedWatermarkLabel = String(watermarkLabel || "").trim();
-    // 旧入口曾以“R1”覆盖操作者身份。所有账本截图都应记录实际保存者，
-    // 因此保留业务自定义文字的兼容性，但不再接受固定R1作为水印主体。
-    const saverLabel =
-      requestedWatermarkLabel && requestedWatermarkLabel.toUpperCase() !== "R1"
-        ? requestedWatermarkLabel
-        : watermarkMode === "time-only"
-          ? ""
-          : getSaverLabel(currentUser || getStoredSnapshotUser());
+    // 全部账本/订单图片使用R1标识，绝不读取或暴露当时登录的保存者。
+    // 明确采用 time-only 的米伴订单图片仍只保留北京时间。
+    const saverLabel = watermarkMode === "time-only" ? "" : "R1";
     const watermarkText = saverLabel
       ? `${saverLabel}｜${timestamp}`
       : timestamp;
@@ -625,7 +594,6 @@ export function OrderCardImageDownload({
     }
   }, [
     captureFullContent,
-    currentUser,
     exportBackground,
     filenamePrefix,
     fullContentBottomPadding,
@@ -634,7 +602,6 @@ export function OrderCardImageDownload({
     orderNo,
     outerPadding,
     targetRef,
-    watermarkLabel,
     watermarkMode,
     watermarkOpacity,
   ]);
