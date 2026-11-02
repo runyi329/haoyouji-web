@@ -2125,11 +2125,22 @@ type AdminLadderDisplayMode = "integrated" | "individual";
 
 type LadderLivePriceMarkerPlacement = "above" | "below" | "center";
 
+/**
+ * 启用“隐藏已锁定”后，报价表仍保留给订单所属用户的最小只读概览。
+ * 这里仅含方向和剩余 ETH 数量，绝不携带订单笔数、账户、项目或其他订单详情。
+ */
+type HiddenLockedPositionOverview = {
+  quantity: number;
+};
+
 type LadderPriceRow = {
   key: string;
   price: number;
   long?: PositionBucket;
   short?: PositionBucket;
+  /** 隐藏锁单后仍显示的最小仓位概览，不会恢复订单详情或交互入口。 */
+  hiddenLockedLong?: HiddenLockedPositionOverview;
+  hiddenLockedShort?: HiddenLockedPositionOverview;
   /** 实时价仅作为价格轴标记，绝不伪装成真实订单或独立档位行。 */
   livePriceMarkerPlacement?: LadderLivePriceMarkerPlacement;
   /** 管理员“逐笔报价”模式中，左右两侧各自对应的独立未平仓主单。 */
@@ -2582,6 +2593,50 @@ function applyLadderLivePriceMarker(rows: LadderPriceRow[], marker: LadderLivePr
     if (markerApplied || priceKey(row.price) !== priceKey(marker.anchorPrice)) return row;
     markerApplied = true;
     return { ...row, livePriceMarkerPlacement: marker.placement };
+  });
+}
+
+/**
+ * 锁定开仓被过滤后，仍把同一用户已经获授权看到的剩余 ETH 数量钉在原报价档。
+ * 该函数不重新放回原订单，也不产生任何可点击详情入口；只保留最低限度的仓位感知。
+ */
+function attachHiddenLockedOverviews(
+  rows: LadderPriceRow[],
+  overviewsBySlot: Map<string, HiddenLockedPositionOverview>,
+) {
+  if (overviewsBySlot.size === 0 || rows.length === 0) return rows;
+  // 隐藏预览不允许创建任何新报价格。每笔隐藏锁仓只寻找现有报价中“刚好在它上方”的一格，
+  // 并钉在该格与下一格之间的横线：例如 2691.69 会进入 2700 与 2684 之间。
+  // 多笔锁仓若落在同一条现有分界线，才合并其 ETH 数量并按筹码面额堆叠。
+  const overviewsByRowIndex = new Map<number, { long?: HiddenLockedPositionOverview; short?: HiddenLockedPositionOverview }>();
+  for (const [slot, overview] of overviewsBySlot) {
+    const [side, priceText] = slot.split(":");
+    const price = Number(priceText);
+    if (!Number.isFinite(price) || price <= 0 || (side !== "long" && side !== "short")) continue;
+
+    // rows 已按价格从高到低排序。取最后一个仍不低于隐藏锁仓价的现有格，
+    // 即在相邻的上、下两个现有价格格之间显示筹码；在边缘则贴最近的现有格。
+    let anchorIndex = -1;
+    for (let index = 0; index < rows.length; index += 1) {
+      if (rows[index].price >= price - 0.000001) anchorIndex = index;
+      else break;
+    }
+    if (anchorIndex < 0) anchorIndex = 0;
+    const placed = overviewsByRowIndex.get(anchorIndex) ?? {};
+    const existing = side === "long" ? placed.long : placed.short;
+    const merged = existing
+      ? { quantity: existing.quantity + overview.quantity }
+      : { quantity: overview.quantity };
+    if (side === "long") placed.long = merged;
+    else placed.short = merged;
+    overviewsByRowIndex.set(anchorIndex, placed);
+  }
+
+  return rows.map((row, index) => {
+    const overview = overviewsByRowIndex.get(index);
+    return overview
+      ? { ...row, hiddenLockedLong: overview.long, hiddenLockedShort: overview.short }
+      : row;
   });
 }
 
@@ -3964,6 +4019,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
   const [hideLocked, setHideLocked] = useState(false);
+  // 勾选时黑色锁单隐藏为边界筹码；取消勾选时黑色订单立即恢复、筹码同步消失。
+  const shouldHideLockedForDisplay = hideLocked;
   // 成员端用户范围固定为本人；保留旧状态字段仅用于兼容此前浏览器保存的筛选状态。
   const [memberRelatedUserFilterTouched, setMemberRelatedUserFilterTouched] = useState(false);
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
@@ -5368,14 +5425,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [trades, executionFilter],
   );
   const lockVisibilityScopedTrades = useMemo(
-    () => hideLocked
+    () => shouldHideLockedForDisplay
       ? executionScopedTrades.filter((trade) => !trade.isLocked)
       : executionScopedTrades,
-    [executionScopedTrades, hideLocked],
+    [executionScopedTrades, shouldHideLockedForDisplay],
   );
   const instrumentScopedTrades = useMemo(
     () => filterTradesByInstrumentTypes(lockVisibilityScopedTrades, instrumentTypeFilterIds),
     [lockVisibilityScopedTrades, instrumentTypeFilterIds],
+  );
+  // “隐藏已锁定”只能隐藏订单明细，不能让所属用户误以为仓位消失；此集合严格沿用
+  // 顶部所有筛选与服务端已下发的权限范围，仅作为锁仓数量/订单数的只读统计来源。
+  const instrumentScopedTradesIncludingLocked = useMemo(
+    () => filterTradesByInstrumentTypes(executionScopedTrades, instrumentTypeFilterIds),
+    [executionScopedTrades, instrumentTypeFilterIds],
   );
   const topRelatedUserFilter = useMemo(
     () => resolveT0RelatedUserFilter(
@@ -5397,25 +5460,30 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     return entryIds;
   }, [isMemberView, profitShareSnapshots, relatedUserFilterIds.length, topRelatedUserFilter]);
+  const matchesCurrentTopScope = useCallback((trade: PreviewTrade) => (
+    // 成员端账户不属于筛选维度，必须忽略旧版 localStorage 中可能残留的账户条件。
+    (isMemberView || selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
+    && trade.symbol === "ETH"
+    // 成员端数据范围仍严格由服务端锁定为“本人订单 + 明确分佣/共享来源”。
+    // 此处只允许在已经下发的来源之间做本地隐藏：空选即显示全部，选择本人可只看自己下单。
+    && (isMemberView
+      ? (relatedUserFilterIds.length === 0 || Boolean(trade.relatedUserId && relatedUserFilterIds.includes(trade.relatedUserId)))
+      : (relatedUserFilterIds.length === 0
+      || topRelatedUserFilter.waitingForReferralData
+      || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
+      || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId))
+      || Boolean(trade.profitShareBeneficiaryUserId && topRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
+      || topProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
+    && (relatedFundFilterIds.length === 0
+      || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
+  ), [isMemberView, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topProfitShareBeneficiaryEntryIds, topRelatedUserFilter]);
   const selectedTrades = useMemo(
-    () => instrumentScopedTrades.filter((trade) => (
-      // 成员端账户不属于筛选维度，必须忽略旧版 localStorage 中可能残留的账户条件。
-      (isMemberView || selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
-      && trade.symbol === "ETH"
-      // 成员端数据范围仍严格由服务端锁定为“本人订单 + 明确分佣/共享来源”。
-      // 此处只允许在已经下发的来源之间做本地隐藏：空选即显示全部，选择本人可只看自己下单。
-      && (isMemberView
-        ? (relatedUserFilterIds.length === 0 || Boolean(trade.relatedUserId && relatedUserFilterIds.includes(trade.relatedUserId)))
-        : (relatedUserFilterIds.length === 0
-        || topRelatedUserFilter.waitingForReferralData
-        || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
-        || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId))
-        || Boolean(trade.profitShareBeneficiaryUserId && topRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
-        || topProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
-      && (relatedFundFilterIds.length === 0
-        || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
-    )),
-    [instrumentScopedTrades, isMemberView, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds, topProfitShareBeneficiaryEntryIds, topRelatedUserFilter],
+    () => instrumentScopedTrades.filter(matchesCurrentTopScope),
+    [instrumentScopedTrades, matchesCurrentTopScope],
+  );
+  const selectedTradesIncludingLocked = useMemo(
+    () => instrumentScopedTradesIncludingLocked.filter(matchesCurrentTopScope),
+    [instrumentScopedTradesIncludingLocked, matchesCurrentTopScope],
   );
   // 挂单仅作管理员报价与状态统计展示；成交前绝不进入真实仓位、FIFO、手续费、浮盈或收益汇总。
   const selectedFilledTrades = useMemo(
@@ -7011,7 +7079,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : [accountSpec, userSpec, fundSpec]);
   }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
-  const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter, hideLocked);
+  const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter, shouldHideLockedForDisplay);
   const topTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       // 管理端与用户端均以当前两项文字作为整体智能分配，保证“期权 + 全部状态”等组合不挤压类型。
@@ -7143,6 +7211,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!ACTIONS[entryForm.action].opening || !Number.isFinite(price) || price <= 0) return null;
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price, gridReferencePrice]);
+  const isIndividualLadderView = adminLadderDisplayMode === "individual";
   // 资金、盈亏、手续费和 FIFO 仍仅使用实际成交单；挂单在成交前绝不参与这些财务口径。
   const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
   // “总仓位”则忠实反映顶部状态筛选：状态为全部时同时展示挂单与已成交数量，
@@ -7156,6 +7225,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => buildIntegratedDisplayBuckets(selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
     [selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
   );
+  const hiddenLockedOpeningClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(selectedTradesIncludingLocked.filter((trade) => !trade.isPending)),
+    [selectedTradesIncludingLocked],
+  );
+  const hiddenLockedOverviewBySlot = useMemo(() => {
+    const summaries = new Map<string, HiddenLockedPositionOverview>();
+    if (!shouldHideLockedForDisplay) return summaries;
+    for (const trade of selectedTradesIncludingLocked) {
+      if (!ACTIONS[trade.action].opening || trade.isPending || !trade.isLocked) continue;
+      const closedQuantity = (hiddenLockedOpeningClosingAllocations.get(trade.id) ?? [])
+        .reduce((total, allocation) => total + allocation.quantity, 0);
+      const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+      if (remainingQuantity <= 0.0000001) continue;
+      const side = ACTIONS[trade.action].side;
+      // 锁单已从报价卡中隐藏，但筹码必须钉回这笔订单的真实成交价位置。
+      // 只允许相同真实价位的多笔锁单合并；绝不可按100U等宽区间压缩，
+      // 否则 2650、2671、2681、2691.69 的仓位会被错误挤到同一条分界线上。
+      const price = Number(trade.price.toFixed(2));
+      const key = `${side}:${priceKey(price)}`;
+      const existing = summaries.get(key);
+      if (existing) {
+        existing.quantity += remainingQuantity;
+      } else {
+        summaries.set(key, { quantity: remainingQuantity });
+      }
+    }
+    return summaries;
+  }, [hiddenLockedOpeningClosingAllocations, selectedTradesIncludingLocked, shouldHideLockedForDisplay]);
   // 逐笔详情恒定按真实十美元档展开；整合详情沿用进入时选定的宽档。
   const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
   const entryArchiveStep = isIndividualQuoteDetail || (!ACTIONS[entryForm.action].opening && closingSourceTrade)
@@ -8903,8 +9000,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       resolveLadderLivePriceMarker(individualMarkLadderPrice, individualLevelPrices, lastMarkPriceMovement),
     );
   }, [selectedTrades, ladderOpeningClosingAllocations, individualLiveReferenceBand, individualMarkLadderPrice, lastMarkPriceMovement, visibleReopenReminders]);
-  const isIndividualLadderView = adminLadderDisplayMode === "individual";
-  const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
+  const baseDisplayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
+  const displayedPriceRows = useMemo(
+    () => attachHiddenLockedOverviews(baseDisplayedPriceRows, hiddenLockedOverviewBySlot),
+    [baseDisplayedPriceRows, hiddenLockedOverviewBySlot],
+  );
 
   const openEntrySheet = (
     action: TradeAction = "openLong",
@@ -11482,10 +11582,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 emptyLabel="暂无状态"
                 align="right"
                 singleSelect
-                summarySuffix={hideLocked ? "隐藏已锁定" : undefined}
+                summarySuffix={shouldHideLockedForDisplay ? "隐藏已锁定" : undefined}
                 additionalToggle={{
                   label: "隐藏已锁定",
-                  checked: hideLocked,
+                  checked: shouldHideLockedForDisplay,
                   onCheckedChange: (checked) => {
                     setHideLocked(checked);
                     setRecentJournalPage(1);
@@ -11594,6 +11694,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               };
               const longLockDisplay = resolveLockedDisplay(row.long, row.longOpeningTrade);
               const shortLockDisplay = resolveLockedDisplay(row.short, row.shortOpeningTrade);
+              const longHiddenLockedOverview = row.hiddenLockedLong;
+              const shortHiddenLockedOverview = row.hiddenLockedShort;
               // 逐笔报价按这张主单的固化分配快照判断；整合报价则同一档内含任一共享订单即提示。
               const hasProfitSharingAtSlot = (bucket: PositionBucket | undefined, side: PositionSide, openingTrade?: PreviewTrade) => {
                 if (openingTrade) return hasOpeningProfitSharingWithOthers(profitShareSnapshots, getStoredEntryId(openingTrade));
@@ -11621,8 +11723,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div
                   key={row.key}
                   data-ladder-price={row.price}
-                  className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
+                  className="relative grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
                 >
+                {longHiddenLockedOverview && <HiddenLockedEthOverviewBoundaryChips overview={longHiddenLockedOverview} side="long" />}
+                {shortHiddenLockedOverview && <HiddenLockedEthOverviewBoundaryChips overview={shortHiddenLockedOverview} side="short" />}
                 {row.longReminder ? <ReminderPlaceholderCell reminder={row.longReminder} side="long" readOnly={!canManage} onActivate={() => openReopenReminderEntrySheet(row.longReminder!, isIndividualLadderView ? 'individual' : 'integrated')} /> : <LadderCell
                   bucket={row.long}
                   side="long"
@@ -12354,6 +12458,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+              {shouldHideLockedForDisplay && hiddenLockedOverviewBySlot.size > 0 && (
+                <div data-card-export-hide="true" className="flex items-center justify-center gap-3 border-t border-slate-200 bg-white px-4 py-2">
+                  {[1, 5, 20, 100].map((denomination) => (
+                    <span key={denomination} className="inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums text-slate-500" title={`${denomination} ETH 筹码`}>
+                      <LockedOrderChip denomination={denomination as LockedOrderChipDenomination} />
+                      <span>{denomination}</span>
+                    </span>
+                  ))}
                 </div>
               )}
           </div>
@@ -15169,6 +15283,100 @@ function useReliableDoubleTap(onActivate: () => void) {
     onPointerCancel: resetDoubleTap,
     onKeyDown: handleKeyDown,
   };
+}
+
+/**
+ * 锁单筹码以1／5／20／100 ETH四种面额表达锁定剩余数量。筹码均为同一黑金工艺、透明居中裁切的
+ * 256px正方形素材，缩小到手机端约12px后仍保持圆盘和ETH符号的同心对齐。
+ */
+type LockedOrderChipDenomination = 1 | 5 | 20 | 100;
+
+const LOCKED_ORDER_CHIP_ASSET: Record<LockedOrderChipDenomination, string> = {
+  1: "/t0-black-gold-eth-chip.png",
+  // 彩色面额使用独立版本号，避免手机端沿用改色前的深色图片缓存。
+  5: "/t0-locked-chip-5.png?v=bright-20261102",
+  20: "/t0-locked-chip-20.png?v=bright-20261102",
+  100: "/t0-locked-chip-100.png?v=bright-20261102",
+};
+
+const LOCKED_ORDER_CHIP_DENOMINATIONS: readonly LockedOrderChipDenomination[] = [100, 20, 5, 1];
+
+/**
+ * 使用贪心面额拆分，使任意0–500（及以上）ETH的隐藏锁仓以尽量少的筹码表达。
+ * 锁仓筹码的口径是实际剩余 ETH，绝不是订单记录笔数：例如 43 ETH = 20 + 20 + 1 + 1 + 1。
+ * 1／5／20／100恰好为整除式面额，按从大到小取用即是最少筹码数；不显示任何数字角标。
+ */
+function decomposeLockedOrderChips(lockedEthQuantity: number): LockedOrderChipDenomination[] {
+  // 页面允许两位小数的 ETH 数量；筹码最小面额为 1 ETH，因此按最近整 ETH 作为无文字的视觉摘要。
+  // 精确剩余量仍在展开锁单后的黑色订单卡及悬停辅助说明中保留，不影响任何资金或FIFO口径。
+  let remaining = Math.max(0, Math.round(lockedEthQuantity));
+  const chips: LockedOrderChipDenomination[] = [];
+  for (const denomination of LOCKED_ORDER_CHIP_DENOMINATIONS) {
+    const coinCount = Math.floor(remaining / denomination);
+    for (let index = 0; index < coinCount; index += 1) chips.push(denomination);
+    remaining -= coinCount * denomination;
+  }
+  return chips;
+}
+
+function LockedOrderChip({ denomination, style }: { denomination: LockedOrderChipDenomination; style?: React.CSSProperties }) {
+  return (
+    <img
+      src={LOCKED_ORDER_CHIP_ASSET[denomination]}
+      alt=""
+      aria-hidden="true"
+      className="h-3 w-3 shrink-0 object-contain"
+      style={style}
+    />
+  );
+}
+
+/**
+ * 锁仓已经从报价表中隐藏时，将筹码钉在该报价档与下一档之间的横向分界线上。
+ * 以1（黑金）／5（酒红金）／20（墨绿金）／100（深蓝金）的最少筹码组合表达锁定剩余 ETH；
+ * 一枚独立、两枚及以上以50%宽度叠放。多仓在左、空仓在右，不显示订单数角标。
+ * 图标只作轻量仓位提示；需要逐笔数量时可直接展开黑色锁单核对。
+ */
+function HiddenLockedEthOverviewBoundaryChips({
+  overview,
+  side,
+}: {
+  overview: HiddenLockedPositionOverview;
+  side: PositionSide;
+}) {
+  const isLong = side === "long";
+  const chips = decomposeLockedOrderChips(overview.quantity);
+  // 一枚独立显示；两枚及以上均按约50%重叠，形成统一、紧凑的筹码堆叠效果。
+  const shouldStack = chips.length >= 2;
+  const quantity = formatLadderQuantity(overview.quantity);
+  const chipBreakdown = LOCKED_ORDER_CHIP_DENOMINATIONS
+    .map((denomination) => {
+      const count = chips.filter((chip) => chip === denomination).length;
+      return count > 0 ? `${denomination}×${count}` : null;
+    })
+    .filter((item): item is string => item !== null)
+    .join(" + ");
+  const title = `${isLong ? "多仓" : "空仓"}已隐藏锁仓：${quantity} ETH；筹码面额 ${chipBreakdown || "1×1"} ETH`;
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className={`pointer-events-none absolute bottom-0 z-30 flex h-3 translate-y-1/2 items-center ${isLong ? "left-2" : "right-2 justify-end"}`}
+    >
+      <span className="flex h-3 items-center">
+        {chips.map((denomination, index) => (
+          <LockedOrderChip
+            key={`${denomination}-${index}`}
+            denomination={denomination}
+            style={{
+              marginLeft: index === 0 ? 0 : (shouldStack ? -6 : 1.5),
+              zIndex: chips.length - index,
+            }}
+          />
+        ))}
+      </span>
+    </span>
+  );
 }
 
 function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, hasProfitSharing = false, takeProfitEnabled = false, takeProfitQuantity }: {
