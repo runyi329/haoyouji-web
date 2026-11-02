@@ -3281,8 +3281,8 @@ async function assertExistingGlobalUser(tx: any, userId: number, label: string) 
 }
 
 /**
- * T+0从全局用户目录选择客户后，首笔开仓同时把该普通用户加入52号账本。
- * 与佣金客户保存使用同一成员权限基线；不会影响已有真实成员，也不会改写既有AI成员记录。
+ * T+0从全局用户目录选择客户后，首笔开仓同时把尚未入账本的普通用户加入52号账本。
+ * 已经是52号账本真实成员的管理员可用于其本人的订单，但绝不借新订单把外部管理员自动加入账本。
  */
 async function ensureLedger52T0RelatedUserMembership(tx: any, userId: number): Promise<boolean> {
   const [userRows] = await tx.execute(
@@ -3291,10 +3291,6 @@ async function ensureLedger52T0RelatedUserMembership(tx: any, userId: number): P
   );
   const user = asRows(userRows)[0];
   if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新搜索选择" });
-  const role = String(user.role || "").trim().toLowerCase();
-  if (role === "super_admin" || role === "admin" || role === "owner") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择全局普通用户作为T+0业务客户" });
-  }
   const [memberRows] = await tx.execute(
     `SELECT id, member_type FROM ledger_members
       WHERE ledgerId = ? AND userId = ?
@@ -3303,7 +3299,12 @@ async function ensureLedger52T0RelatedUserMembership(tx: any, userId: number): P
     [LEDGER_52_T0_JOURNAL_ID, userId],
   );
   // 同一用户可同时存在AI和真实成员记录；仅真实成员已经存在时跳过，绝不修改AI记录。
-  if (asRows(memberRows).some((member) => String(member.member_type || 'real') !== 'ai')) return false;
+  const alreadyRealMember = asRows(memberRows).some((member) => String(member.member_type || 'real') !== 'ai');
+  if (alreadyRealMember) return false;
+  const role = String(user.role || "").trim().toLowerCase();
+  if (role === "super_admin" || role === "admin" || role === "owner") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "该管理员尚未加入52号账本，不能作为T+0业务客户自动添加" });
+  }
   await tx.execute(
     `INSERT INTO ledger_members
        (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite)
