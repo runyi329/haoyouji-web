@@ -954,6 +954,14 @@ function OrdersPanel() {
             ? `${walletDeductUsdtEquivalent.toFixed(2)}U`
             : "待核实";
         const customerNote = String(order.userNote ?? "").trim();
+        // allOrders 仅管理员可调用：下单人必须与收货人分开展示，
+        // 避免代收/赠送订单中把收货人误认为实际下单账号。
+        const ordererName = String(order.userName ?? "").trim();
+        const ordererUsername = String(order.userUsername ?? "").trim();
+        const ordererDisplayName =
+          ordererName || ordererUsername || "未找到关联用户";
+        const showOrdererUsername =
+          Boolean(ordererUsername) && ordererUsername !== ordererDisplayName;
         const paymentWasRefunded = order.status === "cancelled";
         const isShippingConfirmed = order.status === "confirmed";
         const isShipped = ["shipped", "delivered"].includes(order.status);
@@ -1083,6 +1091,20 @@ function OrdersPanel() {
             </div>
 
             <div className="mt-3 space-y-2 border-t border-gray-100 pt-2.5">
+              <div
+                data-card-export-hide="true"
+                className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4"
+              >
+                <span className="pt-px font-medium text-gray-400">下单人</span>
+                <span className="min-w-0 break-words text-right font-semibold text-gray-700">
+                  {ordererDisplayName}
+                  {showOrdererUsername && (
+                    <span className="font-normal text-gray-400">
+                      {`（${ordererUsername}）`}
+                    </span>
+                  )}
+                </span>
+              </div>
               <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
                 <span className="pt-px font-medium text-gray-400">收货人</span>
                 <span className="min-w-0 break-words text-right font-semibold text-gray-700">
