@@ -1539,7 +1539,7 @@ export async function transferWalletBalance(params: {
     const lockOrder = [params.fromUserId, params.toUserId].sort((a, b) => a - b);
     const [userRows] = await transaction.execute(
       `SELECT id, username, name, COALESCE(balance, 0) AS balance,
-              COALESCE(balance_cny, 0) AS balance_cny
+              COALESCE(cny_balance, 0) AS cny_balance
          FROM users WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`,
       lockOrder,
     );
@@ -1566,7 +1566,7 @@ export async function transferWalletBalance(params: {
         [params.fromUserId],
       );
       const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
-      senderAvailable = Number(sender.balance_cny || 0) + manualTotal;
+      senderAvailable = Number(sender.cny_balance || 0) + manualTotal;
     }
     const [holdRows] = await transaction.execute(
       `SELECT COALESCE(SUM(amount), 0) AS frozen
@@ -2669,21 +2669,21 @@ export async function deleteFeeRule(id: number): Promise<{ success: boolean }> {
 // CNY 子账户：余额查询 & 调账
 // ─────────────────────────────────────────────
 
-/** 获取用户 CNY 余额（users.balance_cny + af_manual_balances 中 [CNY] 标记的记录） */
+/** 获取用户 CNY 余额（users.cny_balance + af_manual_balances 中 [CNY] 标记的记录） */
 export async function getUserCnyBalance(userId: number): Promise<number> {
   const conn = await getDbConnection();
   if (!conn) return 0;
-  // 尝试读取 users.balance_cny（新数据库有此字段），失败则降级为 0
+  // 统一读取与人民币调账写入相同的 users.cny_balance 字段，失败则降级为 0。
   let baseCny = 0;
   try {
     const [baseRows] = await conn.execute(
-      `SELECT COALESCE(balance_cny, 0) AS baseCny FROM users WHERE id = ?`,
+      `SELECT COALESCE(cny_balance, 0) AS baseCny FROM users WHERE id = ?`,
       [userId]
     ) as any;
     const baseRow = Array.isArray(baseRows) ? baseRows[0] : baseRows;
     baseCny = parseFloat(baseRow?.baseCny?.toString() || '0');
   } catch (_e) {
-    // balance_cny 字段不存在，忽略
+    // cny_balance 字段不存在，忽略
   }
   // 查询 af_manual_balances 中 [CNY] 记录
   const [manualRows] = await conn.execute(
@@ -2853,7 +2853,7 @@ export async function getAllUsersCnyBalance(): Promise<any[]> {
        u.id,
        u.name,
        u.username,
-       COALESCE(u.balance_cny, 0) + COALESCE(m.manualCny, 0) AS cnyBalance
+       COALESCE(u.cny_balance, 0) + COALESCE(m.manualCny, 0) AS cnyBalance
      FROM users u
      LEFT JOIN (
        SELECT user_id, SUM(amount) AS manualCny

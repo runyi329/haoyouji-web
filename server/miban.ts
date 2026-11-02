@@ -1688,12 +1688,12 @@ async function getAllUsers() {
       );
     }
 
-    // 步骤4: CNY 余额（balance_cny 字段可能不存在，用 IFNULL 兼容）
+    // 步骤4: CNY 余额（统一读取实际调账写入的 cny_balance 字段）
     let cnyMap = new Map<number, number>();
     try {
       const [cnyRows] = (await (conn as any).execute(
         `SELECT u.id AS userId,
-          COALESCE(IFNULL(u.balance_cny, 0), 0) + COALESCE(c.cnySum, 0) AS cnyBalance
+          COALESCE(u.cny_balance, 0) + COALESCE(c.cnySum, 0) AS cnyBalance
          FROM users u
          LEFT JOIN (
            SELECT user_id, SUM(amount) AS cnySum
@@ -2044,7 +2044,7 @@ async function getUnifiedWalletBalanceAfterByEventKey(
  * 以当前统一钱包余额倒推每日结束时的余额。
  *
  * 余额表的 USDT 口径为 users.balance + 非 CNY / 非 [BALANCE_BASE] 的手动账本；
- * CNY 口径为 users.balance_cny + [CNY] 手动账本。这里按同一口径使用当前余额减去
+ * CNY 口径为 users.cny_balance + [CNY] 手动账本。这里按同一口径使用当前余额减去
  * 后续真实变动，因此无需把历史数据库快照当作唯一事实，也不会把辅助日志重复计入。
  */
 async function getWalletDailyBalanceTrend(
@@ -2061,7 +2061,7 @@ async function getWalletDailyBalanceTrend(
   const [currentRows] = (await conn.execute(
     `SELECT
        COALESCE(SUM(COALESCE(u.balance, 0) + COALESCE(usdt_manual.manual_sum, 0)), 0) AS usdt_balance,
-       COALESCE(SUM(COALESCE(u.balance_cny, 0) + COALESCE(cny_manual.manual_sum, 0)), 0) AS cny_balance
+       COALESCE(SUM(COALESCE(u.cny_balance, 0) + COALESCE(cny_manual.manual_sum, 0)), 0) AS cny_balance
      FROM users u
      LEFT JOIN (
        SELECT user_id, SUM(amount) AS manual_sum

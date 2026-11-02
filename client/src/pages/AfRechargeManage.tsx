@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronLeft, Plus, Pencil, Trash2, RefreshCw, Search, X,
@@ -685,8 +685,16 @@ export default function AfRechargeManage() {
     onError: (e: any) => toast.error(e.message || "数字资产备注更新失败"),
   });
   // 同步 adjSelectedUser 余额（调账后刷新）
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const adjUserList = adjAllUsers as any[];
+  useEffect(() => {
+    setAdjSelectedUser((current: any) => {
+      if (!current) return current;
+      return (
+        adjUserList.find((user: any) => Number(user.id) === Number(current.id)) ??
+        current
+      );
+    });
+  }, [adjUserList]);
   const formatWalletAmount = (value: unknown, digits: number) => Number(value ?? 0).toLocaleString("zh-CN", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
