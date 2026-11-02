@@ -19699,6 +19699,7 @@ ${klinesSummary}
           id: `r_${r.id}`,
           historyId: Number(r.history_id),
           amount: parseFloat(r.actual_amount),
+          currency: 'USDT' as const,
           sourceType: 'recharge' as const,
           note: statusLabelMap[r.status] || r.status,
           status: r.status,
@@ -19720,7 +19721,6 @@ ${klinesSummary}
                   AND m.note LIKE CONCAT('提现申请冻结 #', w.id, ' %')
                 )
                 WHERE m.user_id = ${targetUserId}
-                  AND m.note NOT LIKE '[CNY]%'
                   AND m.note NOT LIKE '[BALANCE_BASE]%'
                   /* 本金迁入冻结会保留一正一负两条审计账务；用户端以真实冻结台账替代展示，避免误读为支出/收入。 */
                   AND COALESCE(m.note, '') NOT LIKE '[AF52本金冻结迁移-%'
@@ -19728,6 +19728,7 @@ ${klinesSummary}
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
             let note = r.note || '管理员调账';
+            const currency = String(r.note || '').startsWith('[CNY]') ? 'CNY' as const : 'USDT' as const;
             const withdrawalId = Number(r.withdrawal_id || 0);
             const isWithdrawalFreeze = Number.isFinite(withdrawalId) && withdrawalId > 0;
             // 如果关联到了订单，把 #id 替换为完整编号 AFyymmdd000000
@@ -19743,6 +19744,7 @@ ${klinesSummary}
               id: `m_${r.id}`,
               ledgerId: Number(r.ledger_id),
               amount: parseFloat(r.amount),
+              currency,
               sourceType: isWithdrawalFreeze ? 'balance_history' as const : 'manual' as const,
               type: isWithdrawalFreeze ? 'withdraw' : undefined,
               relatedId: isWithdrawalFreeze ? withdrawalId : undefined,
@@ -19801,6 +19803,7 @@ ${klinesSummary}
             id: `hold_${row.id}`,
             // 仅用于方向和显示金额；下方累计余额明确不把冻结计作收支。
             amount: -Math.abs(parseFloat(String(row.amount || '0'))),
+            currency: 'USDT' as const,
             sourceType: 'wallet_hold' as const,
             type: 'principal_hold' as const,
             status: String(row.status || '') === 'released' ? '本金已解冻' : '本金已冻结',
@@ -19810,6 +19813,7 @@ ${klinesSummary}
           principalReleaseList = (Array.isArray(releaseRows) ? releaseRows : []).map((row: any) => ({
             id: `hold_release_${row.id}`,
             amount: Math.abs(parseFloat(String(row.amount || '0'))),
+            currency: 'USDT' as const,
             sourceType: 'wallet_hold' as const,
             type: 'principal_hold_release' as const,
             status: '本金已解冻',
@@ -19819,22 +19823,22 @@ ${klinesSummary}
         } catch (_) {
           // 冻结基础表尚未初始化的旧环境不影响既有钱包流水。
         }
-        // 3. balance_history 作为历史兼容层（处理改造前的旧数据）
-        // 改造后 addUserBalance 已统一写入 af_manual_balances，新记录不再依赖 balance_history
-        // 只保留 af_manual_balances 里找不到对应条目的旧记录（按时间窗口±2s+金额去重）
+        // 3. balance_history 作为历史兼容层（处理改造前的USDT和人民币记录）。
+        // 只保留 af_manual_balances 里找不到对应条目的旧记录（按时间、金额和币种去重）。
         let bhList: any[] = [];
         try {
           const bhRows = await db.execute(
             sql`SELECT id, amount, type, currency, related_id, description, created_at
                 FROM balance_history
                 WHERE user_id = ${targetUserId}
-                  AND (currency IS NULL OR currency = '' OR UPPER(currency) = 'USDT')
+                  AND (currency IS NULL OR currency = '' OR UPPER(currency) IN ('USDT', 'CNY'))
                   AND (type <> 'withdraw' OR related_id IS NULL)
                 ORDER BY created_at ASC`
           ) as any;
           const allBh = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
             id: `bh_${r.id}`,
             amount: parseFloat(r.amount),
+            currency: String(r.currency || '').toUpperCase() === 'CNY' ? 'CNY' as const : 'USDT' as const,
             sourceType: 'balance_history' as const,
             note: r.description || r.type,
             // 旧后台手工扣款曾借用 withdraw 类型；没有关联提现申请时属于支出而非冻结。
@@ -19843,10 +19847,11 @@ ${klinesSummary}
             relatedId: r.related_id,
             createdAt: r.created_at,
           }));
-          // 去重：如果 manualList 里已有相同时间（±2s）且金额相同的条目，说明是改造后的新记录，跳过
+          // USDT兼容去重：改造期可能同写手动台账与历史表；CNY两类来源都是独立资金事实，绝不跨来源吞并。
           const manualTimes = manualList.map(m => ({
             t: new Date(m.createdAt).getTime(),
             amt: Math.abs(m.amount),
+            currency: m.currency,
           }));
           bhList = allBh.filter(bh => {
             // 充值订单已使用该订单对应的实际到账金额，不能再把同一笔 recharge history 并入。
@@ -19855,21 +19860,22 @@ ${klinesSummary}
             if (String(bh.note).includes('[迁移自af_manual_balances')) return false;
             const bhT = new Date(bh.createdAt).getTime();
             const bhAmt = Math.abs(bh.amount);
-            return !manualTimes.some(m => Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
+            return bh.currency === 'CNY' || !manualTimes.some(m => m.currency === 'USDT' && Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
           });
         } catch (_) { /* 忽略 */ }
 
-        // 4. 合并并按时间正序排列（从旧到新）。此处只保留一次实际影响 USDT 余额的事件。
+        // 4. 合并并按时间正序排列（从旧到新）。每笔真实事件只保留一次，并显式标注币种。
         const combinedAsc = [...rechargeList, ...manualList, ...principalHoldList, ...principalReleaseList, ...bhList].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
-        // 5. 从第一笔可追溯的真实事件开始正序累计余额。
+        // 5. 从第一笔可追溯的真实事件开始，按币种独立正序累计余额。
         // 禁止再使用“当前余额 - 历史流水合计”倒推，否则未入明细的差额会被静默塞进第一笔余额。
-        let running = 0;
+        const runningByCurrency = new Map<string, number>();
         const balanceMap = new Map<string, number>();
         for (const item of combinedAsc) {
           const amt = parseFloat(String((item as any).amount));
+          const currency = String((item as any).currency || 'USDT').toUpperCase();
           const srcType = (item as any).sourceType;
           const status = (item as any).status;
           const affects =
@@ -19877,9 +19883,10 @@ ${klinesSummary}
             srcType === 'manual' ||
             srcType === 'balance_history';
           if (affects) {
-            running += amt;
+            runningByCurrency.set(currency, Number(runningByCurrency.get(currency) || 0) + amt);
           }
-          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(8)));
+          const running = Number(runningByCurrency.get(currency) || 0);
+          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(currency === 'CNY' ? 2 : 8)));
         }
 
         // 页面仍按时间倒序（最新在前）展示，但每笔余额来自上面的正序真实累计。

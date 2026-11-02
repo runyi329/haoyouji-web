@@ -220,6 +220,7 @@ function WalletBalanceTrendChart({
           <p className="text-[10px] text-gray-400">较 {periodLabel} 前</p>
           <p className={`mt-0.5 text-[12px] font-bold tabular-nums ${change > 0 ? "text-green-600" : change < 0 ? "text-red-500" : "text-gray-500"}`}>
             {change > 0 ? "+" : ""}{currency === "CNY" ? "¥" : ""}{formatAmount(change)}
+            <span className="ml-1 text-[9px] font-medium">{currency}</span>
           </p>
         </div>
       </div>
@@ -2304,6 +2305,9 @@ export default function AfRechargeManage() {
                     const sourceType = String(r.sourceType ?? '');
                     const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
                     const amount = Number(r.amount ?? 0);
+                    const currency = String(r.currency ?? 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT';
+                    const isCny = currency === 'CNY';
+                    const currencyPrefix = isCny ? '¥' : '';
                     const noteText = cleanAdjustmentNote(r.note ?? r.description);
                     const isInternalTransfer = String(r.note ?? r.description ?? '').includes('[站内转账]');
                     const isPrincipalHold = sourceType === 'wallet_hold' && String(r.type ?? '') === 'principal_hold';
@@ -2322,35 +2326,37 @@ export default function AfRechargeManage() {
                           ? '历史期初余额'
                           : typeLabel[r.type] ?? r.type ?? '系统流水';
                     const historyId = sourceType === 'recharge' ? Number(r.historyId || 0) : sourceType === 'balance_history' ? sourceId : 0;
-                    const canRevoke = !isInternalTransfer && sourceType !== 'wallet_hold' && sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
-                    const canEdit = !isInternalTransfer && (sourceType === 'manual' ? sourceId > 0 : historyId > 0);
+                    // 旧式[CNY]手动账本的反向/备注接口尚不保留币种标记，先只读展示，避免误按USDT冲回。
+                    const isLegacyCnyManual = sourceType === 'manual' && isCny;
+                    const canRevoke = !isLegacyCnyManual && !isInternalTransfer && sourceType !== 'wallet_hold' && sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
+                    const canEdit = !isLegacyCnyManual && !isInternalTransfer && (sourceType === 'manual' ? sourceId > 0 : historyId > 0);
                     return (
                       <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
                         <div className="flex items-start justify-between">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">USDT</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isCny ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{currency}</span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isPrincipalHold ? 'bg-amber-50 text-amber-700' : isPrincipalRelease ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{label}</span>
-                            </div>
-                            {noteText && <p className="text-[12px] leading-5 text-gray-600 whitespace-normal break-words">{noteText}</p>}
-                            <p className="text-[10px] text-gray-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
-                            {r.balanceAfter != null && (
-                              <p className="text-[10px] text-gray-400 mt-0.5">余额 {Number(r.balanceAfter).toFixed(2)} USDT</p>
-                            )}
                           </div>
-                          <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
-                            <p className={`text-[14px] font-bold ${isPrincipalHold ? 'text-amber-700' : isPrincipalRelease ? 'text-green-600' : amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {amount >= 0 ? '+' : ''}{amount.toFixed(2)}
-                            </p>
-                            {canRevoke && (
-                              <button
+                          {noteText && <p className="text-[12px] leading-5 text-gray-600 whitespace-normal break-words">{noteText}</p>}
+                          <p className="text-[10px] text-gray-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
+                          {r.balanceAfter != null && (
+                              <p className="text-[10px] text-gray-400 mt-0.5">余额 {currencyPrefix}{Number(r.balanceAfter).toFixed(2)} {currency}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
+                          <p className={`text-[14px] font-bold ${isPrincipalHold ? 'text-amber-700' : isPrincipalRelease ? 'text-green-600' : amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {amount >= 0 ? '+' : ''}{currencyPrefix}{amount.toFixed(2)}
+                          </p>
+                          {canRevoke && (
+                            <button
                                 onClick={() => {
                                   if (sourceType === 'recharge') {
                                     setRevokeTarget({ type: 'order', orderId: sourceId, amount: Math.abs(amount) });
-                                  } else if (sourceType === 'manual') {
-                                    setRevokeTarget({ type: 'manual', manualId: sourceId, amount: Math.abs(amount), currency: 'USDT' });
+                                } else if (sourceType === 'manual') {
+                                    setRevokeTarget({ type: 'manual', manualId: sourceId, amount: Math.abs(amount), currency });
                                   } else {
-                                    setRevokeTarget({ type: 'history', historyId: sourceId, amount: Math.abs(amount), currency: 'USDT' });
+                                    setRevokeTarget({ type: 'history', historyId: sourceId, amount: Math.abs(amount), currency });
                                   }
                                   setShowRevokeDialog(true);
                                 }}

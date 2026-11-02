@@ -2126,6 +2126,7 @@ async function getWalletDailyBalanceTrend(
     SELECT bh.user_id, bh.amount, bh.created_at
     FROM balance_history bh
     WHERE NOT (bh.type = 'recharge' AND bh.related_id IS NOT NULL)
+      AND (bh.currency IS NULL OR bh.currency = '' OR UPPER(bh.currency) = 'USDT')
       AND COALESCE(bh.description, '') NOT LIKE '%[迁移自af_manual_balances%'
       AND NOT (
         (bh.currency IS NULL OR bh.currency = '' OR UPPER(bh.currency) = 'USDT')
@@ -2139,11 +2140,16 @@ async function getWalletDailyBalanceTrend(
         )
       )
   `;
-  // CNY 当前余额表只合并 [CNY] 手动账本，故趋势也严格沿用该口径。
+  // CNY 当前余额由 users.cny_balance 与 [CNY] 手动账本组成；两类来源的历史事件都必须回放。
   const cnyEventsSql = `
     SELECT m.user_id, m.amount, m.created_at
     FROM af_manual_balances m
     WHERE COALESCE(m.note, '') LIKE '[CNY]%'
+    UNION ALL
+    SELECT bh.user_id, bh.amount, bh.created_at
+    FROM balance_history bh
+    WHERE UPPER(bh.currency) = 'CNY'
+      AND COALESCE(bh.description, '') NOT LIKE '%[迁移自af_manual_balances%'
   `;
   const scopedFilterSql = normalizedUserId
     ? "AND wallet_event.user_id = ?"
