@@ -1074,6 +1074,37 @@ async function listHistoricalBackfillReports(input: {
   });
 }
 
+/**
+ * 提现额度专用的完整已实现收益汇总。
+ * 不依赖浏览器当前筛选、分页或缓存；直接回放完整订单、冻结分佣快照与已到账共享流水，
+ * 因而与周结算的订单 / 分佣 / 共享归属使用同一引擎。资金流水在调用方单独扣减。
+ */
+export async function getLedger52T0CumulativeRealizedIncome(input: {
+  journalOwnerUserId: number;
+  targetUserId: number;
+}) {
+  const targetUserId = Number(input.targetUserId);
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
+  }
+  const journal = await getLedger52T0JournalSettlementFinancialFacts({
+    journalOwnerUserId: input.journalOwnerUserId,
+  });
+  const facts = getSettlementIncomeFacts(journal);
+  const income = emptyIncome();
+  for (const closingIncome of buildSettlementIncomeAttribution(facts).closings) {
+    for (const allocation of closingIncome.allocations) {
+      if (allocation.userId !== targetUserId || !Number.isFinite(allocation.amount)) continue;
+      income[allocation.kind] += allocation.amount;
+      if (allocation.kind === "order") income.orderCount += 1;
+      if (allocation.kind === "commission") income.commissionCount += 1;
+      if (allocation.kind === "shared") income.sharedCount += 1;
+    }
+  }
+  income.total = income.order + income.commission + income.shared;
+  return income;
+}
+
 export async function getLedger52T0WeeklySettlementCenter(input: {
   journalOwnerUserId: number;
   targetUserId?: number;

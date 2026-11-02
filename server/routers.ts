@@ -12876,6 +12876,29 @@ ${klinesSummary}
         return await journal.getLedger52T0JournalPayoutLogs({ scope, relatedUserId: input.relatedUserId, allUsers: input.allUsers });
       }),
 
+    // 资金登记页的可提额度只读口径：服务端完整回放订单、分佣快照与共享到账，再扣已登记提现。
+    // 不接收浏览器汇总金额，避免当前筛选、分页或缓存造成少算或被篡改。
+    t0GetPayoutAvailability: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        relatedUserId: z.number().int().positive(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅具备登记权限的账本成员可读取可提额度' });
+        }
+        return await journal.getLedger52T0JournalPayoutAvailability({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          relatedUserId: input.relatedUserId,
+        });
+      }),
+
     t0CreatePayoutLog: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -12887,7 +12910,6 @@ ${klinesSummary}
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
         note: z.string().trim().max(300).optional(),
-        maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') {
@@ -12912,7 +12934,6 @@ ${klinesSummary}
           ethReferencePrice: input.ethReferencePrice,
           ethQuantity: input.ethQuantity,
           note: input.note,
-          maximumTotalAmount: input.maximumTotalAmount,
         });
       }),
 
@@ -12927,7 +12948,6 @@ ${klinesSummary}
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
         note: z.string().trim().max(300).optional(),
-        maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') {
@@ -12952,7 +12972,6 @@ ${klinesSummary}
           ethReferencePrice: input.ethReferencePrice,
           ethQuantity: input.ethQuantity,
           note: input.note,
-          maximumTotalAmount: input.maximumTotalAmount,
         });
       }),
 
