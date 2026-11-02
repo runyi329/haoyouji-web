@@ -4216,6 +4216,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // React 的 pending 状态要等下一次 render 才会禁用按钮；此锁在同一事件循环内立即生效，
   // 仅覆盖真正写入账本的提交段，不能阻碍“参数确认 → 二次确认”的正常流程。
   const saveEntryCommitLockRef = useRef(false);
+  // 新开仓的响应若在移动网络中断，应按完全相同的表单重用请求标识，令服务端返回已落库结果，
+  // 而非创建第二笔开仓。任何保存字段变化都会形成新的指纹与新的请求标识。
+  const openingCommitRequestIdRef = useRef<string | null>(null);
+  const openingCommitRequestFingerprintRef = useRef<string | null>(null);
   // 二次确认页发生网络不确定错误时，重试必须沿用首次请求标识，才能由服务端幂等键回放同一笔平仓。
   const closeCommitRequestIdRef = useRef<string | null>(null);
   // 历史 FIFO、已实现盈亏和年化计算只在进入本次分配页时执行一次。
@@ -9044,6 +9048,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
     setEditingOriginalTrade(null);
+    openingCommitRequestIdRef.current = null;
+    openingCommitRequestFingerprintRef.current = null;
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
     const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
@@ -9092,6 +9098,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setCloseConfirmationStep('input');
     setClosingSourceTrade(null);
     setEditingOriginalTrade(null);
+    openingCommitRequestIdRef.current = null;
+    openingCommitRequestFingerprintRef.current = null;
     setEntryForm({
       action,
       accountId: reminder.accountId,
@@ -9290,6 +9298,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPartialOpeningAttributionError(null);
     residualReassignRequestIdRef.current = null;
     residualReassignRequestFingerprintRef.current = null;
+    openingCommitRequestIdRef.current = null;
+    openingCommitRequestFingerprintRef.current = null;
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
     const closedQuantity = linkedClosings.reduce((total, allocation) => total + allocation.quantity, 0);
@@ -9537,6 +9547,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
       saveEntryCommitLockRef.current = false;
+      openingCommitRequestIdRef.current = null;
+      openingCommitRequestFingerprintRef.current = null;
       closeCommitRequestIdRef.current = null;
       const account: PreviewAccount = {
         id: String(data.account.id),
@@ -9657,7 +9669,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               : "速记已保存");
     },
     onError: (error, variables: any) => {
-      // 失败后允许修正或重试；平仓的 request ID 刻意保留，避免“服务端已写入但响应丢失”时生成第二笔流水。
+      // 失败后允许修正或重试；开仓和平仓均保留相同表单的 request ID，
+      // 避免“服务端已写入但响应丢失”时生成第二笔流水。
       saveEntryCommitLockRef.current = false;
       setTrades((current) => current.filter((trade) => trade.clientRequestId !== variables.clientRequestId));
       if (!variables.accountId) {
@@ -10459,10 +10472,42 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const createClientRequestId = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `t0-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`);
-    // 只有二次确认后的平仓会保留同一 ID 以支持不确定网络错误后的安全重试；开仓仍为每次新的明确操作生成 ID。
-    const clientRequestId = !selectedAction.opening && closeConfirmationStep === "review"
-      ? (closeCommitRequestIdRef.current ?? createClientRequestId())
-      : createClientRequestId();
+    // 同一张新开仓表单的网络重试必须复用幂等键。保存内容有任何变化即换新键，
+    // 既可避免响应丢失时重复记账，也不会让修改后的订单错误复用旧请求结果。
+    const openingRequestFingerprint = selectedAction.opening
+      ? [
+          storedAction,
+          hasPersistedAccountId ? `account:${entryForm.accountId}` : `account-name:${normalizedAccountName}`,
+          normalizedRelatedUserId ?? "",
+          normalizedRelatedFundId ?? normalizedRelatedFundName,
+          entryForm.instrumentType ?? "",
+          entryForm.optionDirection,
+          entryForm.optionExpiryDate,
+          entryForm.optionPremium.trim(),
+          entryForm.optionPremiumCurrency,
+          entryForm.gridDirection,
+          entryForm.gridRangeMin.trim(),
+          entryForm.gridRangeMax.trim(),
+          entryForm.gridLeverage.trim(),
+          entryForm.gridCount.trim(),
+          normalizedQuantity,
+          effectivePriceInput,
+          entryForm.isLocked ? "locked" : "unlocked",
+          entryForm.isCounterparty ? "counterparty" : "standard",
+          entryForm.isPending ? "pending" : "filled",
+          entryForm.keepReopenReminder ? "keep-reminder" : "no-reminder",
+          entryForm.reminderTemplateId ?? "",
+          JSON.stringify(takeProfitPlans),
+          entryForm.note.trim(),
+        ].join("|")
+      : null;
+    if (openingRequestFingerprint && openingCommitRequestFingerprintRef.current !== openingRequestFingerprint) {
+      openingCommitRequestFingerprintRef.current = openingRequestFingerprint;
+      openingCommitRequestIdRef.current = createClientRequestId();
+    }
+    const clientRequestId = selectedAction.opening
+      ? (openingCommitRequestIdRef.current ?? createClientRequestId())
+      : (closeConfirmationStep === "review" ? (closeCommitRequestIdRef.current ?? createClientRequestId()) : createClientRequestId());
     if (!selectedAction.opening && closeConfirmationStep === "review") {
       closeCommitRequestIdRef.current = clientRequestId;
     }
