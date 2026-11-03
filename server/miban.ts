@@ -45,6 +45,7 @@ import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 import { readMibanFruitSales } from "./miban-fruit-sales";
+import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
@@ -3148,7 +3149,7 @@ export const mibanOrderRouter = router({
         totalWeightJin: z.number().min(1, "重量不能为0"),
         totalPrice: z.number().finite().positive("订单金额必须大于0"),
         receiverName: z.string().min(1),
-        receiverPhone: z.string().min(11),
+        receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().min(5),
         userNote: z.string().optional(),
         productImg: z.string().url().optional(),
@@ -3484,7 +3485,7 @@ export const mibanOrderRouter = router({
       z.object({
         orderId: z.number(),
         receiverName: z.string().min(1),
-        receiverPhone: z.string().min(11),
+        receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().min(5),
       })
     )
@@ -3523,7 +3524,7 @@ export const mibanOrderRouter = router({
       z.object({
         orderId: z.number(),
         receiverName: z.string().trim().min(1).max(64),
-        receiverPhone: z.string().trim().min(11).max(20),
+        receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         reason: z.string().trim().min(1, "请填写修改说明").max(500),
       })
@@ -4724,7 +4725,7 @@ export const mibanLimitedProductRouter = router({
         skuId: z.string().min(1).max(80),
         quantity: z.number().int().min(1).max(20),
         receiverName: z.string().trim().min(1).max(64),
-        receiverPhone: z.string().trim().min(11).max(20),
+        receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
         cnyAmount: z.number().finite().min(0),
@@ -4922,7 +4923,7 @@ export const mibanLimitedProductRouter = router({
           .min(1)
           .max(10),
         receiverName: z.string().trim().min(1).max(64),
-        receiverPhone: z.string().trim().min(11).max(20),
+        receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
         cnyAmount: z.number().finite().min(0),
@@ -6389,7 +6390,7 @@ export const mibanAddressRouter = router({
     .input(
       z.object({
         name: z.string().min(1).max(50),
-        phone: z.string().min(7).max(20),
+        phone: mibanReceiverPhoneSchema,
         province: z.string().min(1).max(30),
         city: z.string().min(1).max(30),
         district: z.string().max(30).optional(),
@@ -6432,7 +6433,7 @@ export const mibanAddressRouter = router({
       z.object({
         id: z.number(),
         name: z.string().min(1).max(50),
-        phone: z.string().min(7).max(20),
+        phone: mibanReceiverPhoneSchema,
         province: z.string().min(1).max(30),
         city: z.string().min(1).max(30),
         district: z.string().max(30).optional(),

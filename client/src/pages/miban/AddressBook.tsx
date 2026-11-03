@@ -4,6 +4,7 @@ import { mtrpc } from "./mibanTrpc";
 import { toast } from "sonner";
 import { MapPin, Plus, Pencil, Trash2, Check, ChevronRight } from "lucide-react";
 import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./regionData";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 
 const QUICK_LABELS = ["家", "公司", "父母家"];
 const LABEL_ICON: Record<string, string | null> = { "家": null, "公司": null, "父母家": null };
@@ -18,6 +19,8 @@ interface AddressFormProps {
 function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const phoneError = getMibanReceiverPhoneError(phone);
   const [province, setProvince] = useState(initial?.province ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
   const [district, setDistrict] = useState(initial?.district ?? "");
@@ -36,7 +39,14 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
   const isMunicipality = ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(province);
   // 六个直接地区保存时使用 city = province。
   const effectiveCity = isMunicipality ? province : city;
-  const canSubmit = name.trim() && phone.trim() && province && (isMunicipality || city) && detail.trim();
+  const handleSave = () => {
+    if (saving) return;
+    setSaveAttempted(true);
+    const message = phoneError || (!name.trim() ? "请填写收货人姓名" :
+      !province || (!isMunicipality && !city) || !detail.trim() ? "请补全收货地址" : null);
+    if (message) { toast.error(message); return; }
+    onSave({ name, phone: normalizeMibanReceiverPhone(phone), province, city: effectiveCity, district, detail, label: finalLabel, isDefault });
+  };
 
   return (
     <div className="space-y-3">
@@ -94,6 +104,7 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
           className="w-0 flex-1 min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none"
         />
       </div>
+      {(phone || saveAttempted) && phoneError && <p role="alert" className="text-[12px] text-red-500">{phoneError}</p>}
 
       {/* 省市区三级联动 */}
       <select
@@ -169,8 +180,8 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
           取消
         </button>
         <button
-          onClick={() => onSave({ name, phone, province, city: effectiveCity, district, detail, label: finalLabel, isDefault })}
-          disabled={!canSubmit || saving}
+          onClick={handleSave}
+          disabled={saving}
           className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white active:scale-95 transition-transform disabled:opacity-40"
           style={{ background: "#FF6900" }}
         >
@@ -218,6 +229,14 @@ function AddressCard({ addr, onEdit, onDelete, onSetDefault, selectable, onSelec
         {selectable && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 mt-1" />}
       </div>
 
+      {selectable && (
+        <button
+          onClick={e => { e.stopPropagation(); onEdit?.(); }}
+          className="mt-3 flex items-center gap-1 text-[12px] text-orange-500"
+        >
+          <Pencil className="w-3.5 h-3.5" /> 编辑地址
+        </button>
+      )}
       {!selectable && (
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50">
           {addr.is_default !== 1 && (
@@ -260,19 +279,19 @@ export default function AddressBook({
   const { data: addresses, isLoading } = mtrpc.address.list.useQuery();
   const addMut = mtrpc.address.add.useMutation({
     onSuccess: () => { utils.address.list.invalidate(); toast.success("地址已保存"); setShowForm(false); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(formatMibanCheckoutError(e, "地址保存失败，请稍后再试")),
   });
   const updateMut = mtrpc.address.update.useMutation({
     onSuccess: () => { utils.address.list.invalidate(); toast.success("地址已更新"); setEditAddr(null); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(formatMibanCheckoutError(e, "地址更新失败，请稍后再试")),
   });
   const deleteMut = mtrpc.address.delete.useMutation({
     onSuccess: () => { utils.address.list.invalidate(); toast.success("地址已删除"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(formatMibanCheckoutError(e, "地址删除失败，请稍后再试")),
   });
   const setDefaultMut = mtrpc.address.setDefault.useMutation({
     onSuccess: () => { utils.address.list.invalidate(); toast.success("已设为默认地址"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(formatMibanCheckoutError(e, "默认地址设置失败，请稍后再试")),
   });
 
   const [showForm, setShowForm] = useState(false);

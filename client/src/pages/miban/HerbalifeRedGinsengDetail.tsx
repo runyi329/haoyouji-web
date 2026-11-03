@@ -26,6 +26,7 @@ import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
 import { toast } from "sonner";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 
 type LimitedOrderSuccess = {
   orderNo: string;
@@ -128,6 +129,8 @@ export default function HerbalifeRedGinsengDetail() {
   const [cnyPaymentInput, setCnyPaymentInput] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const receiverPhoneError = getMibanReceiverPhoneError(receiverPhone);
   const [receiverProvince, setReceiverProvince] = useState("");
   const [receiverCity, setReceiverCity] = useState("");
   const [receiverDistrict, setReceiverDistrict] = useState("");
@@ -215,7 +218,9 @@ export default function HerbalifeRedGinsengDetail() {
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
-  const addAddressMutation = mtrpc.address.add.useMutation();
+  const addAddressMutation = mtrpc.address.add.useMutation({
+    onError: (error: unknown) => toast.warning(`订单已支付成功，但地址簿保存失败：${formatMibanCheckoutError(error, "请稍后到地址簿保存")}`),
+  });
   const { data: favoriteData, refetch: refetchFavorite } =
     mtrpc.favorite.isFavorited.useQuery(
       { productKey },
@@ -300,7 +305,12 @@ export default function HerbalifeRedGinsengDetail() {
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (error: { message?: string }) => {
-      window.alert(error.message || "提交订单失败，请稍后再试");
+      const message = formatMibanCheckoutError(error);
+      toast.error(message);
+      if (/手机|联系电话|receiverPhone/.test(message)) {
+        setCheckoutAttempted(true);
+        setShowWalletPayment(false);
+      }
     },
   });
 
@@ -322,14 +332,15 @@ export default function HerbalifeRedGinsengDetail() {
     );
   }
 
-  const canSubmit = Boolean(
-    receiverName.trim() &&
-      receiverPhone.trim() &&
-      receiverProvince &&
-      (isMunicipality || receiverCity) &&
-      receiverDetail.trim() &&
-      !createOrder.isPending
-  );
+  const validateShipping = () => {
+    setCheckoutAttempted(true);
+    const message = receiverPhoneError ||
+      (!receiverName.trim() ? "请填写收货人姓名" :
+        !receiverProvince || (!isMunicipality && !receiverCity) || !receiverDetail.trim()
+          ? "请补全收货地址后再付款" : null);
+    if (message) toast.error(message);
+    return !message;
+  };
 
   const handleTouchStart = (event: React.TouchEvent) => {
     startXRef.current = event.touches[0]?.clientX ?? 0;
@@ -466,34 +477,41 @@ export default function HerbalifeRedGinsengDetail() {
   };
 
   const handleOpenWalletPayment = () => {
-    if (!canSubmit) return;
+    if (createOrder.isPending || !validateShipping()) return;
     setCnyPayment(Math.min(cnyBalanceNum, totalPrice));
     setShowWalletPayment(true);
   };
 
   const handleConfirmWalletPayment = () => {
-    if (!canSubmit || !combinedPaymentAvailable) return;
-    if (saveToBook && currentProduct.orderPolicy.allowAddressBook) {
-      addAddressMutation.mutate({
+    if (createOrder.isPending || !combinedPaymentAvailable) return;
+    if (!validateShipping()) {
+      setShowWalletPayment(false);
+      return;
+    }
+    // 可选地址保存与付款分离：只有订单成功后才保存，失败重试不新增重复地址。
+    const addressToSave = saveToBook && currentProduct.orderPolicy.allowAddressBook ? {
         name: receiverName.trim(),
-        phone: receiverPhone.trim(),
+        phone: normalizeMibanReceiverPhone(receiverPhone),
         province: receiverProvince,
         city: effectiveReceiverCity,
         district: receiverDistrict,
         detail: receiverDetail.trim(),
         label: "家",
         isDefault: false,
-      });
-    }
+      } : null;
     createOrder.mutate({
       productKey: currentProduct.key,
       skuId: selectedSku.id,
       quantity,
       receiverName: receiverName.trim(),
-      receiverPhone: receiverPhone.trim(),
+      receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       cnyAmount: cnyDeductAmount,
+    }, {
+      onSuccess: () => {
+        if (addressToSave) addAddressMutation.mutate(addressToSave);
+      },
     });
   };
 
@@ -1172,6 +1190,9 @@ export default function HerbalifeRedGinsengDetail() {
                     className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
                   />
                 </div>
+                {(receiverPhone || checkoutAttempted) && receiverPhoneError && (
+                  <p role="alert" className="px-4 py-2 text-[12px] text-red-500">{receiverPhoneError}</p>
+                )}
                 <div className="space-y-2 border-b border-gray-100 px-4 py-3">
                   <div className="flex items-center gap-2">
                     <MapPin size={14} className="text-gray-300" />
@@ -1288,10 +1309,10 @@ export default function HerbalifeRedGinsengDetail() {
             >
               <button
                 onClick={handleOpenWalletPayment}
-                disabled={!canSubmit}
+                disabled={createOrder.isPending}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
                 style={{
-                  background: canSubmit ? accent : undefined,
+                  background: !createOrder.isPending ? accent : undefined,
                 }}
               >
                 {!hasAvailablePaymentWallet

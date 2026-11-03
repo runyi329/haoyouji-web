@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 
 function getSessionId() {
   const key = "miban_session_id";
@@ -49,6 +50,8 @@ export default function CartDrawer() {
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; price: number; deductCny: number; deductUsdt: number } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const receiverPhoneError = getMibanReceiverPhoneError(receiverPhone);
   const [receiverAddress, setReceiverAddress] = useState("");
   const [userNote, setUserNote] = useState("");
   const [pendingPrice, setPendingPrice] = useState(0);
@@ -67,7 +70,7 @@ export default function CartDrawer() {
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (err: any) => {
-      const msg = err?.message ?? "下单失败";
+      const msg = formatMibanCheckoutError(err, "下单失败，请稍后再试");
       if (msg.includes("余额不足") || msg.includes("PAYMENT_REQUIRED")) {
         toast.error("余额不足，请先充值", {
           description: msg.slice(0, 80),
@@ -343,6 +346,7 @@ export default function CartDrawer() {
                 <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <input type="tel" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} placeholder="手机号码" className="flex-1 text-[14px] text-black outline-none bg-transparent" />
               </div>
+              {(receiverPhone || checkoutAttempted) && receiverPhoneError && <p role="alert" className="text-[12px] text-red-500">{receiverPhoneError}</p>}
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <input type="text" value={receiverAddress} onChange={(e) => setReceiverAddress(e.target.value)} placeholder="收货地址（省市区+详细地址）" className="flex-1 text-[14px] text-black outline-none bg-transparent" />
@@ -351,8 +355,12 @@ export default function CartDrawer() {
             </div>
             {/* 下单按钮 */}
             <button
-              disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || !walletPayment.canPay}
+              disabled={createOrder.isPending || !walletPayment.canPay}
               onClick={() => {
+                if (createOrder.isPending || !walletPayment.canPay) return;
+                setCheckoutAttempted(true);
+                const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : null);
+                if (message) { toast.error(message); return; }
                 setPendingPrice(totalPrice);
                 // 将购物车所有商品合并为一个订单
                 const allIngredients = items.map((item) => {
@@ -365,7 +373,7 @@ export default function CartDrawer() {
                   totalWeightJin: totalWeight,
                   totalPrice,
                   receiverName: receiverName.trim(),
-                  receiverPhone: receiverPhone.trim(),
+                  receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
                   receiverAddress: receiverAddress.trim(),
                   userNote: userNote.trim() || undefined,
                   cnyAmount: walletPayment.cnyAmount,

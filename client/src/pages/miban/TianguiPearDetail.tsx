@@ -22,6 +22,8 @@ import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AddressBook from "./AddressBook";
 import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./regionData";
+import { toast } from "sonner";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
@@ -186,6 +188,8 @@ export default function TianguiPearDetail() {
   const [showOrderDialog, setShowOrderDialog] = useState(false);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const receiverPhoneError = getMibanReceiverPhoneError(receiverPhone);
   const [receiverProvince, setReceiverProvince] = useState("");
   const [receiverCity, setReceiverCity] = useState("");
   const [receiverDistrict, setReceiverDistrict] = useState("");
@@ -253,7 +257,9 @@ export default function TianguiPearDetail() {
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
-  const addAddressMut = mtrpc.address.add.useMutation();
+  const addAddressMut = mtrpc.address.add.useMutation({
+    onError: (error: unknown) => toast.warning(`订单已支付成功，但地址簿保存失败：${formatMibanCheckoutError(error, "请稍后到地址簿保存")}`),
+  });
 
   const trpcUtils = trpc.useUtils();
   const createOrder = mtrpc.order.create.useMutation({
@@ -271,7 +277,7 @@ export default function TianguiPearDetail() {
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (err: any) => {
-      alert(err.message || "下单失败，请重试");
+      toast.error(formatMibanCheckoutError(err, "下单失败，请稍后再试"));
     },
   });
 
@@ -310,24 +316,21 @@ export default function TianguiPearDetail() {
   };
 
   const handleSubmitOrder = () => {
-    if (
-      saveToBook &&
-      receiverName.trim() &&
-      receiverPhone.trim() &&
-      receiverDetail.trim() &&
-      receiverProvince
-    ) {
-      addAddressMut.mutate({
+    if (createOrder.isPending || !balanceOk) return;
+    setCheckoutAttempted(true);
+    const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" :
+      !receiverProvince || (!isMunicipality && !receiverCity) || !receiverDetail.trim() ? "请补全收货地址后再付款" : null);
+    if (message) { toast.error(message); return; }
+    const addressToSave = saveToBook ? {
         name: receiverName.trim(),
-        phone: receiverPhone.trim(),
+        phone: normalizeMibanReceiverPhone(receiverPhone),
         province: receiverProvince,
         city: effectiveReceiverCity,
         district: receiverDistrict,
         detail: receiverDetail.trim(),
         label: "家",
         isDefault: false,
-      });
-    }
+      } : null;
     createOrder.mutate({
       recipeName: `天桂梨 · ${currentSpec.name}${qty > 1 ? ` x${qty}` : ""}`,
       ingredients: [
@@ -342,11 +345,15 @@ export default function TianguiPearDetail() {
       totalWeightJin: totalWeightJin,
       totalPrice: totalPrice,
       receiverName: receiverName.trim(),
-      receiverPhone: receiverPhone.trim(),
+      receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       productImg: IMGS.hero,
       cnyAmount: walletPayment.cnyAmount,
+    }, {
+      onSuccess: () => {
+        if (addressToSave) addAddressMut.mutate(addressToSave);
+      },
     });
   };
 
@@ -423,13 +430,6 @@ export default function TianguiPearDetail() {
   const totalPrice = currentSpec.price * qty;
   const totalWeightJin = currentSpec.weightJin * qty;
   const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
-  const canSubmit =
-    receiverName.trim() &&
-    receiverPhone.trim() &&
-    receiverProvince &&
-    (isMunicipality || receiverCity) &&
-    receiverDetail.trim() &&
-    !createOrder.isPending;
   const balanceOk = walletPayment.canPay;
 
   return (
@@ -1237,6 +1237,9 @@ export default function TianguiPearDetail() {
                       className="flex-1 text-[14px] text-black outline-none bg-transparent"
                     />
                   </div>
+                  {(receiverPhone || checkoutAttempted) && receiverPhoneError && (
+                    <p role="alert" className="px-4 py-2 text-[12px] text-red-500">{receiverPhoneError}</p>
+                  )}
                   {/* 收货地址 - 三级联动 */}
                   <div
                     className="flex flex-col gap-2 px-4 py-3"
@@ -1368,7 +1371,7 @@ export default function TianguiPearDetail() {
 
               {/* 确认下单按钮 */}
               <button
-                disabled={!canSubmit || !balanceOk}
+                disabled={createOrder.isPending || !balanceOk}
                 onClick={handleSubmitOrder}
                 className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform mt-5"
                 style={{ background: "#FF6900" }}

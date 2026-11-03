@@ -31,6 +31,7 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 
 const RICE_TYPES = [
   { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#A07840", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_white_single.webp" },
@@ -273,13 +274,17 @@ export default function DiyWorkshop() {
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNo: string; deductCny: number; deductUsdt: number; subscriptionMonths?: number } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const receiverPhoneError = getMibanReceiverPhoneError(receiverPhone);
   const [receiverAddress, setReceiverAddress] = useState("");
   const [userNote, setUserNote] = useState("");
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [saveToBook, setSaveToBook] = useState(false);
   const [selectedFromBook, setSelectedFromBook] = useState(false);
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
-  const addAddressMut = mtrpc.address.add.useMutation();
+  const addAddressMut = mtrpc.address.add.useMutation({
+    onError: (error: unknown) => toast.warning(`订单已支付成功，但地址簿保存失败：${formatMibanCheckoutError(error, "请稍后到地址簿保存")}`),
+  });
   const [aiNeed, setAiNeed] = useState("");
   const [aiResult, setAiResult] = useState<{ recommended: string[]; reason: string } | null>(null);
   // 余额查询
@@ -311,7 +316,7 @@ export default function DiyWorkshop() {
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (err: any) => {
-      const msg = err?.message ?? "下单失败";
+      const msg = formatMibanCheckoutError(err, "下单失败，请稍后再试");
       if (msg.includes("余额不足") || msg.includes("PAYMENT_REQUIRED")) {
         toast.error("余额不足，请先充值", {
           description: msg.slice(0, 80),
@@ -1329,6 +1334,7 @@ export default function DiyWorkshop() {
                   className="flex-1 text-[14px] text-black outline-none bg-transparent"
                 />
               </div>
+              {(receiverPhone || checkoutAttempted) && receiverPhoneError && <p role="alert" className="text-[12px] text-red-500">{receiverPhoneError}</p>}
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <MapPin size={15} className="text-gray-400 flex-shrink-0" />
                 <input
@@ -1372,8 +1378,12 @@ export default function DiyWorkshop() {
               const isInsufficient = !walletPayment.canPay;
               return (
                 <button
-                  disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || isInsufficient}
+                  disabled={createOrder.isPending || isInsufficient}
                   onClick={() => {
+                    if (createOrder.isPending || isInsufficient) return;
+                    setCheckoutAttempted(true);
+                    const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : null);
+                    if (message) { toast.error(message); return; }
                     const singlePrice = totalPrice();
                     const ingredients = selected.map((id) => {
                       const rice = allRiceList.find(r => r.id === id)!;
@@ -1382,29 +1392,31 @@ export default function DiyWorkshop() {
                       const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : (parseInt(id, 10) || 0);
                       return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
                     });
-                    if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
-                      addAddressMut.mutate({
+                    const addressToSave = saveToBook ? {
                         name: receiverName.trim(),
-                        phone: receiverPhone.trim(),
+                        phone: normalizeMibanReceiverPhone(receiverPhone),
                         province: "",
                         city: "",
                         district: "",
                         detail: receiverAddress.trim(),
                         label: "其他",
                         isDefault: false,
-                      });
-                    }
+                      } : null;
                     createOrder.mutate({
                       recipeName: recipeName || "我的专属米",
                       ingredients,
                       totalWeightJin: weight,
                       totalPrice: singlePrice,
                       receiverName: receiverName.trim(),
-                      receiverPhone: receiverPhone.trim(),
+                      receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
                       receiverAddress: receiverAddress.trim(),
                       userNote: userNote.trim() || undefined,
                       subscriptionMonths: subscriptionPlan ?? undefined,
                       cnyAmount: walletPayment.cnyAmount,
+                    }, {
+                      onSuccess: () => {
+                        if (addressToSave) addAddressMut.mutate(addressToSave);
+                      },
                     });
                   }}
                   className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"

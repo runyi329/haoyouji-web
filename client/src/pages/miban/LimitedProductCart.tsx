@@ -26,6 +26,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
+import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
@@ -313,6 +314,7 @@ function LimitedProductCartOverlay() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [showAddressBook, setShowAddressBook] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const receiverPhoneError = selectedAddress ? getMibanReceiverPhoneError(selectedAddress.phone ?? "") : null;
   const [userNote, setUserNote] = useState("");
   const [success, setSuccess] = useState<any>(null);
   const usdtCnyRate = useMibanUsdtCnyRate();
@@ -343,6 +345,12 @@ function LimitedProductCartOverlay() {
   }, [addresses, checkoutOpen, selectedAddress]);
 
   useEffect(() => {
+    if (!addresses || !selectedAddress) return;
+    const latest = addresses.find((address: any) => address.id === selectedAddress.id);
+    if (latest !== selectedAddress) setSelectedAddress(latest ?? null);
+  }, [addresses, selectedAddress]);
+
+  useEffect(() => {
     if (checkoutOpen && !paymentInitialized.current && payment.cnyBalance > 0) {
       payment.resetToCnyFirst();
       paymentInitialized.current = true;
@@ -365,7 +373,7 @@ function LimitedProductCartOverlay() {
       setSuccess(data);
     },
     onError: (error: { message?: string }) => {
-      toast.error(error.message || "提交订单失败，请稍后再试");
+      toast.error(formatMibanCheckoutError(error));
     },
   });
 
@@ -382,8 +390,13 @@ function LimitedProductCartOverlay() {
   };
 
   const handlePay = () => {
+    if (createOrder.isPending) return;
     if (!selectedAddress) {
       toast.error("请先选择收货地址");
+      return;
+    }
+    if (receiverPhoneError) {
+      toast.error(receiverPhoneError);
       return;
     }
     if (!payment.canPay) {
@@ -397,7 +410,7 @@ function LimitedProductCartOverlay() {
         quantity: item.quantity,
       })),
       receiverName: selectedAddress.name,
-      receiverPhone: selectedAddress.phone,
+      receiverPhone: normalizeMibanReceiverPhone(selectedAddress.phone),
       receiverAddress: formatAddress(selectedAddress),
       userNote: userNote.trim() || undefined,
       cnyAmount: payment.cnyAmount,
@@ -578,6 +591,12 @@ function LimitedProductCartOverlay() {
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
+                {receiverPhoneError && (
+                  <div role="alert" className="mt-2 text-[12px] text-red-500">
+                    <p>{receiverPhoneError}</p>
+                    <button type="button" onClick={() => setShowAddressBook(true)} className="mt-1 font-semibold underline">编辑收货地址</button>
+                  </div>
+                )}
                 <div className="mt-4 border-t border-gray-100 pt-3">
                   <label className="text-[12px] font-bold text-gray-600">
                     顾客备注{" "}
@@ -627,7 +646,7 @@ function LimitedProductCartOverlay() {
                 type="button"
                 onClick={handlePay}
                 disabled={
-                  !selectedAddress || !payment.canPay || createOrder.isPending
+                  !payment.canPay || createOrder.isPending
                 }
                 className="flex h-13 w-full items-center justify-center rounded-xl bg-[#0D7A3E] text-[15px] font-extrabold text-white disabled:bg-gray-300"
               >
