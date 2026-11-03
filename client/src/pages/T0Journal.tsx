@@ -2585,13 +2585,17 @@ function resolveLadderLivePriceMarker(
     : { anchorPrice: lowerPrice, placement: "above" };
 }
 
-/** 将实时标记挂到同价位的第一条行，避免逐笔同价多行时重复绘制。 */
+/** 上侧/居中挂同价首行，下侧挂同价末行，避免标记落入同价多行中间。 */
 function applyLadderLivePriceMarker(rows: LadderPriceRow[], marker: LadderLivePriceMarker | null) {
   if (!marker) return rows;
-  let markerApplied = false;
-  return rows.map((row) => {
-    if (markerApplied || priceKey(row.price) !== priceKey(marker.anchorPrice)) return row;
-    markerApplied = true;
+  let anchorIndex = -1;
+  for (let index = 0; index < rows.length; index += 1) {
+    if (priceKey(rows[index].price) !== priceKey(marker.anchorPrice)) continue;
+    anchorIndex = index;
+    if (marker.placement !== "below") break;
+  }
+  return rows.map((row, index) => {
+    if (index !== anchorIndex) return row;
     return { ...row, livePriceMarkerPlacement: marker.placement };
   });
 }
