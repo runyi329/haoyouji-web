@@ -38,6 +38,7 @@ import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
+import { readMibanFruitSales } from "./miban-fruit-sales";
 import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
@@ -927,7 +928,7 @@ async function getAllOrders() {
   if (!conn) return [];
   try {
     const [rows]: any = await (conn as any).execute(
-      `SELECT o.*, u.name AS userName, u.username AS userUsername
+      `SELECT o.*, u.name AS userName, u.username AS userUsername, u.avatar AS userAvatar
        FROM miban_orders o
        LEFT JOIN users u ON u.id = o.userId
        ORDER BY o.createdAt DESC`
@@ -4786,6 +4787,7 @@ export const mibanLimitedProductRouter = router({
           quantity: input.quantity,
           unitLabel: sku.unitLabel,
           netContentText: sku.netContentText,
+          ...(sku.fruitCountPerUnit ? { fruitCountPerUnit: sku.fruitCountPerUnit } : {}),
           unitPriceCny: sku.priceCny,
           lineTotalCny: totalCny,
           // 资格和金额均以本次成交快照为准；之后修改开关或售价不会追溯影响旧订单。
@@ -5042,6 +5044,7 @@ export const mibanLimitedProductRouter = router({
             quantity: line.quantity,
             unitLabel: line.sku.unitLabel,
             netContentText: line.sku.netContentText,
+            ...(line.sku.fruitCountPerUnit ? { fruitCountPerUnit: line.sku.fruitCountPerUnit } : {}),
             unitPriceCny: line.sku.priceCny,
             lineTotalCny: line.lineTotalCny,
             commissionEligible: commissionLine?.commissionEligible === true,
@@ -6694,6 +6697,15 @@ export const mibanFavoriteRouter = router({
 
 // ── 天桂梨规格路由 ──────────────────────────────────────────────────────────
 export const mibanPearRouter = router({
+  // 仅公开两款水果的累计颗数，不公开订单、买家或收货信息。
+  fruitSales: publicProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "销量暂不可用" });
+    }
+    return readMibanFruitSales(conn);
+  }),
+
   // 获取规格列表（公开接口，无需登录）
   getSpecs: publicProcedure
     .input(z.object({ productKey: z.string().default("tiangui-pear") }))

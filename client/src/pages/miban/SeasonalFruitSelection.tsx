@@ -10,9 +10,38 @@ const TIANGUI_PEAR_IMAGE =
 const MAJIAYOU_IMAGE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guangfeng-majiayou/v1/majiayou-hero.webp";
 
+// 用户设定的累计销量起点，仅用于前台展示，不回填订单或改变真实销量统计。
+const MAJIAYOU_INITIAL_SOLD_PIECES = 32_000;
+
+function FruitSalesLabel({
+  sales,
+  initialSoldPieces = 0,
+}: {
+  sales?: { soldPieces: number; estimated: boolean; unresolvedOrders: number };
+  initialSoldPieces?: number;
+}) {
+  // 加载失败或未完成时不显示虚假的 0 销量。
+  if (!sales) return null;
+  return (
+    <p className="shrink-0 text-right font-medium text-[#718064]">
+      <span className="block text-[14px] font-extrabold leading-4 tabular-nums text-[#C65A42]">
+        {sales.estimated ? "约" : ""}{(initialSoldPieces + sales.soldPieces).toLocaleString("zh-CN")}
+        <span className="ml-0.5 text-[10px] font-medium text-[#718064]">颗</span>
+      </span>
+      <span className="mt-0.5 block text-[9px] leading-3">
+        {sales.unresolvedOrders > 0 ? "已核实售出" : "已累计售出"}
+      </span>
+    </p>
+  );
+}
+
 export default function SeasonalFruitSelection() {
   const { data: pearSpecs } = mtrpc.pear.getSpecs.useQuery({
     productKey: "tiangui-pear",
+  });
+  const { data: fruitSales } = mtrpc.pear.fruitSales.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
   const usdtCnyRate = useMibanUsdtCnyRate();
   const pearMinPrice =
@@ -65,9 +94,15 @@ export default function SeasonalFruitSelection() {
 
               <div className="flex min-w-0 flex-col justify-between px-3.5 py-3 max-[360px]:px-2.5">
                 <div>
-                  <span className="text-[10px] font-bold text-[#647B35]">
-                    产地鲜果
-                  </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="shrink-0 text-[10px] font-bold text-[#647B35]">
+                      产地鲜果
+                    </span>
+                    <FruitSalesLabel
+                      sales={fruitSales?.["guangfeng-majiayou"]}
+                      initialSoldPieces={MAJIAYOU_INITIAL_SOLD_PIECES}
+                    />
+                  </div>
                   <h3 className="mt-1 text-[17px] font-extrabold leading-5 text-[#2E3C30]">
                     广丰马家柚
                   </h3>
@@ -125,9 +160,12 @@ export default function SeasonalFruitSelection() {
 
               <div className="flex min-w-0 flex-col justify-between px-3.5 py-3 max-[360px]:px-2.5">
                 <div>
-                  <span className="text-[10px] font-bold text-[#9B8552]">
-                    产地鲜果
-                  </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="shrink-0 text-[10px] font-bold text-[#9B8552]">
+                      产地鲜果
+                    </span>
+                    <FruitSalesLabel sales={fruitSales?.["tiangui-pear"]} />
+                  </div>
                   <h3 className="mt-1 text-[17px] font-extrabold leading-5 text-[#2E3C30]">
                     天桂梨
                   </h3>

@@ -8,6 +8,7 @@ const ALLOWED_IMAGE_PATH_PREFIXES = [
   "/miban-shebei/",
   "/miban-pear/",
   "/assets/miban/",
+  "/avatars/",
 ] as const;
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/avif",

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
@@ -30,8 +30,11 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Search,
+  X,
 } from "lucide-react";
 import AddressBook from "./AddressBook";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
 function dedupeAddress(addr: string): string {
   return (addr ?? "").replace(/(北京市|上海市|天津市|重庆市)\1/, "$1");
@@ -39,21 +42,85 @@ function dedupeAddress(addr: string): string {
 
 // ─── 状态映射 ─────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending: { label: "待发货", color: "text-amber-600 bg-amber-50" },
-  processing: { label: "处理中", color: "text-blue-600 bg-blue-50" },
-  confirmed: { label: "已确认", color: "text-blue-600 bg-blue-50" },
-  packing: { label: "打包中", color: "text-purple-600 bg-purple-50" },
-  shipped: { label: "已发货", color: "text-green-600 bg-green-50" },
-  delivered: { label: "已送达", color: "text-gray-500 bg-gray-100" },
-  cancelled: { label: "已取消", color: "text-red-500 bg-red-50" },
+  pending: { label: "待发货", color: "text-white bg-orange-600" },
+  processing: { label: "处理中", color: "text-white bg-blue-600" },
+  confirmed: { label: "已确认", color: "text-white bg-blue-600" },
+  packing: { label: "打包中", color: "text-white bg-purple-600" },
+  shipped: { label: "已发货", color: "text-white bg-green-600" },
+  delivered: { label: "已送达", color: "text-white bg-gray-600" },
+  cancelled: { label: "已取消", color: "text-white bg-red-600" },
 };
+
+const PERSONAL_ORDER_STATUS_TABS = [
+  { value: "all", label: "全部" },
+  { value: "pending", label: "待发货" },
+  { value: "shipped", label: "已发货" },
+  { value: "delivered", label: "已收货" },
+  { value: "cancelled", label: "已取消" },
+] as const;
+
+function getPersonalOrderStatus(status: string) {
+  return ["pending", "processing", "confirmed", "packing"].includes(status)
+    ? "pending"
+    : status;
+}
+
+function normalizeOrderKeyword(value: string) {
+  return value.normalize("NFKC").toLowerCase();
+}
+
+function getPersonalOrderSearchText(order: Record<string, any>) {
+  const values: string[] = [];
+  const collect = (value: unknown) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === "string" || typeof value === "number") values.push(String(value));
+    else if (Array.isArray(value)) value.forEach(collect);
+    else if (typeof value === "object") Object.entries(value).forEach(([key, item]) => {
+      // 搜索业务内容，不把头像或商品图片URL中的随机文件名作为订单关键词。
+      if (key !== "ingredients" && !/avatar|image|img|url|link/i.test(key)) collect(item);
+    });
+  };
+  collect(order);
+  try {
+    const ingredients = JSON.parse(order.ingredients || "[]");
+    collect(ingredients);
+    if (Array.isArray(ingredients)) ingredients.forEach(item => {
+      if (item?.quantity && item?.unitLabel) values.push(`${item.quantity}${item.unitLabel}`);
+    });
+  } catch { /* 旧订单快照格式异常不影响其余信息搜索。 */ }
+  for (const key of ["totalPrice", "walletDeductCny", "walletDeductUsdt", "totalWeightJin"]) {
+    if (order[key] !== null && order[key] !== undefined && Number.isFinite(Number(order[key]))) values.push(Number(order[key]).toFixed(2));
+  }
+  const paidCny = Math.max(0, Number(order.walletDeductCny || 0));
+  const paidUsdt = Math.max(0, Number(order.walletDeductUsdt || 0));
+  const total = Math.max(0, Number(order.totalPrice || 0));
+  const rate = Math.max(0, Number(order.usdtCnyRateAtOrder || 0)) || (paidUsdt > 0 && total > paidCny ? (total - paidCny) / paidUsdt : 0);
+  values.push(`${paidUsdt.toFixed(2)}U`);
+  if (rate > 0) values.push(`${(total / rate).toFixed(2)}U`, `${(paidUsdt + paidCny / rate).toFixed(2)}U`);
+  values.push(STATUS_MAP[order.status]?.label || "", PERSONAL_ORDER_STATUS_TABS.find(tab => tab.value === getPersonalOrderStatus(order.status))?.label || "");
+  for (const key of ["createdAt", "scheduledShipDate", "shippedAt", "deliveredAt"]) {
+    if (!order[key]) continue;
+    const date = new Date(order[key]);
+    if (Number.isNaN(date.getTime())) continue;
+    values.push(new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(date));
+    values.push(new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",year:"numeric",month:"long",day:"numeric"}).format(date));
+  }
+  return normalizeOrderKeyword(values.join(" "));
+}
 
 // ─── 我的订单 Tab ─────────────────────────────────────────────────────────────
 function OrdersTab() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const [, navigate] = useLocation();
+  const orderCardRefs = useRef(new Map<number, { current: HTMLDivElement | null }>());
+  const getOrderCardRef = (orderId: number) => {
+    if (!orderCardRefs.current.has(orderId)) orderCardRefs.current.set(orderId, { current: null });
+    return orderCardRefs.current.get(orderId)!;
+  };
   const {
     data: orders,
     isLoading,
+    isError,
     refetch: refetchOrders,
   } = mtrpc.order.myOrders.useQuery(undefined, { enabled: isAuthenticated });
   const confirmMutation = mtrpc.order.confirmReceipt.useMutation({
@@ -96,10 +163,21 @@ function OrdersTab() {
   const [aftersaleReason, setAftersaleReason] = useState<string>("");
   // ⚠️ 必须在所有条件性 return 之前声明，否则违反 React hooks 规则
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
+
+  const orderSearchIndex = useMemo(() => new Map((orders ?? []).map(order => [
+    order.id,
+    getPersonalOrderSearchText({
+      ...order,
+      userName: order.userName || user?.name || user?.username || "本人",
+      userUsername: order.userUsername || user?.username || "",
+    }),
+  ])), [orders, user?.name, user?.username]);
 
   if (isLoading)
     return (
@@ -110,21 +188,36 @@ function OrdersTab() {
       </div>
     );
 
-  if (!orders?.length)
+  if (isError && !orders)
     return (
       <div className="flex flex-col items-center py-16 text-center">
-        <Package className="w-10 h-10 mb-3 text-gray-200" />
-        <p className="text-[13px] text-gray-400 mb-5">还没有订单记录</p>
-        <Link href="/p/proj_hzxm2t/diy">
-          <button
-            className="px-6 py-3 rounded-xl text-[13px] font-semibold text-white active:scale-95 transition-transform"
-            style={{ background: "#FF6900" }}
-          >
-            去 DIY 工坊下单
-          </button>
-        </Link>
+        <Package className="w-10 h-10 mb-3 text-gray-300" />
+        <p className="text-[13px] text-gray-500 mb-5">订单加载失败，请重试</p>
+        <button
+          onClick={() => refetchOrders()}
+          className="px-6 py-3 rounded-xl text-[13px] font-semibold text-white active:scale-95 transition-transform"
+          style={{ background: "#FF6900" }}
+        >
+          重新加载
+        </button>
       </div>
     );
+
+  // 只统计本人接口返回的订单；订阅每一期都是一笔，不以折叠卡片数或商品件数计数。
+  const allOrders = orders ?? [];
+  const searchTerms = normalizeOrderKeyword(searchText).trim().split(/\s+/).filter(Boolean);
+  const hasSearch = searchTerms.length > 0;
+  const matchingOrders = hasSearch ? allOrders.filter(order => {
+    const content = orderSearchIndex.get(order.id) || "";
+    return searchTerms.every(term => content.includes(term));
+  }) : allOrders;
+  const statusCounts = Object.fromEntries(PERSONAL_ORDER_STATUS_TABS.map(tab => [
+    tab.value,
+    tab.value === "all" ? matchingOrders.length : matchingOrders.filter(order => getPersonalOrderStatus(order.status) === tab.value).length,
+  ]));
+  const filteredOrders = statusFilter === "all"
+    ? matchingOrders
+    : matchingOrders.filter(order => getPersonalOrderStatus(order.status) === statusFilter);
 
   // ─── 订阅分组：将同一 subscriptionGroupId 的订单合并 ───────────────────────
   type OrderItem = (typeof orders)[0] & {
@@ -137,8 +230,9 @@ function OrdersTab() {
   const { singleOrders, subscriptionGroups } = (() => {
     const singles: OrderItem[] = [];
     const groups: Map<string, OrderItem[]> = new Map();
-    for (const o of (orders ?? []) as OrderItem[]) {
-      if (o.subscriptionGroupId) {
+    for (const o of filteredOrders as OrderItem[]) {
+      // 查看具体状态时直接显示每期订单，避免藏在订阅折叠中，让数量与列表一致。
+      if (o.subscriptionGroupId && statusFilter === "all" && !hasSearch) {
         const g = groups.get(o.subscriptionGroupId) ?? [];
         g.push(o);
         groups.set(o.subscriptionGroupId, g);
@@ -254,104 +348,137 @@ function OrdersTab() {
       ? `https://www.kuaidi100.com/chaxun?com=${companyCode}&nu=${trackingNo}`
       : `https://www.kuaidi100.com/chaxun?nu=${trackingNo}`;
 
+    // 与管理员卡片使用同一成交快照口径，不用当前汇率重估历史订单。
+    const orderTotalCny = Math.max(0, Number(order.totalPrice ?? 0));
+    const paidCny = Math.max(0, Number(order.walletDeductCny ?? 0));
+    const paidUsdt = Math.max(0, Number(order.walletDeductUsdt ?? 0));
+    const displayOrderRate = Math.max(0, Number(order.usdtCnyRateAtOrder ?? 0)) ||
+      (paidUsdt > 0 && orderTotalCny > paidCny ? (orderTotalCny - paidCny) / paidUsdt : 0);
+    const orderTotalUsdt = displayOrderRate > 0 ? orderTotalCny / displayOrderRate : null;
+    const singleLine = limitedProductLines.length === 1 ? limitedProductLines[0] : null;
+    const singleQuantity = Number(singleLine?.quantity ?? 0);
+    const singleUnit = singleLine?.unitLabel || "件";
+    // 再来一单只进入商品/下单页面，用户仍需重新确认数量、地址与支付。
+    const reorderHref = singleLine?.productKey
+      ? `/p/proj_hzxm2t/limited/${encodeURIComponent(singleLine.productKey)}${singleLine.skuId ? `?sku=${encodeURIComponent(singleLine.skuId)}` : ""}`
+      : isLimitedProduct ? "/p/proj_hzxm2t/limited"
+      : String(order.recipeName ?? "").includes("天桂梨") ? "/p/proj_hzxm2t/pear/tiangui"
+      : "/p/proj_hzxm2t/diy";
+    const renderReorderButton = () => (
+      <button
+        data-card-export-hide="true"
+        onClick={() => navigate(reorderHref)}
+        className="flex h-7 items-center justify-center rounded-[3px] bg-emerald-600 px-2.5 text-[11px] font-semibold text-white max-[360px]:px-1.5"
+      >
+        再来一单
+      </button>
+    );
+    const renderSaveImageButton = () => (
+      <span data-card-export-hide="true" className="inline-flex shrink-0 [&>button]:rounded-[3px] [&>button]:text-[11px] [&>button]:px-1.5 [&>button]:gap-0.5 [&>button>svg]:h-3 [&>button>svg]:w-3 [&>button]:!bg-violet-600 [&>button]:!text-white [&>button]:!border-0">
+        <OrderCardImageDownload
+          targetRef={getOrderCardRef(order.id)}
+          currentUser={user}
+          orderNo={order.orderNo || order.id}
+          color="#FFFFFF"
+          buttonLabel="保存图片"
+          captureFullContent
+          outerPadding={12}
+          fullContentHorizontalBleed={0}
+          fullContentBottomPadding={12}
+          exportBackground="#FFFFFF"
+          watermarkMode="time-only"
+          filenamePrefix="米伴个人订单"
+          previewTitle="订单图片预览"
+          previewHint="保留至下单时间及订单状态，不包含操作按钮"
+        />
+      </span>
+    );
+    const orderAmountSummary = orderTotalUsdt !== null
+      ? singleLine && singleQuantity > 0
+        ? `${(orderTotalUsdt / singleQuantity).toFixed(2)}U/${singleUnit} × ${singleQuantity}${singleUnit} = ${orderTotalUsdt.toFixed(2)}U`
+        : `= ${orderTotalUsdt.toFixed(2)}U`
+      : `¥${orderTotalCny.toFixed(2)}`;
+    const hasWalletPaymentRecord = paidCny > 0.001 || paidUsdt > 0.000001;
+    const walletEquivalent = displayOrderRate > 0
+      ? paidUsdt + paidCny / displayOrderRate
+      : paidCny <= 0.001 && paidUsdt > 0 ? paidUsdt : null;
+    const walletPaymentSummary = walletEquivalent !== null ? `${walletEquivalent.toFixed(2)}U`
+      : paidCny > 0 && paidUsdt <= 0 ? `¥${paidCny.toFixed(2)}` : "待核实";
+    const ordererName = String(order.userName || user?.name || user?.username || "本人");
+    const ordererUsername = String(order.userUsername || user?.username || "");
+    const ordererAvatar = order.userAvatar || user?.avatar;
+    const createdAtLabel = order.createdAt
+      ? new Intl.DateTimeFormat("zh-CN", {
+          timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        }).format(new Date(order.createdAt)) : "--";
+
     return (
       <div
         key={order.id}
+        ref={getOrderCardRef(order.id)}
+        data-personal-order-id={order.id}
         className={`bg-white overflow-hidden ${isSubChild ? "border-l-2 border-orange-200 ml-2" : "rounded-2xl shadow-sm border border-gray-100"}`}
       >
-        {/* ── 顶部状态栏 ── */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-400 font-mono">
-              订单号 {order.orderNo || `#${order.id}`}
-            </span>
-            {order.subscriptionIndex && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">
-                第{order.subscriptionIndex}期
-              </span>
-            )}
-          </div>
-          <span
-            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${status.color}`}
-          >
-            {status.label}
-          </span>
-        </div>
-
         <div className="p-4 space-y-3">
-          {/* ── 商品信息行 ── */}
-          <div className="flex items-center gap-3">
-            {order.productImg && (
-              <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-100">
+          {/* 与管理员卡片一致的商品缩略图、名称、规格与成交价格。 */}
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-[#fcfcfc]">
+            <div className="flex min-h-[64px]">
+              {order.productImg ? (
                 <img
                   src={order.productImg}
                   alt={order.recipeName || "商品图片"}
-                  className="w-full h-full object-cover"
+                  className="w-[76px] shrink-0 self-stretch object-cover"
                 />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] font-bold text-black leading-tight truncate">
-                {order.recipeName || "定制米"}
-              </h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                {new Date(order.createdAt).toLocaleString("zh-CN", {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-              {order.scheduledShipDate && (
-                <p className="text-[10px] text-orange-500 mt-0.5">
-                  计划发货：{order.scheduledShipDate}
-                </p>
+              ) : (
+                <div className="flex w-[76px] shrink-0 self-stretch items-center justify-center bg-orange-50 text-orange-300">
+                  <Package className="h-6 w-6" />
+                </div>
               )}
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p
-                className="text-[18px] font-bold leading-tight"
-                style={{ color: "#FF6900" }}
-              >
-                ¥{Number(order.totalPrice).toFixed(2)}
-              </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                {itemQuantityLabel}
-              </p>
+              <div className="min-w-0 flex-1 py-2.5 px-2.5">
+                <h3 className="break-words text-[13px] font-bold leading-5 text-gray-800">
+                  {order.recipeName || "定制米"}
+                </h3>
+                {isLimitedProduct ? (
+                  <div className="mt-1 space-y-0.5">
+                    {limitedProductLines.map((line: any, index: number) => (
+                      <div key={`${line.productKey || line.name}-${line.skuId || index}`} className="flex min-w-0 items-start gap-1 text-[10px] leading-4">
+                        <span className="min-w-0 flex-1 break-words text-gray-500">
+                          {limitedProductLines.length > 1
+                            ? Array.from(new Set([line.name, line.skuName, line.netContentText].filter(Boolean))).join(" · ")
+                            : line.netContentText || line.skuName || line.name}
+                          {` × ${line.quantity}${line.unitLabel}`}
+                        </span>
+                        {index === 0 && (
+                          <span className="shrink-0 whitespace-nowrap font-bold text-[#FF6900]">
+                            {limitedProductLines.length > 1 ? "合计 " : ""}¥{orderTotalCny.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-[11px] text-gray-500">
+                    {itemQuantityLabel}
+                    <span className="ml-2 font-bold text-[#FF6900]">¥{orderTotalCny.toFixed(2)}</span>
+                  </div>
+                )}
+                {(order.subscriptionIndex || order.scheduledShipDate) && (
+                  <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-orange-500">
+                    {order.subscriptionIndex && <span>第{order.subscriptionIndex}期</span>}
+                    {order.scheduledShipDate && <span>计划发货：{order.scheduledShipDate}</span>}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* ── 静态限时商品明细 / 米种配比可视化 ── */}
-          {isLimitedProduct ? (
-            <div className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-2.5">
-              <div className="space-y-2">
-                {limitedProductLines.map((line: any, index: number) => (
-                  <div
-                    key={`${line.productKey || line.name}-${line.skuId || index}`}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-[12px] font-semibold text-gray-800">
-                        {line.skuName || line.name}
-                      </div>
-                      {line.netContentText && (
-                        <div className="mt-0.5 text-[11px] text-gray-400">
-                          {line.netContentText}
-                        </div>
-                      )}
-                    </div>
-                    <span className="flex-shrink-0 text-[12px] font-bold text-rose-700">
-                      {line.quantity}
-                      {line.unitLabel}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            ingredients.length > 0 &&
-            (() => {
+          {/* 配比功能保留，默认折叠使普通米订单也保持简洁。 */}
+          {!isLimitedProduct && ingredients.length > 0 && (
+            <details className="border-b border-gray-100 pb-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-gray-400">米种配比明细</summary>
+              <div className="pt-3">
+                {(() => {
               const totalW =
                 ingredients.reduce(
                   (s: number, ing: any) => s + (ing.weightJin || 0),
@@ -444,70 +571,117 @@ function OrdersTab() {
                   </div>
                 </div>
               );
-            })()
+                })()}
+              </div>
+            </details>
           )}
 
           {/* ── 收货信息 ── */}
-          {order.receiverName && (
-            <div className="bg-gray-50 rounded-xl p-3 space-y-1">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="text-[11px] font-semibold text-gray-500">
-                    收货信息
-                  </span>
-                </div>
+          <div className="space-y-2 border-t border-gray-100 pt-2.5">
+            <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
+              <span className="flex items-center gap-1 font-medium text-gray-400">
+                收货人
                 <button
+                  data-card-export-hide="true"
                   onClick={() => setShowPrivacy(v => !v)}
+                  aria-label={showPrivacy ? "显示收货详情" : "隐藏收货详情"}
+                  title={showPrivacy ? "显示收货详情" : "隐藏收货详情"}
                   className="text-gray-400 active:opacity-70 transition-opacity"
                 >
                   {showPrivacy ? (
-                    <EyeOff className="w-3.5 h-3.5" />
+                    <EyeOff className="w-3 h-3" />
                   ) : (
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-3 h-3" />
                   )}
                 </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-gray-800">
-                  {order.receiverName}
-                </span>
-                <span className="text-[12px] text-gray-500">
+              </span>
+              <span className="min-w-0 break-words text-right font-semibold text-gray-700">
+                {order.receiverName || "未填写收货人"}
+                {order.receiverPhone && <span className="ml-2">
                   {showPrivacy
                     ? (order.receiverPhone ?? "").replace(
                         /(\d{3})\d{4}(\d{4})/,
                         "$1****$2"
                       )
                     : order.receiverPhone}
-                </span>
-              </div>
-              <p className="text-[12px] text-gray-500 leading-relaxed">
+                </span>}
+              </span>
+            </div>
+            <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
+              <span className="font-medium text-gray-400">收货地址</span>
+              <span className="min-w-0 break-words text-right font-semibold text-gray-700">
                 {showPrivacy
                   ? (() => {
                       const a = dedupeAddress(order.receiverAddress ?? "");
-                      if (a.length <= 10) return a;
+                      if (a.length <= 10) return a || "未填写收货地址";
                       return a.slice(0, 8) + "***" + a.slice(-6);
                     })()
-                  : dedupeAddress(order.receiverAddress ?? "")}
-              </p>
+                  : dedupeAddress(order.receiverAddress ?? "") || "未填写收货地址"}
+              </span>
             </div>
-          )}
+            {order.userNote && (
+              <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
+                <span className="font-medium text-gray-400">订单备注</span>
+                <span className="min-w-0 break-words text-right font-medium text-amber-700">{order.userNote}</span>
+              </div>
+            )}
+          </div>
 
-          {/* ── 备注 ── */}
-          {order.userNote && (
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">
-                备注：
+          <div className="space-y-1.5 border-t border-gray-100 pt-2.5 text-[11px] leading-4">
+            <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2">
+              <span className="font-medium text-gray-400">订单金额</span>
+              <span className="min-w-0 break-words text-right font-semibold text-gray-700">{orderAmountSummary}</span>
+            </div>
+            <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2">
+              <span className="font-medium text-gray-400">
+                {order.status === "cancelled" ? "原钱包实扣" : hasWalletPaymentRecord ? "钱包实扣" : "支付记录"}
               </span>
-              <span className="text-[12px] text-gray-600">
-                {order.userNote}
+              <span className={`min-w-0 break-words text-right font-semibold ${order.status === "cancelled" ? "text-red-600" : "text-gray-700"}`}>
+                {hasWalletPaymentRecord ? walletPaymentSummary : "待核实"}
               </span>
             </div>
-          )}
+          </div>
+
+          <div className="flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
+            <div className="min-w-0 flex-1 space-y-1 text-[11px] leading-4">
+              <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">
+                <span className="font-medium text-gray-400">订单号</span>
+                <span className="min-w-0 break-all text-right font-semibold text-gray-600">{order.orderNo || `#${order.id}`}</span>
+              </div>
+              <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">
+                <span className="font-medium text-gray-400">下单人</span>
+                <span className="flex w-full min-w-0 items-center justify-end gap-1.5 text-right font-semibold text-gray-600">
+                  {ordererAvatar ? (
+                    <img src={ordererAvatar} alt={`${ordererName}头像`} className="h-4 w-4 shrink-0 rounded-full border border-gray-100 object-cover" onError={event => { event.currentTarget.style.display = "none"; }} />
+                  ) : (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400"><User className="h-2.5 w-2.5" /></span>
+                  )}
+                  <span className="min-w-0 break-words text-right">
+                    {ordererName}
+                    {ordererUsername && ordererUsername !== ordererName && (
+                      <span className="font-normal text-gray-400">{`（${ordererUsername}）`}</span>
+                    )}
+                  </span>
+                </span>
+              </div>
+              <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">
+                <span className="font-medium text-gray-400">下单时间</span>
+                <span className="min-w-0 break-words text-right font-semibold text-gray-600">{createdAtLabel}</span>
+              </div>
+            </div>
+            {/* 个人页仅消费订单状态，不开放管理员状态下拉或删单功能。 */}
+            {order.status !== "pending" && (
+              <div className="flex shrink-0 items-end">
+                <span className={`flex h-7 items-center justify-center rounded-[3px] px-2.5 text-[11px] font-semibold ${status.color}`}>
+                  {status.label}
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* ── 物流信息 ── */}
           {hasTracking ? (
-            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <div data-card-export-hide="true" className="flex items-center justify-between pt-2 border-t border-gray-100">
               <div className="flex items-center gap-1.5">
                 <Truck className="w-3.5 h-3.5 text-green-500" />
                 <div>
@@ -530,41 +704,45 @@ function OrdersTab() {
               </a>
             </div>
           ) : (
+            order.status !== "pending" &&
             order.status !== "cancelled" &&
             order.status !== "delivered" && (
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <div data-card-export-hide="true" className="flex items-center justify-between pt-2 border-t border-gray-100">
                 <div className="flex items-center gap-1.5">
                   <Truck className="w-3.5 h-3.5 text-gray-300" />
                   <span className="text-[11px] text-gray-400">
-                    {order.status === "pending"
-                      ? "待发货，订单已接收、正在备货中"
-                      : "配货完成后将更新物流信息"}
+                    配货完成后将更新物流信息
                   </span>
                 </div>
-                {order.status === "pending" && (
-                  <button
-                    onClick={() => {
-                      setEditAddressOrderId(order.id);
-                      setEditName(order.receiverName ?? "");
-                      setEditPhone(order.receiverPhone ?? "");
-                      setEditAddress(order.receiverAddress ?? "");
-                    }}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
-                    style={{
-                      color: "#FF6900",
-                      background: "rgba(255,105,0,0.08)",
-                    }}
-                  >
-                    修改地址
-                  </button>
-                )}
               </div>
             )
           )}
 
+          {order.status === "pending" && (
+            <div data-personal-order-footer="true" className="flex items-center justify-end gap-1.5 border-t border-gray-100 pt-2 max-[360px]:gap-1">
+              <span className={`flex h-7 items-center justify-center rounded-[3px] px-2.5 text-[11px] font-semibold max-[360px]:px-1.5 ${status.color}`}>
+                {status.label}
+              </span>
+              <button
+                data-card-export-hide="true"
+                onClick={() => {
+                  setEditAddressOrderId(order.id);
+                  setEditName(order.receiverName ?? "");
+                  setEditPhone(order.receiverPhone ?? "");
+                  setEditAddress(order.receiverAddress ?? "");
+                }}
+                className="flex h-7 items-center justify-center rounded-[3px] bg-sky-600 px-2.5 text-[11px] font-semibold text-white max-[360px]:px-1.5"
+              >
+                修改地址
+              </button>
+              {renderReorderButton()}
+              {renderSaveImageButton()}
+            </div>
+          )}
+
           {/* ── 管理员备注 ── */}
           {order.adminNote && (
-            <div className="bg-amber-50 rounded-xl px-3 py-2 flex items-start gap-1.5">
+            <div data-card-export-hide="true" className="bg-amber-50 rounded-xl px-3 py-2 flex items-start gap-1.5">
               <span className="text-[11px] text-amber-600 font-semibold flex-shrink-0">
                 客服备注：
               </span>
@@ -576,7 +754,7 @@ function OrdersTab() {
 
           {/* ── 确认收货（已发货状态） ── */}
           {order.status === "shipped" && (
-            <div className="pt-2 border-t border-gray-100">
+            <div data-card-export-hide="true" className="pt-2 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
@@ -603,7 +781,7 @@ function OrdersTab() {
 
           {/* ── 去评价（已送达状态；静态限时商品首发暂不开评价） ── */}
           {order.status === "delivered" && !isLimitedProduct && (
-            <div className="pt-2 border-t border-gray-100 flex justify-end">
+            <div data-card-export-hide="true" className="pt-2 border-t border-gray-100 flex justify-end">
               <button
                 onClick={() => {
                   window.location.href = `/p/proj_hzxm2t/review?orderId=${order.id}`;
@@ -616,19 +794,23 @@ function OrdersTab() {
             </div>
           )}
           {/* ── 申请售后（已发货/已送达状态） ── */}
-          {(order.status === "shipped" || order.status === "delivered") && (
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={() => {
-                  setAftersaleOrderId(order.id);
-                  setAftersaleOrderNo(order.orderNo ?? "");
-                  setAftersaleType("refund");
-                  setAftersaleReason("");
-                }}
-                className="text-[11px] font-medium px-3 py-1 rounded-lg border border-gray-200 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors"
-              >
-                申请售后
-              </button>
+          {order.status !== "pending" && (
+            <div data-card-export-hide="true" className="flex items-center justify-end gap-1.5 pt-1">
+              {(order.status === "shipped" || order.status === "delivered") && (
+                <button
+                  onClick={() => {
+                    setAftersaleOrderId(order.id);
+                    setAftersaleOrderNo(order.orderNo ?? "");
+                    setAftersaleType("refund");
+                    setAftersaleReason("");
+                  }}
+                  className="flex h-7 items-center justify-center rounded-[3px] bg-slate-600 px-2.5 text-[11px] font-semibold text-white"
+                >
+                  申请售后
+                </button>
+              )}
+              {renderReorderButton()}
+              {renderSaveImageButton()}
             </div>
           )}
         </div>
@@ -638,6 +820,54 @@ function OrdersTab() {
 
   return (
     <div className="space-y-4">
+      <div role="tablist" aria-label="订单状态筛选" className="grid grid-cols-5 gap-1">
+        {PERSONAL_ORDER_STATUS_TABS.map(tab => {
+          const selected = statusFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-label={`${tab.label}，${statusCounts[tab.value]}笔订单`}
+              data-order-status-filter={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[3px] py-2 transition-colors ${selected ? "bg-orange-600 text-white" : "bg-white text-gray-500"}`}
+            >
+              <span className={`text-[18px] font-bold leading-5 ${selected ? "text-white" : "text-gray-700"}`}>{statusCounts[tab.value]}</span>
+              <span className="whitespace-nowrap text-[11px] leading-4">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div role="search" className="flex items-center gap-2 rounded-[3px] border border-gray-200 bg-white px-3 py-2">
+        <Search className="h-4 w-4 shrink-0 text-gray-400" />
+        <input
+          type="search"
+          aria-label="搜索订单关键词"
+          placeholder="搜索订单内任意关键词"
+          value={searchText}
+          onChange={event => setSearchText(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-700 outline-none placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {searchText && (
+          <button type="button" aria-label="清空订单搜索" onClick={() => setSearchText("")} className="flex h-6 w-6 shrink-0 items-center justify-center text-gray-400">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      {hasSearch && <p className="text-[11px] text-gray-400">当前筛选 {filteredOrders.length} 笔订单</p>}
+      {filteredOrders.length === 0 && (
+        <div className="flex flex-col items-center py-12 text-center">
+          <Package className="mb-3 h-10 w-10 text-gray-200" />
+          <p className="text-[13px] text-gray-400">{!allOrders.length ? "还没有订单记录" : hasSearch ? "没有匹配的订单，试试其他关键词或状态" : "暂无对应状态订单"}</p>
+          {!allOrders.length && (
+            <Link href="/p/proj_hzxm2t/diy">
+              <button className="mt-5 rounded-[3px] bg-orange-600 px-5 py-2 text-[13px] font-semibold text-white">去 DIY 工坊下单</button>
+            </Link>
+          )}
+        </div>
+      )}
       {renderList.map(item => {
         if (item.type === "single") {
           return renderOrderCard(item.order);

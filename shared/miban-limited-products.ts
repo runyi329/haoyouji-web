@@ -24,6 +24,8 @@ export type LimitedProductSku = {
   quantityPerOrder: number;
   unitLabel: "盒" | "瓶" | "套" | "箱";
   netContentText: string;
+  /** 鲜果每个售卖单位的准确颗数，下单时快照保存，不由价格/重量反推。 */
+  fruitCountPerUnit?: number;
   maxPurchaseQty: number;
   active: boolean;
   /** 多口味商品在选择规格后展示对应包装图。 */
@@ -1147,10 +1149,10 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         name: "大果 6个装",
         subtitle: "约17.5–18斤/箱",
         priceCny: 188,
-        featured: true,
         quantityPerOrder: 1,
         unitLabel: "箱",
         netContentText: "6个装 · 约17.5–18斤/箱",
+        fruitCountPerUnit: 6,
         maxPurchaseQty: 10,
         active: true,
         image: majiayouImage("majiayou-hero.webp"),
@@ -1163,6 +1165,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         quantityPerOrder: 1,
         unitLabel: "箱",
         netContentText: "4个装 · 约8.5–9.5斤/箱",
+        fruitCountPerUnit: 4,
         maxPurchaseQty: 10,
         active: true,
         image: majiayouImage("majiayou-hero.webp"),
@@ -1172,9 +1175,11 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         name: "中果 2个装",
         subtitle: "约5.0–5.5斤/箱",
         priceCny: 49,
+        featured: true,
         quantityPerOrder: 1,
         unitLabel: "箱",
         netContentText: "2个装 · 约5.0–5.5斤/箱",
+        fruitCountPerUnit: 2,
         maxPurchaseQty: 10,
         active: true,
         image: majiayouImage("majiayou-hero.webp"),
@@ -1187,6 +1192,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         quantityPerOrder: 1,
         unitLabel: "箱",
         netContentText: "2个装 · 约3.6–4斤/箱",
+        fruitCountPerUnit: 2,
         maxPurchaseQty: 10,
         active: true,
         image: majiayouImage("majiayou-hero.webp"),
@@ -1199,6 +1205,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         quantityPerOrder: 1,
         unitLabel: "箱",
         netContentText: "2个装 · 约6.8–7.5斤/箱",
+        fruitCountPerUnit: 2,
         maxPurchaseQty: 10,
         active: true,
         image: majiayouImage("majiayou-hero.webp"),

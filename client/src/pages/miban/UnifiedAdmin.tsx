@@ -23,6 +23,7 @@ import {
   Copy,
   ShieldCheck,
   UserCog,
+  UserRound,
   Percent,
   Building2,
   Search,
@@ -439,100 +440,21 @@ function OrdersPanel() {
       </div>
     );
 
-  // 统计数据（不提前 return，用空数组兼容无订单情况）
+  // 先应用搜索和高级筛选，顶部各状态统计与列表共用同一筛选口径。
   const safeOrders = orders ?? [];
-  const total = safeOrders.length;
-  const countPending = safeOrders.filter(
-    (o: any) => o.status === "pending"
-  ).length;
-  const countConfirmed = safeOrders.filter(
-    (o: any) => o.status === "confirmed"
-  ).length;
-  const countPacking = safeOrders.filter(
-    (o: any) => o.status === "packing"
-  ).length;
-  const countShipped = safeOrders.filter(
-    (o: any) => o.status === "shipped"
-  ).length;
-  const countDelivered = safeOrders.filter(
-    (o: any) => o.status === "delivered"
-  ).length;
-  const countCancelled = safeOrders.filter(
-    (o: any) => o.status === "cancelled"
-  ).length;
-  const totalRevenue = safeOrders
-    .filter((o: any) => o.status !== "cancelled")
-    .reduce((s: number, o: any) => s + Number(o.totalPrice ?? 0), 0);
 
-  const stats = [
-    {
-      key: "all",
-      label: "全部",
-      count: total,
-      color: "#FF6900",
-      bg: "#fff5ee",
-    },
-    {
-      key: "pending",
-      label: "待处理",
-      count: countPending,
-      color: "#FF6900",
-      bg: "#fff5ee",
-    },
-    {
-      key: "confirmed",
-      label: "已确认",
-      count: countConfirmed,
-      color: "#FF6900",
-      bg: "#fff5ee",
-    },
-    {
-      key: "packing",
-      label: "打包中",
-      count: countPacking,
-      color: "#FF6900",
-      bg: "#fff5ee",
-    },
-    {
-      key: "shipped",
-      label: "已发货",
-      count: countShipped,
-      color: "#FF6900",
-      bg: "#fff5ee",
-    },
-    {
-      key: "delivered",
-      label: "已送达",
-      count: countDelivered,
-      color: "#6b7280",
-      bg: "#f5f5f5",
-    },
-    {
-      key: "cancelled",
-      label: "已取消",
-      count: countCancelled,
-      color: "#6b7280",
-      bg: "#f5f5f5",
-    },
-  ];
-
-  const baseOrders =
-    filterStatus === "all"
-      ? safeOrders
-      : safeOrders.filter((o: any) => o.status === filterStatus);
-
-  // 日期筛选
-  let dateFilteredOrders = baseOrders;
+  // 日期筛选与卡片上的北京时间一致，起止日期均包含当天完整时间。
+  let dateFilteredOrders = safeOrders;
   if (filterStartDate) {
     dateFilteredOrders = dateFilteredOrders.filter((o: any) => {
       const d = new Date(o.createdAt);
-      return d >= new Date(filterStartDate + "T00:00:00");
+      return d >= new Date(filterStartDate + "T00:00:00+08:00");
     });
   }
   if (filterEndDate) {
     dateFilteredOrders = dateFilteredOrders.filter((o: any) => {
       const d = new Date(o.createdAt);
-      return d <= new Date(filterEndDate + "T23:59:59");
+      return d <= new Date(filterEndDate + "T23:59:59.999+08:00");
     });
   }
 
@@ -600,7 +522,7 @@ function OrdersPanel() {
     );
   }
 
-  const filteredOrders =
+  const matchingOrders =
     searchText.trim() === ""
       ? userFilteredOrders
       : userFilteredOrders.filter((o: any) => {
@@ -615,9 +537,92 @@ function OrdersPanel() {
             (o.trackingNo ?? "").toLowerCase().includes(kw) ||
             (o.userNote ?? "").toLowerCase().includes(kw) ||
             (o.adminNote ?? "").toLowerCase().includes(kw) ||
-            (o.userName ?? "").toLowerCase().includes(kw)
+            (o.userName ?? "").toLowerCase().includes(kw) ||
+            (o.userUsername ?? "").toLowerCase().includes(kw)
           );
         });
+
+  // 状态按钮展示当前搜索/高级筛选范围内的分布；选中状态只限制下方列表。
+  // 否则点“待处理”后其他状态都会变成 0，无法了解同一日期范围的订单概览。
+  const total = matchingOrders.length;
+  const countPending = matchingOrders.filter(
+    (o: any) => o.status === "pending"
+  ).length;
+  const countConfirmed = matchingOrders.filter(
+    (o: any) => o.status === "confirmed"
+  ).length;
+  const countPacking = matchingOrders.filter(
+    (o: any) => o.status === "packing"
+  ).length;
+  const countShipped = matchingOrders.filter(
+    (o: any) => o.status === "shipped"
+  ).length;
+  const countDelivered = matchingOrders.filter(
+    (o: any) => o.status === "delivered"
+  ).length;
+  const countCancelled = matchingOrders.filter(
+    (o: any) => o.status === "cancelled"
+  ).length;
+  const totalRevenue = matchingOrders
+    .filter((o: any) => o.status !== "cancelled")
+    .reduce((s: number, o: any) => s + Number(o.totalPrice ?? 0), 0);
+
+  const stats = [
+    {
+      key: "all",
+      label: "全部",
+      count: total,
+      color: "#FF6900",
+      bg: "#fff5ee",
+    },
+    {
+      key: "pending",
+      label: "待处理",
+      count: countPending,
+      color: "#FF6900",
+      bg: "#fff5ee",
+    },
+    {
+      key: "confirmed",
+      label: "已确认",
+      count: countConfirmed,
+      color: "#FF6900",
+      bg: "#fff5ee",
+    },
+    {
+      key: "packing",
+      label: "打包中",
+      count: countPacking,
+      color: "#FF6900",
+      bg: "#fff5ee",
+    },
+    {
+      key: "shipped",
+      label: "已发货",
+      count: countShipped,
+      color: "#FF6900",
+      bg: "#fff5ee",
+    },
+    {
+      key: "delivered",
+      label: "已送达",
+      count: countDelivered,
+      color: "#6b7280",
+      bg: "#f5f5f5",
+    },
+    {
+      key: "cancelled",
+      label: "已取消",
+      count: countCancelled,
+      color: "#6b7280",
+      bg: "#f5f5f5",
+    },
+  ];
+
+  const filteredOrders =
+    filterStatus === "all"
+      ? matchingOrders
+      : matchingOrders.filter((o: any) => o.status === filterStatus);
 
   const hasAdvFilter = !!(
     filterStartDate ||
@@ -684,7 +689,7 @@ function OrdersPanel() {
           <input
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            placeholder="搜索收件人、手机号、地址、单号…"
+            placeholder="搜索下单人、收货人、手机号…"
             className="w-full pl-8 pr-8 py-2.5 text-[13px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-300"
           />
           {searchText && (
@@ -824,14 +829,14 @@ function OrdersPanel() {
               <TrendingUp className="w-3 h-3" />
               订单金额（元）
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5">
               <input
                 type="number"
                 min="0"
                 placeholder="最小金额"
                 value={filterMinPrice}
                 onChange={e => setFilterMinPrice(e.target.value)}
-                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
+                className="min-w-0 w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
               />
               <span className="text-[11px] text-gray-400">—</span>
               <input
@@ -840,7 +845,7 @@ function OrdersPanel() {
                 placeholder="最大金额"
                 value={filterMaxPrice}
                 onChange={e => setFilterMaxPrice(e.target.value)}
-                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
+                className="min-w-0 w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
               />
             </div>
           </div>
@@ -958,6 +963,7 @@ function OrdersPanel() {
         // 避免代收/赠送订单中把收货人误认为实际下单账号。
         const ordererName = String(order.userName ?? "").trim();
         const ordererUsername = String(order.userUsername ?? "").trim();
+        const ordererAvatar = String(order.userAvatar ?? "").trim();
         const ordererDisplayName =
           ordererName || ordererUsername || "未找到关联用户";
         const showOrdererUsername =
@@ -1091,20 +1097,6 @@ function OrdersPanel() {
             </div>
 
             <div className="mt-3 space-y-2 border-t border-gray-100 pt-2.5">
-              <div
-                data-card-export-hide="true"
-                className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4"
-              >
-                <span className="pt-px font-medium text-gray-400">下单人</span>
-                <span className="min-w-0 break-words text-right font-semibold text-gray-700">
-                  {ordererDisplayName}
-                  {showOrdererUsername && (
-                    <span className="font-normal text-gray-400">
-                      {`（${ordererUsername}）`}
-                    </span>
-                  )}
-                </span>
-              </div>
               <div className="grid grid-cols-[58px_minmax(0,1fr)] items-start gap-x-2 text-[12px] leading-4">
                 <span className="pt-px font-medium text-gray-400">收货人</span>
                 <span className="min-w-0 break-words text-right font-semibold text-gray-700">
@@ -1170,6 +1162,38 @@ function OrdersPanel() {
                   </span>
                   <span className="min-w-0 break-all text-right font-semibold text-gray-600">
                     {order.orderNo || `#${order.id}`}
+                  </span>
+                </div>
+                <div
+                  data-card-export-hide="true"
+                  className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2"
+                >
+                  <span className="pt-px font-medium text-gray-400">
+                    下单人
+                  </span>
+                  <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5 text-right font-semibold text-gray-600">
+                    {ordererAvatar ? (
+                      <img
+                        src={ordererAvatar}
+                        alt={`${ordererDisplayName}头像`}
+                        className="h-4 w-4 shrink-0 rounded-full border border-gray-100 object-cover"
+                        onError={event => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+                        <UserRound className="h-2.5 w-2.5" />
+                      </span>
+                    )}
+                    <span className="min-w-0 break-words">
+                      {ordererDisplayName}
+                      {showOrdererUsername && (
+                        <span className="font-normal text-gray-400">
+                          {`（${ordererUsername}）`}
+                        </span>
+                      )}
+                    </span>
                   </span>
                 </div>
                 <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-2">

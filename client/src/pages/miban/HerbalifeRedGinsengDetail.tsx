@@ -158,10 +158,11 @@ export default function HerbalifeRedGinsengDetail() {
           availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOnSale ===
             true)
     ) ?? [];
-  const activeSkuId = selectedSkuId || activeSkus[0]?.id || "";
+  const defaultSku = activeSkus.find(sku => sku.featured) ?? activeSkus[0];
+  const activeSkuId = selectedSkuId || defaultSku?.id || "";
   const checkoutPath = `${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}`;
   const selectedSku = currentProduct
-    ? (activeSkus.find(sku => sku.id === activeSkuId) ?? activeSkus[0])
+    ? (activeSkus.find(sku => sku.id === activeSkuId) ?? defaultSku)
     : undefined;
   const skuSelectionLabel =
     currentProduct?.detail.skuSelectionLabel ??
