@@ -360,6 +360,8 @@ function LimitedProductCartOverlay() {
       clearCart();
       utils.recharge.getBalance.invalidate();
       utils.recharge.getCnyBalance.invalidate();
+      utils.recharge.getUsdtBalanceSummary.invalidate();
+      utils.recharge.getCnyBalanceSummary.invalidate();
       setSuccess(data);
     },
     onError: (error: { message?: string }) => {

@@ -230,20 +230,31 @@ export default function HerbalifeRedGinsengDetail() {
     onSuccess: () => refetchFavorite(),
     onSettled: () => setFavoritePending(false),
   });
-  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, {
+  const cnyBalanceQuery = trpc.recharge.getCnyBalanceSummary.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchInterval: 15_000,
     refetchOnWindowFocus: true,
   });
-  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, {
+  const usdtBalanceQuery = trpc.recharge.getUsdtBalanceSummary.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchInterval: 15_000,
     refetchOnWindowFocus: true,
   });
   const usdtCnyRate = useMibanUsdtCnyRate();
   const trpcUtils = trpc.useUtils();
-  const cnyBalanceNum = Number(cnyBalance ?? 0);
-  const usdtBalanceNum = Number(usdtBalance ?? 0);
+  const cnyAvailable = Number(cnyBalanceQuery.data?.available);
+  const usdtAvailable = Number(usdtBalanceQuery.data?.available);
+  const cnyBalanceNum = Math.max(0, Number.isFinite(cnyAvailable) ? cnyAvailable : 0);
+  const usdtBalanceNum = Math.max(0, Number.isFinite(usdtAvailable) ? usdtAvailable : 0);
+  // 摘要未就绪、刷新中或请求失败时拒绝支付，绝不回退到总余额。
+  const balancesReady =
+    isAuthenticated &&
+    cnyBalanceQuery.isSuccess &&
+    usdtBalanceQuery.isSuccess &&
+    !cnyBalanceQuery.isFetching &&
+    !usdtBalanceQuery.isFetching &&
+    Number.isFinite(cnyAvailable) &&
+    Number.isFinite(usdtAvailable);
   const totalPriceU = cnyToU(totalPrice, usdtCnyRate);
   const maxCnyPayment = Math.min(cnyBalanceNum, totalPrice);
   const requestedCnyPayment = Number(cnyPaymentInput);
@@ -260,9 +271,9 @@ export default function HerbalifeRedGinsengDetail() {
     Math.max(0, totalPrice - cnyDeductAmount).toFixed(2)
   );
   const requiredUsdt = Number((remainingCnyForUsdt / usdtCnyRate).toFixed(8));
-  const cnyPartAvailable = cnyDeductAmount <= cnyBalanceNum + 0.001;
-  const usdtPartAvailable = requiredUsdt <= usdtBalanceNum + 0.00000001;
-  const combinedPaymentAvailable = cnyPartAvailable && usdtPartAvailable;
+  const cnyPartAvailable = cnyDeductAmount <= cnyBalanceNum;
+  const usdtPartAvailable = requiredUsdt <= usdtBalanceNum;
+  const combinedPaymentAvailable = balancesReady && cnyPartAvailable && usdtPartAvailable;
   const hasAvailablePaymentWallet = combinedPaymentAvailable;
   const paymentSummary =
     cnyDeductAmount > 0 && requiredUsdt > 0
@@ -285,6 +296,8 @@ export default function HerbalifeRedGinsengDetail() {
       });
       trpcUtils.recharge.getBalance.invalidate();
       trpcUtils.recharge.getCnyBalance.invalidate();
+      trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
+      trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (error: { message?: string }) => {
       window.alert(error.message || "提交订单失败，请稍后再试");

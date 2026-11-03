@@ -11,6 +11,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
 import { getDbConnection, getDbTransactionConnection, getLedgerDb } from "./db";
+import { assertGlobalWalletDebit, fundingAmountText, fundingUnits, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import * as dbEthPosition from "./db-eth-position";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -18950,7 +18951,7 @@ ${klinesSummary}
         ledgerId: z.number(),
         id: z.number().optional(),
         userId: z.number(),
-        amount: z.number(),
+        amount: z.number().finite(),
         note: z.string().optional(),
         createdAt: z.string().optional(), // 自定义时间，格式 'YYYY-MM-DD HH:mm:ss'
       }))
@@ -18961,25 +18962,84 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
         await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "admin_adjustment");
-        const db = await getLedgerDb();
-        if (input.id) {
-          await db.execute(
-            input.createdAt
-              ? sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, created_at = ${input.createdAt}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
-              : sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        const amountText = fundingAmountText(input.amount);
+        const note = input.note || '';
+        let targetUserId = input.userId;
+        if (input.id !== undefined) {
+          // Only discover ownership outside the transaction; re-read under the user lock before writing.
+          const connection = await getDbConnection();
+          if (!connection) throw new Error('数据库连接失败，未执行手动调账');
+          const [rows] = await connection.execute(
+            'SELECT user_id FROM af_manual_balances WHERE id = ? AND ledger_id = ? LIMIT 1',
+            [input.id, input.ledgerId],
           );
-        } else {
-          // af_manual_balances 表已通过 deploy.yml 创建
-          if (input.createdAt) {
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, ${input.createdAt}, NOW())`
-            );
-          } else {
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, NOW(), NOW())`
-            );
+          const existing = (rows as any[])[0];
+          if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: '调账记录不存在或已删除' });
+          targetUserId = Number(existing.user_id);
+          if (targetUserId !== input.userId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '不可更改调账记录所属用户' });
           }
         }
+        await withGlobalWalletTransaction(targetUserId, async tx => {
+          let oldAsset: string | undefined;
+          let oldUnits = 0n;
+          if (input.id !== undefined) {
+            const [rows] = await tx.execute(
+              `SELECT ledger_id, user_id, amount,
+                      CASE WHEN COALESCE(note, '') LIKE '[CNY]%' THEN 'CNY'
+                           WHEN COALESCE(note, '') LIKE '[BALANCE_BASE]%' THEN 'BASE' ELSE 'USDT' END AS asset
+                 FROM af_manual_balances WHERE id = ? LIMIT 1 FOR UPDATE`,
+              [input.id],
+            );
+            const existing = rows[0];
+            if (!existing || Number(existing.ledger_id) !== input.ledgerId) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '调账记录不存在或已删除' });
+            }
+            if (Number(existing.user_id) !== targetUserId || targetUserId !== input.userId) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '调账记录所属用户已变化，请刷新后重试' });
+            }
+            oldAsset = existing.asset;
+            oldUnits = fundingUnits(existing.amount);
+          }
+          // Use the same SQL collation/prefix rules as the global-wallet guard, including legacy notes.
+          const [assetRows] = await tx.execute(
+            `SELECT CASE WHEN ? LIKE '[CNY]%' THEN 'CNY'
+                         WHEN ? LIKE '[BALANCE_BASE]%' THEN 'BASE' ELSE 'USDT' END AS asset`,
+            [note, note],
+          );
+          const newAsset = assetRows[0].asset;
+          const newUnits = fundingUnits(amountText);
+          for (const asset of ['CNY', 'USDT'] as const) {
+            const delta = (newAsset === asset ? newUnits : 0n) - (oldAsset === asset ? oldUnits : 0n);
+            if (delta >= 0n) continue; // Do not reject unchanged/increased currencies with historical deficits.
+            const debitUnits = -delta;
+            const debit = Number(debitUnits) / 1e18;
+            // The shared guard currently accepts numbers: fail closed rather than round down an exact delta.
+            if (fundingUnits(fundingAmountText(debit)) !== debitUnits) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '调账扣减差额超出安全金额精度，请联系管理员' });
+            }
+            await assertGlobalWalletDebit(tx, targetUserId, asset, debit);
+          }
+          if (input.id !== undefined) {
+            await tx.execute(
+              input.createdAt
+                ? 'UPDATE af_manual_balances SET amount = ?, note = ?, created_at = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ? AND user_id = ?'
+                : 'UPDATE af_manual_balances SET amount = ?, note = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ? AND user_id = ?',
+              input.createdAt
+                ? [amountText, note, input.createdAt, input.id, input.ledgerId, targetUserId]
+                : [amountText, note, input.id, input.ledgerId, targetUserId],
+            );
+          } else {
+            await tx.execute(
+              input.createdAt
+                ? 'INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW())'
+                : 'INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+              input.createdAt
+                ? [input.ledgerId, targetUserId, amountText, note, input.createdAt]
+                : [input.ledgerId, targetUserId, amountText, note],
+            );
+          }
+        });
         return { success: true };
       }),
 
@@ -18992,11 +19052,45 @@ ${klinesSummary}
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        
-        const db = await getLedgerDb();
-        await db.execute(
-          sql`DELETE FROM af_manual_balances WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+
+        const connection = await getDbConnection();
+        if (!connection) throw new Error('数据库连接失败，未执行手动调账');
+        const [lookupRows] = await connection.execute(
+          'SELECT user_id FROM af_manual_balances WHERE id = ? AND ledger_id = ? LIMIT 1',
+          [input.id, input.ledgerId],
         );
+        const lookup = (lookupRows as any[])[0];
+        if (!lookup) throw new TRPCError({ code: 'NOT_FOUND', message: '调账记录不存在或已删除' });
+        const targetUserId = Number(lookup.user_id);
+        await withGlobalWalletTransaction(targetUserId, async tx => {
+          const [rows] = await tx.execute(
+            `SELECT ledger_id, user_id, amount,
+                    CASE WHEN COALESCE(note, '') LIKE '[CNY]%' THEN 'CNY'
+                         WHEN COALESCE(note, '') LIKE '[BALANCE_BASE]%' THEN 'BASE' ELSE 'USDT' END AS asset
+               FROM af_manual_balances WHERE id = ? LIMIT 1 FOR UPDATE`,
+            [input.id],
+          );
+          const existing = rows[0];
+          if (!existing || Number(existing.ledger_id) !== input.ledgerId) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: '调账记录不存在或已删除' });
+          }
+          if (Number(existing.user_id) !== targetUserId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '调账记录所属用户已变化，请刷新后重试' });
+          }
+          const oldUnits = fundingUnits(existing.amount);
+          // Removing a positive contribution is a debit; removing a negative/base mirror is not.
+          if ((existing.asset === 'CNY' || existing.asset === 'USDT') && oldUnits > 0n) {
+            const debit = Number(oldUnits) / 1e18;
+            if (fundingUnits(fundingAmountText(debit)) !== oldUnits) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '调账扣减差额超出安全金额精度，请联系管理员' });
+            }
+            await assertGlobalWalletDebit(tx, targetUserId, existing.asset, debit);
+          }
+          await tx.execute(
+            'DELETE FROM af_manual_balances WHERE id = ? AND ledger_id = ? AND user_id = ?',
+            [input.id, input.ledgerId, targetUserId],
+          );
+        });
         return { success: true };
       }),
 

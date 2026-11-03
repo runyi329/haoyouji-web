@@ -267,6 +267,8 @@ export default function TianguiPearDetail() {
       // 下单扣款后立即刷新余额显示
       trpcUtils.recharge.getBalance.invalidate();
       trpcUtils.recharge.getCnyBalance.invalidate();
+      trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
+      trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (err: any) => {
       alert(err.message || "下单失败，请重试");

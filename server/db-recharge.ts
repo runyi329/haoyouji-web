@@ -3,6 +3,7 @@ import { randomInt } from "crypto";
 import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
+import { assertGlobalWalletDebit, fundingAmountText, withGlobalWalletTransaction } from "./wallet-funding-guard";
 
 // ========== 短信通知（腾讯云SMS） ==========
 const SMS_SECRET_ID = process.env.SMS_SECRET_ID ?? '';
@@ -1548,37 +1549,8 @@ export async function transferWalletBalance(params: {
     const recipient = usersById.get(params.toUserId);
     if (!sender || !recipient) throw new Error('收款用户不存在');
 
-    let senderAvailable: number;
-    if (params.currency === 'USDT') {
-      const [manualRows] = await transaction.execute(
-        `SELECT amount FROM af_manual_balances
-          WHERE user_id = ?
-            AND COALESCE(note, '') NOT LIKE '[CNY]%'
-            AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
-          FOR UPDATE`,
-        [params.fromUserId],
-      );
-      const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
-      senderAvailable = Number(sender.balance || 0) + manualTotal;
-    } else {
-      const [manualRows] = await transaction.execute(
-        `SELECT amount FROM af_manual_balances WHERE user_id = ? AND COALESCE(note, '') LIKE '[CNY]%' FOR UPDATE`,
-        [params.fromUserId],
-      );
-      const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
-      senderAvailable = Number(sender.cny_balance || 0) + manualTotal;
-    }
-    const [holdRows] = await transaction.execute(
-      `SELECT COALESCE(SUM(amount), 0) AS frozen
-       FROM ai_wallet_project_holds
-       WHERE user_id = ? AND asset_code = ? AND status = 'active' FOR UPDATE`,
-      [params.fromUserId, params.currency],
-    );
-    const frozen = Number(asRows(holdRows)[0]?.frozen || 0);
-    senderAvailable -= frozen;
-    if (amount > senderAvailable + 1e-8) {
-      throw new Error(`可用余额不足，当前可转 ${senderAvailable.toFixed(params.currency === 'CNY' ? 2 : 4)} ${params.currency}`);
-    }
+    // 同商城扣款共用精确校验；冻结只计尚未释放的部分，且禁止epsilon负余额。
+    await assertGlobalWalletDebit(transaction, params.fromUserId, params.currency, amount);
 
     const transferNo = buildInternalTransferNumber();
     const senderName = transferDisplayName(sender);
@@ -1647,7 +1619,7 @@ export async function transferWalletBalance(params: {
 
 // 给用户添加余额 —— 全局统一资金入口
 // 所有类型均同时写入 af_manual_balances（全局流水账本），保证任何入口的钱包明细完整一致。
-// 余额计算公式：users.balance + SUM(af_manual_balances WHERE note NOT LIKE '[CNY]%')
+// 余额计算排除 [CNY] 和 [BALANCE_BASE]；所有负数记账必须扣除全局冻结额后在用户锁内校验。
 // - recharge/commission/withdraw：写 users.balance（影响余额基数）+ af_manual_balances（流水展示）
 // - reward/consume/refund：只写 af_manual_balances（余额通过 SUM 自动生效）
 export async function addUserBalance(
@@ -1658,7 +1630,26 @@ export async function addUserBalance(
   description?: string,
   ledgerId?: number
 ) {
-  const conn = await getDbConnection();
+  fundingAmountText(amount);
+  if (amount < 0) {
+    return withGlobalWalletTransaction(userId, async transaction => {
+      await assertGlobalWalletDebit(transaction, userId, 'USDT', -amount);
+      return writeUserBalance(userId, amount, type, relatedId, description, ledgerId, transaction);
+    });
+  }
+  return writeUserBalance(userId, amount, type, relatedId, description, ledgerId);
+}
+
+async function writeUserBalance(
+  userId: number,
+  amount: number,
+  type: 'recharge' | 'consume' | 'refund' | 'reward' | 'withdraw' | 'commission',
+  relatedId?: number,
+  description?: string,
+  ledgerId?: number,
+  transaction?: any,
+) {
+  const conn = transaction ?? await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
   const pool = conn as any;
 
@@ -1684,7 +1675,8 @@ export async function addUserBalance(
   // ── recharge / commission / withdraw ──────────────────────────────────────
   // 这三种类型需要更新 users.balance（影响余额基数）
   if (type === 'recharge' || type === 'commission' || type === 'withdraw') {
-    // 确保 users.balance 字段存在
+    // 严禁资金事务内执行 ALTER（MySQL会隐式提交并释放余额锁）。旧正入账保留兼容检查。
+    if (!transaction) {
     try {
       const [cols] = await pool.execute(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'balance'`
@@ -1693,10 +1685,11 @@ export async function addUserBalance(
         await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
       }
     } catch (_) {}
+    }
     // 更新 users.balance
     await pool.execute(
       `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
-      [amount, userId]
+      [fundingAmountText(amount), userId]
     );
     const [balRows] = await pool.execute(
       `SELECT balance FROM users WHERE id = ? LIMIT 1`,
@@ -1709,7 +1702,7 @@ export async function addUserBalance(
         `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
         [userId, amount.toString(), type, relatedId ?? null, newBalance.toString(), description ?? null]
       );
-    } catch (_) {}
+    } catch (error) { if (transaction) throw error; }
     // 写 af_manual_balances（全局流水，统一展示层）
     // 注意：这三种类型已经写入了 users.balance，为避免余额 SUM 公式双重计入，
     // note 加 [BALANCE_BASE] 标记，所有余额 SUM 语句均排除此标记的条目
@@ -1718,9 +1711,10 @@ export async function addUserBalance(
       const note = `[BALANCE_BASE]${buildNote(type, description)}`;
       await pool.execute(
         `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-        [targetLedgerId, userId, amount.toFixed(6), note]
+        [targetLedgerId, userId, fundingAmountText(amount), note]
       );
     } catch (e: any) {
+      if (transaction) throw e;
       console.error(`[addUserBalance] af_manual_balances 写入失败 type=${type}:`, e?.message);
     }
     console.log(`[addUserBalance] ${type} userId=${userId}, amount=${amount}, newBalance=${newBalance}`);
@@ -1733,7 +1727,7 @@ export async function addUserBalance(
   const note = buildNote(type, description);
   await pool.execute(
     `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-    [targetLedgerId, userId, amount, note]
+    [targetLedgerId, userId, fundingAmountText(amount), note]
   );
   // 写 balance_history（辅助日志）
   try {
@@ -1741,7 +1735,7 @@ export async function addUserBalance(
       `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, 0, ?)`,
       [userId, amount.toString(), type, relatedId ?? null, description ?? null]
     );
-  } catch (_) {}
+  } catch (error) { if (transaction) throw error; }
   console.log(`[addUserBalance] ${type} 写入 af_manual_balances userId=${userId}, amount=${amount}, ledgerId=${targetLedgerId}`);
   return amount;
 }
@@ -2028,46 +2022,12 @@ export async function requestWithdraw(
   paymentAccountId: number,
   remark?: string
 ): Promise<{ success: boolean; message: string }> {
-  const db = await getDb();
-
-  // 检查用户余额
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (!user || user.length === 0) {
-    throw new Error('用户不存在');
-  }
-
-  const balance = parseFloat(user[0].balance || '0');
-
-  if (balance < amount) {
-    throw new Error('余额不足');
-  }
-
-  if (amount < 10) {
+  if (!Number.isFinite(amount) || amount < 10) {
     throw new Error('最低提现金额为 10 USDT');
   }
 
-  // 扣除余额
-  await db
-    .update(users)
-    .set({
-      balance: sql`${users.balance} - ${amount}`,
-    })
-    .where(eq(users.id, userId));
-
-  // 记录余额变动
-  await db.insert(balanceHistory).values({
-    userId,
-    amount: -amount, // 负数表示减少
-    type: 'withdraw',
-    relatedId: paymentAccountId,
-    balance: balance - amount,
-    description: remark || `提现 ${amount} USDT`,
-  });
+  // 共用入口同时锁用户、扣除全部冻结并原子写主余额和辅助流水。
+  await addUserBalance(userId, -amount, 'withdraw', paymentAccountId, remark || `提现 ${amount} USDT`);
 
   return {
     success: true,
@@ -2243,13 +2203,12 @@ export async function requestSntWithdraw(
   ledgerId: number = 52,  // 默认账本52（谷底增筹），支持未来扩展
 ): Promise<{ success: boolean; message: string; withdrawalId: number }> {
   await ensureWithdrawalTables();
-  const conn = await getDbConnection();
-  if (!conn) throw new Error('数据库连接失败');
-
-  if (sntAmount < 10) {
+  if (!Number.isFinite(sntAmount) || sntAmount < 10) {
     throw new Error('最低提现金额为 10 USDT');
   }
 
+  const result = await withGlobalWalletTransaction(userId, async conn => {
+  await assertGlobalWalletDebit(conn, userId, 'USDT', sntAmount);
   // 检查用户是否存在
   const [userRows] = await conn.execute(
     `SELECT id FROM users WHERE id = ? LIMIT 1`,
@@ -2258,10 +2217,10 @@ export async function requestSntWithdraw(
   const userArr = userRows as any[];
   if (!userArr.length) throw new Error('用户不存在');
 
-  // 按账本隔离计算余额：只计算该账本的充值和手动调账
+  // 钱包资金是全局的；账本只用于申请归属，不得用作冻结/可用金额过滤条件。
   const balance = await getUserBalance(userId, ledgerId);
   if (balance < sntAmount) {
-    throw new Error(`余额不足，当前账本可提现余额 ${balance.toFixed(2)} USDT`);
+    throw new Error(`余额不足，当前钱包总余额 ${balance.toFixed(2)} USDT`);
   }
 
   // 检查是否有未处理的提现申请（按账本隔离：检查同一账本的pending/processing，包含旧数据 ledger_id IS NULL）
@@ -2285,24 +2244,25 @@ export async function requestSntWithdraw(
   await conn.execute(
     `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
      VALUES (?, ?, ?, ?, NOW(), NOW())`,
-    [ledgerId, userId, -sntAmount, `提现申请冻结 #${insertId} ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
+    [ledgerId, userId, fundingAmountText(-sntAmount), `提现申请冻结 #${insertId} ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
   );
 
   // 同时记录到 balance_history 方便历史查询
   await conn.execute(
     `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
      VALUES (?, ?, 'withdraw', ?, ?, ?)`,
-    [userId, -sntAmount, insertId, balance - sntAmount, `提现申请 ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
+    [userId, fundingAmountText(-sntAmount), insertId, balance - sntAmount, `提现申请 ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
   );
-
-  // 短信通知：如果是52号账本YJH下线，发送短信
-  notifyIfYJHDownline(userId, 'withdraw', sntAmount).catch(() => {});
 
   return {
     success: true,
     message: '提现申请已提交，等待管理员审核',
     withdrawalId: insertId,
   };
+  });
+  // 提交成功后才发送通知，不能在尚可能回滚的资金事务内通知。
+  notifyIfYJHDownline(userId, 'withdraw', sntAmount).catch(() => {});
+  return result;
 }
 
 // 获取用户 SNT 提现记录
@@ -2828,7 +2788,23 @@ export async function adminAdjustCnyBalance(params: {
   note: string;
   operatorId: number;
 }): Promise<{ success: boolean }> {
-  const conn = await getDbConnection();
+  fundingAmountText(params.amount);
+  if (params.amount < 0) {
+    return withGlobalWalletTransaction(params.userId, async transaction => {
+      await assertGlobalWalletDebit(transaction, params.userId, 'CNY', -params.amount);
+      return writeCnyBalance(params, transaction);
+    });
+  }
+  return writeCnyBalance(params);
+}
+
+async function writeCnyBalance(params: {
+  userId: number;
+  amount: number;
+  note: string;
+  operatorId: number;
+}, transaction?: any): Promise<{ success: boolean }> {
+  const conn = transaction ?? await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
   // 获取最近一个 ledger_id（复用现有逻辑，CNY 调账也挂在账本下）
   const [ledgerRows] = await conn.execute(
@@ -2839,7 +2815,7 @@ export async function adminAdjustCnyBalance(params: {
   const noteText = `[CNY]${params.note || ''}`;
   await conn.execute(
     `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-    [ledgerId, params.userId, params.amount, noteText]
+    [ledgerId, params.userId, fundingAmountText(params.amount), noteText]
   );
   return { success: true };
 }
@@ -2867,6 +2843,28 @@ export async function getAllUsersCnyBalance(): Promise<any[]> {
 }
 
 // ── 撤回充值订单 ────────────────────────────────────────────────────────────────
+/** 先取得归属用户，再锁用户及原记录；避免撤回与消费、冻结交叉透支。 */
+async function withWalletRecordTransaction<T>(
+  table: 'recharge_orders' | 'af_manual_balances' | 'balance_history',
+  id: number,
+  work: (transaction: any, row: any) => Promise<T>,
+): Promise<T> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const [lookup] = await (conn as any).execute(`SELECT user_id FROM ${table} WHERE id = ? LIMIT 1`, [id]);
+  const owner = lookup?.[0];
+  if (!owner) throw new Error('钱包记录不存在');
+  return withGlobalWalletTransaction(Number(owner.user_id), async transaction => {
+    const assetColumn = table === 'af_manual_balances'
+      ? ", CASE WHEN COALESCE(note, '') LIKE '[CNY]%' THEN 'CNY' WHEN COALESCE(note, '') LIKE '[BALANCE_BASE]%' THEN 'BASE' ELSE 'USDT' END AS funding_asset"
+      : '';
+    const [rows] = await transaction.execute(`SELECT *${assetColumn} FROM ${table} WHERE id = ? LIMIT 1 FOR UPDATE`, [id]);
+    const row = rows?.[0];
+    if (!row || Number(row.user_id) !== Number(owner.user_id)) throw new Error('钱包记录已变更，请刷新后重试');
+    return work(transaction, row);
+  });
+}
+
 /**
  * 撤回一笔已完成的充值订单
  * @param mode 'reverse' = 写反向记录（推荐）；'delete' = 直接删除原流水记录
@@ -2876,25 +2874,18 @@ export async function adminRevokeRecharge(
   orderId: number,
   mode: 'reverse' | 'delete'
 ) {
-  const conn = await getDbConnection();
-  if (!conn) throw new Error('数据库连接失败');
-  const pool = conn as any;
-
-  // 查询订单
-  const [[orderRow]] = await pool.execute(
-    `SELECT * FROM recharge_orders WHERE id = ? LIMIT 1`,
-    [orderId]
-  ) as any[];
-  if (!orderRow) throw new Error('订单不存在');
+  return withWalletRecordTransaction('recharge_orders', orderId, async (pool, orderRow) => {
   if (orderRow.status !== 'completed') throw new Error('只能撤回已完成的订单');
 
   const userId = Number(orderRow.user_id);
   const amount = parseFloat(orderRow.actual_amount ?? orderRow.amount ?? '0');
+  fundingAmountText(amount);
+  if (amount > 0) await assertGlobalWalletDebit(pool, userId, 'USDT', amount);
 
   if (mode === 'reverse') {
     // 写一条反向退款记录，余额扣回
     const desc = `撤回误操作（关联订单#${orderId}，操作人ID:${adminId}）`;
-    await addUserBalance(userId, -amount, 'refund', orderId, desc);
+    await writeUserBalance(userId, -amount, 'refund', orderId, desc, undefined, pool);
   } else {
     // 直接删除 balance_history 中该订单对应的那条充值记录，并扣回余额
     await pool.execute(
@@ -2914,6 +2905,7 @@ export async function adminRevokeRecharge(
   );
 
   return { success: true, userId, amount, mode };
+  });
 }
 
 // ── 管理员撤回统一钱包流水 ─────────────────────────────────────────────────────
@@ -2926,16 +2918,7 @@ export async function adminRevokeManualBalance(
   manualId: number,
   mode: 'reverse' | 'delete'
 ) {
-  const conn = await getDbConnection();
-  if (!conn) throw new Error('数据库连接失败');
-  const pool = conn as any;
-
-  const [[row]] = await pool.execute(
-    `SELECT id, ledger_id, user_id, amount, note FROM af_manual_balances WHERE id = ? LIMIT 1`,
-    [manualId]
-  ) as any[];
-  if (!row) throw new Error('手动来源流水不存在');
-
+  return withWalletRecordTransaction('af_manual_balances', manualId, async (pool, row) => {
   const note = String(row.note ?? '');
   if (note.includes('撤回误操作')) {
     throw new Error('该记录是撤回操作本身，不可再次撤回');
@@ -2947,19 +2930,30 @@ export async function adminRevokeManualBalance(
   const ledgerId = Number(row.ledger_id);
   const userId = Number(row.user_id);
   const amount = parseFloat(row.amount ?? '0');
+  const currency = row.funding_asset === 'CNY' ? 'CNY' as const : 'USDT' as const;
+  fundingAmountText(amount);
+  if (amount > 0 && (mode === 'reverse' || row.funding_asset !== 'BASE')) {
+    await assertGlobalWalletDebit(pool, userId, currency, amount);
+  }
 
   if (mode === 'reverse') {
-    const reverseNote = `撤回误操作（关联手动流水#${manualId}，操作人ID:${adminId}）`;
+    const reverseNote = `${currency === 'CNY' ? '[CNY]' : ''}撤回误操作（关联手动流水#${manualId}，操作人ID:${adminId}）`;
+    const [previous] = await pool.execute(
+      `SELECT id FROM af_manual_balances WHERE user_id = ? AND note LIKE ? LIMIT 1 FOR UPDATE`,
+      [userId, `%关联手动流水#${manualId}，%`],
+    );
+    if (previous?.length) throw new Error('该流水已撤回，请刷新后查看');
     await pool.execute(
       `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
        VALUES (?, ?, ?, ?, NOW(), NOW())`,
-      [ledgerId, userId, -amount, reverseNote]
+      [ledgerId, userId, fundingAmountText(-amount), reverseNote]
     );
   } else {
     await pool.execute(`DELETE FROM af_manual_balances WHERE id = ? LIMIT 1`, [manualId]);
   }
 
-  return { success: true, ledgerId, userId, amount, currency: 'USDT', mode };
+  return { success: true, ledgerId, userId, amount, currency, mode };
+  });
 }
 
 /**
@@ -2971,17 +2965,7 @@ export async function adminRevokeBalanceHistory(
   historyId: number,
   mode: 'reverse' | 'delete'
 ) {
-  const conn = await getDbConnection();
-  if (!conn) throw new Error('数据库连接失败');
-  const pool = conn as any;
-
-  // 查询流水记录
-  const [[row]] = await pool.execute(
-    `SELECT * FROM balance_history WHERE id = ? LIMIT 1`,
-    [historyId]
-  ) as any[];
-  if (!row) throw new Error('流水记录不存在');
-
+  return withWalletRecordTransaction('balance_history', historyId, async (pool, row) => {
   // 已经是撤回记录本身，不允许再撤回撤回
   if (String(row.description ?? '').includes('撤回误操作')) {
     throw new Error('该记录是撤回操作本身，不可再次撤回');
@@ -2990,6 +2974,9 @@ export async function adminRevokeBalanceHistory(
   const userId = Number(row.user_id);
   const amount = parseFloat(row.amount ?? '0');
   const currency = String(row.currency ?? 'USDT');
+  if (currency !== 'CNY' && currency !== 'USDT') throw new Error('该币种流水须使用对应数字资产钱包处理');
+  fundingAmountText(amount);
+  if (amount > 0) await assertGlobalWalletDebit(pool, userId, currency, amount);
 
   if (mode === 'reverse') {
     const desc = `撤回误操作（关联流水#${historyId}，操作人ID:${adminId}）`;
@@ -3010,7 +2997,7 @@ export async function adminRevokeBalanceHistory(
       );
     } else {
       // USDT
-      await addUserBalance(userId, -amount, 'refund', historyId, desc);
+      await writeUserBalance(userId, -amount, 'refund', historyId, desc, undefined, pool);
     }
   } else {
     // 直接删除该条流水，并扣回余额
@@ -3029,6 +3016,7 @@ export async function adminRevokeBalanceHistory(
   }
 
   return { success: true, userId, amount, currency, mode };
+  });
 }
 
 // ── 编辑备注（不涉及金额，只更新 description/note 字段）────────────────────────

@@ -2,9 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 
-const CNY_EPSILON = 0.001;
-const USDT_EPSILON = 0.00000001;
-
 export type MibanMixedPayment = {
   cnyBalance: number;
   usdtBalance: number;
@@ -31,7 +28,7 @@ export function useMibanMixedPayment(
   enabled = true
 ): MibanMixedPayment {
   const totalCny = Math.max(0, Number(totalCnyInput) || 0);
-  const { data: cnyBalanceData } = trpc.recharge.getCnyBalance.useQuery(
+  const cnyBalanceQuery = trpc.recharge.getCnyBalanceSummary.useQuery(
     undefined,
     {
       enabled,
@@ -39,7 +36,7 @@ export function useMibanMixedPayment(
       refetchOnWindowFocus: true,
     }
   );
-  const { data: usdtBalanceData } = trpc.recharge.getBalance.useQuery(
+  const usdtBalanceQuery = trpc.recharge.getUsdtBalanceSummary.useQuery(
     undefined,
     {
       enabled,
@@ -50,8 +47,19 @@ export function useMibanMixedPayment(
   const usdtCnyRate = useMibanUsdtCnyRate();
   const [cnyInput, setCnyInputValue] = useState("");
 
-  const cnyBalance = Number(cnyBalanceData ?? 0);
-  const usdtBalance = Number(usdtBalanceData ?? 0);
+  const cnyAvailable = Number(cnyBalanceQuery.data?.available);
+  const usdtAvailable = Number(usdtBalanceQuery.data?.available);
+  const cnyBalance = Math.max(0, Number.isFinite(cnyAvailable) ? cnyAvailable : 0);
+  const usdtBalance = Math.max(0, Number.isFinite(usdtAvailable) ? usdtAvailable : 0);
+  // 摘要未就绪、刷新中或请求失败时拒绝支付，绝不回退到总余额。
+  const balancesReady =
+    enabled &&
+    cnyBalanceQuery.isSuccess &&
+    usdtBalanceQuery.isSuccess &&
+    !cnyBalanceQuery.isFetching &&
+    !usdtBalanceQuery.isFetching &&
+    Number.isFinite(cnyAvailable) &&
+    Number.isFinite(usdtAvailable);
   const maxCnyAmount = Math.min(cnyBalance, totalCny);
   const requestedCnyAmount = Number(cnyInput);
   const cnyAmount = Number(
@@ -63,8 +71,7 @@ export function useMibanMixedPayment(
   const remainingCny = Number(Math.max(0, totalCny - cnyAmount).toFixed(2));
   const usdtAmount = Number((remainingCny / usdtCnyRate).toFixed(8));
   const canPay =
-    cnyAmount <= cnyBalance + CNY_EPSILON &&
-    usdtAmount <= usdtBalance + USDT_EPSILON;
+    balancesReady && cnyAmount <= cnyBalance && usdtAmount <= usdtBalance;
 
   const paymentSummary = useMemo(() => {
     if (cnyAmount > 0 && usdtAmount > 0) {

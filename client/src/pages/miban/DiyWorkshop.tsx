@@ -307,6 +307,8 @@ export default function DiyWorkshop() {
       // 下单扣款后立即刷新余额显示
       trpcUtils.recharge.getBalance.invalidate();
       trpcUtils.recharge.getCnyBalance.invalidate();
+      trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
+      trpcUtils.recharge.getCnyBalanceSummary.invalidate();
     },
     onError: (err: any) => {
       const msg = err?.message ?? "下单失败";

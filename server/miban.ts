@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
 import {
   mibanCartItems,
   mibanSavedRecipes,
@@ -17,15 +18,20 @@ import {
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { TRPCError } from "@trpc/server";
-import { getDb, getDbConnection } from "./db";
+import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { sdk } from "./_core/sdk";
 import { ONE_YEAR_MS } from "@shared/const";
 import {
-  getUserCnyBalance,
   adminAdjustCnyBalance,
   addUserBalance,
-  getUserBalance,
 } from "./db-recharge";
+import {
+  assertGlobalWalletDebit,
+  debitGlobalWallet,
+  fundingAmountText,
+  getGlobalWalletFundingBalance,
+  withGlobalWalletTransaction,
+} from "./wallet-funding-guard";
 import {
   adjustMultiAssetBalance,
   ensureMultiAssetWalletInfrastructure,
@@ -168,8 +174,11 @@ async function deleteUserRecipe(id: number, userId: number) {
     );
 }
 
-async function createOrder(data: typeof mibanOrders.$inferInsert) {
-  const db = await getDb();
+async function createOrder(
+  data: typeof mibanOrders.$inferInsert,
+  transaction?: any
+) {
+  const db = transaction ? drizzle(transaction) : await getDb();
   if (!db) throw new Error("DB not available");
   try {
     console.log("[Miban] createOrder data:", JSON.stringify(data));
@@ -436,6 +445,32 @@ async function ensureLimitedProductManagementTables() {
   return conn;
 }
 
+type LimitedStockTransactionConnection = NonNullable<
+  Awaited<ReturnType<typeof getDbTransactionConnection>>
+>;
+
+async function getLimitedStockTransactionConnection(): Promise<LimitedStockTransactionConnection> {
+  // DDL 和默认状态补齐必须在事务开始前完成，不能导致库存或钱包事务隐式提交。
+  await ensureLimitedProductManagementTables();
+  const conn = await getDbTransactionConnection();
+  if (!conn) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "限时商品管理服务暂不可用",
+    });
+  }
+  return conn;
+}
+
+async function closeLimitedStockTransactionConnection(
+  conn: LimitedStockTransactionConnection
+) {
+  try {
+    if ("release" in conn) conn.release();
+    else await conn.end();
+  } catch {}
+}
+
 async function snapshotLimitedCommissionLines(lines: LimitedCommissionLine[]) {
   const conn = await ensureLimitedProductManagementTables();
   try {
@@ -537,7 +572,7 @@ async function releaseLimitedSkuStock(
   operatorUserId: number | null,
   note: string
 ) {
-  const conn = await ensureLimitedProductManagementTables();
+  const conn = await getLimitedStockTransactionConnection();
   try {
     await (conn as any).beginTransaction();
     const [rows] = await (conn as any).execute(
@@ -592,9 +627,7 @@ async function releaseLimitedSkuStock(
     } catch {}
     throw error;
   } finally {
-    try {
-      await (conn as any).end();
-    } catch {}
+    await closeLimitedStockTransactionConnection(conn);
   }
 }
 
@@ -605,10 +638,11 @@ async function reserveLimitedSkuStock(
   operatorUserId: number,
   orderNo: string
 ) {
-  const conn = await ensureLimitedProductManagementTables();
+  const conn = await getLimitedStockTransactionConnection();
   try {
+    await (conn as any).beginTransaction();
     const [rows] = await (conn as any).execute(
-      `SELECT is_active, stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1`,
+      `SELECT is_active, stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1 FOR UPDATE`,
       [productKey, skuId]
     );
     const state = (rows as any[])[0];
@@ -616,7 +650,10 @@ async function reserveLimitedSkuStock(
       throw new TRPCError({ code: "NOT_FOUND", message: "该商品规格已下架" });
     }
     const before = Number(state.stock_qty);
-    if (before < 0) return false;
+    if (before < 0) {
+      await (conn as any).rollback();
+      return false;
+    }
     if (before < quantity) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -650,11 +687,15 @@ async function reserveLimitedSkuStock(
         `用户下单扣减库存 #${orderNo}`,
       ]
     );
+    await (conn as any).commit();
     return true;
-  } finally {
+  } catch (error) {
     try {
-      await (conn as any).end();
+      await (conn as any).rollback();
     } catch {}
+    throw error;
+  } finally {
+    await closeLimitedStockTransactionConnection(conn);
   }
 }
 
@@ -662,9 +703,11 @@ async function linkLimitedStockDeductionToOrder(
   productKey: string,
   skuId: string,
   orderNo: string,
-  orderId: number
+  orderId: number,
+  transaction?: any
 ) {
-  const conn = await ensureLimitedProductManagementTables();
+  // 外部钱包事务仅借用连接执行关联；不得初始化表或接管事务生命周期。
+  const conn = transaction ?? (await ensureLimitedProductManagementTables());
   try {
     const [result] = await (conn as any).execute(
       `UPDATE miban_limited_stock_movements
@@ -677,9 +720,11 @@ async function linkLimitedStockDeductionToOrder(
       throw new Error(`订单 ${orderNo} 的库存扣减流水关联失败`);
     }
   } finally {
-    try {
-      await (conn as any).end();
-    } catch {}
+    if (!transaction) {
+      try {
+        await (conn as any).end();
+      } catch {}
+    }
   }
 }
 
@@ -688,7 +733,7 @@ async function reserveLimitedSkuStocks(
   operatorUserId: number,
   orderNo: string
 ) {
-  const conn = await ensureLimitedProductManagementTables();
+  const conn = await getLimitedStockTransactionConnection();
   const managed: LimitedProductLine[] = [];
   const snapshots: Array<LimitedProductLine & { stockBefore: number }> = [];
   const sortedLines = [...lines].sort((a, b) =>
@@ -755,21 +800,21 @@ async function reserveLimitedSkuStocks(
     } catch {}
     throw error;
   } finally {
-    try {
-      await (conn as any).end();
-    } catch {}
+    await closeLimitedStockTransactionConnection(conn);
   }
 }
 
 async function linkLimitedStockDeductionsToOrder(
   lines: LimitedProductLine[],
   orderNo: string,
-  orderId: number
+  orderId: number,
+  transaction?: any
 ) {
   if (lines.length === 0) return;
-  const conn = await ensureLimitedProductManagementTables();
+  // 传入钱包事务时不做 DDL、种子写入或嵌套事务；仅独立调用拥有自己的事务连接。
+  const conn = transaction ?? (await getLimitedStockTransactionConnection());
   try {
-    await (conn as any).beginTransaction();
+    if (!transaction) await (conn as any).beginTransaction();
     for (const line of lines) {
       const [result] = await (conn as any).execute(
         `UPDATE miban_limited_stock_movements
@@ -782,16 +827,18 @@ async function linkLimitedStockDeductionsToOrder(
         throw new Error(`订单 ${orderNo} 的库存扣减流水关联失败`);
       }
     }
-    await (conn as any).commit();
+    if (!transaction) await (conn as any).commit();
   } catch (error) {
-    try {
-      await (conn as any).rollback();
-    } catch {}
+    if (!transaction) {
+      try {
+        await (conn as any).rollback();
+      } catch {}
+    }
     throw error;
   } finally {
-    try {
-      await (conn as any).end();
-    } catch {}
+    if (!transaction) {
+      await closeLimitedStockTransactionConnection(conn);
+    }
   }
 }
 
@@ -803,7 +850,7 @@ async function releaseLimitedSkuStocks(
   note: string
 ) {
   if (lines.length === 0) return 0;
-  const conn = await ensureLimitedProductManagementTables();
+  const conn = await getLimitedStockTransactionConnection();
   let released = 0;
   const sortedLines = [...lines].sort((a, b) =>
     `${a.productKey}:${a.skuId}`.localeCompare(`${b.productKey}:${b.skuId}`)
@@ -858,9 +905,7 @@ async function releaseLimitedSkuStocks(
     } catch {}
     throw error;
   } finally {
-    try {
-      await (conn as any).end();
-    } catch {}
+    await closeLimitedStockTransactionConnection(conn);
   }
 }
 
@@ -3101,7 +3146,7 @@ export const mibanOrderRouter = router({
           })
         ),
         totalWeightJin: z.number().min(1, "重量不能为0"),
-        totalPrice: z.number(),
+        totalPrice: z.number().finite().positive("订单金额必须大于0"),
         receiverName: z.string().min(1),
         receiverPhone: z.string().min(11),
         receiverAddress: z.string().min(5),
@@ -3125,10 +3170,13 @@ export const mibanOrderRouter = router({
       const totalCny = Number(
         (subMonths !== null ? singleCny * subMonths : singleCny).toFixed(2)
       ); // 本次实际扣款总额
+      if (!Number.isFinite(totalCny) || totalCny <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "订单金额必须大于0且有效" });
+      }
 
-      // 1. 查询用户钱包余额
-      const cnyBalance = await getUserCnyBalance(userId);
-      const usdtBalance = await getUserBalance(userId);
+      // 1. 仅预检全局钱包可用余额；扣款时会在锁定用户行的事务内再次校验。
+      const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
+      const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
       const usdtRate = Number(Number(await getUsdtCnyRate()).toFixed(4)); // 1 USDT = ? CNY
       if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
         throw new TRPCError({
@@ -3139,17 +3187,17 @@ export const mibanOrderRouter = router({
 
       // 2. 用户可指定本次使用的人民币；剩余金额由 U 按订单时汇率支付。
       // 老客户端不传 cnyAmount 时，继续采用历史的“优先扣人民币”规则。
-      const requestedCny = input.cnyAmount ?? Math.min(cnyBalance, totalCny);
+      const requestedCny = input.cnyAmount ?? Math.max(0, Math.min(cnyBalance, totalCny));
       const deductCny = Number(requestedCny.toFixed(2));
-      if (deductCny > totalCny || deductCny > cnyBalance) {
+      if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
-          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.max(0, Math.min(totalCny, cnyBalance)).toFixed(2)}`,
         });
       }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
       const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
-      if (deductUsdt > usdtBalance) {
+      if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
           message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
@@ -3204,82 +3252,75 @@ export const mibanOrderRouter = router({
       const orderIds: number[] = [];
       const orderNos: string[] = [];
 
-      for (let i = 0; i < totalPeriods; i++) {
-        const letters = Array.from({ length: 2 }, () =>
-          String.fromCharCode(65 + Math.floor(Math.random() * 26))
-        ).join("");
-        const digits = String(Math.floor(Math.random() * 9000) + 1000);
-        const orderNo =
-          letters + digits + (totalPeriods > 1 ? `P${i + 1}` : "");
+      // 所有订阅期订单与两币扣款共用一个事务，任一步失败均整体回滚。
+      await withGlobalWalletTransaction(userId, async transaction => {
+        for (let i = 0; i < totalPeriods; i++) {
+          const letters = Array.from({ length: 2 }, () =>
+            String.fromCharCode(65 + Math.floor(Math.random() * 26))
+          ).join("");
+          const digits = String(Math.floor(Math.random() * 9000) + 1000);
+          const orderNo =
+            letters + digits + (totalPeriods > 1 ? `P${i + 1}` : "");
 
-        // 计划发货日期：第1期立即，后续每期+1个月
-        const shipDate = new Date();
-        shipDate.setMonth(shipDate.getMonth() + i);
-        const scheduledShipDateStr = shipDate.toISOString().slice(0, 10); // YYYY-MM-DD
+          // 计划发货日期：第1期立即，后续每期+1个月
+          const shipDate = new Date();
+          shipDate.setMonth(shipDate.getMonth() + i);
+          const scheduledShipDateStr = shipDate.toISOString().slice(0, 10); // YYYY-MM-DD
 
-        // 每期分摊扣款金额（仅记录，实际一次性扣款）。最后一期承接精度尾差，保证总和准确。
-        const cnyPerPeriod = Math.floor((deductCny / totalPeriods) * 100) / 100;
-        const usdtPerPeriod = Number((deductUsdt / totalPeriods).toFixed(8));
-        const perPeriodDeductCny =
-          i === totalPeriods - 1
-            ? Number((deductCny - cnyPerPeriod * (totalPeriods - 1)).toFixed(2))
-            : cnyPerPeriod;
-        const perPeriodDeductUsdt =
-          i === totalPeriods - 1
-            ? Number(
-                (deductUsdt - usdtPerPeriod * (totalPeriods - 1)).toFixed(8)
-              )
-            : usdtPerPeriod;
+          // 每期向下分摊，最后一期承接精度尾差，保证总和准确且不出现负数分摊。
+          const cnyPerPeriod = Math.floor((deductCny / totalPeriods) * 100) / 100;
+          const usdtPerPeriod = Math.floor((deductUsdt / totalPeriods) * 1e8) / 1e8;
+          const perPeriodDeductCny =
+            i === totalPeriods - 1
+              ? Number((deductCny - cnyPerPeriod * (totalPeriods - 1)).toFixed(2))
+              : cnyPerPeriod;
+          const perPeriodDeductUsdt =
+            i === totalPeriods - 1
+              ? Number(
+                  (deductUsdt - usdtPerPeriod * (totalPeriods - 1)).toFixed(8)
+                )
+              : usdtPerPeriod;
 
-        const orderId = await createOrder({
-          orderNo,
+          const orderId = await createOrder({
+            orderNo,
+            userId,
+            recipeName: input.recipeName,
+            ingredients: JSON.stringify(input.ingredients) as any,
+            totalWeightJin: input.totalWeightJin.toString() as any,
+            totalPrice: singleCny.toString() as any,
+            receiverName: input.receiverName,
+            receiverPhone: input.receiverPhone,
+            receiverAddress: input.receiverAddress,
+            userNote: input.userNote,
+            productImg: input.productImg,
+            walletDeductCny: perPeriodDeductCny.toString() as any,
+            walletDeductUsdt: perPeriodDeductUsdt.toString() as any,
+            usdtCnyRateAtOrder: usdtRate.toString() as any,
+            commissionTrigger: commissionTriggerSnapshot,
+            subscriptionGroupId: subscriptionGroupId ?? undefined,
+            subscriptionMonths: subMonths ?? undefined,
+            subscriptionIndex: i + 1,
+            scheduledShipDate:
+              subMonths !== null ? (scheduledShipDateStr as any) : undefined,
+          }, transaction);
+          orderIds.push(orderId);
+          orderNos.push(orderNo);
+        }
+
+        const deductNote =
+          subMonths !== null
+            ? `米伴订阅${subMonths}期扣款 #${subscriptionGroupId}`
+            : `米伴订单扣款 #${orderNos[0]}`;
+        await debitGlobalWallet({
+          transaction,
           userId,
-          recipeName: input.recipeName,
-          ingredients: JSON.stringify(input.ingredients) as any,
-          totalWeightJin: input.totalWeightJin.toString() as any,
-          totalPrice: singleCny.toString() as any,
-          receiverName: input.receiverName,
-          receiverPhone: input.receiverPhone,
-          receiverAddress: input.receiverAddress,
-          userNote: input.userNote,
-          productImg: input.productImg,
-          walletDeductCny: perPeriodDeductCny.toString() as any,
-          walletDeductUsdt: perPeriodDeductUsdt.toString() as any,
-          usdtCnyRateAtOrder: usdtRate.toString() as any,
-          commissionTrigger: commissionTriggerSnapshot,
-          subscriptionGroupId: subscriptionGroupId ?? undefined,
-          subscriptionMonths: subMonths ?? undefined,
-          subscriptionIndex: i + 1,
-          scheduledShipDate:
-            subMonths !== null ? (scheduledShipDateStr as any) : undefined,
-        });
-        orderIds.push(orderId);
-        orderNos.push(orderNo);
-      }
-
-      // 6. 一次性扣款（所有订单入库后才扣）
-      const firstOrderNo = orderNos[0];
-      const deductNote =
-        subMonths !== null
-          ? `米伴订阅${subMonths}期扣款 #${subscriptionGroupId}`
-          : `米伴订单扣款 #${firstOrderNo}`;
-      if (deductCny > 0.001) {
-        await adminAdjustCnyBalance({
-          userId,
-          amount: -deductCny,
+          cnyAmount: deductCny,
+          usdtAmount: deductUsdt,
           note: deductNote,
-          operatorId: userId,
+          usdtDescription: `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+          relatedId: orderIds[0],
         });
-      }
-      if (deductUsdt > 0.000001) {
-        await addUserBalance(
-          userId,
-          -deductUsdt,
-          "reward",
-          orderIds[0],
-          `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
-        );
-      }
+      });
 
       console.log(
         `[Miban] 订单创建并扣款成功: orderIds=${orderIds.join(",")}, totalCny=${totalCny}, deductCny=${deductCny}, deductUsdt=${deductUsdt}, subMonths=${subMonths}`
@@ -3488,7 +3529,7 @@ export const mibanOrderRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const conn = await ensureLimitedProductManagementTables();
+      const conn = await getLimitedStockTransactionConnection();
       try {
         await (conn as any).beginTransaction();
         const [rows] = await (conn as any).execute(
@@ -3548,9 +3589,7 @@ export const mibanOrderRouter = router({
         } catch {}
         throw error;
       } finally {
-        try {
-          await (conn as any).end();
-        } catch {}
+        await closeLimitedStockTransactionConnection(conn);
       }
     }),
 
@@ -4544,7 +4583,7 @@ export const mibanLimitedProductRouter = router({
       if (!exists) {
         throw new TRPCError({ code: "NOT_FOUND", message: "商品分类不存在" });
       }
-      const conn = await ensureLimitedProductManagementTables();
+      const conn = await getLimitedStockTransactionConnection();
       try {
         const targetSkus = mibanLimitedProducts.flatMap(product =>
           product.brand === input.brand && product.category === input.category
@@ -4594,9 +4633,7 @@ export const mibanLimitedProductRouter = router({
         } catch {}
         throw error;
       } finally {
-        try {
-          await (conn as any).end();
-        } catch {}
+        await closeLimitedStockTransactionConnection(conn);
       }
     }),
 
@@ -4722,8 +4759,11 @@ export const mibanLimitedProductRouter = router({
 
       const userId = ctx.user!.id;
       const totalCny = Number((sku.priceCny * input.quantity).toFixed(2));
-      const cnyBalance = await getUserCnyBalance(userId);
-      const usdtBalance = await getUserBalance(userId);
+      if (!Number.isFinite(totalCny) || totalCny <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "订单金额必须大于0且有效" });
+      }
+      const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
+      const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
       const usdtRateRaw = await getUsdtCnyRate();
       // 按订单表既有的四位小数精度固化汇率，实际U扣款和退款都能用同一快照复核。
       const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
@@ -4736,15 +4776,15 @@ export const mibanLimitedProductRouter = router({
 
       // 浏览器只提交人民币分配额；剩余应付金额始终由服务端以当前汇率换算为 U。
       const deductCny = Number(input.cnyAmount.toFixed(2));
-      if (deductCny > totalCny || deductCny > cnyBalance) {
+      if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
-          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.max(0, Math.min(totalCny, cnyBalance)).toFixed(2)}`,
         });
       }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
       const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
-      if (deductUsdt > usdtBalance) {
+      if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
           message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
@@ -4796,52 +4836,47 @@ export const mibanLimitedProductRouter = router({
           colorHex: product.card.theme.accent,
         };
 
-        const orderId = await createOrder({
-          orderNo,
-          userId,
-          recipeName: `${product.detail.title} · ${sku.name}`,
-          ingredients: JSON.stringify([productLine]) as any,
-          // 旧表字段必须非空；限时商品的数量以 ingredients 中 quantity + unitLabel 为准。
-          totalWeightJin: String(input.quantity) as any,
-          totalPrice: String(totalCny) as any,
-          receiverName: input.receiverName,
-          receiverPhone: input.receiverPhone,
-          receiverAddress: input.receiverAddress,
-          userNote: input.userNote || undefined,
-          productImg: sku.image || product.detail.productImage,
-          walletDeductCny: String(deductCny) as any,
-          walletDeductUsdt: String(deductUsdt) as any,
-          usdtCnyRateAtOrder: String(usdtRate) as any,
-          commissionTrigger,
-        });
-        orderCreated = true;
-        if (stockReserved) {
-          await linkLimitedStockDeductionToOrder(
-            product.key,
-            sku.id,
+        const orderId = await withGlobalWalletTransaction(userId, async transaction => {
+          const createdOrderId = await createOrder({
             orderNo,
-            orderId
-          );
-        }
-
-        const deductNote = `米伴精选商品订单扣款 #${orderNo}`;
-        if (deductCny > 0.001) {
-          await adminAdjustCnyBalance({
             userId,
-            amount: -deductCny,
-            note: deductNote,
-            operatorId: userId,
+            recipeName: `${product.detail.title} · ${sku.name}`,
+            ingredients: JSON.stringify([productLine]) as any,
+            // 旧表字段必须非空；限时商品的数量以 ingredients 中 quantity + unitLabel 为准。
+            totalWeightJin: String(input.quantity) as any,
+            totalPrice: String(totalCny) as any,
+            receiverName: input.receiverName,
+            receiverPhone: input.receiverPhone,
+            receiverAddress: input.receiverAddress,
+            userNote: input.userNote || undefined,
+            productImg: sku.image || product.detail.productImage,
+            walletDeductCny: String(deductCny) as any,
+            walletDeductUsdt: String(deductUsdt) as any,
+            usdtCnyRateAtOrder: String(usdtRate) as any,
+            commissionTrigger,
+          }, transaction);
+          if (stockReserved) {
+            await linkLimitedStockDeductionToOrder(
+              product.key,
+              sku.id,
+              orderNo,
+              createdOrderId,
+              transaction
+            );
+          }
+          await debitGlobalWallet({
+            transaction,
+            userId,
+            cnyAmount: deductCny,
+            usdtAmount: deductUsdt,
+            note: `米伴精选商品订单扣款 #${orderNo}`,
+            usdtDescription: `米伴精选商品订单扣款 #${orderNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+            relatedId: createdOrderId,
           });
-        }
-        if (deductUsdt > 0.000001) {
-          await addUserBalance(
-            userId,
-            -deductUsdt,
-            "reward",
-            orderId,
-            `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
-          );
-        }
+          return createdOrderId;
+        });
+        // 只有钱包事务成功提交后，才保留本次预占库存。
+        orderCreated = true;
 
         console.log(
           `[Miban] 限时商品订单创建并扣款成功: orderId=${orderId}, product=${product.key}, sku=${sku.id}`
@@ -4856,8 +4891,7 @@ export const mibanLimitedProductRouter = router({
           unitLabel: sku.unitLabel,
         };
       } catch (error) {
-        // 下单记录尚未创建时才回滚库存；订单已创建后的资金异常由既有订单售后/取消链路处理，
-        // 不提前释放库存，避免出现已生成订单却再次售出的情况。
+        // 订单、库存关联及两币扣款均已回滚，提交前的任何失败都释放预占库存。
         if (stockReserved && !orderCreated) {
           await releaseLimitedSkuStock(
             product.key,
@@ -4866,7 +4900,7 @@ export const mibanLimitedProductRouter = router({
             "order_rollback",
             null,
             userId,
-            "订单创建失败，回滚预留库存"
+            "订单创建或支付失败，回滚预留库存"
           );
         }
         throw error;
@@ -4950,6 +4984,9 @@ export const mibanLimitedProductRouter = router({
         checkoutGroupKey = currentGroupKey;
         const lineTotalCents =
           Math.round(Number(sku.priceCny) * 100) * item.quantity;
+        if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "商品金额必须大于0且有效" });
+        }
         totalCents += lineTotalCents;
         resolvedLines.push({
           productKey: product.key,
@@ -4962,9 +4999,12 @@ export const mibanLimitedProductRouter = router({
       }
 
       const totalCny = Number((totalCents / 100).toFixed(2));
+      if (!Number.isFinite(totalCny) || totalCny <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "订单金额必须大于0且有效" });
+      }
       const userId = ctx.user!.id;
-      const cnyBalance = await getUserCnyBalance(userId);
-      const usdtBalance = await getUserBalance(userId);
+      const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
+      const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
       const usdtRateRaw = await getUsdtCnyRate();
       const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
       if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
@@ -4974,15 +5014,15 @@ export const mibanLimitedProductRouter = router({
         });
       }
       const deductCny = Number(input.cnyAmount.toFixed(2));
-      if (deductCny > totalCny || deductCny > cnyBalance) {
+      if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
-          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.min(totalCny, cnyBalance).toFixed(2)}`,
+          message: `人民币钱包余额不足，本次最多可使用 ¥${Math.max(0, Math.min(totalCny, cnyBalance)).toFixed(2)}`,
         });
       }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
       const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
-      if (deductUsdt > usdtBalance) {
+      if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
           message: `U 钱包余额不足，需要 ${deductUsdt.toFixed(4)} U，当前可用 ${usdtBalance.toFixed(4)} U`,
@@ -5057,53 +5097,48 @@ export const mibanLimitedProductRouter = router({
           (sum, line) => sum + line.quantity,
           0
         );
-        const orderId = await createOrder({
-          orderNo,
-          userId,
-          recipeName:
-            resolvedLines.length === 1
-              ? `${firstLine.product.detail.title} · ${firstLine.sku.name}`
-              : `${firstLine.product.brand}精选 · ${firstLine.product.detail.title}等${resolvedLines.length}款`,
-          ingredients: JSON.stringify(productLines) as any,
-          // 旧表字段必须非空；限时商品以 ingredients 中的多行数量和单位为准。
-          totalWeightJin: String(totalQuantity) as any,
-          totalPrice: String(totalCny) as any,
-          receiverName: input.receiverName,
-          receiverPhone: input.receiverPhone,
-          receiverAddress: input.receiverAddress,
-          userNote: input.userNote || undefined,
-          productImg:
-            firstLine.sku.image || firstLine.product.detail.productImage,
-          walletDeductCny: String(deductCny) as any,
-          walletDeductUsdt: String(deductUsdt) as any,
-          usdtCnyRateAtOrder: String(usdtRate) as any,
-          commissionTrigger,
-        });
-        orderCreated = true;
-        await linkLimitedStockDeductionsToOrder(
-          managedStockLines,
-          orderNo,
-          orderId
-        );
-
-        const deductNote = `米伴精选合单扣款 #${orderNo}`;
-        if (deductCny > 0.001) {
-          await adminAdjustCnyBalance({
+        const orderId = await withGlobalWalletTransaction(userId, async transaction => {
+          const createdOrderId = await createOrder({
+            orderNo,
             userId,
-            amount: -deductCny,
-            note: deductNote,
-            operatorId: userId,
-          });
-        }
-        if (deductUsdt > 0.000001) {
-          await addUserBalance(
-            userId,
-            -deductUsdt,
-            "reward",
-            orderId,
-            `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
+            recipeName:
+              resolvedLines.length === 1
+                ? `${firstLine.product.detail.title} · ${firstLine.sku.name}`
+                : `${firstLine.product.brand}精选 · ${firstLine.product.detail.title}等${resolvedLines.length}款`,
+            ingredients: JSON.stringify(productLines) as any,
+            // 旧表字段必须非空；限时商品以 ingredients 中的多行数量和单位为准。
+            totalWeightJin: String(totalQuantity) as any,
+            totalPrice: String(totalCny) as any,
+            receiverName: input.receiverName,
+            receiverPhone: input.receiverPhone,
+            receiverAddress: input.receiverAddress,
+            userNote: input.userNote || undefined,
+            productImg:
+              firstLine.sku.image || firstLine.product.detail.productImage,
+            walletDeductCny: String(deductCny) as any,
+            walletDeductUsdt: String(deductUsdt) as any,
+            usdtCnyRateAtOrder: String(usdtRate) as any,
+            commissionTrigger,
+          }, transaction);
+          await linkLimitedStockDeductionsToOrder(
+            managedStockLines,
+            orderNo,
+            createdOrderId,
+            transaction
           );
-        }
+          await debitGlobalWallet({
+            transaction,
+            userId,
+            cnyAmount: deductCny,
+            usdtAmount: deductUsdt,
+            note: `米伴精选合单扣款 #${orderNo}`,
+            usdtDescription: `米伴精选合单扣款 #${orderNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+            relatedId: createdOrderId,
+          });
+          return createdOrderId;
+        });
+        // 提交后才视为成功创建，失败时订单和扣款一起回滚并释放全部库存。
+        orderCreated = true;
         return {
           orderId,
           orderNo,
@@ -5116,14 +5151,14 @@ export const mibanLimitedProductRouter = router({
           lines: productLines,
         };
       } catch (error) {
-        // 订单记录还未生成时才释放全部库存预占；已生成订单须走取消退款售后链路。
+        // 钱包事务提交前失败，订单、库存关联和扣款均已回滚。
         if (!orderCreated) {
           await releaseLimitedSkuStocks(
             managedStockLines,
             "order_rollback",
             null,
             userId,
-            "合单订单创建失败，回滚预留库存"
+            "合单订单创建或支付失败，回滚预留库存"
           );
         }
         throw error;
@@ -5334,51 +5369,37 @@ export const mibanAdminUserRouter = router({
   walletAdjust: mibanAdminProcedure
     .input(
       z.object({
-        userId: z.number(),
+        userId: z.number().int().positive(),
         currency: z.enum(["USDT", "CNY"]),
-        amount: z.number(), // 正数=充值，负数=扣款
+        amount: z.number().finite(), // 正数=充值，负数=扣款
         note: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
-      const conn = await getDbConnection();
-      if (!conn) throw new Error("DB not available");
+      const amount = fundingAmountText(input.amount);
       const type = input.amount >= 0 ? "recharge" : "withdraw";
       // 资金类型和操作时间已提供审计信息；未填写备注时保持为空，不生成占位文字。
       const desc = input.note?.trim() || "";
-      if (input.currency === "USDT") {
-        // 1. 更新 users.balance
-        await (conn as any).execute(
-          `UPDATE users SET balance = balance + ? WHERE id = ?`,
-          [input.amount, input.userId]
+      await withGlobalWalletTransaction(input.userId, async transaction => {
+        if (input.amount < 0) {
+          await assertGlobalWalletDebit(transaction, input.userId, input.currency, -input.amount);
+        }
+        // 更新余额与历史流水共用独占连接；不能用共享 pool 模拟事务。
+        const column = input.currency === "USDT" ? "balance" : "cny_balance";
+        await transaction.execute(
+          `UPDATE users SET ${column} = ${column} + ? WHERE id = ?`,
+          [amount, input.userId]
         );
-        // 2. 查询更新后的余额
-        const [[userRow]] = (await (conn as any).execute(
-          `SELECT balance FROM users WHERE id = ?`,
+        const [[userRow]] = (await transaction.execute(
+          `SELECT ${column} AS balance FROM users WHERE id = ?`,
           [input.userId]
         )) as any[];
-        const newBalance = parseFloat(userRow?.balance ?? "0");
-        // 3. 写入 balance_history（统一账本）
-        await (conn as any).execute(
-          `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, ?, 'USDT', ?, ?)`,
-          [input.userId, input.amount, type, newBalance, desc]
+        const newBalance = fundingAmountText(Number(userRow?.balance ?? "0"));
+        await transaction.execute(
+          `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
+          [input.userId, amount, type, input.currency, newBalance, desc]
         );
-      } else {
-        // CNY：更新 users.cny_balance
-        await (conn as any).execute(
-          `UPDATE users SET cny_balance = cny_balance + ? WHERE id = ?`,
-          [input.amount, input.userId]
-        );
-        const [[userRow]] = (await (conn as any).execute(
-          `SELECT cny_balance FROM users WHERE id = ?`,
-          [input.userId]
-        )) as any[];
-        const newBalance = parseFloat(userRow?.cny_balance ?? "0");
-        await (conn as any).execute(
-          `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, ?, 'CNY', ?, ?)`,
-          [input.userId, input.amount, type, newBalance, desc]
-        );
-      }
+      });
       return { ok: true };
     }),
   // 52号账本订单数字币的手动加减。与历史 USDT / CNY 调账隔离，
