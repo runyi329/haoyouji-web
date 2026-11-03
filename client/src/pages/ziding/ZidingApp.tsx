@@ -9,28 +9,21 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import VersionSwitcher from "@/components/VersionSwitcher";
-import zidingRegionData from "./ziding-region-data.json";
+import {
+  chinaProvinceNames,
+  getChinaCities as getZidingCities,
+  getChinaDistricts as getZidingDistricts,
+  withCurrentRegionOption,
+} from "@shared/china-regions";
 
 const BASE = "/p/proj_stn4q7";
 const C = {
   ink: "#28152F", plum: "#765777", gold: "#B89A68", canvas: "#F8F5F1",
   paper: "#FFFFFF", line: "#E9E1D8", muted: "#897C88", success: "#3F715D", danger: "#B95252",
 };
-type ZidingRegionNode = { n: string; d?: ZidingRegionNode[] };
-const ZIDING_REGIONS = zidingRegionData as ZidingRegionNode[];
 const DIRECT_DISTRICT_REGIONS = new Set(["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"]);
-const getZidingRegion = (province: string) => ZIDING_REGIONS.find((region) => region.n === province);
-const getZidingCities = (province: string) => {
-  const region = getZidingRegion(province);
-  if (!region || DIRECT_DISTRICT_REGIONS.has(province)) return [];
-  return region.d?.length ? region.d.map((city) => city.n) : [province];
-};
-const getZidingDistricts = (province: string, city: string) => {
-  const region = getZidingRegion(province);
-  if (!region) return [];
-  if (DIRECT_DISTRICT_REGIONS.has(province)) return region.d?.map((district) => district.n) || [];
-  return region.d?.find((item) => item.n === city)?.d?.map((district) => district.n) || [];
-};
+const formatZidingAddress = (address: { province?: string | null; city?: string | null; district?: string | null; detail?: string | null }) =>
+  [address.province, address.city === address.province ? "" : address.city, address.district, address.detail].filter(Boolean).join("");
 
 type Cart = Record<number, number>;
 type ProductNarrative = { image: string; headline: string; summary: string; highlights: string[]; specification: string; guidance: string; notice: string };
@@ -494,13 +487,15 @@ function CheckoutPage({ go }: { go: (path?: string) => void }) {
   const update = (key: string, value: string) =>
     setForm(old => ({ ...old, [key]: value }));
   const isDirectRegion = DIRECT_DISTRICT_REGIONS.has(form.province);
-  const cityOptions = form.province ? getZidingCities(form.province) : [];
-  const districtOptions = form.province
-    ? getZidingDistricts(
-        form.province,
-        isDirectRegion ? form.province : form.city
-      )
-    : [];
+  const provinceOptions = withCurrentRegionOption(chinaProvinceNames, form.province);
+  const cityOptions = withCurrentRegionOption(getZidingCities(form.province), form.city);
+  const districtOptions = withCurrentRegionOption(
+    getZidingDistricts(
+      form.province,
+      isDirectRegion ? form.province : form.city
+    ),
+    form.district
+  );
   const canSaveAddress = Boolean(
     form.receiverName.trim() &&
       form.receiverPhone.trim() &&
@@ -660,10 +655,7 @@ function CheckoutPage({ go }: { go: (path?: string) => void }) {
                     className="mt-1 text-xs leading-5"
                     style={{ color: C.muted }}
                   >
-                    {address.province}
-                    {address.city}
-                    {address.district}
-                    {address.detail}
+                    {formatZidingAddress(address)}
                   </div>
                 </button>
               ))}
@@ -710,9 +702,9 @@ function CheckoutPage({ go }: { go: (path?: string) => void }) {
                     style={selectStyle}
                   >
                     <option value="">省 / 直辖市 / 自治区</option>
-                    {ZIDING_REGIONS.map(region => (
-                      <option key={region.n} value={region.n}>
-                        {region.n}
+                    {provinceOptions.map(province => (
+                      <option key={province} value={province}>
+                        {province}
                       </option>
                     ))}
                   </select>
@@ -1356,10 +1348,7 @@ function OrderDetailSheet({
           <div className="mt-2 text-xs leading-5" style={{ color: C.muted }}>
             {order.receiver.name}　{order.receiver.phone}
             <br />
-            {order.receiver.province}
-            {order.receiver.city}
-            {order.receiver.district}
-            {order.receiver.detail}
+            {formatZidingAddress(order.receiver)}
           </div>
         </Panel>
         {order.shippingCompany && (
@@ -1832,10 +1821,7 @@ function AdminOrders() {
               <div className="text-xs" style={{ color: C.muted }}>
                 {detail.data.receiver.name}　{detail.data.receiver.phone}
                 <br />
-                {detail.data.receiver.province}
-                {detail.data.receiver.city}
-                {detail.data.receiver.district}
-                {detail.data.receiver.detail}
+                {formatZidingAddress(detail.data.receiver)}
               </div>
             </Panel>
             {reviewAction && (

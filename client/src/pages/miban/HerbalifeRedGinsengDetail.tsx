@@ -21,7 +21,7 @@ import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import { getMibanLimitedBrandByName } from "../../../../shared/miban-limited-brand-config";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
-import { getCities, getDistricts, provinces } from "./regionData";
+import { getCities, getDistricts, provinces, withCurrentRegionOption } from "./regionData";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
@@ -193,7 +193,7 @@ export default function HerbalifeRedGinsengDetail() {
     selectedSku?.image ?? currentProduct?.detail.productImage;
   const isOnSale = currentProduct?.status === "on_sale" && !!selectedSku;
   const totalPrice = selectedSku ? selectedSku.priceCny * quantity : 0;
-  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市"].includes(
+  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(
     receiverProvince
   );
   const effectiveReceiverCity = isMunicipality
@@ -1174,7 +1174,7 @@ export default function HerbalifeRedGinsengDetail() {
                     className="w-full rounded-lg border border-gray-100 bg-white px-3 py-2 text-[13px] outline-none"
                   >
                     <option value="">选择省/直辖市/自治区</option>
-                    {provinces.map(province => (
+                    {withCurrentRegionOption(provinces, receiverProvince).map(province => (
                       <option key={province} value={province}>
                         {province}
                       </option>
@@ -1191,7 +1191,7 @@ export default function HerbalifeRedGinsengDetail() {
                       className="w-full rounded-lg border border-gray-100 bg-white px-3 py-2 text-[13px] outline-none disabled:opacity-40"
                     >
                       <option value="">选择市/地区</option>
-                      {getCities(receiverProvince).map(city => (
+                      {withCurrentRegionOption(getCities(receiverProvince), receiverCity).map(city => (
                         <option key={city} value={city}>
                           {city}
                         </option>
@@ -1205,9 +1205,9 @@ export default function HerbalifeRedGinsengDetail() {
                     className="w-full rounded-lg border border-gray-100 bg-white px-3 py-2 text-[13px] outline-none disabled:opacity-40"
                   >
                     <option value="">选择区/县（可选）</option>
-                    {getDistricts(
-                      receiverProvince,
-                      isMunicipality ? receiverProvince : receiverCity
+                    {withCurrentRegionOption(
+                      getDistricts(receiverProvince, effectiveReceiverCity),
+                      receiverDistrict
                     ).map(district => (
                       <option key={district} value={district}>
                         {district}

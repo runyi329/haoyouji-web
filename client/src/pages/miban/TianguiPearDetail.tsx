@@ -21,7 +21,7 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AddressBook from "./AddressBook";
-import { provinces, getCities, getDistricts } from "./regionData";
+import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./regionData";
 import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
@@ -190,7 +190,7 @@ export default function TianguiPearDetail() {
   const [receiverCity, setReceiverCity] = useState("");
   const [receiverDistrict, setReceiverDistrict] = useState("");
   const [receiverDetail, setReceiverDetail] = useState("");
-  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市"].includes(
+  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(
     receiverProvince
   );
   const effectiveReceiverCity = isMunicipality
@@ -1260,13 +1260,13 @@ export default function TianguiPearDetail() {
                       className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white"
                     >
                       <option value="">选择省/直辖市/自治区</option>
-                      {provinces.map(p => (
+                      {withCurrentRegionOption(provinces, receiverProvince).map(p => (
                         <option key={p} value={p}>
                           {p}
                         </option>
                       ))}
                     </select>
-                    {/* 市（直辖市跳过） */}
+                    {/* 市（直辖市及港澳跳过） */}
                     {!isMunicipality && (
                       <select
                         value={receiverCity}
@@ -1278,7 +1278,7 @@ export default function TianguiPearDetail() {
                         className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white disabled:opacity-40"
                       >
                         <option value="">选择市/地区</option>
-                        {getCities(receiverProvince).map(c => (
+                        {withCurrentRegionOption(getCities(receiverProvince), receiverCity).map(c => (
                           <option key={c} value={c}>
                             {c}
                           </option>
@@ -1293,9 +1293,9 @@ export default function TianguiPearDetail() {
                       className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white disabled:opacity-40"
                     >
                       <option value="">选择区/县（可选）</option>
-                      {getDistricts(
-                        receiverProvince,
-                        isMunicipality ? receiverProvince : receiverCity
+                      {withCurrentRegionOption(
+                        getDistricts(receiverProvince, effectiveReceiverCity),
+                        receiverDistrict
                       ).map(d => (
                         <option key={d} value={d}>
                           {d}

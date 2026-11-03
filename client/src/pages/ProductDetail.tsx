@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
+import { chinaRegions, withCurrentRegionOption } from '@shared/china-regions';
 import {
   ChevronLeft, Check, Shield, Clock, Headphones, Zap, Users, BookOpen,
   Cpu, X, CreditCard, Star, ChevronRight, MessageCircle, Phone,
@@ -583,74 +584,16 @@ function ImageCarousel({ images }: { images: string[] }) {
 }
 
 // ============================================================
-// 随机收货信息生成
+// 收货地区视图（复用全国统一地区数据）
 // ============================================================
-const PROVINCE_DATA: { province: string; cities: { city: string; districts: string[] }[] }[] = [
-  { province: '广东省', cities: [
-    { city: '广州市', districts: ['天河区', '越秀区', '海珠区', '番禺区', '白云区'] },
-    { city: '深圳市', districts: ['福田区', '罗湖区', '南山区', '龙岗区', '宝安区'] },
-    { city: '佛山市', districts: ['禅城区', '南海区', '顺德区', '三水区'] },
-  ]},
-  { province: '浙江省', cities: [
-    { city: '杭州市', districts: ['上城区', '拱墅区', '西湖区', '滨江区', '临安区'] },
-    { city: '宁波市', districts: ['海曙区', '江北区', '鄄州区', '镇海区'] },
-    { city: '温州市', districts: ['鹿城区', '龙湾区', '瓯海区', '洞头区'] },
-  ]},
-  { province: '江苏省', cities: [
-    { city: '南京市', districts: ['玄武区', '秦淮区', '鼓楼区', '建邺区', '栖霞区'] },
-    { city: '苏州市', districts: ['姑苏区', '吴中区', '吴江区', '相城区'] },
-    { city: '无锡市', districts: ['梁溪区', '锡山区', '惠山区', '滨湖区'] },
-  ]},
-  { province: '北京市', cities: [
-    { city: '朝阳区', districts: ['朝阳区'] },
-    { city: '海淀区', districts: ['海淀区'] },
-    { city: '西城区', districts: ['西城区'] },
-    { city: '东城区', districts: ['东城区'] },
-  ]},
-  { province: '上海市', cities: [
-    { city: '浦东新区', districts: ['浦东新区'] },
-    { city: '徐汇区', districts: ['徐汇区'] },
-    { city: '静安区', districts: ['静安区'] },
-    { city: '长宁区', districts: ['长宁区'] },
-  ]},
-  { province: '四川省', cities: [
-    { city: '成都市', districts: ['锦江区', '青羊区', '武侯区', '成华区', '龙泉驿区'] },
-    { city: '绵阳市', districts: ['涪城区', '游仙区', '安州区'] },
-  ]},
-  { province: '湖北省', cities: [
-    { city: '武汉市', districts: ['江岸区', '江汉区', '础口区', '武昌区', '洪山区'] },
-    { city: '宜昌市', districts: ['西陵区', '伍家岗区', '点军区'] },
-  ]},
-  { province: '福建省', cities: [
-    { city: '福州市', districts: ['鼓楼区', '台江区', '仓山区', '晋安区', '闽侯区'] },
-    { city: '厦门市', districts: ['思明区', '海沧区', '湖里区', '集美区'] },
-  ]},
-];
-const RANDOM_STREETS = ['人民路', '解放路', '建设路', '中山路', '文化路', '科技路', '幸福路', '和平路', '兴业路', '振兴路', '光明路', '南京路', '北京路', '长安路'];
-const RANDOM_SURNAMES = ['张', '李', '王', '刘', '陈', '杨', '赵', '黄', '周', '吴', '徐', '孙', '马', '朱', '胡'];
-const RANDOM_NAMES_2 = ['伟', '芳', '娜', '秀英', '敏', '静', '丽', '强', '磊', '洋', '艳', '勇', '军', '杰', '娟'];
-function generateRandomAddress() {
-  const p = PROVINCE_DATA[Math.floor(Math.random() * PROVINCE_DATA.length)];
-  const cityData = p.cities[Math.floor(Math.random() * p.cities.length)];
-  const district = cityData.districts[Math.floor(Math.random() * cityData.districts.length)];
-  const street = RANDOM_STREETS[Math.floor(Math.random() * RANDOM_STREETS.length)];
-  const num = Math.floor(Math.random() * 200) + 1;
-  const unit = Math.floor(Math.random() * 20) + 1;
-  const room = Math.floor(Math.random() * 30) + 1;
-  const surname = RANDOM_SURNAMES[Math.floor(Math.random() * RANDOM_SURNAMES.length)];
-  const given = RANDOM_NAMES_2[Math.floor(Math.random() * RANDOM_NAMES_2.length)];
-  const name = surname + given;
-  const phone = '1' + ['3','5','7','8','9'][Math.floor(Math.random()*5)] +
-    Array.from({length:9}, () => Math.floor(Math.random()*10)).join('');
-  return {
-    name,
-    phone,
-    province: p.province,
-    city: cityData.city,
-    district,
-    detail: `${street}${num}号${unit}单元${room}0${Math.floor(Math.random()*9)+1}室`,
-  };
-}
+const REGION_OPTIONS = chinaRegions.map(province => ({
+  province: province.name,
+  cities: province.cities.map(city => ({
+    city: city.name,
+    districts: city.districts,
+  })),
+}));
+
 function generateOrderNo() {
   const now = new Date();
   const pad = (n: number, len = 2) => String(n).padStart(len, '0');
@@ -667,13 +610,26 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
   const [confirming, setConfirming] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
-  const [receiver, setReceiver] = useState(() => generateRandomAddress());
+  const [receiver, setReceiver] = useState({
+    name: '',
+    phone: '',
+    province: '',
+    city: '',
+    district: '',
+    detail: '',
+  });
   const [orderNo] = useState(() => generateOrderNo());
   const [orderTime] = useState(() => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   });
+  const currentProvince = REGION_OPTIONS.find(p => p.province === receiver.province);
+  const currentCity = currentProvince?.cities.find(c => c.city === receiver.city);
+  const districts = currentCity?.districts ?? [];
+  const provinceOptions = withCurrentRegionOption(REGION_OPTIONS.map(p => p.province), receiver.province);
+  const cityOptions = withCurrentRegionOption(currentProvince?.cities.map(c => c.city) ?? [], receiver.city);
+  const districtOptions = withCurrentRegionOption(districts, receiver.district);
 
   const handlePay = async () => {
     if (selected === 'wechat') {
@@ -682,6 +638,11 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
     }
     if (!isAuthenticated) {
       window.location.href = getLoginUrl() + '?returnUrl=' + encodeURIComponent(window.location.pathname);
+      return;
+    }
+    if (!receiver.name.trim() || !receiver.phone.trim() || !receiver.province || !receiver.city ||
+        (districts.length > 0 && !receiver.district) || !receiver.detail.trim()) {
+      setErrorMsg('请本人填写完整的真实收货信息；无下级区县的地区可留空区县。');
       return;
     }
     setConfirming(true);
@@ -756,6 +717,7 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
           {/* 收货信息 */}
           <div className="mb-4 pb-4 border-b border-gray-100">
             <p className="text-sm font-medium text-gray-700 mb-2">收货信息</p>
+            <p className="text-xs text-gray-400 mb-2">请本人填写真实收货信息，街道、乡镇及门牌号请填写在详细地址中。</p>
             <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400 w-14 flex-shrink-0">收货人</span>
@@ -780,47 +742,48 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
               <div className="h-px bg-gray-200" />
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400 w-14 flex-shrink-0">所在地区</span>
-                <div className="flex-1 flex gap-1">
+                <div className="min-w-0 flex-1 grid grid-cols-3 gap-1">
                   <select
                     value={receiver.province}
                     onChange={e => {
-                      const prov = PROVINCE_DATA.find(p => p.province === e.target.value);
-                      const firstCity = prov?.cities[0];
                       setReceiver(r => ({
                         ...r,
                         province: e.target.value,
-                        city: firstCity?.city || '',
-                        district: firstCity?.districts[0] || '',
+                        city: '',
+                        district: '',
                       }));
                     }}
-                    className="flex-1 text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
+                    className="min-w-0 w-full text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
                   >
-                    {PROVINCE_DATA.map(p => <option key={p.province} value={p.province}>{p.province}</option>)}
+                    <option value="">请选择省份</option>
+                    {provinceOptions.map(province => <option key={province} value={province}>{province}</option>)}
                   </select>
                   <select
                     value={receiver.city}
                     onChange={e => {
-                      const prov = PROVINCE_DATA.find(p => p.province === receiver.province);
-                      const cityData = prov?.cities.find(c => c.city === e.target.value);
                       setReceiver(r => ({
                         ...r,
                         city: e.target.value,
-                        district: cityData?.districts[0] || '',
+                        district: '',
                       }));
                     }}
-                    className="flex-1 text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
+                    disabled={!receiver.province}
+                    className="min-w-0 w-full text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
                   >
-                    {(PROVINCE_DATA.find(p => p.province === receiver.province)?.cities || []).map(c => (
-                      <option key={c.city} value={c.city}>{c.city}</option>
+                    <option value="">请选择城市</option>
+                    {cityOptions.map(city => (
+                      <option key={city} value={city}>{city}</option>
                     ))}
                   </select>
                   <select
                     value={receiver.district}
                     onChange={e => setReceiver(r => ({ ...r, district: e.target.value }))}
-                    className="flex-1 text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
+                    disabled={!receiver.city || districtOptions.length === 0}
+                    className="min-w-0 w-full text-xs text-gray-800 bg-transparent border border-gray-200 rounded-md px-1 py-1 outline-none"
                   >
-                    {(PROVINCE_DATA.find(p => p.province === receiver.province)?.cities.find(c => c.city === receiver.city)?.districts || []).map(d => (
-                      <option key={d} value={d}>{d}</option>
+                    <option value="">{receiver.city && districts.length === 0 ? '无下级区县（可留空）' : '请选择区县'}</option>
+                    {districtOptions.map(district => (
+                      <option key={district} value={district}>{district}</option>
                     ))}
                   </select>
                 </div>

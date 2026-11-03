@@ -3,7 +3,7 @@ import { useState } from "react";
 import { mtrpc } from "./mibanTrpc";
 import { toast } from "sonner";
 import { MapPin, Plus, Pencil, Trash2, Check, ChevronRight } from "lucide-react";
-import { provinces, getCities, getDistricts } from "./regionData";
+import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./regionData";
 
 const QUICK_LABELS = ["家", "公司", "父母家"];
 const LABEL_ICON: Record<string, string | null> = { "家": null, "公司": null, "父母家": null };
@@ -32,9 +32,9 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
   const [isDefault, setIsDefault] = useState(initial?.is_default === 1 || initial?.isDefault === true);
   const finalLabel = customLabel.trim() || label;
 
-  // 直辖市：北京、天津、上海、重庆—市级和省级同名，自动跳过
-  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市"].includes(province);
-  // 直辖市选省后自动设置 city = province
+  // 四个直辖市及港澳：市级和省级同名，自动跳过市级。
+  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(province);
+  // 六个直接地区保存时使用 city = province。
   const effectiveCity = isMunicipality ? province : city;
   const canSubmit = name.trim() && phone.trim() && province && (isMunicipality || city) && detail.trim();
 
@@ -102,10 +102,10 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none bg-white"
       >
         <option value="">选择省/直辖市/自治区</option>
-        {provinces.map(p => <option key={p} value={p}>{p}</option>)}
+        {withCurrentRegionOption(provinces, province).map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      {/* 直辖市跳过市级，直接选区县 */}
+      {/* 直辖市及港澳跳过市级，直接选区县 */}
       {!isMunicipality ? (
         <div className="flex gap-2">
           <select
@@ -115,7 +115,7 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
             className="w-0 flex-1 min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none bg-white disabled:opacity-40"
           >
             <option value="">选择市/地区</option>
-            {getCities(province).map(c => <option key={c} value={c}>{c}</option>)}
+            {withCurrentRegionOption(getCities(province), city).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select
             value={district}
@@ -124,7 +124,7 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
             className="w-0 flex-1 min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none bg-white disabled:opacity-40"
           >
             <option value="">选择区/县</option>
-            {getDistricts(province, city).map(d => <option key={d} value={d}>{d}</option>)}
+            {withCurrentRegionOption(getDistricts(province, city), district).map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
       ) : (
@@ -135,7 +135,7 @@ function AddressForm({ initial, onSave, onCancel, saving }: AddressFormProps) {
           className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none bg-white disabled:opacity-40"
         >
           <option value="">选择区/县</option>
-          {getDistricts(province, province).map(d => <option key={d} value={d}>{d}</option>)}
+          {withCurrentRegionOption(getDistricts(province, province), district).map(d => <option key={d} value={d}>{d}</option>)}
         </select>
       )}
 

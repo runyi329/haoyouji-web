@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, MapPin, Clock, MessageSquare, ChevronRight, Shield, Truck } from "lucide-react";
+import { chinaProvinceNames } from "@shared/china-regions";
 
 const PACKAGES: Record<string, { label: string; price: number }> = {
   "1": { label: "衣鞋任洗1件", price: 29 },
@@ -33,7 +34,20 @@ const TIME_SLOTS = [
   "18:00 - 20:00",
 ];
 
-const PROVINCES = ["北京", "上海", "广东", "浙江", "江苏", "四川", "湖北", "湖南", "山东", "河南", "福建", "陕西", "其他"];
+// 此表单沿用省级短名值；城市/区县和送回地址仍由用户自由填写。
+const PROVINCE_SHORT_NAMES: Record<string, string> = {
+  "内蒙古自治区": "内蒙古",
+  "广西壮族自治区": "广西",
+  "宁夏回族自治区": "宁夏",
+  "新疆维吾尔自治区": "新疆",
+  "西藏自治区": "西藏",
+  "香港特别行政区": "香港",
+  "澳门特别行政区": "澳门",
+};
+const PROVINCES = [
+  ...chinaProvinceNames.map(name => PROVINCE_SHORT_NAMES[name] ?? name.replace(/[省市]$/, "")),
+  "其他",
+];
 
 export default function BeautyLaundryOrder() {
   const [, navigate] = useLocation();
