@@ -150,6 +150,17 @@ function limitT0EthQuantityInput(value: string): string {
   return hasDecimal ? `${integerPart}.${fractionalPart}` : integerPart;
 }
 
+/** 平仓加减每次严格为1 ETH；不足一步时禁用，不自动改成不足1 ETH的增减。 */
+function stepT0ClosingQuantity(value: string, direction: -1 | 1, availableQuantity: number): string {
+  const parsed = Number(value);
+  const current = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : 0;
+  const maximum = Number.isFinite(availableQuantity) && availableQuantity > 0
+    ? Math.floor(Math.min(500, availableQuantity) * 100 + 0.0000001)
+    : 0;
+  const next = current + direction * 100;
+  return ((next >= 0 && next <= maximum ? next : current) / 100).toFixed(2);
+}
+
 function normalizeT0MarketPriceInput(value: string, prefix = "", autoAppendDecimal = true): string {
   const normalized = limitT0ManualDecimalInput(value, 2);
   const firstDecimal = normalized.indexOf(".");
@@ -2320,7 +2331,7 @@ type IntegratedArchiveStep = (typeof INTEGRATED_ARCHIVE_STEPS)[number];
 const T0_PRICE_REFRESH_INTERVAL_MS = 500;
 // 账本数据由 App 的52号账本前台统一两秒调度刷新，避免该页产生第二个重叠轮询。
 const T0_JOURNAL_STALE_TIME_MS = 2_000;
-const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
+const DEFAULT_QUANTITY_QUICK_OPTIONS = ["1.00", "5.00", "10.00", "20.00", "30.00", "40.00", "50.00", "100.00"];
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
 const OKX_VIP2_TAKER_FEE_LABEL = "0.0360%";
 const ETH_QUANTITY_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
@@ -7180,7 +7191,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? "管理项目名称"
       : "管理已关联用户";
   const quantityQuickOptions = useMemo(
-    () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity))),
+    () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity)))
+      .sort((left, right) => Number(left) - Number(right)),
     [lastSavedQuantity],
   );
   const quantityFormatError = useMemo(() => {
@@ -11052,27 +11064,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           className="min-w-0 text-left"
         >
           <span className="block min-w-0 text-[11px] leading-4 tabular-nums">
-            <span className="grid grid-cols-3 gap-x-0">
-              <span className="flex min-w-0 items-baseline justify-start gap-1 whitespace-nowrap">
+            <span className="grid grid-cols-3 gap-x-2">
+              <span className="flex min-w-0 flex-col items-start gap-0.5">
                 <span className={`font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
-                <span className="text-sm font-semibold text-slate-900">{formatQuantity(historicalOpeningQuantity)} E</span>
+                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-900">{formatQuantity(historicalOpeningQuantity)} E</span>
               </span>
-              <span className="flex min-w-0 items-baseline justify-center gap-1 whitespace-nowrap">
+              <span className="flex min-w-0 flex-col items-center gap-0.5">
                 <span className="font-semibold text-sky-600">已平</span>
-                <span className="text-sm font-semibold text-slate-700">{formatQuantity(linkedClosedQuantity)} E</span>
+                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-700">{formatQuantity(linkedClosedQuantity)} E</span>
               </span>
-              <span className="flex min-w-0 items-baseline justify-end gap-1 whitespace-nowrap">
-                <span className="font-semibold text-slate-600">剩余</span>
-                <span className="text-sm font-semibold text-slate-800">{formatQuantity(remainingQuantity)} E</span>
+              <span className="flex min-w-0 flex-col items-end gap-0.5">
+                <span className="inline-flex items-center gap-1 font-semibold text-slate-600">剩余
                 {trade.isLocked && <span title="已锁定" aria-label="已锁定" className="inline-flex shrink-0 text-amber-700"><Lock className="h-3.5 w-3.5" /></span>}
                 {takeProfitMarkerLabel && <span title={takeProfitMarkerLabel} aria-label={takeProfitMarkerLabel} className="inline-flex shrink-0 text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} /></span>}
+                </span>
+                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatQuantity(remainingQuantity)} E</span>
               </span>
             </span>
-            <span className="mt-1 grid grid-cols-2 items-baseline gap-x-3 border-t border-slate-200/80 pt-1">
-              <span className="min-w-0 whitespace-nowrap text-slate-600">开仓价 <span className="font-semibold text-slate-800">{formatPrice(trade.price)}</span></span>
-              {trade.isPending ? <span className="inline-flex justify-end whitespace-nowrap items-center gap-1 text-sky-700"><span className="text-slate-500">当前状态</span><Clock3 className="h-3 w-3" />待成交</span>
-                : trade.instrumentType === "option" ? <span className="flex min-w-0 items-baseline justify-end gap-1 whitespace-nowrap"><span className="shrink-0 text-slate-500">实时盈亏</span><OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 font-semibold tabular-nums" /></span>
-                : <span className={`justify-self-end whitespace-nowrap font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}><span className="mr-1 font-normal text-slate-500">实时盈亏</span>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+            <span className="mt-1.5 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-x-2 border-t border-slate-200/80 pt-1.5">
+              <span className="flex min-w-0 flex-col gap-0.5 text-slate-600"><span>开仓价</span><span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatPrice(trade.price)}</span></span>
+              {trade.isPending ? <span className="flex min-w-0 flex-col items-end gap-0.5 text-sky-700"><span className="text-slate-500">当前状态</span><span className="inline-flex items-center gap-1 whitespace-nowrap leading-5"><Clock3 className="h-3 w-3" />待成交</span></span>
+                : trade.instrumentType === "option" ? <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="whitespace-nowrap text-[13px] font-semibold leading-5 tabular-nums" /></span>
+                : <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><span className={`whitespace-nowrap text-[13px] font-semibold leading-5 ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span></span>}
             </span>
           </span>
         </button>
@@ -11081,9 +11094,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview || trade.isPending || trade.instrumentType === "option"}
           onClick={() => isSelectedClosingSource ? backToOrderList() : openQuickCloseSheet(trade)}
           title={isSelectedClosingSource ? `取消本笔${ACTIONS[closeAction].label}选择，恢复新开仓编辑` : trade.isPending ? "挂单成交后才能平仓" : trade.instrumentType === "option" ? "期权订单请在编辑页处理" : trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
-          className={`min-h-[52px] rounded border px-1 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${closeAction === "closeLong" ? "border-rose-300 bg-rose-50 text-rose-700" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}
+          aria-label={isSelectedClosingSource ? `取消${ACTIONS[closeAction].label}` : ACTIONS[closeAction].label}
+          className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded border px-1 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${closeAction === "closeLong" ? "border-rose-300 bg-rose-50 text-rose-700" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}
         >
-          {isSelectedClosingSource ? `取消${ACTIONS[closeAction].label}` : ACTIONS[closeAction].label}
+          {isSelectedClosingSource ? <><span className="whitespace-nowrap">取消</span><span className="whitespace-nowrap">{ACTIONS[closeAction].label}</span></> : <span className="whitespace-nowrap">{ACTIONS[closeAction].label}</span>}
         </button>}
       </div>
       {isExpanded && (
@@ -12755,6 +12769,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     label={<span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已平 E" : isPartiallyClosedOpeningEdit ? "剩余 E" : "数量 E"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}
                     labelFor="t0-entry-quantity"
                     horizontal
+                    wideControl
+                    compactControl={ACTIONS[entryForm.action].opening}
                     labelAction={ACTIONS[entryForm.action].opening ? (
                       <div className="inline-flex items-center gap-0.5" aria-label="订单类型">
                         {T0_INSTRUMENT_TYPES.map((instrument) => {
@@ -12777,7 +12793,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </div>
                     ) : undefined}
                   >
-                    <div>
+                    <div className="relative min-w-0">
+                      <button
+                        type="button"
+                        aria-label={isClosingEntry ? "减少平仓数量1 ETH" : "减少开仓数量1 ETH"}
+                        title="减少1 ETH"
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit || Number(stepT0ClosingQuantity(entryForm.quantity, -1, isClosingEntry ? closingAvailableQuantity : 500)) === Number(entryForm.quantity || 0)}
+                        onClick={() => setEntryForm((current) => ({ ...current, quantity: stepT0ClosingQuantity(current.quantity, -1, isClosingEntry ? closingAvailableQuantity : 500) }))}
+                        className={`absolute inset-y-0 left-0 z-10 flex items-center justify-center rounded-l text-slate-900 transition active:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-35 ${isClosingEntry ? "w-12" : "w-7"}`}
+                      >
+                        <Minus className={isClosingEntry ? "h-7 w-7" : "h-6 w-6"} strokeWidth={3} />
+                      </button>
                       <input
                         id="t0-entry-quantity"
                         inputMode="decimal"
@@ -12788,16 +12814,60 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: limitT0EthQuantityInput(event.target.value) }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 min-w-0 w-full rounded border text-center font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${isClosingEntry ? "px-12 text-2xl" : "px-7 text-xl"} ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
+                      <div className={`pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center font-semibold tabular-nums ${isClosingEntry ? "text-2xl" : "text-xl"}`}>
+                        <span aria-hidden="true" className="invisible whitespace-nowrap">{entryForm.quantity || "0.00"}</span>
+                        <button
+                        type="button"
+                        aria-label={isClosingEntry ? "清空平仓数量" : "清空开仓数量"}
+                        title="清空数量"
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit || !entryForm.quantity}
+                        onClick={() => {
+                          setEntryForm((current) => ({ ...current, quantity: "" }));
+                          document.getElementById("t0-entry-quantity")?.focus();
+                        }}
+                        className={`pointer-events-auto absolute inset-y-0 right-full flex items-center justify-end pr-1 text-slate-400 transition active:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30 ${isClosingEntry ? "w-8" : "w-6"}`}
+                      >
+                        <X className="h-4 w-4 rounded-full bg-slate-100 p-0.5" strokeWidth={2.5} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={isClosingEntry ? "增加平仓数量1 ETH" : "增加开仓数量1 ETH"}
+                        title="增加1 ETH"
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit || Number(stepT0ClosingQuantity(entryForm.quantity, 1, isClosingEntry ? closingAvailableQuantity : 500)) === Number(entryForm.quantity || 0)}
+                        onClick={() => setEntryForm((current) => ({ ...current, quantity: stepT0ClosingQuantity(current.quantity, 1, isClosingEntry ? closingAvailableQuantity : 500) }))}
+                        className={`absolute inset-y-0 right-0 z-10 flex items-center justify-center rounded-r text-slate-900 transition active:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-35 ${isClosingEntry ? "w-12" : "w-7"}`}
+                      >
+                        <Plus className={isClosingEntry ? "h-7 w-7" : "h-6 w-6"} strokeWidth={3} />
+                      </button>
                     </div>
                   </Field>
+
+                  {!isClosingEntry && <div className="grid grid-flow-col auto-cols-fr gap-1" aria-label="开仓数量快选，从小到大">
+                    {quantityQuickOptions.map((value) => {
+                      const isActive = entryForm.quantity === value;
+                      const displayValue = formatQuantityQuickOption(value);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={isCloseReview || hasDependentCloseOpeningEdit}
+                          onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(value) }))}
+                          className={`h-8 min-w-0 rounded border px-1 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                        >
+                          {displayValue}
+                        </button>
+                      );
+                    })}
+                  </div>}
 
                   <Field label={
                     <span className="inline-flex whitespace-nowrap text-sm font-semibold text-slate-800">
                       {ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : isGridOpeningEntry ? "网格参考价" : "成交价" : "平仓价"}{(isOptionOpeningEntry || isGridOpeningEntry) && <span className="text-rose-500">*</span>}
                     </span>
-                  } labelFor="t0-entry-price" horizontal labelAction={renderOpeningExecutionControls()}>
+                  } labelFor="t0-entry-price" horizontal wideControl={isClosingEntry} labelAction={renderOpeningExecutionControls()}>
                     {isOptionOpeningEntry ? (
                       <select
                         id="t0-entry-price"
@@ -12875,8 +12945,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         };
                       })}
                       placeholder={isSmartOpeningPriceInput ? undefined : "0.00"}
-                      className={`min-w-0 w-full h-14 rounded border border-slate-200 px-2.5 text-[19px] font-semibold tabular-nums outline-none placeholder:text-slate-400 focus:border-indigo-500 ${entryPriceFractionPlaceholder ? "text-transparent caret-slate-900" : "text-slate-900"}`}
+                      className={`min-w-0 w-full h-14 rounded border border-slate-200 font-semibold tabular-nums outline-none placeholder:text-slate-400 focus:border-indigo-500 ${isClosingEntry ? "px-10 text-2xl text-center" : "px-2.5 text-[19px]"} ${entryPriceFractionPlaceholder ? "text-transparent caret-slate-900" : "text-slate-900"}`}
                       />
+                      {isClosingEntry && <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center text-2xl font-semibold tabular-nums">
+                        <span aria-hidden="true" className="invisible whitespace-nowrap">{entryPriceDisplayValue || "0.00"}</span>
+                        <button
+                        type="button"
+                        aria-label="清空平仓价"
+                        title="清空平仓价"
+                        disabled={isCloseReview || !entryForm.price}
+                        onClick={() => {
+                          setEntryForm((current) => ({ ...current, price: "" }));
+                          document.getElementById("t0-entry-price")?.focus();
+                        }}
+                        className="pointer-events-auto absolute inset-y-0 right-full flex w-8 items-center justify-end pr-1 text-slate-400 transition active:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <X className="h-4 w-4 rounded-full bg-slate-100 p-0.5" strokeWidth={2.5} />
+                        </button>
+                      </div>}
                       {entryPriceFractionPlaceholder && <span
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap px-2.5 text-[19px] font-semibold tabular-nums"
@@ -12919,25 +13005,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         aria-label={`平仓可用数量的 ${percentage}%`}
                       >
                         {percentage}%
-                      </button>
-                    );
-                  })}
-                </div>}
-
-                {!isClosingEntry && <div className="-mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="mr-0.5 text-[11px] text-slate-400">数量快选</span>
-                  {quantityQuickOptions.map((value) => {
-                    const isActive = entryForm.quantity === value;
-                    const displayValue = isActive ? value : formatQuantityQuickOption(value);
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        disabled={isCloseReview || hasDependentCloseOpeningEdit}
-                        onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(value) }))}
-                        className={`h-7 rounded border px-2 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
-                      >
-                        {displayValue}
                       </button>
                     );
                   })}
@@ -14804,10 +14871,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
 }
 
-function Field({ label, children, labelAction, labelFor, horizontal = false }: { label: ReactNode; children: ReactNode; labelAction?: ReactNode; labelFor?: string; horizontal?: boolean }) {
+function Field({ label, children, labelAction, labelFor, horizontal = false, wideControl = false, compactControl = false }: { label: ReactNode; children: ReactNode; labelAction?: ReactNode; labelFor?: string; horizontal?: boolean; wideControl?: boolean; compactControl?: boolean }) {
   if (horizontal) {
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.58fr)] items-center gap-x-3">
+      <div className={`grid items-center ${compactControl ? "gap-x-1" : "gap-x-3"} ${wideControl ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_minmax(0,0.58fr)]"}`}>
         <div className="flex min-w-0 items-center gap-1.5">
           <label htmlFor={labelFor} className="w-12 shrink-0 text-xs font-medium text-slate-600">{label}</label>
           {labelAction && <div className="min-w-0 shrink-0">{labelAction}</div>}
