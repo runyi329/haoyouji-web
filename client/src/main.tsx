@@ -236,6 +236,9 @@ const trpcClient = trpc.createClient({
         return op.path === "ledger.funderUpdateParticipantOrder"
           || op.path === "ledger.t0CreateEntry"
           || op.path === "ledger.t0UpdateOpeningEntry"
+          // 充值记录和可提额度单独读取，不等待同批行情或重型统计。
+          || op.path === "ledger.t0GetPayoutLogs"
+          || op.path === "ledger.t0GetPayoutAvailability"
           || op.path === "ledger.t0CreatePayoutLog"
           || op.path === "ledger.t0UpdatePayoutLog"
           || op.path === "ledger.t0DeletePayoutLog"

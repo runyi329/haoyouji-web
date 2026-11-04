@@ -2795,8 +2795,7 @@ export async function getLedger52T0JournalPayoutLogs(input: {
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.ledger_id = ? AND payout.user_id = ?
-        ORDER BY payout.occurred_on DESC, payout.id DESC
-        LIMIT 5000`
+        ORDER BY payout.occurred_on DESC, payout.id DESC`
     : adminScope
     ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
               payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
@@ -2804,8 +2803,7 @@ export async function getLedger52T0JournalPayoutLogs(input: {
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.ledger_id = ? AND payout.user_id = ? AND payout.related_user_id = ?
-        ORDER BY payout.occurred_on DESC, payout.id DESC
-        LIMIT 500`
+        ORDER BY payout.occurred_on DESC, payout.id DESC`
     : `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
               payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
