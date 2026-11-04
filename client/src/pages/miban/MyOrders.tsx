@@ -11,7 +11,6 @@ import {
   Package,
   BookOpen,
   Heart,
-  Wallet,
   Users,
   ShoppingCart,
   Trash2,
@@ -19,8 +18,6 @@ import {
   ChevronRight,
   TrendingUp,
   Copy,
-  ArrowUpRight,
-  ArrowDownLeft,
   Settings,
   MapPin,
   Truck,
@@ -1597,162 +1594,6 @@ function FavoritesTab() {
 }
 
 // ─── 我的钱包 Tab ─────────────────────────────────────────────────────────────
-function WalletTab() {
-  const { isAuthenticated } = useAuth();
-  const { data: usdtBalance, isLoading: balanceLoading } =
-    trpc.recharge.getBalance.useQuery(undefined, {
-      enabled: isAuthenticated,
-      refetchInterval: 60000,
-      refetchOnWindowFocus: false,
-    });
-  const { data: cnyBalance, isLoading: cnyLoading } =
-    trpc.recharge.getCnyBalance.useQuery(undefined, {
-      enabled: isAuthenticated,
-      refetchInterval: 60000,
-      refetchOnWindowFocus: false,
-    });
-  const { data: history, isLoading: historyLoading } =
-    trpc.recharge.getBalanceHistory.useQuery(
-      { limit: 20 },
-      {
-        enabled: isAuthenticated,
-        refetchInterval: 60000,
-        refetchOnWindowFocus: false,
-      }
-    );
-  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
-    staleTime: 5000,
-  });
-
-  const usdtNum = Number(usdtBalance ?? 0);
-  const cnyNum = Number(cnyBalance ?? 0);
-  const usdtRate = cryptoPrices?.usdtCnyRate ?? 7.3;
-  const totalCny = cnyNum + usdtNum * usdtRate;
-  const isLoading = balanceLoading || cnyLoading;
-
-  return (
-    <div className="space-y-4">
-      {/* 余额卡片 */}
-      <div
-        className="rounded-2xl p-5 text-white"
-        style={{
-          background: "linear-gradient(135deg, #FF6900 0%, #FF8C00 100%)",
-        }}
-      >
-        <p className="text-[12px] text-white/70 mb-1">钱包可用余额</p>
-        {isLoading ? (
-          <div className="h-10 w-32 bg-white/20 rounded-xl animate-pulse" />
-        ) : (
-          <>
-            <p className="text-[36px] font-bold leading-none">
-              ¥<span>{totalCny.toFixed(2)}</span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              {usdtNum > 0 && (
-                <span className="text-[11px] text-white/80 bg-white/15 rounded-full px-2 py-0.5">
-                  {usdtNum.toFixed(4)} USDT × {usdtRate.toFixed(2)} = ¥
-                  {(usdtNum * usdtRate).toFixed(2)}
-                </span>
-              )}
-              {cnyNum > 0 && (
-                <span className="text-[11px] text-white/80 bg-white/15 rounded-full px-2 py-0.5">
-                  CNY ¥{cnyNum.toFixed(2)}
-                </span>
-              )}
-            </div>
-          </>
-        )}
-        <p className="text-[11px] text-white/50 mt-2">
-          脉动网共享钱包 · 实时汇率折算 · 可用于米伴下单
-        </p>
-      </div>
-
-      {/* 操作按钮 */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href={`/recharge?returnTo=${encodeURIComponent("/p/proj_hzxm2t/my-orders?tab=wallet")}`}
-        >
-          <button
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#FF6900] text-[13px] font-semibold active:scale-95 transition-transform"
-            style={{ color: "#FF6900" }}
-          >
-            <ArrowDownLeft className="w-4 h-4" />
-            充值
-          </button>
-        </Link>
-        <Link
-          href={`/recharge?returnTo=${encodeURIComponent("/p/proj_hzxm2t/my-orders?tab=wallet")}`}
-        >
-          <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 text-gray-600 text-[13px] font-semibold active:scale-95 transition-transform border border-gray-100">
-            <ArrowUpRight className="w-4 h-4" />
-            提现
-          </button>
-        </Link>
-      </div>
-
-      {/* 收支记录 */}
-      <div>
-        <h3 className="text-[13px] font-semibold text-gray-700 mb-3">
-          最近收支
-        </h3>
-        {historyLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 rounded-xl" />
-            ))}
-          </div>
-        ) : !history?.length ? (
-          <div className="text-center py-10">
-            <Wallet className="w-8 h-8 mx-auto mb-2 text-gray-200" />
-            <p className="text-[12px] text-gray-400">暂无收支记录</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {(history ?? []).map((item: any, i: number) => {
-              const isIncome = Number(item.amount) > 0;
-              return (
-                <div
-                  key={i}
-                  className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3"
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isIncome ? "bg-green-50" : "bg-red-50"}`}
-                  >
-                    {isIncome ? (
-                      <ArrowDownLeft className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <ArrowUpRight className="w-4 h-4 text-red-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-gray-800 truncate">
-                      {item.remark || (isIncome ? "收入" : "支出")}
-                    </p>
-                    <p className="text-[11px] text-gray-400">
-                      {item.createdAt
-                        ? new Date(item.createdAt).toLocaleDateString("zh-CN")
-                        : ""}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-[15px] font-bold flex-shrink-0 ${isIncome ? "text-green-500" : "text-red-400"}`}
-                  >
-                    {isIncome ? "+" : ""}¥
-                    {Math.abs(Number(item.amount)).toFixed(2)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── 团队业绩 Tab（仅团队长/业务员/管理员可见）─────────────────────────────
-
 // ─── 我的售后 Tab ─────────────────────────────────────────────────────────────
 const MY_AFTERSALE_STATUS_LABELS: Record<string, string> = {
   pending: "待处理",
@@ -2083,7 +1924,6 @@ type TabKey =
   | "orders"
   | "recipes"
   | "favorites"
-  | "wallet"
   | "team"
   | "address"
   | "aftersale";
@@ -2092,9 +1932,13 @@ export default function MyOrders() {
   const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const search = useSearch();
-  const initialTab =
-    (new URLSearchParams(search).get("tab") as TabKey) || "orders";
+  const requestedTab = new URLSearchParams(search).get("tab");
+  const initialTab = (requestedTab === "wallet" ? "orders" : requestedTab as TabKey) || "orders";
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+  // 钱包已独立，兼容以前的收藏链接与充值回跳。
+  useEffect(() => {
+    if (requestedTab === "wallet") setLocation("/p/proj_hzxm2t/wallet", { replace: true });
+  }, [requestedTab, setLocation]);
   // 是否显示团队业绩 Tab（业务员/团队长/管理员）
   const showTeamTab =
     (user as any)?.mibanRole === "parent" ||
@@ -2112,7 +1956,7 @@ export default function MyOrders() {
         </div>
         <h1 className="text-[22px] font-bold text-black mb-2">我的</h1>
         <p className="text-[13px] text-gray-400 mb-8">
-          登录后查看订单、配方、钱包等信息
+          登录后查看订单、配方等信息
         </p>
         <button
           onClick={() =>
@@ -2131,7 +1975,6 @@ export default function MyOrders() {
   const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
     { key: "orders", label: "订单", icon: <Package className="w-4 h-4" /> },
     { key: "favorites", label: "收藏", icon: <Heart className="w-4 h-4" /> },
-    { key: "wallet", label: "錢包", icon: <Wallet className="w-4 h-4" /> },
     ...(showTeamTab
       ? [
           {
@@ -2181,7 +2024,6 @@ export default function MyOrders() {
       <div className="px-4 py-4 pb-24">
         {activeTab === "orders" && <OrdersTab />}
         {activeTab === "favorites" && <FavoritesTab />}
-        {activeTab === "wallet" && <WalletTab />}
         {activeTab === "team" && showTeamTab && <TeamTab />}
         {activeTab === "aftersale" && <MyAftersaleTab />}
         {activeTab === "address" && <AddressBook mode="manage" />}

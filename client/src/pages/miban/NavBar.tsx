@@ -5,16 +5,18 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { saveToken } from "@/lib/tokenStorage";
 import { toast } from "sonner";
-import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check } from "lucide-react";
+import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet } from "lucide-react";
+import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { QRCodeSVG } from "qrcode.react";
+import { useMibanWalletValue } from "./useMibanWalletValue";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const SITE_URL = typeof window !== "undefined" ? window.location.origin : "";
 
-// ─── 邀请二维码按钮 ──────────────────────────────────────────────────────────
-function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const [open, setOpen] = useState(false);
+// ─── 从头像菜单打开邀请二维码 ────────────────────────────────────────────────
+function InviteQrDialog({ isAuthenticated, open, onClose }: { isAuthenticated: boolean; open: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const { data: inviteInfo } = mtrpc.agent.myInviteInfo.useQuery(
     undefined,
     { enabled: isAuthenticated && open }
@@ -23,14 +25,6 @@ function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   const inviteCode = inviteInfo?.inviteCode ?? "";
   const inviteLink = inviteCode ? `${SITE_URL}/join?ref=${inviteCode}` : `${SITE_URL}/p/proj_hzxm2t/`;
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   function copyLink() {
     navigator.clipboard.writeText(inviteLink).then(() => {
       setCopied(true);
@@ -38,26 +32,20 @@ function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
     });
   }
 
+  if (!open) return null;
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-70"
-        style={{ background: open ? "#FFF3E8" : "transparent" }}
-        aria-label="邀请好友"
-      >
-        <QrCode className="w-5 h-5" style={{ color: open ? "#FF6900" : "#333" }} strokeWidth={1.8} />
-      </button>
-
-      {open && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center"
           style={{ background: "rgba(0,0,0,0.45)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="扫码邀请好友"
         >
           <div className="bg-white rounded-3xl px-6 py-7 w-72 flex flex-col items-center shadow-2xl relative">
             <button
-              onClick={() => setOpen(false)}
+              onClick={onClose}
+              aria-label="关闭邀请弹窗"
               className="absolute top-4 right-4 w-7 h-7 rounded-full bg-black/5 flex items-center justify-center active:opacity-70"
             >
               <X className="w-4 h-4 text-black/40" />
@@ -95,8 +83,6 @@ function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
             </button>
           </div>
         </div>
-      )}
-    </div>
   );
 }
 
@@ -315,6 +301,7 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
   onLogout: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -351,12 +338,16 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 active:opacity-70"
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        title="点击头像打开用户菜单"
+        className="flex h-8 w-8 items-center justify-center active:opacity-70"
       >
-        <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center">
-          <span className="text-white text-[12px] font-semibold">{initial}</span>
-        </div>
-        <ChevronDown className={`w-3 h-3 text-black/40 transition-transform ${open ? "rotate-180" : ""}`} />
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={user?.avatar || undefined} alt={`${user?.name || user?.username || "成员"}的头像`} className="object-cover" />
+          <AvatarFallback className="bg-gray-100 text-gray-600 text-[12px] font-semibold">{initial}</AvatarFallback>
+        </Avatar>
       </button>
 
       {open && (
@@ -382,16 +373,34 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
 
           {/* 管理员入口（管理员显示，包含订单/米库/用户/团队等全部功能） */}
           {isMibanAdmin && (
-            <Link
-              href="/p/proj_hzxm2t/admin"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
-            >
-              <Settings className="w-4 h-4 text-[#FF6900]" />
-              管理后台
-            </Link>
+            <>
+              <Link
+                href="/p/proj_hzxm2t/admin"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
+              >
+                <Settings className="w-4 h-4 text-[#FF6900]" />
+                管理后台
+              </Link>
+              <Link
+                href="/ledger/52/af-recharge-manage?tab=adjust"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
+              >
+                <Wallet className="w-4 h-4 text-[#FF6900]" />
+                钱包充值
+              </Link>
+            </>
           )}
 
+          <button
+            type="button"
+            onClick={() => { setOpen(false); setInviteOpen(true); }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
+          >
+            <QrCode className="w-4 h-4 text-[#FF6900]" />
+            扫码邀请
+          </button>
           <button
             onClick={() => { setOpen(false); onLogout(); }}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-black/5"
@@ -401,7 +410,29 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
           </button>
         </div>
       )}
+      <InviteQrDialog isAuthenticated={isAuthenticated} open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
+  );
+}
+
+function PersonalWalletEntry() {
+  const { value, isLoading, error, isAuthenticated } = useMibanWalletValue();
+  const walletPath = "/p/proj_hzxm2t/wallet";
+  const amount = !isAuthenticated ? "登录查看" : error ? "暂不可用" : isLoading || !value ? "加载中…" : value.availableCny == null ? "估值待更新" : `¥${value.availableCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <Link
+      href={isAuthenticated ? walletPath : `/login?from=${encodeURIComponent(walletPath)}`}
+      onClick={() => clearLedgerViewAsState()}
+      className="flex h-9 w-[104px] items-center justify-end gap-0.5 active:opacity-70 max-[350px]:w-[84px]"
+      aria-label="钱包可用余额"
+      title="全部资产剔除冻结后的可用余额"
+    >
+      <span className="h-8 w-7 shrink-0"><AnimatedWalletLogo /></span>
+      <span className="min-w-0 text-right">
+        <span className="block text-[9px] leading-3 text-gray-400">可用余额</span>
+        <span className="block break-all text-[12px] font-bold leading-[14px] text-[#B08B32] tabular-nums" data-header-wallet-balance>{amount}</span>
+      </span>
+    </Link>
   );
 }
 
@@ -427,16 +458,20 @@ export default function NavBar() {
         className="fixed top-0 left-0 right-0 z-50 bg-white"
         style={{ borderBottom: "1px solid #E8E8E8", height: "52px" }}
       >
-        <div className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full">
+        <div className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full gap-1 max-[350px]:px-3">
           {/* Logo + 版本切换 + 身份切换器 */}
-          <div className="flex items-center">
+          <div className="flex min-w-0 items-center">
             <LogoWithVersionSwitch />
             <IdentitySwitcherNav />
           </div>
 
-          {/* 右侧：邀请二维码 + 用户头像 */}
-          <div className="flex items-center gap-2">
-            <InviteQrButton isAuthenticated={isAuthenticated} />
+          {/* 所有米伴页面统一显示钱包与头像，内部仍分别打开钱包和用户菜单 */}
+          <div
+            className="flex h-10 shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-white pl-1 pr-0.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+            data-wallet-avatar-group="true"
+          >
+            <PersonalWalletEntry />
+            <span aria-hidden="true" className="h-5 w-px shrink-0 bg-orange-100" />
             <UserMenu user={user} isAuthenticated={isAuthenticated} onLogout={() => logout.mutate()} />
           </div>
         </div>

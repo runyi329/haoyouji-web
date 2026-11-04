@@ -170,10 +170,17 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
   // 服务端会再次校验真实管理员角色和目标用户，前端参数不能提升权限。
   let viewAsUserId: string | null = null;
   try {
-    const urlViewAs = new URLSearchParams(window.location.search).get('viewAs');
-    viewAsUserId = urlViewAs && /^\d+$/.test(urlViewAs) ? urlViewAs : sessionStorage.getItem('view-as-user-id');
+    const searchParams = new URLSearchParams(window.location.search);
+    const isMibanPersonalEntry = window.location.pathname === '/p/proj_hzxm2t'
+      || window.location.pathname.startsWith('/p/proj_hzxm2t/')
+      || searchParams.get('from') === 'miban';
+    const urlViewAs = searchParams.get('viewAs');
+    if (!isMibanPersonalEntry) {
+      viewAsUserId = urlViewAs && /^\d+$/.test(urlViewAs) ? urlViewAs : sessionStorage.getItem('view-as-user-id');
+    }
   } catch {
-    viewAsUserId = sessionStorage.getItem('view-as-user-id');
+    // 无法读取上下文时不继承他人视角，按真实登录身份读取。
+    viewAsUserId = null;
   }
   if (viewAsUserId && /^\d+$/.test(viewAsUserId)) {
     headers.set('x-view-as-user-id', viewAsUserId);

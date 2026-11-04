@@ -61,11 +61,15 @@ export default function MultiAssetWalletTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const query = new URLSearchParams(search);
-  const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
-  const sourceLedgerId = query.get("fromLedger") === "37" ? "37" : "52";
+  const isMiban = query.get("from") === "miban";
+  const viewAsUserId = isMiban ? undefined : restoreLedgerViewAsState(query.get("viewAs"));
+  const sourceLedgerId = isMiban ? undefined : query.get("fromLedger") === "37" ? "37" : "52";
   // 从单币种明细返回时保持数字币账户选中，不回退到默认稳定币账户。
-  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
-  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
+  const walletQuery = isMiban ? `?from=miban&account=${query.get("account") === "CNY" ? "CNY" : "CRYPTO"}` : viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
+  const backTo = `${isMiban ? "/p/proj_hzxm2t/wallet" : "/wallet"}${walletQuery}`;
+  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => isMiban
+    ? `?from=miban&account=${account === "USDT" ? "CRYPTO" : account}`
+    : viewAsUserId
     ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
     : `?fromLedger=${sourceLedgerId}&account=${account}`;
   const requestedAsset = String(query.get("asset") || "BTC").toUpperCase();
@@ -94,6 +98,7 @@ export default function MultiAssetWalletTransactions() {
   const handleAssetChange = (nextAsset: string) => {
     if (nextAsset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
     if (nextAsset === "CNY") return setLocation(`/wallet/cny-transactions${walletQueryForAccount("CNY")}`);
+    if (isMiban) return setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&from=miban&account=CRYPTO`);
     setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=${sourceLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
@@ -101,7 +106,7 @@ export default function MultiAssetWalletTransactions() {
     <div className="min-h-screen pb-12" style={{ background: theme.bg }}>
       <header className="sticky top-0 z-10 border-b px-4 py-3" style={{ background: "rgba(13,13,13,.97)", borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
-          <button onClick={() => setLocation(`/wallet${walletQuery}`)} className="rounded-full p-1.5" aria-label="返回钱包">
+          <button onClick={() => setLocation(backTo)} className="rounded-full p-1.5" aria-label="返回钱包">
             <ArrowLeft className="h-6 w-6" style={{ color: theme.goldLight }} />
           </button>
           <div className="min-w-0 flex-1 text-center">

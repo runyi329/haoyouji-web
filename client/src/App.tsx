@@ -453,11 +453,14 @@ function ActiveLedgerPagePolling() {
 
 function Router() {
   const { isLoading, data: currentUser } = trpc.auth.me.useQuery();
+  const [pathname] = useLocation();
+  const isMibanEntry = pathname === "/p/proj_hzxm2t" || pathname.startsWith("/p/proj_hzxm2t/");
   // 规则003：全局记录页面访问轨迹，供返回按钮精确「从哪来回哪去」
   useNavSourceTracker();
 
   // 认证状态加载中时直接显示Loading，避免Switch提前命中NotFound导致刷新页面闪现404
-  if (isLoading) {
+  // 米伴有独立本人身份守卫和失败重试；父级不能在无缓存重试时反复卸载它。
+  if (isLoading && !isMibanEntry) {
     return <LoadingFallback />;
   }
 

@@ -64,6 +64,10 @@ export default function WalletReceive() {
   const backToWallet = () => {
     const params = new URLSearchParams();
     const account = searchParams.get("account");
+    if (searchParams.get("from") === "miban") {
+      setLocation(`/p/proj_hzxm2t/wallet?from=miban&account=${account === "CNY" ? "CNY" : "CRYPTO"}`);
+      return;
+    }
     const fromLedger = searchParams.get("fromLedger");
     const viewAs = searchParams.get("viewAs");
     if (account === "CNY" || account === "CRYPTO") params.set("account", account);

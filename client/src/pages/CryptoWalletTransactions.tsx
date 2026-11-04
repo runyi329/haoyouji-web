@@ -190,11 +190,15 @@ export default function CryptoWalletTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const query = new URLSearchParams(search);
-  const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
-  const sourceLedgerId = query.get("fromLedger") === "37" ? "37" : "52";
-  const walletQuery = viewAsUserId
+  const isMiban = query.get("from") === "miban";
+  const viewAsUserId = isMiban ? undefined : restoreLedgerViewAsState(query.get("viewAs"));
+  const sourceLedgerId = isMiban ? undefined : query.get("fromLedger") === "37" ? "37" : "52";
+  const walletQuery = isMiban
+    ? `?from=miban&account=${query.get("account") === "CNY" ? "CNY" : "CRYPTO"}`
+    : viewAsUserId
     ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}`
     : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
+  const backTo = `${isMiban ? "/p/proj_hzxm2t/wallet" : "/wallet"}${walletQuery}`;
   const queryInput = viewAsUserId ? { viewAsUserId } : undefined;
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [assetFilter, setAssetFilter] = useState("ALL");
@@ -267,7 +271,7 @@ export default function CryptoWalletTransactions() {
     <div className="min-h-screen pb-12" style={{ background: theme.bg }}>
       <header className="sticky top-0 z-20 border-b px-4 py-3" style={{ background: "rgba(13,13,13,.98)", borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
-          <button onClick={() => setLocation(`/wallet${walletQuery}`)} className="rounded-full p-1.5" aria-label="返回数字币账户">
+          <button onClick={() => setLocation(backTo)} className="rounded-full p-1.5" aria-label="返回数字币账户">
             <ArrowLeft className="h-6 w-6" style={{ color: theme.goldLight }} />
           </button>
           <div className="min-w-0 flex-1 text-center">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -55,20 +55,44 @@ function extractWcTeamCode(note: string): string | null {
 
 // ─── 黑金色系 Token ───────────────────────────────────────────
 const G = {
-  bg: "#0d0d0d",          // 页面底色
-  card: "#141414",        // 卡片底色
-  cardBorder: "rgba(201,168,76,0.22)", // 卡片边框
-  gold: "#C9A84C",        // 主金色
-  goldLight: "#F5D78E",   // 亮金色
-  goldDim: "rgba(201,168,76,0.45)",
-  goldFaint: "rgba(201,168,76,0.12)",
-  white: "rgba(255,255,255,0.88)",
-  whiteDim: "rgba(255,255,255,0.45)",
-  whiteFaint: "rgba(255,255,255,0.08)",
-  divider: "rgba(255,255,255,0.06)",
-  green: "#34d399",       // 入账绿
-  red: "#f87171",         // 出账红
+  bg: "var(--wallet-bg, #0d0d0d)",
+  card: "var(--wallet-card, #141414)",
+  cardBorder: "var(--wallet-card-border, rgba(var(--wallet-accent-rgb,201,168,76),0.22))",
+  gold: "var(--wallet-accent, #C9A84C)",
+  goldLight: "var(--wallet-accent-light, #F5D78E)",
+  goldDim: "var(--wallet-accent-muted, rgba(var(--wallet-accent-rgb,201,168,76),0.45))",
+  goldFaint: "var(--wallet-accent-faint, rgba(var(--wallet-accent-rgb,201,168,76),0.12))",
+  white: "var(--wallet-text, rgba(var(--wallet-neutral-rgb,255,255,255),0.88))",
+  whiteDim: "var(--wallet-text-muted, rgba(var(--wallet-neutral-rgb,255,255,255),0.45))",
+  whiteFaint: "var(--wallet-surface, rgba(var(--wallet-neutral-rgb,255,255,255),0.08))",
+  divider: "var(--wallet-divider, rgba(var(--wallet-neutral-rgb,255,255,255),0.06))",
+  green: "var(--wallet-income, #34d399)",
+  red: "var(--wallet-expense, #f87171)",
 };
+
+// 只替换色调，所有账户、操作、明细均复用原钱包的组件与数据。
+const MIBAN_WALLET_THEME = {
+  "--wallet-bg": "#F8F6F3",
+  "--wallet-card": "#FFFFFF",
+  "--wallet-card-border": "#E5E7EB",
+  "--wallet-accent": "#FF6900",
+  "--wallet-accent-light": "#C75512",
+  "--wallet-accent-muted": "#8B8D93",
+  "--wallet-accent-faint": "#FFF1E7",
+  "--wallet-text": "#1F2937",
+  "--wallet-text-muted": "#8B8D93",
+  "--wallet-surface": "#F3F4F6",
+  "--wallet-divider": "#ECEDEF",
+  "--wallet-income": "#16A34A",
+  "--wallet-expense": "#EF4444",
+  "--wallet-accent-rgb": "255,105,0",
+  "--wallet-neutral-rgb": "55,65,81",
+  "--wallet-selected-bg": "linear-gradient(135deg, #FF8C33 0%, #FF6900 100%)",
+  "--wallet-button-text": "#FFFFFF",
+  "--wallet-shadow": "0 4px 24px rgba(0,0,0,0.06)",
+  "--wallet-asset-surface": "#FAFAFA",
+  "--wallet-sheet-background": "#FFFFFF",
+} as CSSProperties;
 
 type ModalType = "recharge" | "withdraw" | "cny-recharge" | "cny-withdraw" | "transfer" | "crypto-transfer-select" | null;
 type WalletTransferAsset = "USDT" | "CNY" | AiWalletSettlementAsset;
@@ -252,7 +276,7 @@ function getWalletFlowBadge(label: string, note: string | undefined, isIn: boole
   if (/分红回填|分红冲正/.test(context)) return { label: "分红回填", color: "#FCA5A5", background: "rgba(248,113,113,0.12)", border: "rgba(252,165,165,0.20)" };
   if (/股票分红|分红/.test(context)) return { label: "分红", color: "#D8B4FE", background: "rgba(168,85,247,0.13)", border: "rgba(216,180,254,0.22)" };
   if (/解担保|保证金解冻|担保解冻|解冻|释放/.test(context)) return { label: "解担保", color: "#7DD3FC", background: "rgba(56,189,248,0.12)", border: "rgba(125,211,252,0.22)" };
-  if (/担保|保证金/.test(context)) return { label: "担保", color: G.goldLight, background: "rgba(201,168,76,0.12)", border: "rgba(245,215,142,0.20)" };
+  if (/担保|保证金/.test(context)) return { label: "担保", color: G.goldLight, background: "rgba(var(--wallet-accent-rgb,201,168,76),0.12)", border: "rgba(245,215,142,0.20)" };
   if (/提现/.test(context)) return { label: "提现", color: "#FCA5A5", background: "rgba(248,113,113,0.12)", border: "rgba(252,165,165,0.20)" };
   if (/充值/.test(context)) return { label: "充值", color: "#86EFAC", background: "rgba(52,211,153,0.12)", border: "rgba(134,239,172,0.20)" };
   if (/转账|汇款|收款|站内/.test(context)) return { label: "转账", color: "#93C5FD", background: "rgba(96,165,250,0.12)", border: "rgba(147,197,253,0.20)" };
@@ -296,7 +320,7 @@ function WalletOperationReceiptCard({
     : formatDigitalAssetAmount(receipt.currency, receipt.amount);
   const pending = receipt.balanceState === "pending";
   return (
-    <div className="mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: pending ? "rgba(201,168,76,0.08)" : "rgba(52,211,153,0.08)", border: `1px solid ${pending ? "rgba(201,168,76,0.24)" : "rgba(52,211,153,0.20)"}` }}>
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: pending ? "rgba(var(--wallet-accent-rgb,201,168,76),0.08)" : "rgba(52,211,153,0.08)", border: `1px solid ${pending ? "rgba(var(--wallet-accent-rgb,201,168,76),0.24)" : "rgba(52,211,153,0.20)"}` }}>
       {pending ? <Clock className="mt-0.5 h-4 w-4 shrink-0" style={{ color: G.goldLight }} /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: G.green }} />}
       <div className="min-w-0 flex-1">
         <div className="text-xs font-semibold" style={{ color: G.white }}>{receipt.operation}{receipt.status} · {hidden ? "••••••" : `${amount} ${receipt.currency}`}</div>
@@ -322,7 +346,7 @@ function BottomSheet({ title, onClose, children }: {
       <div
         className="rounded-t-3xl mt-auto overflow-hidden"
         style={{
-          background: "linear-gradient(160deg, #111 0%, #1c1c1c 100%)",
+          background: "var(--wallet-sheet-background, linear-gradient(160deg, #111 0%, #1c1c1c 100%))",
           border: `1px solid ${G.cardBorder}`,
           borderBottom: "none",
           maxHeight: "90vh",
@@ -358,7 +382,7 @@ function GoldInput({ label, value, onChange, placeholder, type = "text" }: {
       <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>{label}</div>
       <div
         className="flex items-center rounded-xl px-4 py-3"
-        style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}
+        style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.2)` }}
       >
         {type === "number" && (
           <span className="text-lg font-bold mr-2" style={{ color: G.goldDim }}>¥</span>
@@ -391,8 +415,8 @@ function GoldBtn({ children, onClick, disabled }: {
       className="w-full py-3.5 rounded-xl text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50"
       style={{
         background: `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
-        boxShadow: "0 4px 16px rgba(201,168,76,0.35)",
-        color: "#000",
+        boxShadow: "0 4px 16px rgba(var(--wallet-accent-rgb,201,168,76),0.35)",
+        color: "var(--wallet-button-text, #000)",
       }}
     >{children}</button>
   );
@@ -427,7 +451,7 @@ function CnyRechargeContent({ onClose }: { onClose: () => void }) {
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
       {/* 收款信息卡 */}
-      <div className="rounded-2xl p-4 space-y-2.5" style={{ background: G.goldFaint, border: `1px solid rgba(201,168,76,0.25)` }}>
+      <div className="rounded-2xl p-4 space-y-2.5" style={{ background: G.goldFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.25)` }}>
         <div className="text-xs font-semibold mb-1" style={{ color: G.goldDim }}>收款信息</div>
         {[
           { label: "收款账户", value: "招商银行 6214 **** **** 8888" },
@@ -465,7 +489,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
       {/* 可用余额 */}
       <div
         className="rounded-xl px-4 py-3 flex items-center justify-between"
-        style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.15)` }}
+        style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.15)` }}
       >
         <span className="text-sm" style={{ color: G.whiteDim }}>可用余额</span>
         <span className="text-base font-bold" style={{ color: G.goldLight }}>¥ {cnyBalance.toFixed(2)}</span>
@@ -476,7 +500,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
         <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>提现金额（元）</div>
         <div
           className="flex items-center rounded-xl px-4 py-3"
-          style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}
+          style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.2)` }}
         >
           <span className="text-lg font-bold mr-2" style={{ color: G.goldDim }}>¥</span>
           <input
@@ -506,7 +530,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
           className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
           style={{
             background: G.whiteFaint,
-            border: `1px solid rgba(201,168,76,0.2)`,
+            border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.2)`,
             color: G.white,
           }}
         />
@@ -642,7 +666,7 @@ function WalletTransferContent({
   if (confirming && recipient) {
     return (
       <div className="px-5 pb-8 pt-4 space-y-4">
-        <div className="rounded-2xl p-4 space-y-2" style={{ background: G.goldFaint, border: `1px solid rgba(201,168,76,0.3)` }}>
+        <div className="rounded-2xl p-4 space-y-2" style={{ background: G.goldFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.3)` }}>
           <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: G.goldLight }}>
             <AlertTriangle className="w-4 h-4" /> 请再次核对转账信息
           </div>
@@ -667,7 +691,7 @@ function WalletTransferContent({
 
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
-      <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.15)` }}>
+      <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.15)` }}>
         <span className="text-sm" style={{ color: G.whiteDim }}>当前可转余额</span>
         <span className="text-base font-bold" style={{ color: G.goldLight }}>{availableBalance.toFixed(amountDigits)} {currency}</span>
       </div>
@@ -690,7 +714,7 @@ function WalletTransferContent({
                   setRequestId("");
                 }}
                 className="shrink-0 rounded-xl px-3 py-2 text-left active:scale-[0.98]"
-                style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.18)` }}
+                style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.18)` }}
               >
                 <div className="max-w-24 truncate text-xs font-semibold" style={{ color: G.white }}>{favorite.nickname || favorite.name}</div>
                 <div className="mt-0.5 font-mono text-[10px] tracking-[0.1em]" style={{ color: G.goldDim }}>{favorite.paymentId}</div>
@@ -715,7 +739,7 @@ function WalletTransferContent({
             placeholder="收款码、用户名、昵称或手机号"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-xl px-3 py-3 text-sm outline-none"
-            style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)`, color: G.white }}
+            style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.2)`, color: G.white }}
           />
           <button
             type="button"
@@ -768,7 +792,7 @@ function WalletTransferContent({
           <span>转账金额（{currency}）</span>
           <button type="button" onClick={() => setAmount(availableBalance.toFixed(amountDigits))} style={{ color: G.gold }}>全部转出</button>
         </div>
-        <div className="flex items-center rounded-xl px-4 py-3" style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}>
+        <div className="flex items-center rounded-xl px-4 py-3" style={{ background: G.whiteFaint, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.2)` }}>
           <input
             type="number"
             min="0"
@@ -794,16 +818,18 @@ function WalletTransferContent({
 }
 
 // ─── 主页面 ──────────────────────────────────────────────────
-export default function Wallet() {
+export default function Wallet({ appearance = "default" }: { appearance?: "default" | "miban" } = {}) {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
+  const isMibanWalletEntry = appearance === "miban" || searchParams.get("from") === "miban";
+  const walletBasePath = isMibanWalletEntry ? "/p/proj_hzxm2t/wallet" : "/wallet";
   // 账本页卸载时会清理临时身份；钱包作为其子页面需从 URL 恢复已授权的查看用户。
-  const viewAsUserId = restoreLedgerViewAsState(searchParams.get("viewAs"));
+  const viewAsUserId = restoreLedgerViewAsState(isMibanWalletEntry ? null : searchParams.get("viewAs"));
   const isReadOnlyMemberView = !!viewAsUserId;
   // 52、37号账本均进入同一个全局钱包视图；账本来源只决定返回位置和 URL 上下文。
-  const isLedger52WalletEntry = searchParams.get("fromLedger") === "52";
-  const isLedger37WalletEntry = searchParams.get("fromLedger") === "37";
+  const isLedger52WalletEntry = !isMibanWalletEntry && searchParams.get("fromLedger") === "52";
+  const isLedger37WalletEntry = !isMibanWalletEntry && searchParams.get("fromLedger") === "37";
   const isGlobalWalletLedgerEntry = isLedger52WalletEntry || isLedger37WalletEntry;
   // 钱包资产仅按用户隔离，不按进入的项目隔离；任意入口均显示同一套数字币和人民币账户。
   const isGlobalWalletView = true;
@@ -817,7 +843,7 @@ export default function Wallet() {
     ? "CNY"
     : "CRYPTO";
   const appendWalletAccount = (path: string, account: WalletAccountAsset) => appendViewAs(
-    `${path}${path.includes("?") ? "&" : "?"}account=${account}${walletEntryLedgerId ? `&fromLedger=${walletEntryLedgerId}` : ""}`,
+    `${path}${path.includes("?") ? "&" : "?"}account=${account}${walletEntryLedgerId ? `&fromLedger=${walletEntryLedgerId}` : ""}${isMibanWalletEntry ? "&from=miban" : ""}`,
   );
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
@@ -836,7 +862,7 @@ export default function Wallet() {
   }, [operationReceipt?.id]);
   // 转账能力属于全局统一钱包；从37、52号账本进入时使用同一套钱包档案与操作入口。
   const walletReturnPath = appendViewAs(
-    isLedger52WalletEntry ? "/ledger/52" : isLedger37WalletEntry ? "/ledger/37" : "/",
+    isMibanWalletEntry ? "/p/proj_hzxm2t/" : isLedger52WalletEntry ? "/ledger/52" : isLedger37WalletEntry ? "/ledger/37" : "/",
   );
   const walletPolicyQuery = trpc.aiWallet.runtimeProfile.useQuery(
     { targetKey: "ledger:52" },
@@ -905,11 +931,11 @@ export default function Wallet() {
   const multiAssetBalances = ((multiAssetBalancesQuery.data ?? []) as any[]).map((asset) => {
     const assetCode = String(asset.assetCode || '').trim().toUpperCase();
     const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
-    const priceUsdt = livePriceUsdt > 0 ? livePriceUsdt : Number(asset.priceUsdt || 0);
+    const priceUsdt = Number.isFinite(livePriceUsdt) && livePriceUsdt > 0 ? livePriceUsdt : isMibanWalletEntry ? 0 : Number(asset.priceUsdt || 0);
     return {
       ...asset,
       priceUsdt,
-      priceCny: priceUsdt > 0 ? priceUsdt * usdtCnyRate : Number(asset.priceCny || 0),
+      priceCny: priceUsdt > 0 ? priceUsdt * usdtCnyRate : isMibanWalletEntry ? 0 : Number(asset.priceCny || 0),
     };
   });
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
@@ -943,6 +969,13 @@ export default function Wallet() {
     0,
   );
   const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
+  // 米伴共用相同卡片，但未知行情不能被当成真实零值或静默漏掉持有资产。
+  const mibanDigitalValuationKnown = usdtBalanceSummaryQuery.data !== undefined
+    && multiAssetBalancesQuery.data !== undefined
+    && walletPricesQuery.data !== undefined
+    && visibleMultiAssetBalances.every((asset) => Number.isFinite(Number(asset.priceUsdt)) && Number(asset.priceUsdt) > 0);
+  const mibanCnyValuationKnown = mibanDigitalValuationKnown
+    && Number.isFinite(unifiedUsdtCnyRate) && unifiedUsdtCnyRate > 0;
   // 钱包为全局共享账户；当前仅开放数字币和人民币两类账户。
   const cryptoAccountLabel = "数字币账户";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = [
@@ -960,11 +993,11 @@ export default function Wallet() {
   const selectWalletAccount = (account: WalletAccountAsset) => {
     setActiveAsset(account);
     setIsAccountMenuOpen(false);
-    const params = new URLSearchParams(searchParams);
+    const params = isMibanWalletEntry ? new URLSearchParams() : new URLSearchParams(searchParams);
     const isDefaultAccount = account === "CRYPTO";
     if (isDefaultAccount) params.delete("account");
     else params.set("account", account);
-    setLocation(`/wallet${params.toString() ? `?${params.toString()}` : ""}`);
+    setLocation(`${walletBasePath}${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   const recentUsdtTx = (() => {
@@ -986,7 +1019,9 @@ export default function Wallet() {
         }
       };
       // 与 CryptoWalletTransactions 完整明细页保持相同的主源与安全回退顺序。
-      (ledger52UsdtHistoryQuery.data ?? []).forEach(put);
+      (ledger52UsdtHistoryQuery.data ?? [])
+        .filter((item: any) => String(item.currency || "USDT").toUpperCase() !== "CNY")
+        .forEach(put);
       (recentManualQuery.data ?? [])
         .filter((item: any) => !String(item.note || "").startsWith("[CNY]") && !String(item.note || "").startsWith("[BALANCE_BASE]") && !String(item.note || "").startsWith("[AF52本金冻结迁移-"))
         .forEach((item: any) => put({
@@ -1126,7 +1161,7 @@ export default function Wallet() {
       style={{
         background: G.card,
         border: `1px solid ${G.cardBorder}`,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+        boxShadow: "var(--wallet-shadow, 0 4px 24px rgba(0,0,0,0.5))",
       }}
     >
       {/* 顶部金线 */}
@@ -1144,12 +1179,12 @@ export default function Wallet() {
               onClick={() => setLocation(walletReturnPath)}
               className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center"
               style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
-              aria-label={isLedger37WalletEntry ? "返回37号账本" : isLedger52WalletEntry ? "返回52号账本" : "返回首页"}
+              aria-label={isMibanWalletEntry ? "返回米伴首页" : isLedger37WalletEntry ? "返回37号账本" : isLedger52WalletEntry ? "返回52号账本" : "返回首页"}
             >
               <ArrowLeft className="w-4 h-4" style={{ color: G.goldLight }} />
             </button>
             {isGlobalWalletView ? (
-              <div className="grid h-9 w-[144px] grid-cols-2 overflow-hidden rounded-lg border p-0.5" style={{ borderColor: "rgba(201,168,76,0.32)", background: "rgba(255,255,255,0.045)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)" }} aria-label="切换全局钱包账户">
+              <div className="grid h-9 w-[144px] grid-cols-2 overflow-hidden rounded-lg border p-0.5" style={{ borderColor: "rgba(var(--wallet-accent-rgb,201,168,76),0.32)", background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.045)", boxShadow: "inset 0 1px 0 rgba(var(--wallet-neutral-rgb,255,255,255),0.035)" }} aria-label="切换全局钱包账户">
                 {accountMenuItems.map((item) => {
                   const selected = item.value === activeAsset;
                   const shortLabel = item.value === "CRYPTO" ? "数字币" : "人民币";
@@ -1159,10 +1194,10 @@ export default function Wallet() {
                     onClick={() => selectWalletAccount(item.value)}
                     className="w-full rounded-md px-1 text-[11px] font-semibold transition-all duration-200"
                     style={{
-                      background: selected ? "linear-gradient(135deg, #F8E3A4 0%, #D4B15A 55%, #BD963D 100%)" : "rgba(255,255,255,0.012)",
-                      color: selected ? "#171109" : "rgba(255,255,255,0.48)",
-                      boxShadow: selected ? "0 2px 8px rgba(201,168,76,0.35), inset 0 1px 0 rgba(255,255,255,0.38)" : "none",
-                      textShadow: selected ? "0 1px 0 rgba(255,255,255,0.2)" : "none",
+                      background: selected ? "var(--wallet-selected-bg, linear-gradient(135deg, #F8E3A4 0%, #D4B15A 55%, #BD963D 100%))" : "rgba(var(--wallet-neutral-rgb,255,255,255),0.012)",
+                      color: selected ? "var(--wallet-button-text, #171109)" : "rgba(var(--wallet-neutral-rgb,255,255,255),0.48)",
+                      boxShadow: selected ? "0 2px 8px rgba(var(--wallet-accent-rgb,201,168,76),0.35), inset 0 1px 0 rgba(var(--wallet-neutral-rgb,255,255,255),0.38)" : "none",
+                      textShadow: selected ? "0 1px 0 rgba(var(--wallet-neutral-rgb,255,255,255),0.2)" : "none",
                     }}
                     aria-pressed={selected}
                     title={item.label}
@@ -1228,14 +1263,14 @@ export default function Wallet() {
             {showDetails && <button
               onClick={onDetails || (() => setLocation(activeAssetDetailsPath))}
               className="h-7 rounded-lg px-2 text-xs font-medium"
-              style={{ background: G.goldFaint, color: G.goldLight, border: `1px solid rgba(201,168,76,0.55)`, boxShadow: "0 1px 5px rgba(201,168,76,0.12)" }}
+              style={{ background: G.goldFaint, color: G.goldLight, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.55)`, boxShadow: "0 1px 5px rgba(var(--wallet-accent-rgb,201,168,76),0.12)" }}
             >
               明细
             </button>}
             <button
               onClick={() => window.location.reload()}
               className="h-7 rounded-lg px-2 text-xs font-medium"
-              style={{ background: G.goldFaint, color: G.goldLight, border: `1px solid rgba(201,168,76,0.55)`, boxShadow: "0 1px 5px rgba(201,168,76,0.12)" }}
+              style={{ background: G.goldFaint, color: G.goldLight, border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.55)`, boxShadow: "0 1px 5px rgba(var(--wallet-accent-rgb,201,168,76),0.12)" }}
             >
               刷新
             </button>
@@ -1270,10 +1305,10 @@ export default function Wallet() {
                 disabled={readOnly || rechargeDisabled}
                 className="flex h-9 items-center justify-center gap-1 rounded-lg text-sm font-bold leading-none active:scale-[0.97] transition-transform"
                 style={{
-                  background: rechargeDisabled ? "rgba(255,255,255,0.055)" : `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
-                  border: rechargeDisabled ? "1px solid rgba(255,255,255,0.09)" : "none",
-                  boxShadow: rechargeDisabled ? "none" : "0 2px 8px rgba(201,168,76,0.28)",
-                  color: rechargeDisabled ? "rgba(255,255,255,0.32)" : "#000",
+                  background: rechargeDisabled ? "rgba(var(--wallet-neutral-rgb,255,255,255),0.055)" : `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
+                  border: rechargeDisabled ? "1px solid rgba(var(--wallet-neutral-rgb,255,255,255),0.09)" : "none",
+                  boxShadow: rechargeDisabled ? "none" : "0 2px 8px rgba(var(--wallet-accent-rgb,201,168,76),0.28)",
+                  color: rechargeDisabled ? "rgba(var(--wallet-neutral-rgb,255,255,255),0.32)" : "var(--wallet-button-text, #000)",
                   opacity: readOnly ? 0.45 : 1,
                 }}
               >
@@ -1287,9 +1322,9 @@ export default function Wallet() {
                 disabled={readOnly || withdrawDisabled}
                 className="flex h-9 items-center justify-center gap-1 rounded-lg text-sm font-bold leading-none active:scale-[0.97] transition-transform"
                 style={{
-                  background: withdrawDisabled ? "rgba(255,255,255,0.055)" : "transparent",
-                  border: withdrawDisabled ? "1px solid rgba(255,255,255,0.09)" : `1px solid ${G.gold}`,
-                  color: withdrawDisabled ? "rgba(255,255,255,0.32)" : G.goldLight,
+                  background: withdrawDisabled ? "rgba(var(--wallet-neutral-rgb,255,255,255),0.055)" : "transparent",
+                  border: withdrawDisabled ? "1px solid rgba(var(--wallet-neutral-rgb,255,255,255),0.09)" : `1px solid ${G.gold}`,
+                  color: withdrawDisabled ? "rgba(var(--wallet-neutral-rgb,255,255,255),0.32)" : G.goldLight,
                   opacity: readOnly ? 0.45 : 1,
                 }}
               >
@@ -1302,7 +1337,7 @@ export default function Wallet() {
                 onClick={onTransfer}
                 disabled={readOnly}
                 className="flex h-9 items-center justify-center gap-1 rounded-lg text-sm font-bold leading-none active:scale-[0.97] transition-transform"
-                style={{ background: "rgba(255,255,255,0.035)", border: `1px solid ${G.divider}`, color: G.whiteDim, opacity: readOnly ? 0.45 : 1 }}
+                style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.035)", border: `1px solid ${G.divider}`, color: G.whiteDim, opacity: readOnly ? 0.45 : 1 }}
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>转账</span>
@@ -1322,7 +1357,7 @@ export default function Wallet() {
           </div>
         )}
         {readOnly && (onRecharge || onWithdraw || onTransfer || onReceive) && (
-          <div className="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[10px] leading-4" style={{ background: "rgba(255,255,255,0.035)", border: `1px solid ${G.divider}`, color: G.whiteDim }}>
+          <div className="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[10px] leading-4" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.035)", border: `1px solid ${G.divider}`, color: G.whiteDim }}>
             <Eye className="mt-0.5 h-3 w-3 shrink-0" style={{ color: G.goldDim }} />
             <span>成员只读视角：资金操作仅该成员本人可用；“明细”和“刷新”仍可正常使用。</span>
           </div>
@@ -1335,7 +1370,7 @@ export default function Wallet() {
   );
 
   return (
-    <div className="min-h-screen" style={{ background: G.bg }}>
+    <div className="min-h-screen" data-wallet-appearance={isMibanWalletEntry ? "miban" : "default"} style={{ ...(isMibanWalletEntry ? MIBAN_WALLET_THEME : {}), background: G.bg }}>
 
       {/* ── 账户卡片 ── */}
       <div
@@ -1449,7 +1484,7 @@ export default function Wallet() {
                     style={{ borderBottom: idx < recentCnyTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                      <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${G.cardBorder}` }}>
+                      <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.06)", border: `1px solid ${G.cardBorder}` }}>
                         {(tx as any).wcCode
                           ? <img src={`/flags/${(tx as any).wcCode}.png`} alt={(tx as any).wcCode} className="h-full w-full object-cover" />
                           : cnyIconSrc
@@ -1489,11 +1524,11 @@ export default function Wallet() {
         {isGlobalWalletView && activeAsset === "CRYPTO" && <AccountCard
           icon="₿"
           label="数字币账户"
-          balance={mask(digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-          unit="USDT"
+          balance={mask(isMibanWalletEntry && !mibanDigitalValuationKnown ? "估值待更新" : digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+          unit={isMibanWalletEntry && !mibanDigitalValuationKnown ? "" : "USDT"}
           balanceCaption="总资产估值"
           subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
-            ≈ ¥{(digitalTotalUsdt * usdtCnyRate).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币
+            {isMibanWalletEntry && !mibanCnyValuationKnown ? "人民币估值待更新" : `≈ ¥${(digitalTotalUsdt * usdtCnyRate).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币`}
           </div>}
           txPath=""
           onRefresh={refreshWalletData}
@@ -1513,7 +1548,7 @@ export default function Wallet() {
                 <span className="font-semibold" style={{ color: G.white }}>我的数字资产</span>
                 <span style={{ color: G.whiteDim }}>{visibleDigitalAssetBalances.length > 0 ? "数量 / 估值" : "暂无持仓"}</span>
               </div>
-              {visibleDigitalAssetBalances.length > 0 ? <div className="overflow-hidden rounded-xl" style={{ background: "rgba(0,0,0,0.14)", border: `1px solid ${G.divider}` }}>
+              {visibleDigitalAssetBalances.length > 0 ? <div className="overflow-hidden rounded-xl" style={{ background: "var(--wallet-asset-surface, rgba(0,0,0,0.14))", border: `1px solid ${G.divider}` }}>
               {visibleDigitalAssetBalances.map((asset: any, index: number) => {
                 const assetCode = String(asset.assetCode || "").toUpperCase() as DigitalAssetHistoryCode;
                 const amount = Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0)));
@@ -1527,7 +1562,7 @@ export default function Wallet() {
                 const assetAccent = assetCode === "USDT" ? "#26A17B" : assetCode === "ETH" ? "#627EEA" : assetCode === "BTC" ? "#F7931A" : assetCode === "SOL" ? "#A55CFF" : assetCode === "BNB" ? "#F3BA2F" : assetCode === "SUI" ? "#4DA2FF" : "#8AA0B8";
                 const assetIconSrc = getCryptoAssetIconSrc(assetCode);
                 return (
-                  <div key={assetCode} className="relative px-3 py-3" style={{ background: hasCollateral ? "linear-gradient(90deg, rgba(201,168,76,0.075) 0%, rgba(201,168,76,0.018) 42%, transparent 72%)" : "transparent", borderBottom: index < visibleDigitalAssetBalances.length - 1 ? "1px solid rgba(255,255,255,0.10)" : "none" }}>
+                  <div key={assetCode} className="relative px-3 py-3" style={{ background: hasCollateral ? "linear-gradient(90deg, rgba(var(--wallet-accent-rgb,201,168,76),0.075) 0%, rgba(var(--wallet-accent-rgb,201,168,76),0.018) 42%, transparent 72%)" : "transparent", borderBottom: index < visibleDigitalAssetBalances.length - 1 ? "1px solid rgba(var(--wallet-neutral-rgb,255,255,255),0.10)" : "none" }}>
                     {hasCollateral && <div className="absolute inset-y-3 left-0 w-px rounded-full" style={{ background: "linear-gradient(180deg, transparent, rgba(245,215,142,0.82), transparent)" }} />}
                     <div className="grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem_1rem] items-start gap-x-2.5 text-left">
                       <div className="row-span-3 flex h-9 w-9 shrink-0 items-center justify-center self-start overflow-hidden rounded-full text-xs font-bold" style={{ background: `${assetAccent}25`, color: assetAccent, border: `1px solid ${assetAccent}55` }}>
@@ -1543,8 +1578,8 @@ export default function Wallet() {
                     </div>
                 );
               })}
-              </div> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(255,255,255,0.025)", border: `1px dashed ${G.divider}` }}>
-                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(201,168,76,0.10)", border: "1px solid rgba(201,168,76,0.20)" }}>
+              </div> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.025)", border: `1px dashed ${G.divider}` }}>
+                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(var(--wallet-accent-rgb,201,168,76),0.10)", border: "1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.20)" }}>
                   <WalletIcon className="h-4 w-4" style={{ color: G.goldDim }} />
                 </div>
                 <p className="text-xs font-medium" style={{ color: G.whiteDim }}>暂无持仓资产</p>
@@ -1574,7 +1609,7 @@ export default function Wallet() {
                       style={{ borderBottom: index < recentDigitalTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                        <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${G.cardBorder}` }}>
+                        <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.06)", border: `1px solid ${G.cardBorder}` }}>
                           {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-[10px] font-bold" style={{ color: G.goldLight }}>{assetCode.slice(0, 1)}</span>}
                           <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: presentation.isIn ? G.green : G.red, borderColor: G.card }} />
                         </div>
@@ -1659,7 +1694,7 @@ export default function Wallet() {
                   style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)", border: `1px solid ${G.cardBorder}` }}>
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.07)", border: `1px solid ${G.cardBorder}` }}>
                       {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: G.goldLight }}>{assetCode.slice(0, 1)}</span>}
                     </div>
                     <div className="min-w-0">

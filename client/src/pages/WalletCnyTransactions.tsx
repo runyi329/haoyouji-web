@@ -76,15 +76,20 @@ export default function WalletCnyTransactions() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
-  const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
-  const sourceLedgerId = params.get("fromLedger") === "37" ? "37" : "52";
-  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CNY&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CNY`;
-  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
+  const isMiban = params.get("from") === "miban";
+  const viewAsUserId = isMiban ? undefined : restoreLedgerViewAsState(params.get("viewAs"));
+  const sourceLedgerId = isMiban ? undefined : params.get("fromLedger") === "37" ? "37" : "52";
+  const walletQuery = isMiban ? `?from=miban&account=${params.get("account") === "CRYPTO" ? "CRYPTO" : "CNY"}` : viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CNY&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CNY`;
+  const backTo = `${isMiban ? "/p/proj_hzxm2t/wallet" : "/wallet"}${walletQuery}`;
+  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => isMiban
+    ? `?from=miban&account=${account === "USDT" ? "CRYPTO" : account}`
+    : viewAsUserId
     ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
     : `?fromLedger=${sourceLedgerId}&account=${account}`;
   const switchAsset = (asset: string) => {
     if (asset === "CNY") return;
     if (asset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
+    if (isMiban) return setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&from=miban&account=CRYPTO`);
     setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=${sourceLedgerId}&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
@@ -259,7 +264,7 @@ export default function WalletCnyTransactions() {
         }}
       >
         <button
-          onClick={() => setLocation(`/wallet${walletQuery}`)}
+          onClick={() => setLocation(backTo)}
           className="flex items-center justify-center w-9 h-9 rounded-full"
           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(201,168,76,0.22)" }}
         >

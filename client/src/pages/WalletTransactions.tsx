@@ -63,19 +63,22 @@ export default function WalletTransactions() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
-  const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
-  const sourceLedgerId = params.get("fromLedger") === "37" ? "37" : "52";
-  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
+  const isMiban = params.get("from") === "miban";
+  const viewAsUserId = isMiban ? undefined : restoreLedgerViewAsState(params.get("viewAs"));
+  const sourceLedgerId = isMiban ? undefined : params.get("fromLedger") === "37" ? "37" : "52";
+  const walletQuery = isMiban ? `?from=miban&account=${params.get("account") === "CNY" ? "CNY" : "CRYPTO"}` : viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
   const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => {
     const walletAccount = account === "USDT" ? "CRYPTO" : account;
+    if (isMiban) return `?from=miban&account=${walletAccount}`;
     return viewAsUserId
       ? `?fromLedger=${sourceLedgerId}&account=${walletAccount}&viewAs=${viewAsUserId}`
       : `?fromLedger=${sourceLedgerId}&account=${walletAccount}`;
   };
-  const backTo = isYaban ? "/yaban/wallet" : `/wallet${walletQuery}`;
+  const backTo = isYaban ? "/yaban/wallet" : `${isMiban ? "/p/proj_hzxm2t/wallet" : "/wallet"}${walletQuery}`;
   const switchAsset = (asset: string) => {
     if (asset === "USDT") return;
     if (asset === "CNY") return setLocation(`/wallet/cny-transactions${walletQueryForAccount("CNY")}`);
+    if (isMiban) return setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&from=miban&account=CRYPTO`);
     setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=${sourceLedgerId}&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
