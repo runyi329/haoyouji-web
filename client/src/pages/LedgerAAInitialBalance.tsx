@@ -1573,25 +1573,25 @@ export default function LedgerAAInitialBalance() {
       const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
       return `${part('year')}-${part('month')}-${part('day')}`;
     };
-    return (
-      <section className="space-y-2">
-        {matrix.lots.length === 0 ? (
-          <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">该标签还没有登记股票；请先在股票账户页新增买入或加仓。</div>
-        ) : matrix.lots.map((lot: any, lotIndex: number) => {
+    const activeLots = matrix.lots.filter((lot: any) => lot.status !== 'closed');
+    const closedLots = matrix.lots.filter((lot: any) => lot.status === 'closed');
+    const activeLotNumbers = new Map<number, string>(activeLots.map((lot: any, index: number) => [Number(lot.id), String(index + 1).padStart(2, '0')]));
+    const renderLot = (lot: any) => {
           const globalClosed = lot.status === 'closed';
           const lotId = Number(lot.id);
-          const lotNumber = String(lotIndex + 1).padStart(2, '0');
+          const lotNumber = activeLotNumbers.get(lotId) || '历史';
           const isExpanded = expandedStockLots.has(lotId);
-          const isEditing = editingStockLots.has(lotId);
+          const isEditing = !globalClosed && editingStockLots.has(lotId);
           const isSaving = savingStockLots.has(lotId);
           const activeParticipations = lot.participations.filter((item: any) => Number(item.remainingQuantity || 0) > 0);
           const totalAllocatedQuantity = activeParticipations.reduce((total: number, item: any) => total + Number(item.remainingQuantity || 0), 0);
           const holdingTotal = Number(lot.initialQuantity || 0) * Number(lot.unitCost || 0);
           const isUsStock = isUsStockSymbol(lot.symbol);
           const stockInputSymbol = isUsStock ? '$' : '¥';
-          const initialQuantity = Number(lot.initialQuantity || 0);
-          const availablePercent = initialQuantity > 0 ? Number(lot.availableForParticipation || 0) / initialQuantity * 100 : 0;
-          const allocatedPercent = initialQuantity > 0 ? totalAllocatedQuantity / initialQuantity * 100 : 0;
+          const allocationQuantityBase = Number(lot.currentQuantity || 0);
+          const availablePercent = allocationQuantityBase > 0 ? Number(lot.availableForParticipation || 0) / allocationQuantityBase * 100 : 0;
+          const allocatedPercent = allocationQuantityBase > 0 ? totalAllocatedQuantity / allocationQuantityBase * 100 : 0;
+          const isFullyAllocated = !globalClosed && allocationQuantityBase > 0.00000001 && Math.abs(totalAllocatedQuantity - allocationQuantityBase) <= 0.00000001;
           const marketValue = lot.marketPrice === null || lot.marketPrice === undefined
             ? null
             : Number(lot.currentQuantity || 0) * Number(lot.marketPrice || 0);
@@ -1701,13 +1701,14 @@ export default function LedgerAAInitialBalance() {
             }
           };
           return (
-            <div key={lot.id} className="overflow-hidden rounded-xl bg-white" style={{ border: `1px solid ${isEditing ? accentColor : '#E3E9ED'}` }}>
-              <div className="flex items-start gap-2 px-2.5 py-2.5" style={{ backgroundColor: isEditing ? '#F4FAFC' : '#FFFFFF' }}>
+            <div key={lot.id} className="overflow-hidden rounded-xl bg-white" style={{ border: `1px solid ${globalClosed ? '#DED8D0' : isEditing ? accentColor : '#E3E9ED'}` }}>
+              <div className="flex items-start gap-2 px-2.5 py-2.5" style={{ backgroundColor: globalClosed ? '#F4F1EC' : isEditing ? '#F4FAFC' : '#FFFFFF' }}>
                 <button type="button" onClick={() => toggleStockLotExpanded(lotId)} className="min-w-0 flex-1 text-left">
                   <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                     <span className="text-sm font-semibold leading-5 text-gray-800 break-words">{lot.stockName}</span>
                     <span className="shrink-0 text-sm font-semibold leading-5 text-gray-800">{lot.symbol}</span>
-                    <span className="shrink-0 text-xs font-semibold" style={{ color: accentColor }}>持仓编号 {lotNumber}</span>
+                    {!globalClosed && <span className="shrink-0 text-xs font-semibold" style={{ color: accentColor }}>持仓编号 {lotNumber}</span>}
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${globalClosed ? 'bg-[#E7E1D8] text-[#7F6B53]' : 'bg-[#EAF5EF] text-[#2F7660]'}`}>{globalClosed ? '已卖出 · 只读' : Number(lot.globallySoldQuantity || 0) > 0 ? '进行中 · 部分已卖出' : '进行中'}</span>
                   </div>
                 </button>
                 {isEditing ? (
@@ -1722,15 +1723,21 @@ export default function LedgerAAInitialBalance() {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-px border-y text-[10px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#E8EEF1' }}>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>持仓</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b><span className="invisible text-[9px] leading-4">占位</span></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{globalClosed ? '买入股数' : '当前持仓'}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(globalClosed ? lot.initialQuantity : lot.currentQuantity, 4)} 股</b><span className="invisible text-[9px] leading-4">占位</span></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓均价</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(Number(lot.unitCost || 0), isUsStock, 4)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(holdingTotal, isUsStock)}</b></div>
+                {globalClosed ? <>
+                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">已卖出 <b className="font-semibold">{formatNumber(lot.globallySoldQuantity, 4)} 股</b></div>
+                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">当前余量 <b className="font-semibold">0 股</b></div>
+                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">已结束 · 不可分配</div>
+                </> : <>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{marketQuoteLabel}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock)}</b></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(lot.availableForParticipation, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
-                <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">已分配 <b className="ml-0.5 text-gray-700">{formatNumber(totalAllocatedQuantity, 4)} 股</b> <span className="text-gray-400">{formatNumber(allocatedPercent, 2)}%</span></div>
+                <div className={`whitespace-nowrap px-0.5 py-1.5 text-center ${isFullyAllocated ? 'bg-[#C62828] text-white' : 'bg-[#F8FAFB] text-gray-500'}`}>已分配 <b className={`ml-0.5 ${isFullyAllocated ? 'text-white' : 'text-gray-700'}`}>{formatNumber(totalAllocatedQuantity, 4)} 股</b> <span className={isFullyAllocated ? 'text-white/90' : 'text-gray-400'}>{formatNumber(allocatedPercent, 2)}%</span></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
+                </>}
               </div>
               {isExpanded && <div className="space-y-1.5 p-2.5">
                 <div className="space-y-1.5">
@@ -1972,8 +1979,8 @@ export default function LedgerAAInitialBalance() {
               </div>}
               {!isEditing ? (
                 <div className="flex w-full items-center justify-between px-2.5 py-2 text-[11px] text-gray-500">
-                  <span>成交时间 {tradeTimestamp}</span>
-                  <button type="button" aria-label={isExpanded ? `收起持仓编号 ${lotNumber}` : `展开持仓编号 ${lotNumber}`} onClick={() => toggleStockLotExpanded(lotId)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+                  <span>{globalClosed ? '买入时间' : '成交时间'} {tradeTimestamp}</span>
+                  <button type="button" aria-label={`${isExpanded ? '收起' : '展开'}${globalClosed ? '已卖出持仓记录' : `持仓编号 ${lotNumber}`}`} onClick={() => toggleStockLotExpanded(lotId)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
                     <ChevronDown size={15} className="transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                   </button>
                 </div>
@@ -1996,7 +2003,18 @@ export default function LedgerAAInitialBalance() {
               </div>
             </div>
           );
-        })}
+    };
+    return (
+      <section className="space-y-2">
+        {matrix.lots.length > 0 && <div className="px-0.5 text-[11px] font-medium text-[#2F7660]">进行中 {activeLots.length} 笔</div>}
+        {matrix.lots.length === 0 ? <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">该标签还没有登记股票；请先在股票账户页新增买入或加仓。</div> : activeLots.map(renderLot)}
+        {closedLots.length > 0 && <details key={activeStockParticipationCategoryId} className="group overflow-hidden rounded-xl border border-[#DED8D0] bg-[#F4F1EC]">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-xs font-medium text-[#7F6B53] [&::-webkit-details-marker]:hidden">
+            <span>已卖出（{closedLots.length}笔）</span>
+            <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-2 border-t border-[#DED8D0] p-2">{closedLots.map(renderLot)}</div>
+        </details>}
       </section>
     );
   };
