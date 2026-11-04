@@ -1,5 +1,6 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
 import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
+import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -1585,6 +1586,9 @@ export async function createStockTagEvent(input: {
       const lots = await getActiveLots(access.categoryId);
       const selectedLot = lots.find((lot) => lot.id === lotId && lot.remainingQuantity > EPSILON);
       if (!selectedLot) throw new Error("所选持仓编号不存在或已全部卖出");
+      if (!isStockLotSaleDateValid(actualTradedAt, selectedLot.openedAt)) {
+        throw new Error("卖出日期不能早于这笔持仓的买入日期");
+      }
       stock = await verifyStockForTrade(selectedLot.symbol);
       quantity = selectedLot.remainingQuantity;
     } else {
@@ -1596,10 +1600,9 @@ export async function createStockTagEvent(input: {
     throw new Error("备注内容不能为空");
   }
 
-  // Append-only allocation is deterministic only when new trades are recorded in execution order.
-  // A historical backfill remains possible until a later trade is present; otherwise the later
-  // operation must first be corrected/voided in reverse order instead of silently reallocating it.
-  if (stock && !input.correctsEventId) {
+  // 展示序号会随当前列表变化。新买入、按内部持仓ID选定的卖出彼此独立，
+  // 不由同股票其他记录或12:00日期占位时间拦截；旧式非指定持仓操作仍保留保护。
+  if (stock && requiresStockTradeOrderCheck(type, input.correctsEventId, Number(input.lotId))) {
     const conn = await getDbConnection();
     if (!conn) throw new Error("数据库连接不可用");
     const [laterRows] = await (conn as any).execute(
