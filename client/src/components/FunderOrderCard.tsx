@@ -739,7 +739,7 @@ export interface FunderOrderCardProps {
   setParticipantsEditMode?: (v: boolean) => void;
   onConfirmSettle?: (order: any) => void;
   viewMode?: 'default' | 'large' | 'small';
-  onExposureGapChange?: (orderId: number, gap: number) => void;
+  onExposureGapChange?: (orderId: number, gap: number, collateralValueU?: number | null) => void;
   /** 编辑页用：回传三种担保口径的同源实时试算，避免编辑器与订单卡片各算一套。 */
   onCollateralFormulaPreviewChange?: (orderId: number, values: FunderCollateralFormulaPreview) => void;
   sharedGapMap?: Record<number, number>;
@@ -773,6 +773,12 @@ function readConfirmedExposureGap(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const gap = Number(value);
   return Number.isFinite(gap) ? gap : null;
+}
+
+function readConfirmedHoldingGap(finalGap: unknown, collateralValueU: unknown): number | null {
+  const gap = readConfirmedExposureGap(finalGap);
+  const collateral = readConfirmedExposureGap(collateralValueU);
+  return gap === null || collateral === null ? null : gap - collateral;
 }
 
 export function FunderOrderCard({
@@ -898,14 +904,15 @@ export function FunderOrderCard({
   } | null>(null);
   // ⑤的数字只保存在当前共享担保弹窗内：每张候选订单都由其原订单卡直接回传
   // 最终“担保缺口”。不经父页面映射、不读取服务端摘要，也不以浮动盈亏作回退。
-  const [popupFinalGapByOrderId, setPopupFinalGapByOrderId] = useState<Record<string, number>>({});
-  const handlePopupFinalGapChange = useCallback((memberKey: string | number, gap: number) => {
+  const [popupFinalGapByOrderId, setPopupFinalGapByOrderId] = useState<Record<string, { finalGap: number; collateralValueU: number | null }>>({});
+  const handlePopupFinalGapChange = useCallback((memberKey: string | number, gap: number, collateralValueU?: number | null) => {
     const normalizedMemberKey = String(memberKey || '').trim();
     if (!normalizedMemberKey || !Number.isFinite(gap)) return;
+    const confirmedCollateral = readConfirmedExposureGap(collateralValueU);
     setPopupFinalGapByOrderId(previous => (
-      previous[normalizedMemberKey] === gap
+      previous[normalizedMemberKey]?.finalGap === gap && previous[normalizedMemberKey]?.collateralValueU === confirmedCollateral
         ? previous
-        : { ...previous, [normalizedMemberKey]: gap }
+        : { ...previous, [normalizedMemberKey]: { finalGap: gap, collateralValueU: confirmedCollateral } }
     ));
   }, []);
   // 担保说明状态前置：共享担保完整池只在用户打开说明时读取，避免长列表逐卡轮询。
@@ -1273,7 +1280,7 @@ export function FunderOrderCard({
     ).map((sourceOrder: any) => [String(sourceOrder._sharedPoolMemberKey || `${Number(sourceOrder.id)}:${String(sourceOrder._sharedPoolSegmentId || '__primary__')}`), sourceOrder])
   );
   // 第③项的每笔持仓差额由同一张订单卡回传：订单卡最终缺口中已包含该笔担保物，
-  // 因此统一扣除本笔担保物，并在第④项统一加回；资金属性仅影响展示标签。
+  // 因此扣除同次计算的担保物，不能用共享池稍早的担保价；第④项统一加回池资产。
   const sharedOwnerOrders = (Array.isArray((sharedPoolInfo as any)?.orders)
     ? (sharedPoolInfo as any).orders
     : []
@@ -1281,15 +1288,14 @@ export function FunderOrderCard({
     const orderId = Number(summaryOrder.orderId ?? summaryOrder.id);
     const memberKey = String(summaryOrder.memberKey || `${orderId}:${String(summaryOrder.jointSegmentId || '__primary__')}`);
     const sourceOrder = sharedOrderSourcesByMemberKey.get(memberKey) ?? null;
-    const finalGap = readConfirmedExposureGap(popupFinalGapByOrderId[memberKey as any]);
-    const collateralValue = Number(summaryOrder.collateralValue ?? 0);
+    const finalGap = readConfirmedExposureGap(popupFinalGapByOrderId[memberKey]?.finalGap);
     return {
       ...summaryOrder,
       orderId,
       memberKey,
       sourceOrder,
       finalGap,
-      holdingGap: finalGap === null ? null : finalGap - (Number.isFinite(collateralValue) ? collateralValue : 0),
+      holdingGap: readConfirmedHoldingGap(finalGap, popupFinalGapByOrderId[memberKey]?.collateralValueU),
     };
   }).filter((candidate: any) => Number.isFinite(candidate.orderId));
   const sharedHoldingGapReady = sharedOwnerOrders.length > 0
@@ -1309,7 +1315,7 @@ export function FunderOrderCard({
       orderId,
       memberKey,
       sourceOrder: nonSharedOrderSourcesByMemberKey.get(memberKey) ?? null,
-      collateralGap: readConfirmedExposureGap(popupFinalGapByOrderId[memberKey as any]),
+      collateralGap: readConfirmedExposureGap(popupFinalGapByOrderId[memberKey]?.finalGap),
     };
   }).filter((candidate: any) => Number.isFinite(candidate.orderId));
   const nonSharedGapReady = nonSharedOwnerOrders.every((candidate: any) => readConfirmedExposureGap(candidate.collateralGap) !== null);
@@ -3029,9 +3035,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     if (hasExternalCollateral && !isSharedMode && externalNonSharedGapU === null) return;
     const finalGap = isSharedMode ? sharedOrderExposure : (externalNonSharedGapU ?? exposure);
     if (finalGap !== null && Number.isFinite(finalGap) && Number.isFinite(canonicalOrderId)) {
-      onExposureGapChange(canonicalOrderId, finalGap);
+      onExposureGapChange(canonicalOrderId, finalGap, combinedCollateralValueU);
     }
-  }, [sharedOrderExposure, externalNonSharedGapU, exposure, hasExternalCollateral, isSharedMode, onExposureGapChange, order.id]);
+  }, [sharedOrderExposure, externalNonSharedGapU, exposure, combinedCollateralValueU, hasExternalCollateral, isSharedMode, onExposureGapChange, order.id]);
 
   const renderCollateralGapValue = (gapU: number) => {
     const color = gapU < 0 ? '#16A34A' : '#DC2626';
@@ -4425,20 +4431,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           {sharedPoolInfo && (() => {
                             const orders = (sharedPoolInfo as any).orders ?? [];
                             const totalColl = Number((sharedPoolInfo as any).totalCollateralValue);
-                            const serverHoldingBalance = Number((sharedPoolInfo as any).totalCollateralRequired);
-                            const serverTotalGap = Number((sharedPoolInfo as any).totalGap);
-                            // 第①项与第③项共用原订单卡回传的单笔最终缺口；不再用服务端
-                            // 对期权按行权价/现货价简化出来的余额。若某张隐藏订单卡没有回传，
-                            // 则直接使用同一共享池接口已算好的汇总，避免第①、②项永久停在加载中。
-                            const hasClientFinalGaps = sharedHoldingGapReady && Number.isFinite(totalColl);
-                            const hasServerSummary = Number.isFinite(totalColl)
-                              && Number.isFinite(serverHoldingBalance)
-                              && Number.isFinite(serverTotalGap);
-                            const allHaveGap = hasClientFinalGaps || hasServerSummary;
-                            const holdingBalance = hasClientFinalGaps ? sharedHoldingGapTotal : serverHoldingBalance;
-                            const diff = hasClientFinalGaps
-                              ? holdingBalance + totalColl
-                              : serverTotalGap;
+                            // ①②③共用原订单卡的最终缺口。报价未到齐时等待，绝不把期权张数
+                            // 乘ETH/BTC现货价的服务端简化摘要当作合约持仓差额。
+                            const allHaveGap = sharedHoldingGapReady && Number.isFinite(totalColl);
+                            const holdingBalance = sharedHoldingGapTotal;
+                            const diff = holdingBalance + totalColl;
                             // 浮盈亏口径与担保减买入价值口径均以订单真实买入价值为基准。
                             const totalGapBase = orders.reduce((sum: number, o: any) => {
                               // 币本位订单的本金和标的市价均不构成风险基准，分母不能重新混入其买入价值。
@@ -4696,13 +4693,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           </div>
 
                           {/* 共享第③项与⑤均由隐藏的原订单卡回传最终缺口；服务端摘要只负责
-                              枚举已授权订单，不能参与期权、37号或利息的最终金额计算。 */}
+                              枚举已授权订单；隐藏卡需显式启用预览加载，结清快照限制仍保留。 */}
                           {(sharedOwnerOrders.length > 0 || nonSharedOwnerOrders.length > 0) && (
                             <div aria-hidden="true" style={{ display: 'none' }}>
                               {[...sharedOwnerOrders, ...nonSharedOwnerOrders].map((sourceCandidate: any) => sourceCandidate.sourceOrder ? (
                                 <FunderOrderCard
                                   key={`popup-final-gap-${order.id}-${sourceCandidate.memberKey || sourceCandidate.orderId}`}
                                   order={sourceCandidate.sourceOrder}
+                                  previewMode={true}
                                   ledgerId={ledgerId}
                                   livePrices={livePrices}
                                   priceDirection={priceDirection}
@@ -4710,7 +4708,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   isAdmin={false}
                                   membersData={membersData}
                                   allOrders={[]}
-                                  onExposureGapChange={(_orderId, gap) => handlePopupFinalGapChange(sourceCandidate.memberKey || `${sourceCandidate.orderId}:__primary__`, gap)}
+                                  onExposureGapChange={(_orderId, gap, collateralValueU) => handlePopupFinalGapChange(sourceCandidate.memberKey || `${sourceCandidate.orderId}:__primary__`, gap, collateralValueU)}
                                 />
                               ) : null)}
                             </div>
