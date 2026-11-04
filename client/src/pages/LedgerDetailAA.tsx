@@ -28,6 +28,7 @@ import { useLocation, useSearch } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { readTagVisible } from "@shared/tag-visibility";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import {
   AreaChart,
@@ -648,16 +649,9 @@ export default function LedgerDetailAA({
   const categories = useMemo(() => {
     if (!initialBalancesData) return []; // 数据未加载完，先返回空，防止隐藏标签闪现
     const balances = initialBalancesData.balances ?? {};
-    // 检查是否有任何 visible 配置；若完全没有配置则全部显示
-    const hasVisibleConfig = allCategories.some(
-      (c: any) => balances[`${c.name}__visible`] !== undefined && balances[`${c.name}__visible`] !== null
-    );
-    if (!hasVisibleConfig) return allCategories; // 该用户没有配置，全部显示
+    // 新成员使用默认关闭标记；旧成员仍保留原默认值，显式开关优先。
     return allCategories.filter((c: any) => {
-      const visibleVal = balances[`${c.name}__visible`];
-      // 未设置时默认显示；设置为 0 则隐藏
-      const explicitlyVisible = visibleVal === undefined || visibleVal === null || Number(visibleVal) !== 0;
-      if (!explicitlyVisible) return false;
+      if (!readTagVisible(balances, c.name)) return false;
       if (stockParticipantView && c.accountingMode === 'stock_portfolio') {
         // 查询尚未返回时先不展示，避免未授权股票标签闪现。
         return stockTagOverviewQuery.data !== undefined && stockTagOverviewById.has(Number(c.id));
@@ -668,11 +662,12 @@ export default function LedgerDetailAA({
 
   // 如果当前选中的标签已被隐藏，切换到全部模式
   useEffect(() => {
-    if (selectedTagId !== null && categories.length > 0) {
+    if (!initialBalancesData || !rawCategories) return;
+    if (selectedTagId !== null) {
       const stillVisible = categories.find((c: any) => c.id === selectedTagId);
       if (!stillVisible) setSelectedTagId(null);
     }
-  }, [categories]);
+  }, [categories, initialBalancesData, rawCategories, selectedTagId]);
 
   // 普通标签的日历由父层一次性交易记录筛选而来。切换标签时主动重拉，避免首屏
   // 仍短暂使用上一个标签加载期的记录，必须切换月份才触发下一次渲染的问题。

@@ -10,6 +10,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
+import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
 import { getDbConnection, getDbTransactionConnection, getLedgerDb } from "./db";
 import { assertGlobalWalletDebit, fundingAmountText, fundingUnits, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import * as dbEthPosition from "./db-eth-position";
@@ -699,7 +700,7 @@ async function assertLedgerMemberTagHideAcknowledgements(params: {
     if (!key.endsWith('__visible')) continue;
     const tagName = key.slice(0, -'__visible'.length);
     if (!tagName) continue;
-    const wasVisible = previousBalances[key] === undefined || Number(previousBalances[key]) !== 0;
+    const wasVisible = readTagVisible(previousBalances, tagName);
     const becomesHidden = Number(nextValue) === 0;
     if (!wasVisible || !becomesHidden) continue;
     const impact = await getLedgerMemberTagHideImpact({
@@ -5665,8 +5666,8 @@ ${klinesSummary}
                   const rawConnAF = await getDbConnection();
                   if (rawConnAF) {
                     await (rawConnAF as any).execute(
-                      `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0)`,
-                      [afLedger.id, user.id]
+                      `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, initial_balances) VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, ?)`,
+                      [afLedger.id, user.id, createNewMemberInitialBalances(afLedger.id)]
                     );
                   }
                   console.log(`[邀请注册] 新用户 ${user.id} 自动加入 AF 账本 ${afLedger.id}`);
@@ -13778,8 +13779,17 @@ ${klinesSummary}
         ledgerId: z.number(),
         type: z.enum(['income', 'expense']).optional(),
         parentId: z.number().nullable().optional(),
+        includeHiddenForManagement: z.boolean().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        if (input.includeHiddenForManagement) {
+          await requireLedger52Creator(ctx.user.id, input.ledgerId);
+          const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+          if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可维护全部标签' });
+          }
+          return await dbLedger.getLedgerCategories(input.ledgerId, undefined, input.type, input.parentId);
+        }
         return await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, input.type, input.parentId);
       }),
 

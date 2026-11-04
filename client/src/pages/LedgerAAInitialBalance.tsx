@@ -30,6 +30,7 @@ import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
+import { readTagVisible } from "@shared/tag-visibility";
 
 // 与52号融资付息订单保持同一币种覆盖范围；CNY 统一表示人民币。
 const MARGIN_COIN_OPTIONS = ['CNY', ...COIN_OPTIONS.filter((coin) => coin !== 'CNY')];
@@ -216,7 +217,7 @@ interface TagEntry {
   pauseHistory: PauseHistoryItem[]; // 多次暂停/重启历史
 }
 
-const defaultEntry = (): TagEntry => ({
+const defaultEntry = (visible = true): TagEntry => ({
   amount: "",
   ratio: "",
   margin: "",
@@ -226,7 +227,7 @@ const defaultEntry = (): TagEntry => ({
   startDate: "",
   pauseDate: "",
   endDate: "",
-  visible: true,
+  visible,
   targetAmount: "",
   pauseHistory: [],
 });
@@ -257,7 +258,7 @@ export default function LedgerAAInitialBalance() {
   );
 
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
-    { ledgerId, parentId: null },
+    { ledgerId, parentId: null, includeHiddenForManagement: true },
     { enabled: !!ledgerId }
   );
   const categories = useMemo(() => {
@@ -273,6 +274,10 @@ export default function LedgerAAInitialBalance() {
       { ledgerId },
       { enabled: !!ledgerId }
     );
+  // 草稿尚未同步时也按目标成员的已保存配置回退，避免新成员标签短暂显示为开启。
+  const getSavedTagVisible = (userId: number, tagName: string): boolean =>
+    readTagVisible((allBalancesData as any)?.balancesMap?.[userId], tagName);
+
   // 37号初始金额管理的「用户」视图：胡大叔可从成员头像读取同款只读钱包快照。
   const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
   const canViewLedger37WalletSnapshot = ledgerId === 37 && Number(user?.id) === 870413;
@@ -485,10 +490,7 @@ export default function LedgerAAInitialBalance() {
           startDate: balances[`${n}__startDate`] ?? "",
           pauseDate: balances[`${n}__pauseDate`] ?? "",
           endDate: balances[`${n}__endDate`] ?? "",
-          visible:
-            balances[`${n}__visible`] !== undefined
-              ? Number(balances[`${n}__visible`]) !== 0
-              : true,
+          visible: readTagVisible(balances, n),
           targetAmount: balances[`${n}__targetAmount`] !== undefined ? String(balances[`${n}__targetAmount`]) : "",
           pauseHistory: (() => {
             // 优先读取 pauseHistory，如果没有则兼容旧 pauseDate 迁移
@@ -542,7 +544,7 @@ export default function LedgerAAInitialBalance() {
       [userId]: {
         ...(prev[userId] ?? {}),
         [catName]: {
-          ...(prev[userId]?.[catName] ?? defaultEntry()),
+          ...(prev[userId]?.[catName] ?? defaultEntry(getSavedTagVisible(userId, catName))),
           ...patch,
         },
       },
@@ -557,7 +559,7 @@ export default function LedgerAAInitialBalance() {
     impactHash?: string,
   ) => {
     const { userId, tagName, mode } = confirmation;
-    const previousVisible = editState[userId]?.[tagName]?.visible ?? true;
+    const previousVisible = editState[userId]?.[tagName]?.visible ?? getSavedTagVisible(userId, tagName);
     updateEntry(userId, tagName, { visible: false });
     if (mode === 'draft') {
       if (impactHash) {
@@ -591,7 +593,7 @@ export default function LedgerAAInitialBalance() {
     mode: 'draft' | 'immediate' = 'draft',
   ) => {
     if (!nextVisible) {
-      const currentlyVisible = editState[userId]?.[tagName]?.visible ?? true;
+      const currentlyVisible = editState[userId]?.[tagName]?.visible ?? getSavedTagVisible(userId, tagName);
       if (!currentlyVisible) return;
       setHideConfirmation({ userId, tagName, mode, stage: 'loading' });
       return;
@@ -695,7 +697,7 @@ export default function LedgerAAInitialBalance() {
     changedField: 'amount' | 'ratio' | 'targetAmount',
     rawValue: string,
   ) => {
-    const current = editState[userId]?.[tagName] ?? defaultEntry();
+    const current = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
     const next = { amount: current.amount, ratio: current.ratio, targetAmount: current.targetAmount, [changedField]: rawValue };
     const key = allocationKey(userId, tagName);
     if (rawValue.trim() === '') {
@@ -780,7 +782,7 @@ export default function LedgerAAInitialBalance() {
     for (const category of categories) {
       if (isStockPortfolioTag(category)) continue;
       const tagName = category.name;
-      const entry = userEdit[tagName] ?? defaultEntry();
+      const entry = userEdit[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
       const changed = allocationValueChanged(originalBalances[tagName], entry.amount)
         || allocationValueChanged(originalBalances[`${tagName}__ratio`], entry.ratio)
         || allocationValueChanged(originalBalances[`${tagName}__targetAmount`], entry.targetAmount);
@@ -813,7 +815,7 @@ export default function LedgerAAInitialBalance() {
       plansByTag.set(pauseWalletHandlingDraft.tagName, pauseWalletHandlingDraft);
     }
     for (const plan of Array.from(plansByTag.values())) {
-      const entry = effectiveUserEdit[plan.tagName] ?? defaultEntry();
+      const entry = effectiveUserEdit[plan.tagName] ?? defaultEntry(getSavedTagVisible(userId, plan.tagName));
       const history = entry.pauseHistory ?? [];
       const lastIndex = history.length - 1;
       const last = lastIndex >= 0 ? history[lastIndex] : null;
@@ -836,7 +838,7 @@ export default function LedgerAAInitialBalance() {
     const balances: Record<string, number | string> = {};
     for (const cat of categories) {
       const n = cat.name;
-      const entry = userEdit[n] ?? defaultEntry();
+      const entry = userEdit[n] ?? defaultEntry(getSavedTagVisible(userId, n));
       const isStockTag = isStockPortfolioTag(cat);
 
       if (!isStockTag && entry.amount !== "") {
@@ -1037,7 +1039,7 @@ export default function LedgerAAInitialBalance() {
   };
 
   const updateMarginEntry = (userId: number, tagName: string, index: number, patch: Partial<MarginEntry>) => {
-    const current = editState[userId]?.[tagName] ?? defaultEntry();
+    const current = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
     // 空押金的首行也使用稳定ID，首次输入时不会因 key 变化重建 input 并丢失手机焦点。
     const nextMargins = current.margins.length > 0
       ? [...current.margins]
@@ -1056,7 +1058,7 @@ export default function LedgerAAInitialBalance() {
   };
 
   const addMarginEntry = (userId: number, tagName: string) => {
-    const current = editState[userId]?.[tagName] ?? defaultEntry();
+    const current = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
     const currentMargins = current.margins.length > 0
       ? current.margins
       : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: new Date().toISOString() })];
@@ -1064,7 +1066,7 @@ export default function LedgerAAInitialBalance() {
   };
 
   const removeMarginEntry = (userId: number, tagName: string, index: number) => {
-    const current = editState[userId]?.[tagName] ?? defaultEntry();
+    const current = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
     updateEntry(userId, tagName, { margins: current.margins.filter((_, itemIndex) => itemIndex !== index) });
   };
 
@@ -1774,7 +1776,7 @@ export default function LedgerAAInitialBalance() {
                   const currentQuantity = Number(participation?.remainingQuantity || 0);
                   const share = lot.currentQuantity > 0 ? currentQuantity / lot.currentQuantity * 100 : 0;
                   const stockTagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
-                  const isMemberVisible = stockTagName ? (editState[Number(member.userId)]?.[stockTagName]?.visible ?? true) : true;
+                  const isMemberVisible = stockTagName ? (editState[Number(member.userId)]?.[stockTagName]?.visible ?? getSavedTagVisible(Number(member.userId), stockTagName)) : true;
                   // 同批次允许先完整调整所有成员；编辑期间单个成员只限制 0–100%，最终总量在保存时统一校验。
                   const maxPercentage = 100;
                   const draftKey = `${lot.id}:${member.userId}`;
@@ -2287,7 +2289,7 @@ export default function LedgerAAInitialBalance() {
         const balances = (allBalancesData as any).balancesMap[member.userId] ?? {};
         const ratio = balances[`${n}__ratio`] !== undefined ? parseFloat(String(balances[`${n}__ratio`])) : 0;
         const amount = balances[n] !== undefined ? String(balances[n]) : "";
-        const visible = balances[`${n}__visible`] !== undefined ? Number(balances[`${n}__visible`]) !== 0 : true;
+        const visible = readTagVisible(balances, n);
         // 计算暂停状态
         let pauseStatus: 'paused' | 'running' | 'none' = 'none';
         const phRaw = balances[`${n}__pauseHistory`];
@@ -3323,13 +3325,13 @@ export default function LedgerAAInitialBalance() {
                 });
               };
               const isUserExpanded = expandedUsers.has(userId);
-              const hiddenTags = categories.filter((cat: any) => !(userEdit[cat.name] ?? defaultEntry()).visible);
+              const hiddenTags = categories.filter((cat: any) => !(userEdit[cat.name] ?? defaultEntry(getSavedTagVisible(userId, cat.name))).visible);
               const visibleTagCount = categories.length - hiddenTags.length;
               const userTagStatusSummary = (() => {
                 let running = 0;
                 let paused = 0;
                 for (const cat of categories) {
-                  const entry = userEdit[(cat as any).name] ?? defaultEntry();
+                  const entry = userEdit[(cat as any).name] ?? defaultEntry(getSavedTagVisible(userId, (cat as any).name));
                   if (!entry.visible) continue;
                   const lastPause = entry.pauseHistory?.[entry.pauseHistory.length - 1];
                   const isPaused = lastPause ? !lastPause.resumeDate : Boolean(entry.pauseDate);
@@ -3429,7 +3431,7 @@ export default function LedgerAAInitialBalance() {
                   {isUserExpanded && <div className="pb-2">
                     {[...categories].sort((a: any, b: any) => {
                       const getOrder = (catName: string) => {
-                        const e = userEdit[catName] ?? defaultEntry();
+                        const e = userEdit[catName] ?? defaultEntry(getSavedTagVisible(userId, catName));
                         if (!e.visible) return 2; // 隐藏排最后
                         // 判断暂停状态
                         let isPaused = false;
@@ -3443,10 +3445,10 @@ export default function LedgerAAInitialBalance() {
                       };
                       return getOrder(a.name) - getOrder(b.name);
                     }).filter((cat: any) => {
-                      const entry = userEdit[cat.name] ?? defaultEntry();
+                      const entry = userEdit[cat.name] ?? defaultEntry(getSavedTagVisible(userId, cat.name));
                       return entry.visible || isHiddenTagGroupExpanded;
                     }).map((cat: any, renderedIndex: number) => {
-                      const entry = userEdit[cat.name] ?? defaultEntry();
+                      const entry = userEdit[cat.name] ?? defaultEntry(getSavedTagVisible(userId, cat.name));
                       const isStockTag = isStockPortfolioTag(cat);
                       const allocationDisplay = resolveAllocationDisplay(entry, userId, cat.name);
                       // 可见标签在排序结果中恒位于隐藏标签之前，因此编号仅随当前列表顺序连续变化。
@@ -3790,7 +3792,7 @@ export default function LedgerAAInitialBalance() {
       {tagEditModal && (() => {
         const { userId, tagName, catColor } = tagEditModal;
         const member = members.find((m: any) => m.userId === userId);
-        const entry = editState[userId]?.[tagName] ?? defaultEntry();
+        const entry = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
         const isStockTag = isStockPortfolioTag(categories.find((category: any) => category.name === tagName));
         const allocationDisplay = resolveAllocationDisplay(entry, userId, tagName);
         const isSaving = savingUsers.has(userId);

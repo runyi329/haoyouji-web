@@ -1,5 +1,6 @@
 import { getLedgerDb, getDbConnection, withDatabaseLock } from "./db";
 import { pinyin } from 'pinyin-pro';
+import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
 
 /**
  * 从公司名提取拼音首字母缩写
@@ -926,8 +927,8 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
   const permEdit = sanitizePerm(defRowA.default_permission_edit, "own");
   const permDel = sanitizePerm(defRowA.default_permission_delete, "own");
   await conn.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
-    [ledgerId, inviteeUser.id, permView, permAdd, permEdit, permDel, inviterUserId]
+    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy, initial_balances) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?, ?)`,
+    [ledgerId, inviteeUser.id, permView, permAdd, permEdit, permDel, inviterUserId, createNewMemberInitialBalances(ledgerId)]
   );
 
   return {
@@ -1010,8 +1011,8 @@ export async function inviteMemberByUsernameWithRole(
   const canDeleteVal = isAdmin ? 1 : 0;
   const canInviteVal = isAdmin ? 1 : 0;
   await connR.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, ?, 'real', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [ledgerId, inviteeUser.id, role, pView, pAdd, pEdit, pDel, canEditVal, canDeleteVal, canInviteVal, inviterUserId]
+    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy, initial_balances) VALUES (?, ?, ?, 'real', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ledgerId, inviteeUser.id, role, pView, pAdd, pEdit, pDel, canEditVal, canDeleteVal, canInviteVal, inviterUserId, createNewMemberInitialBalances(ledgerId, role)]
   );
 
   return {
@@ -1075,8 +1076,8 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
   const jPermEdit = jSanitize(defRow.default_permission_edit, "own");
   const jPermDel = jSanitize(defRow.default_permission_delete, "own");
   await connJ.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
-    [ledgerId, userId, jPermView, jPermAdd, jPermEdit, jPermDel, invitedBy]
+    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy, initial_balances) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?, ?)`,
+    [ledgerId, userId, jPermView, jPermAdd, jPermEdit, jPermDel, invitedBy, createNewMemberInitialBalances(ledgerId)]
   );
   return true;
 }
@@ -1133,7 +1134,7 @@ export async function getLedgerCategories(
 
   // ===== 标签可见性过滤 =====
   // 仅对非-owner用户生效：读取该用户在该账本的 initial_balances，
-  // 将 tagName__visible=0 的顶级标签及其所有子孙分类过滤掉。
+  // 按显式可见性和新成员默认标记过滤顶级标签及其所有子孙分类。
   if (userId && ledgerId > 0) {
     try {
       // 查询该用户在该账本的角色
@@ -1149,45 +1150,32 @@ export async function getLedgerCategories(
         if (memberRole !== 'owner') {
           const raw = memberRows[0].initialBalances;
           if (raw) {
-            const balances = JSON.parse(raw) as Record<string, any>;
-            // 收集隐藏的顶级标签名称（visible=0）
-            const hiddenTopNames = new Set<string>();
-            for (const [key, val] of Object.entries(balances)) {
-              if (key.endsWith('__visible') && Number(val) === 0) {
-                hiddenTopNames.add(key.replace('__visible', ''));
-              }
-            }
+            const balances = JSON.parse(raw) as Record<string, unknown>;
+            // 不受 type/parentId 返回列表限制：完整树用于判断顶级标签及递归子孙。
+            const allLedgerCats = await db
+              .select({ id: ledgerCategories.id, name: ledgerCategories.name, parentId: ledgerCategories.parentId })
+              .from(ledgerCategories)
+              .where(inArray(ledgerCategories.ledgerId, [0, ledgerId]));
+            const hiddenIds = new Set<number>(
+              allLedgerCats
+                .filter(c => c.parentId === null && !readTagVisible(balances, c.name))
+                .map(c => c.id)
+            );
 
-            if (hiddenTopNames.size > 0) {
-              // 找出隐藏的顶级分类 ID
-              const topLevelCats = allCategories.filter(c => c.parentId === null);
-              const hiddenTopIds = new Set<number>(
-                topLevelCats.filter(c => hiddenTopNames.has(c.name)).map(c => c.id)
-              );
-
-              if (hiddenTopIds.size > 0) {
-                // 递归收集所有需要隐藏的 ID（包括子孙分类）
-                // 先拿到该账本所有分类（不分层级）用于递归
-                const allLedgerCats = await db
-                  .select({ id: ledgerCategories.id, parentId: ledgerCategories.parentId })
-                  .from(ledgerCategories)
-                  .where(eq(ledgerCategories.ledgerId, ledgerId));
-
-                const hiddenIds = new Set<number>(hiddenTopIds);
-                // BFS 收集子孙分类
-                let changed = true;
-                while (changed) {
-                  changed = false;
-                  for (const cat of allLedgerCats) {
-                    if (!hiddenIds.has(cat.id) && cat.parentId !== null && hiddenIds.has(cat.parentId)) {
-                      hiddenIds.add(cat.id);
-                      changed = true;
-                    }
+            if (hiddenIds.size > 0) {
+              // BFS 收集子孙分类
+              let changed = true;
+              while (changed) {
+                changed = false;
+                for (const cat of allLedgerCats) {
+                  if (!hiddenIds.has(cat.id) && cat.parentId !== null && hiddenIds.has(cat.parentId)) {
+                    hiddenIds.add(cat.id);
+                    changed = true;
                   }
                 }
-
-                return allCategories.filter(c => !hiddenIds.has(c.id));
               }
+
+              return allCategories.filter(c => !hiddenIds.has(c.id));
             }
           }
         }
@@ -1940,8 +1928,8 @@ export async function joinLedgerByToken(token: string, userId: number) {
   const tPermEdit = tSanitize(defRowT.default_permission_edit, "own");
   const tPermDel = tSanitize(defRowT.default_permission_delete, "own");
   await connT.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
-    [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel]
+    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, initial_balances) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel, createNewMemberInitialBalances(ledgerId)]
   );
 
   // 自动初始化拨比：继承直接邀请人的完整波比配置
@@ -5660,8 +5648,8 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
   const sPermEdit = defRowS.default_permission_edit || "own";
   const sPermDel = defRowS.default_permission_delete || "own";
   await connS.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
-    [ledgerId, userId, sPermView, sPermAdd, sPermEdit, sPermDel]
+    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, initial_balances) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    [ledgerId, userId, sPermView, sPermAdd, sPermEdit, sPermDel, createNewMemberInitialBalances(Number(ledgerId))]
   );
   // 自动初始化拨比：继承直接邀请人的完整波比配置
   try {

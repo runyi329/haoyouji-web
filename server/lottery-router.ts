@@ -22,6 +22,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { createNewMemberInitialBalances } from "../shared/tag-visibility";
 import crypto from "crypto";
 
 
@@ -753,9 +754,9 @@ export const lotteryRouter = router({
         if (!existingMember) {
           // 以 member 身份加入账本
           await _execQuery(
-            `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy)
-             VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, ?)`,
-            [ledgerId, input.userId, ctx.user.id]
+            `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy, initial_balances)
+             VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, ?, ?)`,
+            [ledgerId, input.userId, ctx.user.id, createNewMemberInitialBalances(Number(ledgerId))]
           );
         }
       }

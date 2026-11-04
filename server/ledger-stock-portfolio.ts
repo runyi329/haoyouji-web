@@ -1,6 +1,7 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
 import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
+import { readTagVisible } from "../shared/tag-visibility";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -411,7 +412,7 @@ async function assertStockTagAccess(
   if (member && member.role !== "owner") {
     try {
       const balances = member.initialBalances ? JSON.parse(member.initialBalances) : {};
-      if (Number(balances[`${category.name}__visible`]) === 0) {
+      if (!readTagVisible(balances, String(category.name))) {
         throw new Error("您无权查看此标签");
       }
     } catch (error) {
@@ -1363,7 +1364,13 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
   );
   const result: any[] = [];
   for (const category of categoryRows as any[]) {
-    const access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
+    let access: Access;
+    try {
+      access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
+    } catch (error) {
+      if (error instanceof Error && error.message === "您无权查看此标签") continue;
+      throw error;
+    }
     const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
     const chronological: any[] = portfolio.dailySnapshots.slice().reverse();
