@@ -472,12 +472,13 @@ async function getActiveLots(categoryId: number, symbol?: string) {
  * 已卖出批次从进行中持仓完全分流：只读卖出事件和批次分配，不取实时行情。
  * 旧记录没有手续费时沿用既有已实现盈亏口径；新记录则保留买卖双边手续费。
  */
-async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof getActiveLots>>) {
-  const fullyClosedLots = lots.filter((lot) => lot.remainingQuantity <= EPSILON);
-  if (fullyClosedLots.length === 0) return [];
+async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof getActiveLots>>, includePartial = false) {
+  // 汇总包含所有已经售出的份额；原订单卡仍仅展示完整卖出的批次。
+  const selectedLots = lots.filter((lot) => includePartial ? lot.allocatedQuantity > EPSILON : lot.remainingQuantity <= EPSILON);
+  if (selectedLots.length === 0) return [];
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
-  const lotIds = fullyClosedLots.map((lot) => lot.id);
+  const lotIds = selectedLots.map((lot) => lot.id);
   const placeholders = lotIds.map(() => '?').join(',');
   const [rows] = await (conn as any).execute(
     `SELECT a.lot_id, a.quantity, e.id AS sell_event_id, e.execution_price, e.quantity AS event_quantity, e.transaction_fee,
@@ -485,11 +486,11 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
      FROM ledger_stock_event_lot_allocations a
      INNER JOIN ledger_stock_events e ON e.id = a.event_id
      WHERE a.lot_id IN (${placeholders})
-       AND e.status = 'active' AND e.event_type = 'sell'
+       AND e.status = 'active' AND ${includePartial ? "e.event_type IN ('reduce','sell')" : "e.event_type = 'sell'"}
      ORDER BY COALESCE(e.actual_traded_at, e.server_registered_at) DESC, e.id DESC`,
     lotIds,
   );
-  const lotById = new Map(fullyClosedLots.map((lot) => [lot.id, lot]));
+  const lotById = new Map(selectedLots.map((lot) => [lot.id, lot]));
   const grouped = new Map<number, any[]>();
   for (const row of rows as any[]) {
     const lotId = Number(row.lot_id);
@@ -498,7 +499,7 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
     grouped.set(lotId, list);
   }
   const latestSellEventIds = Array.from(grouped.values())
-    .map((saleRows) => Number(saleRows[0]?.sell_event_id))
+    .map((saleRows) => includePartial ? 0 : Number(saleRows[0]?.sell_event_id))
     .filter((eventId) => Number.isInteger(eventId) && eventId > 0);
   const memberSharesBySellEvent = new Map<number, Array<{ userId: number; name: string; percentage: number }>>();
   if (latestSellEventIds.length > 0) {
@@ -526,7 +527,7 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
     if (!lot) return [];
     const soldQuantity = saleRows.reduce((total, row) => total + numberValue(row.quantity), 0);
     // 新流程要求整笔卖出。历史减仓记录不伪装成完整的“已卖出”订单卡。
-    if (soldQuantity + EPSILON < lot.initialQuantity) return [];
+    if (!includePartial && soldQuantity + EPSILON < lot.initialQuantity) return [];
     const sellValue = saleRows.reduce((total, row) => total + numberValue(row.quantity) * numberValue(row.execution_price), 0);
     const sellFee = saleRows.reduce((total, row) => {
       const fee = row.transaction_fee === null || row.transaction_fee === undefined ? 0 : numberValue(row.transaction_fee);
@@ -938,7 +939,10 @@ async function buildPortfolio(categoryId: number) {
       initialQuantity: lot.initialQuantity,
       unitCost: lot.unitCost,
     }));
-  const soldLots = await getSoldLots(categoryId, allLots);
+  const [soldLots, realizedLots] = await Promise.all([
+    getSoldLots(categoryId, allLots),
+    getSoldLots(categoryId, allLots, true),
+  ]);
 
   const usdCnyRate = Number(getUsdtCnyRate() || 0);
   const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate);
@@ -964,6 +968,7 @@ async function buildPortfolio(categoryId: number) {
     positions,
     closedLots,
     soldLots,
+    realizedLots,
     summary: {
       // Never display or persist a partial portfolio aggregate as though missing prices were zero.
       reportingCurrency: 'CNY' as const,
@@ -998,7 +1003,7 @@ export async function getStockTagPortfolio(input: {
   ]);
   // The administrator UI needs this only to label its own allocation inside the
   // full member allocation matrix.  Access remains enforced server-side.
-  return { ...access, viewerUserId: input.userId, accountingMode: "stock_portfolio" as const, ...portfolio, history };
+  return { ...access, viewerUserId: input.userId, accountingMode: "stock_portfolio" as const, ...portfolio, realizedLots: access.canEdit ? portfolio.realizedLots : [], history };
 }
 
 /**
@@ -1053,7 +1058,7 @@ export async function getStockTagPublicPortfolio(input: {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
   const memberPortfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
-  const { soldLots: _soldLots, ...portfolio } = await buildPortfolio(access.categoryId);
+  const { soldLots: _soldLots, realizedLots: _realizedLots, ...portfolio } = await buildPortfolio(access.categoryId);
   // 批次备注是管理员维护信息；成员只需看到已分配批次的价格与数量，不能读取备注。
   const publicPositions = portfolio.positions.map((position) => ({
     ...position,
