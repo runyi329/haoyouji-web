@@ -2648,34 +2648,7 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* 独立观察入口：不依赖真实标签/初始份额，不进入概览表格或任何结算汇总。 */}
-      {canShowStockObservationAccount && stockObservationCategories.length > 0 && (
-        <section className="mx-3 mt-2 shrink-0 rounded-lg px-3 py-2.5" style={{ backgroundColor: '#F7F2FF', border: '1px solid #E8DDF7' }}>
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold" style={{ color: '#7E57C2' }}>观察账户</h2>
-            <span className="text-[10px]" style={{ color: '#9575CD' }}>独立观察 · 不计入真实账户</span>
-          </div>
-          <div className="mt-1 max-h-36 overflow-y-auto">
-            {stockObservationCategories.map((category) => (
-              <button
-                key={category.categoryId}
-                type="button"
-                onClick={() => {
-                  setSelectedStockObservationTag({ categoryId: category.categoryId, categoryName: category.categoryName });
-                  setShowStockPortfolio(true);
-                }}
-                className="flex w-full items-center gap-2 py-2 text-left"
-                aria-label={`查看${category.categoryName}观察账户`}
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: '#6D4C9F' }}>{category.categoryName}</span>
-                <span className="shrink-0 text-xs" style={{ color: '#9575CD' }}>{category.holdingCount} 笔观察</span>
-                <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: '#9575CD' }} />
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
+      {/* 观察账户仅在股票标签详情内部展示，首页不再单独列出观察入口。 */}
       {/* 全部与单标签共用的视图切换；更换标签时保留当前模式。 */}
       {categories && categories.length > 0 && (
         <div className="mx-3 mt-2 flex rounded-lg bg-white shadow-sm" style={{ border: '1px solid #F0F0F0', borderRadius: 8 }}>
