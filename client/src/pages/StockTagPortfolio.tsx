@@ -16,9 +16,9 @@ import StockCustomerProfitSummary from "@/components/StockCustomerProfitSummary"
 import StockNameProfitSummary from "@/components/StockNameProfitSummary";
 import StockParticipantProfitChart from "@/components/StockParticipantProfitChart";
 import StockQuoteUpdateIndicator from "@/components/StockQuoteUpdateIndicator";
+import StockObservationPortfolio from "@/components/StockObservationPortfolio";
 
 type EventType = "buy" | "add" | "reduce" | "sell" | "note";
-
 type Props = {
   ledgerId: number;
   categoryId: number;
@@ -474,6 +474,10 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
   if (isLoading) {
     return <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 animate-spin mr-2" />正在加载股票持仓…</div>;
+  }
+  if (participantView && ledgerId === 37 && error?.message === '该股票标签尚未对您开放') {
+    // 没有真实份额不代表没有观察配额：另走本人观察接口，仍保留标签可见性权限校验。
+    return <div className="min-h-screen bg-[#FAF3ED] pb-8"><header className="flex items-center gap-3 bg-white px-4 py-3 shadow-sm"><button onClick={onBack} aria-label="返回" className="inline-flex h-8 w-8 items-center justify-center"><ArrowLeft size={20} /></button><Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatar || undefined} /><AvatarFallback>{(currentUser?.name || currentUser?.username || '我').slice(0, 1)}</AvatarFallback></Avatar><span className="text-sm font-semibold text-[#644484]">{accountName} · 观察账户</span></header><main className="mx-auto max-w-2xl space-y-3 px-3 pt-3"><div className="rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-gray-500">您当前只有观察配额。观察盈亏仅供查看，不参与真实盈利或资金结算。</div><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} /></main></div>;
   }
   if (error || !data) {
     return <div className="min-h-screen bg-[#FAF3ED] p-5"><button onClick={onBack} className="flex items-center text-sm text-gray-600"><ArrowLeft className="w-4 h-4 mr-1" />返回</button><div className="mt-10 text-center text-gray-500">股票标签无法加载：{error?.message || "请稍后重试"}</div></div>;
@@ -1317,6 +1321,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               </details>}
             </div>
           </div>
+          {participantView && ledgerId === 37 && <div className="border-t border-[#F1E6DE] px-3 py-3"><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} /></div>}
           {!tagData ? (
             <div className="px-4 py-7 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入标签整体持仓…</div>
           ) : (

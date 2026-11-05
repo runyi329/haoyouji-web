@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
 import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
@@ -1575,6 +1576,20 @@ export default function LedgerAAInitialBalance() {
       const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
       return `${part('year')}-${part('month')}-${part('day')}`;
     };
+    const getStockObservationFallback = (lot: any, userId: number) => {
+      const observation = (lot.observations ?? []).find((item: any) => Number(item.userId) === Number(userId));
+      const participation = lot.participations.find((item: any) => Number(item.userId) === Number(userId));
+      // 首次转观察默认同额；已有观察参数（包括 0 股）原样保留，真正释放由保存时的观察事务完成。
+      const entryPrice = Number(observation?.entryPrice ?? lot.unitCost ?? lot.openingReferencePrice ?? 0);
+      return {
+        enabled: observation?.enabled === true || observation?.enabled === 1,
+        quantity: observation?.quantity === undefined || observation?.quantity === null ? String(participation?.remainingQuantity || 0) : String(observation.quantity),
+        entryPrice: entryPrice > 0 ? String(entryPrice) : '',
+        startDate: dateInputValue(observation?.startDate || lot.actualTradedAt || lot.openedAt),
+        // 观察暂停独立于真实参与，首次开启绝不复制真实暂停日期。
+        pauseDate: dateInputValue(observation?.pauseDate),
+      };
+    };
     const activeLots = matrix.lots.filter((lot: any) => lot.status !== 'closed');
     const closedLots = matrix.lots.filter((lot: any) => lot.status === 'closed');
     const activeLotNumbers = new Map<number, string>(activeLots.map((lot: any, index: number) => [Number(lot.id), String(index + 1).padStart(2, '0')]));
@@ -1585,13 +1600,31 @@ export default function LedgerAAInitialBalance() {
           const isExpanded = expandedStockLots.has(lotId);
           const isEditing = !globalClosed && editingStockLots.has(lotId);
           const isSaving = savingStockLots.has(lotId);
-          const activeParticipations = lot.participations.filter((item: any) => Number(item.remainingQuantity || 0) > 0);
-          const totalAllocatedQuantity = activeParticipations.reduce((total: number, item: any) => total + Number(item.remainingQuantity || 0), 0);
+          const allocationQuantityBase = Number(lot.currentQuantity || 0);
+          // 观察与真实互斥：开启草稿立即退出实际统计；取消草稿恢复保存态，关闭已保存观察不复原释放量。
+          const effectiveRealAllocations = (matrix.members as any[]).map((member: any) => {
+            const draftKey = `${lotId}:${member.userId}`;
+            const savedObservation = getStockObservationFallback(lot, Number(member.userId));
+            const observationDraft = stockObservationDrafts[draftKey] ?? savedObservation;
+            if (observationDraft.enabled) return { userId: Number(member.userId), quantity: 0 };
+            const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
+            const savedQuantity = savedObservation.enabled ? 0 : Number(participation?.remainingQuantity || 0);
+            const savedPercentage = allocationQuantityBase > 0 ? savedQuantity / allocationQuantityBase * 100 : 0;
+            const fallbackPercentage = Math.round(savedPercentage) ? String(Math.round(savedPercentage)) : '';
+            const draftPercentage = stockParticipationDrafts[draftKey]?.percentage;
+            const percentageChanged = draftPercentage !== undefined && draftPercentage !== fallbackPercentage;
+            const quantity = percentageChanged && Number(participation?.closedQuantity || 0) <= 0
+              ? allocationQuantityBase * Math.round(Math.max(0, Math.min(100, Number(draftPercentage) || 0))) / 100
+              : savedQuantity;
+            return { userId: Number(member.userId), quantity };
+          });
+          const activeParticipations = effectiveRealAllocations.filter((item) => item.quantity > 0.00000001);
+          const totalAllocatedQuantity = effectiveRealAllocations.reduce((total, item) => total + item.quantity, 0);
+          const availableQuantity = Math.max(0, allocationQuantityBase - totalAllocatedQuantity);
           const holdingTotal = Number(lot.initialQuantity || 0) * Number(lot.unitCost || 0);
           const isUsStock = isUsStockSymbol(lot.symbol);
           const stockInputSymbol = isUsStock ? '$' : '¥';
-          const allocationQuantityBase = Number(lot.currentQuantity || 0);
-          const availablePercent = allocationQuantityBase > 0 ? Number(lot.availableForParticipation || 0) / allocationQuantityBase * 100 : 0;
+          const availablePercent = allocationQuantityBase > 0 ? availableQuantity / allocationQuantityBase * 100 : 0;
           const allocatedPercent = allocationQuantityBase > 0 ? totalAllocatedQuantity / allocationQuantityBase * 100 : 0;
           const isFullyAllocated = !globalClosed && allocationQuantityBase > 0.00000001 && Math.abs(totalAllocatedQuantity - allocationQuantityBase) <= 0.00000001;
           const marketValue = lot.marketPrice === null || lot.marketPrice === undefined
@@ -1610,31 +1643,35 @@ export default function LedgerAAInitialBalance() {
                 ? '登记参考价'
                 : '等待行情';
           const tradeTimestamp = formatTradeTime(lot.actualTradedAt || lot.openedAt);
-          const totalDraftPercentage = (matrix.members as any[]).reduce((total: number, member: any) => {
-            const draftPercentage = stockParticipationDrafts[`${lotId}:${member.userId}`]?.percentage;
-            if (draftPercentage !== undefined) return total + Math.max(0, Math.min(100, Number(draftPercentage) || 0));
-            const savedQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(member.userId))?.remainingQuantity || 0);
-            return total + (Number(lot.currentQuantity || 0) > 0 ? savedQuantity / Number(lot.currentQuantity || 0) * 100 : 0);
-          }, 0);
+          const totalDraftPercentage = allocatedPercent;
           const remainingDraftPercentage = Math.max(0, 100 - totalDraftPercentage);
-          const draftPercentageExceeded = totalDraftPercentage > 100;
+          const draftPercentageExceeded = totalDraftPercentage > 100.00000001;
           const startLotSave = async () => {
             if (!matrix.canEdit || globalClosed || isSaving) return;
             const proposedRows: Array<{ targetUserId: number; quantity: number; previousQuantity: number; entryPrice?: number; startDate: string; pauseDate: string }> = [];
+            const proposedObservationRows: Array<{ targetUserId: number; enabled: boolean; quantity: number; entryPrice?: number; startDate?: string; pauseDate?: string }> = [];
             let proposedTotal = 0;
             for (const member of matrix.members as any[]) {
               const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
-              const previousQuantity = Number(participation?.remainingQuantity || 0);
+              const savedObservation = getStockObservationFallback(lot, Number(member.userId));
+              const draftKey = `${lotId}:${member.userId}`;
+              const observationDraft = stockObservationDrafts[draftKey] ?? savedObservation;
+              // 观察用户不生成真实行，也不占 proposedTotal；转换事务释放 remaining，保留已结算 portion。
+              if (observationDraft.enabled) continue;
+              const previousQuantity = savedObservation.enabled ? 0 : Number(participation?.remainingQuantity || 0);
+              proposedTotal += previousQuantity;
+              const savedDraft = stockParticipationDrafts[draftKey];
+              // 无真实草稿即没有真实变更。观察操作不生成真实草稿；已卖出成员继续受真实分配 closure 保护。
+              if (!savedDraft || Number(participation?.closedQuantity || 0) > 0) continue;
               const share = lot.currentQuantity > 0 ? previousQuantity / lot.currentQuantity * 100 : 0;
               const savedEntryPrice = Number(participation?.entryPrice || lot.unitCost || lot.openingReferencePrice || 0);
               const defaultStartDate = dateInputValue(lot.actualTradedAt || lot.openedAt);
               const savedStartDate = participation?.startDate || defaultStartDate;
               const savedPauseDate = participation?.pauseDate || '';
-              const draftKey = `${lot.id}:${member.userId}`;
               const totalLotValue = Number(lot.currentQuantity || 0) * savedEntryPrice;
               const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
-              const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', amount: share ? String(Number((totalLotValueCny * Math.round(share) / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
-              const savedDraft = stockParticipationDrafts[draftKey];
+              const fallbackPercentage = share ? Math.round(share) : 0;
+              const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? String(Number((totalLotValueCny * fallbackPercentage / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
               const draft = savedDraft ?? fallbackDraft;
               const percentage = Math.round(Math.max(0, Math.min(100, Number(draft.percentage) || 0)));
               // 历史份额可能不是整数比例。未触碰比例时保留其原始股数，日期或入场价单独修改绝不因为界面显示比例而改仓。
@@ -1652,7 +1689,7 @@ export default function LedgerAAInitialBalance() {
                 toast.error(`${member.name} 的入场参考价必须大于 0`);
                 return;
               }
-              proposedTotal += quantity;
+              proposedTotal += quantity - previousQuantity;
               const priceChanged = quantity > 0 && Number.isFinite(effectiveEntryPrice) && effectiveEntryPrice > 0 && Math.abs(effectiveEntryPrice - savedEntryPrice) >= 0.00000001;
               const datesChanged = startDate !== savedStartDate || pauseDate !== savedPauseDate;
               const quantityChanged = Math.abs(quantity - previousQuantity) >= 0.00000001;
@@ -1660,22 +1697,88 @@ export default function LedgerAAInitialBalance() {
                 proposedRows.push({ targetUserId: Number(member.userId), quantity, previousQuantity, entryPrice: effectiveEntryPrice > 0 ? effectiveEntryPrice : undefined, startDate, pauseDate });
               }
             }
-            if (proposedTotal - Number(lot.currentQuantity || 0) > 0.00000001) {
+            for (const member of matrix.members as any[]) {
+              const savedObservation = getStockObservationFallback(lot, Number(member.userId));
+              const observationDraft = stockObservationDrafts[`${lotId}:${member.userId}`] ?? savedObservation;
+              const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
+              const hasRealConflict = observationDraft.enabled && Number(participation?.remainingQuantity || 0) > 0.00000001;
+              const enabledChanged = observationDraft.enabled !== savedObservation.enabled;
+              const quantity = Number(observationDraft.quantity);
+              const entryPrice = Number(observationDraft.entryPrice);
+              const quantityChanged = !observationDraft.quantity.trim() || !Number.isFinite(quantity) || Math.abs(quantity - Number(savedObservation.quantity)) >= 0.00000001;
+              const priceChanged = !Number.isFinite(entryPrice) || Math.abs(entryPrice - Number(savedObservation.entryPrice)) >= 0.00000001;
+              const dateChanged = observationDraft.startDate !== savedObservation.startDate;
+              const pauseDate = observationDraft.pauseDate || '';
+              const pauseDateChanged = pauseDate !== savedObservation.pauseDate;
+              // enabled 与真实余量冲突时，即便观察参数未改也要转换释放；关闭不自动恢复任何真实份额。
+              if (!hasRealConflict && !enabledChanged && (!observationDraft.enabled || (!quantityChanged && !priceChanged && !dateChanged && !pauseDateChanged))) continue;
+              if (observationDraft.enabled && (!observationDraft.quantity.trim() || !Number.isFinite(quantity) || quantity < 0 || quantity > 1e9)) {
+                toast.error(`${member.name} 的观察股数必须为 0 至 10 亿之间的数字`);
+                return;
+              }
+              if (observationDraft.enabled && (!Number.isFinite(entryPrice) || entryPrice <= 0)) {
+                toast.error(`${member.name} 的观察买入价必须大于 0`);
+                return;
+              }
+              if (observationDraft.enabled && !/^\d{4}-\d{2}-\d{2}$/.test(observationDraft.startDate)) {
+                toast.error(`${member.name} 请选择观察开始日期`);
+                return;
+              }
+              if (observationDraft.enabled && pauseDate && (!/^\d{4}-\d{2}-\d{2}$/.test(pauseDate) || pauseDate < observationDraft.startDate)) {
+                toast.error(`${member.name} 的观察暂停日期不能早于开始日期，请选择有效日期`);
+                return;
+              }
+              proposedObservationRows.push({
+                targetUserId: Number(member.userId),
+                enabled: observationDraft.enabled,
+                quantity: observationDraft.enabled ? quantity : Number(savedObservation.quantity) || 0,
+                entryPrice: observationDraft.enabled ? entryPrice : undefined,
+                startDate: observationDraft.enabled ? observationDraft.startDate : undefined,
+                pauseDate: observationDraft.enabled ? pauseDate : undefined,
+              });
+            }
+            if (proposedRows.length > 0 && proposedTotal - Number(lot.currentQuantity || 0) > 0.00000001) {
               toast.error(`持仓编号 ${lotNumber} 的合计参与股数不能超过当前余量 ${formatNumber(lot.currentQuantity, 4)} 股`);
               return;
             }
-            if (proposedRows.length === 0) {
+            if (proposedRows.length === 0 && proposedObservationRows.length === 0) {
               toast.info(`持仓编号 ${lotNumber} 没有待保存的更改`);
               finishStockLotEditing(lotId, true);
               return;
             }
-            if (isLocalHotPreview) {
-              toast.info('热预览仅演示交互，不会写入正式股票数据');
+            if (isLocalHotPreview && proposedRows.length > 0) {
+              // 预览壳将观察 mutation 接到独立沙箱存储；真实分配仍明确禁写，混合草稿不能误报全部保存。
+              toast.error('热预览不能保存真实分配；本批次未保存，请取消真实变更后单独保存观察配额');
               return;
+            }
+            if (!isLocalHotPreview) {
+              const releases = proposedObservationRows.filter((row) => row.enabled).flatMap((row) => {
+                const participation = lot.participations.find((item: any) => Number(item.userId) === row.targetUserId);
+                const releasedQuantity = Number(participation?.remainingQuantity || 0);
+                const member = (matrix.members as any[]).find((item: any) => Number(item.userId) === row.targetUserId);
+                return releasedQuantity > 0.00000001
+                  ? [`${member?.name || '成员'}：释放真实 ${formatNumber(releasedQuantity, 8)} 股，观察 ${formatNumber(row.quantity, 8)} 股`]
+                  : [];
+              });
+              if (releases.length > 0 && !window.confirm([
+                `${lot.stockName} ${lot.symbol}：确认切换观察？`,
+                ...releases,
+                '这部分真实余量将恢复为可分配，不再计入该用户真实盈亏。',
+                '观察盈亏不结算；钱包、押金及已结算历史不变。',
+                '关闭观察不会自动恢复原真实份额。',
+              ].join('\n'))) return;
             }
             setSavingStockLots((previous) => new Set(previous).add(lotId));
             try {
-              // 减仓／清零先提交，随后再增加其他成员，保证同一批次调整份额时不会被余量校验误拦截。
+              // 先转换观察（事务释放真实余量），也先关闭观察，再减旧真实、增其他成员，避免临时超额或双重参与。
+              for (const row of proposedObservationRows) {
+                await setStockObservationMutation.mutateAsync({
+                  ledgerId: 37,
+                  categoryId: Number(activeStockParticipationCategoryId),
+                  lotId,
+                  ...row,
+                });
+              }
               for (const row of proposedRows.sort((left, right) => (left.quantity - left.previousQuantity) - (right.quantity - right.previousQuantity))) {
                 await setStockParticipationMutation.mutateAsync({
                   ledgerId: 37,
@@ -1736,7 +1839,7 @@ export default function LedgerAAInitialBalance() {
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{marketQuoteLabel}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock)}</b></div>
-                <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(lot.availableForParticipation, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
+                <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(availableQuantity, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
                 <div className={`whitespace-nowrap px-0.5 py-1.5 text-center ${isFullyAllocated ? 'bg-[#C62828] text-white' : 'bg-[#F8FAFB] text-gray-500'}`}>已分配 <b className={`ml-0.5 ${isFullyAllocated ? 'text-white' : 'text-gray-700'}`}>{formatNumber(totalAllocatedQuantity, 4)} 股</b> <span className={isFullyAllocated ? 'text-white/90' : 'text-gray-400'}>{formatNumber(allocatedPercent, 2)}%</span></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
                 </>}
@@ -1771,9 +1874,9 @@ export default function LedgerAAInitialBalance() {
                 }).map((member: any) => {
                   const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
                   const hasSoldHistory = Number(participation?.closedQuantity || 0) > 0;
-                  const isReadonly = globalClosed || hasSoldHistory || !matrix.canEdit || !isEditing;
-                  const inlineFieldTextColor = !isEditing ? '#1F2937' : isReadonly ? '#9CA3AF' : '#4B5563';
-                  const currentQuantity = Number(participation?.remainingQuantity || 0);
+                  const isReadonly = globalClosed || hasSoldHistory || !matrix.canEdit || !isEditing || isSaving;
+                  const observationFallback = getStockObservationFallback(lot, Number(member.userId));
+                  const currentQuantity = observationFallback.enabled ? 0 : Number(participation?.remainingQuantity || 0);
                   const share = lot.currentQuantity > 0 ? currentQuantity / lot.currentQuantity * 100 : 0;
                   const stockTagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
                   const isMemberVisible = stockTagName ? (editState[Number(member.userId)]?.[stockTagName]?.visible ?? getSavedTagVisible(Number(member.userId), stockTagName)) : true;
@@ -1791,23 +1894,49 @@ export default function LedgerAAInitialBalance() {
                   const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
                   const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? formatDraftNumber(totalLotValueCny * fallbackPercentage / 100) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
                   const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
+                  const observationDraft: (typeof stockObservationDrafts)[string] = stockObservationDrafts[draftKey] ?? observationFallback;
+                  const isObservationMode = observationDraft.enabled;
+                  const isObservationReadonly = globalClosed || !matrix.canEdit || !isEditing || isSaving;
+                  const isInlineReadonly = isObservationMode ? isObservationReadonly : isReadonly;
+                  const inlineFieldTextColor = isObservationMode ? '#7C3AED' : !isEditing ? '#1F2937' : isReadonly ? '#9CA3AF' : '#4B5563';
+                  const inlineEntryPrice = isObservationMode ? observationDraft.entryPrice : draft.entryPrice;
                   const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
                   // 开仓均价仍按交易所币种录入；成员分配金额统一按人民币输入并反推比例。
                   const allocationBaseAmount = Number(lot.currentQuantity || 0) * draftEntryPrice * (isUsStock ? usdCnyRate : 1);
                   const allocationPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
-                  const allocationQuantity = Number(lot.currentQuantity || 0) * allocationPercentage / 100;
-                  const draftStartDate = draft.startDate || defaultStartDate;
+                  const percentageChanged = stockParticipationDrafts[draftKey]?.percentage !== undefined && draft.percentage !== fallbackDraft.percentage;
+                  const allocationQuantity = percentageChanged && !hasSoldHistory ? Number(lot.currentQuantity || 0) * allocationPercentage / 100 : currentQuantity;
+                  const observationQuantity = Number(observationDraft.quantity);
+                  const observationUnitAmountCny = Number(observationDraft.entryPrice) * (isUsStock ? usdCnyRate : 1);
+                  const observationAmount = observationDraft.amount ?? (observationDraft.quantity.trim() && Number.isFinite(observationQuantity) ? formatDraftNumber(observationQuantity * observationUnitAmountCny) : '');
+                  // 股数维度参考，允许小数和超过 100%，不参与任何真实份额统计。
+                  const observationPercentage = observationDraft.percentage ?? (observationDraft.quantity.trim() && Number.isFinite(observationQuantity) && allocationQuantityBase > 0 ? formatDraftNumber(observationQuantity / allocationQuantityBase * 100) : '');
+                  const inlineAmount = isObservationMode ? observationAmount : draft.amount;
+                  const inlinePercentage = isObservationMode ? observationPercentage : draft.percentage;
+                  const draftStartDate = isObservationMode ? observationDraft.startDate : draft.startDate || defaultStartDate;
                   const compactStartDate = /^\d{4}-\d{2}-\d{2}$/.test(draftStartDate)
                     ? `${draftStartDate.slice(2, 4)}/${draftStartDate.slice(5, 7)}/${draftStartDate.slice(8, 10)}`
                     : '';
-                  const compactPauseDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.pauseDate)
-                    ? `${draft.pauseDate.slice(2, 4)}/${draft.pauseDate.slice(5, 7)}/${draft.pauseDate.slice(8, 10)}`
+                  const draftPauseDate = isObservationMode ? observationDraft.pauseDate : draft.pauseDate;
+                  const compactPauseDate = /^\d{4}-\d{2}-\d{2}$/.test(draftPauseDate)
+                    ? `${draftPauseDate.slice(2, 4)}/${draftPauseDate.slice(5, 7)}/${draftPauseDate.slice(8, 10)}`
                     : '';
                   return (
                     <div key={member.userId} className="rounded-md px-2 py-2" style={{ backgroundColor: !isMemberVisible ? '#F7F7F7' : Number(member.userId) === Number(selectedUserId) ? '#F4FAFC' : '#FAFAFA', opacity: isMemberVisible ? 1 : 0.7 }}>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <div className="flex min-w-0 basis-full items-center gap-1.5">
                           <span className="min-w-0 truncate text-xs" style={{ color: Number(member.userId) === Number(selectedUserId) ? accentColor : '#4B5563' }}>{member.name}{Number(member.userId) === Number(selectedUserId) ? '（当前）' : ''}</span>
+                          <label className="flex shrink-0 items-center gap-1 text-[10px] text-[#7C3AED]">
+                            <span>观察</span>
+                            <Switch
+                              checked={isObservationMode}
+                              disabled={isObservationReadonly}
+                              aria-label={`${member.name}的观察配额`}
+                              title="保存后释放真实份额；观察不计入实际分配，不参与结算"
+                              className="h-[1.15rem] w-8 data-[state=checked]:bg-[#8B5CF6]"
+                              onCheckedChange={(enabled) => setStockObservationDraft(draftKey, { enabled }, observationFallback)}
+                            />
+                          </label>
                           <button
                             type="button"
                             disabled={!matrix.canEdit || !isEditing || !stockTagName || setMutation.isPending}
@@ -1821,17 +1950,23 @@ export default function LedgerAAInitialBalance() {
                           </button>
                         </div>
                         <label className="flex shrink-0">
-                          <div className="flex h-7 w-20 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                            <span className="pl-1.5 text-[10px] text-gray-400">{stockInputSymbol}</span>
+                          <div className="flex h-7 w-20 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                            <span className="pl-1.5 text-[10px] text-gray-400" style={isObservationMode ? { color: inlineFieldTextColor } : undefined}>{stockInputSymbol}</span>
                             <input
                               type="text"
                               inputMode="decimal"
-                              value={draft.entryPrice}
-                              disabled={isReadonly}
+                              value={inlineEntryPrice}
+                              disabled={isInlineReadonly}
                               placeholder="买入价"
+                              aria-label={isObservationMode ? `${member.name}的观察买入价` : `${member.name}的真实买入价`}
                               onChange={(event) => {
                                 const value = event.target.value;
                                 if (/^(?:\d*\.?\d*)?$/.test(value)) {
+                                  if (isObservationMode) {
+                                    // 只重算观察金额，观察股数保持原样。
+                                    setStockObservationDraft(draftKey, { entryPrice: value, amount: undefined }, observationFallback);
+                                    return;
+                                  }
                                   const nextEntryPrice = Number(value) > 0 ? Number(value) : savedEntryPrice;
                                   const nextPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
                                   const nextAmount = Number(lot.currentQuantity || 0) * nextEntryPrice * (isUsStock ? usdCnyRate : 1) * nextPercentage / 100;
@@ -1843,28 +1978,32 @@ export default function LedgerAAInitialBalance() {
                             />
                           </div>
                         </label>
-                        <label className="relative flex h-7 w-20 shrink-0 overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                          <span className={compactStartDate ? 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium' : 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium text-gray-400'} style={compactStartDate ? { color: inlineFieldTextColor } : undefined}>{compactStartDate || '开始日期'}</span>
+                        <label className="relative flex h-7 w-20 shrink-0 overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                          <span className={compactStartDate ? 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium' : 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium text-gray-400'} style={compactStartDate || isObservationMode ? { color: inlineFieldTextColor } : undefined}>{compactStartDate || '开始日期'}</span>
                           <input
                             type="date"
                             value={draftStartDate}
-                            disabled={isReadonly}
-                            onChange={(event) => setStockParticipationDraft(draftKey, { startDate: event.target.value }, fallbackDraft)}
-                            aria-label="开始日期"
+                            disabled={isInlineReadonly}
+                            onChange={(event) => isObservationMode
+                              ? setStockObservationDraft(draftKey, { startDate: event.target.value }, observationFallback)
+                              : setStockParticipationDraft(draftKey, { startDate: event.target.value }, fallbackDraft)}
+                            aria-label={isObservationMode ? `${member.name}的观察开始日期` : '开始日期'}
                             className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
                           />
                         </label>
-                        <div className="relative flex h-7 w-20 shrink-0 overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                          <span className={compactPauseDate ? 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium' : 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium text-gray-400'} style={compactPauseDate ? { color: inlineFieldTextColor, paddingRight: !isReadonly ? '18px' : undefined } : undefined}>{compactPauseDate || '暂停日期'}</span>
+                        <div className="relative flex h-7 w-20 shrink-0 overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                          <span className={compactPauseDate ? 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium' : 'pointer-events-none absolute inset-0 z-10 flex items-center justify-end px-1 text-xs font-medium text-gray-400'} style={compactPauseDate || isObservationMode ? { color: inlineFieldTextColor, paddingRight: compactPauseDate && !isInlineReadonly ? '18px' : undefined } : undefined}>{compactPauseDate || '暂停日期'}</span>
                           <input
                             type="date"
-                            value={draft.pauseDate}
-                            disabled={isReadonly}
-                            onChange={(event) => setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
-                            aria-label="暂停日期"
-                            className={draft.pauseDate ? "absolute inset-y-0 left-0 right-6 z-0 h-full cursor-pointer opacity-0 disabled:cursor-default" : "absolute inset-0 z-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"}
+                            value={draftPauseDate}
+                            disabled={isInlineReadonly}
+                            onChange={(event) => isObservationMode
+                              ? setStockObservationDraft(draftKey, { pauseDate: event.target.value }, observationFallback)
+                              : setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
+                            aria-label={isObservationMode ? `${member.name}的观察暂停日期` : '暂停日期'}
+                            className={draftPauseDate ? "absolute inset-y-0 left-0 right-6 z-0 h-full cursor-pointer opacity-0 disabled:cursor-default" : "absolute inset-0 z-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"}
                           />
-                          {!isReadonly && draft.pauseDate && (
+                          {!isInlineReadonly && draftPauseDate && (
                             <button
                               type="button"
                               aria-label="清除暂停日期"
@@ -1872,9 +2011,14 @@ export default function LedgerAAInitialBalance() {
                               onPointerDown={(event) => event.stopPropagation()}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setStockParticipationDraft(draftKey, { pauseDate: '' }, fallbackDraft);
+                                if (isObservationMode) {
+                                  setStockObservationDraft(draftKey, { pauseDate: '' }, observationFallback);
+                                } else {
+                                  setStockParticipationDraft(draftKey, { pauseDate: '' }, fallbackDraft);
+                                }
                               }}
                               className="absolute right-0 top-0 z-30 flex h-full w-6 items-center justify-center text-gray-400 hover:text-[#B45309]"
+                              style={isObservationMode ? { color: inlineFieldTextColor } : undefined}
                             >
                               <X size={13} strokeWidth={2.5} />
                             </button>
@@ -1884,21 +2028,45 @@ export default function LedgerAAInitialBalance() {
                       <div className="mt-1 flex items-center justify-between gap-1.5">
                         <span className="shrink-0 text-xs font-medium" style={{ color: draftPercentageExceeded ? '#D32F2F' : '#6B7280' }}>{draftPercentageExceeded ? `超出 ${formatNumber(totalDraftPercentage - 100, 0)}%` : `剩余 ${formatNumber(remainingDraftPercentage, 0)}%`}</span>
                         <div className="flex min-w-0 items-center justify-end gap-1.5">
-                          <div className="flex h-7 w-20 shrink-0 items-center justify-end overflow-hidden rounded-[3px] border bg-white px-1 text-xs font-medium whitespace-nowrap" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: inlineFieldTextColor }}>
+                          {isObservationMode ? (
+                            <label className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={observationDraft.quantity}
+                                disabled={isInlineReadonly}
+                                placeholder="股数"
+                                aria-label={`${member.name}的独立观察股数`}
+                                onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setStockObservationDraft(draftKey, { quantity: event.target.value, amount: undefined, percentage: undefined }, observationFallback)}
+                                className="h-full min-w-0 flex-1 bg-transparent px-1 text-right text-xs font-medium text-[#7C3AED] outline-none placeholder:text-gray-400 disabled:cursor-default"
+                              />
+                              <span className="pr-1.5 text-[10px] text-[#7C3AED]">股</span>
+                            </label>
+                          ) : <div className="flex h-7 w-20 shrink-0 items-center justify-end overflow-hidden rounded-[3px] border bg-white px-1 text-xs font-medium whitespace-nowrap" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: inlineFieldTextColor }}>
                             {formatNumber(allocationQuantity, 4)} 股
-                          </div>
-                          <div className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                            <span className="pl-1.5 text-[10px] text-gray-400">¥</span>
+                          </div>}
+                          <div className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                            <span className="pl-1.5 text-[10px] text-gray-400" style={isObservationMode ? { color: inlineFieldTextColor } : undefined}>¥</span>
                             <input
                               type="text"
                               inputMode="decimal"
-                              value={draft.amount}
-                              disabled={isReadonly}
+                              value={inlineAmount}
+                              disabled={isInlineReadonly}
                               placeholder="人民币"
-                              aria-label="分配金额（人民币）"
+                              aria-label={isObservationMode ? `${member.name}的观察金额（人民币）` : '分配金额（人民币）'}
                               onChange={(event) => {
                                 const value = event.target.value;
                                 if (/^(?:\d*(?:\.\d{0,2})?)?$/.test(value)) {
+                                  if (isObservationMode) {
+                                    if (value === '') {
+                                      setStockObservationDraft(draftKey, { amount: '', quantity: '', percentage: undefined }, observationFallback);
+                                    } else if (observationUnitAmountCny > 0) {
+                                      setStockObservationDraft(draftKey, { amount: value, quantity: String(Number(value) / observationUnitAmountCny), percentage: undefined }, observationFallback);
+                                    } else {
+                                      setStockObservationDraft(draftKey, { amount: value }, observationFallback);
+                                    }
+                                    return;
+                                  }
                                   if (value === '') {
                                     setStockParticipationDraft(draftKey, { amount: '', percentage: '' }, fallbackDraft);
                                     return;
@@ -1913,6 +2081,10 @@ export default function LedgerAAInitialBalance() {
                               onBlur={(event) => {
                                 const completedAmount = event.currentTarget.value;
                                 if (completedAmount === '') return;
+                                if (isObservationMode) {
+                                  setStockObservationDraft(draftKey, { amount: undefined }, observationFallback);
+                                  return;
+                                }
                                 const percentage = allocationBaseAmount > 0
                                   ? Math.round(Number(completedAmount) / allocationBaseAmount * 100)
                                   : 0;
@@ -1923,30 +2095,42 @@ export default function LedgerAAInitialBalance() {
                               style={{ color: inlineFieldTextColor }}
                             />
                           </div>
-                          <div className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                          <div className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
                             <button
                               type="button"
-                              disabled={isReadonly || Number(draft.percentage || 0) <= 0}
+                              disabled={isInlineReadonly || Number(inlinePercentage || 0) <= 0}
                               onClick={() => {
+                                if (isObservationMode) {
+                                  const percentage = Math.max(0, Number(observationPercentage || 0) - 1);
+                                  setStockObservationDraft(draftKey, { quantity: String(allocationQuantityBase * percentage / 100), amount: undefined, percentage: undefined }, observationFallback);
+                                  return;
+                                }
                                 const percentage = Math.max(0, Math.min(maxPercentage, Math.round(Number(draft.percentage) || 0) - 1));
                                 setStockParticipationDraft(draftKey, { percentage: String(percentage), amount: formatDraftNumber(allocationBaseAmount * percentage / 100) }, fallbackDraft);
                               }}
                               aria-label="减少比例"
                               className="flex h-full w-4 shrink-0 items-center justify-center border-r text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:text-gray-300"
-                              style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}
+                              style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE', ...(isObservationMode ? { color: inlineFieldTextColor } : {}) }}
                             >
                               <Minus size={10} />
                             </button>
                             <div className="flex h-full min-w-0 flex-1 items-center justify-center">
                               <input
                                 type="text"
-                                inputMode="numeric"
-                                value={draft.percentage === '' ? '' : `${draft.percentage}%`}
-                                disabled={isReadonly}
+                                inputMode={isObservationMode ? 'decimal' : 'numeric'}
+                                value={inlinePercentage === '' ? '' : `${inlinePercentage}%`}
+                                disabled={isInlineReadonly}
                                 placeholder="0%"
-                                maxLength={4}
+                                maxLength={isObservationMode ? undefined : 4}
+                                aria-label={isObservationMode ? `${member.name}的观察比例（股数参考）` : '分配比例'}
                                 onChange={(event) => {
                                   const value = event.target.value.replace(/%/g, '');
+                                  if (isObservationMode) {
+                                    if (/^\d*\.?\d*$/.test(value)) {
+                                      setStockObservationDraft(draftKey, { percentage: value, quantity: value === '' ? '' : String(allocationQuantityBase * Number(value) / 100), amount: undefined }, observationFallback);
+                                    }
+                                    return;
+                                  }
                                   if (/^\d*$/.test(value)) {
                                     const percentage = value === '' ? '' : String(Math.min(maxPercentage, Math.max(0, Number(value))));
                                     const amount = percentage === '' ? '' : formatDraftNumber(allocationBaseAmount * Number(percentage) / 100);
@@ -1959,25 +2143,40 @@ export default function LedgerAAInitialBalance() {
                             </div>
                             <button
                               type="button"
-                              disabled={isReadonly || Number(draft.percentage || 0) >= maxPercentage}
+                              disabled={isInlineReadonly || (!isObservationMode && Number(draft.percentage || 0) >= maxPercentage)}
                               onClick={() => {
+                                if (isObservationMode) {
+                                  const percentage = Math.max(0, Number(observationPercentage || 0) + 1);
+                                  setStockObservationDraft(draftKey, { quantity: String(allocationQuantityBase * percentage / 100), amount: undefined, percentage: undefined }, observationFallback);
+                                  return;
+                                }
                                 const percentage = Math.max(0, Math.min(maxPercentage, Math.round(Number(draft.percentage) || 0) + 1));
                                 setStockParticipationDraft(draftKey, { percentage: String(percentage), amount: formatDraftNumber(allocationBaseAmount * percentage / 100) }, fallbackDraft);
                               }}
                               aria-label="增加比例"
                               className="flex h-full w-4 shrink-0 items-center justify-center border-l text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:text-gray-300"
-                              style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}
+                              style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE', ...(isObservationMode ? { color: inlineFieldTextColor } : {}) }}
                             >
                               <Plus size={10} />
                             </button>
                           </div>
-                          {hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
+                          {!isObservationMode && hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
                         </div>
                       </div>
+                      {isObservationMode && <div className="mt-1 text-[10px] text-gray-500">
+                        {Number(participation?.remainingQuantity || 0) > 0.00000001
+                          ? `保存后释放真实 ${formatNumber(Number(participation.remainingQuantity), 4)} 股（${formatNumber(allocationQuantityBase > 0 ? Number(participation.remainingQuantity) / allocationQuantityBase * 100 : 0, 2)}%）；观察不计入实际分配`
+                          : observationFallback.enabled ? '已释放真实份额；观察不计入实际分配' : '观察不计入实际分配；真实份额为 0'}
+                        {hasSoldHistory ? ` · 已结算 ${formatNumber(participation.closedQuantity, 4)} 股保留` : ''}
+                      </div>}
+                      {!isObservationMode && currentQuantity <= 0.00000001 && (lot.observations ?? []).some((item: any) => Number(item.userId) === Number(member.userId)) && (
+                        <p className="mt-1 text-[10px] text-gray-500">真实份额为 0；关闭观察不会自动恢复，可重新分配{hasSoldHistory ? '（已结算部分仍只读）' : ''}。</p>
+                      )}
                     </div>
                   );
                 })}
                 </div>
+                <p className="px-0.5 text-[10px] text-[#8B6BB1]">观察配额不占实际份额，不参与结算</p>
               </div>}
               {!isEditing ? (
                 <div className="flex w-full items-center justify-between px-2.5 py-2 text-[11px] text-gray-500">
@@ -2061,6 +2260,10 @@ export default function LedgerAAInitialBalance() {
     // 单一批次的多位成员在同一个「保存」动作中顺序提交；全部成功后再统一刷新，避免中途重绘覆盖草稿。
     onError: (error) => toast.error(error.message || '保存股票参与分配失败'),
   });
+  const setStockObservationMutation = trpc.ledger.setStockLotObservation.useMutation({
+    // enabled:true 由服务端事务释放该成员真实余量；无需另调真实分配清零，已结算份额和标签可见性保留。
+    onError: (error) => toast.error(error.message || '保存股票观察配额失败'),
+  });
   // 默认只展示每个持仓编号的摘要；成员份额在展开后才显示，编辑与保存也严格按单个批次隔离。
   const [expandedStockLots, setExpandedStockLots] = useState<Set<number>>(new Set());
   const [editingStockLots, setEditingStockLots] = useState<Set<number>>(new Set());
@@ -2073,9 +2276,21 @@ export default function LedgerAAInitialBalance() {
       [key]: { ...(previous[key] ?? fallback), ...patch },
     }));
   };
+  // 与真实 percentage/amount 草稿完全隔离：开关和任意观察股数绝不触发真实比例联动。
+  // amount/percentage 仅保留当前输入文本，quantity 才是观察配额的保存依据；不占用真实分配。
+  const [stockObservationDrafts, setStockObservationDrafts] = useState<Record<string, { enabled: boolean; quantity: string; entryPrice: string; startDate: string; pauseDate: string; amount?: string; percentage?: string }>>({});
+  const setStockObservationDraft = (key: string, patch: Partial<{ enabled: boolean; quantity: string; entryPrice: string; startDate: string; pauseDate: string; amount?: string; percentage?: string }>, fallback: { enabled: boolean; quantity: string; entryPrice: string; startDate: string; pauseDate: string }) => {
+    setStockObservationDrafts((previous) => ({
+      ...previous,
+      [key]: { ...(previous[key] ?? fallback), ...patch },
+    }));
+  };
   const discardStockLotDrafts = (lotId: number) => {
     const prefix = `${lotId}:`;
     setStockParticipationDrafts((previous) => Object.fromEntries(
+      Object.entries(previous).filter(([key]) => !key.startsWith(prefix)),
+    ));
+    setStockObservationDrafts((previous) => Object.fromEntries(
       Object.entries(previous).filter(([key]) => !key.startsWith(prefix)),
     ));
   };

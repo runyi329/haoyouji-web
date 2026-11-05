@@ -12,6 +12,7 @@ import { TRPCError } from "@trpc/server";
 import * as db from "./db";
 import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
 import { getDbConnection, getDbTransactionConnection, getLedgerDb } from "./db";
+import { getLedger37MarginActor, getLedger37MarginPermission, type Ledger37MarginActorContext } from "@shared/ledger37-margin-actor";
 import { assertGlobalWalletDebit, fundingAmountText, fundingUnits, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import * as dbEthPosition from "./db-eth-position";
 import { storagePut } from "./storage";
@@ -111,6 +112,15 @@ import {
   ensureLedger37WalletInfrastructure,
   type Ledger37WalletBalanceSnapshot,
 } from "./ledger37-wallet";
+
+function requireLedger37MarginActor(ctx: Ledger37MarginActorContext) {
+  const actor = getLedger37MarginActor(ctx);
+  if (!actor) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实认证操作者' });
+  if (actor.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本钱包保证金仅胡大叔可操作' });
+  }
+  return actor;
+}
 
 function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
@@ -13891,6 +13901,41 @@ ${klinesSummary}
         const { getStockLotParticipationMatrix } = await import('./ledger-stock-portfolio');
         return getStockLotParticipationMatrix({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    getMyStockTagObservationPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), viewAsUserId: z.number().int().positive().optional() }))
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角，再查看其观察账户' });
+        }
+        const { getMyStockTagObservationPortfolio } = await import('./ledger-stock-portfolio');
+        return getMyStockTagObservationPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    getMyStockTagObservationOverview: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().optional() }))
+      .query(async ({ ctx, input }) => {
+        // 目标用户须与经过既有管理员代看权限校验的有效身份一致，不能靠参数绕过身份门禁。
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角，再查看其观察账户' });
+        }
+        const { getMyStockTagObservationOverview } = await import('./ledger-stock-portfolio');
+        return getMyStockTagObservationOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    setStockLotObservation: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive(),
+        targetUserId: z.number().int().positive(),
+        enabled: z.boolean(),
+        quantity: z.number().finite().min(0).max(1_000_000_000),
+        entryPrice: z.number().finite().positive().max(1_000_000_000).optional(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+        pauseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { setStockLotObservation } = await import('./ledger-stock-portfolio');
+        return setStockLotObservation({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     updateStockTagLotNote: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),
@@ -17135,13 +17180,21 @@ ${klinesSummary}
         }
       }),
 
+    // 只读真实资金操作者权限；目标仅用于隔离前端查询缓存，绝不参与授权。
+    getLedger37MarginActor: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), targetUserId: z.number().int().positive() }))
+      .query(({ ctx }) => {
+        if (!getLedger37MarginActor(ctx)) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实认证操作者' });
+        }
+        return getLedger37MarginPermission(ctx);
+      }),
+
     // 37号账本保证金统一从全局钱包冻结，不允许新建手工余额记录。
     getLedger37WalletMarginContext: protectedProcedure
       .input(z.object({ targetUserId: z.number().int().positive().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本钱包保证金仅胡大叔可查看' });
-        }
+        requireLedger37MarginActor(ctx);
         const userId = input?.targetUserId;
         const [cny, usdt, holds] = await Promise.all([
           userId ? getLedger37FundingBalanceSummary(userId, 'CNY') : Promise.resolve(null),
@@ -17458,13 +17511,11 @@ ${klinesSummary}
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会冻结真实钱包资金' });
         }
-        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
-        }
+        const actor = requireLedger37MarginActor(ctx);
         await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
         const membership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
         if (!membership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
-        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, ctx.user.id, undefined, null)).find((item: any) => String(item.name) === input.tagName && !item.isDefault);
+        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, actor.id, undefined, null)).find((item: any) => String(item.name) === input.tagName && !item.isDefault);
         if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可用于保证金' });
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
@@ -17473,7 +17524,7 @@ ${klinesSummary}
           await transaction.beginTransaction();
           const result = await freezeLedger37WalletHold({
             userId: input.targetUserId, tagName: input.tagName, assetCode: input.assetCode,
-            amount: input.amount, actorUserId: ctx.user.id, transaction,
+            amount: input.amount, actorUserId: actor.id, transaction,
           });
           await appendLedger37WalletMarginRecord(transaction, {
             userId: input.targetUserId, tagName: input.tagName, holdId: result.hold.id,
@@ -17499,15 +17550,13 @@ ${klinesSummary}
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会解冻真实钱包资金' });
         }
-        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
-        }
+        const actor = requireLedger37MarginActor(ctx);
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
         const transaction = conn as any;
         try {
           await transaction.beginTransaction();
-          const release = await releaseLedger37WalletHold({ holdId: input.holdId, amount: input.amount, actorUserId: ctx.user.id, transaction });
+          const release = await releaseLedger37WalletHold({ holdId: input.holdId, amount: input.amount, actorUserId: actor.id, transaction });
           await appendLedger37WalletMarginRecord(transaction, {
             userId: release.hold.userId, tagName: release.hold.tagName, holdId: release.hold.id,
             assetCode: release.hold.assetCode, amount: release.releasedAmount, createdAt: release.releasedAt, direction: 'release',

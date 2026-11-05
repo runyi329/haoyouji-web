@@ -3,6 +3,20 @@ import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUs
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 import { readTagVisible } from "../shared/tag-visibility";
 
+import {
+  buildStockObservationHolding,
+  summarizeStockObservationHoldings,
+  releaseStockParticipationForObservation,
+  validateStockObservationQuantity,
+  validateStockObservationEntryPrice,
+  validateStockObservationStartDate,
+  validateStockObservationPauseDate,
+  type StockLotObservation,
+  type StockObservationHolding,
+  type StockObservationQuote,
+  type StockObservationValuation,
+} from "../shared/stock-observation-portfolio";
+
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
 
@@ -18,9 +32,11 @@ type StoredQuote = {
   price: number;
   priceDate: string;
   updatedAt: string;
+  source?: 'intraday' | 'close';
 };
 
 let tablesReady: Promise<void> | null = null;
+let quoteHistoryTableReady: Promise<void> | null = null;
 let closeRefreshInProgress = false;
 let intradayRefreshInProgress = false;
 
@@ -117,6 +133,33 @@ function normalizeStoredDate(value: unknown): string | null {
   const day = parts.find((part) => part.type === "day")?.value;
   if (!year || !month || !day) throw new Error("日期格式无效");
   return `${year}-${month}-${day}`;
+}
+
+/** 独立、只CREATE的报价档案迁移；不补写历史、不改钱包或既有股票数据。 */
+export async function ensureLedgerStockQuoteHistoryTable(): Promise<void> {
+  if (!quoteHistoryTableReady) {
+    quoteHistoryTableReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接不可用，无法初始化股票报价历史");
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_quote_history (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          category_id INT NOT NULL,
+          symbol VARCHAR(16) NOT NULL,
+          price DECIMAL(20,8) NOT NULL,
+          price_date DATE NOT NULL,
+          captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          source ENUM('intraday','close') NOT NULL,
+          INDEX idx_ledger_stock_quote_history_asof (ledger_id, category_id, symbol, price_date, captured_at, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    })().catch((error) => {
+      quoteHistoryTableReady = null;
+      throw error;
+    });
+  }
+  await quoteHistoryTableReady;
 }
 
 /**
@@ -257,6 +300,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_intraday_latest (category_id, price_date, captured_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      await ensureLedgerStockQuoteHistoryTable();
 
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ledger_stock_daily_snapshots (
@@ -310,6 +354,42 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_participation_lot (lot_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 展示用观察账户单独存储；不约束实际库存、不参与分红/押金/钱包/冻结/卖出。
+      // 只在既有显式迁移中建表，观察读写接口本身不会触发 ensure。
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_lot_observations (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          category_id INT NOT NULL,
+          lot_id BIGINT NOT NULL,
+          user_id INT NOT NULL,
+          enabled TINYINT(1) NOT NULL DEFAULT 0,
+          quantity DECIMAL(24,8) NOT NULL DEFAULT 0,
+          entry_price DECIMAL(20,8) NOT NULL,
+          start_date DATE NOT NULL,
+          pause_date DATE NULL COMMENT '仅此股票观察账户暂停日期',
+          assigned_by INT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger_stock_lot_observation (lot_id, user_id),
+          INDEX idx_ledger_stock_observation_tag_user (ledger_id, category_id, user_id),
+          INDEX idx_ledger_stock_observation_lot (lot_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      // 兼容此前已建好的观察表，保留全部已保存观察记录；只补独立暂停日期，不改真实参与。
+      const [observationPauseColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_lot_observations'
+           AND column_name = 'pause_date'`,
+      );
+      if ((observationPauseColumnRows as any[]).length === 0) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_lot_observations
+           ADD COLUMN pause_date DATE NULL COMMENT '仅此股票观察账户暂停日期' AFTER start_date`,
+        );
+      }
 
       // 参与日期属于“成员 × 股票批次”，不能复用标签级初始金额日期。
       // 保留为空的历史记录在读取时回退到该批次实际成交日，避免迁移覆盖旧配置。
@@ -381,8 +461,9 @@ async function assertStockTagAccess(
   userId: number,
   systemRole?: string,
   write = false,
+  initializeTables = true,
 ): Promise<Access> {
-  await ensureLedgerStockPortfolioTables();
+  if (initializeTables) await ensureLedgerStockPortfolioTables();
   if (ledgerId !== STOCK_LEDGER_ID) {
     throw new Error("股票持仓标签仅适用于37号账本");
   }
@@ -600,7 +681,7 @@ async function getUsStockExchangeMap(symbols: string[]): Promise<Record<string, 
   }
 }
 
-async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<Record<string, StoredQuote>> {
+async function getLatestQuotes(categoryId: number, symbols: string[], asOfDate?: string): Promise<Record<string, StoredQuote>> {
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -612,11 +693,11 @@ async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<R
      INNER JOIN (
        SELECT symbol, MAX(price_date) AS max_price_date
        FROM ledger_stock_price_snapshots
-       WHERE category_id = ? AND symbol IN (${placeholders})
+       WHERE category_id = ? AND symbol IN (${placeholders})${asOfDate ? ' AND price_date <= ? AND captured_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''}
        GROUP BY symbol
      ) latest ON latest.symbol = s.symbol AND latest.max_price_date = s.price_date
-     WHERE s.category_id = ?`,
-    [categoryId, ...unique, categoryId],
+     WHERE s.category_id = ?${asOfDate ? ' AND s.price_date <= ? AND s.captured_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''}`,
+    [categoryId, ...unique, ...(asOfDate ? [asOfDate, asOfDate] : []), categoryId, ...(asOfDate ? [asOfDate, asOfDate] : [])],
   );
   const result: Record<string, StoredQuote> = {};
   for (const row of rows as any[]) {
@@ -634,7 +715,7 @@ async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<R
 }
 
 /** 返回各股票最后一笔盘中报价；美股按纽约交易日而非北京时间判断跨日。 */
-async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): Promise<Record<string, StoredQuote>> {
+async function getLatestIntradayQuotes(categoryId: number, symbols: string[], asOfDate?: string): Promise<Record<string, StoredQuote>> {
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -643,8 +724,8 @@ async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): P
   const [rows] = await (conn as any).execute(
     `SELECT symbol, price, price_date, captured_at
      FROM ledger_stock_intraday_quotes
-     WHERE category_id = ? AND symbol IN (${placeholders})`,
-    [categoryId, ...unique],
+     WHERE category_id = ? AND symbol IN (${placeholders})${asOfDate ? ' AND price_date <= ? AND captured_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''}`,
+    [categoryId, ...unique, ...(asOfDate ? [asOfDate, asOfDate] : [])],
   );
   const result: Record<string, StoredQuote> = {};
   for (const row of rows as any[]) {
@@ -659,6 +740,45 @@ async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): P
     }
   }
   return result;
+}
+
+/** 观察历史读取只SELECT；旧部署未建档案时不隐式DDL，也绝不借用未来价。 */
+async function getArchivedQuotesAsOf(categoryId: number, symbols: string[], asOfDate: string): Promise<Record<string, StoredQuote>> {
+  if (symbols.length === 0) return {};
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [tableRows] = await (conn as any).execute(
+    `SELECT TABLE_NAME FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_quote_history' LIMIT 1`,
+  );
+  if ((tableRows as any[]).length === 0) return {};
+  const unique = Array.from(new Set(symbols));
+  const [rows] = await (conn as any).execute(
+    `SELECT symbol, price, price_date, captured_at, source FROM (
+       SELECT symbol, price, price_date, captured_at, source,
+              ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY price_date DESC, captured_at DESC, id DESC) AS quote_rank
+       FROM ledger_stock_quote_history
+       WHERE ledger_id = ? AND category_id = ? AND symbol IN (${unique.map(() => '?').join(',')})
+         AND price > 0 AND price_date <= ? AND captured_at < DATE_ADD(?, INTERVAL 1 DAY)
+     ) history WHERE quote_rank = 1`,
+    [STOCK_LEDGER_ID, categoryId, ...unique, asOfDate, asOfDate],
+  );
+  const result: Record<string, StoredQuote> = {};
+  for (const row of rows as any[]) {
+    const quote: StoredQuote = {
+      symbol: String(row.symbol), price: numberValue(row.price),
+      priceDate: normalizeStoredDate(row.price_date) || '', updatedAt: toIso(row.captured_at),
+      source: row.source === 'close' ? 'close' : 'intraday',
+    };
+    if (quote.price > 0 && isQuoteAtOrBefore(quote, asOfDate)) result[quote.symbol] = quote;
+  }
+  return result;
+}
+
+function isQuoteAtOrBefore(quote: StoredQuote, asOfDate: string): boolean {
+  const cutoff = Date.parse(`${asOfDate}T00:00:00+08:00`) + 86400000;
+  return !!quote.priceDate && quote.priceDate <= asOfDate && !!quote.updatedAt
+    && Number.isFinite(Date.parse(quote.updatedAt)) && Date.parse(quote.updatedAt) < cutoff;
 }
 
 /** 同一交易日内以更晚时间为准，让15:05盘尾价优先替代15:00盘中参考价。 */
@@ -677,7 +797,7 @@ function mergeLatestQuoteMaps(...maps: Array<Record<string, StoredQuote>>): Reco
   return result;
 }
 
-async function getLatestReferenceQuotes(categoryId: number): Promise<Record<string, StoredQuote>> {
+async function getLatestReferenceQuotes(categoryId: number, asOfDate?: string): Promise<Record<string, StoredQuote>> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
@@ -687,11 +807,11 @@ async function getLatestReferenceQuotes(categoryId: number): Promise<Record<stri
        SELECT symbol, MAX(id) AS max_id
        FROM ledger_stock_events
        WHERE category_id = ? AND status = 'active' AND symbol IS NOT NULL
-         AND market_reference_price IS NOT NULL
+         AND market_reference_price IS NOT NULL${asOfDate ? ' AND market_reference_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''}
        GROUP BY symbol
      ) latest ON latest.max_id = e.id
      WHERE e.category_id = ?`,
-    [categoryId, categoryId],
+    [categoryId, ...(asOfDate ? [asOfDate] : []), categoryId],
   );
   const result: Record<string, StoredQuote> = {};
   for (const row of rows as any[]) {
@@ -1327,6 +1447,229 @@ function getCachedMemberStockPortfolio(categoryId: number, userId: number) {
   );
 }
 
+/** 缺表仅返回空观察配置；任何观察读取都不能通过 ensure 执行 DDL。 */
+async function stockObservationTableExists(conn: any): Promise<boolean> {
+  const [rows] = await conn.execute(
+    `SELECT TABLE_NAME FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_lot_observations' LIMIT 1`,
+  );
+  return (rows as any[]).length > 0;
+}
+
+async function getStockLotObservations(ledgerId: number, categoryId: number, userId?: number): Promise<StockLotObservation[]> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  if (!await stockObservationTableExists(conn)) return [];
+  const [rows] = await (conn as any).execute(
+    `SELECT o.lot_id, o.user_id, o.enabled, o.quantity, o.entry_price,
+            DATE_FORMAT(o.start_date, '%Y-%m-%d') AS start_date,
+            DATE_FORMAT(o.pause_date, '%Y-%m-%d') AS pause_date,
+            o.assigned_by, o.created_at, o.updated_at,
+            l.symbol, l.stock_name, l.initial_quantity,
+            COALESCE(sales.sold_quantity, 0) AS sold_quantity,
+            sales.sold_value, sales.sold_at,
+            DATE_FORMAT(sales.sold_at, '%Y-%m-%d') AS sold_date
+     FROM ledger_stock_lot_observations o
+     INNER JOIN ledger_stock_lots l ON l.id = o.lot_id AND l.ledger_id = o.ledger_id AND l.category_id = o.category_id
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id AND opening_event.status = 'active'
+     LEFT JOIN (
+       SELECT a.lot_id, SUM(a.quantity) AS sold_quantity,
+              CASE WHEN SUM(CASE WHEN e.execution_price IS NULL OR e.execution_price < 0 THEN 1 ELSE 0 END) > 0
+                THEN NULL ELSE SUM(a.quantity * e.execution_price) END AS sold_value,
+              MAX(COALESCE(e.actual_traded_at, e.server_registered_at)) AS sold_at
+       FROM ledger_stock_event_lot_allocations a
+       INNER JOIN ledger_stock_events e ON e.id = a.event_id
+       WHERE e.ledger_id = ? AND e.category_id = ? AND e.status = 'active' AND e.event_type IN ('reduce','sell')
+       GROUP BY a.lot_id
+     ) sales ON sales.lot_id = l.id
+     WHERE o.ledger_id = ? AND o.category_id = ?${userId === undefined ? '' : ' AND o.user_id = ? AND o.enabled = 1 AND o.quantity > 0'}
+     ORDER BY o.start_date ASC, o.lot_id ASC, o.user_id ASC`,
+    [ledgerId, categoryId, ledgerId, categoryId, ...(userId === undefined ? [] : [userId])],
+  );
+  return (rows as any[]).map((row) => {
+    const initialQuantity = numberValue(row.initial_quantity);
+    const soldQuantity = numberValue(row.sold_quantity);
+    const lotCurrentQuantity = Math.max(0, initialQuantity - soldQuantity);
+    return {
+      lotId: Number(row.lot_id), userId: Number(row.user_id), enabled: Number(row.enabled) === 1,
+      quantity: numberValue(row.quantity), entryPrice: numberValue(row.entry_price), startDate: String(row.start_date),
+      pauseDate: normalizeStoredDate(row.pause_date),
+      assignedBy: Number(row.assigned_by), createdAt: toIso(row.created_at), updatedAt: toIso(row.updated_at),
+      symbol: String(row.symbol), stockName: String(row.stock_name), initialQuantity,
+      lotCurrentQuantity: lotCurrentQuantity <= EPSILON ? 0 : lotCurrentQuantity,
+      soldQuantity,
+      soldValue: row.sold_value === null || row.sold_value === undefined ? null : Number(row.sold_value),
+      soldAt: row.sold_at ? toIso(row.sold_at) : null, soldDate: row.sold_date || null,
+    };
+  });
+}
+
+function toStockObservationQuote(
+  symbol: string,
+  quoteMap: Record<string, StoredQuote>,
+  referenceQuotes: Record<string, StoredQuote>,
+  storedQuotes: Record<string, StoredQuote>,
+  intradayQuotes: Record<string, StoredQuote>,
+): StockObservationQuote | null {
+  const quote = quoteMap[symbol];
+  if (!quote) return null;
+  return {
+    price: quote.price, updatedAt: quote.updatedAt || null, priceDate: quote.priceDate || null,
+    source: quote.source ?? (quote === intradayQuotes[symbol] ? 'intraday'
+      : quote === storedQuotes[symbol] ? 'close' : quote === referenceQuotes[symbol] ? 'reference' : 'unavailable'),
+  };
+}
+
+export type StockObservationPauseContext = {
+  pauseDate: string;
+  observationValuation: StockObservationValuation;
+  quote: StockObservationQuote | null;
+};
+
+/**
+ * 仅SELECT：供已授权观察沙箱预览调用（路由仍须校验批次所属标签和管理员权限）。
+ * 返回as-of原批次数量/截至当日售出及已存历史报价；不可用于真实资金结算。
+ * 空/未来暂停应由调用方继续使用matrix.observationValuation及实时quote。
+ */
+export async function getStockObservationPauseContext(lotId: number, pauseDate: string): Promise<StockObservationPauseContext | null> {
+  if (!Number.isSafeInteger(lotId) || lotId <= 0) throw new Error("持仓编号无效");
+  validateStockObservationStartDate(pauseDate);
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(
+    `SELECT l.id, l.category_id, l.symbol, l.initial_quantity,
+            COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN a.quantity ELSE 0 END), 0) AS sold_quantity,
+            CASE WHEN SUM(CASE WHEN e.id IS NOT NULL AND (e.execution_price IS NULL OR e.execution_price < 0)
+              THEN 1 ELSE 0 END) > 0 THEN NULL ELSE SUM(CASE WHEN e.id IS NOT NULL THEN a.quantity * e.execution_price ELSE 0 END) END AS sold_value,
+            MAX(COALESCE(e.actual_traded_at, e.server_registered_at)) AS sold_at
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id AND opening_event.status = 'active'
+     LEFT JOIN ledger_stock_event_lot_allocations a ON a.lot_id = l.id
+     LEFT JOIN ledger_stock_events e ON e.id = a.event_id AND e.ledger_id = l.ledger_id AND e.category_id = l.category_id
+       AND e.status = 'active' AND e.event_type IN ('reduce','sell')
+       AND COALESCE(e.actual_traded_at, e.server_registered_at) < DATE_ADD(?, INTERVAL 1 DAY)
+     WHERE l.id = ? AND l.ledger_id = ?
+     GROUP BY l.id`,
+    [pauseDate, lotId, STOCK_LEDGER_ID],
+  );
+  const row = (rows as any[])[0];
+  if (!row) return null;
+  const initialQuantity = numberValue(row.initial_quantity);
+  const soldQuantity = numberValue(row.sold_quantity);
+  const remaining = Math.max(0, initialQuantity - soldQuantity);
+  const observationValuation: StockObservationValuation = {
+    initialQuantity, lotCurrentQuantity: remaining <= EPSILON ? 0 : remaining, soldQuantity,
+    soldValue: row.sold_value === null || row.sold_value === undefined ? null : Number(row.sold_value),
+    soldAt: row.sold_at ? toIso(row.sold_at) : null,
+    soldDate: row.sold_at ? normalizeStoredDate(row.sold_at) : null,
+  };
+  if (observationValuation.lotCurrentQuantity === 0) return { pauseDate, observationValuation, quote: null };
+  const categoryId = Number(row.category_id);
+  const symbol = String(row.symbol);
+  const archivedQuotes = await getArchivedQuotesAsOf(categoryId, [symbol], pauseDate);
+  if (archivedQuotes[symbol]) {
+    return { pauseDate, observationValuation, quote: toStockObservationQuote(symbol, archivedQuotes, {}, {}, {}) };
+  }
+  // 旧历史没有archive时只安全读取尚未被覆写的旧快照/审计，不回填、不使用未来行情。
+  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+    getLatestReferenceQuotes(categoryId, pauseDate),
+    getLatestQuotes(categoryId, [symbol], pauseDate),
+    getLatestIntradayQuotes(categoryId, [symbol], pauseDate),
+  ]);
+  const safeMaps = [referenceQuotes, storedQuotes, intradayQuotes].map((map) => Object.fromEntries(
+    Object.entries(map).filter(([, quote]) => isQuoteAtOrBefore(quote, pauseDate)),
+  ));
+  const quoteMap = mergeLatestQuoteMaps(...safeMaps);
+  const quote = toStockObservationQuote(symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes);
+  return { pauseDate, observationValuation, quote };
+}
+
+async function getStockObservationPauseContexts(observations: readonly StockLotObservation[], today: string) {
+  const contexts = new Map<string, StockObservationPauseContext | null>();
+  const requests = new Map<string, { lotId: number; pauseDate: string }>();
+  for (const observation of observations) {
+    if (observation.pauseDate && observation.pauseDate <= today && observation.startDate <= today) {
+      requests.set(`${observation.lotId}:${observation.pauseDate}`, { lotId: observation.lotId, pauseDate: observation.pauseDate });
+    }
+  }
+  await Promise.all(Array.from(requests, async ([key, request]) => {
+    contexts.set(key, await getStockObservationPauseContext(request.lotId, request.pauseDate));
+  }));
+  return contexts;
+}
+
+/**
+ * 本人独立观察组合；即使没有实际获配份额也能读取。不调用真实 eligibility/portfolio，
+ * 不生成 snapshot/closure，不刷新或写入行情。管理员查看其他用户须由路由单独授权。
+ */
+export async function getMyStockTagObservationPortfolio(input: {
+  ledgerId: number;
+  categoryId: number;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
+  const observations = await getStockLotObservations(access.ledgerId, access.categoryId, input.userId);
+  const today = beijingDate();
+  const pauseContexts = await getStockObservationPauseContexts(observations, today);
+  // 全平仓不读取实时行情，仅以实际批次卖出加权价冻结观察回报。
+  const symbols = Array.from(new Set(observations.filter((item) => item.lotCurrentQuantity > 0
+    && (!item.pauseDate || item.pauseDate > today)).map((item) => item.symbol)));
+  const [referenceQuotes, storedQuotes, intradayQuotes] = symbols.length === 0 ? [{}, {}, {}] : await Promise.all([
+    getLatestReferenceQuotes(access.categoryId),
+    getLatestQuotes(access.categoryId, symbols),
+    getLatestIntradayQuotes(access.categoryId, symbols),
+  ]);
+  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
+  const holdings: StockObservationHolding[] = observations.flatMap((item) => {
+    const context = pauseContexts.get(`${item.lotId}:${item.pauseDate}`);
+    const paused = item.startDate <= today && !!item.pauseDate && item.pauseDate <= today;
+    // 缺失as-of批次时不借用未来售出数据；不伪造观察已结束或零估值。
+    if (paused && !context) throw new Error("观察暂停估值批次不可用，请刷新后重试");
+    const holding = buildStockObservationHolding(context ? { ...item, ...context.observationValuation } : item,
+      paused ? context?.quote ?? null : toStockObservationQuote(item.symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes), today);
+    return holding ? [holding] : [];
+  });
+  return {
+    ...access,
+    viewerUserId: input.userId,
+    accountingMode: "stock_portfolio" as const,
+    observationView: true as const,
+    holdings,
+    summary: summarizeStockObservationHoldings(holdings),
+  };
+}
+
+/** 观察专属入口目录，不改变真实 getMyStockTagOverview / isEligible。 */
+export async function getMyStockTagObservationOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+  const categories: Array<{ categoryId: number; categoryName: string; holdingCount: number }> = [];
+  if (input.ledgerId !== STOCK_LEDGER_ID) return { categories };
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  if (!await stockObservationTableExists(conn)) return { categories };
+  const [rows] = await (conn as any).execute(
+    `SELECT c.id, c.name, COUNT(DISTINCT o.lot_id) AS holding_count
+     FROM ledger_stock_lot_observations o
+     INNER JOIN ledger_categories c ON c.id = o.category_id AND c.ledgerId = o.ledger_id
+     INNER JOIN ledger_stock_lots l ON l.id = o.lot_id AND l.category_id = o.category_id AND l.ledger_id = o.ledger_id
+     INNER JOIN ledger_stock_events e ON e.id = l.opened_event_id AND e.status = 'active'
+     WHERE o.ledger_id = ? AND o.user_id = ? AND o.enabled = 1 AND o.quantity > 0
+       AND c.parentId IS NULL AND c.accounting_mode = 'stock_portfolio'
+     GROUP BY c.id, c.name, c.sortOrder ORDER BY c.sortOrder ASC, c.id ASC`,
+    [input.ledgerId, input.userId],
+  );
+  for (const row of rows as any[]) {
+    try {
+      const access = await assertStockTagAccess(input.ledgerId, Number(row.id), input.userId, input.systemRole, false, false);
+      categories.push({ categoryId: access.categoryId, categoryName: access.categoryName, holdingCount: Number(row.holding_count) });
+    } catch (error) {
+      if (error instanceof Error && (error.message === "您无权查看此标签" || error.message === "该标签不是股票持仓模式")) continue;
+      throw error;
+    }
+  }
+  return { categories };
+}
+
 export async function getMyStockTagParticipantPortfolio(input: {
   ledgerId: number;
   categoryId: number;
@@ -1714,67 +2057,110 @@ export async function voidStockTagEvent(input: {
   await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const reason = String(input.reason || "").trim().slice(0, 300);
   if (!reason) throw new Error("请填写作废原因");
-  const conn = await getDbConnection();
+  const conn = await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接不可用");
-  const [rows] = await (conn as any).execute(
-    `SELECT id, event_type, status FROM ledger_stock_events WHERE id = ? AND category_id = ? LIMIT 1`,
-    [input.eventId, input.categoryId],
-  );
-  const event = (rows as any[])[0];
-  if (!event) throw new Error("股票操作不存在");
-  if (event.status === "voided") throw new Error("该股票操作已作废");
+  try {
+    await (conn as any).beginTransaction();
+    const [rows] = await (conn as any).execute(
+      `SELECT id, event_type, status FROM ledger_stock_events
+       WHERE id = ? AND category_id = ? AND ledger_id = ? LIMIT 1 FOR UPDATE`,
+      [input.eventId, input.categoryId, input.ledgerId],
+    );
+    const event = (rows as any[])[0];
+    if (!event) throw new Error("股票操作不存在");
+    if (event.status === "voided") throw new Error("该股票操作已作废");
 
-  if (event.event_type === "buy" || event.event_type === "add") {
-    const [dependencyRows] = await (conn as any).execute(
-      `SELECT COUNT(*) AS count
-       FROM ledger_stock_event_lot_allocations a
-       INNER JOIN ledger_stock_events e ON e.id = a.event_id
-       INNER JOIN ledger_stock_lots l ON l.id = a.lot_id
-       WHERE l.opened_event_id = ? AND e.status = 'active'`,
-      [input.eventId],
-    );
-    if (Number((dependencyRows as any[])[0]?.count || 0) > 0) {
-      throw new Error("该买入批次已有后续减仓/卖出记录，请先作废后续操作");
+    if (event.event_type === "buy" || event.event_type === "add") {
+      const [dependencyRows] = await (conn as any).execute(
+        `SELECT COUNT(*) AS count
+         FROM ledger_stock_event_lot_allocations a
+         INNER JOIN ledger_stock_events e ON e.id = a.event_id
+         INNER JOIN ledger_stock_lots l ON l.id = a.lot_id
+         WHERE l.opened_event_id = ? AND e.status = 'active'`,
+        [input.eventId],
+      );
+      if (Number((dependencyRows as any[])[0]?.count || 0) > 0) {
+        throw new Error("该买入批次已有后续减仓/卖出记录，请先作废后续操作");
+      }
+      const [participationRows] = await (conn as any).execute(
+        `SELECT COUNT(*) AS count FROM ledger_stock_lot_participations p
+         INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+         WHERE l.opened_event_id = ?`,
+        [input.eventId],
+      );
+      if (Number((participationRows as any[])[0]?.count || 0) > 0) {
+        throw new Error("该买入批次已分配给参与成员；请先在初始金额管理中移除未卖出的参与分配");
+      }
     }
-    const [participationRows] = await (conn as any).execute(
-      `SELECT COUNT(*) AS count FROM ledger_stock_lot_participations p
-       INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
-       WHERE l.opened_event_id = ?`,
-      [input.eventId],
-    );
-    if (Number((participationRows as any[])[0]?.count || 0) > 0) {
-      throw new Error("该买入批次已分配给参与成员；请先在初始金额管理中移除未卖出的参与分配");
-    }
-  }
-  if (event.event_type === "reduce" || event.event_type === "sell") {
-    // The sale's participant closures are append-only evidence. Reversing an entire sale
-    // restores its quantities before the closure records are deleted, keeping the matrix
-    // consistent with the surviving stock transaction history.
-    const [closedRows] = await (conn as any).execute(
-      `SELECT participation_id, SUM(quantity) AS quantity
-       FROM ledger_stock_participation_closures
-       WHERE sell_event_id = ?
-       GROUP BY participation_id`,
-      [input.eventId],
-    );
-    for (const row of closedRows as any[]) {
+    if (event.event_type === "reduce" || event.event_type === "sell") {
+      // 按批次ID锁定，与开启观察/真实分配使用同一主锁，避免撤销与转换竞态。
+      const [closedRows] = await (conn as any).execute(
+        `SELECT c.participation_id, p.lot_id, SUM(c.quantity) AS quantity
+         FROM ledger_stock_participation_closures c
+         INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+         WHERE c.sell_event_id = ? AND p.ledger_id = ? AND p.category_id = ?
+         GROUP BY c.participation_id, p.lot_id`,
+        [input.eventId, input.ledgerId, input.categoryId],
+      );
+      const lotIds = Array.from(new Set((closedRows as any[]).map((row) => Number(row.lot_id)))).sort((a, b) => a - b);
+      for (const lotId of lotIds) {
+        await (conn as any).execute(
+          `SELECT id FROM ledger_stock_lots WHERE id = ? AND ledger_id = ? AND category_id = ? FOR UPDATE`,
+          [lotId, input.ledgerId, input.categoryId],
+        );
+      }
+      const observationTableExists = await stockObservationTableExists(conn);
+      for (const row of closedRows as any[]) {
+        const [participationRows] = await (conn as any).execute(
+          `SELECT id, user_id FROM ledger_stock_lot_participations
+           WHERE id = ? AND ledger_id = ? AND category_id = ? FOR UPDATE`,
+          [Number(row.participation_id), input.ledgerId, input.categoryId],
+        );
+        const participation = (participationRows as any[])[0];
+        if (!participation) throw new Error("撤销卖出的真实参与记录不可用");
+        let observerEnabled = false;
+        if (observationTableExists) {
+          const [observationRows] = await (conn as any).execute(
+            `SELECT enabled FROM ledger_stock_lot_observations
+             WHERE ledger_id = ? AND category_id = ? AND lot_id = ? AND user_id = ? FOR UPDATE`,
+            [input.ledgerId, input.categoryId, Number(row.lot_id), Number(participation.user_id)],
+          );
+          observerEnabled = (observationRows as any[]).some((observation) => Number(observation.enabled) === 1);
+        }
+        if (observerEnabled) {
+          // 转观察时已释放真实余量：撤销closure只减掉该笔已售allocated，不能恢复真实资产。
+          await (conn as any).execute(
+            `UPDATE ledger_stock_lot_participations
+             SET allocated_quantity = GREATEST(0, allocated_quantity - ?), remaining_quantity = 0 WHERE id = ?`,
+            [numberValue(row.quantity), Number(row.participation_id)],
+          );
+        } else {
+          await (conn as any).execute(
+            `UPDATE ledger_stock_lot_participations SET remaining_quantity = remaining_quantity + ? WHERE id = ?`,
+            [numberValue(row.quantity), Number(row.participation_id)],
+          );
+        }
+      }
       await (conn as any).execute(
-        `UPDATE ledger_stock_lot_participations SET remaining_quantity = remaining_quantity + ? WHERE id = ?`,
-        [numberValue(row.quantity), Number(row.participation_id)],
+        `DELETE FROM ledger_stock_participation_closures WHERE sell_event_id = ?`,
+        [input.eventId],
       );
     }
     await (conn as any).execute(
-      `DELETE FROM ledger_stock_participation_closures WHERE sell_event_id = ?`,
-      [input.eventId],
+      `UPDATE ledger_stock_events
+       SET status = 'voided', voided_at = NOW(), voided_by = ?, void_reason = ?
+       WHERE id = ? AND category_id = ? AND status = 'active'`,
+      [input.userId, reason, input.eventId, input.categoryId],
     );
+    await (conn as any).commit();
+    invalidateMemberStockReadCaches();
+    return { success: true };
+  } catch (error) {
+    await (conn as any).rollback();
+    throw error;
+  } finally {
+    if (typeof (conn as any).release === "function") (conn as any).release();
   }
-  await (conn as any).execute(
-    `UPDATE ledger_stock_events
-     SET status = 'voided', voided_at = NOW(), voided_by = ?, void_reason = ?
-     WHERE id = ? AND category_id = ? AND status = 'active'`,
-    [input.userId, reason, input.eventId, input.categoryId],
-  );
-  return { success: true };
 }
 
 /**
@@ -1923,6 +2309,13 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
         // 保留行情源实际交易日；日结日期固定为本次北京时间15:05所在自然日。
         const priceDate = quote.priceDate || "";
         if (!priceDate) continue;
+        // 先append保留每次采集，原日结表继续原行为；不能UPDATE历史或把补写日当采集日。
+        await (conn as any).execute(
+          `INSERT INTO ledger_stock_quote_history
+           (ledger_id, category_id, symbol, price, price_date, captured_at, source)
+           VALUES (?, ?, ?, ?, ?, NOW(), 'close')`,
+          [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
+        );
         await (conn as any).execute(
           `INSERT INTO ledger_stock_price_snapshots
            (ledger_id, category_id, symbol, price, price_date, captured_at)
@@ -2012,6 +2405,12 @@ export async function refreshLedgerStockTagIntradaySnapshots(): Promise<{ catego
         // A 股仍按北京时间当日过滤；美股报价日期以交易所返回的纽约交易日为准。
         if (stockCurrency(symbol) === 'CNY' && priceDate !== date) continue;
         await (conn as any).execute(
+          `INSERT INTO ledger_stock_quote_history
+           (ledger_id, category_id, symbol, price, price_date, captured_at, source)
+           VALUES (?, ?, ?, ?, ?, NOW(), 'intraday')`,
+          [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
+        );
+        await (conn as any).execute(
           `INSERT INTO ledger_stock_intraday_quotes
            (ledger_id, category_id, symbol, price, price_date, captured_at)
            VALUES (?, ?, ?, ?, ?, NOW())
@@ -2037,7 +2436,14 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
             COALESCE(l.note, opening_event.note, '') AS note,
             opening_event.market_reference_price AS opening_reference_price,
             COALESCE(opening_event.actual_traded_at, l.opened_at) AS actual_traded_at,
-            COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
+            COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity,
+            COALESCE(SUM(CASE WHEN e.status = 'active' AND e.event_type IN ('reduce','sell') THEN a.quantity ELSE 0 END), 0) AS observation_sold_quantity,
+            CASE WHEN SUM(CASE WHEN e.status = 'active' AND e.event_type IN ('reduce','sell')
+              AND (e.execution_price IS NULL OR e.execution_price < 0) THEN 1 ELSE 0 END) > 0
+              THEN NULL ELSE SUM(CASE WHEN e.status = 'active' AND e.event_type IN ('reduce','sell')
+                THEN a.quantity * e.execution_price ELSE 0 END) END AS observation_sold_value,
+            MAX(CASE WHEN e.status = 'active' AND e.event_type IN ('reduce','sell')
+              THEN COALESCE(e.actual_traded_at, e.server_registered_at) ELSE NULL END) AS observation_sold_at
      FROM ledger_stock_lots l
      INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
      LEFT JOIN ledger_stock_event_lot_allocations a ON a.lot_id = l.id
@@ -2079,6 +2485,15 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     getLatestIntradayQuotes(categoryId, symbols),
   ]);
   const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
+  const observationRows = await getStockLotObservations(STOCK_LEDGER_ID, categoryId);
+  const today = beijingDate();
+  const pauseContexts = await getStockObservationPauseContexts(observationRows, today);
+  const observationsByLot = new Map<number, typeof observationRows>();
+  for (const observation of observationRows) {
+    const list = observationsByLot.get(observation.lotId) || [];
+    list.push(observation);
+    observationsByLot.set(observation.lotId, list);
+  }
   const byLot = new Map<number, any[]>();
   for (const row of participationRows as any[]) {
     const lotId = Number(row.lot_id);
@@ -2118,11 +2533,45 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       marketQuoteSource, marketQuoteDate: marketQuote?.priceDate || null, marketQuoteUpdatedAt: marketQuote?.updatedAt || null,
       availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
       status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
+      // 仅为沙箱观察预览提供同一纯函数的估值输入；不覆盖任何真实字段。
+      observationValuation: {
+        initialQuantity,
+        lotCurrentQuantity: Math.max(0, initialQuantity - numberValue(row.observation_sold_quantity)) <= EPSILON
+          ? 0 : Math.max(0, initialQuantity - numberValue(row.observation_sold_quantity)),
+        soldQuantity: numberValue(row.observation_sold_quantity),
+        soldValue: row.observation_sold_value === null || row.observation_sold_value === undefined ? null : Number(row.observation_sold_value),
+        soldAt: row.observation_sold_at ? toIso(row.observation_sold_at) : null,
+        soldDate: row.observation_sold_at ? normalizeStoredDate(row.observation_sold_at) : null,
+      },
+      // 已存暂停配置的as-of合同；任意新日期的预览调用只读PauseContext helper。
+      pausedValuationByDate: Object.fromEntries((observationsByLot.get(Number(row.id)) || []).flatMap((observation) => {
+        const context = pauseContexts.get(`${observation.lotId}:${observation.pauseDate}`);
+        return context ? [[context.pauseDate, context]] : [];
+      })) as Record<string, StockObservationPauseContext>,
       participations: participations.map((item) => ({
         ...item,
         floatingPnl: marketPrice === null ? null : (item.entryPrice - marketPrice) * item.remainingQuantity,
         totalPnl: marketPrice === null ? item.realizedPnl : item.realizedPnl + (item.entryPrice - marketPrice) * item.remainingQuantity,
       })),
+      // 观察配置只附加展示，不进入 activeAllocatedQuantity 或 availableForParticipation。
+      observations: (observationsByLot.get(Number(row.id)) || []).map((observation) => {
+        const context = pauseContexts.get(`${observation.lotId}:${observation.pauseDate}`);
+        const paused = observation.startDate <= today && !!observation.pauseDate && observation.pauseDate <= today;
+        if (paused && !context) throw new Error("观察暂停估值批次不可用，请刷新后重试");
+        const holding = buildStockObservationHolding(
+          context ? { ...observation, ...context.observationValuation } : observation,
+          paused ? context?.quote ?? null : toStockObservationQuote(symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes), today);
+        return {
+          userId: observation.userId, enabled: observation.enabled, quantity: observation.quantity,
+          entryPrice: observation.entryPrice, startDate: observation.startDate,
+          pauseDate: observation.pauseDate || null,
+          assignedBy: observation.assignedBy, createdAt: observation.createdAt, updatedAt: observation.updatedAt,
+          currentQuantity: holding?.currentQuantity ?? 0,
+          closedQuantity: holding?.closedQuantity ?? 0,
+          floatingPnl: holding?.floatingPnl ?? null, closedPnl: holding?.closedPnl ?? null,
+          totalPnl: holding?.totalPnl ?? null, status: holding?.status ?? 'disabled',
+        };
+      }),
     };
   });
   return {
@@ -2135,7 +2584,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
 }
 
 export async function getStockLotParticipationMatrix(input: { ledgerId: number; categoryId: number; userId: number; systemRole?: string }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
   // The matrix names every participant and their allocated quantities.  It is an
   // administrator maintenance view only; ordinary members keep the separate
   // read-only endpoint that returns only their own allocations.
@@ -2180,6 +2629,111 @@ export async function updateStockTagLotNote(input: {
 }
 
 
+/** 开启观察原子释放该用户本批次未结算真实余量；不是卖出，不触碰历史结算或资金。 */
+export async function setStockLotObservation(input: {
+  ledgerId: number;
+  categoryId: number;
+  lotId: number;
+  targetUserId: number;
+  enabled: boolean;
+  quantity: number;
+  entryPrice?: number;
+  startDate?: string;
+  pauseDate?: string;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, false);
+  const quantity = Number(validateStockObservationQuantity(input.quantity).toFixed(8));
+  if (typeof input.enabled !== 'boolean') throw new Error("观察开关必须是布尔值");
+  if (!Number.isSafeInteger(input.lotId) || input.lotId <= 0) throw new Error("持仓编号无效");
+  if (!Number.isSafeInteger(input.targetUserId) || input.targetUserId <= 0) throw new Error("观察成员编号无效");
+  const specifiedEntryPrice = input.entryPrice === undefined ? undefined : validateStockObservationEntryPrice(input.entryPrice);
+  const specifiedStartDate = input.startDate === undefined ? undefined : validateStockObservationStartDate(input.startDate);
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  if (!await stockObservationTableExists(conn)) throw new Error("观察账户表尚未初始化，请由管理员授权执行迁移；本接口不会自动建表");
+  const tx = await getDbTransactionConnection();
+  if (!tx) throw new Error("数据库连接不可用");
+  try {
+    await (tx as any).beginTransaction();
+    const [memberRows] = await (tx as any).execute(
+      `SELECT userId FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+      [access.ledgerId, input.targetUserId],
+    );
+    if ((memberRows as any[]).length === 0) throw new Error("该用户不是37号账本成员");
+    // 与真实分配共用批次锁；不受全实配或历史卖出限制，再锁定目标真实参与行。
+    const [lotRows] = await (tx as any).execute(
+      `SELECT l.id, l.unit_cost, l.opened_at
+       FROM ledger_stock_lots l
+       INNER JOIN ledger_stock_events e ON e.id = l.opened_event_id AND e.ledger_id = l.ledger_id AND e.category_id = l.category_id
+       WHERE l.id = ? AND l.ledger_id = ? AND l.category_id = ? AND e.status = 'active' FOR UPDATE`,
+      [input.lotId, access.ledgerId, access.categoryId],
+    );
+    const lot = (lotRows as any[])[0];
+    if (!lot) throw new Error("股票批次不存在或已作废");
+    const [participationRows] = await (tx as any).execute(
+      `SELECT id, ledger_id, category_id, allocated_quantity, remaining_quantity
+       FROM ledger_stock_lot_participations WHERE lot_id = ? AND user_id = ? FOR UPDATE`,
+      [input.lotId, input.targetUserId],
+    );
+    const participation = (participationRows as any[])[0];
+    if (participation && (Number(participation.ledger_id) !== access.ledgerId || Number(participation.category_id) !== access.categoryId)) {
+      throw new Error("真实参与记录归属不一致，拒绝跨账本更新");
+    }
+    const [existingRows] = await (tx as any).execute(
+      `SELECT ledger_id, category_id, entry_price, DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date,
+              DATE_FORMAT(pause_date, '%Y-%m-%d') AS pause_date
+       FROM ledger_stock_lot_observations WHERE lot_id = ? AND user_id = ? FOR UPDATE`,
+      [input.lotId, input.targetUserId],
+    );
+    const existing = (existingRows as any[])[0];
+    if (existing && (Number(existing.ledger_id) !== access.ledgerId || Number(existing.category_id) !== access.categoryId)) {
+      throw new Error("观察配置归属不一致，拒绝跨账本更新");
+    }
+    const entryPrice = validateStockObservationEntryPrice(specifiedEntryPrice ?? Number(existing?.entry_price ?? lot.unit_cost));
+    const startDate = specifiedStartDate ?? existing?.start_date ?? normalizeStoredDate(lot.opened_at) ?? beijingDate();
+    validateStockObservationStartDate(startDate);
+    const pauseDate = validateStockObservationPauseDate(input.pauseDate === undefined
+      ? normalizeStoredDate(existing?.pause_date) ?? undefined : input.pauseDate, startDate);
+    if (input.enabled && participation) {
+      const released = releaseStockParticipationForObservation({
+        allocatedQuantity: Number(participation.allocated_quantity),
+        remainingQuantity: Number(participation.remaining_quantity),
+      });
+      if (released.releasedQuantity > 0) {
+        // 只释放未结算部分：保留历史ID、已卖出allocated部分和全部closure，不产生卖出/退款。
+        await (tx as any).execute(
+          `UPDATE ledger_stock_lot_participations SET allocated_quantity = ?, remaining_quantity = ?
+           WHERE id = ? AND ledger_id = ? AND category_id = ? AND lot_id = ? AND user_id = ?`,
+          [released.allocatedQuantity, released.remainingQuantity, participation.id, access.ledgerId, access.categoryId, input.lotId, input.targetUserId],
+        );
+      }
+    }
+    // enabled即使quantity=0也与真实余量互斥；关闭只保存配置，不自动恢复已释放份额。
+    await (tx as any).execute(
+      `INSERT INTO ledger_stock_lot_observations
+       (ledger_id, category_id, lot_id, user_id, enabled, quantity, entry_price, start_date, pause_date, assigned_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), quantity = VALUES(quantity),
+         entry_price = VALUES(entry_price), start_date = VALUES(start_date), pause_date = VALUES(pause_date), assigned_by = VALUES(assigned_by),
+         updated_at = CURRENT_TIMESTAMP`,
+      [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, input.enabled ? 1 : 0, quantity, entryPrice, startDate, pauseDate, input.userId],
+    );
+    await (tx as any).commit();
+    invalidateMemberStockReadCaches();
+    return {
+      success: true as const,
+      observation: { userId: input.targetUserId, lotId: input.lotId, enabled: input.enabled, quantity, entryPrice, startDate, pauseDate },
+    };
+  } catch (error) {
+    await (tx as any).rollback();
+    throw error;
+  } finally {
+    if (typeof (tx as any).release === "function") (tx as any).release();
+  }
+}
+
 export async function setStockLotParticipation(input: {
   ledgerId: number;
   categoryId: number;
@@ -2221,6 +2775,17 @@ export async function setStockLotParticipation(input: {
     );
     const lot = (lotRows as any[])[0];
     if (!lot) throw new Error("股票批次不存在或已作废");
+    if (quantity > 0 && await stockObservationTableExists(tx)) {
+      // 必须在同lot锁内检查；开启观察（包括零观察股数）时不能同时获配真实股份。
+      const [observationRows] = await (tx as any).execute(
+        `SELECT enabled FROM ledger_stock_lot_observations
+         WHERE ledger_id = ? AND category_id = ? AND lot_id = ? AND user_id = ? FOR UPDATE`,
+        [access.ledgerId, access.categoryId, input.lotId, input.targetUserId],
+      );
+      if ((observationRows as any[]).some((row) => Number(row.enabled) === 1)) {
+        throw new Error("该用户已开启此批次观察，请先关闭观察后再分配真实股数");
+      }
+    }
     const [soldRows] = await (tx as any).execute(
       `SELECT COALESCE(SUM(a.quantity), 0) AS globally_sold_quantity
        FROM ledger_stock_event_lot_allocations a
@@ -2296,9 +2861,15 @@ export async function setStockLotParticipation(input: {
 
 
 async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId: number, salePrice: number, quantity: number) {
+  const observationTableExists = await stockObservationTableExists(conn);
   const [rows] = await conn.execute(
     `SELECT id, remaining_quantity FROM ledger_stock_lot_participations
-     WHERE lot_id = ? AND remaining_quantity > 0
+     WHERE lot_id = ? AND remaining_quantity > 0${observationTableExists ? `
+       AND NOT EXISTS (SELECT 1 FROM ledger_stock_lot_observations o
+         WHERE o.lot_id = ledger_stock_lot_participations.lot_id
+           AND o.user_id = ledger_stock_lot_participations.user_id
+           AND o.ledger_id = ledger_stock_lot_participations.ledger_id
+           AND o.category_id = ledger_stock_lot_participations.category_id AND o.enabled = 1)` : ''}
      ORDER BY assigned_at ASC, id ASC FOR UPDATE`,
     [lotId],
   );
@@ -2371,6 +2942,18 @@ async function syncStockLotMemberSharesForSale(
 
   const submittedUserIds = Array.from(shareByUser.keys());
   if (submittedUserIds.length === 0) return;
+  const observerUserIds = new Set<number>();
+  if (await stockObservationTableExists(conn)) {
+    const [observationRows] = await conn.execute(
+      `SELECT user_id FROM ledger_stock_lot_observations
+       WHERE ledger_id = ? AND category_id = ? AND lot_id = ? AND enabled = 1 FOR UPDATE`,
+      [params.ledgerId, params.categoryId, params.lotId],
+    );
+    for (const row of observationRows as any[]) observerUserIds.add(Number(row.user_id));
+    if (submittedUserIds.some((userId) => observerUserIds.has(userId) && (shareByUser.get(userId) || 0) > 0)) {
+      throw new Error("该用户已开启此批次观察，请先关闭观察后再分配真实股数");
+    }
+  }
   const memberPlaceholders = submittedUserIds.map(() => '?').join(', ');
   const [memberRows] = await conn.execute(
     `SELECT userId FROM ledger_members WHERE ledgerId = ? AND userId IN (${memberPlaceholders}) FOR UPDATE`,
@@ -2406,6 +2989,8 @@ async function syncStockLotMemberSharesForSale(
   const closureCountByParticipation = new Map((closureRows as any[]).map((row) => [Number(row.participation_id), Number(row.closure_count)]));
   const defaultStartDate = normalizeStoredDate(lot.opened_at) || beijingDate();
   for (const userId of submittedUserIds) {
+    // 零比例观察用户不删除历史真实参与ID/closure，也不从观察股数自动分配。
+    if (observerUserIds.has(userId)) continue;
     const existing = existingByUser.get(userId);
     const percentage = shareByUser.get(userId) || 0;
     const desiredQuantity = Number((params.closingQuantity * percentage / 100).toFixed(8));

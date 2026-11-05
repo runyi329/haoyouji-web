@@ -30,6 +30,7 @@ import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDo
 import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
+import Ledger37MarginWalletActions from "@/components/Ledger37MarginWalletActions";
 import {
   AreaChart,
   Area,
@@ -418,6 +419,8 @@ export default function LedgerDetailAA({
   const [showStockPortfolio, setShowStockPortfolio] = useState(() => (
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('openStockPortfolio') === '1'
   ));
+  // 观察入口独立保存分类，不写入真实标签选择，避免无真实份额时被可见性过滤清除。
+  const [selectedStockObservationTag, setSelectedStockObservationTag] = useState<{ categoryId: number; categoryName: string } | null>(null);
 
   // 图片预览（普通成员点击日历格子时弹出）
   const [previewImages, setPreviewImages] = useState<string[]>([]);
@@ -447,6 +450,19 @@ export default function LedgerDetailAA({
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(() => viewAsUserIdFromUrl);
   const viewAsMember = viewAsUserId ? (membersData || []).find((member: any) => member.userId === viewAsUserId) : null;
+  // auth.me/user 是有效成员视角，不能用来判断真实资金操作者。目标只进入缓存键和资金操作。
+  const marginTargetUserId = Number(viewAsUserId ?? user?.id ?? 0);
+  const marginActorPermission = trpc.ledger.getLedger37MarginActor.useQuery(
+    { ledgerId: 37, targetUserId: marginTargetUserId },
+    {
+      enabled: ledgerId === 37 && Number.isInteger(marginTargetUserId) && marginTargetUserId > 0,
+      staleTime: 0, gcTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true,
+    },
+  );
+  const canManageMargins = ledgerId === 37 && marginActorPermission.isFetchedAfterMount
+    && !marginActorPermission.isFetching && !marginActorPermission.error
+    && marginActorPermission.data?.canManageMargins === true
+    && marginActorPermission.data.operator?.id === 870413;
   // 管理员维护端仍需完整看到暂停后的后续录入，以便更正或重启；普通成员及管理员代看
   // 普通成员时，只能看到暂停日（最后结算日）及以前的数据。
   const isMemberFacingLedgerView = !canEdit || Boolean(viewAsMember && viewAsMember.role === 'member');
@@ -638,6 +654,23 @@ export default function LedgerDetailAA({
     () => new Map(stockTagOverview.map((item: any) => [Number(item.categoryId), item])),
     [stockTagOverview],
   );
+  // 观察账户与真实份额完全分离；viewAsUserId 同时进入查询键，避免代看切换复用他人缓存。
+  const canShowStockObservationAccount = ledgerId === 37 && (!canEdit || Boolean(viewAsUserId));
+  const stockTagObservationOverviewQuery = (trpc as any).ledger.getMyStockTagObservationOverview.useQuery(
+    { ledgerId: 37, viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: canShowStockObservationAccount, staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+  const stockObservationCategories = useMemo(() => {
+    const data = stockTagObservationOverviewQuery.data as any;
+    const items = data?.categories ?? data;
+    if (!Array.isArray(items)) return [];
+    return items.map((item: any) => ({
+      categoryId: Number(item?.categoryId),
+      categoryName: String(item?.categoryName ?? '').trim(),
+      holdingCount: Number(item?.holdingCount ?? (Array.isArray(item?.holdings) ? item.holdings.length : 0)),
+    })).filter((item) => Number.isInteger(item.categoryId) && item.categoryId > 0
+      && item.categoryName && Number.isFinite(item.holdingCount) && item.holdingCount > 0);
+  }, [stockTagObservationOverviewQuery.data]);
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
   const allCategories = useMemo(() => {
     if (!rawCategories) return [];
@@ -2229,6 +2262,21 @@ export default function LedgerDetailAA({
   };
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
+  if (showStockPortfolio && selectedStockObservationTag && canShowStockObservationAccount) {
+    return (
+      <StockTagPortfolio
+        ledgerId={ledgerId}
+        categoryId={selectedStockObservationTag.categoryId}
+        categoryName={selectedStockObservationTag.categoryName}
+        participantView={true}
+        onBack={() => {
+          setShowStockPortfolio(false);
+          setSelectedStockObservationTag(null);
+          void stockTagObservationOverviewQuery.refetch();
+        }}
+      />
+    );
+  }
   // 股票持仓保留日历作为第一层入口；只有点击交易日后才打开统一维护/详情页。
   if (showStockPortfolio && selectedTagId && selectedTag?.accountingMode === 'stock_portfolio') {
     return (
@@ -2598,6 +2646,34 @@ export default function LedgerDetailAA({
             )}
           </div>
         </div>
+      )}
+
+      {/* 独立观察入口：不依赖真实标签/初始份额，不进入概览表格或任何结算汇总。 */}
+      {canShowStockObservationAccount && stockObservationCategories.length > 0 && (
+        <section className="mx-3 mt-2 shrink-0 rounded-lg px-3 py-2.5" style={{ backgroundColor: '#F7F2FF', border: '1px solid #E8DDF7' }}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold" style={{ color: '#7E57C2' }}>观察账户</h2>
+            <span className="text-[10px]" style={{ color: '#9575CD' }}>独立观察 · 不计入真实账户</span>
+          </div>
+          <div className="mt-1 max-h-36 overflow-y-auto">
+            {stockObservationCategories.map((category) => (
+              <button
+                key={category.categoryId}
+                type="button"
+                onClick={() => {
+                  setSelectedStockObservationTag({ categoryId: category.categoryId, categoryName: category.categoryName });
+                  setShowStockPortfolio(true);
+                }}
+                className="flex w-full items-center gap-2 py-2 text-left"
+                aria-label={`查看${category.categoryName}观察账户`}
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: '#6D4C9F' }}>{category.categoryName}</span>
+                <span className="shrink-0 text-xs" style={{ color: '#9575CD' }}>{category.holdingCount} 笔观察</span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: '#9575CD' }} />
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* 全部与单标签共用的视图切换；更换标签时保留当前模式。 */}
@@ -6315,6 +6391,24 @@ export default function LedgerDetailAA({
               <button onClick={() => setMarginNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
             <div className="px-4 py-4 overflow-y-auto space-y-3" style={{ maxHeight: '61vh' }}>
+              {canManageMargins && (
+                <Ledger37MarginWalletActions
+                  key={`${marginActorPermission.data?.operator?.id}|${marginTargetUserId}|${marginNoteTag}`}
+                  targetUserId={marginTargetUserId}
+                  targetName={viewAsMember?.name || viewAsMember?.nickname || viewAsMember?.username || user?.name || user?.username}
+                  tagName={marginNoteTag}
+                  paused={Boolean(currentMarginDetailSummary?.activePauseDate)}
+                  requiredCny={currentMarginDetailSummary?.hasUnpricedEntry ? null : currentMarginDetailSummary?.referenceDeposit}
+                  actualCny={currentMarginDetailSummary?.actualDeposit}
+                  prices={aaCryptoPrices}
+                  onChanged={async () => {
+                    await Promise.all([
+                      trpcUtils.ledger.getMyInitialBalances.invalidate({ ledgerId, viewAsUserId: viewAsUserId ?? undefined }),
+                      trpcUtils.getAdminNotes.invalidate(),
+                    ]);
+                  }}
+                />
+              )}
               {currentMarginDetailSummary && (() => {
                 const summary = currentMarginDetailSummary;
                 const formatCny = (value: number) => formatSignedMarginCny(value);
