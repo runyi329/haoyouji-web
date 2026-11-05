@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-05
+// 生成时间：2026-11-06
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9893,5 +9893,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-11-05": [
     { date: "2026-11-04T16:02:34Z", type: "feat", cleanMessage: "split T0 deposits and withdrawals with full deposit overview" },
+    { date: "2026-11-04T22:55:34Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-05T00:54:10Z", type: "feat", cleanMessage: "add T0 ladder profit visibility and percentage threshold controls" },
+    { date: "2026-11-05T03:33:15Z", type: "feat", cleanMessage: "add independent stock observation quotas and margin wallet actions" },
+    { date: "2026-11-05T04:44:31Z", type: "feat", cleanMessage: "unify actual and observation stock account views" },
+    { date: "2026-11-05T05:06:09Z", type: "fix", cleanMessage: "remove observation account panel from ledger overview" },
+    { date: "2026-11-05T05:53:59Z", type: "feat", cleanMessage: "add missing financing currencies and live spot quote coverage" },
   ],
 };
