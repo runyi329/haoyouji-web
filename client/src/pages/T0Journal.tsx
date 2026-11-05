@@ -2133,6 +2133,23 @@ type PositionBucket = {
 };
 
 type AdminLadderDisplayMode = "integrated" | "individual";
+type LadderPnlDisplaySettings = {
+  mode: "all" | "hidden" | "profit" | "loss";
+  minPercent: string;
+};
+const DEFAULT_LADDER_PNL_DISPLAY: LadderPnlDisplaySettings = {
+  mode: "all", minPercent: "",
+};
+
+/** 只控制报价单元格内的数字；订单、仓位、收益计算及详情权限均不受影响。 */
+function shouldShowLadderPnl(pnl: number | null, returnRate: number | null, settings: LadderPnlDisplaySettings) {
+  if (pnl === null || !Number.isFinite(pnl) || settings.mode === "hidden") return false;
+  if (settings.mode === "profit" && pnl <= 0) return false;
+  if (settings.mode === "loss" && pnl >= 0) return false;
+  const threshold = Number(settings.minPercent);
+  if (!Number.isFinite(threshold) || threshold <= 0) return true;
+  return returnRate !== null && Number.isFinite(returnRate) && Math.abs(returnRate) * 100 >= threshold;
+}
 
 type LadderLivePriceMarkerPlacement = "above" | "below" | "center";
 
@@ -4209,6 +4226,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastOpeningInstrumentType, setLastOpeningInstrumentType] = useState<T0InstrumentType>("contract");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("individual");
+  const [showLadderPnlSettings, setShowLadderPnlSettings] = useState(false);
+  const [ladderPnlSettings, setLadderPnlSettings] = useState<LadderPnlDisplaySettings>(DEFAULT_LADDER_PNL_DISPLAY);
+  const [hydratedLadderPnlStorageKey, setHydratedLadderPnlStorageKey] = useState<string | null>(null);
   /** 仅控制整合报价的显示聚合宽度；真实成交、FIFO 与平仓匹配始终使用十美元档。 */
   const [integratedArchiveStep, setIntegratedArchiveStep] = useState<IntegratedArchiveStep>(POSITION_ARCHIVE_STEP);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
@@ -5095,6 +5115,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const viewerId = viewerMode === "member" ? String(memberViewerId || signedInUserId) : String(signedInUserId);
     return getT0TopFilterStorageKey(ledgerId, viewerMode, viewerId);
   }, [isUserPreview, ledgerId, me, activeJournalData]);
+  const ladderPnlStorageKey = topFilterStorageKey ? `${topFilterStorageKey}:ladder-pnl-v1` : null;
+  useEffect(() => {
+    let next = { ...DEFAULT_LADDER_PNL_DISPLAY };
+    if (ladderPnlStorageKey) {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(ladderPnlStorageKey) || "null");
+        if (saved && typeof saved === "object") {
+          if (["all", "hidden", "profit", "loss"].includes(saved.mode)) next.mode = saved.mode;
+          if ((typeof saved.minPercent === "string" || typeof saved.minPercent === "number") && Number.isFinite(Number(saved.minPercent)) && Number(saved.minPercent) >= 0) next.minPercent = String(saved.minPercent);
+        }
+      } catch { /* 本机缓存不可用时仍可直接使用显示设置。 */ }
+    }
+    setLadderPnlSettings(next);
+    setHydratedLadderPnlStorageKey(ladderPnlStorageKey);
+  }, [ladderPnlStorageKey]);
+  useEffect(() => {
+    if (!ladderPnlStorageKey || hydratedLadderPnlStorageKey !== ladderPnlStorageKey) return;
+    try { window.localStorage.setItem(ladderPnlStorageKey, JSON.stringify(ladderPnlSettings)); } catch { /* 不阻碍界面选择。 */ }
+  }, [hydratedLadderPnlStorageKey, ladderPnlSettings, ladderPnlStorageKey]);
   const directoryImpactTarget = directoryRenameTarget || directoryDeleteTarget;
   const directoryImpactDimension = directoryImpactTarget?.kind === "account"
     ? "account"
@@ -11772,6 +11811,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 ))}
               </select>
             )}
+            <button
+              type="button"
+              onClick={() => setShowLadderPnlSettings((current) => !current)}
+              aria-expanded={showLadderPnlSettings}
+              aria-controls="t0-ladder-pnl-settings"
+              className={`inline-flex h-6 items-center gap-1 rounded border px-2 text-[11px] font-semibold active:scale-[0.98] ${showLadderPnlSettings ? "border-slate-700 bg-slate-700 text-white" : "border-slate-300 bg-white/80 text-slate-700"}`}
+            >
+              盈亏显示
+              {(ladderPnlSettings.mode !== "all" || Number(ladderPnlSettings.minPercent) > 0) && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="已设置显示条件" />}
+            </button>
+          </div>}
+          {(canManage || isMemberView) && showLadderPnlSettings && <div id="t0-ladder-pnl-settings" className="space-y-2.5 border-b border-slate-300 bg-white/90 px-3 py-3">
+            <div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-700">报价单盈亏显示</span><button type="button" onClick={() => setLadderPnlSettings({ ...DEFAULT_LADDER_PNL_DISPLAY })} className="text-[11px] text-slate-500 active:text-slate-900">恢复默认</button></div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {([
+                ["all", "全部显示"], ["hidden", "全部隐藏"], ["profit", "只显盈利"], ["loss", "只显亏损"],
+              ] as const).map(([mode, label]) => <button key={mode} type="button" aria-pressed={ladderPnlSettings.mode === mode} onClick={() => setLadderPnlSettings((current) => ({ ...current, mode }))} className={`h-9 rounded border text-[11px] font-semibold active:scale-[0.98] ${ladderPnlSettings.mode === mode ? "border-slate-700 bg-slate-700 text-white" : "border-slate-200 bg-white text-slate-500"}`}>{label}</button>)}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <label htmlFor="t0-ladder-pnl-min-percent" className="shrink-0">{ladderPnlSettings.mode === "profit" ? "盈利幅度至少" : ladderPnlSettings.mode === "loss" ? "亏损幅度至少" : "盈亏幅度至少"}</label>
+              <div className="grid h-11 min-w-0 flex-1 grid-cols-[44px_minmax(0,1fr)_44px] overflow-hidden rounded border border-slate-300 bg-white">
+                <button type="button" aria-label="幅度减少1个百分点" disabled={ladderPnlSettings.mode === "hidden" || !(Number(ladderPnlSettings.minPercent) > 0)} onClick={() => setLadderPnlSettings((current) => ({ ...current, minPercent: String(Math.max(0, Math.round((Number(current.minPercent) || 0) * 100) - 100) / 100) }))} className="flex h-full w-11 items-center justify-center border-r border-slate-200 bg-slate-50 text-slate-800 active:bg-slate-200 disabled:opacity-30" style={{ touchAction: "manipulation" }}><Minus className="h-6 w-6" strokeWidth={3} /></button>
+                <div className="relative min-w-0"><input id="t0-ladder-pnl-min-percent" inputMode="decimal" value={ladderPnlSettings.minPercent} disabled={ladderPnlSettings.mode === "hidden"} placeholder="0" onChange={(event) => { const value = event.target.value; if (/^\d*(?:\.\d{0,2})?$/.test(value)) setLadderPnlSettings((current) => ({ ...current, minPercent: value })); }} className="h-full w-full min-w-0 border-0 bg-white px-6 text-center text-xl font-semibold tabular-nums text-slate-800 outline-none disabled:bg-slate-50 disabled:opacity-45" /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span></div>
+                <button type="button" aria-label="幅度增加1个百分点" disabled={ladderPnlSettings.mode === "hidden"} onClick={() => setLadderPnlSettings((current) => ({ ...current, minPercent: String((Math.round((Number(current.minPercent) || 0) * 100) + 100) / 100) }))} className="flex h-full w-11 items-center justify-center border-l border-slate-200 bg-slate-50 text-slate-800 active:bg-slate-200 disabled:opacity-30" style={{ touchAction: "manipulation" }}><Plus className="h-6 w-6" strokeWidth={3} /></button>
+              </div>
+            </div>
+            <p className="text-[10px] leading-4 text-slate-400">{ladderPnlSettings.mode === "hidden" ? "隐藏所有报价单的盈亏金额和百分比。" : ladderPnlSettings.mode === "profit" ? "例如填5，仅盈利达到5%的报价单显示所选数字。" : ladderPnlSettings.mode === "loss" ? "例如填5，仅亏损达到5%的报价单显示所选数字。" : "按盈亏幅度绝对值筛选；留空或0表示不设门槛。"}订单、数量及价格仍保留，不改变收益计算。</p>
           </div>}
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#aeb8c1]/50 px-3 py-2.5"
@@ -11873,6 +11939,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   bucket={row.long}
                   side="long"
                   markPrice={markPrice}
+                  pnlDisplaySettings={ladderPnlSettings}
                   metadata={individualLongMetadata}
                   isLocked={longLockDisplay.isFullyLocked}
                   hasLockedPosition={longLockDisplay.hasLockedPosition}
@@ -11967,6 +12034,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   bucket={row.short}
                   side="short"
                   markPrice={markPrice}
+                  pnlDisplaySettings={ladderPnlSettings}
                   metadata={individualShortMetadata}
                   isLocked={shortLockDisplay.isFullyLocked}
                   hasLockedPosition={shortLockDisplay.hasLockedPosition}
@@ -15606,7 +15674,7 @@ function HiddenLockedEthOverviewBoundaryChips({
   );
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, hasProfitSharing = false, takeProfitEnabled = false, takeProfitQuantity }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, hasProfitSharing = false, takeProfitEnabled = false, takeProfitQuantity, pnlDisplaySettings = DEFAULT_LADDER_PNL_DISPLAY }: {
   bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -15628,6 +15696,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   /** 已设止盈在挂单成交后继续保留；部分止盈同时显示计划数量。 */
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
+  pnlDisplaySettings?: LadderPnlDisplaySettings;
 }) {
   const doubleTapProps = useReliableDoubleTap(onClick);
   const isLong = side === "long";
@@ -15747,6 +15816,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const floatingReturnRate = floatingPnl === null || floatingReturnBase === null || floatingReturnBase <= 0
     ? null
     : floatingPnl / floatingReturnBase;
+  const showPnlNumbers = shouldShowLadderPnl(floatingPnl, floatingReturnRate, pnlDisplaySettings);
   const pnlTone = floatingPnl !== null && floatingPnl >= 0
     ? (isOption ? "text-rose-200" : "text-rose-600")
     : (isOption ? "text-emerald-200" : "text-emerald-600");
@@ -15767,12 +15837,10 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           {!metadata && integratedStatusSummary && <span className="shrink-0 whitespace-nowrap text-[9px] font-medium leading-none text-slate-400" title={`本档${integratedStatusSummary}`} aria-label={`本档${integratedStatusSummary}`}>{integratedStatusSummary}</span>}
           {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
         </div>
-        {floatingPnl !== null && (
+        {showPnlNumbers && floatingPnl !== null && floatingReturnRate !== null && (
           <span className={`flex h-[30px] shrink-0 flex-col justify-center gap-[2px] ${isShort ? "items-start text-left" : "items-end text-right"} ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
             <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
-            {floatingReturnRate !== null && (
-              <span className={`${metadata ? "text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
-            )}
+            <span className={`${metadata ? "text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
           </span>
         )}
       </div>
@@ -15873,6 +15941,7 @@ function LadderCell({
   hasProfitSharing = false,
   takeProfitEnabled = false,
   takeProfitQuantity,
+  pnlDisplaySettings,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
@@ -15889,13 +15958,14 @@ function LadderCell({
   hasProfitSharing?: boolean;
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
+  pnlDisplaySettings?: LadderPnlDisplaySettings;
 }) {
   // 空白报价格与已有订单格共用同一套双击手势：区别只在双击后的页面内容。
   const openDoubleTapProps = useReliableDoubleTap(onOpen);
   if (bucket && bucket.remainingQuantity > 0.0000001) {
     // 已有订单卡必须双击才进入详情；单击只保留，不会打开、创建、平仓或删除任何订单。
     // 双击识别由 PositionCell 在触摸抬起时处理，以避开 Safari click 手势延迟。
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} hasProfitSharing={hasProfitSharing} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} hasProfitSharing={hasProfitSharing} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} pnlDisplaySettings={pnlDisplaySettings} />;
   }
 
   const isLong = side === "long";
