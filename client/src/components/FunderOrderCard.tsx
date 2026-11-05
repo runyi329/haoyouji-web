@@ -58,7 +58,7 @@ const SOFT_BLUE_INDICATOR_STYLE = {
 } as const;
 
 // 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ'] as const;
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 // 期权权利金统一保留四位小数：无论 U 本位还是币本位，都与期权精度一致。
@@ -235,6 +235,11 @@ export const COIN_COLORS: Record<CoinType, string> = {
   ARKM: '#FF6B00',
   UNI: '#FF007A',
   BZ: '#8B4513',
+  TAO: '#111827',
+  PENDLE: '#2563EB',
+  NEAR: '#00A67D',
+  INJ: '#0096FF',
+  STRK: '#EC796B',
 };
 
 // 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD

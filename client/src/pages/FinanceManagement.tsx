@@ -5,10 +5,8 @@ import { trpc } from "@/lib/trpc";
 import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
-
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'BZ'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK', 'DOGE'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
-
 // 整数型币种（单价较低，通常以整数计量）
 const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 
@@ -181,6 +179,12 @@ const COIN_COLORS: Record<CoinType, string> = {
   DRAM: '#E040FB',
   MU: '#0097A7',
   BZ: '#8B4513',
+  TAO: '#111827',
+  PENDLE: '#2563EB',
+  NEAR: '#00A67D',
+  INJ: '#0096FF',
+  STRK: '#EC796B',
+  DOGE: '#C2A633',
 };
 
 // ===== FinanceOrderCard 子组件（左右两栏布局，与 LedgerDetail FunderOrderCard 一致）=====
