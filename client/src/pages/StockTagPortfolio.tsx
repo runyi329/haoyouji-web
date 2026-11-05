@@ -17,7 +17,9 @@ import StockNameProfitSummary from "@/components/StockNameProfitSummary";
 import StockParticipantProfitChart from "@/components/StockParticipantProfitChart";
 import StockQuoteUpdateIndicator from "@/components/StockQuoteUpdateIndicator";
 import StockObservationPortfolio from "@/components/StockObservationPortfolio";
+import StockObservationAccountSummary from "@/components/StockObservationAccountSummary";
 
+type AccountFilter = "all" | "observation" | "actual";
 type EventType = "buy" | "add" | "reduce" | "sell" | "note";
 type Props = {
   ledgerId: number;
@@ -278,6 +280,10 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     ? `${snapshotDate} · ${hasUsStocks ? '美股盘后快照' : '15:05 盘尾快照'}`
     : null;
 
+  // 仅控制本人页面的显示，不改变接口权限、配额或各自独立的盈亏口径。
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>("actual");
+  const showActualAccount = !participantView || accountFilter !== "observation";
+  const showObservationAccount = participantView && accountFilter !== "actual";
   const [showHistory, setShowHistory] = useState(false);
   const [showSoldLots, setShowSoldLots] = useState(false);
   const [showPnlFormula, setShowPnlFormula] = useState(false);
@@ -468,6 +474,17 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   // 观察成员与普通成员始终只读；后端亦不会接受其写请求。
   // 标签名称即账户名称来源；已含“账户”时避免重复拼接。
   const accountName = categoryName.trim().endsWith("账户") ? categoryName.trim() : `${categoryName.trim() || "股票"}账户`;
+  const renderAccountFilter = (light = false) => (
+    <label className={`relative inline-flex h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium focus-within:ring-2 focus-within:ring-offset-1 ${light ? 'border-[#DED3E9] bg-[#F8F5FB] text-[#644484] focus-within:ring-[#644484]' : 'border-white/40 bg-white/15 text-white focus-within:ring-white'}`}>
+      <span aria-hidden="true">{accountFilter === "observation" ? "观察" : accountFilter === "actual" ? "实际" : "全部"}</span>
+      <ChevronDown size={13} aria-hidden="true" />
+      <select aria-label="筛选账户" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value as AccountFilter)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+        <option value="all">全部</option>
+        <option value="observation">只看观察账户</option>
+        <option value="actual">只看实际账户</option>
+      </select>
+    </label>
+  );
   const selectedHistory = selectedPosition
     ? ((data as any)?.history || []).filter((event: any) => event.symbol === selectedPosition.symbol)
     : [];
@@ -477,7 +494,24 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   }
   if (participantView && ledgerId === 37 && error?.message === '该股票标签尚未对您开放') {
     // 没有真实份额不代表没有观察配额：另走本人观察接口，仍保留标签可见性权限校验。
-    return <div className="min-h-screen bg-[#FAF3ED] pb-8"><header className="flex items-center gap-3 bg-white px-4 py-3 shadow-sm"><button onClick={onBack} aria-label="返回" className="inline-flex h-8 w-8 items-center justify-center"><ArrowLeft size={20} /></button><Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatar || undefined} /><AvatarFallback>{(currentUser?.name || currentUser?.username || '我').slice(0, 1)}</AvatarFallback></Avatar><span className="text-sm font-semibold text-[#644484]">{accountName} · 观察账户</span></header><main className="mx-auto max-w-2xl space-y-3 px-3 pt-3"><div className="rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-gray-500">您当前只有观察配额。观察盈亏仅供查看，不参与真实盈利或资金结算。</div><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} /></main></div>;
+    return (
+      <div className="min-h-screen bg-[#FAF3ED] pb-8">
+        <header className="flex items-center gap-2 bg-white px-4 py-3 shadow-sm">
+          <button onClick={onBack} aria-label="返回" className="inline-flex h-8 w-8 shrink-0 items-center justify-center"><ArrowLeft size={20} /></button>
+          <Avatar className="h-8 w-8 shrink-0"><AvatarImage src={currentUser?.avatar || undefined} /><AvatarFallback>{(currentUser?.name || currentUser?.username || '我').slice(0, 1)}</AvatarFallback></Avatar>
+          <span className="min-w-0 flex-1 break-words text-sm font-semibold text-[#644484]">{accountName}</span>
+          {renderAccountFilter(true)}
+        </header>
+        <main className="mx-auto max-w-2xl space-y-3 px-3 pt-3">
+          {accountFilter === "actual" ? <div className="rounded-lg bg-white px-3 py-5 text-center text-sm text-gray-500">暂无实际配额</div> : <>
+            {accountFilter === "all" && <div className="rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-gray-500">您当前只有观察配额。观察盈亏仅供查看，不参与真实盈利或资金结算。</div>}
+            {accountFilter === "observation" && <div className="rounded-2xl bg-[#8462A8] px-4 py-3"><StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} /></div>}
+            {accountFilter === "all" && <div className="rounded-2xl bg-[#426A8C] px-4 py-3"><StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} combined /></div>}
+            <StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} />
+          </>}
+        </main>
+      </div>
+    );
   }
   if (error || !data) {
     return <div className="min-h-screen bg-[#FAF3ED] p-5"><button onClick={onBack} className="flex items-center text-sm text-gray-600"><ArrowLeft className="w-4 h-4 mr-1" />返回</button><div className="mt-10 text-center text-gray-500">股票标签无法加载：{error?.message || "请稍后重试"}</div></div>;
@@ -637,6 +671,18 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       pnl: toCny(lot.realizedPnl, lot.currency),
     })),
   ] : [];
+  // 只向“全部”总览传入真实人民币汇总，不改写任何真实组合、钱包或结算数据。
+  const actualAccountDisplaySummary = {
+    holdingCount: tagHoldingLots.length,
+    closedCount: memberRealizedLots.length,
+    currentCost: memberHoldingSummary?.purchaseValue ?? null,
+    currentValue: memberHoldingSummary?.marketValue ?? null,
+    closedCost: memberClosedLotsSummary?.closedCostValue ?? null,
+    closedValue: memberClosedLotsSummary?.closedMarketValue ?? null,
+    totalPnl: memberTotalPnlSummary?.totalPnl ?? null,
+    positionNumbers: memberHoldingSummary?.positionNumbers || [],
+    profitRows: memberStockProfitRows,
+  };
   // 账户整体持仓按股票本身的实际市值变化计算；成员（含管理员本人）的获配份额
   // 作为对手盘，仍按“成本减当前价值”计算，二者在同一份额上严格相反。
   const accountHoldingSummary = !participantView ? (() => {
@@ -1218,14 +1264,19 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
       <main className="mx-auto max-w-2xl px-3 pt-3 space-y-3">
         <section className="overflow-hidden rounded-2xl border border-[#F1E6DE] bg-white shadow-sm">
-          <div className="bg-[#D32F2F] px-4 py-3">
+          <div className={`px-4 py-3 ${participantView && accountFilter === 'observation' ? 'bg-[#8462A8]' : participantView && accountFilter === 'all' ? 'bg-[#426A8C]' : 'bg-[#D32F2F]'}`}>
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
+              <div className={`flex min-w-0 items-center gap-2.5 ${participantView ? 'flex-1' : ''}`}>
                 {participantView && <Avatar className="h-10 w-10 shrink-0 border-2 border-white/65 shadow-sm"><AvatarImage src={currentUser?.avatar || undefined} alt={currentUser?.name || currentUser?.username || '用户头像'} className="object-cover" /><AvatarFallback className="bg-white/20 text-sm font-semibold text-white">{(currentUser?.name || currentUser?.username || '我').slice(0, 1)}</AvatarFallback></Avatar>}
-                <div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{accountName}整体持仓</div>{!participantView && <div className="mt-0.5 text-[11px] text-white/75">{accountName}全部股票持仓 · 管理员维护视图</div>}</div>
+                <div className="min-w-0"><div className={`${participantView ? 'break-words' : 'truncate'} text-sm font-semibold text-white`}>{accountName}{participantView && accountFilter === 'observation' ? ' · 观察' : <span className={participantView ? 'hidden min-[400px]:inline' : ''}>整体持仓</span>}</div>{!participantView && <div className="mt-0.5 text-[11px] text-white/75">{accountName}全部股票持仓 · 管理员维护视图</div>}</div>
               </div>
+              {participantView && renderAccountFilter()}
               {!participantView && <span className="shrink-0 rounded-full bg-white/15 px-2 py-1 text-[10px] text-white">账户总览</span>}
             </div>
+            {participantView && accountFilter === 'observation' && <StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} />}
+            {participantView && accountFilter === 'all' && <StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} combined actual={actualAccountDisplaySummary} />}
+            {showActualAccount && <>
+            {(!participantView || accountFilter !== 'all') && <>
             {hasMixedViewCurrencies ? (<div className="mt-2 border-t border-white/20 pt-2">
               <div className="mb-1.5 text-[11px] text-white/70">混合币种持仓按原币种分别汇总，不直接相加</div>
               <div className="grid grid-cols-2 gap-1.5">
@@ -1303,6 +1354,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               )}
             </div>}
             {participantView && <StockParticipantProfitChart rows={memberStockProfitRows} />}
+            </>}
             <div className={`mt-2 border text-center text-[10px] ${participantView ? 'overflow-hidden rounded-xl border-white/70 bg-white/95 shadow-[0_2px_8px_rgba(100,20,20,0.06)]' : 'rounded-md border-white/60 bg-white shadow-sm'}`}>
               {!participantView && <div className="grid grid-cols-3 divide-x divide-[#F2D0D0]">
               {[
@@ -1312,7 +1364,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               ].map(item => <div key={item.label} className={`min-w-0 px-1.5 ${participantView ? 'py-2.5' : 'py-1.5'}`}><div className={`whitespace-nowrap ${participantView ? 'text-[#9A8980]' : 'text-gray-500'}`}>{item.label}</div><div className={`whitespace-nowrap ${participantView ? 'mt-1 text-[12px] leading-5 font-semibold tabular-nums text-[#44342E]' : `mt-0.5 font-bold ${item.label === '已平' ? 'text-[#8F1D1D]' : 'text-[#333333]'}`}`}>{item.count} <span className={participantView ? 'text-[9px] font-normal text-[#A8968B]' : ''}>笔</span></div></div>)}
               </div>}
               {participantView && <details className="group/participant-margin text-left">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden"><span className="text-[#9A8980]">所需保证金</span><span className="flex items-center gap-2"><span className="text-[12px] font-semibold tabular-nums text-[#44342E]">{money(holdingSummary?.requiredMargin, 2, 'CNY')}</span><ChevronDown size={14} className="shrink-0 text-[#A8968B] transition-transform group-open/participant-margin:rotate-180" /></span></summary>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden"><span className="text-[#9A8980]">所需保证金{accountFilter === 'all' ? '（实际）' : ''}</span><span className="flex items-center gap-2"><span className="text-[12px] font-semibold tabular-nums text-[#44342E]">{money(holdingSummary?.requiredMargin, 2, 'CNY')}</span><ChevronDown size={14} className="shrink-0 text-[#A8968B] transition-transform group-open/participant-margin:rotate-180" /></span></summary>
                 <div className="divide-y divide-[#F2E8E2] border-t border-[#F2E8E2]">
                   {(memberHoldingSummary?.details || []).map((holding: any) => <div key={holding.positionNumber} className="flex items-center justify-between gap-2 px-3 py-2"><span className="flex min-w-0 items-center gap-2"><span className="shrink-0 font-semibold tabular-nums text-[#8F3028]">{holding.positionNumber}</span><span className="min-w-0 truncate text-[#756258]" title={holding.stockName}>{holding.stockName}</span></span><span className="shrink-0 text-[11px] font-semibold tabular-nums text-[#44342E]">{money(holding.requiredMargin, 2, 'CNY')}</span></div>)}
                   {memberHoldingSummary?.details.length === 0 && <div className="px-3 py-2 text-[#A8968B]">暂无进行中持仓</div>}
@@ -1320,24 +1372,26 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 <div className="border-t border-[#F2E8E2] bg-[#FFF9F5] px-3 py-2 text-[9px] leading-4 text-[#A8968B]">参考保证金 = 各笔最新持仓价值 × 20% 之和，不代表已缴押金。</div>
               </details>}
             </div>
+            </>}
           </div>
-          {participantView && ledgerId === 37 && <div className="border-t border-[#F1E6DE] px-3 py-3"><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} /></div>}
-          {!tagData ? (
+          {showActualAccount && (!tagData ? (
             <div className="px-4 py-7 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入标签整体持仓…</div>
           ) : (
             <>
               {canEdit && <><div className="grid grid-cols-2 gap-px border-b border-[#F1E6DE] bg-[#F1E6DE]"><button type="button" onClick={() => openTrade("buy")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">买入股票</button><button type="button" onClick={() => openTrade("sell")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">卖出股票</button></div><div className="grid grid-cols-2 gap-px border-b border-[#E6E6E6] bg-[#E6E6E6] p-1"><button type="button" onClick={() => setAdminHoldingPerspective("position")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "position" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>编号视角</button><button type="button" onClick={() => setAdminHoldingPerspective("member")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "member" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>用户视角</button></div></>}
-              <div className={participantView || !canEdit ? "relative px-4 py-2.5" : "relative"}>
+              <div className={participantView ? "relative px-3 py-2.5" : !canEdit ? "relative px-4 py-2.5" : "relative"}>
                 {canEdit && adminHoldingPerspective === "member" ? renderMemberTables() : <>
                   {canEdit && !participantView && <div className="px-3 py-3"><StockNameProfitSummary rows={stockNameProfitRows} /></div>}
                   {renderHoldingTables()}
                 </>}
               </div>
             </>
-          )}
+          ))}
+          {participantView && accountFilter === 'all' && <div className="px-3">{renderSoldLots()}</div>}
+          {showObservationAccount && ledgerId === 37 && <div className="border-t border-[#F1E6DE] px-3 py-3"><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} /></div>}
         </section>
 
-        {renderSoldLots()}
+        {showActualAccount && (!participantView || accountFilter !== 'all') && renderSoldLots()}
         <div className="space-y-3">
 
 
@@ -1354,6 +1408,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         </div>
       </main>
 
+      {showActualAccount && <>
       <Dialog open={showDailyPnlHistory} onOpenChange={setShowDailyPnlHistory}>
         <DialogContent className="max-h-[86vh] max-w-md overflow-y-auto px-4 pb-6">
           <DialogHeader><DialogTitle className="text-left">每日盈亏记录</DialogTitle></DialogHeader>
@@ -1429,6 +1484,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <div><Label>实际成交 / 接单时间</Label><Input type="datetime-local" value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="mt-1" /></div><div><Label>{eventType === "note" ? "备注内容" : "备注（可选）"}</Label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={eventType === "note" ? "记录说明、补录原因等" : "可填写成交说明或补录原因"} /></div>{correctingEvent && <div><Label>更正原因</Label><Input value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="例如：实际成交价更正" className="mt-1" /></div>}<div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] text-gray-600">服务器会自动记录登记时间与当时参考价；后续更正或作废只追加审计记录，不会覆盖原成交。</div><div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={closeActionDialog}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submitEvent} disabled={correctEventMutation.isPending}>{correctEventMutation.isPending ? "保存中…" : "确认更正"}</Button></div></div>
         </DialogContent>
       </Dialog>
+      </>}
     </div>
   );
 }
