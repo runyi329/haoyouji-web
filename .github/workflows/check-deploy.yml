@@ -1,28 +1,52 @@
-name: 检查服务器部署状态
+name: PM2 reboot readonly diagnosis
+
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  check:
+  diagnose:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: 设置SSH密钥
+      - name: Checkout isolated diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
+      - name: Read PM2 startup and listener configuration without changing services
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        shell: bash
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
-      - name: 检查服务器上的代码版本
-        run: |
-          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@124.223.54.69 'bash -s' << 'ENDSSH'
-            echo "=== /root/haoyouji-web 最新 git commit ==="
-            cd /root/haoyouji-web && git log --oneline -3
-            echo ""
-            echo "=== /home/ubuntu/haoyouji-web/dist 目录最新文件 ==="
-            ls -lt /home/ubuntu/haoyouji-web/dist/public/assets/ 2>/dev/null | head -10 || echo "dist/public/assets 不存在"
-            echo ""
-            echo "=== 检查 dist 中是否包含新代码（FFF8E1=新版标签，rotate=旧版图章）==="
-            grep -r "FFF8E1\|rotate(5deg)" /home/ubuntu/haoyouji-web/dist/public/assets/*.js 2>/dev/null | head -3 | cut -c1-200 || echo "未找到匹配"
-            echo ""
-            echo "=== PM2 进程状态 ==="
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
-          ENDSSH
+          set -euo pipefail
+          HOST="${DEPLOY_HOST:-124.223.54.69}"
+          PORT="${DEPLOY_PORT:-22}"
+          USER="${DEPLOY_USER:-root}"
+          case "$HOST" in
+            124.223.54.69|jiangyuchen.cn|www.jiangyuchen.cn) ;;
+            *) echo 'Configured server is outside the authorized target.' >&2; exit 1 ;;
+          esac
+          test -n "$DEPLOY_SSH_KEY"
+          KEY="$(mktemp)"
+          KNOWN="$(mktemp)"
+          trap 'rm -f "$KEY" "$KNOWN"' EXIT
+          chmod 600 "$KEY" "$KNOWN"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$KEY"
+          ssh-keyscan -T 10 -p "$PORT" "$HOST" > "$KNOWN" 2>/dev/null
+          test -s "$KNOWN"
+          echo 'Starting read-only diagnosis; no deploy, process restart, database write, or configuration change.'
+          timeout 150 ssh -T -i "$KEY" -p "$PORT" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN" \
+            "$USER@$HOST" \
+            'if [ "$(id -u)" = 0 ]; then python3 -; else sudo -n python3 -; fi' \
+            < scripts/diagnose-pm2-boot-readonly.py
+          echo 'Read-only diagnosis completed.'
