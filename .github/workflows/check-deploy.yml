@@ -1,4 +1,4 @@
-name: PM2 reboot readonly diagnosis
+name: Restore latest website primary PM2
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout isolated diagnostic branch
         uses: actions/checkout@v4
@@ -17,7 +17,7 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
 
-      - name: Read PM2 startup and listener configuration without changing services
+      - name: Repair authorized duplicate startup and verify latest website
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -41,7 +41,15 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$KEY"
           ssh-keyscan -T 10 -p "$PORT" "$HOST" > "$KNOWN" 2>/dev/null
           test -s "$KNOWN"
-          echo 'Starting read-only diagnosis; no deploy, process restart, database write, or configuration change.'
+          echo 'Starting explicitly authorized primary PM2 repair; no application deployment or database commands.'
+          timeout 240 ssh -T -i "$KEY" -p "$PORT" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN" \
+            "$USER@$HOST" \
+            'if [ "$(id -u)" = 0 ]; then bash -s; else sudo -n bash -s; fi' \
+            < scripts/repair-pm2-primary.sh
+          echo 'Repair completed; collecting a final read-only verification.'
           timeout 150 ssh -T -i "$KEY" -p "$PORT" \
             -o BatchMode=yes -o ConnectTimeout=15 \
             -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
@@ -49,4 +57,4 @@ jobs:
             "$USER@$HOST" \
             'if [ "$(id -u)" = 0 ]; then python3 -; else sudo -n python3 -; fi' \
             < scripts/diagnose-pm2-boot-readonly.py
-          echo 'Read-only diagnosis completed.'
+          echo 'Latest primary PM2 repair and verification completed.'
