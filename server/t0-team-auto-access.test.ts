@@ -6,11 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 
 // 仅只读 AST 并运行生产声明；DB 是内存关系表，禁止导入应用、生产DB或触发 ensure/write。
 function ast(relative: string) {
-  return ts.createSourceFile(relative, readFileSync(new URL(relative, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+  return ts.createSourceFile(relative, readFileSync(new URL(relative, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, relative.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
 }
 const teamAst = ast("./ledger52-t0-team-overview.ts");
 const routerAst = ast("./routers.ts");
 const weeklyAst = ast("./ledger52-t0-weekly-settlement.ts");
+const pageAst = ast("../client/src/pages/T0Journal.tsx");
 function nodes<T extends ts.Node>(root: ts.Node, predicate: (node: ts.Node) => node is T): T[] {
   const result: T[] = [];
   const visit = (node: ts.Node) => { if (predicate(node)) result.push(node); ts.forEachChild(node, visit); };
@@ -60,6 +61,7 @@ function payout(extra: Partial<Payout> = {}): Payout {
   return { ledger_id: 52, user_id: OWNER, related_user_id: 101, direction: "deposit", amount: 10, ...extra };
 }
 function accessHarness(options: {
+  journalOwnerUserId?: number;
   users?: User[];
   memberships?: Array<{ ledgerId: number; userId: number }>;
   entries?: Entry[];
@@ -73,6 +75,7 @@ function accessHarness(options: {
   const payouts = options.payouts ?? [];
   const snapshots = options.snapshots ?? [];
   const transfers = options.transfers ?? [];
+  const authorityOwner = options.journalOwnerUserId ?? OWNER;
   const execute = vi.fn(async (sql: string, params: number[]) => {
     const normalized = sql.replace(/\s+/g, " ").trim();
     expect(normalized).toMatch(/^SELECT /);
@@ -95,7 +98,7 @@ function accessHarness(options: {
     expect(branches).toHaveLength(4);
     const width = params.length / 4;
     const scope = params.slice(0, width);
-    expect(scope.slice(0, 2)).toEqual([52, OWNER]);
+    expect(scope.slice(0, 2)).toEqual([52, authorityOwner]);
     expect(width - 2).toBeGreaterThan(0);
     expect(width - 2).toBeLessThanOrEqual(500);
     const aliases = ["entry", "payout", "shared_entry", "transfer"];
@@ -129,8 +132,17 @@ function accessHarness(options: {
   const access = vi.fn(api.getLedger52T0TeamAccess);
   return { ...api, access, execute, getDbConnection, journalReader, financialFacts };
 }
-function routeHarness(mode = "member", targetRole: string | null = "member", activity = true) {
-  const h = accessHarness({ entries: activity ? [entry()] : [] });
+function routeHarness(mode = "member", targetRole: string | null = "member", activity = true, scope: {
+  rootUserId?: number; journalOwnerUserId?: number; users?: User[]; entries?: Entry[];
+} = {}) {
+  const rootUserId = scope.rootUserId ?? ROOT;
+  const journalOwnerUserId = scope.journalOwnerUserId ?? OWNER;
+  const authorityOwner = mode === "admin" ? journalOwnerUserId : OWNER;
+  const h = accessHarness({
+    journalOwnerUserId: authorityOwner,
+    users: scope.users ?? [{ id: 101, invited_by_user_id: rootUserId, name: "下级" }],
+    entries: scope.entries ?? (activity ? [entry("entry", 101, { user_id: authorityOwner })] : []),
+  });
   // 用真实概览编译依赖，资格共享可观察的helper，财务计算来自原生产纯函数声明。
   const helperNames = ["toNumber", "getCalendarDateUtc", "getBeijingDateValue", "getCalendarDateText", "recordEarlierCalendarDate", "calculateTeamXirr", "buildTeamAnnualizedCashFlowDetail", "archivePrice", "scopeKey", "sortByTime", "buildRealizedDetails", "buildRecentDetails", "buildOpeningClosingAllocations", "linkedNetPnl", "getFrozenSnapshotOpeningLinks", "buildFrozenSnapshotDetails", "regularDistributable", "buildProfitDistribution", "buildLedger52T0IncomeAttributionContext", "calculateLedger52T0IncomeByClosing", "calculateLedger52T0IncomeByUser", "getLedger52T0TeamOverview"];
   const actionNode = required(nodes(teamAst, ts.isVariableDeclaration).find(node => node.name.getText() === "actionInfo"), "actionInfo");
@@ -150,7 +162,7 @@ function routeHarness(mode = "member", targetRole: string | null = "member", act
     buildWeeklySettlementReport: () => ({ generatedAt: "2026-11-06", status: "realtime", period: week, members: [{ userId: ROOT, income: { ...emptyIncome(), total: 999 } }, { userId: 999, income: { ...emptyIncome(), total: 888 } }] }),
     emptyIncome, sumIncomeParts: (incomes: any[]) => incomes.reduce((sum, income) => ({ ...sum, total: sum.total + income.total }), emptyIncome()),
   }));
-  const resolveScope = vi.fn(async () => ({ mode, relatedUserId: ROOT, journalOwnerUserId: OWNER }));
+  const resolveScope = vi.fn(async () => ({ mode, relatedUserId: ROOT, journalOwnerUserId }));
   const owner = vi.fn(async () => OWNER);
   const getUserMembership = vi.fn(async () => targetRole === null ? null : ({ role: targetRole }));
   const loadModule = vi.fn(async (path: string) => {
@@ -269,7 +281,7 @@ describe("动态团队准入：真实AST、轻量关系SELECT", () => {
 
 describe("三路由动态门禁与authority scope一致", () => {
   it("普通root无需白名单；canAccess只下发enabled且无财务读取；overview/weekly复用同helper与合格名单", async () => {
-    const h = routeHarness();
+    const h = routeHarness("member", "member", true, { journalOwnerUserId: 999 }); // 普通成员仍lookup真实owner，不能改用scope owner。
     const probe = await h.routes.t0CanViewTeamOverview({ rootUserId: 999, journalOwnerUserId: ROOT });
     expect(probe).toEqual({ enabled: true });
     expect(Object.keys(probe)).toEqual(["enabled"]);
@@ -291,12 +303,65 @@ describe("三路由动态门禁与authority scope一致", () => {
     expect(closed.weekly).not.toHaveBeenCalled();
   });
 
-  it("管理员全局closed；合法预览/代入共用管理员authority owner，拒绝非admin/异常membership/二次切换", async () => {
+  it("管理员Hu与普通admin只开放actor推荐链，authority owner与root严格分离，轻量响应不泄露成员", async () => {
+    for (const [actor, authorityOwner, role] of [[870413, 870413, "super_admin"], [81, 81, "admin"], [81, 999, "admin"]] as const) {
+      const ctx = { user: { id: actor, role }, isViewingAs: false };
+      const adminInput = { rootUserId: actor, journalOwnerUserId: authorityOwner };
+      const users = [
+        { id: 101, invited_by_user_id: actor, name: "直推" },
+        { id: 102, invited_by_user_id: 101, name: "无活动中间人" },
+        { id: 103, invited_by_user_id: 102, name: "合格孙级" },
+        { id: actor, invited_by_user_id: 101, name: "循环本人" },
+        { id: 201, invited_by_user_id: ROOT, name: "scope.relatedUserId团队" },
+        { id: 202, invited_by_user_id: 777, name: "全局无关用户" },
+        ...(actor === authorityOwner ? [] : [{ id: 203, invited_by_user_id: authorityOwner, name: "authority owner团队" }]),
+      ];
+      const entries = [actor, 101, 103, 201, 202, 203].map(id => entry(`admin-${id}`, id, { user_id: authorityOwner }));
+      const admin = routeHarness("admin", "member", true, { ...adminInput, users, entries });
+      const probe = await admin.routes.t0CanViewTeamOverview({ rootUserId: ROOT, journalOwnerUserId: OWNER }, ctx);
+      expect(probe).toEqual({ enabled: true });
+      expect(Object.keys(probe)).toEqual(["enabled"]);
+      expect(admin.h.access).toHaveBeenLastCalledWith(adminInput);
+      expect(admin.h.journalReader).not.toHaveBeenCalled();
+      expect(admin.overview).not.toHaveBeenCalled();
+      const overview = await admin.routes.t0GetTeamOverview({ rootUserId: ROOT, journalOwnerUserId: OWNER }, ctx);
+      expect(overview.relation.rootUserId).toBe(actor);
+      expect(overview.members.map((member: any) => [member.userId, member.parentUserId, member.depth])).toEqual([[101, actor, 1], [103, 101, 2]]);
+      expect(admin.overview).toHaveBeenLastCalledWith({ ...adminInput, annualizedDetailUserId: undefined });
+      expect(admin.h.journalReader).toHaveBeenLastCalledWith({ journalOwnerUserId: authorityOwner });
+      const detail = await admin.routes.t0GetTeamOverview({ annualizedDetailUserId: 103 }, ctx);
+      expect(detail.annualizedDetail.userId).toBe(103);
+      expect(admin.overview).toHaveBeenLastCalledWith({ ...adminInput, annualizedDetailUserId: 103 });
+      expect(admin.h.access.mock.calls.every(([scope]) => scope.rootUserId === actor && scope.journalOwnerUserId === authorityOwner)).toBe(true);
+      for (const target of new Set([actor, authorityOwner, ROOT, 102, 201, 202, 203])) {
+        await expect(admin.routes.t0GetTeamOverview({ annualizedDetailUserId: target }, ctx)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+      expect(admin.h.journalReader).toHaveBeenCalledTimes(2); // 拒绝详情前仍仅运行资格helper。
+      expect(admin.owner).not.toHaveBeenCalled();
+      expect(admin.getUserMembership).not.toHaveBeenCalled();
+      expect(admin.resolveScope).toHaveBeenCalledWith({ id: actor, role, isViewingAs: false });
+      const selfOnly = routeHarness("admin", "member", false, { ...adminInput, users, entries: entries.filter(row => row.related_user_id !== 101 && row.related_user_id !== 103) });
+      expect(await selfOnly.routes.t0CanViewTeamOverview({}, ctx)).toEqual({ enabled: false });
+      expect(await selfOnly.routes.t0GetTeamOverview({}, ctx)).toEqual({ enabled: false });
+      await expect(selfOnly.routes.t0GetTeamOverview({ annualizedDetailUserId: actor }, ctx)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(selfOnly.h.journalReader).not.toHaveBeenCalled();
+    }
+  });
+
+  it("管理员自身teamweekly仍closed，不因总收益团队Tab开放而扩大至全局结算", async () => {
+    for (const [actor, authorityOwner] of [[870413, 870413], [81, 81], [81, 999]]) {
+      const admin = routeHarness("admin", "member", true, { rootUserId: actor, journalOwnerUserId: authorityOwner });
+      expect(await admin.routes.t0GetTeamWeeklySettlement({}, { user: { id: actor, role: "admin" }, isViewingAs: false })).toEqual({ enabled: false });
+      expect(admin.h.access).not.toHaveBeenCalled();
+      expect(admin.h.journalReader).not.toHaveBeenCalled();
+      expect(admin.weekly).not.toHaveBeenCalled();
+      expect(admin.owner).not.toHaveBeenCalled();
+    }
+  });
+
+  it("合法预览/代入共用管理员authority owner，拒绝非admin/异常membership/二次切换", async () => {
     const admin = routeHarness("admin");
     const adminCtx = { user: { id: OWNER, role: "admin" }, isViewingAs: false };
-    for (const name of routeNames) expect(await admin.routes[name]({}, adminCtx)).toEqual({ enabled: false });
-    expect(admin.h.access).not.toHaveBeenCalled();
-    expect(admin.h.journalReader).not.toHaveBeenCalled();
     for (const name of routeNames) {
       expect((await admin.routes[name]({ previewUserId: ROOT }, adminCtx)).enabled).toBe(true);
       expect(admin.h.access).toHaveBeenLastCalledWith(input);
@@ -322,5 +387,37 @@ describe("三路由动态门禁与authority scope一致", () => {
       await expect(member.routes[name]({}, { ...viewingCtx, realUser: { id: 456, role: "member" } })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
     expect(member.h.access).not.toHaveBeenCalled();
+  });
+});
+
+describe("总收益团队Tab前端真实AST门禁", () => {
+  it("管理员/成员/预览均能请求light probe，无canAccess或非报告不发；API enabled才显示team且只点击后读财务", () => {
+    const query = (name: string) => {
+      const declaration = required(nodes(pageAst, ts.isVariableDeclaration).find(node => node.name.getText() === name), name);
+      const call = required(declaration.initializer, name);
+      if (!ts.isCallExpression(call)) throw new Error(`Expected query: ${name}`);
+      return call;
+    };
+    const evaluate = (node: ts.Node, deps: Record<string, any>) => compiled(`const value = (${node.getText(pageAst)});`, deps, "value");
+    const accessQuery = query("t0TeamOverviewAccessQuery");
+    const overviewQuery = query("t0TeamOverviewQuery");
+    const canView = required(nodes(pageAst, ts.isVariableDeclaration).find(node => node.name.getText() === "canViewTeamOverview")?.initializer, "canViewTeamOverview");
+    const teamTab = required(nodes(pageAst, ts.isConditionalExpression).find(node => node.condition.getText() === "canViewTeamOverview" && node.whenTrue.getText().includes('id: "team"') && node.whenTrue.getText().includes('label: "团队"')), "team Tab condition");
+    const base = { canAccess: true, isTotalProfitReportVisible: true, canManage: false, isUserPreview: false, queriedViewerMode: "admin", previewUserId: null, T0_JOURNAL_STALE_TIME_MS: 6000 };
+    for (const patch of [{ canManage: true }, { queriedViewerMode: "member" }, { isUserPreview: true, previewUserId: ROOT }]) {
+      const deps = { ...base, ...patch };
+      expect(evaluate(accessQuery.arguments[1], deps).enabled).toBe(true);
+      expect(evaluate(accessQuery.arguments[0], deps)).toEqual({ ledgerId: 52, previewUserId: deps.isUserPreview ? ROOT : undefined });
+      expect(evaluate(accessQuery.arguments[1], { ...deps, canAccess: false }).enabled).toBe(false);
+      expect(evaluate(accessQuery.arguments[1], { ...deps, isTotalProfitReportVisible: false }).enabled).toBe(false);
+    }
+    expect(evaluate(accessQuery.arguments[1], base).enabled).toBe(false);
+    for (const data of [undefined, { enabled: false }, { enabled: true }]) {
+      const enabled = evaluate(canView, { t0TeamOverviewAccessQuery: { data } });
+      expect(enabled).toBe(data?.enabled === true);
+      expect(evaluate(teamTab, { canViewTeamOverview: enabled })).toEqual(enabled ? [{ id: "team", label: "团队" }] : []);
+      expect(evaluate(overviewQuery.arguments[1], { ...base, canViewTeamOverview: enabled, totalProfitDetailTab: "team" }).enabled).toBe(enabled);
+      expect(evaluate(overviewQuery.arguments[1], { ...base, canViewTeamOverview: enabled, totalProfitDetailTab: "income" }).enabled).toBe(false);
+    }
   });
 });

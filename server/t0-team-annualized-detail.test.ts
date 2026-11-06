@@ -93,9 +93,12 @@ function facts() {
     ], profitShareSnapshots: [], sharedIncomeTransfers: [], sharedIncomeReductions: [],
   });
 }
-function teamHarness(journal = facts(), activityUserIds = [101, 103, 105]) {
+function teamHarness(journal = facts(), activityUserIds = [101, 103, 105], scope: { rootUserId?: number; journalOwnerUserId?: number } = {}) {
+  const rootUserId = scope.rootUserId ?? ROOT;
+  const journalOwnerUserId = scope.journalOwnerUserId ?? 28;
+  const scopedDescendants = descendants.map(row => ({ ...row, invited_by_user_id: row.invited_by_user_id === ROOT ? rootUserId : row.invited_by_user_id }));
   const execute = vi.fn(async (sql: string, params: number[]) => {
-    if (sql.includes("FROM users WHERE")) return [descendants.filter(row => params.includes(row.invited_by_user_id))];
+    if (sql.includes("FROM users WHERE")) return [scopedDescendants.filter(row => params.includes(row.invited_by_user_id))];
     if (sql.includes("FROM ledger_members")) {
       expect(params[0]).toBe(52);
       return [[101, 102, 103, 105].filter(id => params.slice(1).includes(id)).map(userId => ({ userId }))];
@@ -103,7 +106,7 @@ function teamHarness(journal = facts(), activityUserIds = [101, 103, 105]) {
     if (sql.includes("FROM ledger52_t0_journal_entries entry") && sql.includes("UNION")) {
       const width = params.length / 4;
       const scope = params.slice(0, width);
-      expect(scope.slice(0, 2)).toEqual([52, 28]);
+      expect(scope.slice(0, 2)).toEqual([52, journalOwnerUserId]);
       for (let branch = 1; branch < 4; branch += 1) expect(params.slice(branch * width, (branch + 1) * width)).toEqual(scope);
       return [activityUserIds.filter(userId => scope.slice(2).includes(userId)).map(userId => ({ userId }))];
     }
@@ -123,9 +126,9 @@ function teamHarness(journal = facts(), activityUserIds = [101, 103, 105]) {
   const api = compiled(text, { TRPCError, getDbConnection, getLedger52T0JournalTeamFinancialFacts: journalReader }, "({ getLedger52T0TeamAccess, getLedger52T0TeamOverview, calculateTeamXirr, buildTeamAnnualizedCashFlowDetail, getCalendarDateUtc, getBeijingDateValue, calculateLedger52T0IncomeByUser })");
   return { ...api, execute, getDbConnection, journalReader, journal };
 }
-function routeHarness(mode = "member", role = "member", targetRole: string | null = "member") {
-  const h = teamHarness();
-  const resolveScope = vi.fn(async () => ({ mode, relatedUserId: ROOT, journalOwnerUserId: 28 }));
+function routeHarness(mode = "member", role = "member", targetRole: string | null = "member", scope: { rootUserId?: number; journalOwnerUserId?: number } = {}) {
+  const h = teamHarness(facts(), [101, 103, 105], scope);
+  const resolveScope = vi.fn(async () => ({ mode, relatedUserId: ROOT, journalOwnerUserId: scope.journalOwnerUserId ?? 28 }));
   const owner = vi.fn(async () => 28);
   const getUserMembership = vi.fn(async () => targetRole === null ? null : ({ role: targetRole }));
   const property = required(nodes(routerAst, ts.isPropertyAssignment).find(node => node.name.getText(routerAst) === "t0GetTeamOverview"), "t0GetTeamOverview");
@@ -148,7 +151,7 @@ function routeHarness(mode = "member", role = "member", targetRole: string | nul
   const inputCall = call.expression.expression;
   if (!ts.isCallExpression(inputCall)) throw new Error("Expected route input schema");
   const schema = expression(inputCall.arguments[0], { z });
-  const ctx: any = { user: { id: ROOT, role }, isViewingAs: false };
+  const ctx: any = { user: { id: scope.rootUserId ?? ROOT, role }, isViewingAs: false };
   return { h, run: (input: any = {}, context = ctx) => run({ ctx: context, input: schema.parse({ ledgerId: 52, ...input }) }), schema, ctx, resolveScope, owner, getUserMembership };
 }
 
@@ -224,16 +227,34 @@ describe("团队年化详情授权与最小下发（真实概览/路由 AST）",
     expect(option.summary.currentCumulativeIncome).toBeCloseTo(100.123456, 10);
   });
 
-  it("路由schema限定52/正整数目标；管理员全局默认disabled且禁止详情，普通成员只转发授权scope", async () => {
-    const admin = routeHarness("admin", "admin");
-    expect(await admin.run()).toEqual({ enabled: false });
-    await expect(admin.run({ annualizedDetailUserId: 101 })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(admin.h.execute).not.toHaveBeenCalled();
+  it("路由schema限定52/正整数目标；管理员总览和年化详情按actor根/authority owner，普通成员只转发授权scope", async () => {
+    for (const [actor, authorityOwner, role] of [[870413, 870413, "super_admin"], [81, 81, "admin"], [81, 999, "admin"]] as const) {
+      const admin = routeHarness("admin", role, "member", { rootUserId: actor, journalOwnerUserId: authorityOwner });
+      const overview = await admin.run({ rootUserId: ROOT, journalOwnerUserId: 28 });
+      expect(overview.enabled).toBe(true);
+      expect(overview.relation.rootUserId).toBe(actor);
+      expect(overview.members.map((row: any) => row.userId)).toEqual([101, 105, 103]);
+      expect(overview.annualizedDetail).toBeUndefined();
+      const result = await admin.run({ annualizedDetailUserId: 101, rootUserId: ROOT, journalOwnerUserId: 28 });
+      expect(result.relation.rootUserId).toBe(actor);
+      expect(result.annualizedDetail.userId).toBe(101);
+      expect(result.annualizedDetail.currentCumulativeIncome).toBeCloseTo(100.123456, 10);
+      expect(result.annualizedDetail.annualizedReturn).toBe(admin.h.calculateTeamXirr(result.annualizedDetail.cashFlows));
+      for (const target of new Set([actor, authorityOwner, ROOT, 999, 102, 104])) {
+        await expect(admin.run({ annualizedDetailUserId: target })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+      expect(admin.h.journalReader).toHaveBeenCalledTimes(2);
+      expect(admin.h.journalReader).toHaveBeenLastCalledWith({ journalOwnerUserId: authorityOwner });
+      expect(admin.owner).not.toHaveBeenCalled();
+      expect(admin.getUserMembership).not.toHaveBeenCalled();
+      expect(admin.resolveScope).toHaveBeenCalledWith({ id: actor, role, isViewingAs: false });
+    }
     const member = routeHarness();
     const result = await member.run({ annualizedDetailUserId: 101, rootUserId: 999 }, { user: { id: 456, role: "member" }, isViewingAs: false });
     expect(result.relation.rootUserId).toBe(ROOT);
     expect(result.annualizedDetail.userId).toBe(101);
     expect(member.resolveScope).toHaveBeenCalledWith({ id: 456, role: "member", isViewingAs: false });
+    expect(member.owner).toHaveBeenCalledOnce();
     for (const input of [{ ledgerId: 53 }, { ledgerId: 52, annualizedDetailUserId: 0 }, { ledgerId: 52, annualizedDetailUserId: -1 }, { ledgerId: 52, annualizedDetailUserId: 101.5 }]) expect(member.schema.safeParse(input).success).toBe(false);
   });
 

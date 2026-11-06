@@ -4507,7 +4507,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined },
     {
       // 仅查询授权开关以决定是否显示“团队”Tab，不在总收益首屏聚合团队财务数据。
-      enabled: canAccess && isTotalProfitReportVisible && (isUserPreview || queriedViewerMode === "member"),
+      enabled: canAccess && isTotalProfitReportVisible && (canManage || isUserPreview || queriedViewerMode === "member"),
       staleTime: T0_JOURNAL_STALE_TIME_MS,
       refetchOnWindowFocus: true,
     },

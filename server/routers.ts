@@ -12625,9 +12625,14 @@ ${klinesSummary}
             role: ctx.user.role,
             isViewingAs: ctx.isViewingAs,
           });
-          if (scope.mode !== 'member') return { enabled: false };
-          rootUserId = scope.relatedUserId;
-          journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
+          // 管理员也按自己的全站推荐链查看团队；管理流水仍由服务端权限范围确定。
+          if (scope.mode === 'admin') {
+            rootUserId = ctx.user.id;
+            journalOwnerUserId = scope.journalOwnerUserId;
+          } else {
+            rootUserId = scope.relatedUserId;
+            journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
+          }
         }
         const access = await teamOverview.getLedger52T0TeamAccess({ rootUserId, journalOwnerUserId });
         return { enabled: access.enabled };
@@ -12683,15 +12688,14 @@ ${klinesSummary}
             role: ctx.user.role,
             isViewingAs: ctx.isViewingAs,
           });
-          // 管理员的全局账本不出现某个人的团队视图；需通过现有用户预览进入。
-          if (scope.mode !== 'member') {
-            if (input.annualizedDetailUserId !== undefined) {
-              throw new TRPCError({ code: 'FORBIDDEN', message: '未获授权查看团队成员年化明细' });
-            }
-            return { enabled: false };
+          // 管理员本人可查看自己的推荐链；不能把全局用户或其他管理员流水当成本人团队。
+          if (scope.mode === 'admin') {
+            rootUserId = ctx.user.id;
+            journalOwnerUserId = scope.journalOwnerUserId;
+          } else {
+            rootUserId = scope.relatedUserId;
+            journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
           }
-          rootUserId = scope.relatedUserId;
-          journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
         }
         return await teamOverview.getLedger52T0TeamOverview({ journalOwnerUserId, rootUserId, annualizedDetailUserId: input.annualizedDetailUserId });
       }),
