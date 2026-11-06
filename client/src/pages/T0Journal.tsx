@@ -32,6 +32,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { T0TeamAnnualizedDialog, type T0TeamAnnualizedDetail } from "@/components/T0TeamAnnualizedDialog";
 
 /** T+0账本采用页面内状态与确认页反馈，不显示顶部下拉式操作提示。 */
 const t0Toast = {
@@ -1811,7 +1812,7 @@ type T0PreviewMemberCardMetrics = {
   cashReturnRate: number | null;
 };
 
-/** 团队总览仅获取经授权的下属成员汇总，绝不下发团队原始订单或资金流水。 */
+/** 团队总览只获取授权成员汇总；年化计算依据仅点击后按单成员读取，不下发原始订单。 */
 type T0TeamOverviewMember = {
   userId: number;
   parentUserId: number;
@@ -1836,6 +1837,7 @@ type T0TeamOverview = {
   dataCompleteness?: { isComplete: boolean; reason?: string; calculationVersion: string };
   summary?: { cumulativeDepositAmount: number; currentCumulativeIncome: number | null; cumulativeWithdrawalAmount: number; realizedIncomeRate: number | null };
   members?: T0TeamOverviewMember[];
+  annualizedDetail?: T0TeamAnnualizedDetail;
 };
 
 type PreviewRelatedFund = {
@@ -4195,6 +4197,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [globalIncomeSort, setGlobalIncomeSort] = useState<{ key: "order" | "commission" | "shared" | "total"; direction: "asc" | "desc" } | null>(null);
   const [payoutIncomePage, setPayoutIncomePage] = useState(1);
   const [showPayoutXirrHelp, setShowPayoutXirrHelp] = useState(false);
+  const [teamAnnualizedMemberId, setTeamAnnualizedMemberId] = useState<number | null>(null);
+  const closeTeamAnnualizedDetail = useCallback(() => setTeamAnnualizedMemberId(null), []);
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutDepositInputMode, setPayoutDepositInputMode] = useState<"u" | "eth">("u");
@@ -4520,6 +4524,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const teamOverview = t0TeamOverviewQuery.data as T0TeamOverview | undefined;
   const teamOverviewMembers = useMemo(() => Array.isArray(teamOverview?.members) ? teamOverview.members : [], [teamOverview?.members]);
+  const teamAnnualizedMember = teamOverviewMembers.find((member) => member.userId === teamAnnualizedMemberId);
+  const teamAnnualizedDetailQuery = trpc.ledger.t0GetTeamOverview.useQuery(
+    { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined, annualizedDetailUserId: teamAnnualizedMemberId || undefined },
+    {
+      enabled: canViewTeamOverview && isTotalProfitReportVisible && totalProfitDetailTab === "team" && Boolean(teamAnnualizedMember),
+      staleTime: T0_JOURNAL_STALE_TIME_MS,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const loadedTeamAnnualizedDetail = (teamAnnualizedDetailQuery.data as T0TeamOverview | undefined)?.annualizedDetail;
+  const teamAnnualizedDetail = loadedTeamAnnualizedDetail?.userId === teamAnnualizedMemberId ? loadedTeamAnnualizedDetail : undefined;
+  useEffect(() => { setTeamAnnualizedMemberId(null); }, [previewUserId, viewerScopeUserId, totalProfitDetailTab, isTotalProfitReportVisible]);
   const isAdminReconciliationActive = canManage && isTotalProfitPage && totalProfitPageTab === "settlement" && adminSettlementTab === "reconciliation";
   // 管理员在主账本单选一位用户时，周结算必须走服务端同一份成员周报。
   // 不能只因未进入 URL 预览模式就回退为全局周报，再由前端本地流水临时拼接。
@@ -14467,6 +14483,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {isTotalProfitReportVisible && canViewTeamOverview && totalProfitDetailTab === "team" && teamAnnualizedMember && (
+        <T0TeamAnnualizedDialog
+          detail={teamAnnualizedDetail}
+          memberName={teamAnnualizedMember.name}
+          loading={teamAnnualizedDetailQuery.isFetching && !teamAnnualizedDetail}
+          error={teamAnnualizedDetailQuery.isError ? "此成员年化计算明细读取失败，请重试。" : undefined}
+          onClose={closeTeamAnnualizedDetail}
+          onRetry={() => { void teamAnnualizedDetailQuery.refetch(); }}
+          formatRate={formatT0AnnualizedReturn}
+        />
+      )}
+
       {isTotalProfitReportVisible && totalProfitAttribution.hasIndividualScope && showPayoutXirrHelp && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-5" role="dialog" aria-modal="true" aria-label="实际年化计算说明">
           <div className="max-h-[86vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
@@ -14697,7 +14725,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const memberStartDate = formatT0TeamMemberStartDate(member.firstActivityOn);
                     return <div key={member.userId} className="px-3 py-3">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none"><span className="min-w-0 truncate text-[15px] font-semibold text-slate-800">{member.name}</span>{memberStartDate && <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">{memberStartDate}</span>}</div>
-                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总金额</div><div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</div></div></div>
+                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总金额</div><div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><button type="button" onClick={() => setTeamAnnualizedMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}年化回报计算说明`} className={`mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none active:opacity-70 ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</button></div></div>
                   </div>;})}</div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队成员</div>}
                   <p className="border-t border-slate-100 px-3 py-2 text-[10px] leading-4 text-slate-400">仅包含52号账本成员，且至少有非期权T+0下单、入金/提现、收到分佣或收到共享记录。期权订单及其分佣、共享不纳入本总览；收益按已实现订单归属、收到分佣及已到账共享汇总，不含未平仓浮盈亏、提现和钱包余额。年化回报按逐笔入金、提现及当前非期权已实现净值计算。</p>
                 </div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队查看权限</div>}

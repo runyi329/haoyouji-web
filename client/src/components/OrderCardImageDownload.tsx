@@ -315,6 +315,24 @@ function createExactSnapshotContainer(
   const hasCollapsedExportContent = exportHiddenElements.length > 0;
   exportHiddenElements.forEach(element => element.remove());
 
+  // 仅展开显式标记的说明区：屏幕布局保持不变，离屏长图不截断滚动内容。
+  if (measureAfterAssets) {
+    clonedTarget.querySelectorAll<HTMLElement>("[data-card-export-expand]").forEach(element => {
+      if (element.tagName === "DETAILS") element.setAttribute("open", "");
+      Object.assign(element.style, {
+        height: "auto", minHeight: "0", maxHeight: "none",
+        overflow: "visible", overflowX: "visible", overflowY: "visible",
+        flex: "0 0 auto",
+      });
+      element.scrollTop = 0;
+      element.scrollLeft = 0;
+      // 源节点的计算样式含折叠时的像素高度；父章节也要自然撑开，避免与下一节重叠。
+      for (let parent = element.parentElement; parent && parent !== clonedTarget; parent = parent.parentElement) {
+        Object.assign(parent.style, { height: "auto", minHeight: "0", maxHeight: "none" });
+      }
+    });
+  }
+
   // 固定当前卡片宽度，但先释放源节点计算出的固定高度，允许备注等展开内容完整撑开。
   clonedTarget.style.width = `${rect.width}px`;
   clonedTarget.style.minWidth = `${rect.width}px`;

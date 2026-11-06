@@ -12634,6 +12634,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(52),
         previewUserId: z.number().int().positive().optional(),
+        annualizedDetailUserId: z.number().int().positive().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
@@ -12678,11 +12679,16 @@ ${klinesSummary}
             isViewingAs: ctx.isViewingAs,
           });
           // 管理员的全局账本不出现某个人的团队视图；需通过现有用户预览进入。
-          if (scope.mode !== 'member') return { enabled: false };
+          if (scope.mode !== 'member') {
+            if (input.annualizedDetailUserId !== undefined) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '未获授权查看团队成员年化明细' });
+            }
+            return { enabled: false };
+          }
           rootUserId = scope.relatedUserId;
           journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
         }
-        return await teamOverview.getLedger52T0TeamOverview({ journalOwnerUserId, rootUserId });
+        return await teamOverview.getLedger52T0TeamOverview({ journalOwnerUserId, rootUserId, annualizedDetailUserId: input.annualizedDetailUserId });
       }),
 
     // 团队负责人在个人结算页查看下属的指定周汇总：只读、只返回已授权递归下属的三项收益，

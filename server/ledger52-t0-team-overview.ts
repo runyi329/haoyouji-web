@@ -88,7 +88,38 @@ export type Ledger52T0ClosingIncomeAllocation = {
 };
 
 type RecentDetail = { netPnl?: number };
-type TeamXirrCashFlow = { occurredOn: string; amount: number; atEndOfBeijingDay?: boolean };
+type TeamXirrCashFlow = { occurredOn: string; amount: number; kind?: "deposit" | "withdrawal"; atEndOfBeijingDay?: boolean };
+
+export type Ledger52T0TeamAnnualizedDetail = {
+  userId: number;
+  name: string;
+  asOfDate: string;
+  cumulativeDepositAmount: number;
+  cumulativeWithdrawalAmount: number;
+  currentCumulativeIncome: number;
+  currentNetValue: number;
+  annualizedReturn: number | null;
+  firstInvestmentDate: string | null;
+  daysHeld: number;
+  orderIncome: number;
+  commissionIncome: number;
+  sharedIncome: number;
+  cashFlows: Array<{
+    kind: "deposit" | "withdrawal" | "terminal";
+    occurredOn: string;
+    amount: number;
+    /** XIRR 的首个有效合并时间点为原点，不一定等于首笔入金日。 */
+    daysFromStart: number;
+    atEndOfBeijingDay: boolean;
+  }>;
+  groupedCashFlows: Array<{
+    occurredOn: string;
+    amount: number;
+    daysFromStart: number;
+    atEndOfBeijingDay: boolean;
+  }>;
+  unavailableReason: string | null;
+};
 
 const actionInfo: Record<Action, { opening: boolean; side: Side }> = {
   openLong: { opening: true, side: "long" },
@@ -181,6 +212,65 @@ function calculateTeamXirr(cashFlows: TeamXirrCashFlow[]) {
   }
   const result = (lower + upper) / 2;
   return Number.isFinite(result) ? result : null;
+}
+
+/** 只为选中成员解释同一份 XIRR 输入；筛除、有效日期和合并口径逐项保持与求解器一致。 */
+function buildTeamAnnualizedCashFlowDetail(cashFlows: TeamXirrCashFlow[], asOfDate: string, annualizedReturn: number | null): Pick<Ledger52T0TeamAnnualizedDetail, "cashFlows" | "groupedCashFlows" | "firstInvestmentDate" | "daysHeld" | "unavailableReason"> {
+  const dayMilliseconds = 24 * 60 * 60 * 1000;
+  const effectiveCashFlows: Array<{
+    kind: "deposit" | "withdrawal" | "terminal";
+    occurredOn: string;
+    amount: number;
+    atEndOfBeijingDay: boolean;
+    timestamp: number;
+  }> = [];
+  const grouped = new Map<number, { occurredOn: string; amount: number; atEndOfBeijingDay: boolean }>();
+  for (const cashFlow of cashFlows) {
+    const calendarTimestamp = getCalendarDateUtc(cashFlow.occurredOn);
+    if (calendarTimestamp === null || !Number.isFinite(cashFlow.amount) || Math.abs(cashFlow.amount) < 0.000001) continue;
+    const atEndOfBeijingDay = Boolean(cashFlow.atEndOfBeijingDay);
+    const timestamp = calendarTimestamp + (atEndOfBeijingDay ? dayMilliseconds : 0);
+    // 入金/提现已经带 kind；追加的唯一期末净值没有 kind，按当天结束（次日零点）计入。
+    effectiveCashFlows.push({ kind: cashFlow.kind ?? "terminal", occurredOn: cashFlow.occurredOn, amount: cashFlow.amount, atEndOfBeijingDay, timestamp });
+    const current = grouped.get(timestamp);
+    grouped.set(timestamp, {
+      occurredOn: current?.occurredOn ?? cashFlow.occurredOn,
+      amount: (current?.amount || 0) + cashFlow.amount,
+      atEndOfBeijingDay: current?.atEndOfBeijingDay ?? atEndOfBeijingDay,
+    });
+  }
+  const groupedFlows = Array.from(grouped.entries())
+    .map(([timestamp, cashFlow]) => ({ timestamp, ...cashFlow }))
+    .filter((cashFlow) => Math.abs(cashFlow.amount) >= 0.000001)
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const firstTimestamp = groupedFlows[0]?.timestamp;
+  // d_i = (有效时间戳_i - 首个有效合并时间戳) / 86400000；不是持有天数的首笔入金原点。
+  // 原始笔数中被相互抵消的较早日期可得到负 d_i；它们不再出现在求解用的合并现金流里。
+  const daysFromStart = (timestamp: number) => firstTimestamp === undefined ? 0 : (timestamp - firstTimestamp) / dayMilliseconds;
+  const firstInvestment = effectiveCashFlows
+    .filter((cashFlow) => cashFlow.kind === "deposit" && cashFlow.amount < 0)
+    .sort((left, right) => left.timestamp - right.timestamp)[0];
+  const asOfTimestamp = getCalendarDateUtc(asOfDate);
+  const daysHeld = firstInvestment && asOfTimestamp !== null
+    ? Math.max(0, (asOfTimestamp + dayMilliseconds - firstInvestment.timestamp) / dayMilliseconds)
+    : 0;
+  let unavailableReason: string | null = null;
+  if (annualizedReturn === null) {
+    if (groupedFlows.length < 2 || !groupedFlows.some((cashFlow) => cashFlow.amount < 0) || !groupedFlows.some((cashFlow) => cashFlow.amount > 0)) {
+      unavailableReason = "有效正负现金流不足：筛除零金额、无效日期并按有效时间合并后，至少需要两个时间点及正、负现金流";
+    } else if (groupedFlows[groupedFlows.length - 1].timestamp <= groupedFlows[0].timestamp) {
+      unavailableReason = "有效现金流未形成正的时间跨度，无法计算年化回报";
+    } else {
+      unavailableReason = "现有XIRR算法未能求得有效年化回报，可能无法找到求解区间或遇到数值溢出";
+    }
+  }
+  return {
+    cashFlows: effectiveCashFlows.map(({ timestamp, ...cashFlow }) => ({ ...cashFlow, daysFromStart: daysFromStart(timestamp) })),
+    groupedCashFlows: groupedFlows.map(({ timestamp, ...cashFlow }) => ({ ...cashFlow, daysFromStart: daysFromStart(timestamp) })),
+    firstInvestmentDate: firstInvestment?.occurredOn ?? null,
+    daysHeld,
+    unavailableReason,
+  };
 }
 
 function archivePrice(side: Side, value: number) {
@@ -597,10 +687,14 @@ async function getLedger52MemberUserIds(userIds: number[]) {
 export async function getLedger52T0TeamOverview(input: {
   journalOwnerUserId: number;
   rootUserId: number;
+  annualizedDetailUserId?: number;
   /** 周结算可传入同一份只读财务快照，避免资格筛选与收益计算重复扫描账本。 */
   financialFacts?: Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>> | Promise<Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>>>;
 }) {
-  if (!LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(input.rootUserId)) return { enabled: false as const };
+  if (!LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(input.rootUserId)) {
+    if (input.annualizedDetailUserId !== undefined) throw new TRPCError({ code: "FORBIDDEN", message: "未获授权查看团队成员年化明细" });
+    return { enabled: false as const };
+  }
   const [allDescendants, journal] = await Promise.all([
     getRecursiveTeamMembers(input.rootUserId),
     input.financialFacts
@@ -669,6 +763,9 @@ export async function getLedger52T0TeamOverview(input: {
   }
   const members = Array.from(visibleMembersById.values());
   const memberIds = new Set(members.map((member) => member.userId));
+  if (input.annualizedDetailUserId !== undefined && !memberIds.has(input.annualizedDetailUserId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "只能查看当前团队概览中可见成员的年化明细" });
+  }
   // 上方已显式请求完整历史；若读取异常会直接返回可见错误，不能用截断结果伪造收益。
   const incomeComplete = true;
   const trades: Ledger52T0IncomeTrade[] = nonOptionEntries.map((entry: any) => ({
@@ -697,11 +794,12 @@ export async function getLedger52T0TeamOverview(input: {
     target.set(userId, (target.get(userId) || 0) + amount);
     if (Math.abs(amount) > 0.000001) {
       const userCashFlows = investmentCashFlowsByUser.get(userId) || [];
-      userCashFlows.push({ occurredOn: String(flow.occurredOn || "").slice(0, 10), amount: isDeposit ? -amount : amount });
+      userCashFlows.push({ occurredOn: String(flow.occurredOn || "").slice(0, 10), amount: isDeposit ? -amount : amount, kind: isDeposit ? "deposit" : "withdrawal" });
       investmentCashFlowsByUser.set(userId, userCashFlows);
     }
   }
   const asOfDate = getBeijingDateValue();
+  let annualizedDetail: Ledger52T0TeamAnnualizedDetail | undefined;
   const memberRows = members.map((member) => {
     const depositAmount = deposits.get(member.userId) || 0;
     const withdrawalAmount = withdrawals.get(member.userId) || 0;
@@ -709,10 +807,27 @@ export async function getLedger52T0TeamOverview(input: {
     const currentCumulativeIncome = income.orderIncome + income.commissionIncome + income.sharedIncome;
     // 已实现收益未被提现回写扣减，期末净值按与个人账本相同口径扣除累计提现，避免在XIRR中重复计入。
     const currentNetValue = depositAmount + currentCumulativeIncome - withdrawalAmount;
-    const annualizedReturn = incomeComplete ? calculateTeamXirr([
+    const memberCashFlows: TeamXirrCashFlow[] = [
       ...(investmentCashFlowsByUser.get(member.userId) || []),
       { occurredOn: asOfDate, amount: currentNetValue, atEndOfBeijingDay: true },
-    ]) : null;
+    ];
+    const annualizedReturn = incomeComplete ? calculateTeamXirr(memberCashFlows) : null;
+    if (input.annualizedDetailUserId === member.userId) {
+      annualizedDetail = {
+        userId: member.userId,
+        name: member.name,
+        asOfDate,
+        cumulativeDepositAmount: depositAmount,
+        cumulativeWithdrawalAmount: withdrawalAmount,
+        currentCumulativeIncome,
+        currentNetValue,
+        annualizedReturn,
+        orderIncome: income.orderIncome,
+        commissionIncome: income.commissionIncome,
+        sharedIncome: income.sharedIncome,
+        ...buildTeamAnnualizedCashFlowDetail(memberCashFlows, asOfDate, annualizedReturn),
+      };
+    }
     return {
       ...member,
       firstActivityOn: firstActivityOnByUser.get(member.userId) || null,
@@ -757,5 +872,6 @@ export async function getLedger52T0TeamOverview(input: {
         : null,
     },
     members: memberRows,
+    ...(input.annualizedDetailUserId !== undefined && annualizedDetail ? { annualizedDetail } : {}),
   };
 }
