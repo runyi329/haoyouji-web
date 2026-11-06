@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-06
+// 生成时间：2026-11-07
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9899,5 +9899,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-11-05T04:44:31Z", type: "feat", cleanMessage: "unify actual and observation stock account views" },
     { date: "2026-11-05T05:06:09Z", type: "fix", cleanMessage: "remove observation account panel from ledger overview" },
     { date: "2026-11-05T05:53:59Z", type: "feat", cleanMessage: "add missing financing currencies and live spot quote coverage" },
+  ],
+  "2026-11-06": [
+    { date: "2026-11-05T22:56:14Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-06T03:41:19Z", type: "fix", cleanMessage: "preserve wallet transaction currencies across all history views" },
+    { date: "2026-11-06T10:24:08Z", type: "feat", cleanMessage: "explain team annualized returns with cash flows and full report export" },
+    { date: "2026-11-06T14:26:24Z", type: "feat", cleanMessage: "enable T0 team views from descendant ledger activity" },
+  ],
+  "2026-11-07": [
+    { date: "2026-11-06T16:00:28Z", type: "feat", cleanMessage: "allow T0 admins to view their referral teams" },
   ],
 };
