@@ -2,8 +2,6 @@ import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import { getLedger52T0JournalTeamFinancialFacts } from "./ledger52-t0-journal";
 
-/** 首批仅由产品明确授权的团队负责人可查看其递归下属的汇总财务数据。 */
-export const LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS = new Set<number>([4952766]);
 const LEDGER_ID = 52;
 
 type Action = "openLong" | "closeLong" | "openShort" | "closeShort";
@@ -684,70 +682,65 @@ async function getLedger52MemberUserIds(userIds: number[]) {
   return memberIds;
 }
 
-export async function getLedger52T0TeamOverview(input: {
-  journalOwnerUserId: number;
-  rootUserId: number;
-  annualizedDetailUserId?: number;
-  /** 周结算可传入同一份只读财务快照，避免资格筛选与收益计算重复扫描账本。 */
-  financialFacts?: Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>> | Promise<Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>>>;
-}) {
-  if (!LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(input.rootUserId)) {
-    if (input.annualizedDetailUserId !== undefined) throw new TRPCError({ code: "FORBIDDEN", message: "未获授权查看团队成员年化明细" });
-    return { enabled: false as const };
+/**
+ * 动态团队准入：全站推荐链中的递归下级，须同时是52号账本成员且在指定管理流水内有真实活动。
+ * rootUserId 是被查看的推荐上级；journalOwnerUserId 必须由既有服务端 authority scope 解析，不能用上级ID替代。
+ * 只分批读取成员和业务存在的用户ID，不读取财务金额汇总/报价，不调用ensure、迁移或写入。
+ * 任何仍保留的订单（含挂单及期权）均是活动；孤立的分佣/共享审计记录不替代已删除的来源订单。
+ */
+export async function getLedger52T0TeamAccess(input: { rootUserId: number; journalOwnerUserId: number }): Promise<{
+  enabled: boolean;
+  /** 仅含合格下级；无活动中间节点已折叠到最近可见祖先，供概览和周结算复用同一名单。 */
+  eligibleDescendants: TeamMember[];
+}> {
+  if (!Number.isInteger(input.rootUserId) || input.rootUserId <= 0 || !Number.isInteger(input.journalOwnerUserId) || input.journalOwnerUserId <= 0) {
+    return { enabled: false, eligibleDescendants: [] };
   }
-  const [allDescendants, journal] = await Promise.all([
-    getRecursiveTeamMembers(input.rootUserId),
-    input.financialFacts
-      ? Promise.resolve(input.financialFacts)
-      // 团队页只在负责人实际点开时读取完整历史；专用读取器分批取收益和XIRR所需事实，
-      // 不沿用报价页首屏限流，也不加载无关目录、行情、审计或提醒。
-      : getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId }),
-  ]);
-  const entries = Array.isArray((journal as any).entries) ? (journal as any).entries : [];
-  const transfers = Array.isArray((journal as any).sharedIncomeTransfers) ? (journal as any).sharedIncomeTransfers : [];
-  const cashFlows = Array.isArray((journal as any).payoutCashFlows) ? (journal as any).payoutCashFlows : [];
-  // 团队总览不纳入期权：期权订单及其预设分佣、共享到账均不作为团队资格或收益。
-  const nonOptionEntries = entries.filter((entry: any) => String(entry?.instrumentType || "contract") !== "option" && Math.abs(toNumber(entry?.quantity)) > 0.000001);
-  const nonOptionEntryIds = new Set(nonOptionEntries.map((entry: any) => String(entry.id)));
-  const nonOptionSnapshots = ((journal as any).profitShareSnapshots ?? []).filter((snapshot: any) => nonOptionEntryIds.has(String(snapshot?.openingEntryId)));
-  const nonOptionTransfers = transfers.filter((transfer: any) => nonOptionEntryIds.has(String(transfer?.closingEntryId)) && Math.abs(toNumber(transfer?.amount)) > 0.000001);
-  const nonOptionReductions = ((journal as any).sharedIncomeReductions ?? []).filter((row: any) => nonOptionEntryIds.has(String(row?.closingEntryId)));
-  // 成员卡不展示来源类型：只在充值与非期权订单两个时间点中取较早的自然日。
-  const firstActivityOnByUser = new Map<number, string>();
-  for (const entry of nonOptionEntries) {
-    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(entry?.relatedUserId), entry?.createdAt);
-  }
-  for (const flow of cashFlows) {
-    if (String(flow?.direction) !== "deposit" || Math.abs(toNumber(flow?.amount)) <= 0.000001) continue;
-    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(flow?.relatedUserId), flow?.occurredOn);
-  }
-  // 最低准入：本人有普通T+0订单、收到普通订单分佣/共享，或有真实入金/提现流水。只有推荐关系不够。
-  const t0ActivityUserIds = new Set<number>();
-  for (const entry of nonOptionEntries) {
-    const userId = toNumber(entry?.relatedUserId);
-    if (userId > 0) t0ActivityUserIds.add(userId);
-  }
-  for (const snapshot of nonOptionSnapshots) {
-    const userId = toNumber(snapshot?.beneficiaryUserId);
-    if (userId > 0) t0ActivityUserIds.add(userId);
-  }
-  for (const transfer of nonOptionTransfers) {
-    const userId = toNumber(transfer?.recipientUserId);
-    if (userId > 0) t0ActivityUserIds.add(userId);
-  }
-  for (const flow of cashFlows) {
-    const userId = toNumber(flow?.relatedUserId);
-    if (userId > 0 && Math.abs(toNumber(flow?.amount)) > 0.000001) t0ActivityUserIds.add(userId);
-  }
+  const allDescendants = await getRecursiveTeamMembers(input.rootUserId);
   const ledgerMemberIds = await getLedger52MemberUserIds(allDescendants.map((member) => member.userId));
+  if (ledgerMemberIds.size === 0) return { enabled: false, eligibleDescendants: [] };
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队数据库连接失败" });
+  const candidates = allDescendants.filter((member) => ledgerMemberIds.has(member.userId)).map((member) => member.userId);
+  const activityUserIds = new Set<number>();
+  for (let offset = 0; offset < candidates.length; offset += 500) {
+    const batch = candidates.slice(offset, offset + 500);
+    const placeholders = batch.map(() => "?").join(", ");
+    const scopeParams = [LEDGER_ID, input.journalOwnerUserId, ...batch];
+    const [rows] = await conn.execute(
+      `SELECT entry.related_user_id AS userId
+         FROM ledger52_t0_journal_entries entry
+        WHERE entry.ledger_id = ? AND entry.user_id = ? AND entry.related_user_id IN (${placeholders})
+        UNION
+       SELECT payout.related_user_id AS userId
+         FROM ledger52_t0_journal_payout_logs payout
+        WHERE payout.ledger_id = ? AND payout.user_id = ? AND payout.related_user_id IN (${placeholders})
+          AND payout.direction IN ('deposit', 'withdrawal') AND ABS(payout.amount) > 0.000001
+        UNION
+       SELECT shared_entry.beneficiary_user_id AS userId
+         FROM ledger52_t0_journal_entry_profit_shares shared_entry
+         INNER JOIN ledger52_t0_journal_entries source_entry
+           ON source_entry.id = shared_entry.entry_id AND source_entry.ledger_id = shared_entry.ledger_id AND source_entry.user_id = shared_entry.user_id
+         INNER JOIN ledger52_t0_journal_entries opening_entry
+           ON opening_entry.id = shared_entry.opening_entry_id AND opening_entry.ledger_id = shared_entry.ledger_id AND opening_entry.user_id = shared_entry.user_id
+        WHERE shared_entry.ledger_id = ? AND shared_entry.user_id = ? AND shared_entry.beneficiary_user_id IN (${placeholders})
+        UNION
+       SELECT transfer.recipient_user_id AS userId
+         FROM ledger52_t0_journal_shared_income_transfers transfer
+         INNER JOIN ledger52_t0_journal_entries source_closing
+           ON source_closing.id = transfer.closing_entry_id AND source_closing.ledger_id = transfer.ledger_id AND source_closing.user_id = transfer.user_id
+          AND source_closing.action IN ('closeLong', 'closeShort')
+        WHERE transfer.ledger_id = ? AND transfer.user_id = ? AND transfer.recipient_user_id IN (${placeholders})
+          AND ABS(transfer.amount) > 0.000001`,
+      [...scopeParams, ...scopeParams, ...scopeParams, ...scopeParams],
+    );
+    for (const row of rows as any[]) activityUserIds.add(toNumber(row.userId));
+  }
   const rawMemberById = new Map(allDescendants.map((member) => [member.userId, member]));
-  const eligibleMemberIds = new Set(allDescendants
-    .filter((member) => ledgerMemberIds.has(member.userId) && t0ActivityUserIds.has(member.userId))
-    .map((member) => member.userId));
-  // 若中间推荐节点没有T+0活动，不展示该节点；有活动的后代提升到最近可展示祖先，图形仍保持可读。
   const visibleMembersById = new Map<number, TeamMember>();
+  // 推荐链必须先完整递归再筛活动；无动作中间人不展示，但其有活动孙级仍计入。
   for (const member of [...allDescendants].sort((left, right) => left.depth - right.depth || left.userId - right.userId)) {
-    if (!eligibleMemberIds.has(member.userId)) continue;
+    if (!ledgerMemberIds.has(member.userId) || !activityUserIds.has(member.userId)) continue;
     let parentUserId = member.parentUserId;
     const visitedParents = new Set<number>();
     while (parentUserId > 0 && parentUserId !== input.rootUserId && !visibleMembersById.has(parentUserId) && !visitedParents.has(parentUserId)) {
@@ -761,10 +754,49 @@ export async function getLedger52T0TeamOverview(input: {
       depth: visibleParent ? visibleParent.depth + 1 : 1,
     });
   }
-  const members = Array.from(visibleMembersById.values());
+  const eligibleDescendants = Array.from(visibleMembersById.values());
+  return { enabled: eligibleDescendants.length > 0, eligibleDescendants };
+}
+
+export async function getLedger52T0TeamOverview(input: {
+  journalOwnerUserId: number;
+  rootUserId: number;
+  annualizedDetailUserId?: number;
+  /** 周结算可传入同一份只读财务快照；活动准入独立用轻量存在性查询，不以财务口径筛成员。 */
+  financialFacts?: Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>> | Promise<Awaited<ReturnType<typeof getLedger52T0JournalTeamFinancialFacts>>>;
+}) {
+  const access = await getLedger52T0TeamAccess({ rootUserId: input.rootUserId, journalOwnerUserId: input.journalOwnerUserId });
+  if (!access.enabled) {
+    if (input.annualizedDetailUserId !== undefined) throw new TRPCError({ code: "FORBIDDEN", message: "未获授权查看团队成员年化明细" });
+    return { enabled: false as const };
+  }
+  const members = access.eligibleDescendants;
   const memberIds = new Set(members.map((member) => member.userId));
   if (input.annualizedDetailUserId !== undefined && !memberIds.has(input.annualizedDetailUserId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "只能查看当前团队概览中可见成员的年化明细" });
+  }
+  // 团队页只在有资格且实际点开时读取完整历史；专用读取器分批取收益和XIRR所需事实，
+  // 不沿用报价页首屏限流，也不加载无关目录、行情、审计或提醒。
+  const journal = await (input.financialFacts
+    ? Promise.resolve(input.financialFacts)
+    : getLedger52T0JournalTeamFinancialFacts({ journalOwnerUserId: input.journalOwnerUserId }));
+  const entries = Array.isArray((journal as any).entries) ? (journal as any).entries : [];
+  const transfers = Array.isArray((journal as any).sharedIncomeTransfers) ? (journal as any).sharedIncomeTransfers : [];
+  const cashFlows = Array.isArray((journal as any).payoutCashFlows) ? (journal as any).payoutCashFlows : [];
+  // 活动资格允许期权与挂单；收益/XIRR仍沿用既有非期权已实现财务口径，不扩大金融计算范围。
+  const nonOptionEntries = entries.filter((entry: any) => String(entry?.instrumentType || "contract") !== "option" && Math.abs(toNumber(entry?.quantity)) > 0.000001);
+  const nonOptionEntryIds = new Set(nonOptionEntries.map((entry: any) => String(entry.id)));
+  const nonOptionSnapshots = ((journal as any).profitShareSnapshots ?? []).filter((snapshot: any) => nonOptionEntryIds.has(String(snapshot?.openingEntryId)));
+  const nonOptionTransfers = transfers.filter((transfer: any) => nonOptionEntryIds.has(String(transfer?.closingEntryId)) && Math.abs(toNumber(transfer?.amount)) > 0.000001);
+  const nonOptionReductions = ((journal as any).sharedIncomeReductions ?? []).filter((row: any) => nonOptionEntryIds.has(String(row?.closingEntryId)));
+  // 成员卡不展示来源类型：只在充值与非期权订单两个时间点中取较早的自然日。
+  const firstActivityOnByUser = new Map<number, string>();
+  for (const entry of nonOptionEntries) {
+    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(entry?.relatedUserId), entry?.createdAt);
+  }
+  for (const flow of cashFlows) {
+    if (String(flow?.direction) !== "deposit" || Math.abs(toNumber(flow?.amount)) <= 0.000001) continue;
+    recordEarlierCalendarDate(firstActivityOnByUser, toNumber(flow?.relatedUserId), flow?.occurredOn);
   }
   // 上方已显式请求完整历史；若读取异常会直接返回可见错误，不能用截断结果伪造收益。
   const incomeComplete = true;
@@ -851,7 +883,7 @@ export async function getLedger52T0TeamOverview(input: {
       rootIncluded: false,
       directMemberCount,
       recursiveMemberCount: memberRows.length,
-      qualification: "52号账本成员且有非期权T+0下单、入金/提现、收到分佣或收到共享记录",
+      qualification: "52号账本成员且有T+0订单（含挂单、现货、合约、期权、网格）、真实入金/提现、有效订单分佣或共享记录",
     },
     financialDefinition: {
       income: "非期权本人订单实际归属 + 收到分佣 + 已到账共享收益",

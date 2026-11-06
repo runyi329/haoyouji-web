@@ -12577,7 +12577,7 @@ ${klinesSummary}
         });
       }),
 
-    // 团队总览的轻量授权探测：只验证是否显示入口，不读取团队成员、订单或资金汇总，避免拖慢总收益首屏。
+    // 团队总览的轻量授权探测：只递归推荐关系并查询下级业务存在性，不读取全账本财务/报价或资金汇总。
     t0CanViewTeamOverview: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -12587,6 +12587,7 @@ ${klinesSummary}
         const journal = await import('./ledger52-t0-journal');
         const teamOverview = await import('./ledger52-t0-team-overview');
         let rootUserId = 0;
+        let journalOwnerUserId = 0;
         if (input.previewUserId) {
           if (ctx.isViewingAs) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换团队预览用户' });
@@ -12604,6 +12605,7 @@ ${klinesSummary}
             throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员查看团队总览' });
           }
           rootUserId = input.previewUserId;
+          journalOwnerUserId = managerScope.journalOwnerUserId;
         } else if (ctx.isViewingAs) {
           const realUser = ctx.realUser;
           if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
@@ -12616,6 +12618,7 @@ ${klinesSummary}
             throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看团队总览' });
           }
           rootUserId = ctx.user.id;
+          journalOwnerUserId = realScope.journalOwnerUserId;
         } else {
           const scope = await journal.resolveLedger52T0JournalReadScope({
             id: ctx.user.id,
@@ -12624,12 +12627,14 @@ ${klinesSummary}
           });
           if (scope.mode !== 'member') return { enabled: false };
           rootUserId = scope.relatedUserId;
+          journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
         }
-        return { enabled: teamOverview.LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(rootUserId) };
+        const access = await teamOverview.getLedger52T0TeamAccess({ rootUserId, journalOwnerUserId });
+        return { enabled: access.enabled };
       }),
 
-    // 团队总览是单独授予的成员财务汇总权限；推荐关系本身不自动扩大任何订单读取范围。
-    // 当前仅允许产品配置的团队负责人查看自己的递归下属汇总，管理员可用用户预览核对同一结果。
+    // 递归下级加入52号账本并发生T+0活动后，推荐上级自动获得团队汇总入口；推荐关系不扩大个人订单读取范围。
+    // 只显示有活动的递归下级，管理员通过既有成员预览核对同一scope结果。
     t0GetTeamOverview: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -12746,7 +12751,8 @@ ${klinesSummary}
           rootUserId = scope.relatedUserId;
           journalOwnerUserId = await journal.getLedger52T0JournalOwnerUserId();
         }
-        if (!teamOverview.LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS.has(rootUserId)) return { enabled: false };
+        const access = await teamOverview.getLedger52T0TeamAccess({ rootUserId, journalOwnerUserId });
+        if (!access.enabled) return { enabled: false };
         return await weeklySettlement.getLedger52T0TeamWeeklySettlement({ journalOwnerUserId, rootUserId, weekStartBjt: input.weekStartBjt });
       }),
 

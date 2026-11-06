@@ -70,7 +70,8 @@ function freeze<T>(value: T): T {
   if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); }
   return value;
 }
-const ROOT = 4952766;
+// 非旧白名单ID也可因合格下级自动获得团队入口。
+const ROOT = 600123;
 const descendants = [
   { id: 101, invited_by_user_id: ROOT, name: "甲" },
   { id: 102, invited_by_user_id: ROOT, name: "无活动中间人" },
@@ -92,12 +93,19 @@ function facts() {
     ], profitShareSnapshots: [], sharedIncomeTransfers: [], sharedIncomeReductions: [],
   });
 }
-function teamHarness(journal = facts()) {
+function teamHarness(journal = facts(), activityUserIds = [101, 103, 105]) {
   const execute = vi.fn(async (sql: string, params: number[]) => {
     if (sql.includes("FROM users WHERE")) return [descendants.filter(row => params.includes(row.invited_by_user_id))];
     if (sql.includes("FROM ledger_members")) {
       expect(params[0]).toBe(52);
       return [[101, 102, 103, 105].filter(id => params.slice(1).includes(id)).map(userId => ({ userId }))];
+    }
+    if (sql.includes("FROM ledger52_t0_journal_entries entry") && sql.includes("UNION")) {
+      const width = params.length / 4;
+      const scope = params.slice(0, width);
+      expect(scope.slice(0, 2)).toEqual([52, 28]);
+      for (let branch = 1; branch < 4; branch += 1) expect(params.slice(branch * width, (branch + 1) * width)).toEqual(scope);
+      return [activityUserIds.filter(userId => scope.slice(2).includes(userId)).map(userId => ({ userId }))];
     }
     throw new Error("Unexpected SQL in isolated read-only test");
   });
@@ -112,7 +120,7 @@ function teamHarness(journal = facts()) {
       : node;
     return printer.printNode(ts.EmitHint.Unspecified, isolated, teamAst);
   }).join("\n");
-  const api = compiled(text, { TRPCError, getDbConnection, getLedger52T0JournalTeamFinancialFacts: journalReader }, "({ getLedger52T0TeamOverview, calculateTeamXirr, buildTeamAnnualizedCashFlowDetail, getCalendarDateUtc, getBeijingDateValue, calculateLedger52T0IncomeByUser, LEDGER52_T0_TEAM_OVERVIEW_LEADER_IDS })");
+  const api = compiled(text, { TRPCError, getDbConnection, getLedger52T0JournalTeamFinancialFacts: journalReader }, "({ getLedger52T0TeamAccess, getLedger52T0TeamOverview, calculateTeamXirr, buildTeamAnnualizedCashFlowDetail, getCalendarDateUtc, getBeijingDateValue, calculateLedger52T0IncomeByUser })");
   return { ...api, execute, getDbConnection, journalReader, journal };
 }
 function routeHarness(mode = "member", role = "member", targetRole: string | null = "member") {
@@ -151,7 +159,8 @@ describe("团队年化详情授权与最小下发（真实概览/路由 AST）",
   it("默认团队总览只返回汇总，无任何成员原始或合并现金流", async () => {
     const h = teamHarness();
     const result = await h.getLedger52T0TeamOverview({ rootUserId: ROOT, journalOwnerUserId: 28 });
-    expect(result.members.map((member: any) => member.userId).sort((left: number, right: number) => left - right)).toEqual([101, 103]);
+    expect(result.enabled).toBe(true);
+    expect(result.members.map((member: any) => member.userId).sort((left: number, right: number) => left - right)).toEqual([101, 103, 105]);
     expect(result.members.find((member: any) => member.userId === 103)).toMatchObject({ parentUserId: ROOT, depth: 1 });
     const keys = (value: any): string[] => value && typeof value === "object" ? Object.entries(value).flatMap(([key, child]) => [key, ...keys(child)]) : [];
     expect(keys(result).filter(key => ["cashFlows", "groupedCashFlows", "payoutCashFlows", "annualizedDetail"].includes(key))).toEqual([]);
@@ -180,19 +189,39 @@ describe("团队年化详情授权与最小下发（真实概览/路由 AST）",
     expect(JSON.stringify(h.journal)).toBe(before);
   });
 
-  it("未授权root默认disabled，请求任何详情直接FORBIDDEN且完全不读取数据库/财务桩", async () => {
+  it("无下级/无有效活动默认disabled，详情FORBIDDEN；允许light select但不读取financialFacts", async () => {
     const h = teamHarness();
     expect(await h.getLedger52T0TeamOverview({ rootUserId: 999, journalOwnerUserId: 28 })).toEqual({ enabled: false });
     await expect(h.getLedger52T0TeamOverview({ rootUserId: 999, journalOwnerUserId: 28, annualizedDetailUserId: 101 })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(h.getDbConnection).not.toHaveBeenCalled();
+    expect(h.execute).toHaveBeenCalled();
+    expect(h.execute.mock.calls.every(([sql]) => sql.includes("FROM users WHERE"))).toBe(true);
     expect(h.journalReader).not.toHaveBeenCalled();
+    const inactive = teamHarness(facts(), []);
+    expect(await inactive.getLedger52T0TeamOverview({ rootUserId: ROOT, journalOwnerUserId: 28 })).toEqual({ enabled: false });
+    await expect(inactive.getLedger52T0TeamOverview({ rootUserId: ROOT, journalOwnerUserId: 28, annualizedDetailUserId: 101 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(inactive.execute.mock.calls.some(([sql]) => sql.includes("UNION"))).toBe(true);
+    expect(inactive.journalReader).not.toHaveBeenCalled();
   });
 
-  it("负责人自身、其他团队、未入52账本、无活动/仅期权成员均不属于authorized visible memberIds", async () => {
+  it("详情仅eligible descendants：本人/跨团队/未入52/无活动拒绝，期权资格可见但不进入财务", async () => {
     const h = teamHarness();
-    for (const target of [ROOT, 999, 102, 104, 105]) {
+    for (const target of [ROOT, 999, 102, 104]) {
       await expect(h.getLedger52T0TeamOverview({ rootUserId: ROOT, journalOwnerUserId: 28, annualizedDetailUserId: target })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
+    expect(h.journalReader).not.toHaveBeenCalled();
+    const base = facts();
+    const optionHarness = teamHarness(freeze({
+      ...base,
+      entries: [...base.entries, { ...base.entries[2], id: "option-close", action: "closeLong", price: 999, createdAt: "2026-02-01" }],
+      profitShareSnapshots: [{ entryId: "option-close", openingEntryId: "option", beneficiaryUserId: 101, percentage: 100, matchedQuantity: 1 }],
+      sharedIncomeTransfers: [{ closingEntryId: "option-close", recipientUserId: 105, amount: 777 }],
+      sharedIncomeReductions: [{ closingEntryId: "option-close", amount: 777, sourceNetPnl: 998 }],
+    }));
+    const option = await optionHarness.getLedger52T0TeamOverview({ rootUserId: ROOT, journalOwnerUserId: 28, annualizedDetailUserId: 105 });
+    expect(option.members.find((row: any) => row.userId === 105)).toMatchObject({ firstActivityOn: null, currentCumulativeIncome: 0, annualizedReturn: null });
+    expect(option.annualizedDetail).toMatchObject({ userId: 105, currentNetValue: 0, orderIncome: 0, commissionIncome: 0, sharedIncome: 0, cashFlows: [], annualizedReturn: null });
+    expect(option.members.find((row: any) => row.userId === 101).currentCumulativeIncome).toBeCloseTo(100.123456, 10);
+    expect(option.summary.currentCumulativeIncome).toBeCloseTo(100.123456, 10);
   });
 
   it("路由schema限定52/正整数目标；管理员全局默认disabled且禁止详情，普通成员只转发授权scope", async () => {
