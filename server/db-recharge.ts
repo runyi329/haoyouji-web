@@ -4,6 +4,7 @@ import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 import { assertGlobalWalletDebit, fundingAmountText, withGlobalWalletTransaction } from "./wallet-funding-guard";
+import { getWalletFlowCurrency, isWalletFlowCurrency } from "../shared/wallet-flow-currency";
 
 // ========== 短信通知（腾讯云SMS） ==========
 const SMS_SECRET_ID = process.env.SMS_SECRET_ID ?? '';
@@ -1768,14 +1769,14 @@ export async function getUserUsdtBalanceSummary(userId: number): Promise<{ total
   return await getLedger37FundingBalanceSummary(userId, 'USDT');
 }
 
-// 获取用户余额变动记录（合并 balance_history + af_manual_balances，从最早真实流水正序累计余额快照）
+// 获取用户 USDT 余额变动记录（先按币种分流，再合并、去重并正序累计余额快照）
 export async function getUserBalanceHistory(userId: number, limit: number = 50) {
   const conn = await getDbConnection();
   const pool = conn as any;
 
   // 来源1：balance_history（充值/提现/奖励/佣金等）
   const [bhRows] = await pool.execute(
-    `SELECT id, amount, type, related_id AS relatedId, description, created_at AS createdAt FROM balance_history
+    `SELECT id, amount, type, currency, related_id AS relatedId, description, created_at AS createdAt FROM balance_history
      WHERE user_id = ?
      ORDER BY created_at ASC`,
     [userId]
@@ -1785,11 +1786,12 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     id: `bh-${r.id}`,
     amount: parseFloat(r.amount ?? '0'),
     type: r.type,
+    currency: getWalletFlowCurrency({ currency: r.currency, description: r.description }),
     relatedId: r.relatedId ?? null,
     description: r.description ?? '',
     createdAt: r.createdAt,
     balanceAfter: null as number | null,
-  }));
+  })).filter((r) => isWalletFlowCurrency(r, 'USDT'));
 
   // 来源2：af_manual_balances（手动调账/米伴扣款/退款等）
   const [manualRows] = await pool.execute(
@@ -1806,10 +1808,11 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     id: `manual-${r.id}`,
     amount: parseFloat(r.amount ?? '0'),
     type: parseFloat(r.amount ?? '0') >= 0 ? 'reward' : 'deduct',
+    currency: getWalletFlowCurrency({ note: r.note }),
     description: r.note ?? '',
     createdAt: r.createdAt,
     balanceAfter: null as number | null,
-  }));
+  })).filter((r) => isWalletFlowCurrency(r, 'USDT'));
 
   // 去重：balance_history 里与 af_manual_balances 重复的记录
   // 1. 米伴订单（含限时精选商品）扣款/退款：在 af_manual_balances 里已有对应条目
@@ -1853,6 +1856,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     id: row.id,
     amount: row.amount,
     type: row.type,
+    currency: row.currency as string,
     description: row.description,
     createdAt: row.createdAt,
     balance: row.balanceAfter,
@@ -2691,7 +2695,10 @@ export async function getUserCnyHistory(userId: number, limit = 50): Promise<any
               h.balance AS recorded_balance, 1 AS has_recorded_balance,
               0 AS legacy_delta, 0 AS frozen_delta, 30 AS source_order
          FROM balance_history h
-        WHERE h.user_id = ? AND h.currency = 'CNY'
+        WHERE h.user_id = ?
+          AND (UPPER(TRIM(h.currency)) = 'CNY'
+            OR ((h.currency IS NULL OR TRIM(h.currency) = '')
+              AND LTRIM(COALESCE(h.description, '')) LIKE '[CNY]%'))
           AND COALESCE(h.description, '') NOT LIKE '%[迁移自af_manual_balances id=%'
        UNION ALL
        SELECT m.id AS event_id, m.user_id, m.amount,

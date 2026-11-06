@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { selectWalletAccountByLatestFlow } from "@/lib/walletAccountSelection";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 // MySQL timestamp strings are stored as Beijing wall-clock values; format with UTC accessors.
 const fmtBJTime = (d: any, withTime = true): string => {
@@ -53,7 +54,7 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   });
   const [account, setAccount] = useState<'CRYPTO' | 'CNY'>(() => selectWalletAccountByLatestFlow(
     [
-      ...(snapshot?.balanceHistory || []).filter((entry: any) => !String(entry.description || '').startsWith('[CNY]')),
+      ...(snapshot?.balanceHistory || []).filter((entry: any) => isWalletFlowCurrency(entry, 'USDT')),
       ...(snapshot?.multiAssetHistory || []).filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release'),
     ],
     snapshot?.cnyHistory || [],
@@ -84,7 +85,7 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   const multiHistory = (snapshot?.multiAssetHistory || [])
     .filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release');
   const usdtFlows = (snapshot?.balanceHistory || [])
-    .filter((entry: any) => !String(entry.description || '').startsWith('[CNY]'))
+    .filter((entry: any) => isWalletFlowCurrency(entry, 'USDT'))
     .map((entry: any) => ({ ...entry, assetCode: 'USDT', flowType: 'usdt' }));
   const allFlows = [
     ...usdtFlows,

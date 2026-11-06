@@ -1,6 +1,7 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
+import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHash, createHmac } from "crypto";
@@ -19881,7 +19882,7 @@ ${klinesSummary}
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
             let note = r.note || '管理员调账';
-            const currency = String(r.note || '').startsWith('[CNY]') ? 'CNY' as const : 'USDT' as const;
+            const currency = getWalletFlowCurrency({ note: r.note });
             const withdrawalId = Number(r.withdrawal_id || 0);
             const isWithdrawalFreeze = Number.isFinite(withdrawalId) && withdrawalId > 0;
             // 如果关联到了订单，把 #id 替换为完整编号 AFyymmdd000000
@@ -19991,7 +19992,7 @@ ${klinesSummary}
           const allBh = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
             id: `bh_${r.id}`,
             amount: parseFloat(r.amount),
-            currency: String(r.currency || '').toUpperCase() === 'CNY' ? 'CNY' as const : 'USDT' as const,
+            currency: getWalletFlowCurrency({ currency: r.currency, description: r.description }),
             sourceType: 'balance_history' as const,
             note: r.description || r.type,
             // 旧后台手工扣款曾借用 withdraw 类型；没有关联提现申请时属于支出而非冻结。

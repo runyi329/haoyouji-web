@@ -6,6 +6,7 @@ import { restoreLedgerViewAsState } from "@/lib/authIdentity";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 type PeriodFilter = "7d" | "30d" | "90d" | "custom" | "all";
 type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "expense" | "adjustment" | "frozen";
@@ -87,7 +88,9 @@ function hasOrderContext(note: string) {
   return /(订单|谷底|征筹|增筹|净收益|卖出|成交|结算|委托|融资)/.test(note);
 }
 
-function getUsdtEntry(item: any): HistoryEntry {
+function getUsdtEntry(item: any): HistoryEntry | null {
+  // 统一接口也返回人民币流水，必须在清理 [CNY] 备注和套用 USDT 单位之前按原币种分流。
+  if (!isWalletFlowCurrency(item, "USDT")) return null;
   const amount = Number(item.amount ?? 0);
   const incoming = amount >= 0;
   const rawNote = String(item.note || item.description || "");
@@ -219,7 +222,9 @@ export default function CryptoWalletTransactions() {
   );
 
   const allEntries = useMemo<HistoryEntry[]>(() => {
-    const usdt = (usdtHistoryQuery.data ?? []).map((item: any) => getUsdtEntry(item));
+    const usdt = (usdtHistoryQuery.data ?? [])
+      .map((item: any) => getUsdtEntry(item))
+      .filter((entry): entry is HistoryEntry => entry !== null);
     const assets = (assetHistoryQuery.data ?? [])
       // 担保冻结/解冻只改变可用与冻结分层，不是对外资金收支，不放入完整资金流水。
       .filter((item: any) => item.eventType !== "collateral_lock" && item.eventType !== "collateral_release")

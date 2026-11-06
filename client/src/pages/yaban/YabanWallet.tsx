@@ -13,7 +13,7 @@ import {
 import { trpc } from "../../lib/trpc";
 import Recharge from "../Recharge";
 import Withdraw from "../Withdraw";
-
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 // 从交易备注中提取世界杯球队 code（小写）
 function extractWcTeamCode(note: string): string | null {
   const isWcRelated = note.includes("世界杯投注") || note.includes("订单作废-退回投注");
@@ -290,7 +290,7 @@ export default function YabanWallet() {
       note: "", wcCode: null,
     }));
     const manuals = (recentManualQuery.data ?? [])
-      .filter((m: any) => !(m.note || "").startsWith("[CNY]"))
+      .filter((m: any) => isWalletFlowCurrency(m, "USDT"))
       .map((m: any) => ({
         id: `m-${m.id}`,
         type: (Number(m.amount) > 0 ? "reward" : "deduct") as "reward" | "deduct",
@@ -300,7 +300,7 @@ export default function YabanWallet() {
         createdAt: m.created_at,
       }));
     const balanceHistoryItems = (recentBalanceHistoryQuery.data ?? [])
-      .filter((h: any) => h.type === "consume" || h.type === "refund")
+      .filter((h: any) => isWalletFlowCurrency(h, "USDT") && (h.type === "consume" || h.type === "refund"))
       .map((h: any) => ({
         id: `bh-${h.id}`,
         type: (h.type === "refund" ? "reward" : "deduct") as "reward" | "deduct",

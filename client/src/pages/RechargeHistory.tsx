@@ -1,6 +1,7 @@
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle, ArrowUpCircle, ChevronRight } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 // 从备注中提取世界杯球队 code，与 P202 保持一致
 function extractWcTeamCode(note: string): string | null {
@@ -74,7 +75,8 @@ export default function RechargeHistory() {
 
   const isAFMode = !!ledgerId;
   const isLoading = isAFMode ? afHistoryQuery.isLoading : normalOrdersQuery.isLoading;
-  const afData = afHistoryQuery.data || [];
+  const afData = (afHistoryQuery.data || [])
+    .filter((item) => isWalletFlowCurrency(item, "USDT"));
   const normalData = normalOrdersQuery.data || [];
 
   return (

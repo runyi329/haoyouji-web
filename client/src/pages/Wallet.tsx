@@ -28,6 +28,7 @@ import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
 function extractWcTeamCode(note: string): string | null {
@@ -1020,10 +1021,10 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
       };
       // 与 CryptoWalletTransactions 完整明细页保持相同的主源与安全回退顺序。
       (ledger52UsdtHistoryQuery.data ?? [])
-        .filter((item: any) => String(item.currency || "USDT").toUpperCase() !== "CNY")
+        .filter((item: any) => isWalletFlowCurrency(item, "USDT"))
         .forEach(put);
       (recentManualQuery.data ?? [])
-        .filter((item: any) => !String(item.note || "").startsWith("[CNY]") && !String(item.note || "").startsWith("[BALANCE_BASE]") && !String(item.note || "").startsWith("[AF52本金冻结迁移-"))
+        .filter((item: any) => isWalletFlowCurrency(item, "USDT") && !String(item.note || "").startsWith("[BALANCE_BASE]") && !String(item.note || "").startsWith("[AF52本金冻结迁移-"))
         .forEach((item: any) => put({
           ...item,
           id: `manual-fallback-${item.id}`,
@@ -1051,7 +1052,7 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
         .filter((withdrawalId) => Number.isFinite(withdrawalId) && withdrawalId > 0),
     );
     const manuals = (recentManualQuery.data ?? [])
-      .filter((m: any) => !(m.note || "").startsWith("[CNY]"))
+      .filter((m: any) => isWalletFlowCurrency(m, "USDT"))
       // 提现冻结与提现审计行代表同一个动作，首页只保留“提现”这一条。
       .filter((m: any) => {
         const withdrawalMatch = String(m.note || "").match(/^提现申请冻结\s+#(\d+)\b/);
@@ -1072,7 +1073,7 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
       });
     // balance_history 包含世界杯投注/退款记录（type: consume/refund）
     const balanceHistoryItems = (recentBalanceHistoryQuery.data ?? [])
-      .filter((h: any) => h.type === 'consume' || h.type === 'refund')
+      .filter((h: any) => isWalletFlowCurrency(h, "USDT") && (h.type === 'consume' || h.type === 'refund'))
       .map((h: any) => ({
         id: `bh-${h.id}`,
         sourceType: "balance_history", type: h.type,

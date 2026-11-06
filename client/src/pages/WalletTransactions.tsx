@@ -5,6 +5,7 @@ import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
 function extractWcTeamCode(note: string): string | null {
@@ -102,7 +103,8 @@ export default function WalletTransactions() {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   };
 
-  const allItems: any[] = (historyQuery.data as any[]) || [];
+  const allItems: any[] = ((historyQuery.data as any[]) || [])
+    .filter((item: any) => isWalletFlowCurrency(item, "USDT"));
 
   const filteredItems = allItems.filter((item: any) => {
     if (activeType === "all") return true;

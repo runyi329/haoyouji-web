@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Check, Clock, AlertCircle, CheckCircle2, History, Chev
 import { trpc } from "../lib/trpc";
 import { autoCompressImage } from "../utils/imageUtils";
 import QRCode from "qrcode";
+import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 const RECHARGE_NETWORKS = [
   { code: "TRC20", label: "TRC20", enabled: true },
@@ -84,7 +85,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
     { ledgerId: Number(fromLedgerId), ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
     { enabled: !!fromLedgerId && showLedgerHistory, staleTime: 30000 }
   );
-  const ledgerHistoryList: any[] = (ledgerHistoryData as any[]) || [];
+  const ledgerHistoryList: any[] = ((ledgerHistoryData as any[]) || [])
+    .filter((item: any) => isWalletFlowCurrency(item, "USDT"));
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
@@ -926,15 +928,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
                 ) : (
                   <div className="divide-y divide-[#2a2a2a]">
                     {(() => {
-                      let runningBalance = 0;
                       const sorted = [...ledgerHistoryList].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-                      const balances = sorted.map(item => {
-                        const amt = parseFloat(String(item.amount));
-                        runningBalance += amt;
-                        return runningBalance;
-                      });
                       return sorted.slice().reverse().map((item, i) => {
-                        const revIdx = sorted.length - 1 - i;
                         const amt = parseFloat(String(item.amount));
                         const isPositive = amt >= 0;
                         const date = new Date(item.createdAt);
@@ -946,8 +941,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
                         const typeLabel = item.sourceType === 'recharge'
                           ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : cleanNote || '充值')
                           : (cleanNote ? cleanNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
-                        const balanceAfter = balances[revIdx];
-                        const showBalance = item.sourceType === 'manual' || (item.sourceType === 'recharge' && item.status === 'completed');
+                        const balanceAfter = item.balanceAfter == null ? null : Number(item.balanceAfter);
+                        const showBalance = balanceAfter !== null && Number.isFinite(balanceAfter);
                         return (
                           <div key={item.id || i} className="flex items-start justify-between px-4 py-3">
                             <div className="flex-1 min-w-0 mr-3">
@@ -959,7 +954,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
                                 {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
                               </div>
                               {showBalance && (
-                                <div className="text-gray-600 text-xs mt-0.5 whitespace-nowrap">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
+                                <div className="text-gray-600 text-xs mt-0.5 whitespace-nowrap">余额 {balanceAfter!.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
                               )}
                             </div>
                           </div>
