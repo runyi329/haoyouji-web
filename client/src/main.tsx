@@ -233,7 +233,11 @@ const trpcClient = trpc.createClient({
       // 52号T+0的开仓及开仓修改同样会与0.5秒行情、账本读取并发；必须独立提交，
       // 让网络异常能返回本次保存的明确错误，并由订单自身的幂等键安全重试。
       condition(op) {
-        return op.path === "ledger.funderUpdateParticipantOrder"
+        // 纵向股票列表独立读取，不等待同批钱包/总览统计；减小移动WebView请求URL。
+        return op.path === "aiStockLifecycle"
+          || op.path === "aiStockLatestQuotes"
+          || op.path === "aiStockReturnRanking"
+          || op.path === "ledger.funderUpdateParticipantOrder"
           || op.path === "ledger.t0CreateEntry"
           || op.path === "ledger.t0UpdateOpeningEntry"
           // 充值记录和可提额度单独读取，不等待同批行情或重型统计。

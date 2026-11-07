@@ -219,6 +219,8 @@ const StockTrackerHome = lazy(() => import("./pages/LedgerAIDatabase").then(m =>
 const RetailInvestor = lazy(() => import("./pages/RetailInvestor"));
 const StockLifecycle = lazy(() => import("./pages/StockLifecycle"));
 const StockTrackerLifecycle = lazy(() => import("./pages/StockLifecycle").then(m => ({ default: m.StockTrackerLifecycle })));
+const StockComparison = lazy(() => import("./pages/StockComparison"));
+const StockTrackerComparison = lazy(() => import("./pages/StockComparison").then(m => ({ default: m.StockTrackerComparison })));
 const HKStockTracker = lazy(() => import("./pages/HKStockTracker"));
 const USStockTracker = lazy(() => import("./pages/USStockTracker"));
 const USStockLifecycle = lazy(() => import("./pages/USStockLifecycle"));
@@ -660,8 +662,10 @@ function Router() {
         <Route path="/ledger/:id/deposit-manage" component={DepositManage} />
         <Route path="/ledger/:id/aa-dividend-manage" component={LedgerAADividendManage} />
         <Route path="/ledger/:id/ai-database" component={LedgerAIDatabase} />
+        <Route path="/ledger/:id/stock-compare" component={StockComparison} />
         <Route path="/stock-tracker" component={StockTrackerHome} />
         <Route path="/stock-tracker/stock-lifecycle" component={StockTrackerLifecycle} />
+        <Route path="/stock-tracker/stock-compare" component={StockTrackerComparison} />
         <Route path="/hk-stock-tracker" component={HKStockTracker} />
         <Route path="/us-stock-tracker" component={USStockTracker} />
         <Route path="/us-stock-tracker/stock-lifecycle" component={USStockLifecycle} />

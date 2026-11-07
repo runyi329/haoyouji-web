@@ -1,4 +1,10 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { filterAShareCompletedRows, getAShareCompletedCutoff, isValidAShareTradeDate, summarizeAShareCompletedDays } from "@shared/a-share-completed-days";
+import { getStockComparison } from "./stock-comparison";
+import { findStockCodesByInitials } from "./stock-search-initials";
+import { getStockStreakComparison } from "./stock-streak-comparison";
+import { getStockReturnRanking } from "./stock-return-ranking";
+import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
@@ -12,7 +18,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
 import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
-import { getDbConnection, getDbTransactionConnection, getLedgerDb } from "./db";
+import { getDbConnection, getDbTransactionConnection, getLedgerDb, getStockMarketConnection } from "./db";
 import { getLedger37MarginActor, getLedger37MarginPermission, type Ledger37MarginActorContext } from "@shared/ledger37-margin-actor";
 import { assertGlobalWalletDebit, fundingAmountText, fundingUnits, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import * as dbEthPosition from "./db-eth-position";
@@ -37716,19 +37722,70 @@ insights 数组每项包含：
       } finally { /* pool auto-manages connections */ }
     }),
 
+  /** 全市场单维度对比：只读行情统计，不参与账本账户或交易结算。 */
+  aiStockComparison: publicProcedure
+    .input(z.object({ period: z.enum(['30', '60', '90', '180', '365', 'lifetime']).default('60') }))
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockComparison(dbConn, input);
+    }),
+
+  /** 所选完成交易日窗口内的最长连续涨跌双榜，各最多前100名；仅查询。 */
+  aiStockStreakComparison: publicProcedure
+    .input(z.object({
+      period: z.enum(['30', '60', '90', '180', '365']).default('60'),
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all'),
+      keyword: z.string().trim().max(80).optional(),
+    }))
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockStreakComparison(dbConn, input);
+    }),
+
+  /** 周/月/年/全部日期区间的累计涨跌幅排行；只读，旧交易日参数仅兼容历史链接。 */
+  aiStockReturnRanking: publicProcedure
+    .input(z.object({
+      period: z.enum(['1w', '1m', '3m', '6m', '1y', '3y', 'all']).optional(),
+      days: z.number().int().min(1).max(100).optional(),
+      topN: z.number().int().min(1).max(100).default(20),
+      direction: z.enum(['up', 'down']).default('up'),
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all'),
+      keyword: z.string().trim().max(80).optional(),
+      ledgerId: z.number().int().positive().optional(),
+    }).refine(input => !(input.period && input.days !== undefined), { message: '日期区间与交易日数不能同时指定' }))
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockReturnRanking(dbConn, input);
+    }),
+
+  /** 可见股票批量最新行情；仅查询，不触发报价采集或资金快照写入。 */
+  aiStockLatestQuotes: publicProcedure
+    .input(z.object({
+      tsCodes: z.array(z.string().regex(/^\d{6}\.(SH|SZ|BJ)$/)).max(200),
+      ledgerId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockLatestQuotes(dbConn, input, { fetchImpl: fetch });
+    }),
+
   /** 个股全生命周期涨跌天数统计 */
   aiStockLifecycle: publicProcedure
     .input(z.object({
       page: z.number().int().min(1).default(1),
       pageSize: z.number().int().min(10).max(200).default(50),
-      sortBy: z.enum(['up', 'down', 'flat', 'total', 'upRate']).default('upRate'),
-      sortDir: z.enum(['asc', 'desc']).default('desc'),
+      sortBy: z.enum(['code', 'up', 'down', 'flat', 'total', 'upRate']).default('code'),
+      sortDir: z.enum(['asc', 'desc']).default('asc'),
       keyword: z.string().optional(),
       market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all'),
       minTotalDays: z.number().int().min(0).default(0),
     }))
     .query(async ({ input }) => {
-      const dbConn = await getDbConnection();
+      const dbConn = await getStockMarketConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
         const marketCond: Record<string, string> = {
@@ -37741,14 +37798,29 @@ insights 数组每项包含：
         };
         const mf = marketCond[input.market] || marketCond.all;
         const minDaysCond = input.minTotalDays > 0 ? `AND COALESCE(l.total_days, 0) >= ${Number(input.minTotalDays)}` : '';
-        const kwCond = input.keyword ? `AND (b.ts_code LIKE ? OR b.name LIKE ?)` : '';
-        const kwParams: string[] = input.keyword ? [`%${input.keyword}%`, `%${input.keyword}%`] : [];
+        const keyword = input.keyword?.trim() || '';
+        const letterKeyword = /^[a-z]+$/i.test(keyword);
+        const initialCodes = letterKeyword ? await findStockCodesByInitials(dbConn, keyword) : [];
+        // 单个 S 等字母按名称首字母检索，不把 .SH/.SZ 后缀误当作名称匹配。
+        const codeCondition = initialCodes.length ? ` OR b.ts_code IN (${initialCodes.map(() => '?').join(',')})` : '';
+        const kwCond = keyword
+          ? `AND (${letterKeyword ? 'b.name LIKE ?' : 'b.ts_code LIKE ? OR b.name LIKE ?'}${codeCondition})`
+          : '';
+        const kwParams: string[] = keyword
+          ? [...(letterKeyword ? [`%${keyword}%`] : [`%${keyword}%`, `%${keyword}%`]), ...initialCodes]
+          : [];
         const sortColMap: Record<string, string> = {
+          code: 'b.ts_code',
           up: 'up_days', down: 'down_days', flat: 'flat_days',
           total: 'total_days', upRate: 'up_rate',
         };
-        const sortCol = sortColMap[input.sortBy] || 'up_rate';
+        const sortCol = sortColMap[input.sortBy] || 'b.ts_code';
         const sortDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
+        const withinStatusOrder = input.sortBy === 'code'
+          ? `b.ts_code ${sortDir}`
+          : `${sortCol} ${sortDir}, b.ts_code ASC`;
+        // 退市股票全量沉底，先按状态分组再分页；两组内保留所选排序。
+        const orderBy = `CASE WHEN b.list_status = 'D' THEN 1 ELSE 0 END ASC, ${withinStatusOrder}`;
         const offset = (input.page - 1) * input.pageSize;
         const [countRows] = await dbConn.execute(
           `SELECT COUNT(*) AS cnt FROM ts_stock_basic b
@@ -37770,7 +37842,7 @@ insights 数组每项包含：
           FROM ts_stock_basic b
           LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
           WHERE 1=1 ${mf} ${minDaysCond} ${kwCond}
-          ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
+          ORDER BY ${orderBy}
           LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
           kwParams
         ) as any[];
@@ -37797,6 +37869,12 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
+      const cutoff = getAShareCompletedCutoff();
+      // 失败/不完整数据不是零交易日，也不能把局部统计冒充全生命周期。
+      const unavailableStats = {
+        upDays: null, downDays: null, flatDays: null, totalDays: null, upRate: null,
+        completedTradingDays: null, completedThroughDate: null, updatedAt: null,
+      };
 
       try {
         // 1. 调 Tushare stock_basic 拉取基本信息（不传 list_status，直接用 ts_code 查）
@@ -37838,30 +37916,26 @@ insights 数组每项包含：
             delistDate: null,
             exchange: '',
             industry: null,
-            upDays: 0,
-            downDays: 0,
-            flatDays: 0,
-            totalDays: 0,
-            upRate: '0.00',
-            updatedAt: null,
+            ...unavailableStats,
             debugMsg: 'stock_basic returned empty for all statuses (L/D/P)',
           };
         }
 
         // 2. 分段拉取全量日线数据（按10年一段），实时计算涨跌天数
-        let upDays = 0, downDays = 0, flatDays = 0, totalDays = 0;
         // 确定起始年份（上市日期年份，默认1990）
-        const listYear = basicInfo.listDate ? parseInt(basicInfo.listDate.slice(0, 4)) : 1990;
-        const currentYear = new Date().getFullYear();
+        const listYear = isValidAShareTradeDate(basicInfo.listDate) ? Number(basicInfo.listDate.slice(0, 4)) : 1990;
+        const currentYear = Number(cutoff.slice(0, 4));
         // 按10年分段
         const segments: Array<{ start: string; end: string }> = [];
         for (let y = listYear; y <= currentYear; y += 10) {
+          const segmentEnd = `${Math.min(y + 9, currentYear)}1231`;
           segments.push({
             start: `${y}0101`,
-            end: `${Math.min(y + 9, currentYear)}1231`,
+            end: segmentEnd < cutoff ? segmentEnd : cutoff,
           });
         }
-        // 并发拉取各段（最多5个并发）
+        // 10年段的日历天数小于6000条上限，不使用近期500条代替全历史。
+        const SEGMENT_LIMIT = 6000;
         const fetchSegment = async (seg: { start: string; end: string }) => {
           const r = await fetch(TUSHARE_URL, {
             method: 'POST',
@@ -37869,37 +37943,34 @@ insights 数组每项包含：
             body: JSON.stringify({
               api_name: 'daily',
               token: TUSHARE_TOKEN,
-              params: { ts_code: input.tsCode, start_date: seg.start, end_date: seg.end },
-              fields: 'pct_chg',
+              params: { ts_code: input.tsCode, start_date: seg.start, end_date: seg.end, limit: SEGMENT_LIMIT },
+              fields: 'trade_date,pct_chg',
             }),
             signal: AbortSignal.timeout(15000),
           });
+          if (!r.ok) throw new Error(`daily HTTP ${r.status}`);
           return r.json() as Promise<any>;
         };
-        const results = await Promise.all(segments.map(fetchSegment));
-        for (const dailyJson of results) {
-          if (dailyJson.code === 0 && dailyJson.data?.items?.length) {
+        try {
+          const results = await Promise.all(segments.map(fetchSegment));
+          const dailyRows: Array<{ tradeDate: unknown; pctChange: unknown }> = [];
+          for (const dailyJson of results) {
+            if (dailyJson.code !== 0 || !Array.isArray(dailyJson.data?.items)
+              || !Array.isArray(dailyJson.data?.fields) || dailyJson.data.items.length >= SEGMENT_LIMIT) {
+              throw new Error(`daily segment incomplete (code: ${dailyJson.code})`);
+            }
+            const dateIdx = (dailyJson.data.fields as string[]).indexOf('trade_date');
             const pctIdx = (dailyJson.data.fields as string[]).indexOf('pct_chg');
+            if (dateIdx < 0 || pctIdx < 0) throw new Error('daily segment missing trade_date/pct_chg');
             for (const row of dailyJson.data.items) {
-              const pct = Number(row[pctIdx]) || 0;
-              totalDays++;
-              if (pct > 0) upDays++;
-              else if (pct < 0) downDays++;
-              else flatDays++;
+              dailyRows.push({ tradeDate: row[dateIdx], pctChange: row[pctIdx] });
             }
           }
+          return { ...basicInfo, ...summarizeAShareCompletedDays(dailyRows, cutoff) };
+        } catch (e: any) {
+          console.error('[aiStockDetail] daily history incomplete for', input.tsCode, e?.message || e);
+          return { ...basicInfo, ...unavailableStats, debugMsg: `daily: ${e?.message || String(e)}` };
         }
-        const upRate = totalDays > 0 ? ((upDays / totalDays) * 100).toFixed(2) : '0.00';
-
-        return {
-          ...basicInfo,
-          upDays,
-          downDays,
-          flatDays,
-          totalDays,
-          upRate,
-          updatedAt: new Date().toISOString().slice(0, 10),
-        };
       } catch (e: any) {
         // 任何错误都不抛异常，返回基础兜底数据 + 错误信息
         console.error('[aiStockDetail] error for', input.tsCode, e?.message || e);
@@ -37911,12 +37982,7 @@ insights 数组每项包含：
           delistDate: null,
           exchange: '',
           industry: null,
-          upDays: 0,
-          downDays: 0,
-          flatDays: 0,
-          totalDays: 0,
-          upRate: '0.00',
-          updatedAt: null,
+          ...unavailableStats,
           debugMsg: `catch: ${e?.message || String(e)}`,
         };
       }
@@ -37929,6 +37995,7 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
+      const cutoff = getAShareCompletedCutoff();
       try {
         // Tushare daily 接口单次最多返回 6000 条，需分页循环拉取全量
         const PAGE_SIZE = 6000;
@@ -37942,13 +38009,20 @@ insights 数组每项包含：
             body: JSON.stringify({
               api_name: 'daily',
               token: TUSHARE_TOKEN,
-              params: { ts_code: input.tsCode, limit: PAGE_SIZE, offset },
+              params: { ts_code: input.tsCode, end_date: cutoff, limit: PAGE_SIZE, offset },
               fields: 'trade_date,pct_chg',
             }),
             signal: AbortSignal.timeout(30000),
           });
+          if (!resp.ok) throw new Error(`daily HTTP ${resp.status}`);
           const json = await resp.json() as any;
-          if (json.code !== 0 || !json.data?.items?.length) break;
+          if (json.code !== 0 || !Array.isArray(json.data?.items) || !Array.isArray(json.data?.fields)) {
+            throw new Error('daily history incomplete');
+          }
+          if (json.data.items.length === 0) break;
+          if (!json.data.fields.includes('trade_date') || !json.data.fields.includes('pct_chg')) {
+            throw new Error('daily history missing trade_date/pct_chg');
+          }
           if (fields.length === 0) fields = json.data.fields;
           allItems = allItems.concat(json.data.items);
           if (json.data.items.length < PAGE_SIZE) break; // 最后一页
@@ -37959,8 +38033,9 @@ insights 数组每项包含：
         }
         const dateIdx = fields.indexOf('trade_date');
         const pctIdx = fields.indexOf('pct_chg');
-        // Tushare 返回最新在前，反转为时间正序
-        const rows = allItems.slice().reverse();
+        // 按实际有效交易日去重、截止过滤后升序，不生成无日线的停牌/周末。
+        const rows = filterAShareCompletedRows(allItems, row => row[dateIdx], cutoff)
+          .sort((a, b) => String(a[dateIdx]).localeCompare(String(b[dateIdx])));
         // 计算连涨/连跌统计
         const upStreakMap: Record<number, number> = {};
         const downStreakMap: Record<number, number> = {};
@@ -38017,7 +38092,7 @@ insights 数组每项包含：
 
         return { upStreakMap, downStreakMap, maxUpStreak, maxDownStreak, totalDays: rows.length, condProbTable };
       } catch (e) {
-        return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: 0 };
+        return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: null };
       }
     }),
 
@@ -38030,6 +38105,7 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
+      const cutoff = getAShareCompletedCutoff();
       try {
         const resp = await fetch(TUSHARE_URL, {
           method: 'POST',
@@ -38039,9 +38115,10 @@ insights 数组每项包含：
             token: TUSHARE_TOKEN,
             params: {
               ts_code: input.tsCode,
+              end_date: cutoff,
               limit: input.limit,
             },
-            fields: 'trade_date,open,high,low,close,pct_chg,vol,amount',
+            fields: 'trade_date,open,high,low,close,change,pct_chg,vol,amount',
           }),
           signal: AbortSignal.timeout(10000),
         });
@@ -38056,12 +38133,12 @@ insights 数组每项包含：
         const highIdx = fields.indexOf('high');
         const lowIdx = fields.indexOf('low');
         const closeIdx = fields.indexOf('close');
+        const changeIdx = fields.indexOf('change');
         const pctIdx = fields.indexOf('pct_chg');
         const volIdx = fields.indexOf('vol');
         const amountIdx = fields.indexOf('amount');
-        const items = (json.data.items as any[])
-          .slice()
-          .reverse()
+        const items = filterAShareCompletedRows(json.data.items as any[], row => row[dateIdx], cutoff)
+          .sort((a, b) => String(a[dateIdx]).localeCompare(String(b[dateIdx])))
           .map((row: any[]) => ({
             tradeDate: String(row[dateIdx]),
             pct: Number(row[pctIdx]),
@@ -38069,6 +38146,7 @@ insights 数组每项包含：
             high: highIdx >= 0 ? Number(row[highIdx]) : null,
             low: lowIdx >= 0 ? Number(row[lowIdx]) : null,
             close: Number(row[closeIdx]),
+            change: changeIdx >= 0 && row[changeIdx] !== null && row[changeIdx] !== undefined && row[changeIdx] !== '' && Number.isFinite(Number(row[changeIdx])) ? Number(row[changeIdx]) : null,
             vol: volIdx >= 0 ? Number(row[volIdx]) : null,
             amount: amountIdx >= 0 ? Number(row[amountIdx]) : null,
             // 实心：收盘 >= 开盘（阳线或十字星）

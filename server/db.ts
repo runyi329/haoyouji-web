@@ -1,6 +1,7 @@
 import { eq, desc, asc, and, or, sql, isNull, isNotNull, like, inArray, gte, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
+import { getStockMarketExecutor } from "./stock-market-connection";
 import {
   InsertUser, users,
   childProfiles, InsertChildProfile,
@@ -218,6 +219,15 @@ export async function getDbConnection(forceGuest: boolean = false): Promise<mysq
 
   // 统一返回腾讯云数据库连接，不再区分游客/真实用户
   return _connection;
+}
+
+/**
+ * AI 行情只读执行器：同一物理 pool 生命周期保持对象 identity，供行情缓存共享。
+ * 复用原 getter 的初始化/关闭重建逻辑，不改变其他业务或资金独占连接行为。
+ */
+export async function getStockMarketConnection(forceGuest: boolean = false): Promise<mysql.Connection | null> {
+  const connection = await getDbConnection(forceGuest);
+  return getStockMarketExecutor(_pool, connection);
 }
 
 /**

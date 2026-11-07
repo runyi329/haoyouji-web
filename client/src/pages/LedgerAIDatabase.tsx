@@ -2,34 +2,39 @@
  * LedgerAIDatabase.tsx
  * A股全景仪表盘 — 单页展开模式
  * 路径: /ledger/:id/ai-database
- * 风格与 LedgerDetailAA 一致：顶部 #D32F2F，页面背景 #FAF3ED，卡片白色
+ * AI股票科技金融主题：冷色背景、青蓝控件；行情保持红涨绿跌
  */
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
+import AIStockNavigation from "@/components/AIStockNavigation";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
 } from "recharts";
 
-// ─── 配色（与首页一致） ────────────────────────────────────
+// ─── 界面主题与行情语义分离 ──────────────────────────────────
 const RED = "#D32F2F";
-const BG = "#F2EAE0";           // 背景稍加深，让卡片更立体
-const CARD = "#FFFFFF";
-const BORDER = "#E8E0D8";
-const TEXT = "#1A1A1A";
-const MUTED = "#555555";
-const DIM = "#666666";
+const BG = AI_STOCK_THEME.background;
+const CARD = AI_STOCK_THEME.card;
+const SURFACE = AI_STOCK_THEME.surface;
+const BORDER = AI_STOCK_THEME.border;
+const TEXT = AI_STOCK_THEME.text;
+const MUTED = AI_STOCK_THEME.muted;
+const DIM = AI_STOCK_THEME.dim;
+const ACCENT = AI_STOCK_THEME.accent;
+const ACCENT_SOFT = AI_STOCK_THEME.accentSoft;
+const ACCENT_GRAD = AI_STOCK_THEME.accentGradient;
 const GREEN = "#4CAF50";
 const CHART_UP = "#D32F2F";
 const CHART_DOWN = "#4CAF50";
 // 渐变色（立体感用）
 const GRAD_UP = "linear-gradient(135deg, #E53935 0%, #B71C1C 100%)";
 const GRAD_DOWN = "linear-gradient(135deg, #43A047 0%, #1B5E20 100%)";
-const GRAD_NEUTRAL = "linear-gradient(135deg, #9E9E9E 0%, #757575 100%)";
+const GRAD_NEUTRAL = "linear-gradient(135deg, #97A8B8 0%, #61758A 100%)";
 // 卡片阴影
-const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
+const CARD_SHADOW = AI_STOCK_THEME.shadow;
 
 // ─── 市场 Tab ──────────────────────────────────────────────
 type Market = "all" | "SH" | "SZ" | "GEM" | "STAR" | "DELISTED";
@@ -68,11 +73,11 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-/// ─── 分区标题（左侧红色竖条装饰） ──────────────────
+/// ─── 分区标题（左侧青蓝竖条装饰） ──────────────────
 function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra?: React.ReactNode }) {
   return (
     <div className="px-4 pt-5 pb-2 flex items-start gap-2.5">
-      <div className="w-1 rounded-full mt-1 flex-shrink-0" style={{ height: '32px', background: GRAD_UP }} />
+      <div className="w-1 rounded-full mt-1 flex-shrink-0" style={{ height: '32px', background: ACCENT_GRAD }} />
       <div className="flex-1 min-w-0">
         {/* 标题行：标题左对齐 + 截止时间右对齐，同一行 */}
         <div className="flex items-baseline justify-between gap-2">
@@ -107,9 +112,9 @@ function MarketTabs({
             onClick={() => onChange(m.key)}
             className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[52px]"
             style={{
-              background: active ? GRAD_UP : "rgba(211,47,47,0.08)",
-              color: active ? "#fff" : RED,
-              boxShadow: active ? "0 3px 10px rgba(211,47,47,0.30)" : "inset 0 0 0 1px rgba(211,47,47,0.2)",
+              background: active ? ACCENT_GRAD : ACCENT_SOFT,
+              color: active ? "#fff" : ACCENT,
+              boxShadow: active ? "0 3px 10px rgba(8,121,135,0.20)" : `inset 0 0 0 1px ${BORDER}`,
               transform: active ? "translateY(-1px)" : "none",
             }}
           >
@@ -156,7 +161,7 @@ function AnimatedSurvivalBar({
       {/* 宽色条：双向展开动画 — 红色从左、绿色从右同时展开，持平最后淡入 */}
       <div
         className="relative h-14 mx-3 mb-1 rounded-lg overflow-hidden"
-        style={{ background: "#E0D8D0" }}
+        style={{ background: SURFACE }}
       >
         {/* 红色区：从左向右展开 */}
         <div
@@ -300,12 +305,12 @@ function EraBarChart({
             {/* 柱子轨道区（包含跟随数字） */}
             <div
               className="relative flex-1"
-              style={{ height: BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+              style={{ height: BAR_H, borderRadius: 2, background: SURFACE }}
             >
               {/* 50% 参考线 */}
               <div
                 className="absolute top-0 bottom-0"
-                style={{ left: '50%', width: 1, background: '#bbb', opacity: 0.6 }}
+                style={{ left: '50%', width: 1, background: DIM, opacity: 0.6 }}
               />
               {/* 动效柱子 */}
               <div
@@ -437,7 +442,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         sub="上市首日至今现价相对首日开盘价的盈亏分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {survivalLoading ? '数据加载中...' : liveData ? `数据截至 ${(liveData as any).latestDate || ''}` : '数据加载中...'}
+            {survivalLoading ? '' : liveData ? `数据截至 ${(liveData as any).latestDate || ''}` : ''}
           </p>
         }
       />
@@ -459,7 +464,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                 onClick={() => setMarket(m.key)}
                 className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? "#F5EDED" : "transparent",
+                  background: active ? ACCENT_SOFT : "transparent",
                   borderRight: idx < MARKET_KEYS.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
@@ -467,17 +472,17 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                 {active && (
                   <span
                     className="absolute bottom-0 left-0 right-0"
-                    style={{ height: '2px', background: RED }}
+                    style={{ height: '2px', background: ACCENT }}
                   />
                 )}
                 <span
                   className="text-[13px] font-semibold leading-tight"
-                  style={{ color: active ? RED : "#555" }}
+                  style={{ color: active ? ACCENT : MUTED }}
                 >{m.label}</span>
                 {cnt > 0 && (
                   <span
                     className="text-[11px] leading-tight mt-0.5"
-                    style={{ color: active ? RED : "#999" }}
+                    style={{ color: active ? ACCENT : DIM }}
                   >{cnt.toLocaleString()}</span>
                 )}
               </button>
@@ -488,7 +493,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         {/* 双向展开色条 */}
         <div
           className="relative h-14 mx-3 my-3 rounded-lg overflow-hidden"
-          style={{ background: "#E0D8D0" }}
+          style={{ background: SURFACE }}
         >
           <div
             className="absolute top-0 left-0 h-full flex flex-col items-center justify-center overflow-hidden"
@@ -561,9 +566,9 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                   onClick={() => setTrendGranularity(g)}
                   className="px-2 py-0.5 rounded text-[12px] transition-colors"
                   style={{
-                    background: trendGranularity === g ? RED : 'transparent',
+                    background: trendGranularity === g ? ACCENT : 'transparent',
                     color: trendGranularity === g ? '#fff' : MUTED,
-                    border: `1px solid ${trendGranularity === g ? RED : BORDER}`,
+                    border: `1px solid ${trendGranularity === g ? ACCENT : BORDER}`,
                   }}
                 >
                   {g === 'day' ? '日' : g === 'week' ? '周' : g === 'month' ? '月' : '年'}
@@ -573,7 +578,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
           </div>
           {trendLoading ? (
             <div className="flex items-center justify-center" style={{ height: 120 }}>
-              <span className="text-[12px]" style={{ color: MUTED }}>加载中...</span>
+              <span aria-hidden="true" className="h-2 w-16 animate-pulse rounded-full" style={{ background: BORDER }} />
             </div>
           ) : !trendData?.points?.length ? (
             <div className="flex items-center justify-center" style={{ height: 120 }}>
@@ -682,7 +687,7 @@ function BunchingEffectSection() {
       <SectionTitle title="涨停聚集效应" sub="全历史涨幅分布 · 涨跌停制度截断效应分析"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+            {isLoading ? '' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
           </p>
         }
       />
@@ -696,12 +701,12 @@ function BunchingEffectSection() {
                 onClick={() => setMarket(m.key)}
                 className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? "#F5EDED" : "transparent",
+                  background: active ? ACCENT_SOFT : "transparent",
                   borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
-                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />}
-                <span className="text-[13px] font-semibold" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />}
+                <span className="text-[13px] font-semibold" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
               </button>
             );
           })}
@@ -726,7 +731,7 @@ function BunchingEffectSection() {
                   <p className="text-lg font-bold" style={{ color: GREEN }}>{downRatio}x</p>
                   <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9%</p>
                 </div>
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>聚集强度</p>
                   <p className="text-lg font-bold" style={{ color: manipulationColor }}>{manipulationLevel}</p>
                   <p className="text-[10px]" style={{ color: DIM }}>综合评估</p>
@@ -793,7 +798,7 @@ function BunchingEffectSection() {
                   <span className="text-[10px]" style={{ color: DIM }}>-10%跌停峰</span>
                 </div>
               </div>
-              <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+              <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
                   {`涨停聚集倍数 ${upRatio}x：+10%涨停出现次数是相邻区间(+9%)的 ${upRatio} 倍。`}
                   {upRatio >= 5
@@ -804,7 +809,7 @@ function BunchingEffectSection() {
                   {` 跌停聚集倍数 ${downRatio}x，综合聚集强度评估为「${manipulationLevel}」。`}
                 </p>
               </div>
-              <div className="mt-2 px-2 py-1.5 rounded-lg" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+              <div className="mt-2 px-2 py-1.5 rounded-lg" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                 <span className="text-[10px]" style={{ color: MUTED }}>样本：全历史 {fmt(data.totalCount)} 条日涨跌幅记录（涨幅 -20%~+20%）</span>
               </div>
             </>
@@ -846,7 +851,7 @@ function UpRateDistSection() {
       <SectionTitle title="涨天率分布" sub="全市场在市股票历史涨天率正态分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+            {isLoading ? '' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
           </p>
         }
       />
@@ -861,12 +866,12 @@ function UpRateDistSection() {
                 onClick={() => setMarket(m.key)}
                 className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? "#F5EDED" : "transparent",
+                  background: active ? ACCENT_SOFT : "transparent",
                   borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
-                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />}
-                <span className="text-[13px] font-semibold" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />}
+                <span className="text-[13px] font-semibold" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
               </button>
             );
           })}
@@ -883,15 +888,15 @@ function UpRateDistSection() {
             <>
               {/* 统计摘要 */}
               <div className="flex items-center gap-4 mb-3">
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: ACCENT_SOFT, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>样本股票数</p>
-                  <p className="text-lg font-bold" style={{ color: RED }}>{fmt(data.totalCount)}</p>
+                  <p className="text-lg font-bold" style={{ color: ACCENT }}>{fmt(data.totalCount)}</p>
                 </div>
                 <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>平均涨天率</p>
                   <p className="text-lg font-bold" style={{ color: RED }}>{data.mean}%</p>
                 </div>
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>标准差</p>
                   <p className="text-lg font-bold" style={{ color: TEXT }}>±{data.stdDev}%</p>
                 </div>
@@ -980,7 +985,7 @@ function UpRateDistSection() {
                 </div>
               </div>
               {/* 分布解读 */}
-              <div className="mt-1 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+              <div className="mt-1 px-2 py-2 rounded-lg" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
                   {data.mean > 50
                     ? `全市场平均涨天率 ${data.mean}%，高于50%基准，说明A股整体偏多头市场结构。`
@@ -992,7 +997,7 @@ function UpRateDistSection() {
                 </p>
               </div>
               {/* 排除说明 */}
-              <div className="mt-2 px-2 py-1.5 rounded-lg flex flex-wrap gap-x-4 gap-y-1" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+              <div className="mt-2 px-2 py-1.5 rounded-lg flex flex-wrap gap-x-4 gap-y-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                 <span className="text-[10px]" style={{ color: MUTED }}>样本说明：共统计 {fmt(data.totalCount)} 只在市股（上市满60天）</span>
                 <span className="text-[10px]" style={{ color: MUTED }}>已排除退市股 {fmt(data.delistedCount)} 只</span>
                 <span className="text-[10px]" style={{ color: MUTED }}>已排除新股（上市不足60天）{fmt(data.newStockCount)} 只</span>
@@ -1029,7 +1034,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
       <SectionTitle title="估值分布" sub="PE / PB / 市值结构"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+            {isLoading ? '' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
           </p>
         }
       />
@@ -1046,16 +1051,16 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
                 onClick={() => setMarket(m.key)}
                 className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? "#F5EDED" : "transparent",
+                  background: active ? ACCENT_SOFT : "transparent",
                   borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
                 {active && (
-                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />
+                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />
                 )}
-                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
                 {cnt > 0 && (
-                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? RED : "#999" }}>{cnt.toLocaleString()}</span>
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? ACCENT : DIM }}>{cnt.toLocaleString()}</span>
                 )}
               </button>
             );
@@ -1087,7 +1092,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
                 <button key={t} onClick={() => setSubTab(t)}
                   className="flex-1 py-2 text-sm font-medium transition-colors"
                   style={{
-                    background: subTab === t ? RED : CARD,
+                    background: subTab === t ? ACCENT : CARD,
                     color: subTab === t ? "#fff" : MUTED,
                     borderRight: i < 2 ? `1px solid ${BORDER}` : "none",
                   }}
@@ -1096,7 +1101,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
                 </button>
               ))}
             </div>
-            <div className="rounded-xl p-4" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+            <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
               <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>
                 {subTab === "pe" ? "市盈率（TTM）分布" : subTab === "pb" ? "市净率（PB）分布" : "总市值分布"}
               </p>
@@ -1145,7 +1150,7 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
       <SectionTitle title="涨跌统计" sub="今日及近期涨跌分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+            {isLoading ? '' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
           </p>
         }
       />
@@ -1162,16 +1167,16 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                 onClick={() => setMarket(m.key)}
                 className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? "#F5EDED" : "transparent",
+                  background: active ? ACCENT_SOFT : "transparent",
                   borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
                 {active && (
-                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />
+                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />
                 )}
-                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
                 {cnt > 0 && (
-                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? RED : "#999" }}>{cnt.toLocaleString()}</span>
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? ACCENT : DIM }}>{cnt.toLocaleString()}</span>
                 )}
               </button>
             );
@@ -1253,7 +1258,7 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                       <button key={i} onClick={() => setPeriodIdx(i)}
                         className="px-2 py-0.5 rounded text-[12px] transition-colors"
                         style={{
-                          background: periodIdx === i ? RED : "#F5F5F5",
+                          background: periodIdx === i ? ACCENT : SURFACE,
                           color: periodIdx === i ? "#fff" : MUTED,
                         }}
                       >
@@ -1311,7 +1316,7 @@ function MacroSection() {
       <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {isLoading ? '数据加载中...' : latestNorth?.trade_date ? `数据截至 ${latestNorth.trade_date}` : ''}
+            {isLoading ? '' : latestNorth?.trade_date ? `数据截至 ${latestNorth.trade_date}` : ''}
           </p>
         }
       />
@@ -1369,7 +1374,7 @@ function MacroSection() {
                 <button key={t.key} onClick={() => setSubTab(t.key)}
                   className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
                   style={{
-                    background: subTab === t.key ? RED : "#F0F0F0",
+                    background: subTab === t.key ? ACCENT : SURFACE,
                     color: subTab === t.key ? "#fff" : MUTED,
                   }}
                 >
@@ -1572,7 +1577,7 @@ function TradingCostBar({
       {/* 条形轨道 */}
       <div
         className="relative flex-1"
-        style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+        style={{ height: TC_BAR_H, borderRadius: 2, background: SURFACE }}
       >
         {/* 动效条形 */}
         <div
@@ -1737,9 +1742,9 @@ function TradingCostSection() {
 
         {/* 2026年实时数据摘要（动态加载） */}
         {data2026 && (
-          <div className="rounded-lg p-3" style={{ background: "#FFF8E1", border: "1px solid #FFE082" }}>
+          <div className="rounded-lg p-3" style={{ background: ACCENT_SOFT, border: `1px solid ${BORDER}` }}>
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[12px] font-medium" style={{ color: "#E65100" }}>2026年实时累计</p>
+              <p className="text-[12px] font-medium" style={{ color: ACCENT }}>2026年实时累计</p>
               <p className="text-[10px]" style={{ color: MUTED }}>截至{data2026.tradeDate.slice(5,7)}月{data2026.tradeDate.slice(8,10)}日（{data2026.tradeDays}个交易日）</p>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -1765,7 +1770,7 @@ function TradingCostSection() {
             <button key={t.key} onClick={() => handleTabChange(t.key)}
               className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
               style={{
-                background: subTab === t.key ? RED : "#F0F0F0",
+                background: subTab === t.key ? ACCENT : SURFACE,
                 color: subTab === t.key ? "#fff" : MUTED,
               }}
             >
@@ -1874,7 +1879,7 @@ function TradingCostSection() {
                 return (
                   <div key={d.year} className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
                     <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{d.year}</div>
-                    <div className="relative flex-1" style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}>
+                    <div className="relative flex-1" style={{ height: TC_BAR_H, borderRadius: 2, background: SURFACE }}>
                       <div
                         className="absolute top-0 left-0 h-full flex overflow-hidden"
                         style={{
@@ -1929,7 +1934,7 @@ function TradingCostSection() {
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={ratioData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D8" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                   <XAxis
                     dataKey="year"
                     tick={{ fontSize: 9, fill: MUTED }}
@@ -1943,7 +1948,7 @@ function TradingCostSection() {
                     tickFormatter={(v) => `${v}‰`}
                   />
                   <Tooltip
-                    contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', background: '#fff' }}
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW, background: CARD }}
                     formatter={(value: number, name: string) => [`${value}‰`, name]}
                     labelFormatter={(label) => `${label}年`}
                   />
@@ -1979,58 +1984,13 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
-      {/* 顶部红色导航 */}
-      <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED, color: "#fff" }}>
-        <button
-          onClick={() => homeMode ? setLocation('/') : setLocation(`/ledger/${ledgerId}`)}
-          className="w-7 h-7 flex items-center justify-center rounded-full"
-          style={{ background: "rgba(255,255,255,0.2)" }}
-        >
-          <ChevronLeft className="w-4 h-4 text-white" />
-        </button>
-        <div className="flex-1">
-          <p className="font-bold text-lg">A股AI实时追踪</p>
-        </div>
-        {/* 散户入口：仅在账本模式下显示 */}
-        {!homeMode && (
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/retail-investor`)}
-            className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-bold"
-            style={{
-              backgroundColor: "#FFD600",
-              color: "#B71C1C",
-              border: "none",
-              minWidth: "52px",
-            }}
-          >
-            散户入口
-          </button>
-        )}
-        <button
-          onClick={() => homeMode ? setLocation('/stock-tracker/stock-lifecycle') : setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.9)",
-            color: "#D32F2F",
-            border: "1px solid rgba(255,255,255,0.4)",
-            minWidth: "44px",
-          }}
-        >
-          个股
-        </button>
-        <button
-          onClick={() => window.location.reload()}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.9)",
-            color: "#D32F2F",
-            border: "1px solid rgba(255,255,255,0.4)",
-            minWidth: "44px",
-          }}
-        >
-          刷新
-        </button>
-      </div>
+      <AIStockNavigation
+        active="overview"
+        ledgerId={ledgerId}
+        homeMode={homeMode}
+        onBack={() => homeMode ? setLocation('/') : setLocation(`/ledger/${ledgerId}`)}
+        onRefresh={() => window.location.reload()}
+      />
 
       {/* 全部内容单页展开，上下滚动 */}
       <div className="flex-1 overflow-y-auto pb-8">

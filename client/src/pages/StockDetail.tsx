@@ -8,16 +8,20 @@ import { ChevronLeft, Calendar, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useEffect } from "react";
+import { getAShareCompletedCutoff } from "@shared/a-share-completed-days";
+import { StockSectionImageDownload, StockSectionImageExportProvider } from "@/components/StockSectionImageDownload";
+import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 
-// ─── 配色 ────────────────────────────────────────────────
-const RED = "#D32F2F";
-const BG = "#F2EAE0";
-const CARD = "#FFFFFF";
-const BORDER = "#E8E0D8";
-const TEXT = "#1A1A1A";
-const MUTED = "#888888";
+// ─── 科技金融界面配色；行情红涨绿跌独立保留 ────────────────
+const RED = AI_STOCK_THEME.rise;
+const BG = AI_STOCK_THEME.background;
+const CARD = AI_STOCK_THEME.card;
+const BORDER = AI_STOCK_THEME.border;
+const TEXT = AI_STOCK_THEME.text;
+const MUTED = AI_STOCK_THEME.muted;
+const ACCENT = AI_STOCK_THEME.accent;
 const GREEN_A = "#00B050";
-const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
+const CARD_SHADOW = AI_STOCK_THEME.shadow;
 
 // ─── 工具函数 ────────────────────────────────────────────
 function formatDate(dateStr: string | null | undefined) {
@@ -179,7 +183,7 @@ function ZhuLuScrollArea({
                 height: CELL,
                 borderRadius: 2,
                 background: "transparent",
-                border: "1px solid #E0E0E0",
+                border: `1px solid ${BORDER}`,
               }}
             />
           ))
@@ -361,7 +365,7 @@ function ZhuLuScrollArea({
 
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
 type CondProbEntry = { up: number; down: number; flat: number; total: number };
-type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number; condProbTable?: Record<string, Record<number, CondProbEntry>> } | undefined;
+type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number | null; condProbTable?: Record<string, Record<number, CondProbEntry>> } | undefined;
 
 function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; flatMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number } {
   const upMap: Record<number, number> = {};
@@ -549,6 +553,11 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
 
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
+      <div data-stock-export-section style={{ background: CARD }}>
+        <div className="px-4 pt-3 pb-1 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold" style={{ color: ACCENT }}>珠路图</span>
+          <StockSectionImageDownload title="珠路图" />
+        </div>
       <ZhuLuScrollArea
         cells={cells}
         totalCols={totalCols}
@@ -574,20 +583,22 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
         </div>
 
       </div>
+      </div>
 
       {/* 连涨/连跌统计列表 */}
-      <div style={{ background: CARD, marginTop: 8, borderTop: `8px solid ${BG}` }}>
-          <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-            <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
-            <div className="flex items-center gap-1">
+      <div data-stock-export-section style={{ background: CARD, marginTop: 8, borderTop: `8px solid ${BG}` }}>
+          <div className="px-4 pt-3 pb-1 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold min-w-0" style={{ color: ACCENT }}>连涨 / 连跌统计</span>
+            <div className="flex items-center gap-1 shrink-0">
               {([30, 60, 90, 180, 'all'] as const).map(n => (
                 <button
                   key={n}
                   onClick={() => setStreakTab(n)}
                   className="text-xs px-2 py-0.5"
-                  style={{ background: streakTab === n ? RED : '#F0F0F0', color: streakTab === n ? '#fff' : MUTED, fontWeight: streakTab === n ? 700 : 400, borderRadius: 2 }}
+                  style={{ background: streakTab === n ? ACCENT : AI_STOCK_THEME.surface, color: streakTab === n ? '#fff' : MUTED, fontWeight: streakTab === n ? 700 : 400, borderRadius: 2 }}
                 >{n === 'all' ? '全量' : `${n}天`}</button>
               ))}
+              <StockSectionImageDownload title="连涨/连跌统计" />
             </div>
           </div>
           {/* 表头 */}
@@ -675,8 +686,11 @@ function VolSignal({
 
   if (withVol.length < 5) {
     return (
-      <div className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: "#444" }}>放量缩量信号</div>
+      <div data-stock-export-section className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-xs font-semibold" style={{ color: ACCENT }}>放量缩量信号</span>
+          <StockSectionImageDownload title="放量缩量信号" />
+        </div>
         <div className="text-xs" style={{ color: MUTED }}>成交量数据不足</div>
       </div>
     );
@@ -751,13 +765,16 @@ function VolSignal({
   };
 
   return (
-    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+    <div data-stock-export-section className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-sm font-semibold" style={{ color: "#444" }}>放量缩量信号</span>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: "#F5F5F5", color: latestSignalColor, fontWeight: 600 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold shrink-0" style={{ color: ACCENT }}>放量缩量信号</span>
+        <div className="flex items-center justify-end gap-2 min-w-0">
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: AI_STOCK_THEME.surface, color: latestSignalColor, fontWeight: 600 }}>
           最新：{latestSignalLabel}
         </span>
+          <StockSectionImageDownload title="放量缩量信号" />
+        </div>
       </div>
 
       {/* 量比大字 + 说明 */}
@@ -870,8 +887,11 @@ function StrengthPath({
 
   if (withOHLC.length < 5) {
     return (
-      <div className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: '#444' }}>强度路</div>
+      <div data-stock-export-section className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-xs font-semibold" style={{ color: ACCENT }}>强度路</span>
+          <StockSectionImageDownload title="强度路" />
+        </div>
         <div className="text-xs" style={{ color: MUTED }}>K线数据不足</div>
       </div>
     );
@@ -905,13 +925,16 @@ function StrengthPath({
   const chartItems = strengthItems.slice(-60);
 
   return (
-    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+    <div data-stock-export-section className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-sm font-semibold" style={{ color: '#444' }}>强度路</span>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: trendColor, fontWeight: 600 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold shrink-0" style={{ color: ACCENT }}>强度路</span>
+        <div className="flex items-center justify-end gap-2 min-w-0">
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: AI_STOCK_THEME.surface, color: trendColor, fontWeight: 600 }}>
           {trendLabel}
         </span>
+          <StockSectionImageDownload title="强度路" />
+        </div>
       </div>
 
       {/* 最新强度大字 */}
@@ -981,7 +1004,7 @@ function StrengthPath({
           <span className="text-xs" style={{ color: MUTED }}>近20日强中阳</span>
           <span className="text-xs font-bold" style={{ color: RED }}>{recentBull}次</span>
         </div>
-        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: '#F5F5F5' }}>
+        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: AI_STOCK_THEME.surface }}>
           <div
             style={{
               height: '100%',
@@ -996,7 +1019,7 @@ function StrengthPath({
           <span className="text-xs" style={{ color: MUTED }}>近20日强中阴</span>
           <span className="text-xs font-bold" style={{ color: GREEN_A }}>{recentBear}次</span>
         </div>
-        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: '#F5F5F5' }}>
+        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: AI_STOCK_THEME.surface }}>
           <div
             style={{
               height: '100%',
@@ -1116,13 +1139,16 @@ function PatternPath({
   const signalLabel = (s: PatternSignal) => s === 'bullish' ? '看涨' : s === 'bearish' ? '看跌' : '中性';
 
   return (
-    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+    <div data-stock-export-section className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-sm font-semibold" style={{ color: '#444' }}>形态路</span>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: trendColor, fontWeight: 600 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold shrink-0" style={{ color: ACCENT }}>形态路</span>
+        <div className="flex items-center justify-end gap-2 min-w-0">
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: AI_STOCK_THEME.surface, color: trendColor, fontWeight: 600 }}>
           {trendLabel}
         </span>
+          <StockSectionImageDownload title="形态路" />
+        </div>
       </div>
 
       {/* 统计行 */}
@@ -1268,13 +1294,16 @@ function ComboPath({
   const scoreLabel = finalScore > 40 ? '偏多' : finalScore > 20 ? '略偏多' : finalScore < -40 ? '偏空' : finalScore < -20 ? '略偏空' : '中性';
 
   return (
-    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+    <div data-stock-export-section className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-sm font-semibold" style={{ color: '#444' }}>组合路</span>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: scoreColor, fontWeight: 600 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold shrink-0" style={{ color: ACCENT }}>组合路</span>
+        <div className="flex items-center justify-end gap-2 min-w-0">
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: AI_STOCK_THEME.surface, color: scoreColor, fontWeight: 600 }}>
           {scoreLabel}
         </span>
+          <StockSectionImageDownload title="组合路" />
+        </div>
       </div>
 
       {/* 综合评分大字 */}
@@ -1287,9 +1316,9 @@ function ComboPath({
 
       {/* 综合进度条 */}
       <div className="px-4 pb-3">
-        <div className="relative w-full rounded-full overflow-hidden" style={{ height: 10, background: '#E8E8E8' }}>
+        <div className="relative w-full rounded-full overflow-hidden" style={{ height: 10, background: AI_STOCK_THEME.surface }}>
           {/* 中线 */}
-          <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: '#CCC', zIndex: 1 }} />
+          <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: BORDER, zIndex: 1 }} />
           {finalScore >= 0 ? (
             <div
               style={{
@@ -1336,7 +1365,7 @@ function ComboPath({
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium" style={{ color: '#444' }}>{dim.label}</span>
+                  <span className="text-xs font-medium" style={{ color: TEXT }}>{dim.label}</span>
                   <span className="text-xs" style={{ color: MUTED, fontSize: '0.65rem' }}>权重{(dim.weight * 100).toFixed(0)}%</span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1345,8 +1374,8 @@ function ComboPath({
                   </span>
                 </div>
               </div>
-              <div className="relative w-full rounded-full overflow-hidden" style={{ height: 6, background: '#F0F0F0' }}>
-                <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: '#DDD', zIndex: 1 }} />
+              <div className="relative w-full rounded-full overflow-hidden" style={{ height: 6, background: AI_STOCK_THEME.surface }}>
+                <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: BORDER, zIndex: 1 }} />
                 {isPos ? (
                   <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: `${pct / 2}%`, background: barColor, borderRadius: '0 3px 3px 0' }} />
                 ) : (
@@ -1525,13 +1554,16 @@ function AiTranslatePath({
   });
 
   return (
-    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+    <div data-stock-export-section className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-sm font-semibold" style={{ color: '#444' }}>AI翻译路</span>
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold shrink-0" style={{ color: ACCENT }}>AI翻译路</span>
+        <div className="flex items-center justify-end gap-2 min-w-0">
         <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: cfg.color, color: cfg.textColor }}>
           {cfg.label}
         </span>
+          <StockSectionImageDownload title="AI翻译路" />
+        </div>
       </div>
 
       {/* 当前状态大标签 */}
@@ -1607,8 +1639,8 @@ function AiTranslatePath({
           className="w-full flex items-center justify-between px-4 py-2"
           onClick={() => setShowList(v => !v)}
         >
-          <span className="text-xs font-medium" style={{ color: '#444' }}>近20日状态明细</span>
-          <span className="text-xs" style={{ color: MUTED }}>{showList ? '收起 ▲' : '展开 ▼'}</span>
+          <span className="text-xs font-medium" style={{ color: ACCENT }}>近20日状态明细</span>
+          <span className="text-xs" style={{ color: ACCENT }}>{showList ? '收起 ▲' : '展开 ▼'}</span>
         </button>
         {showList && (
           <div>
@@ -1689,7 +1721,7 @@ function ZhuPanLu({
 
   // 进度条
   const Bar = ({ val, hist, color }: { val: number; hist: number; color: string }) => (
-    <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
+    <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: AI_STOCK_THEME.surface }}>
       <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.max(hist, 1)}%`, background: `${color}33` }} />
       <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.max(val, 1)}%`, background: color }} />
       <div className="absolute top-0 h-full" style={{ left: `${Math.max(hist, 1)}%`, width: 2, background: "#fff", opacity: 0.85 }} />
@@ -1699,6 +1731,11 @@ function ZhuPanLu({
   return (
     <div>
       {/* ── 单一容器：Tab + 统计格子 + 偏离值 + 进度条 ── */}
+      <div data-stock-export-section style={{ background: CARD }}>
+        <div className="px-4 pt-4 pb-1 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold" style={{ color: ACCENT }}>涨跌概率</span>
+          <StockSectionImageDownload title="涨跌概率" />
+        </div>
       <div className="px-4 pt-3 pb-4" style={{ background: CARD }}>
 
         {/* Tab切换 + 明细按钮（样式与个股涨跌天数页面一致） */}
@@ -1711,14 +1748,14 @@ function ZhuPanLu({
                 onClick={() => setTab(n)}
                 className="relative flex-shrink-0 text-xs font-medium py-2.5 px-4 transition-colors"
                 style={{
-                  color: active ? RED : MUTED,
-                  background: active ? "#F5EDED" : "transparent",
+                  color: active ? ACCENT : MUTED,
+                  background: active ? AI_STOCK_THEME.accentSoft : "transparent",
                   borderRight: idx < 4 ? `1px solid ${BORDER}` : "none",
                 }}
               >
                 {n}天
                 {active && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: RED }} />
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: ACCENT }} />
                 )}
               </button>
             );
@@ -1726,7 +1763,7 @@ function ZhuPanLu({
           <button
             onClick={() => setShowDetail(true)}
             className="relative flex-shrink-0 text-xs font-medium py-2.5 px-3 ml-auto transition-colors"
-            style={{ color: MUTED, background: "transparent" }}
+            style={{ color: ACCENT, background: "transparent" }}
             title="查看每日明细"
           >
             明细
@@ -1737,13 +1774,20 @@ function ZhuPanLu({
         <div className="space-y-3 mb-4">
           {/* 近N天进度条 */}
           <div>
-            <div className="flex justify-between items-baseline mb-1.5">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 mb-1.5">
               <span className="text-xs font-medium" style={{ color: MUTED }}>近{tab}天</span>
-              <span className="text-xs">
-                <span className="font-semibold" style={{ color: RED }}>{recentUpRate.toFixed(1)}%涨</span>
-                <span style={{ color: MUTED }}> · {(displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0).toFixed(1)}%平 · </span>
-                <span className="font-semibold" style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}%跌</span>
-              </span>
+              <div className="grid grid-cols-3 gap-1 text-center text-xs tabular-nums">
+                {[
+                  { label: '涨', rate: recentUpRate, days: upItems.length, color: RED },
+                  { label: '平', rate: displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0, days: flatItems.length, color: MUTED },
+                  { label: '跌', rate: recentDownRate, days: downItems.length, color: GREEN_A },
+                ].map(metric => (
+                  <div key={metric.label} className="min-w-0" style={{ color: metric.color }}>
+                    <div className="font-semibold whitespace-nowrap">{metric.rate.toFixed(1)}%{metric.label}</div>
+                    <div className="mt-0.5 text-[11px] whitespace-nowrap">{metric.days.toLocaleString('zh-CN')}天</div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex overflow-hidden" style={{ height: 10, borderRadius: 3 }}>
               <div style={{ width: `${recentUpRate}%`, background: RED }} />
@@ -1753,13 +1797,20 @@ function ZhuPanLu({
           </div>
           {/* 历史全期进度条 */}
           <div>
-            <div className="flex justify-between items-baseline mb-1.5">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 mb-1.5">
               <span className="text-xs font-medium" style={{ color: MUTED }}>历史全期</span>
-              <span className="text-xs">
-                <span className="font-semibold" style={{ color: RED }}>{lifetimeUpRate.toFixed(1)}%涨</span>
-                <span style={{ color: MUTED }}> · {(lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0).toFixed(1)}%平 · </span>
-                <span className="font-semibold" style={{ color: GREEN_A }}>{lifetimeDownRate.toFixed(1)}%跌</span>
-              </span>
+              <div className="grid grid-cols-3 gap-1 text-center text-xs tabular-nums">
+                {[
+                  { label: '涨', rate: lifetimeUpRate, days: lifetimeUpDays, color: RED },
+                  { label: '平', rate: lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0, days: lifetimeFlatDays, color: MUTED },
+                  { label: '跌', rate: lifetimeDownRate, days: lifetimeDownDays, color: GREEN_A },
+                ].map(metric => (
+                  <div key={metric.label} className="min-w-0" style={{ color: metric.color }}>
+                    <div className="font-semibold whitespace-nowrap">{metric.rate.toFixed(1)}%{metric.label}</div>
+                    <div className="mt-0.5 text-[11px] whitespace-nowrap">{metric.days.toLocaleString('zh-CN')}天</div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex overflow-hidden" style={{ height: 10, borderRadius: 3 }}>
               <div style={{ width: `${lifetimeUpRate}%`, background: RED }} />
@@ -1789,6 +1840,7 @@ function ZhuPanLu({
             {deviation < 0 ? "近期跌天偏多，历史均值回归信号，可关注反弹机会" : "近期涨天偏多，注意高位风险，可关注回调压力"}
           </div>
         )}
+      </div>
       </div>
 
       {/* 间隙 */}
@@ -1836,14 +1888,14 @@ function ZhuPanLu({
             className="w-full max-w-lg rounded-t-2xl overflow-hidden"
             style={{ background: CARD, maxHeight: "80vh" }}
             onClick={e => e.stopPropagation()}
-          >
+            >
             {/* 弹出框标题栏 */}
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <span className="text-sm font-semibold" style={{ color: TEXT }}>近{tab}天每日涨跌明细</span>
-              <button onClick={() => setShowDetail(false)} style={{ color: MUTED, fontSize: 20, lineHeight: 1 }}>×</button>
+              <span className="text-sm font-semibold" style={{ color: ACCENT }}>近{tab}天每日涨跌明细</span>
+              <button onClick={() => setShowDetail(false)} style={{ color: ACCENT, fontSize: 20, lineHeight: 1 }}>×</button>
             </div>
             {/* 汇总行 */}
-            <div className="flex items-center gap-3 px-4 py-2" style={{ background: "#FFF8F2", borderBottom: `1px solid ${BORDER}` }}>
+            <div className="flex items-center gap-3 px-4 py-2" style={{ background: AI_STOCK_THEME.surface, borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: MUTED }}>共 {displayed.length} 个交易日</span>
               <span className="text-xs font-semibold" style={{ color: RED }}>涨 {upItems.length} 天（{recentUpRate.toFixed(1)}%）</span>
               <span className="text-xs font-semibold" style={{ color: GREEN_A }}>跌 {downItems.length} 天（{recentDownRate.toFixed(1)}%）</span>
@@ -1853,7 +1905,7 @@ function ZhuPanLu({
             <div className="overflow-y-auto" style={{ maxHeight: "calc(80vh - 100px)" }}>
               <table className="w-full text-xs">
                 <thead>
-                  <tr style={{ background: "#F8F8F8", borderBottom: `1px solid ${BORDER}` }}>
+                  <tr style={{ background: AI_STOCK_THEME.surface, borderBottom: `1px solid ${BORDER}` }}>
                     <th className="text-left px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>日期</th>
                     <th className="text-right px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>涨跌幅</th>
                     <th className="text-right px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>结果</th>
@@ -1864,9 +1916,9 @@ function ZhuPanLu({
                     const isUp = d.pct > 0;
                     const isDown = d.pct < 0;
                     const rowColor = isUp ? RED : isDown ? GREEN_A : MUTED;
-                    const rowBg = i % 2 === 0 ? "#FFFFFF" : "#FAFAFA";
+                    const rowBg = i % 2 === 0 ? CARD : BG;
                     return (
-                      <tr key={i} style={{ background: rowBg, borderBottom: `1px solid #F0F0F0` }}>
+                      <tr key={i} style={{ background: rowBg, borderBottom: `1px solid ${BORDER}` }}>
                         <td className="px-4 py-2" style={{ color: TEXT }}>
                           {d.tradeDate.length === 8
                             ? `${d.tradeDate.slice(0, 4)}-${d.tradeDate.slice(4, 6)}-${d.tradeDate.slice(6, 8)}`
@@ -1899,24 +1951,34 @@ function ZhuPanLu({
 export default function StockDetail() {
   const params = useParams<{ tsCode: string }>();
   const { user } = useAuth();
+  const [completedCutoff, setCompletedCutoff] = useState(() => getAShareCompletedCutoff());
+  useEffect(() => {
+    const refreshCutoff = () => setCompletedCutoff(getAShareCompletedCutoff());
+    const timer = window.setInterval(refreshCutoff, 30_000);
+    window.addEventListener('focus', refreshCutoff);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshCutoff);
+    };
+  }, []);
 
   // wouter 路由不支持含 . 的参数，跳转时 . 被替换为 -，这里还原
   const tsCode = (params.tsCode || "").replace(/-(?=[A-Z]{2}$)/g, ".");
 
   const { data, isLoading, error } = trpc.aiStockDetail.useQuery(
-    { tsCode },
+    { tsCode, _r: Number(completedCutoff) },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 日线数据（珠盘路 + 连涨/连跌统计各档位计算，最多500条）
   const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
-    { tsCode, limit: 500 },
+    { tsCode, limit: 500, _r: Number(completedCutoff) },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 全生命周期连涨/连跌统计（后端拉取全量日线并计算）
   const { data: streakStats } = trpc.aiStockStreakStats.useQuery(
-    { tsCode },
+    { tsCode, _r: Number(completedCutoff) },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
@@ -1944,7 +2006,7 @@ export default function StockDetail() {
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col" style={{ background: BG }}>
-        <div className="px-4 py-3 flex items-center gap-3" style={{ background: RED, color: "#fff" }}>
+        <div className="px-4 py-3 flex items-center gap-3" style={{ background: AI_STOCK_THEME.headerGradient, color: "#fff" }}>
           <button
             onClick={() => window.history.back()}
             className="w-7 h-7 flex items-center justify-center rounded-full"
@@ -1955,28 +2017,28 @@ export default function StockDetail() {
           <p className="font-bold text-base">个股详情</p>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-sm" style={{ color: MUTED }}>加载中...</div>
+          <div aria-hidden="true" className="h-2 w-16 animate-pulse rounded-full" style={{ background: BORDER }} />
         </div>
       </div>
     );
   }
 
   const upRate = parseFloat(displayData.upRate || "0");
-  const downRate = displayData.totalDays > 0 ? ((displayData.downDays / displayData.totalDays) * 100) : 0;
-  const flatRate = displayData.totalDays > 0 ? ((displayData.flatDays / displayData.totalDays) * 100) : 0;
   const statusInfo = listStatusLabel(displayData.listStatus);
   const listYears = (() => {
     if (!displayData.listDate || displayData.listDate.length < 8) return null;
     const y = parseInt(displayData.listDate.slice(0, 4));
     return new Date().getFullYear() - y;
   })();
+  const latestQuote = dailyData?.items?.[dailyData.items.length - 1];
 
   return (
+    <StockSectionImageExportProvider stockName={displayData.name} stockCode={displayData.tsCode} asOf={data?.completedThroughDate} latestPrice={latestQuote?.close} quoteDate={latestQuote?.tradeDate} priceChange={latestQuote?.change} percentChange={latestQuote?.pct}>
     <div className="h-screen flex flex-col" style={{ background: BG }}>
       {/* 顶部导航 */}
       <div
         className="px-4 py-3 flex items-center gap-3 flex-shrink-0"
-        style={{ background: RED, color: "#fff" }}
+        style={{ background: AI_STOCK_THEME.headerGradient, color: "#fff" }}
       >
         <button
           onClick={() => window.history.back()}
@@ -1987,7 +2049,7 @@ export default function StockDetail() {
         </button>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-base truncate">{displayData.name}</p>
-          <p className="text-xs opacity-70">{displayData.tsCode}</p>
+          <p className="text-xs opacity-80">{displayData.tsCode}</p>
         </div>
         <span
           className="px-2 py-0.5 rounded-full text-xs font-medium"
@@ -2008,9 +2070,12 @@ export default function StockDetail() {
       <div className="flex-1 overflow-y-auto pb-8">
 
         {/* 基本信息卡片 - 股票档案样式，与珠盘路容器一致（两边无边界，上下有间隙）*/}
-        <div className="mt-3" style={{ background: CARD }}>
+        <div data-stock-export-section className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-3">
-            <div className="text-xs font-semibold mb-3" style={{ color: MUTED }}>股票档案</div>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-xs font-semibold" style={{ color: ACCENT }}>股票档案</span>
+              <StockSectionImageDownload title="股票档案" />
+            </div>
 
             {/* 主区域：左侧价格大字，右侧次要信息 */}
             <div className="flex items-start gap-4">
@@ -2075,6 +2140,16 @@ export default function StockDetail() {
                   <div className="text-xs" style={{ color: MUTED }}>上市年数</div>
                   <div className="text-xs font-medium" style={{ color: TEXT }}>{listYears !== null ? `${listYears} 年` : '-'}</div>
                 </div>
+                <div title="北京时间15:00前不计当天，收盘数据更新后计入完整交易日">
+                  <div className="text-xs" style={{ color: MUTED }}>累计交易日</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>
+                    {data?.completedTradingDays != null ? `${data.completedTradingDays.toLocaleString('zh-CN')} 天` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs" style={{ color: MUTED }}>统计截至</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{formatDate(data?.completedThroughDate)}</div>
+                </div>
                 {displayData.industry && (
                   <div className="col-span-2">
                     <div className="text-xs" style={{ color: MUTED }}>所属行业</div>
@@ -2096,14 +2171,17 @@ export default function StockDetail() {
         <div style={{ height: 8, background: BG }} />
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
-          <div className="px-4 pt-4 pb-1">
-            <div className="text-xs font-semibold" style={{ color: MUTED }}>涨跌概率</div>
-          </div>
           {dailyLoading ? (
+            <div data-stock-export-section style={{ background: CARD }}>
+              <div className="px-4 pt-4 pb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold" style={{ color: ACCENT }}>涨跌概率</span>
+                <StockSectionImageDownload title="涨跌概率" />
+              </div>
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
-              <span className="text-xs">日线数据加载中...</span>
+              <span aria-hidden="true" className="h-2 w-16 animate-pulse rounded-full" style={{ background: BORDER }} />
             </div>
-          ) : dailyData?.items?.length ? (
+            </div>
+          ) : dailyData?.items?.length && displayData.totalDays != null && displayData.upDays != null && displayData.downDays != null && displayData.flatDays != null ? (
             <ZhuPanLu
               items={dailyData.items}
               lifetimeUpRate={upRate}
@@ -2114,8 +2192,14 @@ export default function StockDetail() {
               streakStats={streakStats}
             />
           ) : (
+            <div data-stock-export-section style={{ background: CARD }}>
+              <div className="px-4 pt-4 pb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold" style={{ color: ACCENT }}>涨跌概率</span>
+                <StockSectionImageDownload title="涨跌概率" />
+              </div>
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
-              <span className="text-xs">暂无日线数据</span>
+              <span className="text-xs">{dailyData?.items?.length ? '完整历史统计待更新，请稍后刷新' : '暂无日线数据'}</span>
+            </div>
             </div>
           )}
         </div>
@@ -2128,5 +2212,6 @@ export default function StockDetail() {
         )}
       </div>
     </div>
+    </StockSectionImageExportProvider>
   );
 }
