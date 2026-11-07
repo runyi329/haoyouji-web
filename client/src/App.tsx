@@ -431,7 +431,14 @@ function ActiveLedgerPagePolling() {
 
     const refreshActiveLedgerPage = () => {
       if (document.visibilityState !== "visible") return;
-      void trpcUtils.ledger.invalidate().catch(() => undefined);
+      // 分配计划自行续期签名；两秒失效会反复清空人工核对中的金额并阻止确认。
+      // 仅排除可执行分配预览，不关闭行情、订单或资金台账的原有同步。
+      void trpcUtils.ledger.invalidate(undefined, {
+        predicate: (query) => {
+          const path = query.queryKey[0];
+          return !Array.isArray(path) || path.join(".") !== "ledger.t0PreviewSharedIncomeAllocation";
+        },
+      }).catch(() => undefined);
     };
 
     // 进入37号或52号账本页面、以及从后台回到前台时均立即补拉，轮询仅覆盖前台页面。

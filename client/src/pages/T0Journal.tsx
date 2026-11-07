@@ -2579,6 +2579,18 @@ function archivePriceForTrade(trade: PreviewTrade, archiveStep = POSITION_ARCHIV
   return archivePriceForSide(side, sourcePrice, archiveStep);
 }
 
+/** 成交预览和确认共用原始源单档位，绝不从管理员镜像方向重新归档。 */
+function getT0StoredClosingTargetPrice(
+  storedAction: TradeAction,
+  displayTargetPrice: number | undefined,
+  sourceOpening: PreviewTrade | undefined,
+) {
+  const sourcePrice = sourceOpening && ACTIONS[sourceOpening.action].opening
+    ? sourceOpening.price
+    : displayTargetPrice;
+  return sourcePrice === undefined ? undefined : archivePriceForSide(ACTIONS[storedAction].side, sourcePrice);
+}
+
 function formatPrice(value: number | null | undefined) {
   if (!value || !Number.isFinite(value)) return "--";
   return numberFormatter.format(value);
@@ -6547,6 +6559,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }).sort((left, right) => Number(right.sharedIncomeEnabled) - Number(left.sharedIncomeEnabled)),
     };
   }, [entryForm.relatedUserId, sharedIncomeClosePreviewBaseline, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
+  const closingStoredSourceTrade = useMemo(() => {
+    const sourceId = entryForm.targetOpeningEntryId || (closingSourceTrade ? getStoredEntryId(closingSourceTrade) : "");
+    return rawJournalTrades.find((trade) => getStoredEntryId(trade) === sourceId && ACTIONS[trade.action].opening);
+  }, [rawJournalTrades, entryForm.targetOpeningEntryId, closingSourceTrade]);
+  const closingStoredAction = !ACTIONS[entryForm.action].opening && closingSourceTrade?.isCounterpartyView
+    ? invertTradeAction(entryForm.action)
+    : entryForm.action;
+  const closingStoredTargetPrice = getT0StoredClosingTargetPrice(closingStoredAction, entryForm.targetPrice, closingStoredSourceTrade);
   const sharedIncomeServerPlanActive = canManage && closeConfirmationStep === "review" && !ACTIONS[entryForm.action].opening && sharedIncomeAllocationMetrics.length > 0 && !isCloseDistributionPreviewLink;
   const sharedIncomeServerPlanInput = useMemo(() => ({
     ledgerId: 52 as const,
@@ -6554,15 +6574,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     accountName: entryForm.accountName.trim() || undefined,
     relatedUserId: Number(entryForm.relatedUserId || 0),
     relatedFundId: /^\d+$/.test(entryForm.relatedFundId || "") ? Number(entryForm.relatedFundId) : undefined,
-    action: (closingSourceTrade?.isCounterpartyView ? invertTradeAction(entryForm.action) : entryForm.action) as "closeLong" | "closeShort",
+    action: closingStoredAction as "closeLong" | "closeShort",
     price: normalizeT0PriceForSubmission(entryForm.price),
     quantity: normalizeEthQuantity(entryForm.quantity),
-    targetPrice: entryForm.targetPrice === undefined ? "" : String(archivePriceForSide(ACTIONS[entryForm.action].side, entryForm.targetPrice)),
+    targetPrice: closingStoredTargetPrice === undefined ? "" : String(closingStoredTargetPrice),
     targetOpeningEntryId: /^\d+$/.test(entryForm.targetOpeningEntryId || "") ? Number(entryForm.targetOpeningEntryId) : undefined,
     metrics: T0_SHARED_ALLOCATION_METRICS.filter((metric) => sharedIncomeAllocationMetrics.includes(metric)),
     budgetMode: sharedIncomeAllocationBudgetMode,
     budgetValue: sharedIncomeAllocationBudgetValue.trim(),
-  }), [entryForm.accountId, entryForm.accountName, entryForm.relatedUserId, entryForm.relatedFundId, entryForm.action, entryForm.price, entryForm.quantity, entryForm.targetPrice, entryForm.targetOpeningEntryId, closingSourceTrade, sharedIncomeAllocationMetrics, sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue]);
+  }), [entryForm.accountId, entryForm.accountName, entryForm.relatedUserId, entryForm.relatedFundId, closingStoredAction, entryForm.price, entryForm.quantity, closingStoredTargetPrice, entryForm.targetOpeningEntryId, sharedIncomeAllocationMetrics, sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue]);
   const t0SharedIncomeServerPlanQuery = trpc.ledger.t0PreviewSharedIncomeAllocation.useQuery(
     sharedIncomeServerPlanInput,
     { enabled: sharedIncomeServerPlanActive && Number(sharedIncomeServerPlanInput.price) > 0 && Number(sharedIncomeServerPlanInput.quantity) > 0 && Boolean(sharedIncomeServerPlanInput.targetPrice), staleTime: 20_000, refetchInterval: sharedIncomeServerPlanActive ? 45_000 : false, refetchOnWindowFocus: true, retry: 1 },
@@ -6576,17 +6596,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     weightedOrderFacts: sharedIncomeServerPlan.weightedFacts,
     weightedOrderClosePrice: Number(sharedIncomeServerPlanInput.price),
   } : sharedIncomeLocalClosePreview, [sharedIncomeServerPlan, sharedIncomeLocalClosePreview, sharedIncomeServerPlanInput.price]);
+  const sharedIncomeServerPlanInputKey = JSON.stringify(sharedIncomeServerPlanInput);
+  const sharedIncomePlanDraftSnapshotRef = useRef<{ inputKey: string; allocationKey: string | null } | null>(null);
   useEffect(() => {
-    if (!sharedIncomeServerPlanActive) return;
-    if (!sharedIncomeServerPlan || t0SharedIncomeServerPlanQuery.isFetching || t0SharedIncomeServerPlanQuery.error) {
+    if (!sharedIncomeServerPlanActive) {
+      sharedIncomePlanDraftSnapshotRef.current = null;
+      return;
+    }
+    // 只有来源单、数量、价格、预算或所选方案变化才清理旧草稿。
+    // 同一方案的签名续期/后台读取绝不能把已显示、正在核对的金额清空。
+    if (sharedIncomePlanDraftSnapshotRef.current?.inputKey !== sharedIncomeServerPlanInputKey) {
+      sharedIncomePlanDraftSnapshotRef.current = { inputKey: sharedIncomeServerPlanInputKey, allocationKey: null };
       setSharedIncomeDrafts({});
+      setSharedIncomeTargetSelections({});
+    }
+    if (!sharedIncomeServerPlan || t0SharedIncomeServerPlanQuery.isFetching || t0SharedIncomeServerPlanQuery.error) {
       setSharedIncomeAllocationPlanError(t0SharedIncomeServerPlanQuery.error?.message || "正在按真实订单、资金和已保存权重生成分配清单…");
       return;
     }
-    setSharedIncomeDrafts(Object.fromEntries(sharedIncomeServerPlan.allocations.map((row) => [String(row.recipientUserId), row.amount])));
-    setSharedIncomeTargetSelections({});
+    const allocationKey = JSON.stringify(sharedIncomeServerPlan.allocations);
+    if (sharedIncomePlanDraftSnapshotRef.current.allocationKey !== allocationKey) {
+      setSharedIncomeDrafts(Object.fromEntries(sharedIncomeServerPlan.allocations.map((row) => [String(row.recipientUserId), row.amount])));
+      setSharedIncomeTargetSelections({});
+      sharedIncomePlanDraftSnapshotRef.current.allocationKey = allocationKey;
+    }
     setSharedIncomeAllocationPlanError(null);
-  }, [sharedIncomeServerPlanActive, sharedIncomeServerPlan, t0SharedIncomeServerPlanQuery.isFetching, t0SharedIncomeServerPlanQuery.error]);
+  }, [sharedIncomeServerPlanActive, sharedIncomeServerPlanInputKey, sharedIncomeServerPlan, t0SharedIncomeServerPlanQuery.isFetching, t0SharedIncomeServerPlanQuery.error]);
   const sharedIncomeWeightedOrderScores = useMemo(() => calculateWeightedOrderScores(
     sharedIncomeClosePreview.weightedOrderFacts || [],
     Number(sharedIncomeClosePreview.weightedOrderClosePrice),
@@ -10656,7 +10691,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     const isCounterpartyClosing = !selectedAction.opening && Boolean(closingSourceTrade?.isCounterpartyView);
     // 管理员反向投影下的“平空/平多”仅是展示方向；写库仍沿用用户端原始方向，确保 FIFO 永远以真实流水核算。
-    const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
+    const storedAction = closingStoredAction;
     const isOptionOpening = selectedAction.opening && entryForm.instrumentType === "option";
     const isGridOpening = selectedAction.opening && entryForm.instrumentType === "grid";
     if (smartOpeningPriceIsIncomplete) {
@@ -10748,9 +10783,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     const archiveTargetPrice = selectedAction.opening
       ? archivePriceForSide(selectedAction.side, price)
-      : entryForm.targetPrice === undefined
-        ? undefined
-        : archivePriceForSide(selectedAction.side, entryForm.targetPrice);
+      : closingStoredTargetPrice;
     const targetOpeningEntryId = !selectedAction.opening && /^\d+$/.test(entryForm.targetOpeningEntryId ?? "")
       ? Number(entryForm.targetOpeningEntryId)
       : undefined;
@@ -10906,8 +10939,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         t0Toast.error("请先在价格簿中点选要平的价格档位");
         return;
       }
-      const side = selectedAction.side;
-      const closeScopeTrades = trades.filter((trade) => !trade.isPending && (
+      const side = ACTIONS[storedAction].side;
+      // 成交权限只核对原始完整流水，不使用类型筛选后的集合或管理员反向展示桶。
+      const closeScopeTrades = rawJournalTrades.filter((trade) => !trade.isPending && !trade.isSyncing && (
         trade.accountId === entryForm.accountId
         && trade.symbol === "ETH"
         && (trade.relatedUserId ?? "") === (entryForm.relatedUserId ?? "")
