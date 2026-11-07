@@ -33,6 +33,7 @@ import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { T0TeamAnnualizedDialog, type T0TeamAnnualizedDetail } from "@/components/T0TeamAnnualizedDialog";
+import { T0TeamDepositDialog } from "@/components/T0TeamDepositDialog";
 import { T0_SHARED_ALLOCATION_METRICS, type T0SharedIncomeAllocationPlan } from "@shared/t0-allocation-plan-contract";
 import { T0WeightedOrderRuleSummary, T0WeightedOrderRuleSettingsPage } from "@/components/T0WeightedOrderRule";
 import { SharedIncomeRuleSummaryCard } from "@/components/SharedIncomeRuleSummaryCard";
@@ -4103,6 +4104,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? previewUserIdFromUrlValue
     : null;
   const isTotalProfitPageRoute = location === `/ledger/${ledgerId}/t0-journal/total-profit`;
+  // 仅识别固定团队返回标记，绝不接受任意返回URL。
+  const requestedTeamDetail = searchParams.get("detailTab") === "team";
+  const payoutReturnToTeam = searchParams.get("payoutReturn") === "team";
   /** 仅供界面验收的直达页：使用真实读取数据模拟平仓，但永不允许写入账本。 */
   const isCloseDistributionPreviewLink = searchParams.get("preview") === "close-distribution";
   /** AI分配规则的只读说明页：可独立打开、下载长图，不需要先进入某一笔平仓流程。 */
@@ -4334,6 +4338,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showPayoutXirrHelp, setShowPayoutXirrHelp] = useState(false);
   const [teamAnnualizedMemberId, setTeamAnnualizedMemberId] = useState<number | null>(null);
   const closeTeamAnnualizedDetail = useCallback(() => setTeamAnnualizedMemberId(null), []);
+  const [teamDepositMemberId, setTeamDepositMemberId] = useState<number | null>(null);
+  const closeTeamDepositDetail = useCallback(() => setTeamDepositMemberId(null), []);
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutDepositInputMode, setPayoutDepositInputMode] = useState<"u" | "eth">("u");
@@ -4748,6 +4754,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 页面顶部的“结算”Tab按同一权限自动切为个人结算或全局结算中心。
   const isTotalProfitPage = isTotalProfitPageRoute && (isMemberView || canManage);
   const isTotalProfitReportVisible = showTotalNetProfitDetail || isTotalProfitPage;
+  useEffect(() => {
+    if (!canManage || !isTotalProfitPageRoute || !requestedTeamDetail) return;
+    setTotalProfitPageTab("income");
+    setTotalProfitDetailTab("team");
+    setTotalRevenueDetailPage(1);
+  }, [canManage, isTotalProfitPageRoute, requestedTeamDetail]);
 
   const t0TeamOverviewAccessQuery = trpc.ledger.t0CanViewTeamOverview.useQuery(
     { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined },
@@ -4770,6 +4782,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const teamOverview = t0TeamOverviewQuery.data as T0TeamOverview | undefined;
   const teamOverviewMembers = useMemo(() => Array.isArray(teamOverview?.members) ? teamOverview.members : [], [teamOverview?.members]);
+  const teamDepositMember = teamOverviewMembers.find((member) => member.userId === teamDepositMemberId);
+  const canReadTeamDeposits = canManage && canViewTeamOverview && isTotalProfitReportVisible
+    && totalProfitPageTab === "income" && totalProfitDetailTab === "team" && Boolean(teamDepositMember);
+  const teamDepositLogsQuery = trpc.ledger.t0GetPayoutLogs.useQuery(
+    { ledgerId: 52, relatedUserId: teamDepositMember?.userId },
+    {
+      // 仅打开管理员团队中的可见成员弹窗时读取，不预加载全体充值明细。
+      enabled: canReadTeamDeposits,
+      placeholderData: () => undefined,
+      staleTime: 0,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
+  );
+  useEffect(() => { setTeamDepositMemberId(null); }, [canManage, previewUserId, viewerScopeUserId, totalProfitDetailTab, totalProfitPageTab, isTotalProfitReportVisible]);
   const teamAnnualizedMember = teamOverviewMembers.find((member) => member.userId === teamAnnualizedMemberId);
   const teamAnnualizedDetailQuery = trpc.ledger.t0GetTeamOverview.useQuery(
     { ledgerId: 52, previewUserId: isUserPreview ? previewUserId || undefined : undefined, annualizedDetailUserId: teamAnnualizedMemberId || undefined },
@@ -5255,7 +5282,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPayoutSubmitNotice(null);
     setPayoutOccurredOn(getBeijingDateInputValue());
   };
-  const openPayoutEntryPage = (direction: T0JournalPayoutDirection, relatedUserId = payoutTargetRelatedUserId) => {
+  const openPayoutEntryPage = (direction: T0JournalPayoutDirection, relatedUserId = payoutTargetRelatedUserId, returnToTeam = false) => {
+    if (!canManage) return;
     setEditingPayoutLog(null);
     setPayoutAmount("");
     setPayoutDepositInputMode("u");
@@ -5267,8 +5295,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setPayoutOccurredOn(getBeijingDateInputValue());
     setShowPayoutLog(false);
     const target = Number(relatedUserId);
-    setLocation(`/ledger/${ledgerId}/t0-journal?payout=${direction}${Number.isInteger(target) && target > 0 ? `&payoutUserId=${target}` : ""}`);
+    setLocation(`/ledger/${ledgerId}/t0-journal?payout=${direction}${Number.isInteger(target) && target > 0 ? `&payoutUserId=${target}` : ""}${returnToTeam ? "&payoutReturn=team" : ""}`);
   };
+  const openTeamDepositEntryPage = (userId: number) => {
+    if (!canManage || !canViewTeamOverview || !isTotalProfitReportVisible || totalProfitDetailTab !== "team"
+      || !teamOverviewMembers.some((member) => member.userId === userId)) return;
+    setTeamDepositMemberId(null);
+    setTeamAnnualizedMemberId(null);
+    setShowTotalNetProfitDetail(false);
+    openPayoutEntryPage("deposit", userId, true);
+  };
+  const refreshPayoutRelatedCaches = () => Promise.allSettled([
+    // 不指定输入：覆盖成员明细、全局流水、团队概览及每位成员年化详情的全部缓存键。
+    t0Utils.ledger.t0GetPayoutLogs.invalidate(),
+    t0Utils.ledger.t0GetPayoutAvailability.invalidate(),
+    t0Utils.ledger.t0CanViewTeamOverview.invalidate(),
+    t0Utils.ledger.t0GetTeamOverview.invalidate(),
+    t0Utils.ledger.t0GetTeamWeeklySettlement.invalidate(),
+    t0Utils.ledger.t0GetWeeklySettlementCenter.invalidate(),
+    t0Utils.ledger.t0GetJournal.invalidate(),
+  ]);
   const createPayoutLogMutation = trpc.ledger.t0CreatePayoutLog.useMutation({
     onSuccess: async (createdLog) => {
       const payoutLogQueryInput = { ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId || undefined, previewUserId: previewUserId || undefined };
@@ -5280,11 +5326,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       resetPayoutLogForm();
       // 服务端已经提交：先明确告知成功，读取刷新失败不能冒充写入失败。
       setPayoutSubmitNotice({ tone: "success", message: "已保存成功，请勿重复登记。" });
-      await Promise.allSettled([
-        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
-        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
-        t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
-      ]);
+      await refreshPayoutRelatedCaches();
       t0Toast.success("资金流水已保存");
     },
     onError: (error) => {
@@ -5302,11 +5344,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ]);
       resetPayoutLogForm();
       setPayoutSubmitNotice({ tone: "success", message: "已更新成功，无需再次提交。" });
-      await Promise.allSettled([
-        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
-        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
-        t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
-      ]);
+      await refreshPayoutRelatedCaches();
       t0Toast.success("资金流水已更新");
     },
     onError: (error) => {
@@ -5324,11 +5362,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setDeletePayoutLogId(null);
       if (editingPayoutLog?.id === deletedLog.id) resetPayoutLogForm();
       setPayoutSubmitNotice({ tone: "success", message: "已删除成功，无需再次操作。" });
-      await Promise.allSettled([
-        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
-        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
-        t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
-      ]);
+      await refreshPayoutRelatedCaches();
       t0Toast.success("资金流水已删除");
     },
     onError: (error) => {
@@ -11846,7 +11880,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       resetPayoutLogForm();
       setIsPayoutListEditing(false);
       setDeletePayoutLogId(null);
-      setLocation(`/ledger/${ledgerId}/t0-journal`);
+      setLocation(payoutReturnToTeam && canManage
+        ? `/ledger/${ledgerId}/t0-journal/total-profit?detailTab=team`
+        : `/ledger/${ledgerId}/t0-journal`);
     };
     const submitPayoutEntry = () => {
       const reportValidationError = (message: string) => {
@@ -11897,7 +11933,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     return <div className="min-h-screen max-w-md mx-auto bg-slate-50 pb-8">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
-        <button type="button" onClick={closePayoutEntryPage} aria-label="返回T+0收益账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
+        <button type="button" onClick={closePayoutEntryPage} aria-label={payoutReturnToTeam ? "返回团队成员概览" : "返回T+0收益账本"} className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
         <div className="min-w-0 flex-1"><h1 className="font-semibold text-slate-900">{entryTitle}</h1><div className="truncate text-[11px] text-slate-500">{payoutTargetUserIdentity.name}{payoutTargetUserIdentity.username ? ` · @${payoutTargetUserIdentity.username}` : ""}</div></div>
         {entryLogs.length > 0 && <button type="button" onClick={() => { setIsPayoutListEditing((current) => !current); setDeletePayoutLogId(null); }} className={`h-8 rounded px-2 text-xs font-medium ${isPayoutListEditing ? "bg-slate-800 text-white" : "text-slate-600 active:bg-slate-100"}`}>{isPayoutListEditing ? "完成" : "编辑"}</button>}
       </header>
@@ -15007,6 +15043,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {canReadTeamDeposits && teamDepositMember && (
+        <T0TeamDepositDialog
+          key={teamDepositMember.userId}
+          member={teamDepositMember}
+          logs={teamDepositLogsQuery.data}
+          loading={teamDepositLogsQuery.isFetching}
+          error={teamDepositLogsQuery.isError}
+          onClose={closeTeamDepositDetail}
+          onRetry={() => { void teamDepositLogsQuery.refetch(); void t0TeamOverviewQuery.refetch(); }}
+          onRegister={() => openTeamDepositEntryPage(teamDepositMember.userId)}
+        />
+      )}
       {isTotalProfitReportVisible && canViewTeamOverview && totalProfitDetailTab === "team" && teamAnnualizedMember && (
         <T0TeamAnnualizedDialog
           detail={teamAnnualizedDetail}
@@ -15248,8 +15296,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {teamOverviewMembers.length > 0 ? <div className="divide-y divide-slate-100">{teamOverviewMembers.map((member) => {
                     const memberStartDate = formatT0TeamMemberStartDate(member.firstActivityOn);
                     return <div key={member.userId} className="px-3 py-3">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none"><span className="min-w-0 truncate text-[15px] font-semibold text-slate-800">{member.name}</span>{memberStartDate && <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">{memberStartDate}</span>}</div>
-                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总金额</div><div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><button type="button" onClick={() => setTeamAnnualizedMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}年化回报计算说明`} className={`mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none active:opacity-70 ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</button></div></div>
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none"><span className="min-w-0 truncate text-[15px] font-semibold text-slate-800">{member.name}</span>{memberStartDate && <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">{memberStartDate}</span>}{canManage && <button type="button" onClick={() => openTeamDepositEntryPage(member.userId)} aria-label={`为${member.name}登记充值`} className="ml-auto inline-flex shrink-0 items-center gap-0.5 py-1 text-[11px] font-medium text-sky-700 active:opacity-70"><Plus className="h-3 w-3" />登记充值</button>}</div>
+                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总金额</div>{canManage ? <button type="button" onClick={() => setTeamDepositMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}总金额充值明细`} className="mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900 active:opacity-70">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</button> : <div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div>}</div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><button type="button" onClick={() => setTeamAnnualizedMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}年化回报计算说明`} className={`mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none active:opacity-70 ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</button></div></div>
                   </div>;})}</div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队成员</div>}
                   <p className="border-t border-slate-100 px-3 py-2 text-[10px] leading-4 text-slate-400">全站推荐关系中的下级，只要属于52号账本且有T+0订单（含挂单）、入金/提现、分佣或共享活动，即自动开放团队查看。成员按同一活动条件展示；收益仍只统计非期权已实现订单、分佣及已到账共享，不含挂单收益、未平仓浮盈亏或钱包余额。年化回报按逐笔入金、提现及当前非期权已实现净值计算。</p>
                 </div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队查看权限</div>}
