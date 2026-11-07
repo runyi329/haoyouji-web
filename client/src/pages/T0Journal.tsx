@@ -4200,6 +4200,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   /** 平仓确认中的共享收益草案：仅在提交当下传入服务端，额度仍由服务端用收益快照复核。 */
   const [sharedIncomeDrafts, setSharedIncomeDrafts] = useState<Record<string, string>>({});
   const [sharedIncomeTargetSelections, setSharedIncomeTargetSelections] = useState<Record<string, number>>({});
+  /** 自动方案只是建议；人工精调仍绑定原计划，确认时由服务端复核最终金额。 */
+  const [sharedIncomeManuallyAdjusted, setSharedIncomeManuallyAdjusted] = useState(false);
   /** 本次平仓仅可从正向净收益中拿出的共享预算；不改变本单服务端收益上限。 */
   const [sharedIncomeAllocationBudgetMode, setSharedIncomeAllocationBudgetMode] = useState<SharedIncomeAllocationBudgetMode>("percentage");
   const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("99");
@@ -6629,12 +6631,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   useEffect(() => {
     if (!sharedIncomeServerPlanActive) {
       sharedIncomePlanDraftSnapshotRef.current = null;
+      if (sharedIncomeManuallyAdjusted) setSharedIncomeManuallyAdjusted(false);
       return;
     }
     // 只有来源单、数量、价格、预算或所选方案变化才清理旧草稿。
     // 同一方案的签名续期/后台读取绝不能把已显示、正在核对的金额清空。
-    if (sharedIncomePlanDraftSnapshotRef.current?.inputKey !== sharedIncomeServerPlanInputKey) {
+    const inputChanged = sharedIncomePlanDraftSnapshotRef.current?.inputKey !== sharedIncomeServerPlanInputKey;
+    if (inputChanged) {
       sharedIncomePlanDraftSnapshotRef.current = { inputKey: sharedIncomeServerPlanInputKey, allocationKey: null };
+      setSharedIncomeManuallyAdjusted(false);
       setSharedIncomeDrafts({});
       setSharedIncomeTargetSelections({});
     }
@@ -6643,13 +6648,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     const allocationKey = JSON.stringify(sharedIncomeServerPlan.allocations);
-    if (sharedIncomePlanDraftSnapshotRef.current.allocationKey !== allocationKey) {
+    if ((inputChanged || !sharedIncomeManuallyAdjusted) && sharedIncomePlanDraftSnapshotRef.current.allocationKey !== allocationKey) {
       setSharedIncomeDrafts(Object.fromEntries(sharedIncomeServerPlan.allocations.map((row) => [String(row.recipientUserId), row.amount])));
       setSharedIncomeTargetSelections({});
       sharedIncomePlanDraftSnapshotRef.current.allocationKey = allocationKey;
     }
     setSharedIncomeAllocationPlanError(null);
-  }, [sharedIncomeServerPlanActive, sharedIncomeServerPlanInputKey, sharedIncomeServerPlan, t0SharedIncomeServerPlanQuery.isFetching, t0SharedIncomeServerPlanQuery.error]);
+  }, [sharedIncomeServerPlanActive, sharedIncomeServerPlanInputKey, sharedIncomeServerPlan, t0SharedIncomeServerPlanQuery.isFetching, t0SharedIncomeServerPlanQuery.error, sharedIncomeManuallyAdjusted]);
+  const updateSharedIncomeDraftsByUser = (update: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => {
+    if (sharedIncomeServerPlanActive) {
+      if (sharedIncomeServerPlanUnavailable) return;
+      setSharedIncomeManuallyAdjusted(true);
+    }
+    setCloseSaveError(null);
+    setSharedIncomeDrafts(update);
+  };
   const sharedIncomeWeightedOrderScores = useMemo(() => calculateWeightedOrderScores(
     sharedIncomeClosePreview.weightedOrderFacts || [],
     Number(sharedIncomeClosePreview.weightedOrderClosePrice),
@@ -10687,8 +10700,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       void t0SharedIncomeServerPlanQuery.refetch();
       return;
     }
-    if (sharedIncomeServerPlanActive && sharedIncomeServerPlan && JSON.stringify(sharedIncomeSaveAllocations) !== JSON.stringify(sharedIncomeServerPlan.allocations)) {
-      setCloseSaveError("分配金额已被修改，请先切换手动分配，或重新生成正式分配清单");
+    if (sharedIncomeServerPlanActive && sharedIncomeServerPlan && !sharedIncomeManuallyAdjusted && JSON.stringify(sharedIncomeSaveAllocations) !== JSON.stringify(sharedIncomeServerPlan.allocations)) {
+      setCloseSaveError("分配清单未同步，请重新生成建议后再确认");
       return;
     }
     if (!ACTIONS[entryForm.action].opening && closeConfirmationStep === "review" && sharedIncomeAllocationMetrics.includes("realizedAnnualized") && (sharedIncomeAnnualizedRuleUnavailable || sharedIncomeAllocationPlanError)) {
@@ -11158,6 +11171,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       note: entryForm.note.trim() || undefined,
       sharedIncomeAllocations: !selectedAction.opening && sharedIncomeSaveAllocations.length > 0 ? sharedIncomeSaveAllocations : undefined,
       sharedIncomePlanToken: sharedIncomeServerPlanActive ? sharedIncomeServerPlan?.planToken : undefined,
+      sharedIncomeManualAdjustment: sharedIncomeServerPlanActive && sharedIncomeManuallyAdjusted ? true : undefined,
       sharedIncomeMetrics: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.metrics : undefined,
       sharedIncomeBudgetMode: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.budgetMode : undefined,
       sharedIncomeBudgetValue: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.budgetValue : undefined,
@@ -14343,9 +14357,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </section>}
 	                  {sharedIncomeSelectedDimensions.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-4 text-slate-500"><span>已选 {sharedIncomeSelectedDimensions.length} 个维度：</span>{sharedIncomeSelectedDimensions.map((dimension, index) => <span key={dimension.id} className="whitespace-nowrap font-medium text-blue-700">{index > 0 && <span className="mr-1.5 text-slate-300">·</span>}{dimension.compactLabel} {sharedIncomeDimensionWeightPercentage.toFixed(2)}%</span>)}</div>}
 	                </section>
+	                {sharedIncomeServerPlanActive && <p className="mt-2 text-[11px] leading-4 text-slate-500">{sharedIncomeManuallyAdjusted ? "已人工精调，将按当前金额确认；未分金额保留。" : "自动生成建议后，可直接加减或输入金额进行精调。"}</p>}
 	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">{sharedIncomeAllocationMetrics.length === 0 ? "共享分配人" : "共享分配清单"}</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
 	                  drafts: sharedIncomeDrafts,
-	                  setDrafts: setSharedIncomeDrafts,
+	                  setDrafts: updateSharedIncomeDraftsByUser,
 	                  targetSelections: sharedIncomeTargetSelections,
 	                  setTargetSelections: setSharedIncomeTargetSelections,
 	                  allocatedTotal: sharedIncomeAllocatedTotal,

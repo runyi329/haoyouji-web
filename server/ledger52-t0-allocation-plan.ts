@@ -70,17 +70,27 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 function hash(value: unknown) { return createHash("sha256").update(canonical(value)).digest("hex"); }
+/** 签名执行清单只接受正整数分；不以浮点容差放过超精度或舍入为零的金额。 */
+function allocationAmountCents(value: unknown): number {
+  if (typeof value !== "string" || !/^\d+(?:\.\d{1,2})?$/.test(value.trim())) conflict("共享金额须为最多两位小数的正数，请重新确认清单");
+  const [whole, fraction = ""] = value.trim().split(".");
+  const cents = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
+  if (cents <= 0n || cents > BigInt(Number.MAX_SAFE_INTEGER)) conflict("共享金额超出有效范围，请重新确认清单");
+  return Number(cents);
+}
+function allocationAmountText(cents: number): string {
+  const exact = BigInt(cents);
+  return `${exact / 100n}.${String(exact % 100n).padStart(2, "0")}`;
+}
 function normalizedAllocations(input: T0SharedIncomeAllocation[]): T0SharedIncomeAllocation[] {
   if (!Array.isArray(input)) conflict("共享金额无效，请重新生成清单");
   const ids = new Set<number>();
   return input.map((row) => {
-    const userId = validId(row.recipientUserId, true);
+    const userId = validId(row?.recipientUserId, true);
     if (ids.has(userId)) conflict("同一共享收款人重复出现，请重新生成清单");
     ids.add(userId);
-    const amount = numberText(row.amount, "共享金额");
-    const cents = Math.round(Number(amount) * 100);
-    if (!Number.isSafeInteger(cents) || Math.abs(Number(amount) * 100 - cents) > 0.000001) conflict("共享金额精度无效，请重新生成清单");
-    return { recipientUserId: userId, amount: (cents / 100).toFixed(2) };
+    const cents = allocationAmountCents(row.amount);
+    return { recipientUserId: userId, amount: allocationAmountText(cents) };
   }).sort((a, b) => a.recipientUserId - b.recipientUserId);
 }
 function encode(payload: PlanPayload) {
@@ -101,12 +111,14 @@ function decode(token: string): PlanPayload {
   if (!Number.isFinite(payload.createdAt) || Date.now() - payload.createdAt > TOKEN_LIFETIME_MS || Date.now() < payload.createdAt - 5_000) conflict("共享分配计划已过期，请重新预览");
   return payload;
 }
-/** 确认前校验签名、有效期、实际账户用户、预算、维度和逐笔金额。 */
-export function verifyT0SharedIncomePlanToken(input: T0SharedAllocationPlanInput & { token: string; allocations: T0SharedIncomeAllocation[] }): PlanPayload {
+/** 显式调整仅允许金额偏离建议；签名、有效期及所有原始输入绑定仍必须一致。 */
+export function verifyT0SharedIncomePlanToken(input: T0SharedAllocationPlanInput & { token: string; allocations: T0SharedIncomeAllocation[]; manualAdjustment?: boolean }): PlanPayload {
   const payload = decode(input.token);
   const expected = normalizeInput(input);
   const original = payload.input;
-  if (canonical({ ...original, accountName: original.accountId ? "" : original.accountName }) !== canonical({ ...expected, accountName: expected.accountId ? "" : expected.accountName }) || canonical(normalizedAllocations(payload.allocations)) !== canonical(normalizedAllocations(input.allocations))) conflict("共享计划与确认内容不一致，请重新预览");
+  const suggestedAllocations = normalizedAllocations(payload.allocations);
+  const finalAllocations = normalizedAllocations(input.allocations);
+  if (canonical({ ...original, accountName: original.accountId ? "" : original.accountName }) !== canonical({ ...expected, accountName: expected.accountId ? "" : expected.accountName }) || (input.manualAdjustment !== true && canonical(suggestedAllocations) !== canonical(finalAllocations))) conflict("共享计划与确认内容不一致，请重新预览");
   return payload;
 }
 function allocateWeightedCents(budgetCents: number, scores: AllocationScore[], minimumCent = false): Array<{ userId: string; cents: number }> {
@@ -250,10 +262,33 @@ export async function buildLedger52T0SharedIncomeAllocationPlan(input: T0SharedA
   finally { conn.release(); }
 }
 /** 原保存事务内锁定配置并重读事实；发生变化时拒绝旧计划，不悄悄改确认金额。 */
-export async function verifyT0SharedIncomePlanFresh(input: T0SharedAllocationPlanInput & { token: string; allocations: T0SharedIncomeAllocation[]; connection: PoolConnection }) {
+export async function verifyT0SharedIncomePlanFresh(input: T0SharedAllocationPlanInput & { token: string; allocations: T0SharedIncomeAllocation[]; manualAdjustment?: boolean; connection: PoolConnection }) {
   const payload = verifyT0SharedIncomePlanToken(input);
   const plan = await computePlan(payload.input, input.connection, payload.asOf, true);
   if (plan.fingerprint !== payload.fingerprint || canonical(plan.allocations) !== canonical(payload.allocations) || plan.rulesVersion !== payload.rulesVersion || plan.principalVersion !== payload.principalVersion || plan.annualizedVersion !== payload.annualizedVersion) conflict("订单、资金、共享资格或权重已更新，请重新生成分配清单后确认");
+  // 先完整复核原建议，再验证最终清单；允许部分分配或全部留存，但不得扩张预算或归属范围。
+  const finalAllocations = normalizedAllocations(input.allocations);
+  const eligibleIds = new Set(plan.candidates.filter((row) => row.hasPrincipal && row.sharedIncomeEnabled).map((row) => validId(row.userId, true)));
+  const maximumCents = Math.round(plan.shareableAmount * 100);
+  if (!Number.isSafeInteger(maximumCents) || maximumCents < 0 || !Number.isSafeInteger(plan.audit.budgetCents) || plan.audit.budgetCents < 0) conflict("共享预算超出有效范围，请重新预览");
+  let allocatedCents = 0;
+  for (const row of finalAllocations) {
+    if (!eligibleIds.has(row.recipientUserId)) conflict("共享分配对象须为当前已入金且开启共享资格的有效用户，请重新确认清单");
+    allocatedCents += allocationAmountCents(row.amount);
+    if (!Number.isSafeInteger(allocatedCents) || allocatedCents > plan.audit.budgetCents || allocatedCents > maximumCents) conflict("共享分配合计不得超过原计划预算及本单真实可共享收益，请重新确认清单");
+  }
+  if (input.manualAdjustment === true) {
+    return {
+      ...plan.audit,
+      mode: "manual_adjustment" as const,
+      ruleSource: "signed_server_plan" as const,
+      rulesVersion: plan.rulesVersion, principalVersion: plan.principalVersion, annualizedVersion: plan.annualizedVersion,
+      suggestedAllocations: plan.allocations,
+      allocations: finalAllocations,
+      allocatedTotal: allocatedCents / 100,
+      retainedAmount: (plan.audit.budgetCents - allocatedCents) / 100,
+    };
+  }
   return plan.audit;
 }
 /** 仅实际保存前、BEGIN之外创建审计表，避免DDL破坏成交事务。 */

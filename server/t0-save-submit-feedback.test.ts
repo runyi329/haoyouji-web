@@ -172,6 +172,7 @@ function harness(options: {
     sharedIncomeAllocationBudgetMode: "amount", sharedIncomeAllocationBudgetValue: " 5.00 ",
     sharedIncomeSaveAllocations: allocations, sharedIncomeAllocationPlanError: null,
     sharedIncomeAnnualizedRuleUnavailable: false,
+    sharedIncomeManuallyAdjusted: false,
     t0SharedIncomeServerPlanQuery: { data: signedPlanFixture, isFetching: false, error: null, refetch },
     sharedIncomeBudget: { error: null, allocationLimit: 5 }, sharedIncomeAllocatedTotal: 5,
     saveEntryMutation: { mutate, isPending: false, mutateAsync: forbiddenWrite },
@@ -373,7 +374,7 @@ describe("T0 提交反馈修复不得绕过真实签名计划、预算或原始�
     const h = harness({ globals: { sharedIncomeSaveAllocations: [{ recipientUserId: 4, amount: "4.99" }] } });
     h.invoke();
     expectNoWrites(h);
-    expect(h.state.closeSaveError).toMatch(/分配金额已被修改/);
+    expect(h.state.closeSaveError).toBe("分配清单未同步，请重新生成建议后再确认");
   });
 
   it("直达模拟预览不提交，正式签名 fixture 也不能绕过", () => {
@@ -433,7 +434,7 @@ describe("T0 提交反馈修复不得绕过真实签名计划、预算或原始�
   it("服务端缺token拒绝在DB连接前；签名/预算/fresh源仓仍在INSERT前（只读AST，不执行DB）", () => {
     const save = functionNode("saveLedger52T0JournalEntry", journal);
     const guard = required(nodes(save, ts.isIfStatement).find(node =>
-      node.expression.getText(journal) === "hasSharedMetrics && !input.sharedIncomePlanToken",
+      node.expression.getText(journal) === "(hasSharedMetrics || hasSignedSharedAdjustment) && !input.sharedIncomePlanToken",
     ), "missing-token production guard");
     expect(nodes(guard, ts.isThrowStatement)).toHaveLength(1);
     const db = required(nodes(save, ts.isCallExpression).find(call => call.expression.getText(journal) === "getDbTransactionConnection"), "DB call AST");

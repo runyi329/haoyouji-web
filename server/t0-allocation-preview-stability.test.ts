@@ -202,6 +202,10 @@ function draftHarness() {
     sharedIncomeAllocationMetrics: ["principal"],
     sharedIncomeAnnualizedRuleUnavailable: false,
     sharedIncomeServerPlanInput: input(),
+    sharedIncomeManuallyAdjusted: false,
+    setSharedIncomeManuallyAdjusted: (next: boolean) => {
+      sandbox.sharedIncomeManuallyAdjusted = next;
+    },
     t0SharedIncomeServerPlanQuery: query,
     useRef: (current: unknown) => ({ current }),
     setSharedIncomeDrafts: setDrafts,
@@ -559,7 +563,7 @@ describe("T0 real draft effect preserves rendered amounts through background ref
         { recipientUserId: 4, amount: "3.50" },
       ])
     ).toBeUndefined();
-    expect(h.state.closeError).toMatch(/分配金额已被修改/);
+    expect(h.state.closeError).toBe("分配清单未同步，请重新生成建议后再确认");
   });
   it.each([
     ["budgetValue", "6.00"],

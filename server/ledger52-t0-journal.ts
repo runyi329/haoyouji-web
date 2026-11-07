@@ -90,6 +90,8 @@ export type SaveT0JournalEntryInput = {
    */
   sharedIncomeAllocations?: Array<{ recipientUserId: number; amount: string }>;
   sharedIncomePlanToken?: string;
+  /** 仅显式 true 允许在有效签名计划基础上精调金额；不替代计划令牌或原输入绑定。 */
+  sharedIncomeManualAdjustment?: boolean;
   sharedIncomeMetrics?: Array<"principal" | "weightedOpeningQuantity" | "realizedAnnualized" | "sharedContribution" | "marketContribution">;
   sharedIncomeBudgetMode?: "percentage" | "amount";
   sharedIncomeBudgetValue?: string;
@@ -4707,10 +4709,11 @@ export async function deleteLedger52T0JournalDirectory(input: {
 export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput) {
   const normalizedQuantity = requireValidEthQuantity(input.quantity);
   const hasSharedMetrics = Array.isArray(input.sharedIncomeMetrics) && input.sharedIncomeMetrics.length > 0;
-  if (hasSharedMetrics && !(input.action === "closeLong" || input.action === "closeShort")) {
+  const hasSignedSharedAdjustment = input.sharedIncomeManualAdjustment === true;
+  if ((hasSharedMetrics || hasSignedSharedAdjustment) && !(input.action === "closeLong" || input.action === "closeShort")) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "共享分配维度仅支持正式手动平仓" });
   }
-  if (hasSharedMetrics && !input.sharedIncomePlanToken) {
+  if ((hasSharedMetrics || hasSignedSharedAdjustment) && !input.sharedIncomePlanToken) {
     throw new TRPCError({ code: "CONFLICT", message: "带共享分配维度的平仓必须先生成并确认服务端计划" });
   }
 
@@ -4975,6 +4978,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         targetPrice: String(storedTargetPrice || ""), targetOpeningEntryId: targetOpeningEntryId || undefined,
         metrics: input.sharedIncomeMetrics || [], budgetMode: input.sharedIncomeBudgetMode || "amount",
         budgetValue: input.sharedIncomeBudgetValue || "", allocations: input.sharedIncomeAllocations || [],
+        manualAdjustment: input.sharedIncomeManualAdjustment === true,
       });
     }
     const [entryResult] = await tx.execute(
