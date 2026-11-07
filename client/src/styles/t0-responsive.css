@@ -1,0 +1,102 @@
+/* Opt-in only: portal/dialog roots must also carry data-t0-responsive. */
+[data-t0-responsive],
+[data-t0-responsive] * {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Only numeric layout paths selected by the hook, not every flex child/icon.
+   shrink-0 numeric items must give up space before any truncation is considered. */
+[data-t0-responsive] [data-t0-layout-item],
+[data-t0-responsive][data-t0-layout-item] {
+  min-width: 0 !important;
+  flex-shrink: 1 !important;
+}
+
+[data-t0-responsive] [data-t0-fit],
+[data-t0-responsive][data-t0-fit],
+[data-t0-responsive] [data-t0-fitted],
+[data-t0-responsive][data-t0-fitted] {
+  min-width: 0 !important;
+  max-width: 100%;
+  flex-shrink: 1 !important;
+  white-space: nowrap;
+  /* Never hide digits to make a width check look successful. */
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+[data-t0-responsive] [data-t0-fit-inline] {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+/* Every text run gets its own font size, including fixed-px decimal/unit spans.
+   Preserve family, weight, letter spacing and the original DOM/click handlers. */
+[data-t0-responsive] [data-t0-fit-node],
+[data-t0-responsive][data-t0-fit-node] {
+  font-size: var(--t0-fit-font-size) !important;
+}
+
+/* 10px cannot always fit an arbitrarily long amount. Break safely without
+   ellipsis, clipping, transform:scale or changing the value/unit text. */
+[data-t0-responsive] [data-t0-fit-overflow],
+[data-t0-responsive][data-t0-fit-overflow],
+[data-t0-responsive] [data-t0-fit-overflow] [data-t0-fit-node] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-all;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  height: auto !important;
+  max-height: none !important;
+  line-height: 1.25 !important;
+  flex-shrink: 1 !important;
+  flex-wrap: wrap !important;
+}
+
+/* Narrowly release clipping on the in-flow numeric ancestor path only.
+   Scroll containers / absolutely positioned quote widgets are not selected. */
+[data-t0-responsive] [data-t0-fit-flow] {
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  white-space: normal !important;
+  flex-wrap: wrap !important;
+  overflow-wrap: anywhere;
+}
+
+[data-t0-responsive] [data-t0-fit-overflow][data-t0-fit-inline] {
+  display: inline-block;
+}
+
+/* Author opt-in for titles/toolbars/multi-metric rows; fixed-size icons retain
+   their dimensions. Use min-height instead of a fixed height on these rows. */
+[data-t0-responsive] [data-t0-wrap],
+[data-t0-responsive][data-t0-wrap] {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  flex-wrap: wrap !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Font/layout measurement only. Inert, aria-hidden clones live inside the
+   opted-in scope, never over the live content or at document body level. */
+[data-t0-responsive] [data-t0-measure] {
+  position: fixed !important;
+  left: -100000px !important;
+  top: 0 !important;
+  width: max-content !important;
+  height: auto !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  contain: layout style paint;
+  z-index: -1;
+}

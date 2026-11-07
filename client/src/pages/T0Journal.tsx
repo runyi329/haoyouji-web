@@ -31,9 +31,14 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
+import { useT0ResponsiveLayout } from "@/hooks/useT0ResponsiveLayout";
+import "@/styles/t0-responsive.css";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { T0TeamAnnualizedDialog, type T0TeamAnnualizedDetail } from "@/components/T0TeamAnnualizedDialog";
 import { T0TeamDepositDialog } from "@/components/T0TeamDepositDialog";
+import { T0SummaryHeader } from "@/components/T0SummaryHeader";
+import { UsdtIcon } from "@/components/icons/UsdtIcon";
+import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { T0_SHARED_ALLOCATION_METRICS, type T0SharedIncomeAllocationPlan } from "@shared/t0-allocation-plan-contract";
 import { T0WeightedOrderRuleSummary, T0WeightedOrderRuleSettingsPage } from "@/components/T0WeightedOrderRule";
 import { SharedIncomeRuleSummaryCard } from "@/components/SharedIncomeRuleSummaryCard";
@@ -349,6 +354,14 @@ type T0TotalProfitContextSummary = {
   ringBackground: string;
   items: T0TotalProfitContextSummaryItem[];
 };
+
+function T0TeamUsdtIcon({ size = 10 }: { size?: number }) {
+  const source = getCryptoAssetIconSrc("USDT");
+  return <span role="img" aria-label="USDT" title="USDT" className="relative inline-flex shrink-0 align-middle" style={{ width: size, height: size }}>
+    <UsdtIcon size={size} />
+    {source && <img src={source} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
+  </span>;
+}
 
 function T0TotalProfitContextSummaryCard({ summary, animated }: { summary: T0TotalProfitContextSummary; animated: boolean }) {
   const [whole, fraction] = summary.totalText.split(".");
@@ -679,9 +692,9 @@ function T0SettlementAccountSourceTopRows({
   return <div className="border-b border-slate-100 bg-white" aria-label={`${account.accountName}按类型及日期去向汇总`}>
     <div className="flex min-h-8 items-center gap-2 border-b border-slate-100 px-3 py-1.5 tabular-nums"><span className="shrink-0 text-[10px] font-semibold text-slate-600">按类型</span><div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-slate-100 text-center">{typeRows.map((item) => {
       const amount = breakdown.kinds[item.key];
-      return <div key={item.key} className="min-w-0 whitespace-nowrap px-1 text-[10px]"><span className={`mr-1 inline-flex rounded px-1 py-0.5 text-[8px] font-semibold ${item.className}`}>{item.label}</span><span className={`font-semibold tracking-[-0.045em] ${amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(amount)}</span></div>;
+      return <div key={item.key} className="min-w-0 whitespace-nowrap px-1 text-[10px]"><span className={`mr-1 inline-flex rounded px-1 py-0.5 text-[8px] font-semibold ${item.className}`}>{item.label}</span><span data-t0-fit className={`font-semibold tracking-[-0.045em] ${amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(amount)}</span></div>;
     })}</div></div>
-    <div className="flex items-stretch gap-2 px-3 py-1.5 tabular-nums"><span className="flex shrink-0 items-center text-[10px] font-semibold text-slate-600">按日期</span><div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-100 text-center">{breakdown.days.map((day) => <div key={day.date || day.label} className="min-w-0 px-0.5"><div className="text-[8px] text-slate-400">{day.label}</div><div className={`mt-0.5 whitespace-nowrap text-[8px] font-semibold tracking-[-0.08em] ${day.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(day.amount)}</div></div>)}</div></div>
+    <div className="flex items-stretch gap-2 px-3 py-1.5 tabular-nums"><span className="flex shrink-0 items-center text-[10px] font-semibold text-slate-600">按日期</span><div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-100 text-center">{breakdown.days.map((day) => <div key={day.date || day.label} className="min-w-0 px-0.5"><div className="text-[8px] text-slate-400">{day.label}</div><div data-t0-fit className={`mt-0.5 whitespace-nowrap text-[8px] font-semibold tracking-[-0.08em] ${day.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(day.amount)}</div></div>)}</div></div>
   </div>;
 }
 
@@ -697,7 +710,7 @@ function T0SettlementAccountRecipientSummary({
   const breakdown = useMemo(() => buildT0SettlementAccountSourceBreakdown(account, weekStartBjt), [account, weekStartBjt]);
   return <section className="overflow-hidden border-b border-slate-100 bg-white" aria-label={`${account.accountName}按用户去向汇总`}>
     <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3 py-2"><div className="flex items-center gap-1"><span className="text-[10px] font-semibold text-slate-600">按用户去向</span>{exportControl}</div><span className="text-[9px] text-slate-400">{breakdown.recipients.length} 人</span></div>
-    {breakdown.recipients.length === 0 ? <div className="px-3 py-2 text-[10px] text-slate-400">暂无可归属用户去向</div> : <div className="grid grid-cols-2 gap-px bg-slate-100">{breakdown.recipients.map((recipient) => <div key={recipient.userId} className="flex min-w-0 items-center justify-between gap-1.5 bg-white px-2.5 py-1.5 text-[10px] tabular-nums"><span className="min-w-0 truncate font-medium text-slate-600">{recipient.name}</span><span className={`shrink-0 whitespace-nowrap font-semibold tracking-[-0.035em] ${recipient.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(recipient.amount)} U</span></div>)}</div>}
+    {breakdown.recipients.length === 0 ? <div className="px-3 py-2 text-[10px] text-slate-400">暂无可归属用户去向</div> : <div className="grid grid-cols-2 gap-px bg-slate-100">{breakdown.recipients.map((recipient) => <div key={recipient.userId} className="flex min-w-0 items-center justify-between gap-1.5 bg-white px-2.5 py-1.5 text-[10px] tabular-nums"><span className="min-w-0 truncate font-medium text-slate-600">{recipient.name}</span><span data-t0-fit className={`shrink-0 whitespace-nowrap font-semibold tracking-[-0.035em] ${recipient.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(recipient.amount)} U</span></div>)}</div>}
   </section>;
 }
 function formatT0SettlementAmount(value: number | null | undefined) {
@@ -811,8 +824,8 @@ function T0WeeklySettlementDailyIncomeProgressList({
         const dayTotal = values.reduce((total, item) => total + item.value, 0);
         return <div key={day.date} className="grid grid-cols-[46px_minmax(0,1fr)_58px] items-center gap-2 px-2.5 py-1.5 tabular-nums" aria-label={`${day.label} ${day.date.slice(5).replace("-", "月")}日，收益 ${formatT0SettlementAmount(dayTotal)} U`}>
           <div><div className="text-[10px] font-semibold text-slate-600">{day.label}</div><div className="mt-0.5 text-[9px] text-slate-400">{day.date.slice(5).replace("-", "/")}</div></div>
-          <div className="min-w-0"><div className="flex h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${day.label}收益类别占比`}>{absoluteTotal > 0 ? values.map((item) => <div key={item.key} title={`${item.label} ${formatT0SettlementAmount(item.value)} U`} style={{ width: `${Math.abs(item.value) / absoluteTotal * 100}%`, backgroundColor: item.value >= 0 ? item.positive : item.negative }} />) : <div className="w-full bg-slate-200" />}</div><div className="mt-1 grid grid-cols-3 gap-1 text-[8px] leading-none">{values.map((item) => <span key={item.key} className="truncate" style={{ color: item.value >= 0 ? item.positive : item.negative }}>{formatT0SettlementAmount(item.value)}</span>)}</div></div>
-          <div className={`whitespace-nowrap text-right text-[11px] font-bold ${dayTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(dayTotal)}<span className="ml-0.5 text-[8px] font-medium">U</span></div>
+          <div className="min-w-0"><div className="flex h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${day.label}收益类别占比`}>{absoluteTotal > 0 ? values.map((item) => <div key={item.key} title={`${item.label} ${formatT0SettlementAmount(item.value)} U`} style={{ width: `${Math.abs(item.value) / absoluteTotal * 100}%`, backgroundColor: item.value >= 0 ? item.positive : item.negative }} />) : <div className="w-full bg-slate-200" />}</div><div className="mt-1 grid grid-cols-3 gap-1 text-[8px] leading-none">{values.map((item) => <span data-t0-fit key={item.key} className="truncate" style={{ color: item.value >= 0 ? item.positive : item.negative }}>{formatT0SettlementAmount(item.value)}</span>)}</div></div>
+          <div data-t0-fit className={`whitespace-nowrap text-right text-[11px] font-bold ${dayTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(dayTotal)}<span className="ml-0.5 text-[8px] font-medium">U</span></div>
         </div>;
       })}
     </div>
@@ -890,7 +903,7 @@ function T0HistoricalSettlementWeekCalendar({ reports, dailyIncomeByDate, target
       const income = report.summary.income;
       const positive = income.total >= 0;
       return <div key={visibleWeekStart} className="border-t border-slate-200 bg-white px-3 py-3" aria-label={`${visiblePeriodLabel}，结算收益 ${formatT0SettlementAmount(income.total)} U`}>
-        <div className="flex items-end justify-between gap-3"><span className="text-[11px] font-medium text-slate-500">七日收益明细</span><div className={`whitespace-nowrap text-[clamp(20px,6.2vw,27px)] font-bold leading-none tracking-[-0.04em] tabular-nums ${positive ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-[10px] font-medium">U</span></div></div>
+        <div className="flex items-end justify-between gap-3"><span className="text-[11px] font-medium text-slate-500">七日收益明细</span><div data-t0-fit className={`whitespace-nowrap text-[clamp(20px,6.2vw,27px)] font-bold leading-none tracking-[-0.04em] tabular-nums ${positive ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-[10px] font-medium">U</span></div></div>
         {authoritativeDailyIncomeByDate
           ? <T0WeeklySettlementDailyIncomeProgressList weekStartBjt={visibleWeekStart} dailyIncomeByDate={authoritativeDailyIncomeByDate} />
           : <div className="mt-3 border-t border-slate-100 px-1 py-3 text-center text-[10px] leading-5 text-slate-400">该冻结周快照未保留逐日构成；周结算合计仍以冻结报告为准。</div>}
@@ -920,9 +933,9 @@ function T0MemberWeeklySettlementCurrentCard({
       <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-300">结算周期</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tabular-nums">{formatT0WeeklySettlementPeriod(report.period.weekStartBjt, report.period.weekEndExclusiveBjt)} <span className="ml-1 text-[10px] font-medium text-slate-300">北京时间</span></div></div>
       <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">{periodStatusLabel}</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{periodStatusValue}</div></div>
     </div>
-    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">{displayName}{isRealtimeWeek ? "本周" : "本期"}收益结算</div><div className="mt-1 flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">{avatar ? <img src={avatar} alt={`${displayName}头像`} className="h-full w-full object-cover" /> : <span>{displayName.slice(0, 1)}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">{displayName}{isRealtimeWeek ? "本周" : "本期"}收益结算</div><div className="mt-1 flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">{avatar ? <img src={avatar} alt={`${displayName}头像`} className="h-full w-full object-cover" /> : <span>{displayName.slice(0, 1)}</span>}</div><div data-t0-fit className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
     <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">
-      {[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}
+      {[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}
     </div>
   </div>;
 }
@@ -950,8 +963,8 @@ function T0AdminWeeklySettlementOverviewCard({
   const statusClass = isRealtimeWeek ? "bg-emerald-50 text-emerald-700" : report.status === "frozen" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
   return <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
     <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2.5"><div className="min-w-0"><div className="text-sm font-semibold text-slate-900">{isRealtimeWeek ? "全体用户本周结算" : "全体用户本期结算"}</div><div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatT0WeeklySettlementPeriod(report.period.weekStartBjt, report.period.weekEndExclusiveBjt)} · 北京时间 · {report.summary.participantCount} 人</div></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${statusClass}`}>{statusLabel}</span></div>
-    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">全体用户{isRealtimeWeek ? "本周" : "本期"}结算收益</div><div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"><button type="button" onClick={onPreviousWeek} disabled={!hasPreviousWeek} className="justify-self-start inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看上周全体用户结算"><ChevronLeft className="h-5 w-5" />上周</button><div className="flex min-w-0 items-center justify-center gap-2"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1" aria-label={`参与结算的${report.summary.participantCount}位用户头像`}>{avatarPreview.map((member, index) => { const avatar = memberAvatarByUserId?.get(member.userId); return <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{avatar ? <img src={avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>; })}{report.summary.participantCount > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{report.summary.participantCount - avatarPreview.length}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div><button type="button" onClick={onNextWeek} disabled={!hasNextWeek} className="justify-self-end inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看下周全体用户结算">下周<ChevronRight className="h-5 w-5" /></button></div></div>
-    <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">{[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}</div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">全体用户{isRealtimeWeek ? "本周" : "本期"}结算收益</div><div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"><button type="button" onClick={onPreviousWeek} disabled={!hasPreviousWeek} className="justify-self-start inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看上周全体用户结算"><ChevronLeft className="h-5 w-5" />上周</button><div className="flex min-w-0 items-center justify-center gap-2"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1" aria-label={`参与结算的${report.summary.participantCount}位用户头像`}>{avatarPreview.map((member, index) => { const avatar = memberAvatarByUserId?.get(member.userId); return <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{avatar ? <img src={avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>; })}{report.summary.participantCount > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{report.summary.participantCount - avatarPreview.length}</span>}</div><div data-t0-fit className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div><button type="button" onClick={onNextWeek} disabled={!hasNextWeek} className="justify-self-end inline-flex h-9 items-center gap-0.5 rounded-md px-2 text-[13px] font-semibold text-slate-600 active:bg-slate-50 disabled:opacity-25" aria-label="查看下周全体用户结算">下周<ChevronRight className="h-5 w-5" /></button></div></div>
+    <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">{[{ label: "订单", value: income.order, count: income.orderCount }, { label: "分佣", value: income.commission, count: income.commissionCount }, { label: "共享", value: income.shared, count: income.sharedCount }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-3"><div className="whitespace-nowrap text-[11px] text-slate-500">{item.label}<span className="ml-1 text-[10px] text-slate-400">{item.count}笔</span></div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}<span className="ml-0.5 text-[9px] font-medium">U</span></div></div>)}</div>
   </div>;
 }
 
@@ -964,7 +977,7 @@ function T0AdminWeeklySettlementMemberList({
   expandedMemberId: number | null;
   onExpandedMemberChange: (userId: number | null) => void;
 }) {
-  return <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-900">用户收益结算</span><span className="text-[11px] text-slate-400">{report.members.length} 人</span></div><div className="divide-y divide-slate-100">{report.members.map((member) => { const expanded = expandedMemberId === member.userId; return <div key={member.userId}><button type="button" onClick={() => onExpandedMemberChange(expanded ? null : member.userId)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{member.name}</div><div className="mt-1 text-[10px] tabular-nums text-slate-400">订单 {member.income.orderCount} · 分佣 {member.income.commissionCount} · 共享 {member.income.sharedCount}</div></div><div className="shrink-0 text-right tabular-nums"><div className={`text-sm font-bold leading-none ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-medium">U</span></div><div className="mt-1 text-[10px] text-slate-400">点击查看收益构成</div></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.shared)}</div></div></div>}</div>; })}</div></div>;
+  return <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-900">用户收益结算</span><span className="text-[11px] text-slate-400">{report.members.length} 人</span></div><div className="divide-y divide-slate-100">{report.members.map((member) => { const expanded = expandedMemberId === member.userId; return <div key={member.userId}><button type="button" onClick={() => onExpandedMemberChange(expanded ? null : member.userId)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{member.name}</div><div className="mt-1 text-[10px] tabular-nums text-slate-400">订单 {member.income.orderCount} · 分佣 {member.income.commissionCount} · 共享 {member.income.sharedCount}</div></div><div className="shrink-0 text-right tabular-nums"><div data-t0-fit className={`text-sm font-bold leading-none ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-medium">U</span></div><div className="mt-1 text-[10px] text-slate-400">点击查看收益构成</div></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${member.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.shared)}</div></div></div>}</div>; })}</div></div>;
 }
 
 function T0TeamWeeklySettlementCard({
@@ -1003,9 +1016,9 @@ function T0TeamWeeklySettlementCard({
       <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-300">团队结算周期</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tabular-nums">{formatT0WeeklySettlementPeriod(teamSettlement.period.weekStartBjt, teamSettlement.period.weekEndExclusiveBjt)} <span className="ml-1 text-[10px] font-medium text-slate-300">北京时间</span></div></div>
       <div className="shrink-0 text-right tabular-nums"><div className="text-[11px] font-medium text-slate-300">{periodStatusLabel}</div><div className="mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-bold leading-none tracking-[-0.035em] text-white">{periodStatusValue}</div></div>
     </div>
-    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">团队{isRealtimeWeek ? "本周" : "本期"}收益结算 · {teamSettlement.summary.participantCount} 人</div><div className="mt-1 flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1">{avatarPreview.map((member, index) => <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>)}{members.length > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{members.length - avatarPreview.length}</span>}</div><div className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
+    <div className="px-3 py-3 text-center tabular-nums"><div className="text-[11px] text-slate-500">团队{isRealtimeWeek ? "本周" : "本期"}收益结算 · {teamSettlement.summary.participantCount} 人</div><div className="mt-1 flex min-w-0 items-center justify-center gap-1.5"><div className="flex h-8 min-w-8 shrink-0 items-center justify-center pl-1">{avatarPreview.map((member, index) => <span key={member.userId} className="-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-700 text-[9px] font-bold text-white" style={{ zIndex: avatarPreview.length - index }}>{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</span>)}{members.length > avatarPreview.length && <span className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 px-1 text-[9px] font-bold text-slate-600">+{members.length - avatarPreview.length}</span>}</div><div data-t0-fit className={`whitespace-nowrap text-[clamp(24px,7vw,30px)] font-bold leading-none tracking-[-0.04em] ${income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(income.total)} <span className="text-xs font-semibold">U</span></div></div></div>
     <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 text-center tabular-nums">
-      {[{ label: "订单", value: income.order }, { label: "分佣", value: income.commission }, { label: "共享", value: income.shared }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-2.5"><div className="text-[10px] text-slate-500">{item.label}</div><div className={`mt-1 whitespace-nowrap text-[clamp(11px,3.25vw,14px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}</div></div>)}
+      {[{ label: "订单", value: income.order }, { label: "分佣", value: income.commission }, { label: "共享", value: income.shared }].map((item) => <div key={item.label} className="min-w-0 px-1.5 py-2.5"><div className="text-[10px] text-slate-500">{item.label}</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(11px,3.25vw,14px)] font-bold leading-none tracking-[-0.035em] ${item.value >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.value)}</div></div>)}
     </div>
     </div>
     <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -1029,10 +1042,10 @@ function T0TeamWeeklySettlementCard({
               <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-[11px] font-bold text-white">{member.avatar ? <img src={member.avatar} alt={`${member.name}头像`} className="h-full w-full object-cover" /> : member.name.slice(0, 1)}</div>
               <div className="min-w-0"><div className="truncate text-[13px] font-semibold text-slate-800">{member.name}</div><div className="mt-0.5 text-[10px] text-slate-400">{isRealtimeWeek ? "本周" : "本期"}收益结算</div></div>
             </div>
-            <div className={`shrink-0 whitespace-nowrap text-[clamp(17px,5vw,21px)] font-bold leading-none tracking-[-0.035em] tabular-nums ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-semibold">U</span></div>
+            <div data-t0-fit className={`shrink-0 whitespace-nowrap text-[clamp(17px,5vw,21px)] font-bold leading-none tracking-[-0.035em] tabular-nums ${member.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(member.income.total)} <span className="text-[9px] font-semibold">U</span></div>
           </div>
           <div className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${member.name}本周订单、分佣、共享收益构成`}>{absoluteTotal > 0 ? composition.map((item) => <div key={item.key} title={`${item.label} ${formatT0SettlementAmount(item.value)} U`} style={{ width: `${Math.abs(item.value) / absoluteTotal * 100}%`, backgroundColor: item.value >= 0 ? item.positive : item.negative }} />) : <div className="w-full bg-slate-200" />}</div>
-          <div className="mt-2 grid grid-cols-3 gap-1 text-center tabular-nums">{composition.map((item) => <div key={item.key} className="min-w-0"><div className="text-[10px] text-slate-500">{item.label}</div><div className="mt-0.5 truncate text-[11px] font-bold leading-none" style={{ color: item.value >= 0 ? item.positive : item.negative }}>{formatT0SettlementAmount(item.value)}</div></div>)}</div>
+          <div className="mt-2 grid grid-cols-3 gap-1 text-center tabular-nums">{composition.map((item) => <div key={item.key} className="min-w-0"><div className="text-[10px] text-slate-500">{item.label}</div><div data-t0-fit className="mt-0.5 truncate text-[11px] font-bold leading-none" style={{ color: item.value >= 0 ? item.positive : item.negative }}>{formatT0SettlementAmount(item.value)}</div></div>)}</div>
         </div>;
       })}</div> : <div className="px-3 py-8 text-center text-xs text-slate-400">暂无符合团队结算范围的成员</div>}
       </div>
@@ -1204,7 +1217,7 @@ function T0WeeklySettlementReconciliationConfirmationSheet({
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><div className="text-base font-semibold text-slate-900">确认账目已平</div><div className="mt-0.5 text-[10px] text-slate-400">{formatT0WeeklySettlementPeriod(reconciliation.period.weekStartBjt, reconciliation.period.weekEndExclusiveBjt)} · {sourceLabel}</div></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 active:bg-slate-100" aria-label="关闭账目已平确认"><X className="h-4 w-4" /></button></div>
       <div className="space-y-4 px-4 py-4">
         {isPreviewRuntime && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">当前为只读热预览，可查看确认前校验；不会保存账目已平确认。</div>}
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3"><div className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><ShieldCheck className="h-4 w-4" />本周期账户账目已对齐</div><div className="mt-2 grid grid-cols-3 divide-x divide-emerald-100 text-center tabular-nums"><div><div className="text-[9px] text-emerald-700/70">账户净收益</div><div className="mt-1 text-xs font-bold text-emerald-800">{formatT0SettlementAmount(reconciliation.summary.netPnl)}</div></div><div><div className="text-[9px] text-emerald-700/70">用户去向</div><div className="mt-1 text-xs font-bold text-emerald-800">{formatT0SettlementAmount(reconciliation.summary.allocatedTotal)}</div></div><div><div className="text-[9px] text-emerald-700/70">调整凭证</div><div className="mt-1 text-xs font-bold text-emerald-800">{reconciliation.adjustments.length} 张</div></div></div></div>
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3"><div className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><ShieldCheck className="h-4 w-4" />本周期账户账目已对齐</div><div className="mt-2 grid grid-cols-3 divide-x divide-emerald-100 text-center tabular-nums"><div><div className="text-[9px] text-emerald-700/70">账户净收益</div><div data-t0-fit className="mt-1 text-xs font-bold text-emerald-800">{formatT0SettlementAmount(reconciliation.summary.netPnl)}</div></div><div><div className="text-[9px] text-emerald-700/70">用户去向</div><div data-t0-fit className="mt-1 text-xs font-bold text-emerald-800">{formatT0SettlementAmount(reconciliation.summary.allocatedTotal)}</div></div><div><div className="text-[9px] text-emerald-700/70">调整凭证</div><div className="mt-1 text-xs font-bold text-emerald-800">{reconciliation.adjustments.length} 张</div></div></div></div>
         <label className="block"><span className="text-[11px] font-medium text-slate-600">核对说明 <span className="font-normal text-slate-400">可选</span></span><textarea value={note} onChange={(event) => { setNote(event.target.value); setErrorText(""); requestIdRef.current = null; }} maxLength={300} rows={3} placeholder="例如：已核对各账户利润与用户去向" className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-2 py-2 text-sm leading-5" /></label>
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] leading-5 text-slate-500">确认后会新增一张不可修改的对账凭证，锁定本周逐笔来源、用户去向及全部调整哈希。后续任何来源或调整变化，都将自动变为“需重新确认”；不会自动移动真实资金。</div>
         {errorText && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700" role="alert">{errorText}</div>}
@@ -1277,9 +1290,9 @@ function T0WeeklySettlementAccountReconciliationPanel({
     <section className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label="账户对账汇总">
       <div className="border-b border-slate-100 px-3 py-2.5"><div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1"><button type="button" onClick={() => olderWeek && onSelectedWeekStartChange(olderWeek.weekStartBjt)} disabled={!olderWeek} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 active:bg-slate-50 disabled:opacity-25" aria-label="查看更早一周账户对账"><ChevronLeft className="h-4 w-4" /></button><div className="min-w-0"><div className="text-sm font-semibold text-slate-900">账户对账</div><div className="mt-0.5 whitespace-nowrap text-[10px] tabular-nums text-slate-400">{formatT0WeeklySettlementPeriod(reconciliation.period.weekStartBjt, reconciliation.period.weekEndExclusiveBjt)} · 北京时间</div></div><button type="button" onClick={() => newerWeek && onSelectedWeekStartChange(newerWeek.weekStartBjt)} disabled={!newerWeek} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 active:bg-slate-50 disabled:opacity-25" aria-label="查看更新一周账户对账"><ChevronRight className="h-4 w-4" /></button></div><button type="button" onClick={() => setAdjustmentPrefill({})} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-semibold text-slate-600 active:bg-slate-50"><Plus className="h-3 w-3" />调整</button></div><div className="mt-2 flex flex-wrap items-center gap-1.5"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${reconciliation.settlementReference.status === "frozen" ? "bg-blue-50 text-blue-700" : reconciliation.settlementReference.status === "backfill" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{referenceStatusLabel}</span><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${allReconciled ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{allReconciled ? "全部已对齐" : `${reconciliation.summary.unreconciledClosingCount} 笔待核对`}</span>{reconciliation.confirmation.state === "confirmed" ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"><Check className="h-3 w-3" />{confirmationLabel}</span> : canConfirm ? <button type="button" onClick={() => setShowConfirmationSheet(true)} className="inline-flex h-7 items-center gap-1 rounded-md bg-slate-900 px-2 text-[10px] font-semibold text-white active:opacity-85"><ShieldCheck className="h-3 w-3" />{reconciliation.confirmation.state === "stale" ? "重新确认" : "账目已平确认"}</button> : <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${reconciliation.confirmation.state === "stale" || reconciliation.settlementReference.frozenSourceChanged || hasUnresolvedHold ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{reconciliation.confirmation.state === "stale" ? confirmationLabel : reconciliation.settlementReference.frozenSourceChanged ? "冻结来源已变化" : hasUnresolvedHold ? "有暂挂待处理" : reconciliation.settlementReference.status === "realtime" ? "周结束后确认" : "未满足确认条件"}</span>}</div></div>
       <div className="grid grid-cols-3 divide-x divide-slate-200 text-center tabular-nums">
-        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">账户净收益</div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${reconciliation.summary.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.netPnl)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.summary.accountCount} 个账户</div></div>
-        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">用户去向</div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${reconciliation.summary.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.allocatedTotal)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.destinations.length} 人</div></div>
-        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">对账差额</div><div className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${isT0SettlementReconciled(reconciliation.summary.variance) ? "text-slate-700" : reconciliation.summary.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.variance)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.summary.closingCount} 笔平仓</div></div>
+        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">账户净收益</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${reconciliation.summary.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.netPnl)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.summary.accountCount} 个账户</div></div>
+        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">用户去向</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${reconciliation.summary.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.allocatedTotal)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.destinations.length} 人</div></div>
+        <div className="min-w-0 px-1.5 py-3"><div className="text-[10px] text-slate-500">对账差额</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-[clamp(12px,3.4vw,15px)] font-bold leading-none tracking-[-0.035em] ${isT0SettlementReconciled(reconciliation.summary.variance) ? "text-slate-700" : reconciliation.summary.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(reconciliation.summary.variance)}<span className="ml-0.5 text-[8px] font-medium">U</span></div><div className="mt-1 text-[9px] text-slate-400">{reconciliation.summary.closingCount} 笔平仓</div></div>
       </div>
     </section>
 
@@ -1288,7 +1301,7 @@ function T0WeeklySettlementAccountReconciliationPanel({
       {(reconciliation.adjustments || []).length === 0 ? <div className="px-3 py-4 text-[11px] leading-5 text-slate-400">本周期暂无追加调整。发现填写或归属错误时，可从上方“调整”建立凭证。</div> : <div className="divide-y divide-slate-100">{(reconciliation.adjustments || []).map((adjustment) => {
         const typeLabel = adjustment.type === "source_correction" ? "账户收益补正" : adjustment.type === "allocation_transfer" ? "用户去向调整" : "暂挂说明";
         const typeClass = adjustment.type === "source_correction" ? "bg-rose-50 text-rose-700" : adjustment.type === "allocation_transfer" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
-        return <div key={adjustment.id} className="px-3 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${typeClass}`}>{typeLabel}</span>{adjustment.accountName && <span className="truncate text-[11px] font-medium text-slate-700">{adjustment.accountName}</span>}{adjustment.sourceClosingEntryId && <span className="text-[10px] text-slate-400">#{adjustment.sourceClosingEntryId}</span>}</div><div className="mt-1 text-[11px] leading-5 text-slate-600">{adjustment.reason}</div></div>{adjustment.type === "source_correction" && <div className={`shrink-0 text-sm font-bold tabular-nums ${adjustment.sourceNetPnlDelta >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(adjustment.sourceNetPnlDelta)} <span className="text-[8px] font-medium">U</span></div>}</div>{adjustment.allocations.length > 0 && <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] tabular-nums">{adjustment.allocations.map((line) => <span key={line.userId} className={line.amount >= 0 ? "text-rose-600" : "text-emerald-600"}>{line.name} {formatT0SettlementAmount(line.amount)} U</span>)}</div>}<div className="mt-2 text-[9px] text-slate-400">{adjustment.createdByName} · {formatT0SettlementOccurredAt(adjustment.createdAt)} · 凭证 #{adjustment.id}</div></div>;
+        return <div key={adjustment.id} className="px-3 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${typeClass}`}>{typeLabel}</span>{adjustment.accountName && <span className="truncate text-[11px] font-medium text-slate-700">{adjustment.accountName}</span>}{adjustment.sourceClosingEntryId && <span className="text-[10px] text-slate-400">#{adjustment.sourceClosingEntryId}</span>}</div><div className="mt-1 text-[11px] leading-5 text-slate-600">{adjustment.reason}</div></div>{adjustment.type === "source_correction" && <div data-t0-fit className={`shrink-0 text-sm font-bold tabular-nums ${adjustment.sourceNetPnlDelta >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(adjustment.sourceNetPnlDelta)} <span className="text-[8px] font-medium">U</span></div>}</div>{adjustment.allocations.length > 0 && <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] tabular-nums">{adjustment.allocations.map((line) => <span data-t0-fit key={line.userId} className={line.amount >= 0 ? "text-rose-600" : "text-emerald-600"}>{line.name} {formatT0SettlementAmount(line.amount)} U</span>)}</div>}<div className="mt-2 text-[9px] text-slate-400">{adjustment.createdByName} · {formatT0SettlementOccurredAt(adjustment.createdAt)} · 凭证 #{adjustment.id}</div></div>;
       })}</div>}
     </section>
 
@@ -1301,9 +1314,9 @@ function T0WeeklySettlementAccountReconciliationPanel({
           <div ref={(node) => { if (node) accountSummaryExportTargetsRef.current.set(account.accountId, node); else accountSummaryExportTargetsRef.current.delete(account.accountId); }}>
             <div className="flex items-center gap-1.5"><button type="button" onClick={() => { onExpandedAccountChange(expanded ? null : account.accountId); setExpandedClosingKey(null); }} className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left active:bg-slate-50" aria-expanded={expanded}>
               <div className="flex min-w-0 items-baseline gap-x-1.5 gap-y-0.5"><div className="truncate text-sm font-semibold text-slate-800">{account.accountName}</div><div className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-slate-400">{account.closingCount} 笔 · 去向 {account.recipientCount} 人{account.unreconciledClosingCount > 0 ? ` · ${account.unreconciledClosingCount} 笔待核对` : ""}</div></div>
-              <div className="shrink-0 text-right tabular-nums"><div className={`text-sm font-bold leading-none ${account.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.netPnl)} <span className="text-[9px] font-medium">U</span></div>{!accountReconciled && <div className={`mt-1 whitespace-nowrap text-[10px] ${account.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>差额 {formatT0SettlementAmount(account.variance)} U</div>}</div>
+              <div className="shrink-0 text-right tabular-nums"><div data-t0-fit className={`text-sm font-bold leading-none ${account.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.netPnl)} <span className="text-[9px] font-medium">U</span></div>{!accountReconciled && <div data-t0-fit className={`mt-1 whitespace-nowrap text-[10px] ${account.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>差额 {formatT0SettlementAmount(account.variance)} U</div>}</div>
             </button>{expanded && <div data-card-export-hide="true" className="pr-2"><OrderCardImageDownload targetRef={getAccountExportRef(accountSummaryExportTargetsRef.current, account.accountId)} orderNo={`${account.accountName}-${reconciliation.period.weekStartBjt}`} filenamePrefix="T0账户摘要" previewTitle={`${account.accountName}账户摘要图片预览`} previewHint="包含账户、实际净收益、已归属用户、差额、按类型和按日期" color="#475569" outerPadding={8} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#FFFFFF" variant="bare" /></div>}</div>
-            {expanded && <div className="border-t border-slate-100 bg-slate-50/60"><div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-100 bg-white text-center tabular-nums"><div className="px-1 py-2"><div className="text-[9px] text-slate-400">实际净收益</div><div className={`mt-1 text-xs font-semibold ${account.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.netPnl)}</div></div><div className="px-1 py-2"><div className="text-[9px] text-slate-400">已归属用户</div><div className={`mt-1 text-xs font-semibold ${account.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.allocatedTotal)}</div></div><div className="px-1 py-2"><div className="text-[9px] text-slate-400">差额</div><div className={`mt-1 text-xs font-semibold ${isT0SettlementReconciled(account.variance) ? "text-slate-700" : account.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.variance)}</div></div></div><T0SettlementAccountSourceTopRows account={account} weekStartBjt={reconciliation.period.weekStartBjt} /></div>}
+            {expanded && <div className="border-t border-slate-100 bg-slate-50/60"><div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-100 bg-white text-center tabular-nums"><div className="px-1 py-2"><div className="text-[9px] text-slate-400">实际净收益</div><div data-t0-fit className={`mt-1 text-xs font-semibold ${account.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.netPnl)}</div></div><div className="px-1 py-2"><div className="text-[9px] text-slate-400">已归属用户</div><div data-t0-fit className={`mt-1 text-xs font-semibold ${account.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.allocatedTotal)}</div></div><div className="px-1 py-2"><div className="text-[9px] text-slate-400">差额</div><div data-t0-fit className={`mt-1 text-xs font-semibold ${isT0SettlementReconciled(account.variance) ? "text-slate-700" : account.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(account.variance)}</div></div></div><T0SettlementAccountSourceTopRows account={account} weekStartBjt={reconciliation.period.weekStartBjt} /></div>}
           </div>
           {expanded && <div className="bg-slate-50/60">
             <div ref={(node) => { if (node) accountRecipientExportTargetsRef.current.set(account.accountId, node); else accountRecipientExportTargetsRef.current.delete(account.accountId); }}><T0SettlementAccountRecipientSummary account={account} weekStartBjt={reconciliation.period.weekStartBjt} exportControl={<OrderCardImageDownload targetRef={getAccountExportRef(accountRecipientExportTargetsRef.current, account.accountId)} orderNo={`${account.accountName}-${reconciliation.period.weekStartBjt}`} filenamePrefix="T0账户用户去向" previewTitle={`${account.accountName}用户去向图片预览`} previewHint="仅包含当前账户的全部用户去向" color="#475569" outerPadding={8} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#FFFFFF" variant="bare" />} /></div>
@@ -1315,11 +1328,11 @@ function T0WeeklySettlementAccountReconciliationPanel({
               return <div key={closing.closingEntryId}>
                 <button type="button" onClick={() => setExpandedClosingKey(closingExpanded ? null : closingKey)} className="flex w-full items-start justify-between gap-2 px-3 py-2 text-left active:bg-white" aria-expanded={closingExpanded}>
                   <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] font-semibold text-slate-700"><span>{formatT0SettlementOccurredAt(closing.occurredAt)}</span><span className="text-slate-300">·</span><span>{closing.action === "closeLong" ? "平多" : "平空"}</span></div><div className="mt-0.5 text-[9px] text-slate-400">{closing.ownerName} · {closing.quantity} ETH · 手续费已内含</div></div>
-                  <div className="flex shrink-0 items-start gap-1 text-right tabular-nums"><div><div className={`text-[12px] font-bold leading-none ${closing.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(closing.allocatedTotal)} <span className="text-[8px] font-medium">U</span></div>{!closingReconciled && <div className={`mt-0.5 text-[8px] ${closing.variance === null || closing.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{closing.variance === null ? "待核对" : `差额 ${formatT0SettlementAmount(closing.variance)}`}</div>}</div><ChevronRight className={`mt-0.5 h-3.5 w-3.5 text-slate-400 transition-transform ${closingExpanded ? "rotate-90" : ""}`} /></div>
+                  <div className="flex shrink-0 items-start gap-1 text-right tabular-nums"><div><div data-t0-fit className={`text-[12px] font-bold leading-none ${closing.allocatedTotal >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(closing.allocatedTotal)} <span className="text-[8px] font-medium">U</span></div>{!closingReconciled && <div data-t0-fit className={`mt-0.5 text-[8px] ${closing.variance === null || closing.variance >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{closing.variance === null ? "待核对" : `差额 ${formatT0SettlementAmount(closing.variance)}`}</div>}</div><ChevronRight className={`mt-0.5 h-3.5 w-3.5 text-slate-400 transition-transform ${closingExpanded ? "rotate-90" : ""}`} /></div>
                 </button>
                 {closingExpanded && <div className="border-t border-slate-100 bg-white/75 px-3 py-2.5">
-                  {(closing.recordedSharedReduction !== 0 || closing.sharedTransferTotal !== 0) && <div className="text-[9px] tabular-nums text-slate-400">共享：来源内扣 {formatT0SettlementAmount(closing.recordedSharedReduction)} U · 去向 {formatT0SettlementAmount(closing.sharedTransferTotal)} U</div>}
-                  {closing.allocations.length > 0 ? <div className="mt-2 space-y-1.5 border-l-2 border-slate-200 pl-2">{closing.allocations.map((allocation, index) => <div key={`${allocation.userId}:${allocation.kind}:${index}`} className="flex items-center justify-between gap-2 text-[11px] tabular-nums"><div className="min-w-0 truncate"><span className={`mr-1.5 inline-flex rounded px-1 py-0.5 text-[9px] font-medium ${kindMeta[allocation.kind].className}`}>{kindMeta[allocation.kind].label}</span><span className="font-medium text-slate-600">{allocation.name}</span></div><span className={`shrink-0 font-semibold ${allocation.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(allocation.amount)} U</span></div>)}</div> : <div className="mt-2 text-[10px] text-rose-600">未找到可归属的用户去向，需核对历史开平仓关联。</div>}
+                  {(closing.recordedSharedReduction !== 0 || closing.sharedTransferTotal !== 0) && <div data-t0-fit className="text-[9px] tabular-nums text-slate-400">共享：来源内扣 {formatT0SettlementAmount(closing.recordedSharedReduction)} U · 去向 {formatT0SettlementAmount(closing.sharedTransferTotal)} U</div>}
+                  {closing.allocations.length > 0 ? <div className="mt-2 space-y-1.5 border-l-2 border-slate-200 pl-2">{closing.allocations.map((allocation, index) => <div key={`${allocation.userId}:${allocation.kind}:${index}`} className="flex items-center justify-between gap-2 text-[11px] tabular-nums"><div className="min-w-0 truncate"><span className={`mr-1.5 inline-flex rounded px-1 py-0.5 text-[9px] font-medium ${kindMeta[allocation.kind].className}`}>{kindMeta[allocation.kind].label}</span><span className="font-medium text-slate-600">{allocation.name}</span></div><span data-t0-fit className={`shrink-0 font-semibold ${allocation.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(allocation.amount)} U</span></div>)}</div> : <div className="mt-2 text-[10px] text-rose-600">未找到可归属的用户去向，需核对历史开平仓关联。</div>}
                   {!closingReconciled && <button type="button" onClick={() => setAdjustmentPrefill({ accountId: account.accountId, closingEntryId: closing.closingEntryId })} className="mt-2 h-7 rounded-md border border-rose-200 bg-white px-2 text-[10px] font-semibold text-rose-700 active:bg-rose-50">处理差额</button>}
                 </div>}
               </div>;
@@ -1334,7 +1347,7 @@ function T0WeeklySettlementAccountReconciliationPanel({
       {reconciliation.destinations.length === 0 ? <div className="px-3 py-7 text-center text-xs text-slate-400">暂无用户收益去向</div> : <div className="divide-y divide-slate-100">{reconciliation.destinations.map((destination) => {
         const expanded = expandedDestinationUserId === destination.userId;
         const destinationKey = String(destination.userId);
-        return <div key={destination.userId} ref={(node) => { if (node) destinationUserExportTargetsRef.current.set(destinationKey, node); else destinationUserExportTargetsRef.current.delete(destinationKey); }}><div className="px-3 py-3"><div className="flex min-w-0 items-center gap-1"><button type="button" onClick={() => onExpandedDestinationUserChange(expanded ? null : destination.userId)} className="min-w-0 truncate text-left text-sm font-semibold text-slate-800 active:text-slate-600" aria-expanded={expanded}>{destination.name}</button>{expanded && <div data-card-export-hide="true"><OrderCardImageDownload targetRef={getAccountExportRef(destinationUserExportTargetsRef.current, destinationKey)} orderNo={`${destination.name}-${reconciliation.period.weekStartBjt}`} filenamePrefix="T0用户账户去向" previewTitle={`${destination.name}账户来源图片预览`} previewHint={`仅包含${destination.name}的订单、分佣、共享汇总及全部账户来源`} color="#475569" outerPadding={8} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#FFFFFF" variant="bare" /></div>}</div><button type="button" onClick={() => onExpandedDestinationUserChange(expanded ? null : destination.userId)} className="mt-1 flex w-full items-center justify-between gap-3 text-left active:opacity-75" aria-label={`${expanded ? "收起" : "展开"}${destination.name}的账户来源`}><div className="min-w-0 text-[10px] tabular-nums text-slate-400">订单 {formatT0SettlementAmount(destination.income.order)} · 分佣 {formatT0SettlementAmount(destination.income.commission)} · 共享 {formatT0SettlementAmount(destination.income.shared)}</div><div className={`shrink-0 text-right text-sm font-bold tabular-nums ${destination.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(destination.income.total)} <span className="text-[9px] font-medium">U</span></div></button></div>{expanded && <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/60">{destination.sources.map((source) => <div key={source.accountId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-[11px] tabular-nums"><div className="min-w-0"><div className="truncate font-semibold text-slate-700">{source.accountName}</div><div className="mt-1 text-[9px] text-slate-400">{source.closingCount} 笔 · 订单 {formatT0SettlementAmount(source.income.order)} · 分佣 {formatT0SettlementAmount(source.income.commission)} · 共享 {formatT0SettlementAmount(source.income.shared)}</div></div><div className={`shrink-0 font-semibold ${source.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(source.income.total)} U</div></div>)}</div>}</div>;
+        return <div key={destination.userId} ref={(node) => { if (node) destinationUserExportTargetsRef.current.set(destinationKey, node); else destinationUserExportTargetsRef.current.delete(destinationKey); }}><div className="px-3 py-3"><div className="flex min-w-0 items-center gap-1"><button type="button" onClick={() => onExpandedDestinationUserChange(expanded ? null : destination.userId)} className="min-w-0 truncate text-left text-sm font-semibold text-slate-800 active:text-slate-600" aria-expanded={expanded}>{destination.name}</button>{expanded && <div data-card-export-hide="true"><OrderCardImageDownload targetRef={getAccountExportRef(destinationUserExportTargetsRef.current, destinationKey)} orderNo={`${destination.name}-${reconciliation.period.weekStartBjt}`} filenamePrefix="T0用户账户去向" previewTitle={`${destination.name}账户来源图片预览`} previewHint={`仅包含${destination.name}的订单、分佣、共享汇总及全部账户来源`} color="#475569" outerPadding={8} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#FFFFFF" variant="bare" /></div>}</div><button type="button" onClick={() => onExpandedDestinationUserChange(expanded ? null : destination.userId)} className="mt-1 flex w-full items-center justify-between gap-3 text-left active:opacity-75" aria-label={`${expanded ? "收起" : "展开"}${destination.name}的账户来源`}><div data-t0-fit className="min-w-0 text-[10px] tabular-nums text-slate-400">订单 {formatT0SettlementAmount(destination.income.order)} · 分佣 {formatT0SettlementAmount(destination.income.commission)} · 共享 {formatT0SettlementAmount(destination.income.shared)}</div><div data-t0-fit className={`shrink-0 text-right text-sm font-bold tabular-nums ${destination.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(destination.income.total)} <span className="text-[9px] font-medium">U</span></div></button></div>{expanded && <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/60">{destination.sources.map((source) => <div key={source.accountId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-[11px] tabular-nums"><div className="min-w-0"><div className="truncate font-semibold text-slate-700">{source.accountName}</div><div data-t0-fit className="mt-1 text-[9px] text-slate-400">{source.closingCount} 笔 · 订单 {formatT0SettlementAmount(source.income.order)} · 分佣 {formatT0SettlementAmount(source.income.commission)} · 共享 {formatT0SettlementAmount(source.income.shared)}</div></div><div data-t0-fit className={`shrink-0 font-semibold ${source.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(source.income.total)} U</div></div>)}</div>}</div>;
       })}</div>}
     </section>
     {reconciliation.confirmation.latest && <section className={`mt-3 rounded-xl border px-3 py-3 ${reconciliation.confirmation.state === "confirmed" ? "border-emerald-100 bg-emerald-50/45" : "border-amber-200 bg-amber-50/55"}`} aria-label="账目已平确认凭证"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className={`flex items-center gap-1.5 text-xs font-semibold ${reconciliation.confirmation.state === "confirmed" ? "text-emerald-800" : "text-amber-800"}`}><ShieldCheck className="h-3.5 w-3.5" />{reconciliation.confirmation.state === "confirmed" ? "账目已平确认" : "上次确认已过期"}</div><div className="mt-1 text-[10px] leading-5 text-slate-600">{reconciliation.confirmation.latest.confirmedByName} · {formatT0SettlementOccurredAt(reconciliation.confirmation.latest.confirmedAt)} · 凭证 #{reconciliation.confirmation.latest.id}</div>{reconciliation.confirmation.latest.note && <div className="mt-1 text-[10px] leading-5 text-slate-600">{reconciliation.confirmation.latest.note}</div>}</div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${reconciliation.confirmation.state === "confirmed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{reconciliation.confirmation.state === "confirmed" ? "当前有效" : "需重新确认"}</span></div></section>}
@@ -4094,6 +4107,7 @@ type T0JournalProps = {
 };
 
 export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0JournalProps) {
+  useT0ResponsiveLayout();
   const { id } = useParams<{ id: string }>();
   const ledgerId = Number(id);
   const [location, setLocation] = useLocation();
@@ -4781,7 +4795,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
   const teamOverview = t0TeamOverviewQuery.data as T0TeamOverview | undefined;
-  const teamOverviewMembers = useMemo(() => Array.isArray(teamOverview?.members) ? teamOverview.members : [], [teamOverview?.members]);
+  const teamOverviewMembers = useMemo(() => {
+    if (!Array.isArray(teamOverview?.members)) return [];
+    return [...teamOverview.members].sort((left, right) => {
+      const leftAmount = Number(left.cumulativeDepositAmount);
+      const rightAmount = Number(right.cumulativeDepositAmount);
+      if (!Number.isFinite(leftAmount)) return Number.isFinite(rightAmount) ? 1 : 0;
+      if (!Number.isFinite(rightAmount)) return -1;
+      return rightAmount - leftAmount;
+    });
+  }, [teamOverview?.members]);
   const teamDepositMember = teamOverviewMembers.find((member) => member.userId === teamDepositMemberId);
   const canReadTeamDeposits = canManage && canViewTeamOverview && isTotalProfitReportVisible
     && totalProfitPageTab === "income" && totalProfitDetailTab === "team" && Boolean(teamDepositMember);
@@ -7278,10 +7301,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span>本单共享 <b className={currentSharedIncomeAmount > 0 ? "font-semibold text-rose-600" : "font-semibold text-slate-500"}>{currentSharedIncomeAmount > 0 ? "+" : ""}{currentSharedIncomeAmount === 0 ? "0" : formatPrice(currentSharedIncomeAmount)} u</b></span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>付出共享（{candidate.contributedSharedIncomeOrderCount}次）<b className={candidate.contributedSharedIncome > 0 ? "ml-0.5 font-semibold text-emerald-600" : "ml-0.5 font-semibold text-slate-500"}>{candidate.contributedSharedIncome > 0 ? "-" : ""}{candidate.contributedSharedIncome === 0 ? "0" : formatPrice(candidate.contributedSharedIncome)} u</b></span></div>
-                <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 {formatPrice(candidate.cumulativeDepositAmount)} u</div>
+                <div data-t0-fit className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 {formatPrice(candidate.cumulativeDepositAmount)} u</div>
 	                <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500"><span>历史利润 <b className="font-semibold text-rose-600">+{formatPrice(candidate.historicalProfit)} u</b></span><span className="text-slate-300">·</span><span>已实现年化 <b className={displayedRealizedAnnualized !== null && Number.isFinite(displayedRealizedAnnualized) ? (displayedRealizedAnnualized >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600") : "font-semibold text-slate-400"}>{displayedRealizedAnnualized === null || !Number.isFinite(displayedRealizedAnnualized) ? "--" : formatT0AnnualizedReturn(displayedRealizedAnnualized)}</b></span></div>
                 <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">持仓总浮盈亏 <b className={candidate.holdingNetPnl >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(candidate.holdingNetPnl)} u</b></div>
-              </> : <><div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 未登记</div><div className="mt-0.5 text-[10px] text-slate-500">未投入本金，不参与共享收益分配</div></>}
+              </> : <><div data-t0-fit className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">多 {formatQuantity(candidate.longQuantity)} E · 空 {formatQuantity(candidate.shortQuantity)} E · 本金 未登记</div><div className="mt-0.5 text-[10px] text-slate-500">未投入本金，不参与共享收益分配</div></>}
             </div>
             <div className={`relative w-[92px] ${candidate.hasPrincipal ? "row-span-2 self-stretch pb-10" : "self-stretch"}`}>
               {candidate.hasPrincipal && <div className="grid w-full grid-cols-2 gap-1">
@@ -8603,9 +8626,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return <div key={log.id} className="px-3 py-2.5 text-xs">
       <div className="flex items-start justify-between gap-2">
         <span className="flex shrink-0 items-center gap-1.5 pt-0.5 font-medium text-slate-700"><span className="whitespace-nowrap">{log.occurredOn.replaceAll("-", "/")}</span><span className={`rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "存入" : "提取"}</span></span>
-        <span className="flex shrink-0 items-start gap-1"><span className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutDepositInputMode(log.depositInputMode === "eth" ? "eth" : "u"); setPayoutEthQuantity(log.ethQuantity || ""); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
+        <span className="flex shrink-0 items-start gap-1"><span data-t0-fit className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutDepositInputMode(log.depositInputMode === "eth" ? "eth" : "u"); setPayoutEthQuantity(log.ethQuantity || ""); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
       </div>
-      {(log.note || isDeposit) && <div className="mt-1 flex items-baseline gap-2 text-[10px] leading-4 text-slate-500"><span className="min-w-0 flex-1 break-words">{log.note ? <>备注：{log.note}</> : null}</span>{isDeposit && <span className="flex shrink-0 items-baseline gap-3 whitespace-nowrap font-medium tabular-nums"><span><span className={isEthDepositInput ? "text-sky-700" : "text-slate-400"}>币本位</span> {hasFixedEthPrincipal ? <>{formatPayoutEthQuantity(log.ethQuantity)} ETH</> : "—"}</span>{log.ethReferencePrice && <span>参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
+      {(log.note || isDeposit) && <div className="mt-1 flex items-baseline gap-2 text-[10px] leading-4 text-slate-500"><span className="min-w-0 flex-1 break-words">{log.note ? <>备注：{log.note}</> : null}</span>{isDeposit && <span className="flex shrink-0 items-baseline gap-3 whitespace-nowrap font-medium tabular-nums"><span><span className={isEthDepositInput ? "text-sky-700" : "text-slate-400"}>币本位</span> {hasFixedEthPrincipal ? <>{formatPayoutEthQuantity(log.ethQuantity)} ETH</> : "—"}</span>{log.ethReferencePrice && <span data-t0-fit>参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
       {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
     </div>;
   };
@@ -11416,16 +11439,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           const sharedDetail = detail ?? { netPnl: displayedSharedIncome };
           return (
             <div key={group.id} className="mx-3 my-2 rounded border border-l-[3px] bg-blue-50/35 px-3 py-2.5" style={{ borderColor: "#bfdbfe", borderLeftColor: "#2563eb", borderLeftWidth: "3px" }}>
-              <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-                <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+              <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
+                <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1">
                   <span className="shrink-0 font-semibold" style={{ color: "#2563eb" }}>共享</span>
                   <span className="shrink-0 text-[10px] font-medium text-slate-400">来源平仓</span>
                   <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
-                  <span className="shrink-0 text-slate-600">{formatPrice(closing.price)}</span>
+                  <span data-t0-fit className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
+                  <span data-t0-fit className="shrink-0 text-slate-600">{formatPrice(closing.price)}</span>
                 </div>
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
-                <button
+                <button data-t0-fit
                   type="button"
                   onClick={() => setNetProfitDetail({
                     trade: closing,
@@ -11444,14 +11467,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         }
         return (
           <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
-          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+          <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
               <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
-              {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
-              {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
-            {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
-            {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
+              <span data-t0-fit className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
+              {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span data-t0-fit className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+              {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span data-t0-fit className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+            {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span data-t0-fit className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
+            {!detail && <span data-t0-fit className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
           <div className={getHistoryContextLayoutClass(showFullClosingContext)}>
             {!historyIsMemberPresentation && <>
@@ -11487,16 +11510,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return (
       <div key={group.id} className={`mx-3 my-2 overflow-hidden rounded border border-l-[3px] ${groupTone}`}>
         <div className={`px-3 py-2.5 ${openingSurface}`}>
-          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-            <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+          <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
+            <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1">
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
-              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(historicalOpeningQuantity)}E</span>
+              <span data-t0-fit className="shrink-0 font-medium text-slate-800">{formatQuantity(historicalOpeningQuantity)}E</span>
               {opening.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
               {opening.isCounterpartyView && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-violet-700"><Repeat2 className="h-3 w-3" strokeWidth={2.4} />反向</span>}
-              <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{opening.instrumentType === "option" && opening.optionPremium !== undefined && opening.optionPremiumCurrency ? formatOptionQuote(opening.optionPremium, opening.optionPremiumCurrency) : formatPrice(opening.price)}</span>
-              {opening.instrumentType === "option" && <span className="shrink-0 text-violet-700">行权{formatPrice(opening.price)}</span>}
+              <span data-t0-fit className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{opening.instrumentType === "option" && opening.optionPremium !== undefined && opening.optionPremiumCurrency ? formatOptionQuote(opening.optionPremium, opening.optionPremiumCurrency) : formatPrice(opening.price)}</span>
+              {opening.instrumentType === "option" && <span data-t0-fit className="shrink-0 text-violet-700">行权{formatPrice(opening.price)}</span>}
             </div>
-            <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
+            <span data-t0-fit className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
               {reassignedQuantity > 0
                 ? `已平 ${formatQuantity(closedQuantity)} · 已转入 ${formatQuantity(reassignedQuantity)}`
                 : closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
@@ -11532,18 +11555,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 className={`pointer-events-none absolute left-3 top-0 border-l border-dashed border-slate-300 ${isLastClosing ? "h-1/2" : "bottom-0"}`}
               />
               <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 w-3 border-t border-dashed border-slate-300" />
-              <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-                <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+              <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
+                <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1">
                   <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)}E</span>
+                  <span data-t0-fit className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)}E</span>
                   {!hideRepeatedSettlementPrices && detail.isOptionQuote ? <>
-                    <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>
-                    <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>
-                    <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>
-                  </> : !hideRepeatedSettlementPrices && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
+                    <span data-t0-fit className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>
+                    <span data-t0-fit className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>
+                    <span data-t0-fit className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>
+                  </> : !hideRepeatedSettlementPrices && <span data-t0-fit className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
                 </div>
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
-                <button
+                <button data-t0-fit
                   type="button"
                   onClick={() => setNetProfitDetail({
                     trade: allocatedClosing,
@@ -11649,25 +11672,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="grid grid-cols-3 gap-x-2">
               <span className="flex min-w-0 flex-col items-start gap-0.5">
                 <span className={`font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
-                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-900">{formatQuantity(historicalOpeningQuantity)} E</span>
+                <span data-t0-fit className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-900">{formatQuantity(historicalOpeningQuantity)} E</span>
               </span>
               <span className="flex min-w-0 flex-col items-center gap-0.5">
                 <span className="font-semibold text-sky-600">已平</span>
-                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-700">{formatQuantity(linkedClosedQuantity)} E</span>
+                <span data-t0-fit className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-700">{formatQuantity(linkedClosedQuantity)} E</span>
               </span>
               <span className="flex min-w-0 flex-col items-end gap-0.5">
                 <span className="inline-flex items-center gap-1 font-semibold text-slate-600">剩余
                 {trade.isLocked && <span title="已锁定" aria-label="已锁定" className="inline-flex shrink-0 text-amber-700"><Lock className="h-3.5 w-3.5" /></span>}
                 {takeProfitMarkerLabel && <span title={takeProfitMarkerLabel} aria-label={takeProfitMarkerLabel} className="inline-flex shrink-0 text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} /></span>}
                 </span>
-                <span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatQuantity(remainingQuantity)} E</span>
+                <span data-t0-fit className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatQuantity(remainingQuantity)} E</span>
               </span>
             </span>
             <span className="mt-1.5 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-x-2 border-t border-slate-200/80 pt-1.5">
-              <span className="flex min-w-0 flex-col gap-0.5 text-slate-600"><span>开仓价</span><span className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatPrice(trade.price)}</span></span>
+              <span className="flex min-w-0 flex-col gap-0.5 text-slate-600"><span>开仓价</span><span data-t0-fit className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatPrice(trade.price)}</span></span>
               {trade.isPending ? <span className="flex min-w-0 flex-col items-end gap-0.5 text-sky-700"><span className="text-slate-500">当前状态</span><span className="inline-flex items-center gap-1 whitespace-nowrap leading-5"><Clock3 className="h-3 w-3" />待成交</span></span>
                 : trade.instrumentType === "option" ? <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="whitespace-nowrap text-[13px] font-semibold leading-5 tabular-nums" /></span>
-                : <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><span className={`whitespace-nowrap text-[13px] font-semibold leading-5 ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span></span>}
+                : <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><span data-t0-fit className={`whitespace-nowrap text-[13px] font-semibold leading-5 ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span></span>}
             </span>
           </span>
         </button>
@@ -11705,14 +11728,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
             <div className="min-w-0">
               <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
-              <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(trade.originalQuantityBeforeReassignment !== undefined ? historicalOpeningValue : openingValue)} U`}</div>
+              <div data-t0-fit className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(trade.originalQuantityBeforeReassignment !== undefined ? historicalOpeningValue : openingValue)} U`}</div>
             </div>
             <div className="min-w-0 text-center">
               <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
               {trade.instrumentType === "option" && !trade.isPending ? (
                 <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} emptyLabel="期权报价加载中" className="mt-0.5 whitespace-nowrap text-[11px] font-semibold tabular-nums" />
               ) : (
-                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                <div data-t0-fit className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                 </div>
               )}
@@ -11745,7 +11768,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
               <div className="min-w-0 text-right">
                 <div className="text-[10px] text-slate-400">权利金</div>
-                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
+                <div data-t0-fit className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
               </div>
             </div>}
             {canManage && trade.instrumentType === "grid" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-cyan-200 pt-2">
@@ -11755,23 +11778,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
               <div className="min-w-0 text-center">
                 <div className="text-[10px] text-slate-400">网格范围</div>
-                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridRangeMin === undefined || trade.gridRangeMax === undefined ? "未设置" : trade.gridDirection === "short" ? `${formatPrice(trade.gridRangeMax)}–${formatPrice(trade.gridRangeMin)}` : `${formatPrice(trade.gridRangeMin)}–${formatPrice(trade.gridRangeMax)}`}</div>
+                <div data-t0-fit className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridRangeMin === undefined || trade.gridRangeMax === undefined ? "未设置" : trade.gridDirection === "short" ? `${formatPrice(trade.gridRangeMax)}–${formatPrice(trade.gridRangeMin)}` : `${formatPrice(trade.gridRangeMin)}–${formatPrice(trade.gridRangeMax)}`}</div>
               </div>
               <div className="min-w-0 text-right">
                 <div className="text-[10px] text-slate-400">杠杆 · 格数</div>
-                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
+                <div data-t0-fit className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
               </div>
             </div>}
             {ACTIONS[trade.action].opening && (trade.instrumentType === "spot" || trade.instrumentType === "contract") && takeProfitPlans.length > 0 && <div className="col-span-3 border-t border-amber-200 pt-2">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1 text-[10px] text-slate-500"><Target className="h-3 w-3 text-amber-600" />止盈计划</span>
-                <span className="text-[10px] font-medium text-amber-700">待触发 {formatQuantity(pendingTakeProfitQuantity)} ETH · {takeProfitPlans.filter((plan) => plan.status === "pending").length} 段</span>
+                <span data-t0-fit className="text-[10px] font-medium text-amber-700">待触发 {formatQuantity(pendingTakeProfitQuantity)} ETH · {takeProfitPlans.filter((plan) => plan.status === "pending").length} 段</span>
               </div>
               <div className="space-y-1">
                 {takeProfitPlans.map((plan, planIndex) => (
                   <div key={`${plan.id || "take-profit"}-${planIndex}`} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded border border-amber-100 bg-amber-50/45 px-2 py-1 text-[10px] tabular-nums">
                     <span className={`font-semibold ${plan.status === "pending" ? "text-amber-700" : plan.status === "triggered" ? "text-slate-500" : "text-slate-400"}`}>第{planIndex + 1}段</span>
-                    <span className="min-w-0 truncate text-slate-700">{formatPrice(plan.triggerPrice)} U · {formatQuantity(plan.quantity)} ETH</span>
+                    <span data-t0-fit className="min-w-0 truncate text-slate-700">{formatPrice(plan.triggerPrice)} U · {formatQuantity(plan.quantity)} ETH</span>
                     <span className={`whitespace-nowrap ${plan.status === "pending" ? "text-amber-700" : "text-slate-500"}`}>{plan.status === "pending" ? (ACTIONS[trade.action].side === "long" ? "向上触发" : "向下触发") : plan.status === "triggered" ? "已触发" : "已取消"}</span>
                   </div>
                 ))}
@@ -11784,7 +11807,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
             )}
           </div>
-          {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
+          {trade.filledAt && <div data-t0-fit className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
             <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
             成交时间：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
           </div>}
@@ -11792,7 +11815,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className="mt-2 border-t border-slate-200 pt-2">
               <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
                 <span className="font-medium text-slate-600">关联平仓记录</span>
-                <span className="whitespace-nowrap tabular-nums">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+                <span data-t0-fit className="whitespace-nowrap tabular-nums">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
               </div>
               <div className="mt-1.5 space-y-1">
                 {linkedClosings.map(({ trade: closingTrade, quantity }, index) => {
@@ -11801,8 +11824,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <div key={`${closingTrade.id}-${index}`} className="flex items-center justify-between gap-2 border-l-2 border-slate-200 bg-white/70 px-2 py-1.5 text-[11px] tabular-nums">
                       <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                         <span className={`font-semibold ${isLongPosition ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closingTrade.action].label}</span>
-                        <span className="font-medium text-slate-700">{formatQuantity(quantity)} ETH</span>
-                        <span className="text-slate-500">{isLongPosition ? "卖" : "买"} {formatPrice(closingTrade.price)}</span>
+                        <span data-t0-fit className="font-medium text-slate-700">{formatQuantity(quantity)} ETH</span>
+                        <span data-t0-fit className="text-slate-500">{isLongPosition ? "卖" : "买"} {formatPrice(closingTrade.price)}</span>
                       </div>
                       <span className="shrink-0 whitespace-nowrap text-slate-400">{formatBeijingMonthDayTime(closingTrade.createdAt)}</span>
                     </div>
@@ -11823,7 +11846,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   if (!canAccess) {
     return (
-      <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 flex flex-col`}>
+      <div data-t0-responsive className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 flex flex-col`}>
         <div className="flex items-center gap-3 px-4 py-4 bg-white border-b border-slate-100">
           {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
             <ArrowLeft className="w-5 h-5 text-slate-700" />
@@ -11922,7 +11945,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
 
     if (!canManage || payoutTargetRelatedUserId <= 0) {
-      return <div className="min-h-screen max-w-md mx-auto bg-slate-50">
+      return <div data-t0-responsive className="min-h-screen max-w-md mx-auto bg-slate-50">
         <header className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
           <button type="button" onClick={() => setLocation(`/ledger/${ledgerId}/t0-journal`)} aria-label="返回T+0速记账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
           <h1 className="font-semibold text-slate-900">{entryTitle}</h1>
@@ -11931,7 +11954,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       </div>;
     }
 
-    return <div className="min-h-screen max-w-md mx-auto bg-slate-50 pb-8">
+    return <div data-t0-responsive className="min-h-screen max-w-md mx-auto bg-slate-50 pb-8">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
         <button type="button" onClick={closePayoutEntryPage} aria-label={payoutReturnToTeam ? "返回团队成员概览" : "返回T+0收益账本"} className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
         <div className="min-w-0 flex-1"><h1 className="font-semibold text-slate-900">{entryTitle}</h1><div className="truncate text-[11px] text-slate-500">{payoutTargetUserIdentity.name}{payoutTargetUserIdentity.username ? ` · @${payoutTargetUserIdentity.username}` : ""}</div></div>
@@ -11940,7 +11963,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       <main className="space-y-3 px-3 py-4">
         <section className="border-y border-slate-200 bg-white px-3 py-3">
-          <div className={`flex items-center justify-between gap-2 tabular-nums ${entryTone}`}><span className="flex min-w-0 items-baseline gap-1.5"><span className="shrink-0 text-xs font-medium text-slate-500">{entryFlowTitle}</span><span className="truncate text-base font-semibold">{entryTotal > 0 ? (isDepositEntry ? "+" : "−") : ""}{entryTotal === 0 ? "0" : formatPrice(entryTotal)} <span className="text-[10px] font-medium opacity-75">U</span></span></span>{isDepositEntry && entryFixedEthCount > 0 && <span className="flex shrink-0 items-baseline gap-1.5 border-l border-slate-200 pl-3"><span className="text-xs font-medium text-slate-500">ETH折算</span><span className="text-base font-semibold">{formatPayoutEthQuantity(String(entryFixedEthQuantity))} <span className="text-[10px] font-medium opacity-75">ETH</span></span></span>}</div>
+          <div data-t0-wrap className={`flex items-center justify-between gap-x-2 gap-y-2 tabular-nums ${entryTone}`}><span className="flex min-w-0 items-baseline gap-1.5"><span className="shrink-0 text-xs font-medium text-slate-500">{entryFlowTitle}</span><span data-t0-fit className="min-w-0 flex-1 max-w-full text-base font-semibold">{entryTotal > 0 ? (isDepositEntry ? "+" : "−") : ""}{entryTotal === 0 ? "0" : formatPrice(entryTotal)} <span className="text-[10px] font-medium opacity-75">U</span></span></span>{isDepositEntry && entryFixedEthCount > 0 && <span className="flex shrink-0 items-baseline gap-1.5 border-l border-slate-200 pl-3"><span className="text-xs font-medium text-slate-500">ETH折算</span><span data-t0-fit className="text-base font-semibold">{formatPayoutEthQuantity(String(entryFixedEthQuantity))} <span className="text-[10px] font-medium opacity-75">ETH</span></span></span>}</div>
         </section>
 
         <section aria-label={entryFlowTitle} className="border-y border-slate-200 bg-white">
@@ -11953,10 +11976,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           {isDepositEntry && <div className="mb-3 flex items-center justify-between gap-3 rounded border border-sky-100 bg-sky-50/60 px-2.5 py-2"><span className="text-[11px] font-medium text-slate-600">当前按 <span className={isEthDepositInput ? "text-sky-700" : "text-slate-500"}>{isEthDepositInput ? "ETH" : "U"}</span> 录入</span><button type="button" onClick={() => { setPayoutDepositInputMode((current) => current === "u" ? "eth" : "u"); setPayoutAmount(""); setPayoutEthQuantity(""); }} className="inline-flex h-7 items-center gap-1 rounded border border-sky-200 bg-white px-2 text-[11px] font-semibold text-sky-700 active:scale-95"><Repeat2 className="h-3.5 w-3.5" />{isEthDepositInput ? "改为 U 金额" : "改为 ETH 数量"}</button></div>}
           <div className="grid grid-cols-2 gap-2">
             <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
-              <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-10 min-h-0 w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
+              <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-10 min-h-0 min-w-0 max-w-full w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
             </label>
             <label className="min-w-0 text-[11px] font-medium text-slate-600">{isEthDepositInput ? "币本位数量（ETH）" : "金额（U）"}
-              <input inputMode="decimal" placeholder="0.00" value={isEthDepositInput ? payoutEthQuantity : payoutAmount} onChange={(event) => isEthDepositInput ? setPayoutEthQuantity(event.target.value) : setPayoutAmount(event.target.value)} className={`mt-1 block h-10 min-h-0 w-full rounded px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800 ${isEthDepositInput ? "border border-sky-200 bg-sky-50/40" : "border border-slate-300 bg-white"}`} />
+              <input inputMode="decimal" placeholder="0.00" value={isEthDepositInput ? payoutEthQuantity : payoutAmount} onChange={(event) => isEthDepositInput ? setPayoutEthQuantity(event.target.value) : setPayoutAmount(event.target.value)} className={`mt-1 block h-10 min-h-0 min-w-0 max-w-full w-full rounded px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800 ${isEthDepositInput ? "border border-sky-200 bg-sky-50/40" : "border border-slate-300 bg-white"}`} />
             </label>
           </div>
           {isDepositEntry && <div className="mt-3 grid grid-cols-2 gap-2">
@@ -11969,19 +11992,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   setPayoutEthReferencePrice(event.target.value);
                   setPayoutEthReferencePriceIsManual(true);
                 }}
-                className="mt-1 block h-10 min-h-0 w-full rounded border border-sky-200 bg-sky-50/40 px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800"
+                className="mt-1 block h-10 min-h-0 min-w-0 max-w-full w-full rounded border border-sky-200 bg-sky-50/40 px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800"
               />
               <span className="mt-1 block text-[10px] font-normal text-sky-700">{isEthDepositInput ? "按 ETH × 参考价折算U入账" : isLegacyDepositEditing ? "可选补录参考价并生成币本位数量" : editingPayoutLog ? "修改后将重新计算本笔数量" : payoutEthReferencePriceIsManual ? "已手动输入" : payoutLiveEthPrice ? "实时价预填，可修改" : "等待实时行情"}</span>
             </label>
             <div className="min-w-0 text-[11px] font-medium text-slate-600">{isEthDepositInput ? "折算金额（U）" : "币本位数量"}
-              <div className="mt-1 flex h-10 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-semibold tabular-nums text-slate-800">{isEthDepositInput ? (payoutUAmountPreview === null ? "—" : formatPrice(payoutUAmountPreview)) : (payoutEthQuantityPreview === null ? "—" : formatPayoutEthQuantity(String(payoutEthQuantityPreview)))} <span className="ml-1 text-[10px] font-medium text-slate-500">{isEthDepositInput ? "U" : "ETH"}</span></div>
+              <div className="mt-1 flex min-h-10 min-w-0 items-center rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-semibold tabular-nums text-slate-800"><span data-t0-fit className="min-w-0 flex-1">{isEthDepositInput ? (payoutUAmountPreview === null ? "—" : formatPrice(payoutUAmountPreview)) : (payoutEthQuantityPreview === null ? "—" : formatPayoutEthQuantity(String(payoutEthQuantityPreview)))}</span> <span className="ml-1 shrink-0 text-[10px] font-medium text-slate-500">{isEthDepositInput ? "U" : "ETH"}</span></div>
               <span className="mt-1 block text-[10px] font-normal text-slate-500">{isEthDepositInput ? "保存时以服务端定点折算为准" : editingPayoutLog ? "保存后按本次金额和价格更新" : "确认后固定，不跟随行情变化"}</span>
             </div>
           </div>}
           <label className="mt-3 block text-[11px] font-medium text-slate-600">备注（可选）
             <input value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={300} placeholder="" className="mt-1 block h-10 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" />
           </label>
-          {!isDepositEntry && <div className="mt-2 flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] tabular-nums"><span className="font-medium text-slate-500">当前可提余额</span>{payoutFormWithdrawalLimit === null ? <span className={t0PayoutAvailabilityQuery.error ? "font-medium text-rose-600" : "font-medium text-slate-400"}>{t0PayoutAvailabilityQuery.error ? "核算失败，请刷新" : "收益核算中…"}</span> : <span className={`font-bold ${payoutFormWithdrawalLimit > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatPrice(payoutFormWithdrawalLimit)} <span className="text-[9px] font-medium">U</span></span>}</div>}
+          {!isDepositEntry && <div className="mt-2 flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] tabular-nums"><span className="font-medium text-slate-500">当前可提余额</span>{payoutFormWithdrawalLimit === null ? <span className={t0PayoutAvailabilityQuery.error ? "font-medium text-rose-600" : "font-medium text-slate-400"}>{t0PayoutAvailabilityQuery.error ? "核算失败，请刷新" : "收益核算中…"}</span> : <span data-t0-fit className={`font-bold ${payoutFormWithdrawalLimit > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatPrice(payoutFormWithdrawalLimit)} <span className="text-[9px] font-medium">U</span></span>}</div>}
           <button type="button" disabled={isPayoutSaving || isWithdrawalAvailabilityUnavailable} onClick={submitPayoutEntry} className={`mt-4 h-10 w-full rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${entryButtonTone}`}>{isPayoutSaving ? "保存中" : isWithdrawalAvailabilityUnavailable ? "收益核算中…" : editingPayoutLog ? "保存修改" : `保存${isDepositEntry ? "投入" : "提现"}`}</button>
           {payoutSubmitNotice && <div role="status" aria-live="polite" className={`mt-2 rounded border px-2.5 py-2 text-[11px] leading-4 ${payoutSubmitNotice.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : payoutSubmitNotice.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>{payoutSubmitNotice.tone === "error" ? "未保存：" : payoutSubmitNotice.tone === "success" ? "保存成功：" : "提交状态："}{payoutSubmitNotice.message}</div>}
         </section>
@@ -11991,9 +12014,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }
 
   return (
-    <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-8`}>
+    <div data-t0-responsive className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-8`}>
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
-          <div className="h-14 px-4 flex items-center gap-3">
+          <div data-t0-wrap className="min-h-14 px-4 py-2 flex items-center gap-x-3 gap-y-2">
             {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95">
               <ArrowLeft className="w-4 h-4 text-slate-700" />
             </button>}
@@ -12019,7 +12042,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               刷新
             </button>
           </div>
-          {canUseMemberPreview && <div className={`flex min-h-10 items-center justify-between gap-2 border-t px-4 py-1.5 text-[11px] ${isUserPreview ? "border-indigo-200 bg-indigo-50/80" : "border-slate-100 bg-slate-50/80"}`} aria-live="polite">
+          {canUseMemberPreview && <div data-t0-wrap className={`flex min-h-10 items-center justify-between gap-2 border-t px-4 py-1.5 text-[11px] ${isUserPreview ? "border-indigo-200 bg-indigo-50/80" : "border-slate-100 bg-slate-50/80"}`} aria-live="polite">
             {isUserPreview ? <>
               <div className="min-w-0 leading-4 text-indigo-900">
                 <span className="font-semibold">正在预览：</span>
@@ -12080,46 +12103,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               filter: "contrast(1.16)",
             }}
           />
-          <div
-            className="relative z-[1] flex min-w-0 items-center p-2"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(203,213,225,0.14))",
-              borderTop: "1px solid rgba(100,116,139,0.20)",
-              borderBottom: "1px solid rgba(255,255,255,0.62)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -1px 0 rgba(71,85,105,0.10)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={openTotalProfitReport}
-              aria-haspopup={isMemberView ? undefined : "dialog"}
-              aria-label={isMemberView ? "打开总收益页面" : "查看总收益归因报告"}
-              className="flex min-w-0 flex-1 items-center gap-1.5 border-r px-2.5 py-3 text-left transition-opacity active:opacity-60"
-              style={{
-                borderColor: "rgba(100,116,139,0.26)",
-                boxShadow: "inset -1px 0 0 rgba(255,255,255,0.70)",
-              }}
-            >
-              <div className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总收益</div>
-              <div className={`flex shrink-0 items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
-                <span>{totalNetProfitText}</span>
-                <span className="text-[12px] font-semibold opacity-65">U</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowNetPositionDetail(true)}
-              aria-haspopup="dialog"
-              aria-label="查看总仓位对冲明细"
-              className="flex shrink-0 items-center gap-1.5 px-2.5 py-3 text-left transition-opacity active:opacity-60"
-            >
-              <div className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总仓位</div>
-              <div className={`flex shrink-0 items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${netPositionClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
-                <span>{roundedNetPositionText}</span>
-                <span className="text-[12px] font-semibold opacity-65">ETH</span>
-              </div>
-            </button>
-          </div>
+          <T0SummaryHeader
+            profitText={totalNetProfitText}
+            positionText={roundedNetPositionText}
+            profitClass={totalNetProfitClass}
+            positionClass={netPositionClass}
+            isMemberView={isMemberView}
+            onProfitClick={openTotalProfitReport}
+            onPositionClick={() => setShowNetPositionDetail(true)}
+          />
 
           <div className="relative z-[1]">
             <AccountOverview
@@ -12268,7 +12260,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>}
           </div>
           {(canManage || isMemberView) && <div
-            className="flex h-9 items-center justify-center gap-1.5 border-b border-[#aeb8c1]/50 px-3"
+            data-t0-wrap className="flex min-h-9 items-center justify-center gap-x-1.5 gap-y-1 border-b border-[#aeb8c1]/50 px-3 py-1"
             aria-label="T形交割表报价模式"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(218,224,229,0.60))",
@@ -12341,7 +12333,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className="text-slate-500">实时参考价</span>
               {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
               {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
-              <span>{formatPrice(markPrice)}</span>
+              <span data-t0-fit>{formatPrice(markPrice)}</span>
             </div>
           </div>
           <div
@@ -12608,7 +12600,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 className="border-b border-[#c7d0d7]/70 px-2 py-1.5 sm:px-3 sm:py-2"
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.30), rgba(208,215,221,0.16))" }}
               >
-                <div className="flex flex-nowrap items-center gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1" role="group" aria-label="历史记录动作筛选">
+                <div data-t0-wrap className="flex flex-wrap items-center gap-x-0.5 gap-y-1 sm:gap-x-1" role="group" aria-label="历史记录动作筛选">
                   {historyHasIncomeCategoryToolbar ? <>
                     {historyMemberIncomeKindFilterOptions.length > 0 && <>
                       <button
@@ -12986,14 +12978,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   const recipientLabel = entry.recipientName
                     || (referenceTrade ? getTradeRelatedUserName(referenceTrade) : "未关联用户");
                   return <div key={entry.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
-                    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-                      <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                    <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
+                      <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1">
                         <span className={`shrink-0 font-semibold ${typeClass}`} title={recipientLabel}>{typeLabel}</span>
-                        <span className="shrink-0 font-medium text-slate-800">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)}E`}</span>
-                        {referenceTrade && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(referenceTrade.price)}</span>}
+                        <span data-t0-fit className="shrink-0 font-medium text-slate-800">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)}E`}</span>
+                        {referenceTrade && <span data-t0-fit className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(referenceTrade.price)}</span>}
                       </div>
                       <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
-                      <span className={`shrink-0 border-b border-dotted pb-0.5 font-semibold ${entry.amount >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}>{formatSigned(entry.amount)}<span className="ml-0.5 text-slate-500">u</span></span>
+                      <span data-t0-fit className={`shrink-0 border-b border-dotted pb-0.5 font-semibold ${entry.amount >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}>{formatSigned(entry.amount)}<span className="ml-0.5 text-slate-500">u</span></span>
                     </div>
                     <div className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden text-[10px] leading-4 text-slate-500">
                       {referenceTrade && <><span className="min-w-0 truncate" title={getTradeAccountName(referenceTrade)}>{getTradeAccountName(referenceTrade)}</span><span className="text-slate-300">·</span></>}
@@ -13033,24 +13025,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isSplitIncomeDisplay = Boolean(historyIncomeKind);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
-                    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-                      <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                    <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1 text-xs tabular-nums">
+                      <div data-t0-wrap className="flex min-w-0 items-baseline gap-x-1.5 gap-y-1">
                         <span className={`shrink-0 font-semibold ${isSplitIncomeDisplay ? "text-blue-600" : isLong ? "text-rose-600" : "text-emerald-600"}`}>{historyActionLabel}</span>
                         {isAutomaticTakeProfit && <Target className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.5} aria-label="系统自动止盈" />}
                         {isSharedIncomeOnly ? <span className="shrink-0 text-[10px] font-medium text-slate-400">来源平仓记录缺失</span> : <>
-                          <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
-                          {(isSplitIncomeDisplay || isSharedIncomePerspective) && !isOpening && <span className="shrink-0 text-slate-600">{sharedClosingPriceLabel}{formatPrice(trade.price)}</span>}
+                          <span data-t0-fit className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
+                          {(isSplitIncomeDisplay || isSharedIncomePerspective) && !isOpening && <span data-t0-fit className="shrink-0 text-slate-600">{sharedClosingPriceLabel}{formatPrice(trade.price)}</span>}
                         </>}
                         {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
-                        {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
-                        {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
-                        {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
-                        {!detail && !isSharedIncomePerspective && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span data-t0-fit className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span data-t0-fit className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span data-t0-fit className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
+                        {!detail && !isSharedIncomePerspective && <span data-t0-fit className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
                         {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
                       </div>
                       {!isOpening && displayDetail && displayedNetPnl !== undefined && <>
                         <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
-                        <button
+                        <button data-t0-fit
                           type="button"
                           onClick={() => setNetProfitDetail({
                             trade,
@@ -13140,7 +13132,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       {recoverableEntries.map((item) => (
                         <div key={item.auditId} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-amber-100 last:border-b-0">
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-slate-700">{ACTIONS[item.trade.action].label} {formatQuantity(item.trade.quantity)} ETH @ {formatPrice(item.trade.price)}</div>
+                            <div data-t0-fit className="text-xs font-semibold text-slate-700">{ACTIONS[item.trade.action].label} {formatQuantity(item.trade.quantity)} ETH @ {formatPrice(item.trade.price)}</div>
                             <div className="mt-0.5 text-[10px] text-slate-500">账户 {getTradeAccountName(item.trade)} · 用户 {getTradeRelatedUserName(item.trade)} · {item.operation === "delete" ? "删除" : "回撤"}于 {formatBeijingMonthDayTime(item.revertedAt)}</div>
                           </div>
                           <button
@@ -13303,14 +13295,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <span className={`text-base font-semibold ${isOptionEntryContext ? "text-violet-700" : isGridOpeningEntry ? "text-cyan-800" : entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
-                    <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
+                    <span data-t0-fit className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
-                  <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : isGridOpeningEntry ? "参考价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
+                  <span data-t0-fit className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : isGridOpeningEntry ? "参考价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
                 </div>
                 </div>
                 <div className={`mx-3 flex min-w-0 items-center justify-between gap-2 border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : isGridOpeningEntry ? "border-cyan-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className={`shrink-0 ${entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    <span data-t0-fit className={`shrink-0 ${entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                     </span>
                     <span className="shrink-0 text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
@@ -13322,7 +13314,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     className="flex shrink-0 items-center gap-1 whitespace-nowrap text-slate-500 transition active:opacity-60"
                   >
                     <span>历史平仓 {settledOpenedTradeSummary.count} 笔</span>
-                    <span className={`font-semibold ${settledOpenedTradeSummary.realizedNet > 0 ? "text-rose-600" : settledOpenedTradeSummary.realizedNet < 0 ? "text-emerald-600" : "text-slate-600"}`}>
+                    <span data-t0-fit className={`font-semibold ${settledOpenedTradeSummary.realizedNet > 0 ? "text-rose-600" : settledOpenedTradeSummary.realizedNet < 0 ? "text-emerald-600" : "text-slate-600"}`}>
                       {formatSigned(settledOpenedTradeSummary.realizedNet)} U
                     </span>
                     <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showSettledOpeningHistory ? "rotate-90" : ""}`} />
@@ -13360,10 +13352,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 {isEditingEntry && (
                   <div className="rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
                     <div className="text-xs font-semibold text-indigo-800">{isFullyClosedOpeningEdit ? "本笔开仓已全部平仓" : isPartiallyClosedOpeningEdit ? "正在编辑本笔剩余仓位" : "正在编辑本笔开仓"}</div>
-                    <div className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                    <div data-t0-fit className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
                       {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
                     </div>
-                    <div className="mt-1 text-[11px] leading-4 text-indigo-700/80">
+                    <div data-t0-fit className="mt-1 text-[11px] leading-4 text-indigo-700/80">
                       {isFullyClosedOpeningEdit && editingOriginalTrade
                         ? `原始 ${formatQuantity(editingOriginalTrade.originalQuantityBeforeReassignment ?? editingOriginalTrade.quantity)} ETH 已全部平仓或已完成剩余仓位转入；关联历史不可编辑。`
                         : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
@@ -13586,7 +13578,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </span>}
                     </div>}
                     {!isOptionOpeningEntry && openingArchivePrice !== null && (
-                      <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
+                      <div data-t0-fit className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
                         {isGridOpeningEntry
                           ? `${entryForm.gridDirection === "long" ? "做多下限" : "做空上限"}自动归档至 ${formatPrice(openingArchivePrice)} 档`
                           : `${ACTIONS[entryForm.action].side === "long" ? "向上归档" : "向下归档"}至 ${formatPrice(openingArchivePrice)} 档`}
@@ -13597,7 +13589,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
                     <div className="flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
                       <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
-                      <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量与成交数据固定。账户、项目可选同步已平历史；如更换用户名，只会转入之后的剩余仓位。</span>
+                      <span data-t0-fit>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量与成交数据固定。账户、项目可选同步已平历史；如更换用户名，只会转入之后的剩余仓位。</span>
                     </div>
                   )}
                   {quantityFormatError && <div className="text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
@@ -13701,7 +13693,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     >
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />添加一段
                     </button>
-                    <span className="text-right text-[10px] leading-4 text-amber-800">合计 {formatQuantity(entryForm.takeProfitPlans.reduce((total, plan) => total + (Number(plan.quantity) || 0), 0))} / {formatQuantity(Number(entryForm.quantity) || 0)} ETH</span>
+                    <span data-t0-fit className="text-right text-[10px] leading-4 text-amber-800">合计 {formatQuantity(entryForm.takeProfitPlans.reduce((total, plan) => total + (Number(plan.quantity) || 0), 0))} / {formatQuantity(Number(entryForm.quantity) || 0)} ETH</span>
                   </div>
                   <div className="mt-2 text-[10px] leading-4 text-amber-800">
                     {ACTIONS[entryForm.action].side === "long" ? "多单在标记价达到或高于对应止盈价时，按该段数量自动平仓。" : "空单在标记价达到或低于对应止盈价时，按该段数量自动平仓。"} 可设置多段；所有未触发段落合计不得超过本笔可用数量，锁定状态下会等待解锁后触发。
@@ -14112,20 +14104,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
             <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-3">
               <div className="text-[11px] font-semibold text-rose-800">本次填写</div>
-              <div className="mt-1 text-base font-bold tabular-nums text-rose-900">
+              <div data-t0-fit className="mt-1 text-base font-bold tabular-nums text-rose-900">
                 {formatQuantity(openingEditSaveSafetyReview.quantity)} ETH @ {formatPrice(openingEditSaveSafetyReview.price)} U
               </div>
               <div className="mt-3 space-y-2 text-xs leading-5 text-rose-800">
                 {openingEditSaveSafetyReview.quantityExceeded && (
-                  <div className="rounded-lg border border-rose-200 bg-white/75 px-3 py-2">
+                  <div data-t0-fit className="rounded-lg border border-rose-200 bg-white/75 px-3 py-2">
                     <span className="font-semibold">数量异常：</span>
                     当前 {formatQuantity(openingEditSaveSafetyReview.quantity)} ETH，超过单笔复核阈值 {T0_OPENING_EDIT_QUANTITY_REVIEW_LIMIT} ETH。
                   </div>
                 )}
                 {openingEditSaveSafetyReview.priceDeviationExceeded && openingEditSaveSafetyReview.markPrice !== null && openingEditSaveSafetyReview.priceDeviation !== null && (
                   <div className="rounded-lg border border-rose-200 bg-white/75 px-3 py-2">
-                    <div><span className="font-semibold">成交价偏离：</span>当前成交价与实时参考价相差 {formatPrice(openingEditSaveSafetyReview.priceDeviation)} U，超过复核阈值 {T0_OPENING_EDIT_PRICE_DEVIATION_REVIEW_LIMIT} U。</div>
-                    <div className="mt-0.5 font-medium tabular-nums text-rose-700">实时参考价 {formatPrice(openingEditSaveSafetyReview.markPrice)} U</div>
+                    <div data-t0-fit><span className="font-semibold">成交价偏离：</span>当前成交价与实时参考价相差 {formatPrice(openingEditSaveSafetyReview.priceDeviation)} U，超过复核阈值 {T0_OPENING_EDIT_PRICE_DEVIATION_REVIEW_LIMIT} U。</div>
+                    <div data-t0-fit className="mt-0.5 font-medium tabular-nums text-rose-700">实时参考价 {formatPrice(openingEditSaveSafetyReview.markPrice)} U</div>
                   </div>
                 )}
               </div>
@@ -14200,7 +14192,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-slate-800">仅影响之后的剩余仓位</span>
-                  <span className="shrink-0 text-xs font-semibold text-slate-500">{formatQuantity(Number(partialOpeningAttributionDraft.remainingQuantity))} ETH</span>
+                  <span data-t0-fit className="shrink-0 text-xs font-semibold text-slate-500">{formatQuantity(Number(partialOpeningAttributionDraft.remainingQuantity))} ETH</span>
                 </div>
                 <p className="mt-1.5 text-[11px] leading-5 text-slate-600">已平历史完全不动；剩余仓位会生成一张继承原成本价的新订单，并使用当前选择的账户、用户和项目。</p>
               </button>
@@ -14298,7 +14290,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	            </header>
 	            <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-2 pb-28 sm:px-5">
 	              <section className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
-	                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm font-semibold tabular-nums"><span className="text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</span><span className="text-slate-700">开 {closingSourceTrade ? formatPrice(closingSourceTrade.price) : entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}</span><span className="text-slate-700">平 {formatPrice(Number(entryForm.price))}</span></div>
+	                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm font-semibold tabular-nums"><span data-t0-fit className="text-slate-900">{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</span><span data-t0-fit className="text-slate-700">开 {closingSourceTrade ? formatPrice(closingSourceTrade.price) : entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}</span><span data-t0-fit className="text-slate-700">平 {formatPrice(Number(entryForm.price))}</span></div>
 	                <div className="mt-2 flex overflow-hidden rounded border border-slate-200 text-center tabular-nums"><div className="min-w-0 flex-auto border-r border-slate-100 px-2 py-2"><div className="text-[10px] text-slate-500">本次利润分配</div><div className="mt-0.5 whitespace-nowrap text-base font-bold text-rose-600">{sharedIncomeBudget.maximum.toFixed(2)} <span className="text-[10px] font-medium">u</span></div></div><div className="min-w-0 flex-auto px-2 py-2"><div className="text-[10px] text-slate-500">本次计划分配</div><div className="mt-0.5 whitespace-nowrap text-base font-bold" style={{ color: "#2563EB" }}>{sharedIncomeBudget.allocationLimit.toFixed(2)} <span className="text-[10px] font-medium">u</span><span className="ml-1 text-base font-bold" style={{ color: "#111827" }}>{sharedIncomeBudgetPercentage.toFixed(2)}%</span></div></div></div>
 	                {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 && (
 	                  <div className="mt-2">
@@ -14376,16 +14368,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                  </div>
                   {sharedIncomeAllocationMetrics.includes("weightedOpeningQuantity") && <section className="mt-3 space-y-2">
                     <T0WeightedOrderRuleSummary rule={sharedIncomeWeightedOrderRule} canManage={canManage} onConfigure={openSharedIncomeWeightedOrderRuleSettings} />
-                    <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-[10px] leading-4 text-blue-900">按本次平仓价 {formatPrice(Number(sharedIncomeClosePreviewBaseline.weightedOrderClosePrice) || 0)} U 试算。点右上角“权重”调整三个系数，保存后应用于本次试算；ETH数量与用户净盈亏口径不变。</div>
+                    <div data-t0-fit className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-[10px] leading-4 text-blue-900">按本次平仓价 {formatPrice(Number(sharedIncomeClosePreviewBaseline.weightedOrderClosePrice) || 0)} U 试算。点右上角“权重”调整三个系数，保存后应用于本次试算；ETH数量与用户净盈亏口径不变。</div>
                     <details className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                       <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold text-slate-800">查看每位用户的数量、净盈亏和逐笔权重</summary>
                       <div className="divide-y divide-slate-100">{sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled).map((candidate) => {
                         const score = sharedIncomeWeightedOrderScores.get(candidate.userId);
                         return <div key={candidate.userId} className="px-3 py-2 text-[10px] leading-4 tabular-nums">
                           <div className="flex items-center justify-between gap-2"><b className="truncate text-slate-800">{candidate.name}</b><b className="shrink-0 text-blue-700">加权量 {formatQuantity(score?.score || 0)}</b></div>
-                          <div className="mt-1 text-slate-500">待成交 {formatQuantity(score?.pendingQuantity || 0)} E · 已成交未平 {formatQuantity(score?.filledQuantity || 0)} E</div>
+                          <div data-t0-fit className="mt-1 text-slate-500">待成交 {formatQuantity(score?.pendingQuantity || 0)} E · 已成交未平 {formatQuantity(score?.filledQuantity || 0)} E</div>
                           {score && <div className="text-slate-500">合并净浮盈亏 <b className={score.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}>{formatPrice(score.netPnl)} U</b> · {score.netPnlRate === null ? "无已成交持仓" : `${(score.netPnlRate * 100).toFixed(2)}%`} · 已成交盈亏系数 {score.pnlFactor.toFixed(2)}</div>}
-                          {score?.details.map((line, index) => <div key={index} className="mt-1 border-l-2 border-blue-100 pl-2 text-[9px] text-slate-500">{line.status === "pending" ? "待成交" : "已成交"} · {formatPrice(line.price)} U · 距离 {(line.distance * 100).toFixed(2)}%<br />{formatQuantity(line.quantity)} E × 距离 {line.distanceFactor.toFixed(3)} × 成交 {line.statusFactor.toFixed(2)} × 盈亏 {line.pnlFactor.toFixed(2)} = <b className="text-blue-700">{formatQuantity(line.score)}</b></div>)}
+                          {score?.details.map((line, index) => <div data-t0-fit key={index} className="mt-1 border-l-2 border-blue-100 pl-2 text-[9px] text-slate-500">{line.status === "pending" ? "待成交" : "已成交"} · {formatPrice(line.price)} U · 距离 {(line.distance * 100).toFixed(2)}%<br />{formatQuantity(line.quantity)} E × 距离 {line.distanceFactor.toFixed(3)} × 成交 {line.statusFactor.toFixed(2)} × 盈亏 {line.pnlFactor.toFixed(2)} = <b className="text-blue-700">{formatQuantity(line.score)}</b></div>)}
                         </div>;
                       })}</div>
                     </details>
@@ -14416,7 +14408,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                {closeSaveError && <div role="alert" className="mb-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium leading-5 text-rose-700"><span className="font-semibold">平仓未确认：</span>{closeSaveError}</div>}
 	                <div className="flex gap-2">
 	                  <button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMetrics([]); setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button>
-	                  <button disabled={isCloseDistributionPreviewLink || sharedIncomeServerPlanUnavailable || Boolean(sharedIncomeAllocationPlanError) || saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isCloseDistributionPreviewLink ? "模拟预览，不提交" : saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
+	                  <button data-t0-fit disabled={isCloseDistributionPreviewLink || sharedIncomeServerPlanUnavailable || Boolean(sharedIncomeAllocationPlanError) || saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isCloseDistributionPreviewLink ? "模拟预览，不提交" : saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
 	                </div>
 	              </div>
 	            </footer>
@@ -14808,7 +14800,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <main className="min-h-0 flex-1 overflow-y-auto">
               {globalLedgerTab === "positions" && <>
               {globalLedgerRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
-                <div className="grid grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500"><span className="pr-1">用户</span><span className="px-1 text-right">多</span><span className="px-1 text-right">空</span><span className="px-1 text-right">差额</span><span className="pl-1 text-right">浮盈</span></div>
+                <div className="grid grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500"><span className="pr-1">用户</span><span className="px-1 text-right">多</span><span className="px-1 text-right">空</span><span className="px-1 text-right">差额</span><span className="pl-1 text-right">浮盈</span></div>
                 {globalLedgerRows.map((row) => {
                 const netPosition = row.longQuantity - row.shortQuantity;
                 const netPositionLabel = netPosition > 0.0000001 ? "多" : netPosition < -0.0000001 ? "空" : "平";
@@ -14819,12 +14811,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   setSelectedAccountIds([]);
                   setRelatedFundFilterIds([]);
                   setShowGlobalLedger(false);
-                }} className="grid min-h-11 w-full grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center px-3 py-1 text-left tabular-nums transition active:bg-slate-50">
+                }} className="grid min-h-11 w-full grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center px-3 py-1 text-left tabular-nums transition active:bg-slate-50">
                   <span className="min-w-0 truncate pr-1 text-[13px] font-semibold text-slate-800">{row.name}</span>
-                  <span className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-rose-600">{formatQuantity(row.longQuantity)}</span>
-                  <span className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-emerald-600">{formatQuantity(row.shortQuantity)}</span>
-                  <span className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${netPositionClass}`}>{formatQuantity(Math.abs(netPosition))}</span>
-                  <span className={`whitespace-nowrap pl-1 text-right text-[13px] font-semibold ${floatingPnlClass}`}>{row.floatingPnl === null ? "--" : formatGlobalLedgerWhole(row.floatingPnl)}</span>
+                  <span data-t0-fit className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-rose-600">{formatQuantity(row.longQuantity)}</span>
+                  <span data-t0-fit className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-emerald-600">{formatQuantity(row.shortQuantity)}</span>
+                  <span data-t0-fit className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${netPositionClass}`}>{formatQuantity(Math.abs(netPosition))}</span>
+                  <span data-t0-fit className={`whitespace-nowrap pl-1 text-right text-[13px] font-semibold ${floatingPnlClass}`}>{row.floatingPnl === null ? "--" : formatGlobalLedgerWhole(row.floatingPnl)}</span>
                 </button>;
               })}</div> : <div className="px-5 py-14 text-center text-sm text-slate-400">当前还没有关联用户订单。</div>}
               </>}
@@ -14834,11 +14826,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900">充值总览</h3><span className="text-[10px] text-slate-400">北京时间 · 按发生日期统计</span></div>
                     <div className="grid grid-cols-2 overflow-hidden rounded border border-slate-200">
                       <div className="border-b border-r border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">充值人数</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{globalDepositOverview.people}<span className="ml-1 text-xs font-normal text-slate-500">人</span></div></div>
-                      <div className="border-b border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">累计充值</div><div className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.total)}<span className="ml-1 text-[11px] font-normal">U</span></div></div>
-                      <div className="border-b border-r border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">人均充值</div><div className="mt-1 break-all text-lg font-semibold tabular-nums text-slate-800">{formatPrice(globalDepositOverview.average)}<span className="ml-1 text-[11px] font-normal text-slate-500">U</span></div></div>
+                      <div className="border-b border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">累计充值</div><div data-t0-fit className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.total)}<span className="ml-1 text-[11px] font-normal">U</span></div></div>
+                      <div className="border-b border-r border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">人均充值</div><div data-t0-fit className="mt-1 break-all text-lg font-semibold tabular-nums text-slate-800">{formatPrice(globalDepositOverview.average)}<span className="ml-1 text-[11px] font-normal text-slate-500">U</span></div></div>
                       <div className="border-b border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">充值笔数</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-800">{globalDepositOverview.count}<span className="ml-1 text-xs font-normal text-slate-500">笔</span></div></div>
-                      <div className="border-r border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">近7天充值</div><div className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.lastSevenDays)}<span className="ml-1 text-[11px] font-normal">U</span></div><div className="mt-0.5 text-[10px] text-slate-400">{globalDepositOverview.lastSevenDaysStart}–{globalDepositOverview.today}，含今日</div></div>
-                      <div className="px-3 py-2.5"><div className="text-[11px] text-slate-500">本自然周充值</div><div className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.naturalWeek)}<span className="ml-1 text-[11px] font-normal">U</span></div><div className="mt-0.5 text-[10px] text-slate-400">{globalDepositOverview.naturalWeekStart}–{globalDepositOverview.today}，周一至今</div></div>
+                      <div className="border-r border-slate-200 px-3 py-2.5"><div className="text-[11px] text-slate-500">近7天充值</div><div data-t0-fit className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.lastSevenDays)}<span className="ml-1 text-[11px] font-normal">U</span></div><div className="mt-0.5 text-[10px] text-slate-400">{globalDepositOverview.lastSevenDaysStart}–{globalDepositOverview.today}，含今日</div></div>
+                      <div className="px-3 py-2.5"><div className="text-[11px] text-slate-500">本自然周充值</div><div data-t0-fit className="mt-1 break-all text-lg font-semibold tabular-nums text-rose-600">{formatPrice(globalDepositOverview.naturalWeek)}<span className="ml-1 text-[11px] font-normal">U</span></div><div className="mt-0.5 text-[10px] text-slate-400">{globalDepositOverview.naturalWeekStart}–{globalDepositOverview.today}，周一至今</div></div>
                     </div>
                   </section>
                   <div role="tablist" aria-label="充值明细切换" className="mt-2 grid grid-cols-2 border-y border-slate-200 bg-white px-3">
@@ -14848,10 +14840,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {globalDepositTab === "recent" && <section role="tabpanel" aria-label="全量充值记录" className="border-b border-slate-200 bg-white">
                     <div className="border-b border-slate-100 px-3 py-2">
                       <div className="flex items-center gap-2"><label htmlFor="t0-global-deposit-user" className="shrink-0 text-xs text-slate-500">筛选用户</label><select id="t0-global-deposit-user" value={globalDepositUserFilter} onChange={(event) => setGlobalDepositUserFilter(event.target.value)} className="h-9 min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 text-[13px] text-slate-800"><option value="">全部用户</option>{globalDepositUsers.map((user) => <option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></div>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400"><span>共{filteredGlobalDepositLogs.length}笔 · 最新在前</span><span className="tabular-nums">合计 <span className="font-semibold text-rose-600">{formatPrice(filteredGlobalDepositTotal)} U</span></span></div>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400"><span>共{filteredGlobalDepositLogs.length}笔 · 最新在前</span><span className="tabular-nums">合计 <span data-t0-fit className="font-semibold text-rose-600">{formatPrice(filteredGlobalDepositTotal)} U</span></span></div>
                     </div>
                     {filteredGlobalDepositLogs.length > 0 ? <div className="divide-y divide-slate-100">{filteredGlobalDepositLogs.map((log) => <article key={log.id} className="px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">{log.relatedUserName}</span><span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-rose-600">+{formatPrice(log.amount)} U</span></div>
+                      <div className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">{log.relatedUserName}</span><span data-t0-fit className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-rose-600">+{formatPrice(log.amount)} U</span></div>
                       <div className="mt-1 flex items-start justify-between gap-3 text-[10px] text-slate-400"><time className="shrink-0 tabular-nums">{log.occurredOn.replaceAll("-", "/")}</time><span className="min-w-0 text-right">{log.note || "充值"}</span></div>
                     </article>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">{globalDepositUserFilter ? "该用户暂无充值记录" : "暂无充值记录"}</div>}
                   </section>}
@@ -14863,34 +14855,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                   {sortedGlobalFundsRows.map((row) => <div key={row.userId} className="grid min-h-11 grid-cols-2 divide-x divide-slate-200 items-center px-3 py-2 text-[13px] tabular-nums">
                     <button type="button" onClick={() => { setRelatedUserFilterIds([row.userId]); setSelectedAccountIds([]); setRelatedFundFilterIds([]); setShowGlobalLedger(false); }} className="min-w-0 truncate pr-2 text-left font-semibold text-slate-800 active:text-slate-500" title={`查看 ${row.name} 的订单`}>{row.name}</button>
-                    <button type="button" onClick={() => { setRelatedUserFilterIds([row.userId]); setSelectedAccountIds([]); setRelatedFundFilterIds([]); openPayoutEntryPage(globalPayoutDirection, Number(row.userId)); }} className={`whitespace-nowrap pl-2 text-right font-semibold ${globalPayoutDirection === "deposit" ? "text-rose-600 active:bg-rose-50" : "text-emerald-600 active:bg-emerald-50"}`} aria-label={`为 ${row.name} 登记${globalPayoutLabel}`}>{formatPrice(row[globalPayoutDirection])}</button>
+                    <button data-t0-fit type="button" onClick={() => { setRelatedUserFilterIds([row.userId]); setSelectedAccountIds([]); setRelatedFundFilterIds([]); openPayoutEntryPage(globalPayoutDirection, Number(row.userId)); }} className={`whitespace-nowrap pl-2 text-right font-semibold ${globalPayoutDirection === "deposit" ? "text-rose-600 active:bg-rose-50" : "text-emerald-600 active:bg-emerald-50"}`} aria-label={`为 ${row.name} 登记${globalPayoutLabel}`}>{formatPrice(row[globalPayoutDirection])}</button>
                   </div>)}
                   <div className="grid min-h-11 grid-cols-2 divide-x divide-slate-200 items-center border-t-2 border-slate-300 bg-slate-50 px-3 py-2 text-[13px] font-semibold tabular-nums">
                     <span className="pr-2 text-slate-900">{globalPayoutLabel}汇总</span>
-                    <span className={`whitespace-nowrap pl-2 text-right ${globalPayoutDirection === "deposit" ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(globalFundsSummary[globalPayoutDirection])}</span>
+                    <span data-t0-fit className={`whitespace-nowrap pl-2 text-right ${globalPayoutDirection === "deposit" ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(globalFundsSummary[globalPayoutDirection])}</span>
                   </div>
                 </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂无用户{globalPayoutLabel}记录。</div>)}
               </section>}
               {globalLedgerTab === "income" && <>
                 {globalFundsRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
-                  <div className="grid grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500"><span className="pr-1">用户</span><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "order" ? { key: "order", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "order", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按订单收入排序">订单{globalIncomeSort?.key === "order" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "commission" ? { key: "commission", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "commission", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按分佣收入排序">分佣{globalIncomeSort?.key === "commission" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "shared" ? { key: "shared", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "shared", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按共享收入排序">共享{globalIncomeSort?.key === "shared" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "total" ? { key: "total", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "total", direction: "desc" })} className="whitespace-nowrap pl-1 text-right active:text-slate-900" title="点击按总收入排序">总收入{globalIncomeSort?.key === "total" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button></div>
+                  <div className="grid grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500"><span className="pr-1">用户</span><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "order" ? { key: "order", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "order", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按订单收入排序">订单{globalIncomeSort?.key === "order" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "commission" ? { key: "commission", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "commission", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按分佣收入排序">分佣{globalIncomeSort?.key === "commission" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "shared" ? { key: "shared", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "shared", direction: "desc" })} className="whitespace-nowrap px-1 text-right active:text-slate-900" title="点击按共享收入排序">共享{globalIncomeSort?.key === "shared" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button><button type="button" onClick={() => setGlobalIncomeSort((current) => current?.key === "total" ? { key: "total", direction: current.direction === "desc" ? "asc" : "desc" } : { key: "total", direction: "desc" })} className="whitespace-nowrap pl-1 text-right active:text-slate-900" title="点击按总收入排序">总收入{globalIncomeSort?.key === "total" ? (globalIncomeSort.direction === "desc" ? " ↓" : " ↑") : ""}</button></div>
                   {sortedGlobalIncomeRows.map((row) => {
                     const totalIncome = row.orderProfit + row.commissionProfit + row.sharedProfit;
                     const incomeClass = (value: number) => value > 0 ? "text-rose-600" : value < 0 ? "text-emerald-600" : "text-slate-700";
-                    return <button key={row.userId} type="button" onClick={() => { setRelatedUserFilterIds([row.userId]); setSelectedAccountIds([]); setRelatedFundFilterIds([]); setShowGlobalLedger(false); }} className="grid min-h-11 w-full grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center px-3 py-1 text-left tabular-nums active:bg-slate-50">
+                    return <button key={row.userId} type="button" onClick={() => { setRelatedUserFilterIds([row.userId]); setSelectedAccountIds([]); setRelatedFundFilterIds([]); setShowGlobalLedger(false); }} className="grid min-h-11 w-full grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center px-3 py-1 text-left tabular-nums active:bg-slate-50">
                       <span className="min-w-0 truncate pr-1 text-[13px] font-semibold text-slate-800">{row.name}</span>
-                      <span className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${incomeClass(row.orderProfit)}`}>{formatGlobalLedgerWhole(row.orderProfit)}</span>
-                      <span className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${incomeClass(row.commissionProfit)}`}>{formatGlobalLedgerWhole(row.commissionProfit)}</span>
-                      <span className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-rose-600">{formatGlobalLedgerWhole(row.sharedProfit)}</span>
-                      <span className={`whitespace-nowrap pl-1 text-right text-[13px] font-semibold ${incomeClass(totalIncome)}`}>{formatGlobalLedgerWhole(totalIncome)}</span>
+                      <span data-t0-fit className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${incomeClass(row.orderProfit)}`}>{formatGlobalLedgerWhole(row.orderProfit)}</span>
+                      <span data-t0-fit className={`whitespace-nowrap px-1 text-right text-[13px] font-semibold ${incomeClass(row.commissionProfit)}`}>{formatGlobalLedgerWhole(row.commissionProfit)}</span>
+                      <span data-t0-fit className="whitespace-nowrap px-1 text-right text-[13px] font-semibold text-rose-600">{formatGlobalLedgerWhole(row.sharedProfit)}</span>
+                      <span data-t0-fit className={`whitespace-nowrap pl-1 text-right text-[13px] font-semibold ${incomeClass(totalIncome)}`}>{formatGlobalLedgerWhole(totalIncome)}</span>
                     </button>;
                   })}
-                  <div className="grid min-h-11 grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-t-2 border-slate-300 bg-slate-50 px-3 py-1 text-[13px] font-semibold tabular-nums">
+                  <div className="grid min-h-11 grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-t-2 border-slate-300 bg-slate-50 px-3 py-1 text-[13px] font-semibold tabular-nums">
                     <span className="pr-1 text-slate-900">汇总</span>
-                    <span className={`${globalFundsSummary.orderProfit >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap px-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.orderProfit)}</span>
-                    <span className={`${globalFundsSummary.commissionProfit >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap px-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.commissionProfit)}</span>
-                    <span className="whitespace-nowrap px-1 text-right text-rose-600">{formatGlobalLedgerWhole(globalFundsSummary.sharedProfit)}</span>
-                    <span className={`${(globalFundsSummary.orderProfit + globalFundsSummary.commissionProfit + globalFundsSummary.sharedProfit) >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap pl-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.orderProfit + globalFundsSummary.commissionProfit + globalFundsSummary.sharedProfit)}</span>
+                    <span data-t0-fit className={`${globalFundsSummary.orderProfit >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap px-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.orderProfit)}</span>
+                    <span data-t0-fit className={`${globalFundsSummary.commissionProfit >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap px-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.commissionProfit)}</span>
+                    <span data-t0-fit className="whitespace-nowrap px-1 text-right text-rose-600">{formatGlobalLedgerWhole(globalFundsSummary.sharedProfit)}</span>
+                    <span data-t0-fit className={`${(globalFundsSummary.orderProfit + globalFundsSummary.commissionProfit + globalFundsSummary.sharedProfit) >= 0 ? "text-rose-600" : "text-emerald-600"} whitespace-nowrap pl-1 text-right`}>{formatGlobalLedgerWhole(globalFundsSummary.orderProfit + globalFundsSummary.commissionProfit + globalFundsSummary.sharedProfit)}</span>
                   </div>
                 </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂无用户收入记录。</div>}
               </>}
@@ -14920,8 +14912,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span>订单 #{item.entryId}</span>
                         <span className="text-slate-300">·</span>
                         <span className="font-semibold text-slate-700">{item.action}</span>
-                        {hasQuantity && <><span className="text-slate-300">·</span><span>{formatQuantity(item.quantity)} ETH</span></>}
-                        {hasPrice && <><span className="text-slate-300">·</span><span>{formatPrice(item.price)} u</span></>}
+                        {hasQuantity && <><span className="text-slate-300">·</span><span data-t0-fit>{formatQuantity(item.quantity)} ETH</span></>}
+                        {hasPrice && <><span className="text-slate-300">·</span><span data-t0-fit>{formatPrice(item.price)} u</span></>}
                       </div>
                       {item.note && <p className="mt-1.5 break-words text-[11px] leading-relaxed text-slate-500">{item.note}</p>}
                     </article>;
@@ -14929,12 +14921,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂时没有后台自动处理的订单动态。</div>}
               </>}
             </main>
-            {globalLedgerTab === "positions" && globalLedgerRows.length > 0 && <footer className="grid min-h-11 shrink-0 grid-cols-[72px_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-t-2 border-slate-300 bg-slate-50 px-3 py-1 text-[12px] font-semibold tabular-nums shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
+            {globalLedgerTab === "positions" && globalLedgerRows.length > 0 && <footer className="grid min-h-11 shrink-0 grid-cols-[minmax(48px,0.9fr)_repeat(4,minmax(0,1fr))] divide-x divide-slate-200 items-center border-t-2 border-slate-300 bg-slate-50 px-3 py-1 text-[12px] font-semibold tabular-nums shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
               <span className="pr-1 text-[13px] text-slate-900">汇总</span>
-              <span className="whitespace-nowrap px-1 text-right text-rose-600">{formatQuantity(globalLedgerSummary.longQuantity)}</span>
-              <span className="whitespace-nowrap px-1 text-right text-emerald-600">{formatQuantity(globalLedgerSummary.shortQuantity)}</span>
-              <span className={`whitespace-nowrap px-1 text-right ${globalLedgerSummary.netPositionClass}`}>{formatQuantity(Math.abs(globalLedgerSummary.netPosition))}</span>
-              <span className={`whitespace-nowrap pl-1 text-right text-[12px] ${globalLedgerSummary.floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatGlobalLedgerWhole(globalLedgerSummary.floatingPnl)}</span>
+              <span data-t0-fit className="whitespace-nowrap px-1 text-right text-rose-600">{formatQuantity(globalLedgerSummary.longQuantity)}</span>
+              <span data-t0-fit className="whitespace-nowrap px-1 text-right text-emerald-600">{formatQuantity(globalLedgerSummary.shortQuantity)}</span>
+              <span data-t0-fit className={`whitespace-nowrap px-1 text-right ${globalLedgerSummary.netPositionClass}`}>{formatQuantity(Math.abs(globalLedgerSummary.netPosition))}</span>
+              <span data-t0-fit className={`whitespace-nowrap pl-1 text-right text-[12px] ${globalLedgerSummary.floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatGlobalLedgerWhole(globalLedgerSummary.floatingPnl)}</span>
             </footer>}
           </div>
         </div>
@@ -14976,11 +14968,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="mt-3 border-y border-slate-300 tabular-nums">
                 <button type="button" onClick={openTotalProfitReport} aria-haspopup={isMemberView ? undefined : "dialog"} aria-label={isMemberView ? "打开总收益页面" : "查看总收益归因报告"} className="w-full px-3 py-3 text-left transition active:bg-slate-50">
                   <div className="text-xs font-semibold text-slate-600">当前总收益</div>
-                  <div className={`mt-1 truncate whitespace-nowrap text-[clamp(23px,6.8vw,29px)] font-bold leading-none ${payoutBookTotalIncomeClass}`}>{formatSigned(payoutBookTotalIncome)}<span className="ml-1 text-xs font-semibold opacity-75">U</span></div>
+                  <div data-t0-fit className={`mt-1 truncate whitespace-nowrap text-[clamp(23px,6.8vw,29px)] font-bold leading-none ${payoutBookTotalIncomeClass}`}>{formatSigned(payoutBookTotalIncome)}<span className="ml-1 text-xs font-semibold opacity-75">U</span></div>
                   <div className="mt-1 truncate text-[10px] text-slate-400">{payoutXirrSummary.firstInvestmentDate ? `${Number(payoutXirrSummary.firstInvestmentDate.slice(5, 7))}月${Number(payoutXirrSummary.firstInvestmentDate.slice(8, 10))}日 至 ${Number(payoutXirrSummary.asOfDate.slice(5, 7))}月${Number(payoutXirrSummary.asOfDate.slice(8, 10))}日 · ${payoutXirrSummary.daysHeld} 天` : "尚无投入期间"}</div>
                 </button>
                 <div className="flex min-w-0 items-center justify-between gap-[clamp(12px,4vw,20px)] border-t border-slate-300 px-[clamp(12px,3.5vw,16px)] py-[clamp(10px,2.8vw,13px)] text-left tabular-nums">
-                  <div className="flex shrink-0 items-center gap-[clamp(6px,1.8vw,10px)] whitespace-nowrap"><span className="text-[clamp(11px,3vw,13px)] font-medium text-slate-500">累计投入</span><span className="text-[clamp(12px,3.4vw,14px)] font-semibold leading-none text-slate-800">{cumulativeDepositAmount > 0 ? "+" : ""}{cumulativeDepositAmount === 0 ? "0" : formatPrice(cumulativeDepositAmount)}<span className="ml-0.5 text-[10px] font-medium opacity-70">U</span></span></div>
+                  <div className="flex shrink-0 items-center gap-[clamp(6px,1.8vw,10px)] whitespace-nowrap"><span className="text-[clamp(11px,3vw,13px)] font-medium text-slate-500">累计投入</span><span data-t0-fit className="text-[clamp(12px,3.4vw,14px)] font-semibold leading-none text-slate-800">{cumulativeDepositAmount > 0 ? "+" : ""}{cumulativeDepositAmount === 0 ? "0" : formatPrice(cumulativeDepositAmount)}<span className="ml-0.5 text-[10px] font-medium opacity-70">U</span></span></div>
                   <span aria-hidden="true" className="h-4 shrink-0 border-l border-slate-300" />
                   <div className="flex shrink-0 items-center gap-[clamp(6px,1.8vw,10px)] whitespace-nowrap"><button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" aria-label="查看实际年化计算说明" className="border-b border-dotted border-slate-400 pb-px text-[clamp(11px,3vw,13px)] font-medium text-slate-500 active:opacity-60">实际年化</button><span className={`text-[clamp(12px,3.4vw,14px)] font-semibold leading-none ${payoutXirrSummary.rate === null ? "text-slate-400" : "text-slate-800"}`}>{formatT0AnnualizedReturn(payoutXirrSummary.rate)}</span></div>
                 </div>
@@ -15001,26 +14993,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="shrink-0 text-slate-400">共 {payoutLedgerTab === "income" ? payoutIncomeEntries.length : payoutLedgerCashflowLogs.length} 笔</span>
                 </div>
                 {payoutLedgerTab === "income" ? <>
-                  <div className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
+                  <div className="grid grid-cols-[60px_34px_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
                   {payoutIncomeEntries.length > 0 ? <div className="divide-y divide-slate-100">{pagedPayoutIncomeEntries.map((entry) => {
                   if (entry.kind === "shared") {
                     const sourceTrade = entry.sourceTrade;
-                    return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
+                    return <div key={entry.id} className="grid grid-cols-[60px_34px_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
                       <span className="whitespace-nowrap text-center font-mono tracking-[-0.04em] text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
                       <span className="whitespace-nowrap text-center font-semibold" style={{ color: "#2563eb" }} title="共享收益">共享</span>
-                      <span className="whitespace-nowrap text-center font-medium text-slate-700">{sourceTrade ? `${formatQuantity(sourceTrade.quantity)} ETH` : "—"}</span>
-                      <span className="whitespace-nowrap text-right text-slate-500" title={sourceTrade ? `来源平仓价 ${formatPrice(sourceTrade.price)}` : `来源平仓订单 #${entry.transfer.closingEntryId}`}>{sourceTrade ? formatPrice(sourceTrade.price) : `#${entry.transfer.closingEntryId}`}</span>
-                      <span className="whitespace-nowrap text-right font-semibold text-rose-600">{formatSigned(entry.transfer.amount)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-center font-medium text-slate-700">{sourceTrade ? `${formatQuantity(sourceTrade.quantity)} ETH` : "—"}</span>
+                      <span data-t0-fit className="whitespace-nowrap text-right text-slate-500" title={sourceTrade ? `来源平仓价 ${formatPrice(sourceTrade.price)}` : `来源平仓订单 #${entry.transfer.closingEntryId}`}>{sourceTrade ? formatPrice(sourceTrade.price) : `#${entry.transfer.closingEntryId}`}</span>
+                      <span data-t0-fit className="whitespace-nowrap text-right font-semibold text-rose-600">{formatSigned(entry.transfer.amount)} U</span>
                     </div>;
                   }
                   const { detail } = entry;
                   const isLong = ACTIONS[detail.trade.action].side === "long";
-                  return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
+                  return <div key={entry.id} className="grid grid-cols-[60px_34px_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
                     <span className="whitespace-nowrap text-center font-mono tracking-[-0.04em] text-slate-400">{formatBeijingMonthDayTime(detail.trade.createdAt)}</span>
                     <span className={`whitespace-nowrap text-center font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[detail.trade.action].label}</span>
-                    <span className="whitespace-nowrap text-center font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
-                    <span className="whitespace-nowrap text-right text-slate-500">{formatPrice(detail.trade.price)}</span>
-                    <span className={`whitespace-nowrap text-right font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
+                    <span data-t0-fit className="whitespace-nowrap text-center font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
+                    <span data-t0-fit className="whitespace-nowrap text-right text-slate-500">{formatPrice(detail.trade.price)}</span>
+                    <span data-t0-fit className={`whitespace-nowrap text-right font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
                   </div>;
                   })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无已实现收益记录</div>}
                   {payoutIncomeEntries.length > 0 && payoutIncomeTotalPages > 1 && <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
@@ -15033,7 +15025,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {payoutLedgerCashflowLogs.length > 0 ? <div className="divide-y divide-slate-100">{payoutLedgerCashflowLogs.map((log) => <div key={log.id} className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[11px] tabular-nums">
                     <span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span>
                     <span className="min-w-0 truncate text-slate-600">{log.note}</span>
-                    <span className={`whitespace-nowrap text-right font-semibold ${payoutLedgerTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}><span>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>{payoutLedgerTab === "deposit" && <span className="mt-0.5 block text-[9px] font-medium tabular-nums text-slate-500"><span className={log.depositInputMode === "eth" ? "text-sky-700" : "text-slate-400"}>币本位</span> {log.ethQuantity ? `${formatPayoutEthQuantity(log.ethQuantity)} ETH` : "—"}{log.ethReferencePrice && <span className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</span>
+                    <span className={`whitespace-nowrap text-right font-semibold ${payoutLedgerTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}><span data-t0-fit>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>{payoutLedgerTab === "deposit" && <span data-t0-fit className="mt-0.5 block text-[9px] font-medium tabular-nums text-slate-500"><span className={log.depositInputMode === "eth" ? "text-sky-700" : "text-slate-400"}>币本位</span> {log.ethQuantity ? `${formatPayoutEthQuantity(log.ethQuantity)} ETH` : "—"}{log.ethReferencePrice && <span data-t0-fit className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</span>
                   </div>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{payoutLedgerTab === "withdrawal" ? "提现" : "充值"}记录</div>}
                 </>}
               </section>
@@ -15096,7 +15088,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div>
                   <div className="text-slate-400">期末账面净值</div>
                   <div className="mt-0.5 font-semibold tabular-nums text-slate-800">累计投入 + 当前总收益 − 累计提现</div>
-                  <div className="mt-1 font-semibold tabular-nums text-indigo-700">当前期末净值：{formatSigned(payoutXirrSummary.currentNetValue)} U</div>
+                  <div data-t0-fit className="mt-1 font-semibold tabular-nums text-indigo-700">当前期末净值：{formatSigned(payoutXirrSummary.currentNetValue)} U</div>
                 </div>
                 <div>
                   <div className="text-slate-400">什么是 XIRR</div>
@@ -15209,7 +15201,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     expandedMemberId={expandedSettlementMemberId}
                     onExpandedMemberChange={setExpandedSettlementMemberId}
                   />}
-                  {displayedWeeklySettlementCenter.view === "member" ? memberSettlementCardPage === "self" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><T0HistoricalSettlementWeekCalendar reports={memberSettlementReports} dailyIncomeByDate={memberSettlementIncomeByWeek?.incomeByDay} targetUserId={payoutTargetRelatedUserId} selectedWeekStart={memberSettlementSelectedWeekStart} onSelectedWeekStartChange={selectMemberSettlementWeek} /></div> : null : adminSettlementTab === "overview" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-800">历史收益结算</span><span className="text-[11px] text-slate-400">{displayedWeeklySettlementCenter.history.some((item) => item.kind === "backfill") ? "含回溯核算" : "已冻结周报"}</span></div>{displayedWeeklySettlementCenter.history.length > 0 ? <div className="divide-y divide-slate-100">{displayedWeeklySettlementCenter.history.map((item) => { const expanded = expandedSettlementReportId === item.id; return <div key={item.id}><button type="button" onClick={() => setExpandedSettlementReportId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div><div className="text-sm font-semibold text-slate-800">{formatT0WeeklySettlementPeriod(item.report.period.weekStartBjt, item.report.period.weekEndExclusiveBjt)}</div><div className="mt-1 text-[10px] text-slate-400">{item.kind === "frozen" ? "已冻结 · 北京时间周结" : "回溯核算 · 未冻结"}</div></div><div className={`shrink-0 text-right text-sm font-bold tabular-nums ${item.report.summary.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.total)} <span className="text-[9px] font-medium">U</span></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.shared)}</div></div></div>}</div>; })}</div> : <div className="px-3 py-7 text-center text-xs text-slate-400">暂无已结束周的收益结算记录</div>}</div> : null}
+                  {displayedWeeklySettlementCenter.view === "member" ? memberSettlementCardPage === "self" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><T0HistoricalSettlementWeekCalendar reports={memberSettlementReports} dailyIncomeByDate={memberSettlementIncomeByWeek?.incomeByDay} targetUserId={payoutTargetRelatedUserId} selectedWeekStart={memberSettlementSelectedWeekStart} onSelectedWeekStartChange={selectMemberSettlementWeek} /></div> : null : adminSettlementTab === "overview" ? <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5"><span className="text-sm font-semibold text-slate-800">历史收益结算</span><span className="text-[11px] text-slate-400">{displayedWeeklySettlementCenter.history.some((item) => item.kind === "backfill") ? "含回溯核算" : "已冻结周报"}</span></div>{displayedWeeklySettlementCenter.history.length > 0 ? <div className="divide-y divide-slate-100">{displayedWeeklySettlementCenter.history.map((item) => { const expanded = expandedSettlementReportId === item.id; return <div key={item.id}><button type="button" onClick={() => setExpandedSettlementReportId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left active:bg-slate-50"><div><div className="text-sm font-semibold text-slate-800">{formatT0WeeklySettlementPeriod(item.report.period.weekStartBjt, item.report.period.weekEndExclusiveBjt)}</div><div className="mt-1 text-[10px] text-slate-400">{item.kind === "frozen" ? "已冻结 · 北京时间周结" : "回溯核算 · 未冻结"}</div></div><div data-t0-fit className={`shrink-0 text-right text-sm font-bold tabular-nums ${item.report.summary.income.total >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.total)} <span className="text-[9px] font-medium">U</span></div></button>{expanded && <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-slate-50/70 text-center tabular-nums"><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">订单</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.order >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.order)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">分佣</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.commission >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.commission)}</div></div><div className="min-w-0 px-1 py-2"><div className="text-[10px] text-slate-400">共享</div><div data-t0-fit className={`mt-1 whitespace-nowrap text-xs font-semibold ${item.report.summary.income.shared >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0SettlementAmount(item.report.summary.income.shared)}</div></div></div>}</div>; })}</div> : <div className="px-3 py-7 text-center text-xs text-slate-400">暂无已结束周的收益结算记录</div>}</div> : null}
                   <p data-card-export-hide="true" className="mt-3 px-1 text-[10px] leading-5 text-slate-400">{displayedWeeklySettlementCenter.view === "member" && memberSettlementCardPage === "team" ? (teamWeeklySettlement?.definition || "团队结算仅展示已授权下属的本周收益汇总。") : `${displayedWeeklySettlementCenter.definition.income} ${displayedWeeklySettlementCenter.definition.freeze}`}</p>
                 </> : <div className="border-y border-slate-200 px-3 py-10 text-center text-xs text-slate-400">暂无结算数据</div>}
               </section>
@@ -15217,17 +15209,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div ref={totalProfitAttributionExportRef} className={isTotalProfitPage ? "mt-4" : "mt-1.5"}>
             <section className="overflow-hidden rounded-xl border border-slate-200">
               <div className="overflow-hidden bg-gradient-to-br from-slate-50 via-white to-rose-50/45 text-left">
-                <div className={`grid ${totalProfitAttribution.hasIndividualScope && latestWithdrawalLog ? "grid-cols-[minmax(0,1fr)_132px]" : "grid-cols-1"} items-stretch`}>
+                <div className={`grid ${totalProfitAttribution.hasIndividualScope && latestWithdrawalLog ? "grid-cols-1 min-[400px]:grid-cols-[minmax(0,1fr)_132px]" : "grid-cols-1"} items-stretch`}>
                   <div className="min-w-0 px-4 py-3.5">
                     <div className="flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold text-slate-500"><span className="shrink-0">总收益</span>{totalProfitAttribution.hasIndividualScope && <span className="min-w-0 truncate font-medium text-slate-400">· {totalProfitAttribution.targetLabel}</span>}</div>
-                    <div className="mt-1.5 flex items-center gap-2"><>{totalProfitAttribution.hasIndividualScope && <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-[10px] font-bold text-white">{payoutTargetUserIdentity.avatar ? <img src={payoutTargetUserIdentity.avatar} alt={`${payoutTargetUserIdentity.name}头像`} className="h-full w-full object-cover" /> : <span>{payoutTargetUserIdentity.name.slice(0, 1)}</span>}</div>}</><div className={`whitespace-nowrap text-[clamp(21px,6.5vw,26px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div></div>
+                    <div className="mt-1.5 flex items-center gap-2"><>{totalProfitAttribution.hasIndividualScope && <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-[10px] font-bold text-white">{payoutTargetUserIdentity.avatar ? <img src={payoutTargetUserIdentity.avatar} alt={`${payoutTargetUserIdentity.name}头像`} className="h-full w-full object-cover" /> : <span>{payoutTargetUserIdentity.name.slice(0, 1)}</span>}</div>}</><div data-t0-fit="report-profit" className={`min-w-0 flex-1 whitespace-nowrap text-[clamp(21px,6.5vw,26px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div></div>
                     {totalProfitAttribution.hasIndividualScope && <button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" className="mt-2 border-b border-dotted border-slate-300 pb-px text-left text-[10px] leading-none text-slate-500 active:opacity-60" aria-label="查看实际年化计算说明">实际年化</button>}
                   </div>
                   {totalProfitAttribution.hasIndividualScope && latestWithdrawalLog && <aside className="min-w-0 border-l border-[#DC6218] bg-[#F37021] px-2.5 py-2.5 text-left tabular-nums">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 whitespace-nowrap text-[11px] font-bold leading-none tracking-[0.02em] text-slate-950"><span>最近一笔提现</span><span aria-hidden="true" className="text-[14px] leading-none">🎉</span></div>
                       <div className="mt-1.5 flex h-7 items-baseline rounded-[3px] bg-white px-1.5 pt-[5px] shadow-[0_1px_0_rgba(255,255,255,0.45)]">
-                        <span className="text-[clamp(18px,5.25vw,22px)] font-extrabold leading-none tracking-[-0.045em] text-slate-950">{formatPrice(latestWithdrawalLog.amount)}</span>
+                        <span data-t0-fit className="text-[clamp(18px,5.25vw,22px)] font-extrabold leading-none tracking-[-0.045em] text-slate-950">{formatPrice(latestWithdrawalLog.amount)}</span>
                         <span className="ml-1 text-[9px] font-bold leading-none text-slate-700">u</span>
                       </div>
                       <div className="mt-1.5 whitespace-nowrap text-[10px] font-semibold leading-none text-slate-950/70">{formatPayoutRecordedBeijingTime(latestWithdrawalLog.createdAt)}</div>
@@ -15238,17 +15230,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-white text-center tabular-nums">
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
                   <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">订单收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div data-t0-fit className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
                   <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.ownTradingCount} 笔已平仓</div>
                 </div>
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
                   <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">分佣收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.abs(totalProfitAttribution.commissionShareNetProfit) < 0.000001 ? "0.00" : formatPrice(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div data-t0-fit className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.abs(totalProfitAttribution.commissionShareNetProfit) < 0.000001 ? "0.00" : formatPrice(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
                   <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.commissionShareCount} 笔分佣收益</div>
                 </div>
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
                   <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">共享收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.sharedIncomeNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.sharedIncomeNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div data-t0-fit className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.sharedIncomeNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.sharedIncomeNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
                   <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.sharedIncomeCount} 笔共享收益</div>
                 </div>
               </div>
@@ -15265,7 +15257,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 <div className="min-w-0 overflow-hidden rounded-lg border border-slate-100 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.03)] divide-y divide-slate-100">
                   {totalProfitCompositionItems.map((item, index) => <div key={item.key} className="px-2.5 py-1">
-                    <div className="flex min-w-0 items-center gap-1.5 text-[10px] leading-none"><span className="flex min-w-0 items-center gap-1 font-medium text-slate-600"><i className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="shrink-0">{item.label}收益</span><span className="min-w-0 truncate font-bold tracking-[-0.035em] tabular-nums" style={{ color: item.color }}>{formatPrice(item.value)}<span className="ml-0.5 text-[8px] font-medium text-slate-400">U</span></span></span><span className="ml-auto shrink-0 font-bold tabular-nums" style={{ color: item.color }}>{(item.ratio * 100).toFixed(2)}%</span></div>
+                    <div className="flex min-w-0 items-center gap-1.5 text-[10px] leading-none"><span className="flex min-w-0 items-center gap-1 font-medium text-slate-600"><i className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="shrink-0">{item.label}收益</span><span data-t0-fit className="min-w-0 truncate font-bold tracking-[-0.035em] tabular-nums" style={{ color: item.color }}>{formatPrice(item.value)}<span className="ml-0.5 text-[8px] font-medium text-slate-400">U</span></span></span><span className="ml-auto shrink-0 font-bold tabular-nums" style={{ color: item.color }}>{(item.ratio * 100).toFixed(2)}%</span></div>
                     <div className="mt-1 h-[4px] overflow-hidden rounded-full" style={{ backgroundColor: item.trackColor }}><div className="h-full rounded-full" style={{ width: isTotalProfitCompositionAnimated ? `${item.ratio * 100}%` : "0%", background: item.gradient, boxShadow: "inset 0 -1px 2px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.24)", transition: `width 0.85s cubic-bezier(0.4,0,0.2,1) ${index * 70}ms` }} /></div>
                   </div>)}
                 </div>
@@ -15296,8 +15288,30 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   {teamOverviewMembers.length > 0 ? <div className="divide-y divide-slate-100">{teamOverviewMembers.map((member) => {
                     const memberStartDate = formatT0TeamMemberStartDate(member.firstActivityOn);
                     return <div key={member.userId} className="px-3 py-3">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none"><span className="min-w-0 truncate text-[15px] font-semibold text-slate-800">{member.name}</span>{memberStartDate && <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">{memberStartDate}</span>}{canManage && <button type="button" onClick={() => openTeamDepositEntryPage(member.userId)} aria-label={`为${member.name}登记充值`} className="ml-auto inline-flex shrink-0 items-center gap-0.5 py-1 text-[11px] font-medium text-sky-700 active:opacity-70"><Plus className="h-3 w-3" />登记充值</button>}</div>
-                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 tabular-nums"><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总金额</div>{canManage ? <button type="button" onClick={() => setTeamDepositMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}总金额充值明细`} className="mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900 active:opacity-70">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</button> : <div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div>}</div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">总收益</div><div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div></div><div className="min-w-0 px-1.5 py-1"><div className="text-[11px] text-slate-400">年化回报</div><button type="button" onClick={() => setTeamAnnualizedMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}年化回报计算说明`} className={`mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none active:opacity-70 ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</button></div></div>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-500">
+                        <span aria-hidden="true">{member.name.slice(0, 1)}</span>
+                        {member.avatar && <img src={member.avatar} alt={`${member.name}头像`} loading="lazy" className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[15px] font-semibold leading-5 text-slate-800">{member.name}</div>
+                        {memberStartDate && <div className="mt-0.5 truncate text-[10px] font-medium leading-4 tabular-nums text-slate-400">{memberStartDate}</div>}
+                      </div>
+                    </div>
+                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-100 text-center tabular-nums">
+                      <div className="min-w-0 px-1.5 py-1">
+                        <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400"><span>总金额</span><T0TeamUsdtIcon /></div>
+                        {canManage ? <button type="button" onClick={() => setTeamDepositMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}总金额充值明细`} className="mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900 active:opacity-70">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</button> : <div className="mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none text-slate-900">{member.cumulativeDepositAmount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div>}
+                      </div>
+                      <div className="min-w-0 px-1.5 py-1">
+                        <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400"><span>总收益</span><T0TeamUsdtIcon /></div>
+                        <div className={`mt-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none ${Number(member.currentCumulativeIncome || 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{member.currentCumulativeIncome === null ? "--" : member.currentCumulativeIncome.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</div>
+                      </div>
+                      <div className="min-w-0 px-1.5 py-1">
+                        <div className="text-[11px] text-slate-400">年化回报</div>
+                        <button type="button" onClick={() => setTeamAnnualizedMemberId(member.userId)} aria-haspopup="dialog" aria-label={`${member.name}年化回报计算说明`} className={`mt-1 inline-block max-w-full border-b border-dashed border-current pb-1 whitespace-nowrap tracking-[-0.035em] text-[clamp(12px,3.4vw,14px)] font-bold leading-none active:opacity-70 ${member.annualizedReturn === null ? "text-slate-400" : Number(member.annualizedReturn) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatT0AnnualizedReturn(member.annualizedReturn)}</button>
+                      </div>
+                    </div>
                   </div>;})}</div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队成员</div>}
                   <p className="border-t border-slate-100 px-3 py-2 text-[10px] leading-4 text-slate-400">全站推荐关系中的下级，只要属于52号账本且有T+0订单（含挂单）、入金/提现、分佣或共享活动，即自动开放团队查看。成员按同一活动条件展示；收益仍只统计非期权已实现订单、分佣及已到账共享，不含挂单收益、未平仓浮盈亏或钱包余额。年化回报按逐笔入金、提现及当前非期权已实现净值计算。</p>
                 </div> : <div className="px-3 py-10 text-center text-xs text-slate-400">暂无团队查看权限</div>}
@@ -15319,12 +15333,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           : (isLong ? "text-rose-600" : "text-emerald-600");
                       const displayQuantity = entry.quantity ?? referenceTrade?.quantity;
                       return (
-                        <div key={entry.id} className="grid min-w-0 grid-cols-[61px_32px_48px_minmax(0,1fr)_auto] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums whitespace-nowrap">
+                        <div key={entry.id} className="grid min-w-0 grid-cols-[61px_32px_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums whitespace-nowrap">
                           <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
                           <span className={`shrink-0 font-semibold ${typeClass}`} title={entry.recipientName}>{typeLabel}</span>
-                          <span className="shrink-0 font-medium text-slate-700">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)}E`}</span>
-                          <span className="min-w-0 truncate text-right text-slate-500">{referenceTrade ? formatPrice(referenceTrade.price) : "—"}</span>
-                          <span className={`shrink-0 text-right font-semibold ${entry.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(entry.amount)} U</span>
+                          <span data-t0-fit className="shrink-0 font-medium text-slate-700">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)}E`}</span>
+                          <span data-t0-fit className="min-w-0 truncate text-right text-slate-500">{referenceTrade ? formatPrice(referenceTrade.price) : "—"}</span>
+                          <span data-t0-fit className={`shrink-0 text-right font-semibold ${entry.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(entry.amount)} U</span>
                         </div>
                       );
                     })}
@@ -15361,7 +15375,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     : <>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></>;
                   return <div key={log.id} className="px-3 py-2 tabular-nums">
                     <div className="flex items-center justify-between gap-3 text-[11px]"><span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span><span className={`whitespace-nowrap text-right font-semibold ${activeTotalProfitDetailTab === "withdrawal" ? "text-slate-800" : isEthInput ? "text-indigo-700" : "text-sky-700"}`}>{primaryAmount}</span></div>
-                    {(!totalProfitAttribution.hasIndividualScope || log.note || isDeposit) && <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] leading-4 text-slate-400">{!totalProfitAttribution.hasIndividualScope && <span className="shrink-0 text-slate-500">{log.relatedUserName}</span>}{log.note && <span className="min-w-0 break-words">备注：{log.note}</span>}{isDeposit && <span className="shrink-0 tabular-nums">{isEthInput ? <><span className="font-medium text-indigo-600">= {formatPrice(log.amount)} U</span>{log.ethReferencePrice && <span className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</> : <>{log.ethQuantity ? <span className="font-medium text-sky-700">≈ {formatPayoutEthQuantity(log.ethQuantity)} ETH</span> : <span>未填写参考币数</span>}{log.ethReferencePrice && <span className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</>}</span>}</div>}
+                    {(!totalProfitAttribution.hasIndividualScope || log.note || isDeposit) && <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] leading-4 text-slate-400">{!totalProfitAttribution.hasIndividualScope && <span className="shrink-0 text-slate-500">{log.relatedUserName}</span>}{log.note && <span className="min-w-0 break-words">备注：{log.note}</span>}{isDeposit && <span className="shrink-0 tabular-nums">{isEthInput ? <><span data-t0-fit className="font-medium text-indigo-600">= {formatPrice(log.amount)} U</span>{log.ethReferencePrice && <span data-t0-fit className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</> : <>{log.ethQuantity ? <span data-t0-fit className="font-medium text-sky-700">≈ {formatPayoutEthQuantity(log.ethQuantity)} ETH</span> : <span>未填写参考币数</span>}{log.ethReferencePrice && <span data-t0-fit className="ml-1.5">参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</>}</span>}</div>}
                   </div>;
                 })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{activeTotalProfitDetailTab === "withdrawal" ? "提现" : "充值"}记录</div>}
               </>}
@@ -15396,14 +15410,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     多仓 · {netPositionBreakdown.long.levels.length}档{netPositionBreakdown.long.levels.length > 0 ? `（${netPositionBreakdown.long.levels.map((bucket) => formatLadderPrice(bucket.price)).join("、")}）` : ""}
                   </span>
-                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.long.quantity)} ETH</span>
+                  <span data-t0-fit className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.long.quantity)} ETH</span>
                 </div>
                 {netPositionBreakdown.long.levels.length > 0 ? (
                   <div className="divide-y divide-rose-100">
                     {netPositionBreakdown.long.levels.map((bucket) => (
                       <div key={bucket.key} className="flex items-center justify-between gap-4 px-3 py-2 text-xs">
                         <span className="text-slate-500">{formatLadderPrice(bucket.price)} 档</span>
-                        <span className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
+                        <span data-t0-fit className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
                       </div>
                     ))}
                   </div>
@@ -15418,14 +15432,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     空仓 · {netPositionBreakdown.short.levels.length}档{netPositionBreakdown.short.levels.length > 0 ? `（${netPositionBreakdown.short.levels.map((bucket) => formatLadderPrice(bucket.price)).join("、")}）` : ""}
                   </span>
-                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</span>
+                  <span data-t0-fit className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</span>
                 </div>
                 {netPositionBreakdown.short.levels.length > 0 ? (
                   <div className="divide-y divide-emerald-100">
                     {netPositionBreakdown.short.levels.map((bucket) => (
                       <div key={bucket.key} className="flex items-center justify-between gap-4 px-3 py-2 text-xs">
                         <span className="text-slate-500">{formatLadderPrice(bucket.price)} 档</span>
-                        <span className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
+                        <span data-t0-fit className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
                       </div>
                     ))}
                   </div>
@@ -15437,7 +15451,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="text-sm font-semibold text-slate-700">合计总仓位</span>
                   <span className="whitespace-nowrap text-lg font-bold text-slate-900">{netPositionDetailText} <span className="text-xs font-semibold text-slate-500">ETH</span></span>
                 </div>
-                <div className="mt-1 text-[11px] text-slate-500">多 {formatQuantity(netPositionBreakdown.long.quantity)} ETH − 空 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</div>
+                <div data-t0-fit className="mt-1 text-[11px] text-slate-500">多 {formatQuantity(netPositionBreakdown.long.quantity)} ETH − 空 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</div>
               </div>
             </div>
 
@@ -15462,10 +15476,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm leading-6 text-slate-600">累计净收益已扣除开仓与平仓交易手续费。</div>
             ) : <>
               <div className="mt-4 space-y-2 text-sm tabular-nums">
-                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span className={`font-medium ${grossProfitDetail.gross >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.gross)} U</span></div>
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span data-t0-fit className={`font-medium ${grossProfitDetail.gross >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.gross)} U</span></div>
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">开仓手续费分摊</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.openingFee)} U</span></div>
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.closingFee)} U</span></div>
-                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">累计净收益</span><span className={`font-semibold ${grossProfitDetail.net >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.net)} U</span></div>
+                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">累计净收益</span><span data-t0-fit className={`font-semibold ${grossProfitDetail.net >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.net)} U</span></div>
               </div>
               <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">累计净收益已扣除已平部分的开仓手续费分摊及平仓手续费。</div>
             </>}
@@ -15497,7 +15511,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45 text-sm tabular-nums">
                   <div className="flex items-center justify-between gap-4 px-3 py-3.5">
                     <span className="font-semibold text-slate-800">{netProfitDetail.trade.historyIncomeKind === "commission" ? "本次分佣" : netProfitDetail.trade.historyIncomeKind === "shared" ? "本次共享" : "本单可得"}</span>
-                    <span className={`text-lg font-semibold ${memberProfitShareDetail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(memberProfitShareDetail.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span>
+                    <span data-t0-fit className={`text-lg font-semibold ${memberProfitShareDetail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(memberProfitShareDetail.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span>
                   </div>
                 </div>
                 <div className="mt-3 px-1 text-[11px] leading-5 text-slate-400">{netProfitDetail.trade.historyIncomeKind === "commission"
@@ -15513,21 +15527,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </>
             ) : <>
               <section className="mt-3 overflow-hidden rounded border border-slate-200 bg-slate-50/60 text-xs tabular-nums">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-800">{ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH</span><span className={(netProfitDetail.detail.grossPnl ?? 0) >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(netProfitDetail.detail.grossPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span data-t0-fit className="font-semibold text-slate-800">{ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH</span><span data-t0-fit className={(netProfitDetail.detail.grossPnl ?? 0) >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(netProfitDetail.detail.grossPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-slate-600"><span>手续费</span><span className="font-medium text-emerald-600">−{formatFee((netProfitDetail.detail.allocatedOpeningFee ?? 0) + (netProfitDetail.detail.closingFee ?? 0))}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
-                <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-700">净收益</span><span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-700">净收益</span><span data-t0-fit className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
               </section>
               {netProfitAllocationSummary?.sharedRows.length ? <section className="mt-2 overflow-hidden rounded border border-indigo-100 bg-indigo-50/35 text-xs tabular-nums">
-                <div className="flex items-center justify-between gap-3 border-b border-indigo-100 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">最大可分配共享收益</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-b border-indigo-100 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">最大可分配共享收益</span><span data-t0-fit className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
                 <div className="divide-y divide-indigo-100/90 bg-white/55">
-                  {netProfitAllocationSummary.sharedRows.map((transfer) => <div key={transfer.id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{transfer.recipientUserName}</span><span className={`shrink-0 font-semibold ${transfer.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(transfer.amount)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
+                  {netProfitAllocationSummary.sharedRows.map((transfer) => <div key={transfer.id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{transfer.recipientUserName}</span><span data-t0-fit className={`shrink-0 font-semibold ${transfer.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(transfer.amount)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-indigo-100 bg-white/70 px-2.5 py-1.5 tabular-nums"><span className="font-semibold text-slate-700">剩余</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl - netProfitAllocationSummary.sharedTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-t border-indigo-100 bg-white/70 px-2.5 py-1.5 tabular-nums"><span className="font-semibold text-slate-700">剩余</span><span data-t0-fit className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl - netProfitAllocationSummary.sharedTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
               </section> : null}
               {netProfitAllocationSummary?.regularRows.length ? <section className="mt-2 overflow-hidden rounded border border-slate-200 bg-slate-50/60 text-xs tabular-nums">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">利润分配</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.regularTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">利润分配</span><span data-t0-fit className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.regularTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
                 <div className="divide-y divide-slate-100 bg-white/55">
-                  {netProfitAllocationSummary.regularRows.map((allocation, index) => <div key={`${allocation.beneficiaryUserId}-${index}`} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{allocation.beneficiaryUserName}<small className="ml-1 text-[10px] font-normal text-slate-500">{allocation.percentageLabel}</small></span><span className={`shrink-0 font-semibold ${allocation.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(allocation.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
+                  {netProfitAllocationSummary.regularRows.map((allocation, index) => <div key={`${allocation.beneficiaryUserId}-${index}`} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{allocation.beneficiaryUserName}<small className="ml-1 text-[10px] font-normal text-slate-500">{allocation.percentageLabel}</small></span><span data-t0-fit className={`shrink-0 font-semibold ${allocation.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(allocation.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
                 </div>
               </section> : null}
             </>}
@@ -15540,7 +15554,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="删除开仓记录">
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">删除这笔开仓记录？</div>
-            <div className="mt-2 text-sm tabular-nums text-slate-700">
+            <div data-t0-fit className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[deleteCandidate.action].label} {formatQuantity(deleteCandidate.quantity)} ETH @ {formatPrice(deleteCandidate.price)}
             </div>
             <div className="mt-2 text-[11px] leading-5 text-slate-500">删除后该开仓不再计入价格簿、仓位和盈亏，删除前记录、操作时间与操作人会保留在审计记录中。若此开仓已有对应平仓记录，系统会拒绝删除，须先回撤对应平仓流水。</div>
@@ -15569,7 +15583,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="回撤速记流水">
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">回撤这笔速记？</div>
-            <div className="mt-2 text-sm tabular-nums text-slate-700">
+            <div data-t0-fit className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[revertCandidate.action].label} {formatQuantity(revertCandidate.quantity)} ETH @ {formatPrice(revertCandidate.price)}
             </div>
             <div className="mt-2 text-[11px] leading-5 text-slate-500">
@@ -15600,7 +15614,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="恢复速记流水">
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">恢复这笔速记？</div>
-            <div className="mt-2 text-sm tabular-nums text-slate-700">
+            <div data-t0-fit className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[restoreCandidate.trade.action].label} {formatQuantity(restoreCandidate.trade.quantity)} ETH @ {formatPrice(restoreCandidate.trade.price)}
             </div>
             <div className="mt-2 text-[11px] leading-5 text-slate-500">
@@ -16008,13 +16022,13 @@ function AccountOverview({
                 key={side}
                 className={`min-w-0 px-3 py-2.5 text-left ${isLong ? "border-r border-slate-100" : ""}`}
               >
-                <div className="flex items-baseline justify-between gap-2">
+                <div className="flex min-w-0 items-baseline justify-between gap-1">
                   <div className="flex min-w-0 items-baseline gap-1.5">
                     <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多" : "空"}</span>
                     <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{positionData.activeLevels}档</span>
                   </div>
-                  <div className="flex shrink-0 items-baseline gap-1">
-                    <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(positionData.quantity)}</span>
+                  <div data-t0-fit="position-quantity" className="flex min-w-0 flex-1 items-baseline justify-end gap-1">
+                    <span data-t0-fit className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(positionData.quantity)}</span>
                     <span className="text-[11px] text-slate-500">ETH</span>
                   </div>
                 </div>
@@ -16031,9 +16045,9 @@ function AccountOverview({
               return (
                 <section key={side} className={`min-w-0 ${isLong ? "border-r border-slate-100" : ""}`}>
                   <div className="space-y-0">
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">累计净收益</span>
-                      <button
+                      <button data-t0-fit
                         type="button"
                         onClick={() => onExplainGrossProfit(side, data)}
                         className={`whitespace-nowrap border-b border-dotted pb-0.5 text-[11px] font-semibold outline-none ${profitTone}`}
@@ -16042,29 +16056,29 @@ function AccountOverview({
                         {formatSigned(data.realized)} U
                       </button>
                     </div>
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">持仓均价</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.quantity > 0 ? formatPrice(data.average) : formatAmount(0)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.quantity > 0 ? formatPrice(data.average) : formatAmount(0)} U</span>
                     </div>
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">累计平仓</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatQuantity(data.closedQuantity)} ETH</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatQuantity(data.closedQuantity)} ETH</span>
                     </div>
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">原始平均成本</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAverageCost) : formatAmount(0)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAverageCost) : formatAmount(0)} U</span>
                     </div>
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">平均平仓价</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAveragePrice) : formatAmount(0)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAveragePrice) : formatAmount(0)} U</span>
                     </div>
-                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">累计交易额</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.turnover)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.turnover)} U</span>
                     </div>
-                    {showCommission && <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                    {showCommission && <div data-t0-wrap className="flex min-h-9 items-center justify-between gap-x-1 gap-y-1 border-t border-slate-100 px-3 py-1.5">
                       <span className="whitespace-nowrap text-slate-500">累计佣金</span>
-                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.commission)} U</span>
+                      <span data-t0-fit className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.commission)} U</span>
                     </div>}
                   </div>
                 </section>
@@ -16124,7 +16138,7 @@ function OptionUnrealizedPnlText({
     : optionPnl >= 0
       ? "text-rose-600"
       : "text-emerald-600";
-  return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
+  return <span data-t0-fit className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
 function useReliableDoubleTap(onActivate: () => void) {
@@ -16430,17 +16444,17 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       <div className={`flex w-full min-w-0 justify-between gap-2 tabular-nums ${metadata ? "min-h-[30px] items-center" : "items-start"} ${isShort ? "flex-row-reverse" : ""}`}>
         <div className={metadata
           // 数量容器占满盈亏双行带，并在其中垂直居中；左右两侧的数量基线始终一致。
-          ? `flex min-h-[30px] min-w-0 self-stretch items-center gap-1.5 ${isShort ? "flex-row-reverse justify-start text-right" : ""}`
-          : `flex min-h-[30px] min-w-0 flex-col justify-between ${isShort ? "items-end text-right" : "items-start"}`
+          ? `flex min-h-[30px] min-w-0 flex-[0_1_auto] self-stretch items-center gap-1.5 ${isShort ? "flex-row-reverse justify-start text-right" : ""}`
+          : `flex min-h-[30px] min-w-0 flex-[0_1_auto] flex-col justify-between ${isShort ? "items-end text-right" : "items-start"}`
         }>
-          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          <span data-t0-fit className={`min-w-0 max-w-full font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
           {!metadata && integratedStatusSummary && <span className="shrink-0 whitespace-nowrap text-[9px] font-medium leading-none text-slate-400" title={`本档${integratedStatusSummary}`} aria-label={`本档${integratedStatusSummary}`}>{integratedStatusSummary}</span>}
-          {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
+          {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span data-t0-fit>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
         </div>
         {showPnlNumbers && floatingPnl !== null && floatingReturnRate !== null && (
-          <span className={`flex h-[30px] shrink-0 flex-col justify-center gap-[2px] ${isShort ? "items-start text-left" : "items-end text-right"} ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
-            <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
-            <span className={`${metadata ? "text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
+          <span className={`flex min-h-[30px] min-w-0 flex-1 flex-col justify-center gap-[2px] ${isShort ? "items-start text-left" : "items-end text-right"} ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
+            <span data-t0-fit className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
+            <span data-t0-fit className={`${metadata ? "text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
           </span>
         )}
       </div>
@@ -16499,7 +16513,7 @@ function ReminderPlaceholderCell({
   const content = (
     <div className="min-w-0">
       <div className="text-xs font-bold text-sky-700">持续提醒</div>
-      <div className="mt-0.5 truncate text-[10px] font-medium text-slate-600">
+      <div data-t0-fit className="mt-0.5 truncate text-[10px] font-medium text-slate-600">
         {reminder.relatedUserName || "未关联用户"} · {formatQuantity(reminder.defaultQuantity)} E
       </div>
       <div className="mt-0.5 text-[9px] text-slate-500">待补位 · 点击录入</div>
