@@ -1,0 +1,88 @@
+/* 仅作用于共享分配说明/权重页面，不改变全站用户主题或资金颜色。 */
+@layer utilities {
+  .t0-income-guide {
+    --color-primary: #2563eb;
+    --color-secondary: #1d4ed8;
+    --color-accent1: #ffffff;
+    --color-accent2: #cbd5e1;
+    --color-text: #0f172a;
+    --rule-accent: #2563eb;
+    --rule-tint: #eff6ff;
+    color: #334155;
+  }
+  .t0-income-guide[data-rule-tone="market"] {
+    --rule-accent: #0f766e;
+    --rule-tint: #f0fdfa;
+  }
+  .t0-income-guide[data-rule-tone="annualized"],
+  .t0-income-guide.t0-annualized-rule {
+    --rule-accent: #6366f1;
+    --rule-tint: #eef2ff;
+    --color-primary: #6366f1;
+    --color-secondary: #4f46e5;
+  }
+  .t0-income-guide[data-rule-tone="contribution"],
+  .t0-income-guide.t0-shared-contribution-rule {
+    --rule-accent: #0369a1;
+    --rule-tint: #f0f9ff;
+    --color-primary: #0369a1;
+    --color-secondary: #075985;
+  }
+  .t0-income-guide[data-rule-tone="market-growth"],
+  .t0-income-guide.t0-market-rule {
+    --rule-accent: #b45309;
+    --rule-tint: #fffbeb;
+    --color-primary: #b45309;
+    --color-secondary: #92400e;
+  }
+  /* 卡片、表格、按钮采用4px小圆角；返回图标保持圆形。 */
+  .t0-income-guide :is(article, section, main, header, footer),
+  .t0-income-guide:is(article, section),
+  .t0-income-guide [class*="rounded-"]:not([class*="rounded-full"]):not([class*="rounded-t-sm"]) {
+    border-radius: 4px !important;
+  }
+  .t0-income-guide :is(article, section, main, header, footer),
+  .t0-income-guide:is(article, section),
+  .t0-income-guide [class*="border-blue-100"],
+  .t0-income-guide [class*="border-blue-200"] {
+    border-color: #dbe2ea !important;
+  }
+  .t0-income-guide .t0-rule-summary {
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 3%) !important;
+  }
+  .t0-income-guide .t0-rule-number {
+    background-color: var(--rule-accent) !important;
+    color: #ffffff !important;
+    border-radius: 2px !important;
+  }
+  .t0-income-guide .t0-rule-category {
+    color: var(--rule-accent) !important;
+  }
+  .t0-income-guide .t0-weight-button {
+    border-color: #dbe2ea !important;
+    background-color: var(--rule-tint) !important;
+    color: var(--rule-accent) !important;
+    border-radius: 4px !important;
+  }
+  .t0-income-guide .t0-guide-header {
+    background-color: #ffffff !important;
+    color: #0f172a;
+    border-color: #dbe2ea !important;
+  }
+  .t0-income-guide .t0-guide-hero {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #dbe2ea;
+    box-shadow: none !important;
+  }
+  .t0-income-guide .t0-guide-hero [class*="text-"] { color: #475569 !important; }
+  .t0-income-guide .t0-guide-hero h2 { color: #0f172a !important; }
+  .t0-income-guide .t0-guide-hero [class*="border-"] { border-color: #dbe2ea !important; }
+  .t0-income-guide .t0-guide-hero [class*="divide-"] > :not(:last-child) { border-color: #dbe2ea !important; }
+  .t0-income-guide .t0-guide-common {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+  }
+  .t0-income-guide .t0-guide-common [class*="text-"] { color: #475569 !important; }
+}

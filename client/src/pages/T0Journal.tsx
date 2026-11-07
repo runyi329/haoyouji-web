@@ -33,9 +33,19 @@ import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { T0TeamAnnualizedDialog, type T0TeamAnnualizedDetail } from "@/components/T0TeamAnnualizedDialog";
-
+import { T0_SHARED_ALLOCATION_METRICS, type T0SharedIncomeAllocationPlan } from "@shared/t0-allocation-plan-contract";
+import { T0WeightedOrderRuleSummary, T0WeightedOrderRuleSettingsPage } from "@/components/T0WeightedOrderRule";
+import { SharedIncomeRuleSummaryCard } from "@/components/SharedIncomeRuleSummaryCard";
+import { T0AnnualizedAllocationRuleSummary, T0AnnualizedAllocationRuleDetailsPage, type AnnualizedAllocationRow } from "@/components/T0AnnualizedAllocationRule";
+import "@/styles/shared-income-guide.css";
+import { calculateWeightedOrderScores, DEFAULT_WEIGHTED_ORDER_RULE, type WeightedOrderFact, type WeightedOrderRule } from "@shared/t0-weighted-order-rule";
+import { DEFAULT_T0_ANNUALIZED_ALLOCATION_RULE, getAnnualizedGapWeights, allocateCappedAnnualizedCents, type T0AnnualizedAllocationRule } from "@shared/t0-annualized-allocation-rule";
+import { calculateSharedContributionWeights, DEFAULT_SHARED_CONTRIBUTION_RULE, type SharedContributionRule } from "@shared/t0-shared-contribution-rule";
+import { T0SharedContributionRuleSummary, T0SharedContributionRuleSettingsPage } from "@/components/T0SharedContributionRule";
+import { calculateMarketContributionScores, DEFAULT_MARKET_CONTRIBUTION_RULE, isValidMarketContributionRule, type MarketContributionRule, type MarketContributionFacts } from "@shared/t0-market-contribution-rule";
+import { T0MarketContributionRuleSummary, T0MarketContributionRuleSettingsPage } from "@/components/T0MarketContributionRule";
 /** T+0账本采用页面内状态与确认页反馈，不显示顶部下拉式操作提示。 */
-const t0Toast = {
+const toast = {
   success: (..._args: unknown[]) => undefined,
   error: (..._args: unknown[]) => undefined,
   message: (..._args: unknown[]) => undefined,
@@ -207,7 +217,7 @@ type SharedIncomeEligibility = {
   updatedAt?: string;
 };
 type SharedIncomeAllocationBudgetMode = "percentage" | "amount";
-type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap" | "withdrawalProgress" | "openingOrderCount";
+type SharedIncomeAllocationMetric = "principal" | "historicalProfit" | "holdingLoss" | "realizedAnnualized" | "externalShareContribution" | "receivedSharedAmountGap" | "receivedSharedCountGap" | "withdrawalProgress" | "openingOrderCount" | "weightedOpeningQuantity" | "sharedContribution" | "marketContribution";
 type SharedIncomePrincipalRule = {
   /** 0% 是全员均分，100% 是完全按本金曲线。 */
   influencePercentage: number;
@@ -248,14 +258,15 @@ const SHARED_INCOME_ALLOCATION_DIMENSIONS: ReadonlyArray<{
   accent: string;
 }> = [
   { id: "principal", label: "按本金比例", category: "规模公平", compactLabel: "本金", emptyMessage: "当前开启的分配人没有已登记本金", guideDescription: "按实际累计投入的比例分配，投入规模越大，本维度的分配份额越高。", guideFormula: "累计投入占比 → 本维度份额", accent: "#2563eb" },
-  { id: "historicalProfit", label: "按已获利润", category: "收益激励", compactLabel: "已获利润", emptyMessage: "当前开启的分配人没有已获得的历史利润", guideDescription: "以已实现订单收益与既得共享收益为依据，回馈持续创造实际收益的参与者。", guideFormula: "已获历史利润占比 → 本维度份额", accent: "#f59e0b" },
-  { id: "holdingLoss", label: "按持仓浮亏", category: "风险补偿", compactLabel: "持仓浮亏", emptyMessage: "当前开启的分配人没有持仓浮亏", guideDescription: "仅参考当前仍持有仓位的浮亏，浮亏越多，本维度补偿权重越高。", guideFormula: "未实现浮亏占比 → 本维度份额", accent: "#059669" },
+  { id: "weightedOpeningQuantity", label: "按有效挂单量加权", category: "三层权重 · 试算", compactLabel: "有效挂单权重", emptyMessage: "当前没有有效的ETH挂单加权分数；请核对现货/合约数量、20%价格范围和参与资格", guideDescription: "以有效ETH数量为基数，叠加价格距离、成交状态和用户净浮盈亏三层规则；管理员可分别调节0～1的影响强度。新方案仅试算，不自动执行分配。", guideFormula: "ETH数量 × 距离系数 × 成交系数 × 净盈亏系数 → 分配占比", accent: "#0891b2" },
   { id: "realizedAnnualized", label: "按实现年化", category: "收益平衡", compactLabel: "已实现年化", emptyMessage: "当前开启的分配人没有可计算的已实现年化补差", guideDescription: "以所有有效参与人的已实现年化均值为目标，优先补足低于均值者，让长期回报趋向平衡。", guideFormula: "距平均年化的补足额 → 本维度份额", accent: "#7c3aed" },
-  { id: "externalShareContribution", label: "按对外共享贡献", category: "协作回馈", compactLabel: "贡献权重", emptyMessage: "当前开启的分配人还没有对外共享贡献记录", guideDescription: "同时参考对外共享金额和贡献订单次数，回馈已为其他成员创造共享收益的人。", guideFormula: "共享金额与订单次数综合 → 本维度份额", accent: "#0f766e" },
-  { id: "receivedSharedAmountGap", label: "按收到共享金额补差", category: "分配均衡", compactLabel: "收到共享", emptyMessage: "当前没有可参与收到共享金额补差的分配人", guideDescription: "历史收到共享金额越少，补差权重越高，避免收益机会长期集中。", guideFormula: "最高已收金额 − 个人已收金额 → 权重", accent: "#e11d48" },
-  { id: "receivedSharedCountGap", label: "按收到共享次数补差", category: "机会均衡", compactLabel: "收到次数", emptyMessage: "当前没有可参与收到共享次数补差的分配人", guideDescription: "历史收到共享的次数越少，机会补差越多，保障每个人都持续有参与感。", guideFormula: "最高已收次数 − 个人已收次数 → 权重", accent: "#db2777" },
-  { id: "withdrawalProgress", label: "按提现进度", category: "回款平衡", compactLabel: "提现占比", emptyMessage: "当前开启的分配人没有可计算的提现进度", guideDescription: "提现占投入比例越低，本维度速度越高；始终保留最低档，不会把有效成员排空。", guideFormula: "权重 = 100 − 提现进度（最低 1）", accent: "#0284c7" },
-  { id: "openingOrderCount", label: "按当前挂单数", category: "市场贡献", compactLabel: "当前挂单", emptyMessage: "当前开启的分配人没有可统计的有效开仓或挂单记录", guideDescription: "统计当前仍挂在报价表的开仓：未成交挂单，以及仍有未平仓数量的已成交开仓；已全部平仓的历史开仓不计入。现货、合约、期权、网格和多空均分别计一笔。倾斜度100%时，零笔用户不获得本维度份额。", guideFormula: "均分保障 + 当前挂单数比例 → 本维度份额", accent: "#4f46e5" },
+  { id: "sharedContribution", label: "按共享收支贡献", category: "共享平衡", compactLabel: "收支权重", emptyMessage: "当前没有可计算共享收支贡献的有效参与人", guideDescription: "将对外共享贡献、收到金额补差和收到次数补差归一化后综合计算，兼顾贡献与机会。", guideFormula: "20%均分保障 + 80%三维综合权重 → 本维度份额", accent: "#0369a1" },
+  { id: "marketContribution", label: "按市场贡献", category: "市场拓展 · 试算", compactLabel: "市场权重", emptyMessage: "当前没有有效市场贡献，或四个维度均已关闭；数据缺失时不生成试算", guideDescription: "按推荐用户的实际参与、净投入及留存、有效成交和对团队外收益输出综合计权；完整推荐链按层级递减分摊。新方案仅试算，不执行收益分配。", guideFormula: "推荐参与 + 入金留存 + 有效成交 + 对外输出（分别标准化）→ 综合权重", accent: "#b45309" },
+];
+/** 仅调整说明和选择按钮顺序，不改变实际分配子池和分币尾差的既有顺序。 */
+const SHARED_INCOME_ALLOCATION_DISPLAY_DIMENSIONS = [
+  ...SHARED_INCOME_ALLOCATION_DIMENSIONS.filter((dimension) => ["principal", "weightedOpeningQuantity", "realizedAnnualized", "sharedContribution"].includes(dimension.id)),
+  ...SHARED_INCOME_ALLOCATION_DIMENSIONS.filter((dimension) => !["principal", "weightedOpeningQuantity", "realizedAnnualized", "sharedContribution"].includes(dimension.id)),
 ];
 
 function getSharedIncomeAllocationClientVisual(metric: SharedIncomeAllocationMetric): { metricLabel: string; directionLabel: string; priorityLabel: string } {
@@ -266,8 +277,10 @@ function getSharedIncomeAllocationClientVisual(metric: SharedIncomeAllocationMet
     case "externalShareContribution": return { metricLabel: "对外共享", directionLabel: "越多", priorityLabel: "越优先" };
     case "receivedSharedAmountGap": return { metricLabel: "已收共享", directionLabel: "越少", priorityLabel: "越优先" };
     case "receivedSharedCountGap": return { metricLabel: "已收次数", directionLabel: "越少", priorityLabel: "越优先" };
+    case "sharedContribution": return { metricLabel: "共享收支", directionLabel: "综合", priorityLabel: "共同计权" };
     case "withdrawalProgress": return { metricLabel: "提现进度", directionLabel: "越少", priorityLabel: "越优先" };
     case "openingOrderCount": return { metricLabel: "挂单数量", directionLabel: "越多", priorityLabel: "越优先" };
+    case "weightedOpeningQuantity": return { metricLabel: "有效挂单权重", directionLabel: "越高", priorityLabel: "越优先" };
     default: return { metricLabel: "参与条件", directionLabel: "符合", priorityLabel: "越优先" };
   }
 }
@@ -545,6 +558,11 @@ function SharedIncomeAllocationGuidePage({
   exportRef,
   currentUser,
   principalRule,
+  weightedOrderRule,
+  onConfigureWeightedOrder,
+  onConfigureAnnualized,
+  onConfigureContribution,
+  onConfigureMarket,
   canManage,
   onConfigurePrincipal,
   onClose,
@@ -552,38 +570,56 @@ function SharedIncomeAllocationGuidePage({
   exportRef: RefObject<HTMLElement | null>;
   currentUser?: any;
   principalRule: SharedIncomePrincipalRule;
+  weightedOrderRule: WeightedOrderRule;
+  onConfigureWeightedOrder: () => void;
+  onConfigureAnnualized: () => void;
+  onConfigureContribution: () => void;
+  onConfigureMarket: () => void;
   canManage: boolean;
   onConfigurePrincipal: () => void;
   onClose: () => void;
 }) {
   const principalEqualFloor = Math.max(0, 100 - principalRule.influencePercentage);
-  return <div className="fixed inset-0 z-[150] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="AI智能共享收益分配说明">
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm">
+  return <div className="t0-income-guide fixed inset-0 z-[150] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="AI智能共享收益分配说明">
+    <header className="t0-guide-header flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm">
       <button type="button" onClick={onClose} aria-label="返回智能分配" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"><ArrowLeft className="h-5 w-5" /></button>
       <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-900">AI 智能共享收益分配</div><div className="truncate text-[10px] text-slate-400">一图看懂共享收益如何兼顾公平</div></div>
-      <OrderCardImageDownload targetRef={exportRef} currentUser={currentUser} orderNo="AI共享收益分配" filenamePrefix="52号账本AI共享收益分配方案" previewTitle="AI智能共享收益分配图片预览" previewHint="包含全部分配维度与当前挂单数量规则" color="#4338CA" outerPadding={0} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" />
+      <OrderCardImageDownload targetRef={exportRef} currentUser={currentUser} orderNo="AI共享收益分配" filenamePrefix="52号账本AI共享收益分配方案" previewTitle="AI智能共享收益分配图片预览" previewHint="包含全部分配维度与当前权重规则" color="#4338CA" outerPadding={0} captureFullContent fullContentHorizontalBleed={0} fullContentBottomPadding={0} exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" />
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <main ref={exportRef} className="mx-auto w-full max-w-md space-y-3 rounded-2xl bg-slate-50 p-3 text-slate-800">
-        <section className="overflow-hidden rounded-xl bg-slate-900 px-4 py-4 text-white shadow-sm">
+        <section className="t0-guide-hero overflow-hidden rounded-[4px] bg-slate-900 px-4 py-4 text-white shadow-sm">
           <div><div className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.12em] text-indigo-200"><BookOpen className="h-3.5 w-3.5" />共享收益 · 多维公平</div><h2 className="mt-1 text-[21px] font-bold tracking-tight">AI 智能共享收益分配</h2><p className="mt-1 text-[11px] leading-5 text-slate-300">每笔共享收益都可组合多个公平维度；每个已选维度均分本次预算，再按各自规则计算。</p></div>
           <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 overflow-hidden rounded-lg border border-white/10 bg-white/[0.06] text-center"><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">①</div><div className="mt-0.5 text-[10px] font-semibold">确定预算</div><div className="mt-0.5 text-[8px] text-slate-300">仅正向净收益</div></div><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">②</div><div className="mt-0.5 text-[10px] font-semibold">选择公平维度</div><div className="mt-0.5 text-[8px] text-slate-300">可复选组合</div></div><div className="px-1.5 py-2"><div className="text-[9px] text-indigo-200">③</div><div className="mt-0.5 text-[10px] font-semibold">分配到人</div><div className="mt-0.5 text-[8px] text-slate-300">精确到分</div></div></div>
         </section>
 
-        <section className="pt-1"><div className="flex items-end justify-between gap-3 px-1"><div><div className="text-[13px] font-bold text-slate-900">全部公平维度</div><p className="mt-0.5 text-[9px] text-slate-400">每一项都用一句话和一个小图讲清楚</p></div><span className="text-[10px] font-semibold text-slate-400">{SHARED_INCOME_ALLOCATION_DIMENSIONS.length} 项</span></div><div className="mt-2.5 space-y-2.5">{SHARED_INCOME_ALLOCATION_DIMENSIONS.map((dimension, index) => {
+        <section className="pt-1"><div className="flex items-end justify-between gap-3 px-1"><div><div className="text-[13px] font-bold text-slate-900">全部公平维度</div><p className="mt-0.5 text-[9px] text-slate-400">外部看简明规则，进入“权重”查看详细设置</p></div><span className="text-[10px] font-semibold text-slate-400">{SHARED_INCOME_ALLOCATION_DIMENSIONS.length} 项</span></div><div className="mt-2.5 space-y-2.5">{SHARED_INCOME_ALLOCATION_DISPLAY_DIMENSIONS.map((dimension, index) => {
           const isInverseGuide = dimension.id === "realizedAnnualized" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress";
           const barHeights = isInverseGuide ? [76, 48, 25] : [25, 48, 76];
           const guideVisual = getSharedIncomeAllocationClientVisual(dimension.id);
+          const guideAccent = ({ principal: "#2563eb", weightedOpeningQuantity: "#0f766e", historicalProfit: "#b45309", holdingLoss: "#059669", realizedAnnualized: "#6366f1", externalShareContribution: "#0f766e", receivedSharedAmountGap: "#475569", receivedSharedCountGap: "#475569", withdrawalProgress: "#0284c7", openingOrderCount: "#0f766e" } as Partial<Record<SharedIncomeAllocationMetric, string>>)[dimension.id] || "#475569";
           const DirectionIcon = isInverseGuide ? ArrowDownLeft : ArrowUpRight;
-          if (dimension.id === "principal") return <article key={dimension.id} className="rounded-xl border border-blue-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-[11px] font-bold text-blue-600">{String(index + 1).padStart(2, "0")}</span><div><div className="text-[9px] font-semibold text-blue-700">规模公平</div><h3 className="text-[13px] font-bold text-slate-900">按本金比例共享收益</h3></div></div>{canManage && <button type="button" data-html2canvas-ignore="true" onClick={onConfigurePrincipal} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 text-[10px] font-bold text-blue-700 active:scale-[0.98]"><SlidersHorizontal className="h-3.5 w-3.5" />设置</button>}</div>
-            <div className="mt-2.5 divide-y divide-slate-100 border-y border-slate-100"><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white">1</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-blue-700">按本金：</b>当前 <b>{principalRule.influencePercentage}%</b> 的共享收益，按每人的本金占比分配。</p></div><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-black text-amber-950">2</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-amber-800">均分保障：</b>当前 <b>{principalEqualFloor}%</b> 的共享收益，按有效参与人数均分。</p></div><div className="flex items-center gap-2 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[9px] font-black text-white">3</span><p className="text-[10px] leading-4 text-slate-700"><b className="text-slate-900">AI 输出：</b>自动生成本次共享收益建议，确认前仍可人工调整。</p></div></div>
-            <div className="mt-2 text-center font-mono text-[8px] leading-4 text-slate-400">共享收益建议 = 子池 × [{principalEqualFloor}% ÷ 有效人数 + {principalRule.influencePercentage}% × 本金权重]</div>
-          </article>;
-          return <article key={dimension.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.035)]" style={{ borderTopWidth: 3, borderTopColor: `${dimension.accent}80` }}><div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-[11px] font-bold" style={{ color: dimension.accent }}>{String(index + 1).padStart(2, "0")}</span><div className="min-w-0"><div className="text-[9px] font-semibold" style={{ color: dimension.accent }}>{dimension.category}</div><h3 className="truncate text-[12px] font-bold text-slate-800">{dimension.label}</h3></div></div><span className="shrink-0 text-[8px] font-semibold" style={{ color: dimension.accent }}>共享收益</span></div><div className="mt-2 grid grid-cols-[66px_minmax(0,1fr)_66px] items-center gap-2"><div className="text-center"><div className="flex h-9 items-end justify-center gap-1">{barHeights.map((height, barIndex) => <span key={barIndex} className="w-3 rounded-t-sm" style={{ height: `${height}%`, backgroundColor: dimension.accent, opacity: 0.46 + barIndex * 0.24 }} />)}</div><div className="mt-0.5 text-[7px] font-semibold text-slate-400">{isInverseGuide ? "多 ← 少" : "少 → 多"}</div></div><div className="min-w-0 text-center"><div className="text-[8px] text-slate-400">看 {guideVisual.metricLabel}</div><div className="mt-0.5 flex items-center justify-center gap-1" style={{ color: dimension.accent }}><DirectionIcon className="h-4 w-4" /><span className="text-[15px] font-black">{guideVisual.directionLabel}</span></div></div><div className="text-center"><div className="mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-full text-[8px] font-bold leading-3 text-white" style={{ backgroundColor: dimension.accent }}><span>共享</span><span>收益</span></div><div className="mt-0.5 text-[8px] font-bold" style={{ color: dimension.accent }}>{guideVisual.priorityLabel}</div></div></div></article>;
+          if (dimension.id === "weightedOpeningQuantity") return <T0WeightedOrderRuleSummary key={dimension.id} rule={weightedOrderRule} canManage={canManage} onConfigure={onConfigureWeightedOrder} />;
+          if (dimension.id === "realizedAnnualized") return <T0AnnualizedAllocationRuleSummary key={dimension.id} canManage={canManage} onConfigure={onConfigureAnnualized} />;
+          if (dimension.id === "sharedContribution") return <T0SharedContributionRuleSummary key={dimension.id} canManage={canManage} onConfigure={onConfigureContribution} />;
+          if (dimension.id === "marketContribution") return <T0MarketContributionRuleSummary key={dimension.id} canManage={canManage} onConfigure={onConfigureMarket} />;
+          if (dimension.id === "principal") return <SharedIncomeRuleSummaryCard
+            key={dimension.id}
+            number={1}
+            category="规模公平"
+            title="本金对共享收益的影响"
+            canManage={canManage}
+            onConfigure={onConfigurePrincipal}
+            steps={[
+              { label: "本金规模", content: "本金越多，分配权重越高。" },
+              { label: "均分保障", content: "按设置比例均分，兼顾小额参与者。" },
+              { label: "分配建议", content: "两部分合并计算，确认前可调整。" },
+            ]}
+          />;
+          return <article key={dimension.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.035)]" ><div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center text-[13px] font-bold" style={{ color: "#ffffff", backgroundColor: guideAccent, borderRadius: 2 }}>{index + 1}</span><div className="min-w-0"><div className="text-[9px] font-semibold" style={{ color: guideAccent }}>{dimension.category}</div><h3 className="truncate text-[12px] font-bold text-slate-800">{dimension.label}</h3></div></div><span className="shrink-0 text-[8px] font-semibold" style={{ color: guideAccent }}>共享收益</span></div><div className="mt-2 grid grid-cols-[66px_minmax(0,1fr)_66px] items-center gap-2"><div className="text-center"><div className="flex h-9 items-end justify-center gap-1">{barHeights.map((height, barIndex) => <span key={barIndex} className="w-3 rounded-t-sm" style={{ height: `${height}%`, backgroundColor: guideAccent, opacity: 0.46 + barIndex * 0.24 }} />)}</div><div className="mt-0.5 text-[7px] font-semibold text-slate-400">{isInverseGuide ? "多 ← 少" : "少 → 多"}</div></div><div className="min-w-0 text-center"><div className="text-[8px] text-slate-400">看 {guideVisual.metricLabel}</div><div className="mt-0.5 flex items-center justify-center gap-1" style={{ color: guideAccent }}><DirectionIcon className="h-4 w-4" /><span className="text-[15px] font-black">{guideVisual.directionLabel}</span></div></div><div className="text-center"><div className="mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-[4px] text-[8px] font-bold leading-3 text-white" style={{ backgroundColor: guideAccent }}><span>共享</span><span>收益</span></div><div className="mt-0.5 text-[8px] font-bold" style={{ color: guideAccent }}>{guideVisual.priorityLabel}</div></div></div></article>;
         })}</div></section>
 
-        <section className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3"><div className="text-[11px] font-bold text-amber-900">共同规则</div><div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] leading-4 text-amber-800"><div>• 仅已登记本金且已开启资格的人参与</div><div>• 多选维度时各维度均分预算</div><div>• 金额按分计算，余数按规则补足</div><div>• AI结果可在确认前手动微调</div></div></section>
+        <section className="t0-guide-common rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-3"><div className="text-[11px] font-bold text-amber-900">共同规则</div><div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] leading-4 text-amber-800"><div>• 仅已登记本金且已开启资格的人参与</div><div>• 多选维度时各维度均分预算</div><div>• 金额按分计算，余数按规则补足</div><div>• AI结果可在确认前手动微调</div></div></section>
         <p className="px-1 text-center text-[9px] leading-4 text-slate-400">本说明图用于解释分配规则；实际到账金额以平仓确认时的收益、资格和订单快照为准。</p>
       </main>
     </div>
@@ -606,7 +642,7 @@ function SharedIncomePrincipalRuleSettingsPage({
 }) {
   const example = getSharedIncomePrincipalGuideExample(rule);
   const equalFloor = Math.max(0, 100 - rule.influencePercentage);
-  return <div className="fixed inset-0 z-[160] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="按本金比例设置">
+  return <div className="t0-income-guide t0-income-guide-settings fixed inset-0 z-[160] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="按本金比例设置">
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm">
       <button type="button" onClick={onClose} aria-label="返回方案说明" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"><ArrowLeft className="h-5 w-5" /></button>
       <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-900">按本金比例 · 设置</div><div className="truncate text-[10px] text-slate-400">保存后影响后续AI建议；历史到账不变</div></div>
@@ -618,6 +654,7 @@ function SharedIncomePrincipalRuleSettingsPage({
         <section className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="text-[13px] font-bold text-slate-900">本金曲线</div><p className="mt-1 text-[10px] leading-4 text-slate-500">本金越多仍分得越多；曲线越平滑，大本金的边际优势越小。</p><div className="mt-2 grid grid-cols-3 gap-1.5">{(["linear", "balanced", "strong"] as const).map((curve) => <button key={curve} type="button" onClick={() => onChange({ ...rule, curve })} className={`min-h-14 rounded-lg border px-1.5 text-left ${rule.curve === curve ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600"}`}><span className="block text-[10px] font-bold">{getSharedIncomePrincipalCurveLabel(curve)}</span><span className="mt-1 block text-[8px] leading-3 opacity-75">{curve === "linear" ? "本金翻倍，份额同样翻倍" : curve === "balanced" ? "推荐：平方根递减" : "更优先照顾均衡"}</span></button>)}</div></section>
         <section className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="flex items-baseline justify-between gap-3"><div className="text-[13px] font-bold text-slate-900">本金影响度</div><div className="text-sm font-bold tabular-nums text-blue-700">{rule.influencePercentage}%</div></div><p className="mt-1 text-[10px] leading-4 text-slate-500">本维度中 <b className="text-slate-700">{equalFloor}% 全员均分</b>，<b className="text-slate-700">{rule.influencePercentage}% 按本金曲线</b> 分配。</p><input type="range" min="0" max="100" step="1" value={rule.influencePercentage} onChange={(event) => onChange({ ...rule, influencePercentage: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} className="mt-3 h-3 w-full cursor-pointer accent-blue-600" aria-label="本金影响度" /><div className="mt-1 flex justify-between text-[9px] font-medium text-slate-400"><span>0% 全员均分</span><span>100% 只看本金</span></div></section>
 
+        <section className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="text-[13px] font-bold text-slate-900">计算方法</div><p className="mt-1 text-[10px] leading-4 text-slate-500">个人本金权重先按所选曲线计算，再除以所有有效参与人的本金权重之和。</p><div className="mt-2 rounded-lg bg-blue-50/50 px-2 py-2 text-[9px] leading-4 text-blue-800">个人建议金额 = 本维度子池 ×［{equalFloor}% ÷ 有效人数 + {rule.influencePercentage}% × 个人本金权重占比］</div></section>
         <section className="border-l-2 border-amber-400 px-3 py-1"><div className="text-[10px] font-bold text-amber-900">固定账本口径</div><p className="mt-1 text-[9px] leading-4 text-amber-800">投入金额、资格与历史流水只能由账本事实生成；这里不能按人加减分或改写任何历史到账。</p></section>
       </main>
     </div>
@@ -1365,11 +1402,23 @@ type SharedIncomeCandidate = {
   annualizedTargetTopUps: Array<{ targetRate: number; topUp: number | null }>;
 };
 
+function getSharedContributionCandidateWeights(candidates: SharedIncomeCandidate[], rule: SharedContributionRule) {
+  return calculateSharedContributionWeights(candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled).map((candidate) => ({
+    candidate, userId: candidate.userId,
+    outgoingAmount: candidate.contributedSharedIncome,
+    outgoingCount: candidate.contributedSharedIncomeOrderCount,
+    incomingAmount: candidate.receivedSharedIncome,
+    incomingCount: candidate.receivedSharedIncomeCount,
+  })), rule);
+}
+
 /** 分配页进入当刻固定的重型候选统计；资格开关和本次金额在其上轻量叠加。 */
 type SharedIncomeClosePreview = {
   sourceNetPnl: number;
   shareableAmount: number;
   candidates: SharedIncomeCandidate[];
+  weightedOrderFacts?: WeightedOrderFact[];
+  weightedOrderClosePrice?: number;
 };
 
 function getT0CalendarDateUtc(value: string) {
@@ -4132,13 +4181,73 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [sharedIncomeAllocationBudgetValue, setSharedIncomeAllocationBudgetValue] = useState("99");
   /** AI分配可同时选择多个维度；空数组代表保留当前草案做手动调整。 */
   const [sharedIncomeAllocationMetrics, setSharedIncomeAllocationMetrics] = useState<SharedIncomeAllocationMetric[]>([]);
-  /** 0%为此维度全员均分，100%为完全按当前有效挂单数量比例分配；默认70%保留30%均分保障。 */
-  const [sharedIncomeOpeningOrderCountIntensity, setSharedIncomeOpeningOrderCountIntensity] = useState(70);
-  /** 当前仅用于热预览试算；后续发布版会以版本化审计规则替代此本地草案。 */
+  useEffect(() => {
+    // 合并旧收支选择，撤下全部停用方案；不能把停用规则的自动金额悄悄转为手动草稿。
+    const next = Array.from(new Set(sharedIncomeAllocationMetrics.map((metric) => ["externalShareContribution", "receivedSharedAmountGap", "receivedSharedCountGap"].includes(metric) ? "sharedContribution" as const : metric)))
+      .filter((metric) => SHARED_INCOME_ALLOCATION_DIMENSIONS.some((dimension) => dimension.id === metric));
+    if (next.length === sharedIncomeAllocationMetrics.length && next.every((metric, index) => metric === sharedIncomeAllocationMetrics[index])) return;
+    setSharedIncomeAllocationMetrics(next);
+    if (next.length === 0) {
+      setSharedIncomeDrafts({});
+      setSharedIncomeTargetSelections({});
+      setSharedIncomeAllocationPlanError(null);
+    }
+  }, [sharedIncomeAllocationMetrics]);
+  /** 三个滑条为独立影响强度；保存后仅影响未来确认的新共享分配。 */
+  const [sharedIncomeWeightedOrderRule, setSharedIncomeWeightedOrderRule] = useState<WeightedOrderRule>(DEFAULT_WEIGHTED_ORDER_RULE);
+  const [sharedIncomeWeightedOrderDraftRule, setSharedIncomeWeightedOrderDraftRule] = useState<WeightedOrderRule>(DEFAULT_WEIGHTED_ORDER_RULE);
+  const [sharedIncomeContributionRule, setSharedIncomeContributionRule] = useState<SharedContributionRule>(DEFAULT_SHARED_CONTRIBUTION_RULE);
+  const [sharedIncomeContributionDraftRule, setSharedIncomeContributionDraftRule] = useState<SharedContributionRule>(DEFAULT_SHARED_CONTRIBUTION_RULE);
+  const [showSharedIncomeContributionRuleSettings, setShowSharedIncomeContributionRuleSettings] = useState(false);
+  const [sharedIncomeMarketRule, setSharedIncomeMarketRule] = useState<MarketContributionRule>(DEFAULT_MARKET_CONTRIBUTION_RULE);
+  const [sharedIncomeMarketDraftRule, setSharedIncomeMarketDraftRule] = useState<MarketContributionRule>(DEFAULT_MARKET_CONTRIBUTION_RULE);
+  const [showSharedIncomeMarketRuleSettings, setShowSharedIncomeMarketRuleSettings] = useState(false);
+  const openSharedIncomeMarketRuleSettings = () => {
+    setSharedIncomeMarketDraftRule({ ...sharedIncomeMarketRule });
+    setShowSharedIncomePrincipalRuleSettings(false);
+    setShowSharedIncomeAnnualizedRuleDetails(false);
+    setShowSharedIncomeWeightedOrderRuleSettings(false);
+    setShowSharedIncomeContributionRuleSettings(false);
+    setShowSharedIncomeMarketRuleSettings(true);
+  };
+  const openSharedIncomeContributionRuleSettings = () => {
+    setSharedIncomeContributionDraftRule({ ...sharedIncomeContributionRule });
+    setShowSharedIncomePrincipalRuleSettings(false);
+    setShowSharedIncomeAnnualizedRuleDetails(false);
+    setShowSharedIncomeWeightedOrderRuleSettings(false);
+    setShowSharedIncomeMarketRuleSettings(false);
+    setShowSharedIncomeContributionRuleSettings(true);
+  };
+  const [showSharedIncomeWeightedOrderRuleSettings, setShowSharedIncomeWeightedOrderRuleSettings] = useState(false);
+  const openSharedIncomeWeightedOrderRuleSettings = () => {
+    setSharedIncomeWeightedOrderDraftRule({ ...sharedIncomeWeightedOrderRule });
+    setShowSharedIncomePrincipalRuleSettings(false);
+    setShowSharedIncomeAnnualizedRuleDetails(false);
+    setShowSharedIncomeContributionRuleSettings(false);
+    setShowSharedIncomeMarketRuleSettings(false);
+    setShowSharedIncomeWeightedOrderRuleSettings(true);
+  };
+  /** 本金沿用既有版本化规则；历史订单及收益快照不追溯。 */
   const [sharedIncomePrincipalRule, setSharedIncomePrincipalRule] = useState<SharedIncomePrincipalRule>(DEFAULT_SHARED_INCOME_PRINCIPAL_RULE);
   const [showSharedIncomeAllocationGuide, setShowSharedIncomeAllocationGuide] = useState(false);
   const [showSharedIncomePrincipalRuleSettings, setShowSharedIncomePrincipalRuleSettings] = useState(false);
+  const [showSharedIncomeAnnualizedRuleDetails, setShowSharedIncomeAnnualizedRuleDetails] = useState(false);
+  const [sharedIncomeAnnualizedDraftRule, setSharedIncomeAnnualizedDraftRule] = useState<T0AnnualizedAllocationRule>(DEFAULT_T0_ANNUALIZED_ALLOCATION_RULE);
+  const [sharedIncomeAnnualizedPreviewRule, setSharedIncomeAnnualizedPreviewRule] = useState<T0AnnualizedAllocationRule | null>(null);
+  const [sharedIncomeAnnualizedDraftDirty, setSharedIncomeAnnualizedDraftDirty] = useState(false);
+  const [sharedIncomeAnnualizedRuleSaveError, setSharedIncomeAnnualizedRuleSaveError] = useState<string | null>(null);
+  const openSharedIncomeAnnualizedRuleDetails = () => {
+    setSharedIncomeAnnualizedDraftRule({ ...sharedIncomeAnnualizedRule, targets: { ...sharedIncomeAnnualizedRule.targets } });
+    setSharedIncomeAnnualizedDraftDirty(false);
+    setSharedIncomeAnnualizedRuleSaveError(null);
+    setShowSharedIncomePrincipalRuleSettings(false);
+    setShowSharedIncomeWeightedOrderRuleSettings(false);
+    setShowSharedIncomeContributionRuleSettings(false);
+    setShowSharedIncomeMarketRuleSettings(false);
+    setShowSharedIncomeAnnualizedRuleDetails(true);
+  };
   const [sharedIncomeAllocationPlanError, setSharedIncomeAllocationPlanError] = useState<string | null>(null);
+  const [sharedIncomeRulesSaveError, setSharedIncomeRulesSaveError] = useState<string | null>(null);
   /** 切换资格后先本地稳定呈现，再由服务端权威读模型回填；AI方案会随开启用户即时重分配。 */
   const [sharedIncomeEligibilityOverrides, setSharedIncomeEligibilityOverrides] = useState<Record<string, boolean>>({});
   /** 止盈每一段各自保存预分配草案；成交时再由服务端按实际订单核算。 */
@@ -4485,6 +4594,117 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const activeJournalData = isPreviewSwitching ? undefined : rawJournalData;
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
+  const sharedIncomeRulesNeeded = canManage && (showSharedIncomeAllocationGuide || showSharedIncomeWeightedOrderRuleSettings || showSharedIncomeContributionRuleSettings || showSharedIncomeMarketRuleSettings || (showEntrySheet && sharedIncomeAllocationMetrics.length > 0));
+  const t0AllocationRulesQuery = trpc.ledger.t0GetAllocationRules.useQuery(
+    { ledgerId: 52 },
+    { enabled: sharedIncomeRulesNeeded, staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+  const setAllocationRulesMutation = trpc.ledger.t0SetAllocationRules.useMutation();
+  useEffect(() => {
+    const saved = t0AllocationRulesQuery.data;
+    if (!canManage || !saved) return;
+    setSharedIncomeWeightedOrderRule({ ...saved.weightedOrder });
+    setSharedIncomeContributionRule({ ...saved.contribution });
+    setSharedIncomeMarketRule({ ...saved.market });
+    if (!showSharedIncomeWeightedOrderRuleSettings) setSharedIncomeWeightedOrderDraftRule({ ...saved.weightedOrder });
+    if (!showSharedIncomeContributionRuleSettings) setSharedIncomeContributionDraftRule({ ...saved.contribution });
+    if (!showSharedIncomeMarketRuleSettings) setSharedIncomeMarketDraftRule({ ...saved.market });
+  }, [canManage, t0AllocationRulesQuery.data, showSharedIncomeWeightedOrderRuleSettings, showSharedIncomeContributionRuleSettings, showSharedIncomeMarketRuleSettings]);
+  const saveSharedIncomeRuleSection = async (section: "weightedOrder" | "contribution" | "market") => {
+    const saved = t0AllocationRulesQuery.data;
+    if (!canManage || !saved || setAllocationRulesMutation.isPending) return;
+    setSharedIncomeRulesSaveError(null);
+    try {
+      const settings = {
+        weightedOrder: section === "weightedOrder" ? sharedIncomeWeightedOrderDraftRule : saved.weightedOrder,
+        contribution: section === "contribution" ? sharedIncomeContributionDraftRule : saved.contribution,
+        market: section === "market" ? sharedIncomeMarketDraftRule : saved.market,
+      };
+      if (import.meta.env.DEV) {
+        // 本地验收只应用草稿，不写生产配置或资金。
+        setSharedIncomeWeightedOrderRule({ ...settings.weightedOrder });
+        setSharedIncomeContributionRule({ ...settings.contribution });
+        setSharedIncomeMarketRule({ ...settings.market });
+      } else {
+        const next = await setAllocationRulesMutation.mutateAsync({ ledgerId: 52, expectedVersion: saved.version, ...settings });
+        t0Utils.ledger.t0GetAllocationRules.setData({ ledgerId: 52 }, next);
+        await t0Utils.ledger.t0PreviewSharedIncomeAllocation.invalidate();
+      }
+      if (section === "weightedOrder") setShowSharedIncomeWeightedOrderRuleSettings(false);
+      if (section === "contribution") setShowSharedIncomeContributionRuleSettings(false);
+      if (section === "market") setShowSharedIncomeMarketRuleSettings(false);
+    } catch (error) {
+      setSharedIncomeRulesSaveError(error instanceof Error ? error.message : "权重保存失败，请重试");
+    }
+  };
+  const sharedIncomeMarketFactsNeeded = canManage && (showSharedIncomeMarketRuleSettings || (showEntrySheet && sharedIncomeAllocationMetrics.includes("marketContribution")));
+  const t0MarketContributionFactsQuery = trpc.ledger.t0GetMarketContributionFacts.useQuery(
+    { ledgerId: 52 },
+    { enabled: sharedIncomeMarketFactsNeeded, staleTime: 30_000, retry: 1, refetchOnWindowFocus: false, refetchOnReconnect: true },
+  );
+  useEffect(() => {
+    const hot = import.meta.hot;
+    if (!hot || !sharedIncomeMarketFactsNeeded) return;
+    const resumeMarketFacts = () => { void t0MarketContributionFactsQuery.refetch(); };
+    hot.on("vite:ws:connect", resumeMarketFacts);
+    return () => hot.off("vite:ws:connect", resumeMarketFacts);
+  }, [sharedIncomeMarketFactsNeeded, t0MarketContributionFactsQuery.refetch]);
+  // 个人目标是管理员私有参数：普通成员及管理员代入成员时均不请求。
+  const sharedIncomeAnnualizedRuleNeeded = canManage && (showSharedIncomeAnnualizedRuleDetails || (showEntrySheet && sharedIncomeAllocationMetrics.includes("realizedAnnualized")));
+  const t0SharedIncomeAnnualizedRuleQuery = trpc.ledger.t0GetSharedIncomeAnnualizedRule.useQuery(
+    { ledgerId: 52 },
+    { enabled: sharedIncomeAnnualizedRuleNeeded, staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+  // 名单独立于当前订单窗口和最近30人，也不以是否有本金、持仓或共享资格过滤。
+  const t0SharedIncomeAnnualizedUsersQuery = trpc.ledger.t0GetSharedIncomeAnnualizedUsers.useQuery(
+    { ledgerId: 52 },
+    { enabled: canManage && showSharedIncomeAnnualizedRuleDetails, staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+  useEffect(() => {
+    const hot = import.meta.hot;
+    if (!hot || !canManage || !showSharedIncomeAnnualizedRuleDetails) return;
+    const resumeDirectory = () => {
+      void t0SharedIncomeAnnualizedUsersQuery.refetch();
+      void t0SharedIncomeAnnualizedRuleQuery.refetch();
+    };
+    hot.on("vite:ws:connect", resumeDirectory);
+    return () => hot.off("vite:ws:connect", resumeDirectory);
+  }, [canManage, showSharedIncomeAnnualizedRuleDetails, t0SharedIncomeAnnualizedUsersQuery.refetch, t0SharedIncomeAnnualizedRuleQuery.refetch]);
+  const savedSharedIncomeAnnualizedRule = (t0SharedIncomeAnnualizedRuleQuery.data as T0AnnualizedAllocationRule | undefined) || DEFAULT_T0_ANNUALIZED_ALLOCATION_RULE;
+  const sharedIncomeAnnualizedRule = sharedIncomeAnnualizedPreviewRule || savedSharedIncomeAnnualizedRule;
+  const sharedIncomeAnnualizedRuleWasConfigured = sharedIncomeAnnualizedPreviewRule !== null || sharedIncomeAnnualizedRule.version > 0;
+  const sharedIncomeAnnualizedRuleUnavailable = sharedIncomeAnnualizedRuleNeeded && !sharedIncomeAnnualizedPreviewRule && !t0SharedIncomeAnnualizedRuleQuery.data;
+  const setSharedIncomeAnnualizedRuleMutation = trpc.ledger.t0SetSharedIncomeAnnualizedRule.useMutation();
+  useEffect(() => {
+    if (showSharedIncomeAnnualizedRuleDetails && !sharedIncomeAnnualizedDraftDirty) {
+      setSharedIncomeAnnualizedDraftRule({ ...sharedIncomeAnnualizedRule, targets: { ...sharedIncomeAnnualizedRule.targets } });
+    }
+  }, [showSharedIncomeAnnualizedRuleDetails, sharedIncomeAnnualizedDraftDirty, sharedIncomeAnnualizedRule]);
+  const saveSharedIncomeAnnualizedRule = async () => {
+    if (!canManage || sharedIncomeAnnualizedRuleUnavailable || setSharedIncomeAnnualizedRuleMutation.isPending) return;
+    setSharedIncomeAnnualizedRuleSaveError(null);
+    try {
+      const next = { ...sharedIncomeAnnualizedDraftRule, targets: { ...sharedIncomeAnnualizedDraftRule.targets } };
+      if (!Number.isFinite(next.influence) || next.influence < 0 || next.influence > 1 || Object.entries(next.targets).some(([id, value]) => !/^\d+$/.test(id) || Number(id) <= 0 || !Number.isFinite(value) || value < 0 || value > 10_000)) {
+        throw new Error("参与度为0至1，目标年化为0至10000%；空白表示沿用平均年化");
+      }
+      if (import.meta.env.DEV) {
+        // 热预览只保留本次试算草案；不调用真实库配置写入，更不结算资金。
+        setSharedIncomeAnnualizedPreviewRule(next);
+      } else {
+        const saved = await setSharedIncomeAnnualizedRuleMutation.mutateAsync({
+          ledgerId: 52, influence: next.influence, expectedVersion: next.version,
+          targets: Object.entries(next.targets).map(([userId, targetPercentage]) => ({ userId: Number(userId), targetPercentage })),
+        });
+        t0Utils.ledger.t0GetSharedIncomeAnnualizedRule.setData({ ledgerId: 52 }, saved);
+        setSharedIncomeAnnualizedPreviewRule(null);
+      }
+      setSharedIncomeAnnualizedDraftDirty(false);
+      setShowSharedIncomeAnnualizedRuleDetails(false);
+    } catch (error: any) {
+      setSharedIncomeAnnualizedRuleSaveError(error?.message || "年化权重保存失败，请重试");
+    }
+  };
   // 管理员无论从筛选框还是用户视角入口选人，都记住同一位成员；用户视角期间不改动成员端自身的下拉条件。
   useEffect(() => {
     if (!canUseMemberPreview) return;
@@ -6093,6 +6313,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       openingOrderCountByUser.set(userId, (openingOrderCountByUser.get(userId) || 0) + 1);
     }
+    // 新方案只取真实用户方向及未筛选原始流水，管理员镜像、锁单隐藏不改变权重。
+    const weightedFilledAllocations = buildOpeningClosingAllocations(rawJournalTrades.filter((trade) => !trade.isSyncing && !trade.isPending));
+    const weightedOrderFacts: WeightedOrderFact[] = [];
+    for (const opening of rawJournalTrades) {
+      if (opening.isSyncing || !ACTIONS[opening.action].opening || !opening.relatedUserId
+        || opening.symbol !== "ETH" || !isEligibleSharedIncomeInstrument(opening.instrumentType)) continue;
+      const closed = opening.isPending ? 0 : (weightedFilledAllocations.get(opening.id) || []).reduce((sum, match) => sum + match.quantity, 0);
+      const quantity = Math.max(0, opening.quantity - closed);
+      if (quantity <= 0.000001) continue;
+      weightedOrderFacts.push({
+        userId: String(opening.relatedUserId), quantity,
+        price: !opening.isPending && Number(opening.filledPrice) > 0 ? Number(opening.filledPrice) : opening.price,
+        status: opening.isPending ? "pending" : "filled", side: ACTIONS[opening.action].side,
+        openingFee: opening.isPending ? 0 : opening.fee * quantity / opening.quantity,
+      });
+    }
     let sourceNetPnl = 0;
     for (const opening of allTrades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType)) continue;
@@ -6286,12 +6522,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       sourceNetPnl,
       shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
+      weightedOrderFacts,
+      weightedOrderClosePrice: closePrice,
     };
     sharedIncomeClosePreviewSnapshotRef.current = { key: previewSnapshotKey, preview };
     return preview;
-  }, [canManage, closeConfirmationStep, closingSourceTrade, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades]);
+  }, [canManage, closeConfirmationStep, closingSourceTrade, entryForm.action, entryForm.accountId, entryForm.editingEntryId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.takeProfitPlans, entryForm.targetPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeContributionsBySourceUser, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, sharedIncomePreviewMarkPrice, takeProfitAllocationPlanIndex, trades, rawJournalTrades]);
   // 开关即时生效，但只替换候选人的一个布尔字段，不再重新扫描历史流水、FIFO 和 XIRR。
-  const sharedIncomeClosePreview = useMemo<SharedIncomeClosePreview>(() => {
+  const sharedIncomeLocalClosePreview = useMemo<SharedIncomeClosePreview>(() => {
     const sourceUserId = Number(entryForm.relatedUserId);
     if (!Number.isInteger(sourceUserId) || sourceUserId <= 0 || sharedIncomeClosePreviewBaseline.candidates.length === 0) {
       return sharedIncomeClosePreviewBaseline;
@@ -6309,27 +6547,124 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }).sort((left, right) => Number(right.sharedIncomeEnabled) - Number(left.sharedIncomeEnabled)),
     };
   }, [entryForm.relatedUserId, sharedIncomeClosePreviewBaseline, sharedIncomeEligibilityByPair, sharedIncomeEligibilityOverrides]);
-	  const sharedIncomeBudget = useMemo(() => {
-	    const maximum = Math.max(0, Math.floor((sharedIncomeClosePreview.shareableAmount + 1e-9) * 100) / 100);
-	    const rawValue = sharedIncomeAllocationBudgetValue.trim();
-	    const value = Number(rawValue);
-	    if (!rawValue || !Number.isFinite(value) || value < 0) {
+  const sharedIncomeServerPlanActive = canManage && closeConfirmationStep === "review" && !ACTIONS[entryForm.action].opening && sharedIncomeAllocationMetrics.length > 0 && !isCloseDistributionPreviewLink;
+  const sharedIncomeServerPlanInput = useMemo(() => ({
+    ledgerId: 52 as const,
+    accountId: /^\d+$/.test(entryForm.accountId || "") ? Number(entryForm.accountId) : undefined,
+    accountName: entryForm.accountName.trim() || undefined,
+    relatedUserId: Number(entryForm.relatedUserId || 0),
+    relatedFundId: /^\d+$/.test(entryForm.relatedFundId || "") ? Number(entryForm.relatedFundId) : undefined,
+    action: (closingSourceTrade?.isCounterpartyView ? invertTradeAction(entryForm.action) : entryForm.action) as "closeLong" | "closeShort",
+    price: normalizeT0PriceForSubmission(entryForm.price),
+    quantity: normalizeEthQuantity(entryForm.quantity),
+    targetPrice: entryForm.targetPrice === undefined ? "" : String(archivePriceForSide(ACTIONS[entryForm.action].side, entryForm.targetPrice)),
+    targetOpeningEntryId: /^\d+$/.test(entryForm.targetOpeningEntryId || "") ? Number(entryForm.targetOpeningEntryId) : undefined,
+    metrics: T0_SHARED_ALLOCATION_METRICS.filter((metric) => sharedIncomeAllocationMetrics.includes(metric)),
+    budgetMode: sharedIncomeAllocationBudgetMode,
+    budgetValue: sharedIncomeAllocationBudgetValue.trim(),
+  }), [entryForm.accountId, entryForm.accountName, entryForm.relatedUserId, entryForm.relatedFundId, entryForm.action, entryForm.price, entryForm.quantity, entryForm.targetPrice, entryForm.targetOpeningEntryId, closingSourceTrade, sharedIncomeAllocationMetrics, sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue]);
+  const t0SharedIncomeServerPlanQuery = trpc.ledger.t0PreviewSharedIncomeAllocation.useQuery(
+    sharedIncomeServerPlanInput,
+    { enabled: sharedIncomeServerPlanActive && Number(sharedIncomeServerPlanInput.price) > 0 && Number(sharedIncomeServerPlanInput.quantity) > 0 && Boolean(sharedIncomeServerPlanInput.targetPrice), staleTime: 20_000, refetchInterval: sharedIncomeServerPlanActive ? 45_000 : false, refetchOnWindowFocus: true, retry: 1 },
+  );
+  const sharedIncomeServerPlan = sharedIncomeServerPlanActive ? t0SharedIncomeServerPlanQuery.data as T0SharedIncomeAllocationPlan | undefined : undefined;
+  const sharedIncomeServerPlanUnavailable = sharedIncomeServerPlanActive && (!sharedIncomeServerPlan || t0SharedIncomeServerPlanQuery.isFetching || Boolean(t0SharedIncomeServerPlanQuery.error));
+  const sharedIncomeClosePreview = useMemo<SharedIncomeClosePreview>(() => sharedIncomeServerPlan ? {
+    sourceNetPnl: sharedIncomeServerPlan.sourceNetPnl ?? sharedIncomeLocalClosePreview.sourceNetPnl,
+    shareableAmount: sharedIncomeServerPlan.shareableAmount,
+    candidates: sharedIncomeServerPlan.candidates,
+    weightedOrderFacts: sharedIncomeServerPlan.weightedFacts,
+    weightedOrderClosePrice: Number(sharedIncomeServerPlanInput.price),
+  } : sharedIncomeLocalClosePreview, [sharedIncomeServerPlan, sharedIncomeLocalClosePreview, sharedIncomeServerPlanInput.price]);
+  useEffect(() => {
+    if (!sharedIncomeServerPlanActive) return;
+    if (!sharedIncomeServerPlan || t0SharedIncomeServerPlanQuery.isFetching || t0SharedIncomeServerPlanQuery.error) {
+      setSharedIncomeDrafts({});
+      setSharedIncomeAllocationPlanError(t0SharedIncomeServerPlanQuery.error?.message || "正在按真实订单、资金和已保存权重生成分配清单…");
+      return;
+    }
+    setSharedIncomeDrafts(Object.fromEntries(sharedIncomeServerPlan.allocations.map((row) => [String(row.recipientUserId), row.amount])));
+    setSharedIncomeTargetSelections({});
+    setSharedIncomeAllocationPlanError(null);
+  }, [sharedIncomeServerPlanActive, sharedIncomeServerPlan, t0SharedIncomeServerPlanQuery.isFetching, t0SharedIncomeServerPlanQuery.error]);
+  const sharedIncomeWeightedOrderScores = useMemo(() => calculateWeightedOrderScores(
+    sharedIncomeClosePreview.weightedOrderFacts || [],
+    Number(sharedIncomeClosePreview.weightedOrderClosePrice),
+    sharedIncomeWeightedOrderRule,
+    OKX_VIP2_TAKER_FEE_RATE,
+  ), [sharedIncomeClosePreview, sharedIncomeWeightedOrderRule]);
+  const sharedIncomeWeightedOrderSettingsScores = useMemo(() => showSharedIncomeWeightedOrderRuleSettings
+    ? calculateWeightedOrderScores(sharedIncomeClosePreview.weightedOrderFacts || [], Number(sharedIncomeClosePreview.weightedOrderClosePrice), sharedIncomeWeightedOrderDraftRule, OKX_VIP2_TAKER_FEE_RATE)
+    : new Map(), [showSharedIncomeWeightedOrderRuleSettings, sharedIncomeClosePreview, sharedIncomeWeightedOrderDraftRule]);
+  const sharedIncomeWeightedOrderSettingsCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled);
+  const sharedIncomeWeightedOrderSettingsTotal = sharedIncomeWeightedOrderSettingsCandidates.reduce((sum, candidate) => sum + (sharedIncomeWeightedOrderSettingsScores.get(candidate.userId)?.score || 0), 0);
+  const sharedIncomeMarketFacts = canManage ? t0MarketContributionFactsQuery.data as MarketContributionFacts | undefined : undefined;
+  const sharedIncomeMarketTargetIds = useMemo(() => sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled)
+    .map((candidate) => candidate.userId), [sharedIncomeClosePreview.candidates]);
+  const sharedIncomeMarketSettingsResult = useMemo(() => showSharedIncomeMarketRuleSettings
+    ? calculateMarketContributionScores(sharedIncomeMarketFacts, sharedIncomeMarketDraftRule, sharedIncomeMarketTargetIds.length > 0 ? sharedIncomeMarketTargetIds : undefined)
+    : { rows: [], error: null }, [showSharedIncomeMarketRuleSettings, sharedIncomeMarketFacts, sharedIncomeMarketDraftRule, sharedIncomeMarketTargetIds]);
+  const sharedIncomeMarketAllocationResult = useMemo(() => sharedIncomeAllocationMetrics.includes("marketContribution")
+    ? calculateMarketContributionScores(sharedIncomeMarketFacts, sharedIncomeMarketRule, sharedIncomeMarketTargetIds)
+    : { rows: [], error: null }, [sharedIncomeAllocationMetrics, sharedIncomeMarketFacts, sharedIncomeMarketRule, sharedIncomeMarketTargetIds]);
+  const sharedIncomeMarketWeightsByUserId = useMemo(() => new Map(sharedIncomeMarketAllocationResult.rows
+    .map((row) => [row.userId, row.weightPercentage / 100] as const)), [sharedIncomeMarketAllocationResult.rows]);
+  const sharedIncomeContributionSettingsRows = useMemo(() => showSharedIncomeContributionRuleSettings
+    ? getSharedContributionCandidateWeights(sharedIncomeClosePreview.candidates, sharedIncomeContributionDraftRule).map(({ fact, weight }) => ({
+      userId: fact.userId, name: fact.candidate.name,
+      outgoingAmount: fact.outgoingAmount, outgoingCount: fact.outgoingCount,
+      incomingAmount: fact.incomingAmount, incomingCount: fact.incomingCount,
+      weightPercentage: weight * 100,
+    }))
+    : [], [showSharedIncomeContributionRuleSettings, sharedIncomeClosePreview.candidates, sharedIncomeContributionDraftRule]);
+  const sharedIncomeAnnualizedRuleDetails = useMemo(() => {
+    if (!showSharedIncomeAnnualizedRuleDetails) return { averageAnnualizedReturn: null, rows: [] as AnnualizedAllocationRow[] };
+    const eligible = sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled);
+    const valid = eligible.filter((candidate) => candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference));
+    const averageAnnualizedReturn = valid.length > 0 ? valid.reduce((sum, candidate) => sum + Number(candidate.annualizedReference), 0) / valid.length : null;
+    // 未设个人目标沿用均值；设置页只读真实现金流，以草稿参数进行即时试算。
+    const rows = eligible.map((candidate): AnnualizedAllocationRow => {
+      const annualizedReturn = candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference) ? Number(candidate.annualizedReference) : null;
+      const hasPersonalTarget = Object.prototype.hasOwnProperty.call(sharedIncomeAnnualizedDraftRule.targets, candidate.userId);
+      const targetAnnualizedReturn = hasPersonalTarget ? sharedIncomeAnnualizedDraftRule.targets[candidate.userId] / 100 : averageAnnualizedReturn;
+      const topUp = annualizedReturn === null || targetAnnualizedReturn === null ? null : annualizedReturn < targetAnnualizedReturn - 0.000001
+        ? calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, targetAnnualizedReturn) : 0;
+      return { userId: candidate.userId, name: candidate.name, annualizedReturn, targetAnnualizedReturn, hasPersonalTarget, topUp, weightPercentage: 0 };
+    });
+    // 从独立说明页进入也能预设真实业务用户；没有平仓试算时不伪造其年化或资金明细。
+    const includedUserIds = new Set(rows.map((row) => row.userId));
+    const allBusinessUsers = t0SharedIncomeAnnualizedUsersQuery.data || [];
+    for (const user of allBusinessUsers) {
+      const userId = String(user.id);
+      if (includedUserIds.has(userId)) continue;
+      const hasPersonalTarget = Object.prototype.hasOwnProperty.call(sharedIncomeAnnualizedDraftRule.targets, userId);
+      rows.push({ userId, name: user.name, annualizedReturn: null, targetAnnualizedReturn: hasPersonalTarget ? sharedIncomeAnnualizedDraftRule.targets[userId] / 100 : averageAnnualizedReturn, hasPersonalTarget, topUp: null, weightPercentage: 0 });
+      includedUserIds.add(userId);
+    }
+    const weights = new Map(getAnnualizedGapWeights(rows, sharedIncomeAnnualizedDraftRule.influence).map(({ row, weight }) => [row.userId, weight]));
+    return { averageAnnualizedReturn, rows: rows.map((row) => ({ ...row, weightPercentage: (weights.get(row.userId) || 0) * 100 })) };
+  }, [showSharedIncomeAnnualizedRuleDetails, sharedIncomeClosePreview.candidates, sharedIncomeAnnualizedDraftRule, t0SharedIncomeAnnualizedUsersQuery.data]);
+  const sharedIncomeBudget = useMemo(() => {
+    const maximum = Math.max(0, Math.floor(((sharedIncomeServerPlan?.shareableAmount ?? sharedIncomeClosePreview.shareableAmount) + 1e-9) * 100) / 100);
+    const rawValue = sharedIncomeAllocationBudgetValue.trim();
+    const value = Number(rawValue);
+    if (!rawValue || !Number.isFinite(value) || value < 0) {
 	      return { maximum, allocationLimit: 0, error: "请输入本次共享分配额度" };
 	    }
 	    if (sharedIncomeAllocationBudgetMode === "percentage") {
 	      if (value < 1 || value > 100) return { maximum, allocationLimit: 0, error: "分配比例为1%至100%" };
 	      return { maximum, allocationLimit: Math.floor((maximum * value + 1e-9)) / 100, error: null as string | null };
 	    }
-	    if (value - maximum > 0.00001) return { maximum, allocationLimit: 0, error: `分配金额不得超过本单可共享收益 ${maximum.toFixed(2)} u` };
-	    return { maximum, allocationLimit: Math.floor((value + 1e-9) * 100) / 100, error: null as string | null };
-	  }, [sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue, sharedIncomeClosePreview.shareableAmount]);
-	  const sharedIncomeBudgetPercentage = sharedIncomeBudget.maximum > 0
-	    ? (sharedIncomeBudget.allocationLimit / sharedIncomeBudget.maximum) * 100
-	    : 0;
+    if (value - maximum > 0.00001) return { maximum, allocationLimit: 0, error: `分配金额不得超过本单可共享收益 ${maximum.toFixed(2)} u` };
+    return { maximum, allocationLimit: Math.floor((value + 1e-9) * 100) / 100, error: null as string | null };
+  }, [sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue, sharedIncomeClosePreview.shareableAmount, sharedIncomeServerPlan]);
+  const sharedIncomeBudgetPercentage = sharedIncomeBudget.maximum > 0
+    ? (sharedIncomeBudget.allocationLimit / sharedIncomeBudget.maximum) * 100
+    : 0;
 	  const sharedIncomeBudgetSliderPercentage = Math.min(99, Math.max(1, Math.round(
 	    Number(sharedIncomeAllocationBudgetValue) || 1,
 	  )));
-	  const sharedIncomeAvailableAllocationDimensions = SHARED_INCOME_ALLOCATION_DIMENSIONS;
+	  const sharedIncomeAvailableAllocationDimensions = SHARED_INCOME_ALLOCATION_DISPLAY_DIMENSIONS;
   const sharedIncomeSelectedDimensions = useMemo(() => sharedIncomeAvailableAllocationDimensions
     .filter((dimension) => sharedIncomeAllocationMetrics.includes(dimension.id)), [sharedIncomeAllocationMetrics]);
 	  const sharedIncomeDimensionWeightPercentage = sharedIncomeSelectedDimensions.length > 0
@@ -6351,15 +6686,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     metrics: SharedIncomeAllocationMetric[],
     candidates: SharedIncomeCandidate[],
     allocationLimit: number,
-    openingOrderCountIntensity: number,
   principalRule: SharedIncomePrincipalRule,
   ): { drafts: Record<string, string>; error: string | null } => {
 	    const allocationLimitCents = Math.round(allocationLimit * 100);
 	    const selectedDimensions = SHARED_INCOME_ALLOCATION_DIMENSIONS.filter((dimension) => metrics.includes(dimension.id));
+    if (metrics.includes("realizedAnnualized") && sharedIncomeAnnualizedRuleUnavailable) return { drafts: {}, error: t0SharedIncomeAnnualizedRuleQuery.error ? "年化权重配置读取失败，暂不生成分配；请进入权重页重试" : "正在读取年化权重配置，暂不生成分配" };
+    if (metrics.includes("marketContribution") && (t0MarketContributionFactsQuery.error || sharedIncomeMarketAllocationResult.error)) return { drafts: {}, error: t0MarketContributionFactsQuery.error?.message || sharedIncomeMarketAllocationResult.error || "市场贡献数据未就绪" };
 	    if (allocationLimitCents <= 0 || selectedDimensions.length === 0) return { drafts: {}, error: null };
 	    const eligibleCandidates = candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled);
-	    // 协作回馈与两类共享补差都不能把任何有效成员排空：子池的20%均分保底，
-	    // 其余80%才按对应指标倾斜。指标完全相同则自然退化为全员均分。
+	    // 合并后的共享收支贡献保留20%均分保障、80%综合倾斜，三个内部维度只占一个子池。
     const getSmoothedWeights = (scoredCandidates: Array<{ candidate: SharedIncomeCandidate; score: number }>, scoreShare = 0.8) => {
       if (scoredCandidates.length === 0) return [];
       const normalizedScores = scoredCandidates.map(({ candidate, score }) => ({ candidate, score: Math.max(0, Number.isFinite(score) ? score : 0) }));
@@ -6372,39 +6707,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         weight: equalFloorWeight + normalizedScoreShare * score / totalScore,
       }));
 	    };
-	    const getReceivedSharedIncomeGapWeights = (valueForCandidate: (candidate: SharedIncomeCandidate) => number) => {
-	      const values = eligibleCandidates.map((candidate) => ({ candidate, value: Math.max(0, valueForCandidate(candidate)) }));
-	      if (values.length === 0) return [];
-	      const maximumValue = Math.max(...values.map((item) => item.value));
-	      // 收到越少，补差分数越高；收到最多者仍通过全员保底获得本维度的一部分。
-	      return getSmoothedWeights(values.map(({ candidate, value }) => ({ candidate, score: maximumValue - value })));
-	    };
-	    const getExternalShareContributionWeights = () => {
-	      if (eligibleCandidates.length === 0) return [];
-	      const totalContributedAmount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
-	      const totalContributedOrderCount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncomeOrderCount), 0);
-	      const activeFactorCount = Number(totalContributedAmount > 0.000001) + Number(totalContributedOrderCount > 0);
-	      return getSmoothedWeights(eligibleCandidates.map((candidate) => ({
-	        candidate,
-	        score: (totalContributedAmount > 0.000001 ? candidate.contributedSharedIncome / totalContributedAmount / activeFactorCount : 0)
-	          + (totalContributedOrderCount > 0 ? candidate.contributedSharedIncomeOrderCount / totalContributedOrderCount / activeFactorCount : 0),
-	      })));
-	    };
-    const getWeightedCandidates = (metric: SharedIncomeAllocationMetric) => {
-      if (metric === "externalShareContribution") return getExternalShareContributionWeights();
-      if (metric === "receivedSharedAmountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncome);
-      if (metric === "receivedSharedCountGap") return getReceivedSharedIncomeGapWeights((candidate) => candidate.receivedSharedIncomeCount);
-      if (metric === "openingOrderCount") {
-        const totalOpeningOrderCount = eligibleCandidates.reduce((total, candidate) => total + Math.max(0, candidate.openingOrderCount), 0);
-        const normalizedOpeningOrderCountIntensity = Math.min(100, Math.max(0, Number(openingOrderCountIntensity) || 0)) / 100;
-        // 0% 明确表示本维度全员均分，即使暂时无人有开仓记录也可成立；只要存在按数量倾斜而又没有任何订单，才提示该维度无数据。
-        if (totalOpeningOrderCount <= 0 && normalizedOpeningOrderCountIntensity > 0.000001) return [];
-        // 倾斜度0%时本维度退化为全员均分；100%时完全依当前有效挂单数量比例。默认70%意味着30%均分保障。
-        return getSmoothedWeights(
-          eligibleCandidates.map((candidate) => ({ candidate, score: candidate.openingOrderCount })),
-          normalizedOpeningOrderCountIntensity,
-        );
-      }      if (metric === "principal") {
+    const getWeightedCandidates = (metric: SharedIncomeAllocationMetric): Array<{ candidate: SharedIncomeCandidate; weight: number; capCents?: number }> => {
+      if (metric === "weightedOpeningQuantity") return eligibleCandidates.map((candidate) => ({
+        candidate, weight: sharedIncomeWeightedOrderScores.get(candidate.userId)?.score || 0,
+      })).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+      if (metric === "marketContribution") return eligibleCandidates.map((candidate) => ({
+        candidate, weight: sharedIncomeMarketWeightsByUserId.get(candidate.userId) || 0,
+      })).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+      if (metric === "sharedContribution") return getSharedContributionCandidateWeights(eligibleCandidates, sharedIncomeContributionRule)
+        .map(({ fact, weight }) => ({ candidate: fact.candidate, weight }));
+      if (metric === "principal") {
         const influence = Math.min(100, Math.max(0, Number(principalRule.influencePercentage) || 0)) / 100;
         const exponent = getSharedIncomePrincipalCurveExponent(principalRule.curve);
         return getSmoothedWeights(eligibleCandidates.map((candidate) => ({
@@ -6425,16 +6737,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      if (metric === "realizedAnnualized") {
 	        const candidatesWithAnnualizedReturn = eligibleCandidates.filter((candidate) => candidate.annualizedReference !== null && Number.isFinite(candidate.annualizedReference));
 	        if (candidatesWithAnnualizedReturn.length === 0) return [];
-	        // 以所有有效人的已实现年化算术均值为目标。高于均值者在本维度权重为零；
-	        // 低于均值者按达到该均值所需的实际金额作为权重，令结果朝共同年化收敛。
 	        const averageAnnualizedReturn = candidatesWithAnnualizedReturn.reduce((total, candidate) => total + Number(candidate.annualizedReference), 0) / candidatesWithAnnualizedReturn.length;
-	        return candidatesWithAnnualizedReturn.map((candidate) => {
+        const usesPersonalTargets = candidatesWithAnnualizedReturn.some((candidate) => Object.prototype.hasOwnProperty.call(sharedIncomeAnnualizedRule.targets, candidate.userId));
+        const usesAdjustedRule = sharedIncomeAnnualizedRuleWasConfigured || usesPersonalTargets || sharedIncomeAnnualizedRule.influence !== 1;
+        const gaps = candidatesWithAnnualizedReturn.map((candidate) => {
 	          const annualizedReference = Number(candidate.annualizedReference);
-	          const topUp = annualizedReference < averageAnnualizedReturn - 0.000001
-	            ? calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, averageAnnualizedReturn)
+          const targetRate = Object.prototype.hasOwnProperty.call(sharedIncomeAnnualizedRule.targets, candidate.userId) ? sharedIncomeAnnualizedRule.targets[candidate.userId] / 100 : averageAnnualizedReturn;
+	          const topUp = annualizedReference < targetRate - 0.000001
+	            ? calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, targetRate)
 	            : 0;
-	          return { candidate, weight: topUp === null ? 0 : topUp };
-	        }).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+          return { candidate, topUp };
+        });
+        // 默认值完全保留旧算法；只有显式设置个人目标/参与度才启用限额补差。
+        if (!usesAdjustedRule) return gaps.map(({ candidate, topUp }) => ({ candidate, weight: topUp === null ? 0 : topUp })).filter((item) => Number.isFinite(item.weight) && item.weight > 0.000001);
+        return getAnnualizedGapWeights(gaps.filter((row) => row.topUp !== null && Math.floor(row.topUp * 100) > 0), sharedIncomeAnnualizedRule.influence)
+          .map(({ row, weight }) => ({ candidate: row.candidate, weight, capCents: Math.floor(Number(row.topUp) * 100) }));
 	      }
 	      return eligibleCandidates.map((candidate) => ({
 	        candidate,
@@ -6456,7 +6773,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	      const receivesRemainderCent = dimensionRemainder > 0;
 	      const dimensionCents = baseDimensionCents + (receivesRemainderCent ? 1 : 0);
 	      if (receivesRemainderCent) dimensionRemainder -= 1;
-      const guaranteesMinimumCents = (dimension.id === "externalShareContribution" || dimension.id === "receivedSharedAmountGap" || dimension.id === "receivedSharedCountGap" || dimension.id === "withdrawalProgress")
+      if (dimension.id === "realizedAnnualized" && weightedCandidates.some((item) => item.capCents !== undefined)) {
+        const allocations = allocateCappedAnnualizedCents(dimensionCents, weightedCandidates.map((item) => ({ userId: item.candidate.userId, weight: item.weight, capCents: item.capCents || 0 })));
+        for (const item of allocations) allocationByUserId.set(item.userId, (allocationByUserId.get(item.userId) || 0) + item.cents);
+        // 各人的补差目标已足额时，余额保留；不强行分完、不越目标、不转移其他子池。
+        continue;
+      }
+      const guaranteesMinimumCents = (dimension.id === "sharedContribution" || dimension.id === "withdrawalProgress")
 	        && dimensionCents >= weightedCandidates.length;
 	      const equalMinimumCents = guaranteesMinimumCents ? 1 : 0;
 	      const distributableCents = dimensionCents - equalMinimumCents * weightedCandidates.length;
@@ -6479,20 +6802,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	        .map(([userId, cents]) => [userId, (cents / 100).toFixed(2)])),
 	      error: null,
 	    };
-	  }, []);
+	  }, [sharedIncomeWeightedOrderScores, sharedIncomeContributionRule, sharedIncomeMarketWeightsByUserId, sharedIncomeMarketAllocationResult.error, t0MarketContributionFactsQuery.error, sharedIncomeAnnualizedRule, sharedIncomeAnnualizedRuleWasConfigured, sharedIncomeAnnualizedRuleUnavailable, t0SharedIncomeAnnualizedRuleQuery.error]);
 	  useEffect(() => {
-	    if (sharedIncomeAllocationMetrics.length === 0 || sharedIncomeBudget.error) return;
+	    if (sharedIncomeServerPlanActive || sharedIncomeAllocationMetrics.length === 0 || sharedIncomeBudget.error) return;
     const plan = buildSharedIncomeAllocationPlan(
       sharedIncomeAllocationMetrics,
       sharedIncomeClosePreview.candidates,
       sharedIncomeBudget.allocationLimit,
-      sharedIncomeOpeningOrderCountIntensity,
       sharedIncomePrincipalRule,
     );
 	    setSharedIncomeTargetSelections((current) => Object.keys(current).length === 0 ? current : {});
 	    setSharedIncomeDrafts(plan.drafts);
 	    setSharedIncomeAllocationPlanError(plan.error);
-  }, [buildSharedIncomeAllocationPlan, sharedIncomeAllocationMetrics, sharedIncomeBudget.allocationLimit, sharedIncomeBudget.error, sharedIncomeClosePreview.candidates, sharedIncomeOpeningOrderCountIntensity, sharedIncomePrincipalRule]);
+  }, [buildSharedIncomeAllocationPlan, sharedIncomeServerPlanActive, sharedIncomeAllocationMetrics, sharedIncomeBudget.allocationLimit, sharedIncomeBudget.error, sharedIncomeClosePreview.candidates, sharedIncomePrincipalRule]);
 	  const toggleSharedIncomeAllocationMetric = (metric: SharedIncomeAllocationMetric) => {
 	    setSharedIncomeTargetSelections({});
 	    setSharedIncomeAllocationPlanError(null);
@@ -6525,6 +6847,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
   const saveTakeProfitAllocationPlan = () => {
     if (takeProfitAllocationPlanIndex === null) return;
+    if ((sharedIncomeAllocationMetrics.includes("weightedOpeningQuantity") || sharedIncomeAllocationMetrics.includes("marketContribution"))) {
+      setSharedIncomeAllocationPlanError("挂单加权与市场贡献新方案仅供试算，不可保存为实际止盈分配计划");
+      return;
+    }
     if (takeProfitSharedIncomeAllocatedTotalCents > takeProfitSharedIncomeAllocationLimitCents) {
       t0Toast.error(`预分配合计不可超过预计可共享收益 ${takeProfitSharedIncomeAllocationLimit.toFixed(2)} u`);
       return;
@@ -6563,14 +6889,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const allocationLimit = input.allocationLimit ?? sharedIncomeClosePreview.shareableAmount;
     if (input.compactAllocationMetric) {
       const isRealizedAnnualizedMetric = input.compactAllocationMetric === "realizedAnnualized";
+      const isSharedContributionMetric = input.compactAllocationMetric === "sharedContribution";
+      const isMarketContributionMetric = input.compactAllocationMetric === "marketContribution";
       const isExternalShareContributionMetric = input.compactAllocationMetric === "externalShareContribution";
       const isReceivedSharedAmountGapMetric = input.compactAllocationMetric === "receivedSharedAmountGap";
       const isReceivedSharedCountGapMetric = input.compactAllocationMetric === "receivedSharedCountGap";
       const isWithdrawalProgressMetric = input.compactAllocationMetric === "withdrawalProgress";
       const isOpeningOrderCountMetric = input.compactAllocationMetric === "openingOrderCount";
-      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : isOpeningOrderCountMetric ? "挂单数量" : isWithdrawalProgressMetric ? "提现占比" : "组合占比";
+      const isWeightedOpeningMetric = input.compactAllocationMetric === "weightedOpeningQuantity";
+      const compactMetricLabel = input.compactAllocationMetric === "principal" ? "本金" : input.compactAllocationMetric === "historicalProfit" ? "已获利润" : input.compactAllocationMetric === "holdingLoss" ? "持仓浮亏" : isRealizedAnnualizedMetric ? "已实现年化" : isSharedContributionMetric ? "收支权重" : isMarketContributionMetric ? "市场权重" : isExternalShareContributionMetric ? "贡献权重" : isReceivedSharedAmountGapMetric ? "收到共享" : isReceivedSharedCountGapMetric ? "收到次数" : isWeightedOpeningMetric ? "加权量" : isOpeningOrderCountMetric ? "挂单数量" : isWithdrawalProgressMetric ? "提现占比" : "组合占比";
       const enabledCandidates = sharedIncomeClosePreview.candidates.filter((candidate) => !input.showEligibilityControls || candidate.sharedIncomeEnabled);
       const eligibleMetricCandidates = enabledCandidates.filter((candidate) => candidate.hasPrincipal);
+      const sharedContributionWeightsByUserId = new Map(isSharedContributionMetric
+        ? getSharedContributionCandidateWeights(eligibleMetricCandidates, sharedIncomeContributionRule).map(({ fact, weight }) => [fact.userId, weight] as const)
+        : []);
       const totalContributedAmount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncome), 0);
       const totalContributedOrderCount = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.contributedSharedIncomeOrderCount), 0);
       const contributionFactorCount = Number(totalContributedAmount > 0.000001) + Number(totalContributedOrderCount > 0);
@@ -6578,8 +6910,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? ((totalContributedAmount > 0.000001 ? candidate.contributedSharedIncome / totalContributedAmount / contributionFactorCount : 0)
           + (totalContributedOrderCount > 0 ? candidate.contributedSharedIncomeOrderCount / totalContributedOrderCount / contributionFactorCount : 0)) * 100
         : 0;
-      const getCompactMetricValue = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "principal"
-        ? candidate.cumulativeDepositAmount
+      const getCompactMetricValue = (candidate: SharedIncomeCandidate) => isSharedContributionMetric
+        ? (sharedContributionWeightsByUserId.get(candidate.userId) || 0) * 100
+        : isMarketContributionMetric ? (sharedIncomeMarketWeightsByUserId.get(candidate.userId) || 0) * 100
+        : input.compactAllocationMetric === "principal" ? candidate.cumulativeDepositAmount
         : input.compactAllocationMetric === "historicalProfit"
           ? candidate.historicalProfit
           : input.compactAllocationMetric === "holdingLoss"
@@ -6592,14 +6926,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   ? candidate.receivedSharedIncome
                   : isReceivedSharedCountGapMetric
                     ? candidate.receivedSharedIncomeCount
+                    : isWeightedOpeningMetric
+                      ? sharedIncomeWeightedOrderScores.get(candidate.userId)?.score || 0
                     : isOpeningOrderCountMetric
                       ? candidate.openingOrderCount
                     : isWithdrawalProgressMetric
                       ? Math.max(0, Number(candidate.withdrawalProgressPercentage) || 0)
                       : allocationLimit > 0 ? Math.max(0, Number(input.drafts[candidate.userId]) || 0) / allocationLimit * 100 : 0;
-      const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isExternalShareContributionMetric || isWithdrawalProgressMetric
+      const compactMetricUnit = input.compactAllocationMetric === "combined" || isRealizedAnnualizedMetric || isSharedContributionMetric || isMarketContributionMetric || isExternalShareContributionMetric || isWithdrawalProgressMetric
         ? "%"
-        : isReceivedSharedCountGapMetric || isOpeningOrderCountMetric ? " 笔" : " u";
+        : isWeightedOpeningMetric ? " E权重" : isReceivedSharedCountGapMetric || isOpeningOrderCountMetric ? " 笔" : " u";
       const getCandidateDisplayName = (candidate: SharedIncomeCandidate) => [candidate.name, candidate.username]
         .find((value) => Boolean(value && /[\u3400-\u9fff]/.test(value)))
         || candidate.name
@@ -6616,15 +6952,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? withdrawalProgressCandidates.reduce((total, candidate) => total + Number(candidate.withdrawalProgressPercentage), 0) / withdrawalProgressCandidates.length
         : null;
       const openingOrderCountTotal = eligibleMetricCandidates.reduce((total, candidate) => total + Math.max(0, candidate.openingOrderCount), 0);
-      const allocatedMetricTotal = isRealizedAnnualizedMetric
-        ? annualizedAverage === null ? 0 : annualizedAverage * 100
+      const allocatedMetricTotal = isSharedContributionMetric
+        ? Array.from(sharedContributionWeightsByUserId.values()).reduce((sum, weight) => sum + weight, 0) * 100
+        : isMarketContributionMetric ? Array.from(sharedIncomeMarketWeightsByUserId.values()).reduce((sum, weight) => sum + weight, 0) * 100
+        : isRealizedAnnualizedMetric ? annualizedAverage === null ? 0 : annualizedAverage * 100
         : isWithdrawalProgressMetric
           ? withdrawalProgressAverage === null ? 0 : withdrawalProgressAverage
+          : isWeightedOpeningMetric
+            ? eligibleMetricCandidates.reduce((sum, candidate) => sum + (sharedIncomeWeightedOrderScores.get(candidate.userId)?.score || 0), 0)
           : isOpeningOrderCountMetric
             ? openingOrderCountTotal
         : allocatedCandidates.reduce((total, candidate) => total + getCompactMetricValue(candidate), 0);
       const getCompactMetricValueClassName = (candidate: SharedIncomeCandidate) => input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
+        : isSharedContributionMetric ? "font-semibold text-sky-700"
         : isExternalShareContributionMetric
           ? "font-semibold text-blue-600"
         : isReceivedSharedAmountGapMetric
@@ -6639,6 +6980,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const compactSummaryLabel = isRealizedAnnualizedMetric ? "平均年化" : isWithdrawalProgressMetric ? "平均提现占比" : isOpeningOrderCountMetric ? "当前挂单" : compactMetricLabel;
       const compactSummaryValueClassName = input.compactAllocationMetric === "holdingLoss"
         ? "font-semibold text-emerald-600"
+        : isSharedContributionMetric ? "font-semibold text-sky-700"
         : isExternalShareContributionMetric
           ? "font-semibold text-blue-600"
         : isReceivedSharedAmountGapMetric
@@ -10277,6 +10619,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setCloseSaveError("这是直达模拟预览，不会写入平仓、共享或任何账本记录");
       return;
     }
+    if (sharedIncomeServerPlanActive && sharedIncomeServerPlanUnavailable) {
+      setCloseSaveError(t0SharedIncomeServerPlanQuery.error?.message || "正式分配清单尚未就绪，请稍后再确认");
+      void t0SharedIncomeServerPlanQuery.refetch();
+      return;
+    }
+    if (sharedIncomeServerPlanActive && sharedIncomeServerPlan && JSON.stringify(sharedIncomeSaveAllocations) !== JSON.stringify(sharedIncomeServerPlan.allocations)) {
+      setCloseSaveError("分配金额已被修改，请先切换手动分配，或重新生成正式分配清单");
+      return;
+    }
+    if (!ACTIONS[entryForm.action].opening && closeConfirmationStep === "review" && sharedIncomeAllocationMetrics.includes("realizedAnnualized") && (sharedIncomeAnnualizedRuleUnavailable || sharedIncomeAllocationPlanError)) {
+      setCloseSaveError(sharedIncomeAllocationPlanError || "年化权重配置尚未就绪，请稍后再确认");
+      return;
+    }
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
     const selectedAction = ACTIONS[entryForm.action];
@@ -10740,6 +11095,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       targetOpeningEntryId,
       note: entryForm.note.trim() || undefined,
       sharedIncomeAllocations: !selectedAction.opening && sharedIncomeSaveAllocations.length > 0 ? sharedIncomeSaveAllocations : undefined,
+      sharedIncomePlanToken: sharedIncomeServerPlanActive ? sharedIncomeServerPlan?.planToken : undefined,
+      sharedIncomeMetrics: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.metrics : undefined,
+      sharedIncomeBudgetMode: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.budgetMode : undefined,
+      sharedIncomeBudgetValue: sharedIncomeServerPlanActive ? sharedIncomeServerPlanInput.budgetValue : undefined,
       clientRequestId,
     });
   };
@@ -13903,7 +14262,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                      return <button key={dimension.id} type="button" aria-pressed={isSelected} onClick={() => toggleSharedIncomeAllocationMetric(dimension.id)} className={`flex min-h-11 flex-col items-center justify-center rounded border px-1 leading-tight ${isSelected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"}`}><span className="flex items-center gap-1 text-[11px] font-semibold">{isSelected && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}{dimension.label}</span><span className={`mt-0.5 text-[9px] font-medium ${isSelected ? "text-blue-500" : "text-slate-400"}`}>{dimension.category}</span></button>;
 	                    })}
 	                  </div>
-	                  {sharedIncomeAllocationMetrics.includes("openingOrderCount") && <div className="mt-2.5 rounded-md border border-indigo-100 bg-indigo-50/55 px-2.5 py-2"><div className="flex items-baseline justify-between gap-2"><div className="text-[11px] font-semibold text-indigo-900">当前挂单数倾斜度</div><div className="text-xs font-bold tabular-nums text-indigo-700">{sharedIncomeOpeningOrderCountIntensity}%</div></div><input type="range" min="0" max="100" step="1" value={sharedIncomeOpeningOrderCountIntensity} aria-label="当前挂单数倾斜度，0%为全员均分，100%为完全按当前挂单数" onChange={(event) => setSharedIncomeOpeningOrderCountIntensity(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} className="mt-1.5 h-3 w-full cursor-pointer accent-indigo-600" /><div className="mt-1 flex justify-between text-[9px] font-medium text-indigo-500"><span>0% 全员均分</span><span>100% 当前挂单比例</span></div><div className="mt-1.5 text-[10px] leading-4 text-indigo-700/80">当前：{100 - sharedIncomeOpeningOrderCountIntensity}% 均分保障 + {sharedIncomeOpeningOrderCountIntensity}% 按当前有效挂单数倾斜。</div></div>}
+                  {sharedIncomeAllocationMetrics.includes("weightedOpeningQuantity") && <section className="mt-3 space-y-2">
+                    <T0WeightedOrderRuleSummary rule={sharedIncomeWeightedOrderRule} canManage={canManage} onConfigure={openSharedIncomeWeightedOrderRuleSettings} />
+                    <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-[10px] leading-4 text-blue-900">按本次平仓价 {formatPrice(Number(sharedIncomeClosePreviewBaseline.weightedOrderClosePrice) || 0)} U 试算。点右上角“权重”调整三个系数，保存后应用于本次试算；ETH数量与用户净盈亏口径不变。</div>
+                    <details className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold text-slate-800">查看每位用户的数量、净盈亏和逐笔权重</summary>
+                      <div className="divide-y divide-slate-100">{sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal && candidate.sharedIncomeEnabled).map((candidate) => {
+                        const score = sharedIncomeWeightedOrderScores.get(candidate.userId);
+                        return <div key={candidate.userId} className="px-3 py-2 text-[10px] leading-4 tabular-nums">
+                          <div className="flex items-center justify-between gap-2"><b className="truncate text-slate-800">{candidate.name}</b><b className="shrink-0 text-blue-700">加权量 {formatQuantity(score?.score || 0)}</b></div>
+                          <div className="mt-1 text-slate-500">待成交 {formatQuantity(score?.pendingQuantity || 0)} E · 已成交未平 {formatQuantity(score?.filledQuantity || 0)} E</div>
+                          {score && <div className="text-slate-500">合并净浮盈亏 <b className={score.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}>{formatPrice(score.netPnl)} U</b> · {score.netPnlRate === null ? "无已成交持仓" : `${(score.netPnlRate * 100).toFixed(2)}%`} · 已成交盈亏系数 {score.pnlFactor.toFixed(2)}</div>}
+                          {score?.details.map((line, index) => <div key={index} className="mt-1 border-l-2 border-blue-100 pl-2 text-[9px] text-slate-500">{line.status === "pending" ? "待成交" : "已成交"} · {formatPrice(line.price)} U · 距离 {(line.distance * 100).toFixed(2)}%<br />{formatQuantity(line.quantity)} E × 距离 {line.distanceFactor.toFixed(3)} × 成交 {line.statusFactor.toFixed(2)} × 盈亏 {line.pnlFactor.toFixed(2)} = <b className="text-blue-700">{formatQuantity(line.score)}</b></div>)}
+                        </div>;
+                      })}</div>
+                    </details>
+                    <p className="text-[10px] leading-4 text-amber-800">正式平仓由服务端按真实订单、资金记录和已保存权重复核；分配清单及规则版本随成交固化。</p>
+                  </section>}
 	                  {sharedIncomeSelectedDimensions.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-4 text-slate-500"><span>已选 {sharedIncomeSelectedDimensions.length} 个维度：</span>{sharedIncomeSelectedDimensions.map((dimension, index) => <span key={dimension.id} className="whitespace-nowrap font-medium text-blue-700">{index > 0 && <span className="mr-1.5 text-slate-300">·</span>}{dimension.compactLabel} {sharedIncomeDimensionWeightPercentage.toFixed(2)}%</span>)}</div>}
 	                </section>
 	                <section className="mt-3"><div className="mb-2 flex items-center justify-between gap-3 px-0.5"><div className="text-sm font-semibold text-slate-800">{sharedIncomeAllocationMetrics.length === 0 ? "共享分配人" : "共享分配清单"}</div><div className="text-[11px] tabular-nums text-slate-500">已分 <b className={sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001 ? "text-rose-600" : "text-slate-800"}>{sharedIncomeAllocatedTotal.toFixed(2)} u</b> · 剩余 <b className="text-slate-800">{Math.max(0, sharedIncomeBudget.allocationLimit - sharedIncomeAllocatedTotal).toFixed(2)} u</b></div></div>{renderSharedIncomeAllocationCandidates({
@@ -13928,7 +14303,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                {closeSaveError && <div role="alert" className="mb-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium leading-5 text-rose-700"><span className="font-semibold">平仓未确认：</span>{closeSaveError}</div>}
 	                <div className="flex gap-2">
 	                  <button type="button" disabled={saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending} onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); setSharedIncomeAllocationMetrics([]); setSharedIncomeAllocationBudgetMode("amount"); setSharedIncomeAllocationBudgetValue("0"); setSharedIncomeAllocationPlanError(null); }} className="h-11 shrink-0 rounded border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">不分配</button>
-	                  <button disabled={isCloseDistributionPreviewLink || saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isCloseDistributionPreviewLink ? "模拟预览，不提交" : saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
+	                  <button disabled={isCloseDistributionPreviewLink || sharedIncomeServerPlanUnavailable || Boolean(sharedIncomeAllocationPlanError) || saveEntryMutation.isPending || setSharedIncomeEligibilityMutation.isPending || Boolean(sharedIncomeBudget.error) || sharedIncomeAllocatedTotal - sharedIncomeBudget.allocationLimit > 0.00001} onClick={() => handleSaveEntry()} className="h-11 min-w-0 flex-1 rounded bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{isCloseDistributionPreviewLink ? "模拟预览，不提交" : saveEntryMutation.isPending ? "正在确认…" : `确认${ACTIONS[entryForm.action].label} ${formatQuantity(Number(entryForm.quantity))} ETH`}</button>
 	                </div>
 	              </div>
 	            </footer>
@@ -13940,12 +14315,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         exportRef={sharedIncomeAllocationGuideExportRef}
         currentUser={me as any}
         principalRule={sharedIncomePrincipalRule}
+        weightedOrderRule={sharedIncomeWeightedOrderRule}
+        onConfigureWeightedOrder={openSharedIncomeWeightedOrderRuleSettings}
+        onConfigureAnnualized={openSharedIncomeAnnualizedRuleDetails}
+        onConfigureContribution={openSharedIncomeContributionRuleSettings}
+        onConfigureMarket={openSharedIncomeMarketRuleSettings}
         canManage={canManage}
         onConfigurePrincipal={() => {
+          setShowSharedIncomeAnnualizedRuleDetails(false);
+          setShowSharedIncomeWeightedOrderRuleSettings(false);
+          setShowSharedIncomeContributionRuleSettings(false);
+          setShowSharedIncomeMarketRuleSettings(false);
           setSharedIncomePrincipalRule(savedSharedIncomePrincipalRule);
           setShowSharedIncomePrincipalRuleSettings(true);
         }}
         onClose={() => {
+          setShowSharedIncomeAnnualizedRuleDetails(false);
+          setShowSharedIncomeWeightedOrderRuleSettings(false);
+          setShowSharedIncomeContributionRuleSettings(false);
+          setShowSharedIncomeMarketRuleSettings(false);
           setShowSharedIncomePrincipalRuleSettings(false);
           if (isSharedIncomeAllocationGuideRoute) setLocation(closeSharedIncomeAllocationGuideRoute);
           else setShowSharedIncomeAllocationGuide(false);
@@ -13964,6 +14352,65 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           setSharedIncomePrincipalRule(savedSharedIncomePrincipalRule);
           setShowSharedIncomePrincipalRuleSettings(false);
         }}
+      />}
+      {canManage && showSharedIncomeWeightedOrderRuleSettings && <T0WeightedOrderRuleSettingsPage
+        rule={sharedIncomeWeightedOrderDraftRule}
+        onChange={setSharedIncomeWeightedOrderDraftRule}
+        onSaveAndExit={() => { void saveSharedIncomeRuleSection("weightedOrder"); }}
+        isSaving={setAllocationRulesMutation.isPending}
+        saveDisabled={!t0AllocationRulesQuery.data || Boolean(t0AllocationRulesQuery.error)}
+        saveError={sharedIncomeRulesSaveError || t0AllocationRulesQuery.error?.message || null}
+        onClose={() => setShowSharedIncomeWeightedOrderRuleSettings(false)}
+        previewContent={sharedIncomeWeightedOrderSettingsCandidates.length > 0 ? <section className="rounded-xl border border-blue-100 bg-blue-50/50 px-2.5 py-2">
+          <div className="flex items-baseline justify-between gap-2"><div className="text-[12px] font-bold text-blue-950">即时试算 · 真实参与人</div><span className="text-[8px] font-medium text-blue-800/70">蓝条 = 加权量占比</span></div>
+          <p className="mt-0.5 text-[8px] leading-3 text-blue-800/80">按同一平仓参考价和实际订单试算；拖动后预览变化，保存才应用。</p>
+          <div className="mt-1.5 overflow-hidden rounded-md border border-blue-100 bg-white tabular-nums">
+            <div className="grid h-5 grid-cols-[66px_minmax(0,1fr)_72px] items-center gap-1.5 border-b border-blue-100 bg-blue-50/60 px-2 text-[7px] font-semibold text-blue-800"><span>用户</span><span className="text-center">试算占比</span><span className="text-right">加权量／占比</span></div>
+            {sharedIncomeWeightedOrderSettingsCandidates.map((candidate, index) => {
+              const score = sharedIncomeWeightedOrderSettingsScores.get(candidate.userId)?.score || 0;
+              const percentage = sharedIncomeWeightedOrderSettingsTotal > 0 ? score / sharedIncomeWeightedOrderSettingsTotal * 100 : 0;
+              return <div key={candidate.userId} className={`grid h-7 grid-cols-[66px_minmax(0,1fr)_72px] items-center gap-1.5 px-2 ${index > 0 ? "border-t border-blue-50" : ""}`}><span className="truncate text-[8px] font-semibold text-slate-700">{candidate.name}</span><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${percentage}%` }} /></div><div className="whitespace-nowrap text-right text-[8px] leading-3"><span className="font-bold text-rose-600">{score.toFixed(2)}</span><span className="ml-1 text-[7px] text-blue-700">{percentage.toFixed(2)}%</span></div></div>;
+            })}
+          </div>
+        </section> : undefined}
+      />}
+      {canManage && showSharedIncomeAnnualizedRuleDetails && <T0AnnualizedAllocationRuleDetailsPage
+        averageAnnualizedReturn={sharedIncomeAnnualizedRuleDetails.averageAnnualizedReturn}
+        rows={sharedIncomeAnnualizedRuleDetails.rows}
+        rule={sharedIncomeAnnualizedDraftRule}
+        onChange={(rule) => { setSharedIncomeAnnualizedDraftDirty(true); setSharedIncomeAnnualizedDraftRule(rule); }}
+        onSaveAndExit={saveSharedIncomeAnnualizedRule}
+        loading={(sharedIncomeAnnualizedRuleUnavailable && !t0SharedIncomeAnnualizedRuleQuery.error) || (t0SharedIncomeAnnualizedUsersQuery.isPending && !t0SharedIncomeAnnualizedUsersQuery.error)}
+        isSaving={setSharedIncomeAnnualizedRuleMutation.isPending}
+        error={sharedIncomeAnnualizedRuleSaveError || t0SharedIncomeAnnualizedRuleQuery.error?.message || t0SharedIncomeAnnualizedUsersQuery.error?.message || null}
+        isPreview={import.meta.env.DEV}
+        onClose={() => setShowSharedIncomeAnnualizedRuleDetails(false)}
+      />}
+      {canManage && showSharedIncomeContributionRuleSettings && <T0SharedContributionRuleSettingsPage
+        rule={sharedIncomeContributionDraftRule}
+        onChange={setSharedIncomeContributionDraftRule}
+        rows={sharedIncomeContributionSettingsRows}
+        isPreview={import.meta.env.DEV}
+        onSaveAndExit={() => { void saveSharedIncomeRuleSection("contribution"); }}
+        isSaving={setAllocationRulesMutation.isPending}
+        saveDisabled={!t0AllocationRulesQuery.data || Boolean(t0AllocationRulesQuery.error)}
+        saveError={sharedIncomeRulesSaveError || t0AllocationRulesQuery.error?.message || null}
+        onClose={() => setShowSharedIncomeContributionRuleSettings(false)}
+      />}
+      {canManage && showSharedIncomeMarketRuleSettings && <T0MarketContributionRuleSettingsPage
+        rule={sharedIncomeMarketDraftRule}
+        onChange={setSharedIncomeMarketDraftRule}
+        rows={sharedIncomeMarketSettingsResult.rows}
+        loading={t0MarketContributionFactsQuery.isPending && !t0MarketContributionFactsQuery.error}
+        error={t0MarketContributionFactsQuery.error?.message || sharedIncomeMarketSettingsResult.error}
+        onRetry={() => { void t0MarketContributionFactsQuery.refetch(); }}
+        limitations={sharedIncomeMarketFacts?.limitations || []}
+        asOf={sharedIncomeMarketFacts?.asOf || null}
+        onSaveAndExit={() => { void saveSharedIncomeRuleSection("market"); }}
+        isSaving={setAllocationRulesMutation.isPending}
+        saveDisabled={!t0AllocationRulesQuery.data || Boolean(t0AllocationRulesQuery.error)}
+        saveError={sharedIncomeRulesSaveError || t0AllocationRulesQuery.error?.message || null}
+        onClose={() => setShowSharedIncomeMarketRuleSettings(false)}
       />}
 
       {canManage && profitShareSource && (

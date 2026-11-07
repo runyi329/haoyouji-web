@@ -2654,6 +2654,7 @@ async function fetchAndCacheDeribitStrikes(currency: 'BTC' | 'ETH'): Promise<voi
 
 // 服务器启动时预热（延迟3秒等待数据库连接就绪）
 setTimeout(async () => {
+  if (process.env.FAST_PREVIEW === 'true') return;
   console.log('[Deribit] 开始预热到期日和行权价缓存...');
   await fetchAndCacheDeribitExpiries('BTC');
   await fetchAndCacheDeribitExpiries('ETH');
@@ -2664,6 +2665,7 @@ setTimeout(async () => {
 
 // 每天北京时间凌晨 00:00（UTC 16:00）自动刷新
 (function scheduleDeribitDailyRefresh() {
+  if (process.env.FAST_PREVIEW === 'true') return;
   const now = new Date();
   const nextRefresh = new Date(now);
   nextRefresh.setUTCHours(16, 0, 0, 0);
@@ -5446,6 +5448,8 @@ ${klinesSummary}
     me: publicProcedure.query(async opts => {
       console.log('[auth.me] 返回用户信息:', opts.ctx.user ? `用户ID: ${opts.ctx.user.id}, 用户名: ${opts.ctx.user.username}` : 'null');
       if (!opts.ctx.user) return opts.ctx.user;
+      // 临时快速预览不等待皮肤版本解析；真实身份与业务数据不变，发布前撤销此分支。
+      if (process.env.FAST_PREVIEW === 'true') return opts.ctx.user;
       // 附带用户生效版本（皮肤）信息，供前端登录后分发与切换器使用
       try {
         const { resolveUserVersion } = await import('./version-resolver');
@@ -13199,6 +13203,122 @@ ${klinesSummary}
         });
       }),
 
+    t0GetAllocationRules: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({ id: ctx.user.id, role: ctx.user.role, isViewingAs: ctx.isViewingAs });
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可访问共享分配规则' });
+        const rules = await import('./ledger52-t0-allocation-rule-store');
+        return rules.getLedger52T0AllocationRules({ actorUserId: ctx.user.id });
+      }),
+    t0SetAllocationRules: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52), expectedVersion: z.number().int().nonnegative(),
+        weightedOrder: z.object({ distanceInfluence: z.number().finite().min(0).max(1), statusInfluence: z.number().finite().min(0).max(1), pnlInfluence: z.number().finite().min(0).max(1) }).strict(),
+        contribution: z.object({ outgoing: z.number().finite().min(0).max(1), incomingAmount: z.number().finite().min(0).max(1), incomingCount: z.number().finite().min(0).max(1) }).strict(),
+        market: z.object({ referrals: z.number().finite().min(0).max(1), capital: z.number().finite().min(0).max(1), trading: z.number().finite().min(0).max(1), output: z.number().finite().min(0).max(1), indirectDecay: z.number().finite().min(0).max(1), retentionInfluence: z.number().finite().min(0).max(1), retentionDays: z.number().int().min(1).max(365) }).strict(),
+      }).strict())
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({ id: ctx.user.id, role: ctx.user.role, isViewingAs: ctx.isViewingAs });
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可保存共享分配规则' });
+        const rules = await import('./ledger52-t0-allocation-rule-store');
+        return rules.setLedger52T0AllocationRules({ actorUserId: ctx.user.id, expectedVersion: input.expectedVersion, weightedOrder: input.weightedOrder, contribution: input.contribution, market: input.market });
+      }),
+    // 目标年化用户目录单独读取全量T+0参与用户，不扩大报价页近期名单或共享分配资格。
+    t0GetSharedIncomeAnnualizedUsers: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可读取目标年化用户目录' });
+        }
+        const annualizedRule = await import('./ledger52-t0-annualized-rule');
+        return await annualizedRule.getLedger52T0SharedIncomeAnnualizedUsers({
+          journalOwnerUserId: scope.journalOwnerUserId,
+        });
+      }),
+
+    // 市场贡献全量事实仅供真实管理员试算；推荐root和成员预览均不扩大管理财务读取范围。
+    t0GetMarketContributionFacts: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        previewUserId: z.number().int().positive().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.isViewingAs || input.previewUserId !== undefined) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入或成员预览不可读取市场贡献全量事实' });
+        }
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可读取市场贡献全量事实' });
+        }
+        const marketContribution = await import('./ledger52-t0-market-contribution');
+        return await marketContribution.getLedger52T0MarketContributionFacts({
+          journalOwnerUserId: scope.journalOwnerUserId,
+        });
+      }),
+
+    // 管理员私有的未来年化目标；普通成员和代入视角均不可读取或保存。
+    t0GetSharedIncomeAnnualizedRule: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可访问目标年化规则' });
+        }
+        const annualizedRule = await import('./ledger52-t0-annualized-rule');
+        return await annualizedRule.getLedger52T0SharedIncomeAnnualizedRule({ actorUserId: ctx.user.id });
+      }),
+
+    t0SetSharedIncomeAnnualizedRule: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        influence: z.number().finite().min(0).max(1),
+        targets: z.array(z.object({
+          userId: z.number().int().positive(),
+          targetPercentage: z.number().finite().min(0).max(10000),
+        })).max(1000),
+        expectedVersion: z.number().int().nonnegative(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可保存目标年化规则' });
+        }
+        if (process.env.NODE_ENV !== 'production' && process.env.FAST_PREVIEW === 'true') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '热预览仅应用本次试算，不写入数据库' });
+        }
+        const annualizedRule = await import('./ledger52-t0-annualized-rule');
+        return await annualizedRule.setLedger52T0SharedIncomeAnnualizedRule({
+          actorUserId: ctx.user.id,
+          influence: input.influence,
+          targets: input.targets,
+          expectedVersion: input.expectedVersion,
+        });
+      }),
+
     t0SearchRelatedUsers: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -13214,6 +13334,17 @@ ${klinesSummary}
         return await journal.searchLedger52T0JournalUsers(input.query);
       }),
 
+    t0PreviewSharedIncomeAllocation: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), action: z.enum(['closeLong','closeShort']), accountId: z.number().int().positive().optional(), accountName: z.string().trim().min(1).max(80).optional(), price: z.string(), quantity: z.string(), targetPrice: z.string(), targetOpeningEntryId: z.number().int().positive().optional(), relatedUserId: z.number().int().positive(), relatedFundId: z.number().int().positive().optional(), metrics: z.array(z.enum(['principal','weightedOpeningQuantity','realizedAnnualized','sharedContribution','marketContribution'])).min(1).max(5), budgetMode: z.enum(['percentage','amount']), budgetValue: z.string() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可生成共享分配计划' });
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({ id: ctx.user.id, role: ctx.user.role, isViewingAs: ctx.isViewingAs });
+        if (scope.mode !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可生成共享分配计划' });
+        if (scope.journalOwnerUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请切换到该账本实际管理员账户后生成可执行分配计划' });
+        const plan = await import('./ledger52-t0-allocation-plan');
+        return plan.buildLedger52T0SharedIncomeAllocationPlan({ actorUserId: ctx.user.id, ownerUserId: scope.journalOwnerUserId, ...input, budgetMode: input.budgetMode });
+      }),
     t0CreateEntry: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -13252,6 +13383,10 @@ ${klinesSummary}
           recipientUserId: z.number().int().positive(),
           amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '共享收益金额最多两位小数').refine((value) => Number(value) > 0, '共享收益金额必须大于0'),
         })).optional(),
+        sharedIncomePlanToken: z.string().min(1).optional(),
+        sharedIncomeMetrics: z.array(z.enum(['principal','weightedOpeningQuantity','realizedAnnualized','sharedContribution','marketContribution'])).optional(),
+        sharedIncomeBudgetMode: z.enum(['percentage','amount']).optional(),
+        sharedIncomeBudgetValue: z.string().optional(),
         clientRequestId: z.string().trim().min(12).max(64),
       }).superRefine((input, issue) => {
         if ((input.action === 'openLong' || input.action === 'openShort') && !input.instrumentType) {
@@ -13303,6 +13438,10 @@ ${klinesSummary}
           targetOpeningEntryId: input.targetOpeningEntryId,
           note: input.note,
           sharedIncomeAllocations: input.sharedIncomeAllocations,
+          sharedIncomePlanToken: input.sharedIncomePlanToken,
+          sharedIncomeMetrics: input.sharedIncomeMetrics,
+          sharedIncomeBudgetMode: input.sharedIncomeBudgetMode,
+          sharedIncomeBudgetValue: input.sharedIncomeBudgetValue,
           clientRequestId: input.clientRequestId,
         });
       }),

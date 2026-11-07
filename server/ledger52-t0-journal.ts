@@ -89,6 +89,10 @@ export type SaveT0JournalEntryInput = {
    * 本次共享后剩余净收益才会按该订单既有分佣快照结算。
    */
   sharedIncomeAllocations?: Array<{ recipientUserId: number; amount: string }>;
+  sharedIncomePlanToken?: string;
+  sharedIncomeMetrics?: Array<"principal" | "weightedOpeningQuantity" | "realizedAnnualized" | "sharedContribution" | "marketContribution">;
+  sharedIncomeBudgetMode?: "percentage" | "amount";
+  sharedIncomeBudgetValue?: string;
   clientRequestId: string;
 };
 
@@ -2532,8 +2536,9 @@ export async function getLedger52T0Journal(
  * 该读取器只取统一收益引擎和XIRR所需的五类不可变事实，并在同一只读一致性快照中按500条分页读取。
  * 不调用ensure表结构、不加载报价页目录/审计/行情/提醒，也绝不执行任何业务写入或DDL。
  */
-export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwnerUserId: number; includePayoutCashFlows?: boolean }) {
-  const conn = await getDbTransactionConnection();
+export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwnerUserId: number; includePayoutCashFlows?: boolean; connection?: import("mysql2/promise").PoolConnection; lockFacts?: boolean }) {
+  if (input.lockFacts && !input.connection) throw new TRPCError({ code: "BAD_REQUEST", message: "成交事实锁必须复用原保存事务" });
+  const conn = input.connection || await getDbTransactionConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0团队数据库连接失败" });
 
   const pageSize = 500;
@@ -2562,9 +2567,11 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
   let transactionStarted = false;
 
   try {
-    // 保证订单、分佣快照、共享和资金流水来自同一时点；只读事务不会写入或锁定业务记录。
-    await conn.query("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY");
-    transactionStarted = true;
+    // 保证订单、分佣快照、共享和资金流水来自同一时点；普通只读预览不写入或锁定业务记录；实际确认才使用原事务当前读行锁。
+    if (!input.connection) {
+      await conn.query("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY");
+      transactionStarted = true;
+    }
 
     let entryCursorTradeTime: string | null = null;
     let entryCursorId = 0;
@@ -2577,14 +2584,14 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       const [entryResult] = await conn.execute(
         `SELECT e.id, e.account_id, CASE WHEN account.is_active = 1 THEN account.name ELSE NULL END AS account_name, e.symbol, e.instrument_type, e.option_direction,
                 e.option_premium, e.option_premium_currency, e.option_settlement_price, e.option_delivery_price,
-                e.execution_status, e.filled_at, e.action, e.related_user_id, e.related_fund_id,
+                e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
                 e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id, e.trade_time, e.created_at,
                 DATE_FORMAT(e.trade_time, '%Y-%m-%d %H:%i:%s.%f') AS cursor_trade_time
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts account ON account.id = e.account_id
           WHERE e.ledger_id = ? AND e.user_id = ?${entryCursorSql}
           ORDER BY e.trade_time ASC, e.id ASC
-          LIMIT ${pageSize}`,
+          LIMIT ${pageSize}${input.lockFacts ? " FOR UPDATE" : ""}`,
         entryParams,
       );
       const entryRows = asRows(entryResult);
@@ -2597,7 +2604,7 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
              FROM ledger52_t0_journal_entry_profit_shares shared_entry
             WHERE shared_entry.ledger_id = ? AND shared_entry.user_id = ?
               AND shared_entry.entry_id IN (${entryIds.map(() => "?").join(", ")})
-            ORDER BY shared_entry.entry_id ASC, shared_entry.opening_entry_id ASC, shared_entry.id ASC`,
+            ORDER BY shared_entry.entry_id ASC, shared_entry.opening_entry_id ASC, shared_entry.id ASC${input.lockFacts ? " FOR UPDATE" : ""}`,
           [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, ...entryIds],
         ),
         conn.execute(
@@ -2605,7 +2612,7 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
              FROM ledger52_t0_journal_shared_income_transfers
             WHERE ledger_id = ? AND user_id = ? AND reduces_regular_distribution = 1
               AND closing_entry_id IN (${entryIds.map(() => "?").join(", ")})
-            GROUP BY closing_entry_id`,
+            GROUP BY closing_entry_id${input.lockFacts ? " FOR UPDATE" : ""}`,
           [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, ...entryIds],
         ),
       ]);
@@ -2648,7 +2655,7 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
 	            AND source_closing.execution_status = 'filled'
           WHERE transfer.ledger_id = ? AND transfer.user_id = ?${transferCursorSql}
           ORDER BY transfer.created_at DESC, transfer.id DESC
-          LIMIT ${pageSize}`,
+          LIMIT ${pageSize}${input.lockFacts ? " FOR UPDATE" : ""}`,
         transferParams,
       );
       const transferRows = asRows(transferResult);
@@ -2691,7 +2698,7 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
            FROM ledger52_t0_journal_payout_logs payout
           WHERE payout.ledger_id = ? AND payout.user_id = ?${payoutCursorSql}
           ORDER BY payout.related_user_id ASC, payout.occurred_on ASC, payout.id ASC
-          LIMIT ${pageSize}`,
+          LIMIT ${pageSize}${input.lockFacts ? " FOR UPDATE" : ""}`,
         payoutParams,
       );
       const payoutRows = asRows(payoutResult);
@@ -2716,8 +2723,10 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
       }
     }
 
-    await conn.commit();
-    transactionStarted = false;
+    if (!input.connection) {
+      await conn.commit();
+      transactionStarted = false;
+    }
     return { entries, profitShareSnapshots, sharedIncomeTransfers, sharedIncomeReductions, payoutCashFlows };
   } catch (error) {
     if (transactionStarted) {
@@ -2730,7 +2739,7 @@ export async function getLedger52T0JournalTeamFinancialFacts(input: { journalOwn
     throw error;
   } finally {
     const release = (conn as any).release;
-    if (typeof release === "function") release.call(conn);
+    if (!input.connection && typeof release === "function") release.call(conn);
   }
 }
 
@@ -3412,8 +3421,8 @@ function mapLedger52T0SharedIncomePrincipalRule(row: any): Ledger52T0SharedIncom
 }
 
 /** 账本级规则仅影响未来打开的AI共享收益试算；历史订单和已确认分配不追溯。 */
-export async function getLedger52T0SharedIncomePrincipalRule(options: { skipTableEnsure?: boolean } = {}): Promise<Ledger52T0SharedIncomePrincipalRule> {
-  const conn = await getDbConnection();
+export async function getLedger52T0SharedIncomePrincipalRule(options: { skipTableEnsure?: boolean; connection?: import("mysql2/promise").PoolConnection; lockRules?: boolean } = {}): Promise<Ledger52T0SharedIncomePrincipalRule> {
+  const conn = options.connection || await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   if (!options.skipTableEnsure) await ensureLedger52T0JournalTables(conn);
   try {
@@ -3421,7 +3430,7 @@ export async function getLedger52T0SharedIncomePrincipalRule(options: { skipTabl
       `SELECT curve, influence_percentage, version, updated_at
          FROM ledger52_t0_journal_shared_income_principal_rules
         WHERE ledger_id = ?
-        LIMIT 1`,
+        LIMIT 1${options.lockRules ? " FOR UPDATE" : ""}`,
       [LEDGER_52_T0_JOURNAL_ID],
     );
     const row = asRows(rows)[0];
@@ -3878,7 +3887,7 @@ type ProfitShareOpeningMatch = { openingEntryId: number; matchedQuantityCents: n
  * 与平仓可用量完全相同的 FIFO 口径，额外返回本次平仓实际消耗到的开仓主单。
  * 这让平仓永远继承其对应开仓当时的收益分配快照，而不是读取当前规则。
  */
-function buildProfitShareOpeningMatches(
+export function buildProfitShareOpeningMatches(
   rows: any[],
   action: T0JournalAction,
   targetPrice: string,
@@ -4137,7 +4146,7 @@ function normalizeSharedIncomeAllocations(raw: SaveT0JournalEntryInput["sharedIn
  * 共享收益先从本次平仓的正向净收益中分配；剩余收益才按开仓时固化的分佣快照结算。
  * 计算逐 FIFO 开仓切片进行，先扣相应开仓费和本次平仓费，再汇总为本单净收益。
  */
-async function calculateClosingSharedIncomePool(tx: any, input: {
+export async function calculateClosingSharedIncomePool(tx: any, input: {
   actorUserId: number;
   sourceUserId: number;
   positionRows: any[];
@@ -4696,10 +4705,15 @@ export async function deleteLedger52T0JournalDirectory(input: {
 }
 
 export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput) {
-  const connection = await getDbTransactionConnection();
-  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
-  const tx: any = connection;
   const normalizedQuantity = requireValidEthQuantity(input.quantity);
+  const hasSharedMetrics = Array.isArray(input.sharedIncomeMetrics) && input.sharedIncomeMetrics.length > 0;
+  if (hasSharedMetrics && !(input.action === "closeLong" || input.action === "closeShort")) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "共享分配维度仅支持正式手动平仓" });
+  }
+  if (hasSharedMetrics && !input.sharedIncomePlanToken) {
+    throw new TRPCError({ code: "CONFLICT", message: "带共享分配维度的平仓必须先生成并确认服务端计划" });
+  }
+
   const instrumentType = isOpeningAction(input.action)
     ? normalizeInstrumentType(input.instrumentType, true)
     : undefined;
@@ -4751,8 +4765,16 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     takeProfitPlans: input.takeProfitPlans,
   });
 
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  let sharedAllocationExecutionSnapshot: unknown;
   try {
     await ensureLedger52T0JournalTables(tx);
+    if (input.sharedIncomePlanToken) {
+      const plan = await import("./ledger52-t0-allocation-plan");
+      await plan.ensureT0SharedAllocationAuditTable(connection);
+    }
     await tx.beginTransaction();
 
     const relatedUserId = Number(input.relatedUserId || 0);
@@ -4943,6 +4965,18 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       }
     }
 
+    if (!isRetryOfExistingEntry && input.sharedIncomePlanToken && !isOpeningAction(input.action)) {
+      const plan = await import("./ledger52-t0-allocation-plan");
+      sharedAllocationExecutionSnapshot = await plan.verifyT0SharedIncomePlanFresh({
+        token: input.sharedIncomePlanToken, connection,
+        actorUserId: input.actorUserId, ownerUserId: input.actorUserId,
+        accountId, accountName, sourceUserId: relatedUserId, relatedFundId: relatedFund?.id ?? 0,
+        action: input.action as "closeLong" | "closeShort", price: String(effectivePrice), quantity: normalizedQuantity,
+        targetPrice: String(storedTargetPrice || ""), targetOpeningEntryId: targetOpeningEntryId || undefined,
+        metrics: input.sharedIncomeMetrics || [], budgetMode: input.sharedIncomeBudgetMode || "amount",
+        budgetValue: input.sharedIncomeBudgetValue || "", allocations: input.sharedIncomeAllocations || [],
+      });
+    }
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
         (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, keep_reopen_reminder, execution_status, take_profit_enabled, take_profit_price, take_profit_quantity, action, quantity, price, fee_usdt, target_price, target_opening_entry_id, note, client_request_id, created_by_user_id)
@@ -5106,6 +5140,10 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     const plansByEntryId = await getTakeProfitPlansByEntryId(tx, [entryId]);
     entry.take_profit_plans = plansByEntryId.get(entryId) ?? [];
 
+    if (!isRetryOfExistingEntry && sharedAllocationExecutionSnapshot) {
+      const plan = await import("./ledger52-t0-allocation-plan");
+      await plan.writeT0SharedAllocationExecutionAudit(connection, { actorUserId: input.actorUserId, closingEntryId: entryId, snapshot: sharedAllocationExecutionSnapshot });
+    }
     await tx.commit();
     if (isPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
     return { account: mapAccount(account), entry: mapEntry(entry), relatedUserJoinedLedger };

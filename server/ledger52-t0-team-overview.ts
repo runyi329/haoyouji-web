@@ -343,7 +343,7 @@ function buildRealizedDetails(trades: Ledger52T0IncomeTrade[], strictArchiveMatc
   return details;
 }
 
-function buildRecentDetails(trades: Ledger52T0IncomeTrade[], snapshots: Ledger52T0IncomeSnapshot[] = []) {
+export function buildRecentDetails(trades: Ledger52T0IncomeTrade[], snapshots: Ledger52T0IncomeSnapshot[] = []) {
   const strict = buildRealizedDetails(trades, true);
   const fallback = buildRealizedDetails(trades, false);
   for (const [id, detail] of fallback) {
@@ -357,7 +357,7 @@ function buildRecentDetails(trades: Ledger52T0IncomeTrade[], snapshots: Ledger52
 type Allocation = { trade: Ledger52T0IncomeTrade; quantity: number };
 
 /** 与逐笔报价一致：指定来源优先，历史记录才按同档位FIFO回退。 */
-function buildOpeningClosingAllocations(trades: Ledger52T0IncomeTrade[]) {
+export function buildOpeningClosingAllocations(trades: Ledger52T0IncomeTrade[]) {
   const queues = new Map<string, Array<{ id: string; remainingQuantity: number }>>();
   const allocations = new Map<string, Allocation[]>();
   for (const trade of sortByTime(trades.filter((item) => item.symbol === "ETH" && !item.isPending))) {
