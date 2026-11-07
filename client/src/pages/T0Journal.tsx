@@ -16442,14 +16442,15 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     <div className="w-full min-w-0">
       {/* 固定报价卡上半区高度：即使某一侧没有浮动盈亏，下面的账户/用户/项目也与对侧同价位严格齐平。 */}
       <div className={`flex w-full min-w-0 justify-between gap-2 tabular-nums ${metadata ? "min-h-[30px] items-center" : "items-start"} ${isShort ? "flex-row-reverse" : ""}`}>
-        <div className={metadata
+        <div data-t0-fit-ignore className={metadata
+          // 币本位数量是核心报价信息，所有数位均保留原字号，禁止自动拟合缩小。
           // 数量容器占满盈亏双行带，并在其中垂直居中；左右两侧的数量基线始终一致。
-          ? `flex min-h-[30px] min-w-0 flex-[0_1_auto] self-stretch items-center gap-1.5 ${isShort ? "flex-row-reverse justify-start text-right" : ""}`
-          : `flex min-h-[30px] min-w-0 flex-[0_1_auto] flex-col justify-between ${isShort ? "items-end text-right" : "items-start"}`
+          ? `flex min-h-[30px] min-w-0 shrink-0 self-stretch items-center gap-1.5 ${isShort ? "flex-row-reverse justify-start text-right" : ""}`
+          : `flex min-h-[30px] min-w-0 shrink-0 flex-col justify-between ${isShort ? "items-end text-right" : "items-start"}`
         }>
-          <span data-t0-fit className={`min-w-0 max-w-full font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
           {!metadata && integratedStatusSummary && <span className="shrink-0 whitespace-nowrap text-[9px] font-medium leading-none text-slate-400" title={`本档${integratedStatusSummary}`} aria-label={`本档${integratedStatusSummary}`}>{integratedStatusSummary}</span>}
-          {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span data-t0-fit>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
+          {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
         </div>
         {showPnlNumbers && floatingPnl !== null && floatingReturnRate !== null && (
           <span className={`flex min-h-[30px] min-w-0 flex-1 flex-col justify-center gap-[2px] ${isShort ? "items-start text-left" : "items-end text-right"} ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
