@@ -45,7 +45,7 @@ import { T0SharedContributionRuleSummary, T0SharedContributionRuleSettingsPage }
 import { calculateMarketContributionScores, DEFAULT_MARKET_CONTRIBUTION_RULE, isValidMarketContributionRule, type MarketContributionRule, type MarketContributionFacts } from "@shared/t0-market-contribution-rule";
 import { T0MarketContributionRuleSummary, T0MarketContributionRuleSettingsPage } from "@/components/T0MarketContributionRule";
 /** T+0账本采用页面内状态与确认页反馈，不显示顶部下拉式操作提示。 */
-const toast = {
+const t0Toast = {
   success: (..._args: unknown[]) => undefined,
   error: (..._args: unknown[]) => undefined,
   message: (..._args: unknown[]) => undefined,
@@ -5276,12 +5276,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== createdLog.id) : []),
       ]);
       resetPayoutLogForm();
-      await Promise.all([
+      // 服务端已经提交：先明确告知成功，读取刷新失败不能冒充写入失败。
+      setPayoutSubmitNotice({ tone: "success", message: "已保存成功，请勿重复登记。" });
+      await Promise.allSettled([
         t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
         t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
         t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
       ]);
-      setPayoutSubmitNotice({ tone: "success", message: "已保存，正在刷新下方流水记录。" });
       t0Toast.success("资金流水已保存");
     },
     onError: (error) => {
@@ -5298,12 +5299,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== updatedLog.id) : []),
       ]);
       resetPayoutLogForm();
-      await Promise.all([
+      setPayoutSubmitNotice({ tone: "success", message: "已更新成功，无需再次提交。" });
+      await Promise.allSettled([
         t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
         t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
         t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
       ]);
-      setPayoutSubmitNotice({ tone: "success", message: "已更新，正在刷新下方流水记录。" });
       t0Toast.success("资金流水已更新");
     },
     onError: (error) => {
@@ -5320,14 +5321,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       );
       setDeletePayoutLogId(null);
       if (editingPayoutLog?.id === deletedLog.id) resetPayoutLogForm();
-      await Promise.all([
+      setPayoutSubmitNotice({ tone: "success", message: "已删除成功，无需再次操作。" });
+      await Promise.allSettled([
         t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
         t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
         t0Utils.ledger.t0GetPayoutAvailability.invalidate({ ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId }),
       ]);
       t0Toast.success("资金流水已删除");
     },
-    onError: (error) => t0Toast.error(error.message || "资金流水删除失败"),
+    onError: (error) => {
+      const message = error.message || "资金流水删除失败";
+      setPayoutSubmitNotice({ tone: "error", message });
+      t0Toast.error(message);
+    },
   });
   // 推荐树仅供管理员在完整管理视图内筛选，普通成员不读取任何下线名单。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
