@@ -12444,7 +12444,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
                   onOpen={() => openEntrySheet("openLong", row.price, isIndividualLadderView ? "individual" : "integrated")}
                 />}
+                {/* 中轴价格是核心报价信息，整数、小数和实时标记均保留原字号。 */}
                 <div
+                  data-t0-fit-ignore
                   className="relative flex items-center justify-center overflow-visible border-x border-[#b9c2ca] px-0.5"
                   style={{
                     background: isExactLivePrice
