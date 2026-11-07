@@ -45,7 +45,7 @@ const pageNames = [
   "ACTIONS", "POSITION_ARCHIVE_STEP", "priceKey", "archivePriceForSide", "archivePriceForTrade",
   "getT0StoredClosingTargetPrice", "getTradeProfitShareRate", "getTradeFinancialQuantity",
   "getTradeActivityTime", "getStoredEntryId", "getStoredAction", "getStoredOptionDirection",
-  "getStoredGridDirection", "invertTradeAction", "invertOptionDirection", "invertGridDirection",
+  "getStoredGridDirection", "compareT0PositionRecordedOrder", "invertTradeAction", "invertOptionDirection", "invertGridDirection",
   "asAdminCounterpartyTrade", "buildOpeningClosingAllocations", "projectAdminCounterpartyTrades",
   "buildPositionBuckets", "formatQuantity",
 ];

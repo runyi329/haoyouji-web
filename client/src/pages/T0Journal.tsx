@@ -2879,6 +2879,18 @@ function getTradeActivityTime(trade: Pick<PreviewTrade, "createdAt" | "filledAt"
   return trade.createdAt;
 }
 
+/** 仓位 FIFO 与后台 created_at、数字 id 一致；createdAt 实际是可编辑的 trade_time，仅作日期展示。 */
+function compareT0PositionRecordedOrder(a: PreviewTrade, b: PreviewTrade) {
+  const timeOrder = (a.recordedAt || a.createdAt).localeCompare(b.recordedAt || b.createdAt);
+  if (timeOrder) return timeOrder;
+  const aStoredId = Number(getStoredEntryId(a));
+  const bStoredId = Number(getStoredEntryId(b));
+  if (Number.isSafeInteger(aStoredId) && Number.isSafeInteger(bStoredId) && aStoredId !== bStoredId) {
+    return aStoredId - bStoredId;
+  }
+  return a.id.localeCompare(b.id);
+}
+
 /** 已触发的挂单同时保留原始挂单时间与实际成交时间；普通成交单仅展示原始下单时间。 */
 function formatT0TradeTimeline(trade: Pick<PreviewTrade, "createdAt" | "filledAt">) {
   const createdAt = formatBeijingMonthDayTime(trade.createdAt);
@@ -3321,7 +3333,7 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
   // 仓位扣减必须遵循账本实际写入顺序，而不是挂单的历史成交时间。否则一笔后来
   // 才录入、但 filledAt 更早的订单会被倒插进旧平仓之前，造成逐笔报价余额错位。
   const orderedTrades = [...trades]
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    .sort(compareT0PositionRecordedOrder);
 
   for (const trade of orderedTrades) {
     const config = ACTIONS[trade.action];
@@ -3534,7 +3546,7 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   // 而被倒插到旧平仓之前，导致逐笔报价和详情页显示不同余额。
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    .sort(compareT0PositionRecordedOrder);
 
   const scopeKeyFor = (trade: PreviewTrade) => [
     ACTIONS[trade.action].side,
@@ -6585,7 +6597,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }), [entryForm.accountId, entryForm.accountName, entryForm.relatedUserId, entryForm.relatedFundId, closingStoredAction, entryForm.price, entryForm.quantity, closingStoredTargetPrice, entryForm.targetOpeningEntryId, sharedIncomeAllocationMetrics, sharedIncomeAllocationBudgetMode, sharedIncomeAllocationBudgetValue]);
   const t0SharedIncomeServerPlanQuery = trpc.ledger.t0PreviewSharedIncomeAllocation.useQuery(
     sharedIncomeServerPlanInput,
-    { enabled: sharedIncomeServerPlanActive && Number(sharedIncomeServerPlanInput.price) > 0 && Number(sharedIncomeServerPlanInput.quantity) > 0 && Boolean(sharedIncomeServerPlanInput.targetPrice), staleTime: 20_000, refetchInterval: sharedIncomeServerPlanActive ? 45_000 : false, refetchOnWindowFocus: true, retry: 1 },
+    {
+      enabled: sharedIncomeServerPlanActive && Number(sharedIncomeServerPlanInput.price) > 0 && Number(sharedIncomeServerPlanInput.quantity) > 0 && Boolean(sharedIncomeServerPlanInput.targetPrice),
+      staleTime: 20_000,
+      refetchInterval: sharedIncomeServerPlanActive ? 45_000 : false,
+      refetchOnWindowFocus: true,
+      retry: (failureCount, error) => {
+        // 来源仓位/权限/参数冲突不会因重试变好，应立刻显示原因，不能让空金额停留在“生成中”。
+        if (["CONFLICT", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(error.data?.code || "")) return false;
+        return failureCount < 1;
+      },
+    },
   );
   const sharedIncomeServerPlan = sharedIncomeServerPlanActive ? t0SharedIncomeServerPlanQuery.data as T0SharedIncomeAllocationPlan | undefined : undefined;
   const sharedIncomeServerPlanUnavailable = sharedIncomeServerPlanActive && (!sharedIncomeServerPlan || t0SharedIncomeServerPlanQuery.isFetching || Boolean(t0SharedIncomeServerPlanQuery.error));

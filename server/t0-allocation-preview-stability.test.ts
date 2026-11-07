@@ -446,8 +446,15 @@ describe("T0 real formal plan query and stable input identity", () => {
       staleTime: 20_000,
       refetchInterval: 45_000,
       refetchOnWindowFocus: true,
-      retry: 1,
+      retry: expect.any(Function),
     });
+    const retry = options(true).retry;
+    expect(retry(0, new Error("temporary network failure"))).toBe(true);
+    expect(retry(1, new Error("temporary network failure"))).toBe(false);
+    for (const code of ["CONFLICT", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"]) {
+      expect(retry(0, { data: { code } })).toBe(false);
+      expect(retry(1, { data: { code } })).toBe(false);
+    }
     expect(options(false)).toMatchObject({
       enabled: false,
       refetchInterval: false,
