@@ -37814,7 +37814,7 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const dbConn = await getStockMarketConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      return getStockMAMonitorChart(dbConn, input, { token: process.env.TUSHARE_TOKEN || TUSHARE_TOKEN, fetchImpl: fetch });
+      return getStockMAMonitorChart(dbConn, input, { token: process.env.TUSHARE_TOKEN || process.env.TS_TOKEN || '', fetchImpl: fetch });
     }),
 
   /** 按需读取单股最近已发布的供应商原生筹码价位分布，不叠加现价或修改筛选。 */
@@ -37830,7 +37830,7 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const dbConn = await getStockMarketConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      return getStockChipDistribution(dbConn, input, { token: process.env.TUSHARE_TOKEN || TUSHARE_TOKEN, fetchImpl: fetch });
+      return getStockChipDistribution(dbConn, input, { token: process.env.TUSHARE_TOKEN || process.env.TS_TOKEN || '', fetchImpl: fetch });
     }),
 
   /** 个股全生命周期涨跌天数统计 */
