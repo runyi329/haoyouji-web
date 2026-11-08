@@ -1,0 +1,62 @@
+name: A股监控运行状态只读检查
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: 配置只读诊断SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+      - name: 仅读取进程指标与内存错误标记
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'python3 -' <<'PY'
+          import json, os, re, subprocess, time
+          from pathlib import Path
+          raw = subprocess.check_output(['sudo', '-u', 'ubuntu', 'env', 'HOME=/home/ubuntu', 'pm2', 'jlist'], text=True)
+          raw = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', raw)
+          processes = json.loads(raw)
+          for item in processes:
+              if item.get('name') != 'haoyouji-web':
+                  continue
+              env = item.get('pm2_env', {})
+              node_args = env.get('node_args') or []
+              if isinstance(node_args, str):
+                  node_args = [node_args]
+              limits = [match.group(0) for arg in node_args for match in re.finditer(r'--max-old-space-size(?:=| )\d+', str(arg))]
+              report = {'name': item['name'], 'pid': item.get('pid'), 'status': env.get('status'),
+                        'restarts': env.get('restart_time'), 'uptime_seconds': round((time.time()*1000-env.get('pm_uptime', time.time()*1000))/1000),
+                        'memory_bytes': item.get('monit', {}).get('memory'), 'cpu': item.get('monit', {}).get('cpu'),
+                        'max_memory_restart': env.get('max_memory_restart'), 'heap_limit_arguments': limits,
+                        'exec_mode': env.get('exec_mode')}
+              print(json.dumps(report, ensure_ascii=False))
+              for key in ['pm_err_log_path', 'pm_out_log_path']:
+                  name = env.get(key)
+                  if not name:
+                      continue
+                  path = Path(name)
+                  if not path.is_file():
+                      continue
+                  with path.open('rb') as f:
+                      f.seek(max(0, path.stat().st_size-100000))
+                      text = f.read().decode('utf-8', errors='replace')
+                  marks = sorted(set(re.findall(r'JavaScript heap out of memory|Reached heap limit|Allocation failed|memory limit', text, re.I)))
+                  print(json.dumps({'log_kind': key, 'modified_unix': path.stat().st_mtime, 'memory_error_marks': marks}, ensure_ascii=False))
+          subprocess.run(['free', '-m'], check=True)
+          PY
