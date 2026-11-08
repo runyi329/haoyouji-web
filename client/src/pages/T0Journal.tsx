@@ -5088,6 +5088,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .filter((member) => Boolean(member.avatar))
       .map((member) => [member.id, member.avatar!] as const),
   ), [previewMembers]);
+  const adminFilterMemberIds = useMemo(() => new Set(previewMembers.map((member) => String(member.id))), [previewMembers]);
+  const adminFilterMemberDirectoryLoaded = t0PreviewMembersQuery.isSuccess;
   const selectedPreviewMember = previewMembers.find((member) => member.id === previewUserId) ?? null;
   const visiblePreviewMembers = useMemo(() => {
     const keyword = previewMemberSearch.trim().toLowerCase();
@@ -5754,6 +5756,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
         const next = preferred.filter((id) => {
           if (id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id)) return true;
+          // 管理员从完整成员卡选择，不能再用“最近30人”否决历史订单/分佣成员。
+          // 名单异步加载或读取失败时，先保留已选用户，不能误切到全体数据。
+          if (/^[1-9]\d*$/.test(id) && (!adminFilterMemberDirectoryLoaded || adminFilterMemberIds.has(id))) return true;
           const rootUserId = getT0ReferralDescendantsRootUserId(id);
           // 下线树异步返回前不能清掉 localStorage 中的选择；树到位后再剔除失效根用户。
           return Boolean(rootUserId && (!referralDataLoaded || referralDescendantsByRootUserId.has(rootUserId)));
@@ -5802,7 +5807,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
     setHydratedTopFilterStorageKey(topFilterStorageKey);
-  }, [memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds, activeJournalData, topFilterStorageKey]);
+  }, [adminFilterMemberDirectoryLoaded, adminFilterMemberIds, memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds, activeJournalData, topFilterStorageKey]);
 
   useEffect(() => {
     if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
@@ -7471,6 +7476,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return Number(rightIsSelf) - Number(leftIsSelf) || left.label.localeCompare(right.label, "zh-CN");
     });
   }, [isMemberView, me, memberRelatedUserName, trades, viewerProfitShareBeneficiaryUserId]);
+  const adminRelatedUserFilterMembers = useMemo<PreviewRelatedUser[]>(() => {
+    const membersById = new Map(recentRelatedUsers.map((user) => [user.id, user] as const));
+    for (const member of previewMembers) {
+      const id = String(member.id);
+      if (!membersById.has(id)) membersById.set(id, { id, name: member.name, username: member.username, avatar: member.avatar });
+    }
+    return Array.from(membersById.values());
+  }, [previewMembers, recentRelatedUsers]);
   const relatedUserFilterOptions: T0MultiSelectOption[] = isMemberView
     ? memberSourceUserFilterOptions
     : [
@@ -7483,7 +7496,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         summaryLabel: `推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
         kind: "referral-descendants" as const,
       }] : []),
-      ...recentRelatedUsers
+      ...adminRelatedUserFilterMembers
         .filter((user) => user.id !== currentReferralRootUserId)
         .map((user) => toRelatedUserFilterOption(user)),
       ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
@@ -7492,21 +7505,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (payoutTargetRelatedUserId <= 0) return { name: "当前用户", username: "", avatar: "" };
     const targetId = String(payoutTargetRelatedUserId);
     const relatedTrade = trades.find((trade) => trade.relatedUserId === targetId);
+    const targetMember = previewMembers.find((member) => String(member.id) === targetId);
+    // auth.me 仍是登录管理员；只有报告目标确为登录本人，才可使用登录资料兜底。
+    const isLoggedInUser = String((me as any)?.id || "") === targetId;
+    const targetUsername = targetMember?.username || relatedTrade?.relatedUsername || (isLoggedInUser ? String((me as any)?.username || "").trim() : "");
+    const targetAvatar = targetMember?.avatar || relatedTrade?.relatedUserAvatar || (isLoggedInUser ? String((me as any)?.avatar || "").trim() : "");
     if (isMemberView) {
       return {
-        name: memberRelatedUserName || "本人",
-        username: String((me as any)?.username || "").trim(),
-        avatar: relatedTrade?.relatedUserAvatar || String((me as any)?.avatar || "").trim(),
+        name: targetMember?.name || memberRelatedUserName || "本人",
+        username: targetUsername,
+        avatar: targetAvatar,
       };
     }
     const relatedUser = recentRelatedUsers.find((user) => user.id === targetId);
     const payoutUserName = payoutLogs[0]?.relatedUserName || "";
     return {
       name: relatedUser?.name || relatedTrade?.relatedUserName || relatedTrade?.relatedUsername || payoutUserName || "当前用户",
-      username: relatedUser?.username || relatedTrade?.relatedUsername || "",
-      avatar: relatedTrade?.relatedUserAvatar || "",
+      username: relatedUser?.username || targetUsername,
+      avatar: targetAvatar,
     };
-  }, [isMemberView, me, memberRelatedUserName, payoutLogs, payoutTargetRelatedUserId, recentRelatedUsers, trades]);
+  }, [isMemberView, me, memberRelatedUserName, payoutLogs, payoutTargetRelatedUserId, previewMembers, recentRelatedUsers, trades]);
 
   const relatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
@@ -7524,7 +7542,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   ];
   const topSelectableRelatedUserIds = isMemberView
     ? memberSourceUserFilterOptions.map((option) => option.id)
-    : recentRelatedUsers.map((user) => user.id);
+    : adminRelatedUserFilterMembers.map((user) => user.id);
   const topRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
     relatedUserFilterIds,
     topRelatedUserFilter,
@@ -7541,14 +7559,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const adminFilterSelectedMemberId = canManage
     && relatedUserFilterIds.length === 1
     && /^\d+$/.test(relatedUserFilterIds[0])
-    ? Number(relatedUserFilterIds[0])
-    : null;
+      ? Number(relatedUserFilterIds[0])
+      : null;
   const adminFilterSelectedMember = previewMembers.find((member) => member.id === adminFilterSelectedMemberId) ?? null;
-  const adminFilterSummary = topRelatedUserSelectionIsAll || relatedUserFilterIds.length === 0
+  const adminFilterSummary = relatedUserFilterIds.length === 0
     ? "全部"
-    : adminFilterSelectedMember?.name
-      || relatedUserFilterOptions.find((option) => option.id === relatedUserFilterIds[0])?.summaryLabel
-      || (relatedUserFilterIds.length === 1 ? `用户#${relatedUserFilterIds[0]}` : `已选 ${relatedUserFilterIds.length} 项`);
+    : adminFilterSelectedMemberId !== null
+      ? adminFilterSelectedMember?.name || relatedUserFilterOptions.find((option) => option.id === relatedUserFilterIds[0])?.summaryLabel || `用户#${adminFilterSelectedMemberId}`
+      : topRelatedUserSelectionIsAll
+        ? "全部"
+        : relatedUserFilterOptions.find((option) => option.id === relatedUserFilterIds[0])?.summaryLabel
+          || (relatedUserFilterIds.length === 1 ? `用户#${relatedUserFilterIds[0]}` : `已选 ${relatedUserFilterIds.length} 项`);
   const isAdminFilterMemberPicker = previewMemberPickerMode === "filter";
   const activeAdminMemberPickerId = isAdminFilterMemberPicker
     ? adminFilterSelectedMemberId
@@ -7593,11 +7614,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setHistoryRelatedUserFilterIds((current) => current.filter((id) => {
       if (isMemberView) return memberSourceUserFilterOptions.some((option) => option.id === id);
       if (id === "unlinked" || recentRelatedUsers.some((user) => user.id === id)) return true;
+      if (/^[1-9]\d*$/.test(id) && (!adminFilterMemberDirectoryLoaded || adminFilterMemberIds.has(id))) return true;
       const rootUserId = getT0ReferralDescendantsRootUserId(id);
       return Boolean(rootUserId && (!referralDataLoaded || referralDescendantsByRootUserId.has(rootUserId)));
     }));
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
-  }, [accounts, isMemberView, memberSourceUserFilterOptions, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
+  }, [accounts, adminFilterMemberDirectoryLoaded, adminFilterMemberIds, isMemberView, memberSourceUserFilterOptions, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
   useEffect(() => {
     const selectableIds = new Set(historyMemberIncomeKindFilterOptions.map((option) => option.id));
     setHistoryIncomeKindFilterIds((current) => {
