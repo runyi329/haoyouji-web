@@ -1,4 +1,6 @@
 import type mysql from "mysql2/promise";
+import { configureStockMAMonitorPersistence } from "./stock-ma-monitor";
+import { stockMAPersistenceOptions } from "./stock-ma-persistence-config";
 
 // Key by the physical pool, not getDbConnection's per-call compatibility proxy.
 // Weak keys allow retired pools and their AI-module caches to be collected.
@@ -8,7 +10,7 @@ const noOpEnd = async (): Promise<void> => undefined;
 /** AI read executor only; does not acquire, release or close a pool connection. */
 export function getStockMarketExecutor(
   pool: mysql.Pool | null,
-  fallbackConnection: mysql.Connection | null,
+  fallbackConnection: mysql.Connection | null
 ): mysql.Connection | null {
   // Preserve legacy/non-pooled adapters verbatim, including null.
   if (!pool) return fallbackConnection;
@@ -23,6 +25,8 @@ export function getStockMarketExecutor(
         return typeof value === "function" ? value.bind(target) : value;
       },
     }) as unknown as mysql.Connection;
+    const persistence = stockMAPersistenceOptions(pool);
+    if (persistence) configureStockMAMonitorPersistence(executor, persistence);
     poolExecutors.set(pool, executor);
   }
   return executor;

@@ -250,6 +250,21 @@ jobs:
             echo "Nginx 静态资源访问与长期缓存校验通过。"
           fi
 
+          # 仅一次本机非锁定行情读取，建立或恢复部署目录外的市场检查点。
+          # 不采集外部行情、不补写日线、不更改业务数据或内存保护上限。
+          # 绕过用户入口的代理等待时限；后续部署可直接恢复原有检查点。
+          echo "初始化或恢复 A股监控检查点…"
+          python3 - <<'PYWARM'
+          import json, urllib.parse, urllib.request
+          args = {'market': 'all', 'periods': [5, 10, 20], 'page': 1, 'pageSize': 10, 'sort': 'newest'}
+          encoded = urllib.parse.quote(json.dumps({'json': args}, separators=(',', ':')))
+          url = 'http://127.0.0.1:3000/api/trpc/aiStockMAMonitor?input=' + encoded
+          with urllib.request.urlopen(url, timeout=600) as response:
+              data = json.load(response)['result']['data']['json']
+          assert data.get('asOf') and data.get('sourceVersion') and data.get('mode') == 'close-confirmed'
+          print(json.dumps({'monitor_ready': True, 'as_of': data['asOf'], 'qualified_count': data['total'], 'readonly': True}, ensure_ascii=False))
+          PYWARM
+
           # 保留当前与最近三版，兼顾旧分块回退、回滚能力及服务器磁盘空间。
           find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
             | sort -nr | awk 'NR > 4 {print $2}' | while IFS= read -r old_release; do

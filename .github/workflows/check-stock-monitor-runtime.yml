@@ -45,6 +45,8 @@ jobs:
                         'memory_bytes': item.get('monit', {}).get('memory'), 'cpu': item.get('monit', {}).get('cpu'),
                         'max_memory_restart': env.get('max_memory_restart'), 'heap_limit_arguments': limits,
                         'exec_mode': env.get('exec_mode')}
+              report['production_mode'] = env.get('NODE_ENV', env.get('env', {}).get('NODE_ENV')) == 'production'
+              report['checkpoint_disabled'] = env.get('STOCK_MA_PERSISTENCE_DISABLED', env.get('env', {}).get('STOCK_MA_PERSISTENCE_DISABLED')) == '1'
               print(json.dumps(report, ensure_ascii=False))
               for key in ['pm_err_log_path', 'pm_out_log_path']:
                   name = env.get(key)
@@ -57,6 +59,24 @@ jobs:
                       f.seek(max(0, path.stat().st_size-100000))
                       text = f.read().decode('utf-8', errors='replace')
                   marks = sorted(set(re.findall(r'JavaScript heap out of memory|Reached heap limit|Allocation failed|memory limit', text, re.I)))
-                  print(json.dumps({'log_kind': key, 'modified_unix': path.stat().st_mtime, 'memory_error_marks': marks}, ensure_ascii=False))
+                  events = sorted(set(re.findall(r'\[StockMA\] checkpoint (restored|committed)', text)))
+                  print(json.dumps({'log_kind': key, 'modified_unix': path.stat().st_mtime, 'memory_error_marks': marks, 'checkpoint_events': events}, ensure_ascii=False))
           subprocess.run(['free', '-m'], check=True)
+          checkpoint_root = Path('/home/ubuntu/.cache/haoyouji-web/stock-ma')
+          files = []
+          if checkpoint_root.is_dir() and not checkpoint_root.is_symlink():
+              for directory, subdirs, names in os.walk(checkpoint_root, followlinks=False):
+                  subdirs[:] = [name for name in subdirs if not Path(directory, name).is_symlink()]
+                  for name in names:
+                      path = Path(directory, name)
+                      if path.is_file() and not path.is_symlink():
+                          files.append(path.stat())
+                      if len(files) >= 10000:
+                          break
+                  if len(files) >= 10000:
+                      break
+          print(json.dumps({'checkpoint_root_exists': checkpoint_root.is_dir(),
+                            'checkpoint_file_count': len(files),
+                            'checkpoint_disk_bytes': sum(item.st_size for item in files),
+                            'checkpoint_latest_write_unix': max((item.st_mtime for item in files), default=None)}, ensure_ascii=False))
           PY

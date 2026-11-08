@@ -1,4 +1,23 @@
 import { createHash } from "node:crypto";
+import { serialize, deserialize } from "node:v8";
+import {
+  STOCK_MA_ALGORITHM_VERSION,
+  canonicalWindowSums,
+  compareMADates,
+  packMAStates,
+  unpackMAStates,
+  decodeMARaw,
+  sameMANormalizedDay,
+  maTail,
+  advanceMAStates,
+  type MACompactStock,
+  type MADateMetadata,
+} from "./stock-ma-incremental";
+import type {
+  StockMACheckpointStore,
+  StockMAStoredGeneration,
+  StockMAWriteTransaction,
+} from "./stock-ma-checkpoint-store";
 import {
   getAShareCompletedCutoff,
   isValidAShareTradeDate,
@@ -29,7 +48,15 @@ const PROBE_INTERVAL_MS = 60_000;
 const FINGERPRINT_INTERVAL_MS = 30 * 60_000;
 const STABILITY_MS = 60_000;
 const ALL_PERIODS = STOCK_MA_MONITOR_PERIODS;
-const MAX_RANKED_COMBINATIONS = 6; // Three presets + three legacy short-line pairs.
+const COMBINATIONS: readonly (readonly StockMAMonitorPeriod[])[] = [
+  ...Object.values(STOCK_MA_MONITOR_PRESETS).map(preset => preset.periods),
+  [5, 10],
+  [5, 20],
+  [10, 20],
+];
+const COMBINATION_INDEX = new Map(
+  COMBINATIONS.map((periods, index) => [JSON.stringify(periods), index])
+);
 const BOARDS: readonly StockMAMonitorBoard[] = ["SH", "SZ", "GEM", "STAR"];
 const MARKETS = new Set(["all", "SH", "SZ", "GEM", "STAR"]);
 const SORTS = new Set(["newest", "longest", "code"]);
@@ -51,10 +78,10 @@ type Daily = {
   amount: number;
   pct: number | null;
 };
-// Numeric period keys (5..250) allocate large sparse V8 element stores. Keep
-// seven packed doubles per day in ONE buffer per stock, not per-day objects or
-// typed-array views. NaN denotes unavailable data and never escapes publicly.
-// Page/chart copies alone use the numeric period-key contract.
+// Numeric period keys (5..250) allocate large sparse V8 element stores. Only
+// scratch holds all 350 days; a cached stock owns seven latest doubles plus an
+// independent, packed buffer for at most 30 real candles, never a scratch view.
+// NaN is private; page/chart copies alone use the numeric period-key contract.
 type CompactAverages = Float64Array;
 const PERIOD_INDEX: Record<StockMAMonitorPeriod, number> = {
   5: 0,
@@ -69,9 +96,15 @@ type SourceCandle = Omit<StockMAMonitorCandle, "averages"> & {
   averages: CompactAverages;
   averageOffset: number;
 };
-type Day = {
+type ScratchDay = {
   close: Float64Array;
   pct: Float64Array;
+  averages: CompactAverages;
+  candles: Omit<SourceCandle, "averages">[];
+};
+type Day = {
+  close: number;
+  pct: number | null;
   averages: CompactAverages;
   candles: SourceCandle[];
 };
@@ -80,6 +113,7 @@ type Source = {
   cutoff: string;
   dates: string[];
   stocks: Stock[];
+  ranked: Ranked[];
   fetchedAt: string;
   dataUpdatedAt: string | null;
   warning?: string;
@@ -107,6 +141,24 @@ type Fingerprint = {
   basics: Row[];
   dataUpdatedAt: string | null;
   newestUpdateAt: number | null;
+  metadata: MADateMetadata;
+};
+type CheckpointMetadata = {
+  engine: string;
+  version: string;
+  probe: Probe;
+  fingerprintAt: number;
+  epochReliable: boolean;
+  fingerprint: Omit<Fingerprint, "basics">;
+  shards: { name: string; codes: string[] }[];
+};
+type Persistence = {
+  root: string;
+  sourceIdentity: string;
+  store: Promise<StockMACheckpointStore>;
+  restored?: Promise<void>;
+  head?: StockMAStoredGeneration;
+  metadata?: CheckpointMetadata;
 };
 type Cache = {
   source?: {
@@ -116,13 +168,13 @@ type Cache = {
     fingerprintAt: number;
   };
   sourceInFlight: Map<string, Promise<Source>>;
-  ranked: Map<string, { value: Ranked; source: Source }>;
   nextProbeAt: number;
   epochReliable: boolean;
   candidate?: { version: string; probe: Probe; firstObservedAt: number };
+  persistence?: Persistence;
 };
-// A stable executor identifies a DB. One heavy source + at most six period
-// combinations per DB; no market/page/ledger cache multiplication or connection close.
+// A stable executor identifies a DB. One lightweight source + six final period
+// rankings per DB; no market/page/ledger cache multiplication or connection close.
 const caches = new WeakMap<StockComparisonDb, Cache>();
 // Bind a fingerprint to the actual source identity, not the mutable cache head.
 // Warning wrappers retain the old snapshot's version even during a refresh.
@@ -145,13 +197,45 @@ function getCache(db: StockComparisonDb): Cache {
   if (!cache) {
     cache = {
       sourceInFlight: new Map(),
-      ranked: new Map(),
       nextProbeAt: 0,
       epochReliable: true,
     };
     caches.set(db, cache);
   }
   return cache;
+}
+
+/** Explicit opt-in only. No filesystem/store module is loaded for fixtures or
+ * legacy callers. Changing identity intentionally discards this executor cache. */
+export function configureStockMAMonitorPersistence(
+  db: StockComparisonDb,
+  options: { root: string; sourceIdentity: string } | null
+): void {
+  const old = caches.get(db)?.persistence;
+  if (
+    (!options && !old) ||
+    (options &&
+      old?.root === options.root &&
+      old.sourceIdentity === options.sourceIdentity)
+  )
+    return;
+  if (caches.get(db)?.sourceInFlight.size)
+    throw new Error("Cannot reconfigure stock MA persistence during refresh");
+  if (options && (!options.root.startsWith("/") || !options.sourceIdentity))
+    throw new TypeError("Invalid stock MA persistence configuration");
+  caches.delete(db);
+  if (!options) return;
+  const copied = { ...options };
+  const store = import("./stock-ma-checkpoint-store").then(module =>
+    module.openStockMACheckpointStore({
+      ...copied,
+      algorithmVersion: STOCK_MA_ALGORITHM_VERSION,
+    })
+  );
+  // A configuration error is surfaced on the first request, not as an
+  // unhandled background rejection between configuration and that request.
+  void store.catch(() => undefined);
+  getCache(db).persistence = { ...copied, store };
 }
 
 async function selectRows(
@@ -248,8 +332,8 @@ function computedDays(
   raw: (Daily | null)[],
   dates: string[],
   poisoned: boolean
-): Day {
-  const days: Day = {
+): ScratchDay {
+  const days: ScratchDay = {
     close: new Float64Array(raw.length).fill(NaN),
     pct: new Float64Array(raw.length).fill(NaN),
     averages: new Float64Array(raw.length * ALL_PERIODS.length).fill(NaN),
@@ -263,26 +347,11 @@ function computedDays(
       if (++candleCount === CANDLE_DAYS) break;
     }
   }
-  // Positive-only segment sums: O(H + H*P*log H), with H <= 350 and P = 7.
-  // Every queried node lies wholly INSIDE its window: never subtract a huge
-  // historical prefix or rolling accumulator to recover tiny recent volumes.
-  // Pairwise tree addition also bounds summation error without relaxing the
-  // strict-order ULP guard. These scratch trees are discarded after this stock.
-  let base = 1;
-  while (base < raw.length) base *= 2;
-  const amounts = new Float64Array(base * 2);
-  const volumes = new Float64Array(base * 2);
-  if (!poisoned) {
-    raw.forEach((sample, i) => {
-      if (!sample) return;
-      amounts[base + i] = sample.amount;
-      volumes[base + i] = sample.vol;
-    });
-    for (let i = base - 1; i > 0; i--) {
-      amounts[i] = amounts[i * 2] + amounts[i * 2 + 1];
-      volumes[i] = volumes[i * 2] + volumes[i * 2 + 1];
-    }
-  }
+  // Versioned, positive pairwise sums use window-relative indices, so shifting
+  // the 350-day left boundary never changes a surviving window's sum order.
+  // No historical prefix subtraction or infinite rolling accumulator.
+  const amountSum = canonicalWindowSums(raw, "amount");
+  const volumeSum = canonicalWindowSums(raw, "vol");
   const breaks = raw.map((d, i) =>
     d && i > 0 && raw[i - 1]
       ? Math.abs(d.preClose - raw[i - 1]!.close) > 0.0010000001
@@ -298,22 +367,8 @@ function computedDays(
       for (const period of ALL_PERIODS) {
         const start = i - period + 1;
         if (start < 0 || start <= lastInvalid) continue;
-        let amount = 0,
-          vol = 0,
-          left = base + start,
-          right = base + i + 1;
-        while (left < right) {
-          if (left % 2) {
-            amount += amounts[left];
-            vol += volumes[left++];
-          }
-          if (right % 2) {
-            amount += amounts[--right];
-            vol += volumes[right];
-          }
-          left = Math.floor(left / 2);
-          right = Math.floor(right / 2);
-        }
+        const amount = amountSum(start, period);
+        const vol = volumeSum(start, period);
         const avg = (10 * amount) / vol;
         if (Number.isFinite(avg) && avg > 0)
           days.averages[averageOffset + PERIOD_INDEX[period]] = avg;
@@ -327,11 +382,37 @@ function computedDays(
         high: d.high,
         low: d.low,
         close: d.close,
-        averages: days.averages,
         averageOffset,
       });
   }
   return days;
+}
+
+function projectedDays(scratch: ScratchDay): Day {
+  const last = scratch.close.length - 1;
+  const averages = new Float64Array(ALL_PERIODS.length).fill(NaN);
+  if (last >= 0)
+    for (let p = 0; p < ALL_PERIODS.length; p++)
+      averages[p] = scratch.averages[last * ALL_PERIODS.length + p];
+  // Explicit owning allocation/copy: subarray would retain the full 350x7
+  // scratch ArrayBuffer through every source candle and cached ranking.
+  const candleAverages = new Float64Array(
+    scratch.candles.length * ALL_PERIODS.length
+  );
+  const candles = scratch.candles.map((candle, i) => {
+    const averageOffset = i * ALL_PERIODS.length;
+    for (let p = 0; p < ALL_PERIODS.length; p++)
+      candleAverages[averageOffset + p] =
+        scratch.averages[candle.averageOffset + p];
+    return { ...candle, averages: candleAverages, averageOffset };
+  });
+  return {
+    close: last >= 0 ? scratch.close[last] : NaN,
+    pct:
+      last >= 0 && !Number.isNaN(scratch.pct[last]) ? scratch.pct[last] : null,
+    averages,
+    candles,
+  };
 }
 
 function averageOf(
@@ -515,8 +596,7 @@ async function queryFingerprint(
   discoveredBasics?: Row[]
 ): Promise<Fingerprint> {
   const basics = discoveredBasics ?? (await queryBasics(db));
-  if (!dates.length || !basics.some(row => boardOf(row.ts_code as string)))
-    throw new Error("No cached stock MA source available");
+  if (!dates.length) throw new Error("No cached stock MA source available");
   // Only one aggregate row per market date crosses the DB boundary. Include
   // every raw field and updated_at, including invalid/duplicate daily records.
   const checksum = `CRC32(JSON_ARRAY(d.ts_code, d.open, d.high, d.low, d.close,
@@ -564,6 +644,7 @@ async function queryFingerprint(
     basics,
     dataUpdatedAt: metadata.at(-1)![2] as string | null,
     newestUpdateAt,
+    metadata,
   };
 }
 
@@ -571,7 +652,9 @@ async function querySource(
   db: StockComparisonDb,
   cutoff: string,
   dates: string[],
-  fingerprint: Fingerprint
+  fingerprint: Fingerprint,
+  transaction?: StockMAWriteTransaction,
+  shardIdentities?: CheckpointMetadata["shards"]
 ): Promise<Source> {
   const identities: { code: string; name: string; board: Board }[] = [];
   for (const row of fingerprint.basics) {
@@ -581,6 +664,11 @@ async function querySource(
     identities.push({ code, name: row.name as string, board });
   }
   const stocks: Stock[] = [];
+  const ranked: Ranked[] = COMBINATIONS.map(() => ({
+    items: [],
+    eligible: counts(),
+    excluded: counts(),
+  }));
   const ordinals = new Map(dates.map((date, i) => [date, i]));
   // Each serial batch reads all the same discovered dates, without row LIMITs
   // or shortened warm-up. uk_code_date prevents a full-market scan per batch.
@@ -590,6 +678,7 @@ async function querySource(
     offset += SOURCE_BATCH_STOCKS
   ) {
     const batch = identities.slice(offset, offset + SOURCE_BATCH_STOCKS);
+    const compact: MACompactStock[] = [];
     const byCode = new Map(
       batch.map(identity => [
         identity.code,
@@ -598,6 +687,9 @@ async function querySource(
           raw: Array<Daily | null>(dates.length).fill(null),
           seen: new Set<number>(),
           poisoned: false,
+          normalized: transaction
+            ? emptyCompact(identity.code, dates.length)
+            : undefined,
         },
       ])
     );
@@ -636,34 +728,545 @@ async function querySource(
         }
         if (stock.seen.has(index)) {
           stock.raw[index] = null;
+          if (stock.normalized) {
+            stock.normalized.flags[index] = 3;
+            stock.normalized.values.fill(NaN, index * 8, index * 8 + 8);
+          }
           continue;
         }
         stock.seen.add(index);
         stock.raw[index] = dailyOf(row);
+        if (stock.normalized) normalizeInto(stock.normalized, index, row);
       }
       // Release mysql2's full batch row array before constructing cached Days.
       rows.length = 0;
     }
-    for (const [code, stock] of byCode) {
-      stocks.push({
-        code,
-        name: stock.name,
-        board: stock.board,
-        days: computedDays(stock.raw, dates, stock.poisoned),
-      });
+    for (const [code, stock] of Array.from(byCode)) {
+      stocks.push(
+        computedStock(
+          { code, name: stock.name, board: stock.board },
+          stock.raw,
+          dates,
+          stock.poisoned,
+          ranked,
+          stock.normalized
+            ? states => {
+                stock.normalized!.states = packMAStates(states);
+              }
+            : undefined
+        )
+      );
+      if (stock.normalized) {
+        stock.normalized.poisoned = stock.poisoned;
+        compact.push(stock.normalized);
+      }
       // Drop raw OHLC/volume/amount and duplicate guards stock by stock.
       byCode.delete(code);
+    }
+    if (transaction) {
+      const name = shardName(offset / SOURCE_BATCH_STOCKS);
+      await transaction.writeShard(name, serialize(compact));
+      shardIdentities!.push({ name, codes: batch.map(s => s.code) });
     }
   }
   const source: Source = {
     cutoff,
     dates,
     stocks,
+    ranked,
     fetchedAt: new Date().toISOString(),
     dataUpdatedAt: fingerprint.dataUpdatedAt,
   };
   sourceVersions.set(source, fingerprint.version);
   return source;
+}
+
+function shardName(index: number): string {
+  return `shard-${String(index).padStart(6, "0")}`;
+}
+function emptyCompact(code: string, n: number): MACompactStock {
+  return {
+    code,
+    values: new Float64Array(n * 8).fill(NaN),
+    flags: new Uint8Array(n),
+    states: new Uint8Array(Math.ceil((n * 6) / 4)),
+    poisoned: false,
+  };
+}
+function normalizeInto(stock: MACompactStock, index: number, row: Row): void {
+  stock.flags[index] = dailyOf(row) ? 2 : 1;
+  const fields = [
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "vol",
+    "amount",
+    "pct_chg",
+  ];
+  fields.forEach((field, p) => {
+    stock.values[index * 8 + p] = finite(row[field]) ?? NaN;
+  });
+}
+async function queryCompact(
+  db: StockComparisonDb,
+  codes: string[],
+  dates: string[]
+): Promise<Map<string, MACompactStock>> {
+  const found = new Map(
+    codes.map(code => [code, emptyCompact(code, dates.length)])
+  );
+  if (!codes.length || !dates.length) return found;
+  const ordinals = new Map(dates.map((d, i) => [d, i]));
+  const rows = await selectRows(
+    db,
+    `
+    SELECT d.ts_code, d.trade_date, d.open, d.high, d.low, d.close,
+           d.pre_close, d.pct_chg, d.vol, d.amount
+    FROM ts_daily AS d FORCE INDEX (uk_code_date)
+    INNER JOIN ts_stock_basic AS b ON b.ts_code = d.ts_code
+    WHERE d.trade_date >= ? AND d.trade_date <= ?
+      AND d.trade_date IN (${dates.map(() => "?").join(", ")})
+      AND d.ts_code IN (${codes.map(() => "?").join(", ")})
+      AND b.list_status = 'L'
+      AND (b.ts_code LIKE '6%' OR b.ts_code LIKE '0%'
+           OR b.ts_code LIKE '300%' OR b.ts_code LIKE '301%')
+  `,
+    [dates[0], dates.at(-1), ...dates, ...codes]
+  );
+  for (const row of rows) {
+    if (typeof row.ts_code !== "string")
+      throw new TypeError("Invalid stock MA daily identity");
+    const stock = found.get(row.ts_code);
+    if (!stock) continue;
+    const index = isValidAShareTradeDate(row.trade_date)
+      ? ordinals.get(row.trade_date)
+      : undefined;
+    if (index === undefined) {
+      stock.poisoned = true;
+      continue;
+    }
+    if (stock.flags[index]) {
+      stock.flags[index] = 3;
+      stock.values.fill(NaN, index * 8, index * 8 + 8);
+    } else normalizeInto(stock, index, row);
+  }
+  rows.length = 0;
+  return found;
+}
+function identityOf(row: Row): Omit<Stock, "days"> | null {
+  const code = row.ts_code as string,
+    board = boardOf(code);
+  return row.list_status === "L" && board
+    ? { code, name: row.name as string, board }
+    : null;
+}
+function appendRankings(
+  stock: Stock,
+  states: Uint8Array,
+  dates: string[],
+  rankings: Ranked[]
+): void {
+  for (let c = 0; c < COMBINATIONS.length; c++) {
+    const tail = maTail(states, dates, c),
+      ranked = rankings[c];
+    const counter = tail.state === 0 ? ranked.excluded : ranked.eligible;
+    counter.all++;
+    counter[stock.board]++;
+    if (tail.state !== 2) continue;
+    ranked.items.push({
+      board: stock.board,
+      tsCode: stock.code,
+      name: stock.name,
+      close: stock.days.close,
+      changePercent: stock.days.pct,
+      averages: stock.days.averages,
+      averageOffset: 0,
+      candles: stock.days.candles,
+      consecutiveDays: tail.consecutiveDays,
+      consecutiveIsLowerBound: tail.lowerBound,
+      qualifiedSince: formatStockComparisonDate(tail.since)!,
+    });
+  }
+}
+function ownCandles(candles: SourceCandle[]): SourceCandle[] {
+  const averages = new Float64Array(candles.length * ALL_PERIODS.length).fill(
+    NaN
+  );
+  return candles.map((candle, i) => {
+    for (let p = 0; p < ALL_PERIODS.length; p++)
+      averages[i * ALL_PERIODS.length + p] =
+        candle.averages[candle.averageOffset + p];
+    return { ...candle, averages, averageOffset: i * ALL_PERIODS.length };
+  });
+}
+function bootstrapCompact(
+  identity: Omit<Stock, "days">,
+  compact: MACompactStock,
+  dates: string[],
+  rankings: Ranked[]
+): Stock {
+  return computedStock(
+    identity,
+    decodeMARaw(compact, dates.length),
+    dates,
+    compact.poisoned,
+    rankings,
+    states => {
+      compact.states = packMAStates(states);
+    }
+  );
+}
+function advanceCompact(
+  identity: Omit<Stock, "days">,
+  compact: MACompactStock,
+  oldStock: Stock,
+  oldDates: string[],
+  newDates: string[],
+  appended: MACompactStock | undefined,
+  rankings: Ranked[]
+): Stock {
+  let raw = decodeMARaw(compact, oldDates.length),
+    states = unpackMAStates(compact.states, oldDates.length);
+  let dates = oldDates.slice(),
+    flags = Array.from(compact.flags),
+    values = Array.from(compact.values);
+  const newRaw = appended ? decodeMARaw(appended, newDates.length) : [];
+  let days = oldStock.days;
+  for (const [j, date] of Array.from(newDates.entries())) {
+    raw.push(newRaw[j] ?? null);
+    flags.push(appended?.flags[j] ?? 0);
+    for (let p = 0; p < 8; p++) values.push(appended?.values[j * 8 + p] ?? NaN);
+    dates.push(date);
+    const dropped = dates.length > HISTORY_DAYS;
+    if (dropped) {
+      dates.shift();
+      raw.shift();
+      flags.shift();
+      values.splice(0, 8);
+    }
+    const update = advanceMAStates(states, raw, dropped);
+    states = update.states;
+    let candles = ownCandles(
+      days.candles.filter(c => c.date.replace(/-/g, "") >= dates[0])
+    );
+    const byDate = new Map(
+      dates.map((d, i) => [formatStockComparisonDate(d)!, i])
+    );
+    for (const candle of candles) {
+      const i = byDate.get(candle.date)!;
+      for (let p = 0; p < ALL_PERIODS.length; p++) {
+        if (i < ALL_PERIODS[p] - 1)
+          candle.averages[candle.averageOffset + p] = NaN;
+        else if (update.corrections.has(i))
+          candle.averages[candle.averageOffset + p] =
+            update.corrections.get(i)![p];
+      }
+    }
+    const latest = raw.at(-1);
+    if (latest)
+      candles.push({
+        date: formatStockComparisonDate(date)!,
+        open: latest.open,
+        high: latest.high,
+        low: latest.low,
+        close: latest.close,
+        averages: update.latest,
+        averageOffset: 0,
+      });
+    candles = ownCandles(candles.slice(-CANDLE_DAYS));
+    days = {
+      close: latest?.close ?? NaN,
+      pct: latest?.pct ?? null,
+      averages: update.latest,
+      candles,
+    };
+  }
+  compact.values = Float64Array.from(values);
+  compact.flags = Uint8Array.from(flags);
+  compact.states = packMAStates(states);
+  const stock = { ...identity, days };
+  appendRankings(stock, states, dates, rankings);
+  return stock;
+}
+async function queryIncrementalSource(
+  db: StockComparisonDb,
+  cutoff: string,
+  dates: string[],
+  fingerprint: Fingerprint,
+  current: NonNullable<Cache["source"]>,
+  persistence: Persistence,
+  transaction: StockMAWriteTransaction,
+  shards: CheckpointMetadata["shards"],
+  diagnostics: {
+    mode: string;
+    newDays: number;
+    repairedStocks: number;
+    initializedStocks: number;
+  }
+): Promise<Source> {
+  const head = persistence.head!,
+    metadata = persistence.metadata!;
+  const delta = compareMADates(
+    current.value.dates,
+    dates,
+    metadata.fingerprint.metadata,
+    fingerprint.metadata
+  );
+  if (delta.bootstrap)
+    return querySource(db, cutoff, dates, fingerprint, transaction, shards);
+  diagnostics.mode = "metadata";
+  diagnostics.newDays = delta.newDates.length;
+  const store = await persistence.store;
+  const identities = new Map(
+    fingerprint.basics
+      .map(identityOf)
+      .filter((x): x is Omit<Stock, "days"> => !!x)
+      .map(x => [x.code, x])
+  );
+  const oldStocks = new Map(
+    current.value.stocks.map(stock => [stock.code, stock])
+  );
+  const stocks: Stock[] = [],
+    ranked: Ranked[] = COMBINATIONS.map(() => ({
+      items: [],
+      eligible: counts(),
+      excluded: counts(),
+    }));
+  const processed = new Set<string>();
+  let shardIndex = 0;
+  for (const prior of metadata.shards) {
+    const decoded: unknown = deserialize(
+      Buffer.from(await store.readShard(head.generation, prior.name))
+    );
+    if (
+      !Array.isArray(decoded) ||
+      decoded.length > SOURCE_BATCH_STOCKS ||
+      decoded.map(s => s?.code).join() !== prior.codes.join()
+    )
+      throw new TypeError("Invalid stock MA shard identities");
+    const batch = (decoded as MACompactStock[]).filter(s =>
+      identities.has(s.code)
+    );
+    if (!batch.length) continue;
+    const codes = batch.map(s => s.code);
+    const revisions = delta.changedDates.length
+      ? await queryCompact(db, codes, delta.changedDates)
+      : undefined;
+    const additions = delta.newDates.length
+      ? await queryCompact(db, codes, delta.newDates)
+      : undefined;
+    const repair = batch.filter(s => {
+      // Unlocatable corruption is retried conservatively, never permanent poison.
+      if (
+        s.poisoned ||
+        revisions?.get(s.code)?.poisoned ||
+        additions?.get(s.code)?.poisoned
+      )
+        return true;
+      return delta.changedDates.some(
+        (date, i) =>
+          !sameMANormalizedDay(
+            s,
+            current.value.dates.indexOf(date),
+            revisions!.get(s.code)!,
+            i
+          )
+      );
+    });
+    diagnostics.repairedStocks += repair.length;
+    const repaired = repair.length
+      ? await queryCompact(
+          db,
+          repair.map(s => s.code),
+          dates
+        )
+      : new Map<string, MACompactStock>();
+    for (let i = 0; i < batch.length; i++) {
+      const compact = batch[i],
+        identity = identities.get(compact.code)!;
+      decodeMARaw(compact, current.value.dates.length); // validate even metadata-only reuse
+      const replacement = repaired.get(compact.code);
+      if (replacement) {
+        batch[i] = replacement;
+        stocks.push(bootstrapCompact(identity, replacement, dates, ranked));
+      } else
+        stocks.push(
+          advanceCompact(
+            identity,
+            compact,
+            oldStocks.get(compact.code)!,
+            current.value.dates,
+            delta.newDates,
+            additions?.get(compact.code),
+            ranked
+          )
+        );
+      processed.add(compact.code);
+    }
+    const name = shardName(shardIndex++);
+    await transaction.writeShard(name, serialize(batch));
+    shards.push({ name, codes });
+  }
+  const newcomers = Array.from(identities.values()).filter(
+    s => !processed.has(s.code)
+  );
+  diagnostics.initializedStocks = newcomers.length;
+  for (
+    let offset = 0;
+    offset < newcomers.length;
+    offset += SOURCE_BATCH_STOCKS
+  ) {
+    const batch = newcomers.slice(offset, offset + SOURCE_BATCH_STOCKS),
+      codes = batch.map(s => s.code);
+    const raw = await queryCompact(db, codes, dates);
+    for (const identity of batch)
+      stocks.push(
+        bootstrapCompact(identity, raw.get(identity.code)!, dates, ranked)
+      );
+    const name = shardName(shardIndex++);
+    await transaction.writeShard(name, serialize(Array.from(raw.values())));
+    shards.push({ name, codes });
+  }
+  diagnostics.mode = diagnostics.repairedStocks
+    ? "repair"
+    : diagnostics.newDays
+      ? "increment"
+      : diagnostics.initializedStocks
+        ? "stock-init"
+        : "metadata";
+  const source: Source = {
+    cutoff,
+    dates,
+    stocks,
+    ranked,
+    fetchedAt: new Date().toISOString(),
+    dataUpdatedAt: fingerprint.dataUpdatedAt,
+  };
+  sourceVersions.set(source, fingerprint.version);
+  return source;
+}
+async function restoreCheckpoint(cache: Cache, cutoff: string): Promise<void> {
+  const persistence = cache.persistence;
+  if (!persistence) return;
+  if (!persistence.restored)
+    persistence.restored = (async () => {
+      const head = await (await persistence.store).read();
+      if (!head) return;
+      const meta = head.metadata as CheckpointMetadata;
+      const source = deserialize(Buffer.from(head.light)) as Source;
+      if (
+        !meta ||
+        meta.engine !== STOCK_MA_ALGORITHM_VERSION ||
+        !/^[a-f0-9]{64}$/.test(meta.version) ||
+        !meta.probe ||
+        !Array.isArray(meta.probe.dates) ||
+        !Array.isArray(meta.shards) ||
+        !meta.fingerprint ||
+        !Array.isArray(meta.fingerprint.metadata) ||
+        meta.fingerprint.version !== meta.version ||
+        !source ||
+        !Array.isArray(source.dates) ||
+        !source.dates.length ||
+        source.dates.length > HISTORY_DAYS ||
+        source.dates.some(
+          (d, i) =>
+            !isValidAShareTradeDate(d) || (i > 0 && d <= source.dates[i - 1])
+        ) ||
+        source.dates.join() !== meta.probe.dates.join() ||
+        !Number.isFinite(Date.parse(source.fetchedAt)) ||
+        !Array.isArray(source.stocks) ||
+        !Array.isArray(source.ranked) ||
+        source.ranked.length !== COMBINATIONS.length
+      )
+        throw new TypeError("Invalid stock MA lightweight checkpoint");
+      if (
+        !Number.isFinite(meta.fingerprintAt) ||
+        meta.fingerprintAt < 0 ||
+        !Number.isFinite(meta.probe.observedAt) ||
+        !Array.isArray(meta.probe.epochs) ||
+        meta.probe.epochs.length !== 2 ||
+        meta.probe.epochs.some(
+          epoch => epoch !== null && utcTimestamp(epoch) !== epoch
+        ) ||
+        meta.fingerprint.metadata.length !== source.dates.length ||
+        meta.fingerprint.metadata.some(
+          (row, i) =>
+            !Array.isArray(row) ||
+            row.length !== 5 ||
+            row[0] !== source.dates[i] ||
+            unsignedInteger(row[1]) === "0" ||
+            utcTimestamp(row[2]) !== row[2] ||
+            unsignedInteger(row[3]) !== row[3] ||
+            unsignedInteger(row[4]) !== row[4]
+        )
+      )
+        throw new TypeError("Invalid stock MA checkpoint metadata");
+      if (source.dates.some(date => date > cutoff))
+        throw new RangeError(
+          "Cached stock MA source exceeds current close cutoff"
+        );
+      const codes = meta.shards.flatMap(s => s.codes);
+      if (
+        codes.length !== new Set(codes).size ||
+        codes.length !== source.stocks.length ||
+        meta.shards.some(
+          s =>
+            !head.shardNames.includes(s.name) ||
+            s.codes.length > SOURCE_BATCH_STOCKS
+        ) ||
+        source.stocks.some(
+          s =>
+            !codes.includes(s.code) ||
+            s.days?.averages?.length !== 7 ||
+            s.days.candles.length > CANDLE_DAYS ||
+            s.days.candles.some(c => c.averages.length > CANDLE_DAYS * 7)
+        )
+      )
+        throw new TypeError("Invalid stock MA checkpoint light identities");
+      // v8.deserialize can give typed views into its input blob. Re-own every
+      // light buffer, then reconnect shared ranking references to those owners.
+      source.stocks = source.stocks.map(stock => ({
+        ...stock,
+        days: {
+          ...stock.days,
+          averages: Float64Array.from(stock.days.averages),
+          candles: ownCandles(stock.days.candles),
+        },
+      }));
+      const stocks = new Map(source.stocks.map(stock => [stock.code, stock]));
+      source.ranked = source.ranked.map(ranked => ({
+        ...ranked,
+        items: ranked.items.map(item => {
+          const stock = stocks.get(item.tsCode);
+          if (!stock)
+            throw new TypeError("Invalid stock MA checkpoint ranking identity");
+          return {
+            ...item,
+            averages: stock.days.averages,
+            averageOffset: 0,
+            candles: stock.days.candles,
+          };
+        }),
+      }));
+      source.warning = undefined;
+      sourceVersions.set(source, meta.version);
+      persistence.head = { ...head, light: new Uint8Array(0) };
+      persistence.metadata = meta;
+      cache.source = {
+        value: source,
+        version: meta.version,
+        probe: meta.probe,
+        fingerprintAt: meta.fingerprintAt,
+      };
+      cache.epochReliable = meta.epochReliable === true;
+      cache.nextProbeAt = 0;
+      console.info("[StockMA] checkpoint restored", {
+        asOf: formatStockComparisonDate(source.dates.at(-1)),
+      });
+    })();
+  await persistence.restored;
 }
 
 class SourceVersionPendingError extends Error {
@@ -756,34 +1359,98 @@ async function refreshSource(
   if (!observedStable && !coldQuiet)
     return previousSource(cache, UPDATING_WARNING);
 
-  const value = await querySource(db, cutoff, probe.dates, fingerprint);
-  // Verify content on BOTH sides of the heavy read, even with non-null epochs:
-  // updated_at and UPDATE_TIME only have seconds precision, and no manifest
-  // exists. An unstable or failed read must never replace a successful source.
-  const verified = await queryFingerprint(db, probe.dates);
-  const afterSource = await queryProbe(db, cutoff);
-  if (
-    verified.version !== fingerprint.version ||
-    !sameProbe(afterFingerprint, afterSource)
-  ) {
-    if (
-      verified.version !== fingerprint.version &&
-      sameProbe(afterFingerprint, afterSource)
-    ) {
-      cache.epochReliable = false;
-    }
-    cache.candidate = undefined;
-    return previousSource(cache, UPDATING_WARNING);
-  }
-  cache.source = {
-    value,
-    version: fingerprint.version,
-    probe: afterSource,
-    fingerprintAt: Date.now(),
+  const persistence = cache.persistence;
+  const transaction = persistence
+    ? await (
+        await persistence.store
+      ).begin(persistence.head?.generation ?? null)
+    : undefined;
+  const shards: CheckpointMetadata["shards"] = [];
+  const diagnostics = {
+    mode: "bootstrap",
+    newDays: 0,
+    repairedStocks: 0,
+    initializedStocks: 0,
   };
-  cache.candidate = undefined;
-  cache.ranked.clear();
-  return value;
+  try {
+    const value =
+      transaction && persistence?.head && persistence.metadata && current
+        ? await queryIncrementalSource(
+            db,
+            cutoff,
+            probe.dates,
+            fingerprint,
+            current,
+            persistence,
+            transaction,
+            shards,
+            diagnostics
+          )
+        : await querySource(
+            db,
+            cutoff,
+            probe.dates,
+            fingerprint,
+            transaction,
+            shards
+          );
+    // Verify content on BOTH sides of the heavy read, even with non-null epochs:
+    // updated_at and UPDATE_TIME only have seconds precision, and no manifest
+    // exists. An unstable or failed read must never replace a successful source.
+    const verified = await queryFingerprint(db, probe.dates);
+    const afterSource = await queryProbe(db, cutoff);
+    if (
+      verified.version !== fingerprint.version ||
+      !sameProbe(afterFingerprint, afterSource)
+    ) {
+      if (
+        verified.version !== fingerprint.version &&
+        sameProbe(afterFingerprint, afterSource)
+      ) {
+        cache.epochReliable = false;
+      }
+      await transaction?.abort();
+      cache.candidate = undefined;
+      return previousSource(cache, UPDATING_WARNING);
+    }
+    const fingerprintAt = Date.now();
+    if (transaction && persistence) {
+      const { basics: _basics, ...compactFingerprint } = fingerprint;
+      const { basics: _probeBasics, ...compactProbe } = afterSource;
+      const metadata: CheckpointMetadata = {
+        engine: STOCK_MA_ALGORITHM_VERSION,
+        version: fingerprint.version,
+        probe: compactProbe,
+        fingerprintAt,
+        epochReliable: cache.epochReliable,
+        fingerprint: compactFingerprint,
+        shards,
+      };
+      await transaction.writeLight(serialize(value));
+      // The before/after DB checks above precede the ONLY atomic publication.
+      const previousGeneration = persistence.head?.generation;
+      const head = await transaction.commit(metadata);
+      persistence.head = { ...head, light: new Uint8Array(0) };
+      persistence.metadata = metadata;
+      if (previousGeneration && previousGeneration !== head.generation)
+        (await persistence.store).release(previousGeneration);
+      console.info("[StockMA] checkpoint committed", {
+        asOf: formatStockComparisonDate(value.dates.at(-1)),
+        ...diagnostics,
+      });
+    }
+    cache.source = {
+      value,
+      version: fingerprint.version,
+      probe: afterSource,
+      fingerprintAt,
+    };
+    cache.candidate = undefined;
+    return value;
+  } catch (error) {
+    await transaction?.abort().catch(() => undefined);
+    throw error;
+  }
 }
 
 async function getSource(
@@ -791,10 +1458,15 @@ async function getSource(
   cache: Cache,
   cutoff: string
 ): Promise<Source> {
+  await restoreCheckpoint(cache, cutoff);
+  if (cache.source?.value.dates.some(date => date > cutoff))
+    throw new RangeError("Cached stock MA source exceeds current close cutoff");
   for (;;) {
     const pending = cache.sourceInFlight.get(cutoff);
-    if (pending) return pending;
+    if (pending)
+      return cache.persistence && cache.source ? cache.source.value : pending;
     if (!cache.sourceInFlight.size) break;
+    if (cache.persistence && cache.source) return cache.source.value;
     // Also serialize different cutoffs, never queue parallel heavy DB scans.
     await Promise.race(
       Array.from(cache.sourceInFlight.values(), p =>
@@ -823,9 +1495,17 @@ async function getSource(
       if (cache.source) cache.source.value.warning = value.warning;
       return value;
     })
-    .catch(error => {
+    .catch(async error => {
       if (!(error instanceof SourceVersionPendingError))
         cache.candidate = undefined;
+      if (
+        cache.persistence &&
+        cache.source &&
+        /WRITER_BUSY|CAS_MISMATCH/.test(String(error?.message))
+      ) {
+        cache.persistence.restored = undefined;
+        await restoreCheckpoint(cache, cutoff).catch(() => undefined);
+      }
       if (!cache.source || cache.source.value.dates.some(date => date > cutoff))
         throw error;
       cache.source.value.warning = CHECK_FAILED_WARNING;
@@ -836,11 +1516,17 @@ async function getSource(
       cache.sourceInFlight.delete(cutoff);
     });
   cache.sourceInFlight.set(cutoff, pending);
+  if (cache.persistence && cache.source) {
+    // Requests discover versions on demand; this is NOT a daily collector or
+    // timer. Always handle asynchronous refresh rejection (shutdown/reconfigure).
+    void pending.catch(() => undefined);
+    return cache.source.value;
+  }
   return pending;
 }
 
 function judgment(
-  day: Day,
+  day: ScratchDay,
   index: number,
   periods: readonly StockMAMonitorPeriod[]
 ): boolean | null {
@@ -907,20 +1593,40 @@ function displayRawCandle(
   };
 }
 
-function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
-  const ranked: Ranked = { items: [], eligible: counts(), excluded: counts() };
-  for (const stock of source.stocks) {
-    const day = stock.days;
-    const last = day.close.length - 1;
-    const current = last >= 0 ? judgment(day, last, periods) : null;
+function computedStock(
+  identity: Omit<Stock, "days">,
+  raw: (Daily | null)[],
+  dates: string[],
+  poisoned: boolean,
+  rankings: Ranked[],
+  captureStates?: (states: Uint8Array) => void
+): Stock {
+  // This scope owns all full-history columns. Finish ALL legal combinations
+  // before returning; neither the Stock nor any RankedItem retains scratch.
+  const scratch = computedDays(raw, dates, poisoned);
+  if (captureStates) {
+    const states = new Uint8Array(dates.length * COMBINATIONS.length);
+    for (let i = 0; i < dates.length; i++)
+      for (let c = 0; c < COMBINATIONS.length; c++) {
+        const value = judgment(scratch, i, COMBINATIONS[c]);
+        states[i * COMBINATIONS.length + c] =
+          value === null ? 0 : value ? 2 : 1;
+      }
+    captureStates(states);
+  }
+  const stock: Stock = { ...identity, days: projectedDays(scratch) };
+  const last = scratch.close.length - 1;
+  COMBINATIONS.forEach((periods, index) => {
+    const ranked = rankings[index];
+    const current = last >= 0 ? judgment(scratch, last, periods) : null;
     const counter = current === null ? ranked.excluded : ranked.eligible;
     counter.all++;
     counter[stock.board]++;
-    if (current !== true) continue;
+    if (current !== true) return;
     let consecutiveDays = 0,
       lowerBound = true;
     for (let i = last; i >= 0; i--) {
-      const qualifies = judgment(day, i, periods);
+      const qualifies = judgment(scratch, i, periods);
       if (qualifies === null) break;
       if (!qualifies) {
         lowerBound = false;
@@ -932,22 +1638,21 @@ function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
       board: stock.board,
       tsCode: stock.code,
       name: stock.name,
-      close: day.close[last],
-      changePercent: Number.isNaN(day.pct[last]) ? null : day.pct[last],
-      averages: day.averages,
-      averageOffset: last * ALL_PERIODS.length,
+      close: stock.days.close,
+      changePercent: stock.days.pct,
+      averages: stock.days.averages,
+      averageOffset: 0,
       consecutiveDays,
       consecutiveIsLowerBound: lowerBound,
       qualifiedSince: formatStockComparisonDate(
-        source.dates[last - consecutiveDays + 1]
+        dates[last - consecutiveDays + 1]
       )!,
-      // Do not duplicate 30 candles per stock for every cached combination.
-      // Source candles are read-only here; selected-period copying happens only
-      // for the requested page when returning the response.
-      candles: day.candles,
+      // Every combination shares the owning small candle/average buffers.
+      // Numeric-period object copies happen only for a requested page/chart.
+      candles: stock.days.candles,
     });
-  }
-  return ranked;
+  });
+  return stock;
 }
 
 function validatedInput(input: StockMAMonitorInput): StockMAMonitorInput {
@@ -1025,8 +1730,8 @@ function validatedInput(input: StockMAMonitorInput): StockMAMonitorInput {
 
 /** Read-only, cached close-version screening. Stable injected adapter only:
  * no HTTP, collector, DB boot, connection close, writes or locked reads.
- * All-market first, shared WeakMap DB/version snapshot and six DB/periods
- * projections, then board filtering, stable sort and pagination. Cold errors
+ * All-market first, shared WeakMap DB/version lightweight snapshot and six
+ * final rankings, then board filtering, stable sort and pagination. Cold errors
  * propagate; refresh failures retain the last success with a warning, never an
  * error-derived empty ranking. Returned data is copied so callers
  * cannot mutate the shared successful snapshot or its genuine fetchedAt.
@@ -1040,14 +1745,7 @@ export async function getStockMAMonitor(
   const cache = getCache(db);
   const source = await getSource(db, cache, cutoff);
   const key = JSON.stringify(snapshot.periods);
-  const entry = cache.ranked.get(key);
-  let ranked = entry?.source.stocks === source.stocks ? entry.value : undefined;
-  if (!ranked) {
-    ranked = rankSource(source, snapshot.periods);
-    cache.ranked.set(key, { value: ranked, source });
-    while (cache.ranked.size > MAX_RANKED_COMBINATIONS)
-      cache.ranked.delete(cache.ranked.keys().next().value!);
-  }
+  const ranked = source.ranked[COMBINATION_INDEX.get(key)!];
   const selectedBoards = snapshot.markets;
   const items = ranked.items.filter(item =>
     selectedBoards

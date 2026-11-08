@@ -1956,3 +1956,217 @@ describe("图表基底复用实际快照与后端合成G", () => {
     expect(rawCalls(db)).toHaveLength(2);
   });
 });
+
+describe("350日仅临时scratch，缓存只保留独立轻量最终结果", () => {
+  it("六组合预计算共享30x7小buffer；detach全部历史后分页/图表不重读或重算", async () => {
+    const good = stock("600001.SH", 350);
+    const second = stock("000001.SZ", 350);
+    const unranked = flat(stock("600002.SH", 350));
+    const gap = stock("600003.SH", 350);
+    gap.rows.splice(340, 1);
+    const db = mockDb([good, second, unranked, gap], dates(350));
+    const combinations: StockMAMonitorPeriod[][] = [
+      ...Object.values(STOCK_MA_MONITOR_PRESETS).map(preset => [
+        ...preset.periods,
+      ]),
+      [5, 10],
+      [5, 20],
+      [10, 20],
+    ];
+    // Observe existing private cache writes/allocations without any diagnostic
+    // export or production-only hook. Restore both probes even on assertion failure.
+    const NativeFloat64Array = Float64Array;
+    const allocations: Float64Array[] = [];
+    const weakSet = vi.spyOn(WeakMap.prototype, "set");
+    vi.stubGlobal(
+      "Float64Array",
+      new Proxy(NativeFloat64Array, {
+        construct(target, args, newTarget) {
+          const values = Reflect.construct(
+            target,
+            args,
+            newTarget
+          ) as Float64Array;
+          allocations.push(values);
+          return values;
+        },
+      })
+    );
+    try {
+      const first = await getStockMAMonitor(db, { ...input, pageSize: 1 });
+      type SmallCandle = { averages: Float64Array; averageOffset: number };
+      type SmallStock = {
+        code: string;
+        days: {
+          close: number;
+          pct: number | null;
+          averages: Float64Array;
+          candles: SmallCandle[];
+        };
+      };
+      const cache = weakSet.mock.calls.find(([key]) => key === db)?.[1] as {
+        source: {
+          value: {
+            stocks: SmallStock[];
+            ranked: {
+              items: {
+                tsCode: string;
+                averages: Float64Array;
+                averageOffset: number;
+                candles: SmallCandle[];
+              }[];
+            }[];
+          };
+        };
+      };
+      expect(cache).toBeDefined();
+      const source = cache.source.value;
+      expect(source.stocks).toHaveLength(4);
+      // All six final rankings already exist after requesting only short/page 1.
+      expect(source.ranked).toHaveLength(6);
+      for (const ranked of source.ranked) {
+        expect(ranked.items).toHaveLength(2);
+        for (const item of ranked.items) {
+          const cachedStock = source.stocks.find(s => s.code === item.tsCode)!;
+          expect(item.averages).toBe(cachedStock.days.averages);
+          expect(item.averageOffset).toBe(0);
+          expect(item.candles).toBe(cachedStock.days.candles);
+        }
+      }
+      for (const sample of source.stocks) {
+        expect(typeof sample.days.close).toBe("number");
+        expect(typeof sample.days.pct).toBe("number");
+        expect(sample.days.averages.length).toBe(7);
+        expect(sample.days.averages.byteOffset).toBe(0);
+        expect(sample.days.averages.buffer.byteLength).toBe(7 * 8);
+        expect(sample.days.candles).toHaveLength(30);
+        const buffer = sample.days.candles[0].averages;
+        expect(buffer.length).toBe(30 * 7);
+        expect(buffer.byteOffset).toBe(0);
+        expect(buffer.buffer.byteLength).toBe(30 * 7 * 8);
+        expect(buffer.buffer).not.toBe(sample.days.averages.buffer);
+        sample.days.candles.forEach((candle, i) => {
+          expect(candle.averages).toBe(buffer);
+          expect(candle.averageOffset).toBe(i * 7);
+        });
+      }
+      // Traverse ALL reachable cached fields, not just expected paths: a hidden
+      // full buffer or a subarray retaining its backing allocation must fail.
+      const visited = new Set<object>();
+      const reachableArrays = new Set<Float64Array>();
+      const inspect = (value: unknown) => {
+        if (value === null || typeof value !== "object" || visited.has(value))
+          return;
+        visited.add(value);
+        if (ArrayBuffer.isView(value)) {
+          expect(value).toBeInstanceOf(NativeFloat64Array);
+          const array = value as Float64Array;
+          expect([7, 30 * 7]).toContain(array.length);
+          expect(array.buffer.byteLength).toBe(array.byteLength);
+          reachableArrays.add(array);
+        } else if (value instanceof Map || value instanceof Set) {
+          for (const entry of value.values()) inspect(entry);
+        } else if (value instanceof ArrayBuffer) {
+          throw new Error("Unexpected standalone cached ArrayBuffer");
+        } else {
+          for (const entry of Object.values(value)) inspect(entry);
+        }
+      };
+      inspect(cache);
+      expect(reachableArrays.size).toBe(4 * 2);
+      expect(
+        new Set([...reachableArrays].map(array => array.buffer)).size
+      ).toBe(8);
+      const historical = allocations.filter(array => array.length > 30 * 7);
+      expect(historical.filter(array => array.length === 350)).toHaveLength(8);
+      expect(historical.filter(array => array.length === 350 * 7)).toHaveLength(
+        4
+      );
+      // Window-relative pairwise v1 no longer allocates position-dependent
+      // 1024-node trees; all historical scratch still must be detached below.
+      expect(historical.filter(array => array.length === 1024)).toHaveLength(0);
+      expect(historical.filter(array => array.length === 350 * 9)).toHaveLength(8);
+      for (const scratch of historical) {
+        expect(reachableArrays.has(scratch)).toBe(false);
+        expect(
+          [...reachableArrays].some(array => array.buffer === scratch.buffer)
+        ).toBe(false);
+        structuredClone(null, { transfer: [scratch.buffer] });
+        expect(scratch.buffer.byteLength).toBe(0);
+      }
+      const allocationCount = allocations.length;
+      const queryCount = db.execute.mock.calls.length;
+      const publicOnly = (value: unknown) => {
+        if (typeof value === "number")
+          expect(Number.isFinite(value)).toBe(true);
+        if (value === null || typeof value !== "object") return;
+        expect(ArrayBuffer.isView(value)).toBe(false);
+        expect(value).not.toBeInstanceOf(ArrayBuffer);
+        expect(value).not.toHaveProperty("averageOffset");
+        for (const entry of Object.values(value)) publicOnly(entry);
+      };
+      for (const [index, periods] of combinations.entries()) {
+        const pages = await Promise.all(
+          [1, 2].map(page =>
+            getStockMAMonitor(db, {
+              ...input,
+              periods: [...periods].reverse(),
+              page,
+              pageSize: 1,
+            })
+          )
+        );
+        expect(pages.map(page => page.items[0].tsCode)).toEqual([
+          second.ts_code,
+          good.ts_code,
+        ]);
+        for (const page of pages) {
+          expect(page).toMatchObject({
+            total: 2,
+            eligibleCount: 3,
+            excludedCount: 1,
+            fetchedAt: first.fetchedAt,
+            sourceVersion: first.sourceVersion,
+          });
+          expect(page.items[0].consecutiveDays).toBe(
+            [331, 291, 101, 341, 331, 331][index]
+          );
+          publicOnly(page);
+          const chart = await getStockMAMonitorChartBase(db, {
+            tsCode: page.items[0].tsCode,
+            periods,
+            asOf: first.asOf!,
+            sourceVersion: first.sourceVersion!,
+          });
+          expect(chart.candles).toEqual(page.items[0].candles);
+          expect(chart.warmupDates).toEqual(dates(350));
+          publicOnly(chart);
+          page.items[0].candles[0].averages[periods[0]] = -999;
+          expect(chart.candles[0].averages[periods[0]]).toBeGreaterThan(0);
+        }
+        // Excluded/eligible-but-not-qualified stocks still own their small chart.
+        for (const tsCode of [unranked.ts_code, gap.ts_code]) {
+          const chart = await getStockMAMonitorChartBase(db, {
+            tsCode,
+            periods,
+            asOf: first.asOf!,
+            sourceVersion: first.sourceVersion!,
+          });
+          expect(chart.candles).toHaveLength(30);
+          expect(chart.warmupDates).toHaveLength(350);
+          if (tsCode === gap.ts_code)
+            expect(
+              chart.candles.some(c => c.date === iso(dates(350)[340]))
+            ).toBe(false);
+          publicOnly(chart);
+        }
+      }
+      expect(allocations).toHaveLength(allocationCount);
+      expect(db.execute).toHaveBeenCalledTimes(queryCount);
+      expect(rawCalls(db)).toHaveLength(1);
+    } finally {
+      weakSet.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+});
