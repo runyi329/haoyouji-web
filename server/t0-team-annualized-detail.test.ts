@@ -491,7 +491,8 @@ function domHarness() {
     return { length: entries.length, item: (index: number) => entries[index][0], getPropertyValue: (key: string) => element.style[key], getPropertyPriority: () => "", position: element.style.position, borderRadius: element.style.borderRadius };
   } };
   const copy = production(exportAst, "copyRenderedStyles", { window, HTMLInputElement: class {}, HTMLTextAreaElement: class {}, HTMLSelectElement: class {} });
-  const capture = production(exportAst, "createExactSnapshotContainer", { window, document, copyRenderedStyles: copy, EXPORT_HIDE_ATTRIBUTE: "data-card-export-hide" });
+  const createSnapshotTextImage = vi.fn((text: string) => { const image = new MemoryElement("IMG"); image.setAttribute("alt", text); image.setAttribute("data-card-export-raster-text", "true"); return image; });
+  const capture = production(exportAst, "createExactSnapshotContainer", { window, document, copyRenderedStyles: copy, createSnapshotTextImage, EXPORT_HIDE_ATTRIBUTE: "data-card-export-hide" });
   const target = new MemoryElement();
   const controls = target.appendChild(new MemoryElement()); controls.setAttribute("data-card-export-hide", "true");
   const scroll = target.appendChild(new MemoryElement()); scroll.setAttribute("data-card-export-expand", "true"); scroll.style = styleObject({ height: "150px", maxHeight: "150px", overflowY: "auto", flex: "1 1 auto" }); scroll.scrollTop = 80; scroll.scrollLeft = 20;
@@ -554,7 +555,7 @@ describe("长图克隆执行与默认订单导出回归", () => {
       const html2canvas = vi.fn(async (_container: any, _options: any) => ({}));
       const helpers = { formatBeijingTime: production(exportAst, "formatBeijingTime"), sanitizeFilename: production(exportAst, "sanitizeFilename"), getErrorMessage: production(exportAst, "getErrorMessage") };
       createSnapshot.mockReturnValue({ container: { remove }, clonedTarget: {}, initialSize: null, finalizeSnapshot });
-      const component = production(exportAst, "OrderCardImageDownload", { React, ...helpers, useState: (value: any) => [value, state], useEffect: () => {}, useCallback: (callback: any) => { callbacks.push(callback); return callback; }, createPortal: vi.fn(), X: "mock-x", Download: "mock-download", Share2: "mock-share", LoaderCircle: "mock-loader", toast: { error: vi.fn(), success: vi.fn() }, window: { innerWidth: 400, innerHeight: 800 }, URL: { createObjectURL: () => "blob:isolated", revokeObjectURL: vi.fn() }, createExactSnapshotContainer: createSnapshot, prepareSnapshotImages: vi.fn(), waitForSnapshotAssets: vi.fn(async () => {}), html2canvas, canvasToBlob: vi.fn(async () => new Blob(["PNG"], { type: "image/png" })) });
+      const component = production(exportAst, "OrderCardImageDownload", { React, ...helpers, useState: (value: any) => [value, state], useEffect: () => {}, useCallback: (callback: any) => { callbacks.push(callback); return callback; }, createPortal: vi.fn(), X: "mock-x", Download: "mock-download", Share2: "mock-share", LoaderCircle: "mock-loader", toast: { error: vi.fn(), success: vi.fn() }, window: { innerWidth: 400, innerHeight: 800 }, URL: { createObjectURL: () => "blob:isolated", revokeObjectURL: vi.fn() }, createExactSnapshotContainer: createSnapshot, prepareSnapshotImages: vi.fn(), prepareSnapshotText: vi.fn(), waitForSnapshotAssets: vi.fn(async () => {}), html2canvas, canvasToBlob: vi.fn(async () => new Blob(["PNG"], { type: "image/png" })) });
       const target = {};
       const tree = component({ targetRef: { current: target }, orderNo: "甲", ...props });
       await callbacks[0]();

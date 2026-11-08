@@ -245,6 +245,69 @@ function copyRenderedStyles(sourceRoot: HTMLElement, clonedRoot: HTMLElement) {
   }
 }
 
+/** 整段文字共用同一基线；截图工具只读取像素，不再逐字测量旋转后的日期。 */
+function createSnapshotTextImage(
+  text: string,
+  font: string,
+  color: string,
+  lineHeight: number,
+  fontSize: number
+): HTMLImageElement {
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("浏览器暂不支持日期图片渲染");
+  context.font = font;
+  const metrics = context.measureText(text);
+  const ascent = Number.isFinite(metrics.actualBoundingBoxAscent)
+    ? Math.max(0, metrics.actualBoundingBoxAscent)
+    : fontSize;
+  const descent = Number.isFinite(metrics.actualBoundingBoxDescent)
+    ? Math.max(0, metrics.actualBoundingBoxDescent)
+    : fontSize * 0.25;
+  const padding = 2;
+  const width = Math.max(1, Math.ceil(metrics.width + padding * 2));
+  const height = Math.max(1, Math.ceil(Math.max(lineHeight, ascent + descent + padding * 2)));
+  const scale = 2;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  context.scale(scale, scale);
+  context.font = font;
+  context.fillStyle = color;
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.fillText(text, padding, (height - ascent - descent) / 2 + ascent);
+
+  const image = document.createElement("img");
+  image.src = canvas.toDataURL("image/png");
+  image.alt = text;
+  image.setAttribute("data-card-export-raster-text", "true");
+  Object.assign(image.style, {
+    display: "inline-block",
+    width: `${width}px`,
+    height: `${height}px`,
+    maxWidth: "none",
+    verticalAlign: "middle",
+    objectFit: "contain",
+  });
+  return image;
+}
+
+/** 只处理导出克隆内显式标记的日期；不改变真实页面、收益数字和交互结构。 */
+function prepareSnapshotText(root: HTMLElement) {
+  root.querySelectorAll<HTMLElement>("[data-card-export-text]").forEach(element => {
+    const text = element.textContent || "";
+    if (!text.trim()) return;
+    const style = window.getComputedStyle(element);
+    const fontSize = Number.parseFloat(style.fontSize) || 12;
+    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35;
+    const font = `${style.fontStyle || "normal"} ${style.fontWeight || "400"} ${fontSize}px ${style.fontFamily || "sans-serif"}`;
+    const image = createSnapshotTextImage(text, font, style.color, lineHeight, fontSize);
+    element.replaceChildren(image);
+    element.style.letterSpacing = "0px";
+    element.style.lineHeight = `${lineHeight}px`;
+  });
+}
+
 async function waitForSnapshotAssets(root: HTMLElement) {
   if (document.fonts?.ready) await document.fonts.ready;
   const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
@@ -425,26 +488,25 @@ function createExactSnapshotContainer(
     const resolvedWatermarkOpacity = Number.isFinite(watermarkOpacity)
       ? Math.min(0.2, Math.max(0.01, watermarkOpacity))
       : 0.07;
+    // 水印先水平整段绘制，再整体旋转。Safari 不再提供逐字符的倾斜矩形给截图引擎。
+    const watermarkImage = createSnapshotTextImage(
+      watermarkText,
+      "600 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      `rgba(51, 65, 85, ${resolvedWatermarkOpacity})`,
+      15,
+      11
+    );
     const rowStep = 78;
     const columnStep = 245;
     for (let y = -45, row = 0; y < fullHeight + 80; y += rowStep, row += 1) {
       const startX = row % 2 === 0 ? -120 : -245;
       for (let x = startX; x < rect.width + 180; x += columnStep) {
-        const label = document.createElement("span");
-        label.textContent = watermarkText;
+        const label = watermarkImage.cloneNode(true) as HTMLImageElement;
+        label.setAttribute("data-card-export-watermark-label", "true");
         Object.assign(label.style, {
           position: "absolute",
           left: `${x}px`,
           top: `${y}px`,
-          color: `rgba(51, 65, 85, ${resolvedWatermarkOpacity})`,
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          fontSize: "11px",
-          fontWeight: "600",
-          letterSpacing: "0.02em",
-          lineHeight: "1",
-          whiteSpace: "nowrap",
-          textShadow: "0 1px 0 rgba(255,255,255,0.45)",
           transform: "rotate(-22deg)",
           transformOrigin: "left top",
         });
@@ -561,6 +623,8 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
+      // 默认订单模式也会立即栅格化水印，必须先等字体，不能缓存未加载字体的像素。
+      if (typeof document !== "undefined" && document.fonts?.ready) await document.fonts.ready;
       const snapshot = createExactSnapshotContainer(
         target,
         watermarkText,
@@ -574,7 +638,12 @@ export function OrderCardImageDownload({
       snapshotContainer = snapshot.container;
       prepareSnapshotImages(snapshot.clonedTarget);
       await waitForSnapshotAssets(snapshot.clonedTarget);
+      prepareSnapshotText(snapshot.clonedTarget);
+      // 新生成的内嵌日期图也要 decode；字体和两帧布局稳定后才测量长图边界。
+      await waitForSnapshotAssets(snapshot.clonedTarget);
       const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();
+      // full 模式的水印在最终测量后才创建；这一轮保证斜向水印图也完整解码。
+      await waitForSnapshotAssets(snapshot.clonedTarget);
 
       const canvas = await html2canvas(snapshot.container, {
         backgroundColor: null,
