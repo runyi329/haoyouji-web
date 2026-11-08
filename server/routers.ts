@@ -5,6 +5,9 @@ import { findStockCodesByInitials } from "./stock-search-initials";
 import { getStockStreakComparison } from "./stock-streak-comparison";
 import { getStockReturnRanking } from "./stock-return-ranking";
 import { getStockLatestQuotes } from "./stock-latest-quotes";
+import { getStockMAMonitor } from "./stock-ma-monitor";
+import { getStockMAMonitorChart } from "./stock-monitor-chart";
+import { getStockChipDistribution } from "./stock-chip-distribution";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
@@ -37771,6 +37774,63 @@ insights 数组每项包含：
       const dbConn = await getStockMarketConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       return getStockLatestQuotes(dbConn, input, { fetchImpl: fetch });
+    }),
+
+  /** 盘后成交加权均价条件监控：仅筛选真实日线，不采集、不下单、不写资金。 */
+  aiStockMAMonitor: publicProcedure
+    .input(z.object({
+      ledgerId: z.number().int().positive().optional(),
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all'),
+      periods: z.array(z.union([z.literal(5), z.literal(10), z.literal(20), z.literal(30), z.literal(60), z.literal(120), z.literal(250)])).min(2).max(3).default([5, 10, 20])
+        .refine(periods => new Set(periods).size === periods.length, { message: '均价周期不能重复' })
+        .refine(periods => ['5,10,20', '20,30,60', '60,120,250', '5,10', '5,20', '10,20'].includes([...periods].sort((a, b) => a - b).join(',')), { message: '仅支持短线、中线、长线固定方案及原短线双周期' }),
+      page: z.number().int().min(1).max(1000).default(1),
+      pageSize: z.number().int().min(10).max(50).default(20),
+      sort: z.enum(['newest', 'longest', 'code']).default('newest'),
+      markets: z.array(z.enum(['SH', 'SZ', 'GEM', 'STAR'])).min(1).max(4)
+        .refine(markets => new Set(markets).size === markets.length, { message: '板块不能重复' })
+        .optional(),
+    }).superRefine((value, ctx) => {
+      if (value.markets !== undefined && value.market !== 'all') {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['markets'], message: 'market为all时才允许传markets' });
+      }
+    }))
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockMAMonitor(dbConn, input);
+    }),
+
+  /** 可见单股前复权展示：原榜单筛选不变，筹码基准未知时不绘制。 */
+  aiStockMAMonitorChart: publicProcedure
+    .input(z.object({
+      ledgerId: z.number().int().positive().optional(),
+      tsCode: z.string().regex(/^\d{6}\.(SH|SZ)$/),
+      periods: z.array(z.union([z.literal(5), z.literal(10), z.literal(20), z.literal(30), z.literal(60), z.literal(120), z.literal(250)])).length(3)
+        .refine(periods => ['5,10,20', '20,30,60', '60,120,250'].includes([...periods].sort((a, b) => a - b).join(',')), { message: '仅支持短中长固定周期' }),
+      asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => isValidAShareTradeDate(value.replace(/-/g, '')), { message: '行情日期无效' }),
+      sourceVersion: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict())
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockMAMonitorChart(dbConn, input, { token: process.env.TUSHARE_TOKEN || TUSHARE_TOKEN, fetchImpl: fetch });
+    }),
+
+  /** 按需读取单股最近已发布的供应商原生筹码价位分布，不叠加现价或修改筛选。 */
+  aiStockChipDistribution: publicProcedure
+    .input(z.object({
+      ledgerId: z.number().int().positive().optional(),
+      tsCode: z.string().regex(/^\d{6}\.(SH|SZ)$/),
+      periods: z.array(z.union([z.literal(5), z.literal(10), z.literal(20), z.literal(30), z.literal(60), z.literal(120), z.literal(250)])).length(3)
+        .refine(periods => ['5,10,20', '20,30,60', '60,120,250'].includes([...periods].sort((a, b) => a - b).join(',')), { message: '仅支持短中长固定周期' }),
+      asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => isValidAShareTradeDate(value.replace(/-/g, '')), { message: '行情日期无效' }),
+      sourceVersion: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict())
+    .query(async ({ input }) => {
+      const dbConn = await getStockMarketConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      return getStockChipDistribution(dbConn, input, { token: process.env.TUSHARE_TOKEN || TUSHARE_TOKEN, fetchImpl: fetch });
     }),
 
   /** 个股全生命周期涨跌天数统计 */

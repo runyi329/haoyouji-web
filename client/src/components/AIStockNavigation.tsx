@@ -10,7 +10,7 @@ import AIStockHeaderSearch from "@/components/AIStockHeaderSearch";
 import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 
 type AIStockNavigationProps = {
-  active: "overview" | "stocks" | "compare";
+  active: "overview" | "stocks" | "compare" | "monitor";
   ledgerId: number | string;
   homeMode?: boolean;
   onBack: () => void;
@@ -23,6 +23,7 @@ type AIStockNavigationProps = {
 const NAV_ITEMS = [
   { key: "overview", label: "总览" },
   { key: "compare", label: "数据" },
+  { key: "monitor", label: "监控" },
 ] as const;
 
 // 仅在本次AI访问期间保留已展开状态；不写入持久存储，也不跨用户复用余额。
@@ -36,8 +37,8 @@ let walletRevealSession: {
 if (typeof window !== "undefined") {
   const resetAfterLeavingAI = () => {
     const path = window.location.pathname;
-    const insideAI = /^\/ledger\/[^/]+\/(ai-database|stock-lifecycle|stock-compare)\/?$/.test(path)
-      || /^\/stock-tracker(?:\/(stock-lifecycle|stock-compare))?\/?$/.test(path)
+    const insideAI = /^\/ledger\/[^/]+\/(ai-database|stock-lifecycle|stock-compare|stock-monitor)\/?$/.test(path)
+      || /^\/stock-tracker(?:\/(stock-lifecycle|stock-compare|stock-monitor))?\/?$/.test(path)
       || /^\/stock\/[^/]+\/?$/.test(path);
     if (!insideAI) walletRevealSession = null;
   };
@@ -65,6 +66,7 @@ export default function AIStockNavigation({
     overview: homeMode ? base : `${base}/ai-database`,
     stocks: `${base}/stock-compare?view=stocks`,
     compare: `${base}/stock-compare?view=stocks&market=all`,
+    monitor: `${base}/stock-monitor`,
   };
   const walletPath = homeMode ? "/wallet" : `/wallet?fromLedger=${ledgerId}&account=CNY`;
   const walletHref = user ? walletPath : `/login?from=${encodeURIComponent(walletPath)}`;
@@ -203,7 +205,7 @@ export default function AIStockNavigation({
         className="px-3 py-2"
         style={{ background: AI_STOCK_THEME.background, borderBottom: `1px solid ${AI_STOCK_THEME.border}` }}
       >
-        <div className="grid grid-cols-2 gap-1 rounded-xl p-1" style={{ background: AI_STOCK_THEME.surface }}>
+        <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: AI_STOCK_THEME.surface }}>
           {NAV_ITEMS.map(item => {
             const isActive = (active === "stocks" ? "compare" : active) === item.key;
             return (
