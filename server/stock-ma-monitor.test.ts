@@ -176,8 +176,13 @@ function mockDb(
       } else if (sql.includes("SELECT b.ts_code")) {
         result = stocks.map(({ rows: _rows, ...s }) => s).reverse();
       } else if (sql.includes("SELECT d.ts_code")) {
-        const [start, end, ...exact] = params;
+        const [start, end, ...selected] = params;
+        const exact = selected.filter(p => /^\d{8}$/.test(String(p)));
+        const codes = new Set(
+          selected.filter(p => /^\d{6}\.(?:SH|SZ)$/.test(String(p)))
+        );
         result = stocks
+          .filter(s => codes.has(s.ts_code))
           .flatMap(s =>
             s.rows
               .filter(
@@ -717,10 +722,16 @@ describe("已完成截止、SQL结构、缓存和失败不缓存", () => {
     expect(dateCalls(db)[0][0]).toContain("LIMIT 350");
     expect(dateCalls(db)[0][0]).not.toMatch(/ts_stock_basic|list_status/);
     const [sql, params] = rawCalls(db)[0];
-    expect(sql).toContain("FORCE INDEX (idx_trade_date)");
+    expect(sql).toContain("FORCE INDEX (uk_code_date)");
     expect(sql).toContain("WHERE d.trade_date >= ? AND d.trade_date <= ?");
+    expect(sql).toContain("AND d.ts_code IN (?)");
     expect(sql.match(/FROM ts_daily/g)).toHaveLength(1);
-    expect(params).toEqual([dates(350)[0], "20261106", ...dates(350)]);
+    expect(params).toEqual([
+      dates(350)[0],
+      "20261106",
+      ...dates(350),
+      "600001.SH",
+    ]);
     expect(
       db.execute.mock.calls.some(([sql]) =>
         String(sql).includes("TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW())")
@@ -755,6 +766,160 @@ describe("已完成截止、SQL结构、缓存和失败不缓存", () => {
       "2026-11-06T08:00:00.000Z"
     );
     expect(rawCalls(db)).toHaveLength(1);
+  });
+
+  it("129股分为64/64/1串行完整350日批次，共享快照且无公开私有列泄漏", async () => {
+    const samples = Array.from({ length: 129 }, (_, i) =>
+      stock(`${600000 + i}.SH`, 350)
+    );
+    const backing = mockDb(samples);
+    let active = 0,
+      maxActive = 0;
+    const db: StockComparisonDb = {
+      execute: async (sql, params) => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        try {
+          await Promise.resolve();
+          return await backing.execute(sql, params);
+        } finally {
+          active--;
+        }
+      },
+    };
+    const results = await Promise.all([
+      getStockMAMonitor(db, input),
+      getStockMAMonitor(db, { ...input, periods: [60, 120, 250], page: 2 }),
+    ]);
+    const calls = rawCalls(backing);
+    expect(calls).toHaveLength(3);
+    expect(maxActive).toBe(1);
+    const codes = calls.flatMap(([sql, params]) => {
+      expect(sql).toContain("FORCE INDEX (uk_code_date)");
+      expect(sql).not.toMatch(/\bLIMIT\b/i);
+      expect(params!.slice(0, 352)).toEqual([
+        dates(350)[0],
+        "20261106",
+        ...dates(350),
+      ]);
+      expect(sql.match(/\?/g)).toHaveLength(params!.length);
+      return params!.slice(352);
+    });
+    expect(calls.map(([, params]) => params!.length - 352)).toEqual([
+      64, 64, 1,
+    ]);
+    expect(new Set(codes).size).toBe(129);
+    expect([...codes].sort()).toEqual(samples.map(s => s.ts_code).sort());
+    expect(results[0]).toMatchObject({
+      total: 129,
+      eligibleCount: 129,
+      excludedCount: 0,
+    });
+    expect(results[1]).toMatchObject({
+      total: 129,
+      eligibleCount: 129,
+      excludedCount: 0,
+    });
+    expect(results[1].items).toHaveLength(29);
+    for (const result of results)
+      for (const item of result.items) {
+        expect(item).not.toHaveProperty("averageOffset");
+        expect(Object.keys(item.averages)).toEqual(result.periods.map(String));
+        expect(item.candles).toHaveLength(30);
+        for (const candle of item.candles) {
+          expect(candle).not.toHaveProperty("averageOffset");
+          expect(Object.keys(candle.averages)).toEqual(
+            result.periods.map(String)
+          );
+          expect(Object.values(candle.averages).every(Number.isFinite)).toBe(
+            true
+          );
+        }
+      }
+    expect(results[1].items[0]).toMatchObject({
+      consecutiveDays: 101,
+      consecutiveIsLowerBound: true,
+    });
+    expect(
+      backing.execute.mock.calls.filter(([sql]) => sql.includes("AS row_count"))
+    ).toHaveLength(2);
+    await getStockMAMonitor(db, { ...input, page: 2 });
+    expect(rawCalls(backing)).toHaveLength(3);
+  });
+
+  it("第二raw批失败不发布部分快照；重试保留完整旧快照再原子发布新版本", async () => {
+    const samples = Array.from({ length: 65 }, (_, i) =>
+      stock(`${600000 + i}.SH`, 350)
+    );
+    const backing = mockDb(samples);
+    let fail = false,
+      revisionBatch = 0;
+    const db: StockComparisonDb = {
+      execute: async (sql, params) => {
+        if (fail && sql.includes("SELECT d.ts_code") && ++revisionBatch === 2)
+          throw new Error("second batch failed");
+        return backing.execute(sql, params);
+      },
+    };
+    const first = await getStockMAMonitor(db, input);
+    samples[64].rows[340].amount = Number(samples[64].rows[340].amount) + 0.1;
+    backing.versionState.dailyEpoch = "2026-11-06T09:00:00Z";
+    vi.setSystemTime(new Date("2026-11-06T09:10:00Z"));
+    await getStockMAMonitor(db, input);
+    fail = true;
+    vi.setSystemTime(new Date("2026-11-06T09:11:01Z"));
+    const failed = await getStockMAMonitor(db, input);
+    expect(failed.sourceVersion).toBe(first.sourceVersion);
+    expect(failed.items).toEqual(first.items);
+    expect(failed.coverageNote).toContain("检查失败");
+    fail = false;
+    vi.setSystemTime(new Date("2026-11-06T09:12:02Z"));
+    await getStockMAMonitor(db, input);
+    vi.setSystemTime(new Date("2026-11-06T09:13:03Z"));
+    const revised = await getStockMAMonitor(db, input);
+    expect(revised.sourceVersion).not.toBe(first.sourceVersion);
+    expect(revised.total).toBe(65);
+    expect(
+      revised.items.find(i => i.tsCode === "600064.SH")!.averages[20]
+    ).not.toBe(first.items.find(i => i.tsCode === "600064.SH")!.averages[20]);
+  });
+
+  it("批间同秒内容更正即使probe未变也由读后全市场指纹拒绝，保留旧版本", async () => {
+    const samples = Array.from({ length: 65 }, (_, i) =>
+      stock(`${600000 + i}.SH`, 350)
+    );
+    const backing = mockDb(samples);
+    let reviseDuringRead = false;
+    const db: StockComparisonDb = {
+      execute: async (sql, params) => {
+        const result = await backing.execute(sql, params);
+        if (reviseDuringRead && sql.includes("SELECT d.ts_code")) {
+          reviseDuringRead = false;
+          samples[0].rows[340].amount =
+            Number(samples[0].rows[340].amount) + 0.2;
+        }
+        return result;
+      },
+    };
+    const first = await getStockMAMonitor(db, input);
+    samples[64].rows[340].amount = Number(samples[64].rows[340].amount) + 0.1;
+    backing.versionState.dailyEpoch = "2026-11-06T09:00:00Z";
+    vi.setSystemTime(new Date("2026-11-06T09:10:00Z"));
+    await getStockMAMonitor(db, input);
+    reviseDuringRead = true;
+    vi.setSystemTime(new Date("2026-11-06T09:11:01Z"));
+    const unstable = await getStockMAMonitor(db, input);
+    expect(rawCalls(backing)).toHaveLength(4);
+    expect(unstable.sourceVersion).toBe(first.sourceVersion);
+    expect(unstable.items).toEqual(first.items);
+    expect(unstable.coverageNote).toContain("版本更新中");
+    vi.setSystemTime(new Date("2026-11-06T09:12:02Z"));
+    await getStockMAMonitor(db, input);
+    vi.setSystemTime(new Date("2026-11-06T09:13:03Z"));
+    const revised = await getStockMAMonitor(db, input);
+    expect(revised.sourceVersion).not.toBe(first.sourceVersion);
+    expect(revised.total).toBe(65);
+    expect(revised.items[0].averages[20]).not.toBe(first.items[0].averages[20]);
   });
 
   it("不同稳定DB不混缓存；结果修改不污染公共快照", async () => {

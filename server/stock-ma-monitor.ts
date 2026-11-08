@@ -24,6 +24,7 @@ import {
 
 const HISTORY_DAYS = 350; // 250-day warm-up leaves 101 judgeable cached market days.
 const CANDLE_DAYS = 30;
+const SOURCE_BATCH_STOCKS = 64;
 const PROBE_INTERVAL_MS = 60_000;
 const FINGERPRINT_INTERVAL_MS = 30 * 60_000;
 const STABILITY_MS = 60_000;
@@ -50,13 +51,31 @@ type Daily = {
   amount: number;
   pct: number | null;
 };
-type Day = {
-  close: number | null;
-  pct: number | null;
-  averages: Partial<Record<StockMAMonitorPeriod, number>>;
-  candle?: StockMAMonitorCandle;
+// Numeric period keys (5..250) allocate large sparse V8 element stores. Keep
+// seven packed doubles per day in ONE buffer per stock, not per-day objects or
+// typed-array views. NaN denotes unavailable data and never escapes publicly.
+// Page/chart copies alone use the numeric period-key contract.
+type CompactAverages = Float64Array;
+const PERIOD_INDEX: Record<StockMAMonitorPeriod, number> = {
+  5: 0,
+  10: 1,
+  20: 2,
+  30: 3,
+  60: 4,
+  120: 5,
+  250: 6,
 };
-type Stock = { code: string; name: string; board: Board; days: Day[] };
+type SourceCandle = Omit<StockMAMonitorCandle, "averages"> & {
+  averages: CompactAverages;
+  averageOffset: number;
+};
+type Day = {
+  close: Float64Array;
+  pct: Float64Array;
+  averages: CompactAverages;
+  candles: SourceCandle[];
+};
+type Stock = { code: string; name: string; board: Board; days: Day };
 type Source = {
   cutoff: string;
   dates: string[];
@@ -65,8 +84,14 @@ type Source = {
   dataUpdatedAt: string | null;
   warning?: string;
 };
+type RankedItem = Omit<StockMAMonitorItem, "averages" | "candles"> & {
+  board: Board;
+  averages: CompactAverages;
+  averageOffset: number;
+  candles: SourceCandle[];
+};
 type Ranked = {
-  items: (StockMAMonitorItem & { board: Board })[];
+  items: RankedItem[];
   eligible: Record<StockMAMonitorMarket, number>;
   excluded: Record<StockMAMonitorMarket, number>;
 };
@@ -223,8 +248,13 @@ function computedDays(
   raw: (Daily | null)[],
   dates: string[],
   poisoned: boolean
-): Day[] {
-  const days: Day[] = [];
+): Day {
+  const days: Day = {
+    close: new Float64Array(raw.length).fill(NaN),
+    pct: new Float64Array(raw.length).fill(NaN),
+    averages: new Float64Array(raw.length * ALL_PERIODS.length).fill(NaN),
+    candles: [],
+  };
   let candleStart = raw.length;
   let candleCount = 0;
   for (let i = raw.length - 1; i >= 0; i--) {
@@ -261,7 +291,7 @@ function computedDays(
   let lastInvalid = -1;
   for (let i = 0; i < raw.length; i++) {
     const d = raw[i];
-    const averages: Day["averages"] = {};
+    const averageOffset = i * ALL_PERIODS.length;
     // Including the first window date's reference-price break remains invalid.
     if (!d || breaks[i]) lastInvalid = i;
     if (!poisoned)
@@ -285,27 +315,32 @@ function computedDays(
           right = Math.floor(right / 2);
         }
         const avg = (10 * amount) / vol;
-        if (Number.isFinite(avg) && avg > 0) averages[period] = avg;
+        if (Number.isFinite(avg) && avg > 0)
+          days.averages[averageOffset + PERIOD_INDEX[period]] = avg;
       }
-    days.push({
-      close: d?.close ?? null,
-      pct: d?.pct ?? null,
-      averages,
-      ...(d && !poisoned && i >= candleStart
-        ? {
-            candle: {
-              date: formatStockComparisonDate(dates[i])!,
-              open: d.open,
-              high: d.high,
-              low: d.low,
-              close: d.close,
-              averages,
-            },
-          }
-        : {}),
-    });
+    days.close[i] = d?.close ?? NaN;
+    days.pct[i] = d?.pct ?? NaN;
+    if (d && !poisoned && i >= candleStart)
+      days.candles.push({
+        date: formatStockComparisonDate(dates[i])!,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+        averages: days.averages,
+        averageOffset,
+      });
   }
   return days;
+}
+
+function averageOf(
+  averages: CompactAverages,
+  offset: number,
+  period: StockMAMonitorPeriod
+): number | undefined {
+  const value = averages[offset + PERIOD_INDEX[period]];
+  return Number.isNaN(value) ? undefined : value;
 }
 
 async function discoverDates(
@@ -538,78 +573,88 @@ async function querySource(
   dates: string[],
   fingerprint: Fingerprint
 ): Promise<Source> {
-  const byCode = new Map<
-    string,
-    {
-      name: string;
-      board: Board;
-      raw: (Daily | null)[];
-      seen: Set<number>;
-      poisoned: boolean;
-    }
-  >();
+  const identities: { code: string; name: string; board: Board }[] = [];
   for (const row of fingerprint.basics) {
     const code = row.ts_code as string;
     const board = boardOf(code);
     if (row.list_status !== "L" || !board) continue;
-    byCode.set(code, {
-      name: row.name as string,
-      board,
-      raw: Array(dates.length).fill(null),
-      seen: new Set(),
-      poisoned: false,
-    });
+    identities.push({ code, name: row.name as string, board });
   }
-  if (dates.length) {
-    const start = dates[0],
-      end = dates[dates.length - 1];
-    // Exactly one bounded raw range per shared snapshot. Only the 350 recent
-    // dates/fields needed for validation, OHLC, and amount/volume calculations
-    // cross the DB boundary. IN pins discovery against concurrent date inserts.
-    const rows = await selectRows(
-      db,
-      `
-      SELECT d.ts_code, d.trade_date, d.open, d.high, d.low, d.close,
-             d.pre_close, d.pct_chg, d.vol, d.amount
-      FROM ts_daily AS d FORCE INDEX (idx_trade_date)
-      INNER JOIN ts_stock_basic AS b ON b.ts_code = d.ts_code
-      WHERE d.trade_date >= ? AND d.trade_date <= ?
-        AND d.trade_date IN (${dates.map(() => "?").join(", ")})
-        AND b.list_status = 'L'
-        AND (b.ts_code LIKE '6%' OR b.ts_code LIKE '0%'
-             OR b.ts_code LIKE '300%' OR b.ts_code LIKE '301%')
-    `,
-      [start, end, ...dates]
+  const stocks: Stock[] = [];
+  const ordinals = new Map(dates.map((date, i) => [date, i]));
+  // Each serial batch reads all the same discovered dates, without row LIMITs
+  // or shortened warm-up. uk_code_date prevents a full-market scan per batch.
+  for (
+    let offset = 0;
+    offset < identities.length;
+    offset += SOURCE_BATCH_STOCKS
+  ) {
+    const batch = identities.slice(offset, offset + SOURCE_BATCH_STOCKS);
+    const byCode = new Map(
+      batch.map(identity => [
+        identity.code,
+        {
+          ...identity,
+          raw: Array<Daily | null>(dates.length).fill(null),
+          seen: new Set<number>(),
+          poisoned: false,
+        },
+      ])
     );
-    const ordinals = new Map(dates.map((date, i) => [date, i]));
-    for (const row of rows) {
-      if (typeof row.ts_code !== "string")
-        throw new TypeError("Invalid stock MA daily identity");
-      const stock = byCode.get(row.ts_code);
-      if (!stock) continue;
-      const index = isValidAShareTradeDate(row.trade_date)
-        ? ordinals.get(row.trade_date)
-        : undefined;
-      // An unlocatable corrupt date cannot reliably be assigned a window;
-      // exclude this stock conservatively rather than silently discarding it.
-      if (index === undefined) {
-        stock.poisoned = true;
-        continue;
+    if (dates.length) {
+      const start = dates[0],
+        end = dates[dates.length - 1];
+      const rows = await selectRows(
+        db,
+        `
+        SELECT d.ts_code, d.trade_date, d.open, d.high, d.low, d.close,
+               d.pre_close, d.pct_chg, d.vol, d.amount
+        FROM ts_daily AS d FORCE INDEX (uk_code_date)
+        INNER JOIN ts_stock_basic AS b ON b.ts_code = d.ts_code
+        WHERE d.trade_date >= ? AND d.trade_date <= ?
+          AND d.trade_date IN (${dates.map(() => "?").join(", ")})
+          AND d.ts_code IN (${batch.map(() => "?").join(", ")})
+          AND b.list_status = 'L'
+          AND (b.ts_code LIKE '6%' OR b.ts_code LIKE '0%'
+               OR b.ts_code LIKE '300%' OR b.ts_code LIKE '301%')
+      `,
+        [start, end, ...dates, ...batch.map(identity => identity.code)]
+      );
+      for (const row of rows) {
+        if (typeof row.ts_code !== "string")
+          throw new TypeError("Invalid stock MA daily identity");
+        const stock = byCode.get(row.ts_code);
+        if (!stock) continue;
+        const index = isValidAShareTradeDate(row.trade_date)
+          ? ordinals.get(row.trade_date)
+          : undefined;
+        // An unlocatable corrupt date cannot reliably be assigned a window;
+        // exclude this stock conservatively rather than silently discarding it.
+        if (index === undefined) {
+          stock.poisoned = true;
+          continue;
+        }
+        if (stock.seen.has(index)) {
+          stock.raw[index] = null;
+          continue;
+        }
+        stock.seen.add(index);
+        stock.raw[index] = dailyOf(row);
       }
-      if (stock.seen.has(index)) {
-        stock.raw[index] = null;
-        continue;
-      }
-      stock.seen.add(index);
-      stock.raw[index] = dailyOf(row);
+      // Release mysql2's full batch row array before constructing cached Days.
+      rows.length = 0;
+    }
+    for (const [code, stock] of byCode) {
+      stocks.push({
+        code,
+        name: stock.name,
+        board: stock.board,
+        days: computedDays(stock.raw, dates, stock.poisoned),
+      });
+      // Drop raw OHLC/volume/amount and duplicate guards stock by stock.
+      byCode.delete(code);
     }
   }
-  const stocks = Array.from(byCode, ([code, stock]) => ({
-    code,
-    name: stock.name,
-    board: stock.board,
-    days: computedDays(stock.raw, dates, stock.poisoned),
-  }));
   const source: Source = {
     cutoff,
     dates,
@@ -796,13 +841,18 @@ async function getSource(
 
 function judgment(
   day: Day,
+  index: number,
   periods: readonly StockMAMonitorPeriod[]
 ): boolean | null {
-  if (day.close === null || periods.some(p => day.averages[p] === undefined))
+  const offset = index * ALL_PERIODS.length;
+  if (
+    Number.isNaN(day.close[index]) ||
+    periods.some(p => averageOf(day.averages, offset, p) === undefined)
+  )
     return null;
-  let previous = day.close;
+  let previous = day.close[index];
   for (const period of periods) {
-    const average = day.averages[period]!;
+    const average = averageOf(day.averages, offset, period)!;
     // Do not let floating-point summation turn mathematically equal prices
     // into a strict ordering. No display-rounding is used for screening.
     const ulps =
@@ -817,21 +867,24 @@ function counts(): Record<StockMAMonitorMarket, number> {
   return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
 }
 function selectedAverages(
-  averages: Day["averages"],
+  averages: CompactAverages,
+  offset: number,
   periods: readonly StockMAMonitorPeriod[]
-): Day["averages"] {
-  const selected: Day["averages"] = {};
+): StockMAMonitorCandle["averages"] {
+  const selected: StockMAMonitorCandle["averages"] = {};
   for (const period of periods) {
-    if (averages[period] !== undefined) selected[period] = averages[period];
+    const value = averageOf(averages, offset, period);
+    if (value !== undefined) selected[period] = value;
   }
   return selected;
 }
 function compositeAverage(
-  averages: Day["averages"],
+  averages: CompactAverages,
+  offset: number,
   periods: readonly StockMAMonitorPeriod[]
 ): number | null {
   if (periods.length !== 3) return null;
-  const values = periods.map(period => averages[period]);
+  const values = periods.map(period => averageOf(averages, offset, period));
   if (
     values.some(
       value => value === undefined || !Number.isFinite(value) || value <= 0
@@ -843,22 +896,23 @@ function compositeAverage(
 }
 
 function displayRawCandle(
-  candle: StockMAMonitorCandle,
+  candle: SourceCandle,
   periods: readonly StockMAMonitorPeriod[]
 ): StockMAMonitorCandle {
+  const { averageOffset, averages, ...ohlc } = candle;
   return {
-    ...candle,
-    averages: selectedAverages(candle.averages, periods),
-    compositeAverage: compositeAverage(candle.averages, periods),
+    ...ohlc,
+    averages: selectedAverages(averages, averageOffset, periods),
+    compositeAverage: compositeAverage(averages, averageOffset, periods),
   };
 }
 
 function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
   const ranked: Ranked = { items: [], eligible: counts(), excluded: counts() };
   for (const stock of source.stocks) {
-    const last = stock.days.length - 1;
-    const day = stock.days[last];
-    const current = day ? judgment(day, periods) : null;
+    const day = stock.days;
+    const last = day.close.length - 1;
+    const current = last >= 0 ? judgment(day, last, periods) : null;
     const counter = current === null ? ranked.excluded : ranked.eligible;
     counter.all++;
     counter[stock.board]++;
@@ -866,7 +920,7 @@ function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
     let consecutiveDays = 0,
       lowerBound = true;
     for (let i = last; i >= 0; i--) {
-      const qualifies = judgment(stock.days[i], periods);
+      const qualifies = judgment(day, i, periods);
       if (qualifies === null) break;
       if (!qualifies) {
         lowerBound = false;
@@ -878,9 +932,10 @@ function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
       board: stock.board,
       tsCode: stock.code,
       name: stock.name,
-      close: day.close!,
-      changePercent: day.pct,
-      averages: selectedAverages(day.averages, periods),
+      close: day.close[last],
+      changePercent: Number.isNaN(day.pct[last]) ? null : day.pct[last],
+      averages: day.averages,
+      averageOffset: last * ALL_PERIODS.length,
       consecutiveDays,
       consecutiveIsLowerBound: lowerBound,
       qualifiedSince: formatStockComparisonDate(
@@ -889,7 +944,7 @@ function rankSource(source: Source, periods: StockMAMonitorPeriod[]): Ranked {
       // Do not duplicate 30 candles per stock for every cached combination.
       // Source candles are read-only here; selected-period copying happens only
       // for the requested page when returning the response.
-      candles: stock.days.flatMap(d => (d.candle ? [d.candle] : [])),
+      candles: day.candles,
     });
   }
   return ranked;
@@ -1034,9 +1089,13 @@ export async function getStockMAMonitor(
     total: items.length,
     items: items
       .slice(offset, offset + snapshot.pageSize)
-      .map(({ board: _board, ...item }) => ({
+      .map(({ board: _board, averageOffset, ...item }) => ({
         ...item,
-        averages: { ...item.averages },
+        averages: selectedAverages(
+          item.averages,
+          averageOffset,
+          snapshot.periods
+        ),
         candles: item.candles.map(c => displayRawCandle(c, snapshot.periods)),
       })),
     method: "amount-volume-weighted",
@@ -1104,13 +1163,10 @@ export async function getStockMAMonitorChartBase(
   const stock = source.stocks.find(stock => stock.code === tsCode);
   if (!stock)
     throw new RangeError("Stock MA chart stock is not in the source snapshot");
-  const candles = stock.days
-    .flatMap(day =>
-      day.candle && day.candle.date <= asOf
-        ? [displayRawCandle(day.candle, snapshot.periods)]
-        : []
-    )
-    .slice(-CANDLE_DAYS);
+  const candles = stock.days.candles
+    .filter(candle => candle.date <= asOf)
+    .slice(-CANDLE_DAYS)
+    .map(candle => displayRawCandle(candle, snapshot.periods));
   return {
     tsCode,
     periods: snapshot.periods,
