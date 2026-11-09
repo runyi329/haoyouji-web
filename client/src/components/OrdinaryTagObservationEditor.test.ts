@@ -236,7 +236,7 @@ describe("组件与管理页离线接线", () => {
   it("仅37号普通标签的用户展开与标签弹窗共用新字段，其他账本恢复旧表单回调", () => {
     const source = readFileSync(new URL("../pages/LedgerAAInitialBalance.tsx", import.meta.url), "utf8");
     expect(source).toContain("ledgerId === 37 && !isStockTag && renderOrdinaryTagEditor(userId, cat, member)");
-    expect(source).toContain("ledgerId === 37 && !isStockTag && category && renderOrdinaryTagEditor(userId, category, member)");
+    expect(source).toContain("ledgerId === 37 && !isStockTag && category && renderOrdinaryTagEditor(userId, category, member, true)");
     const detail = source.slice(source.indexOf("const renderOrdinaryTagEditor"), source.indexOf("const getMarginEntryCNY"));
     expect(detail).toContain("if (ledgerId !== 37 || isStockPortfolioTag(category)) return null;");
     expect(detail).toContain("<OrdinaryTagInlineMemberRow");

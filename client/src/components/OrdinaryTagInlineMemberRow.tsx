@@ -34,6 +34,8 @@ export type OrdinaryTagInlineMemberRowProps = {
   onActualPauseDateEdit?: (value: string) => void;
   onDateDetails?: () => void;
   onDetails: () => void;
+  onToggleVisibility?: () => void;
+  visibilitySaving?: boolean;
 };
 
 /** 每一行查询带固定 user/tag 身份；不读 summary，不通过 POST 自动保存。 */
@@ -53,6 +55,7 @@ export function OrdinaryTagInlineMemberFields({
   member, observation, actual, actualStartDate, actualPauseDate = "", pauseStatus = "none", pauseLocked = false,
   remainingRatio = 100, batchSelectMode = false, showAvatar = true, visible, saving, readError,
   onToggle, onObservationEdit, onActualEdit, onActualStartDateEdit, onActualPauseDateEdit, onDateDetails, onDetails,
+  onToggleVisibility, visibilitySaving = false,
 }: OrdinaryTagInlineMemberRowProps) {
   const name = member.nickname || member.username || "未知";
   const observing = observation.enabled;
@@ -63,9 +66,9 @@ export function OrdinaryTagInlineMemberFields({
   const openDateDetails = onDateDetails ?? onDetails;
   return <div data-ordinary-inline-member={member.userId} className="min-w-0 rounded-md px-2 py-2" style={{ backgroundColor: !visible ? "#F7F7F7" : "#FAFAFA" }}>
     <div data-ordinary-member-header className="mb-1.5 flex min-w-0 items-center gap-1.5">
-      {showAvatar && <button type="button" onClick={onDetails} disabled={saving}
-        aria-label={batchSelectMode ? `${visible ? "隐藏" : "显示"}${name}的标签` : `查看${name}详细设置`}
-        title={batchSelectMode ? "点击头像切换显示/隐藏" : "查看保证金及真实设置详情"} className="relative shrink-0">
+      {showAvatar && <button type="button" onClick={onToggleVisibility ?? onDetails} disabled={saving || visibilitySaving}
+        aria-label={onToggleVisibility || batchSelectMode ? `${visible ? "隐藏" : "显示"}${name}的标签` : `查看${name}详细设置`}
+        title={onToggleVisibility || batchSelectMode ? "点击头像切换显示/隐藏" : "查看保证金及真实设置详情"} className="relative shrink-0">
         {/* 灰度只作用头像，暂停/运行角标保持蓝/绿原色，批量修改实时反馈。 */}
         <span className="block" style={{ filter: visible ? "none" : "grayscale(100%)", opacity: visible ? 1 : 0.45, transition: "all 0.15s ease" }}>
           <UserAvatar username={member.username} avatar={member.avatar} nickname={member.nickname} size="sm" />
@@ -92,8 +95,8 @@ export function OrdinaryTagInlineMemberFields({
       onPauseDateChange={observing ? value => onObservationEdit({ pauseDate: value }) : onActualPauseDateEdit}
       onOpenDateDetails={openDateDetails} />
     <div className="mt-1 flex min-w-0 flex-wrap items-center justify-between gap-1 text-[10px] leading-4 text-gray-400">
-      <span>{observing ? "观察不占实际份额" : onActualStartDateEdit ? "金额/观察保存本标签；真实日期保存详细设置" : "真实日期点日期框进入详细设置保存"}</span>
-      {showAvatar && <button type="button" disabled={saving} onClick={openDateDetails} className="inline-flex shrink-0 items-center gap-0.5"><Settings2 size={10} />查看详细设置</button>}
+      <span>{observing ? "观察不占实际份额" : onActualStartDateEdit ? "修改后在详情底部统一保存" : "真实日期点日期框进入详细设置保存"}</span>
+      {showAvatar && <button type="button" disabled={saving} onClick={onToggleVisibility ? onDetails : openDateDetails} className="inline-flex shrink-0 items-center gap-0.5"><Settings2 size={10} />查看详细设置</button>}
     </div>
     {!observing && observation.startDate && Number(actual.ratio) === 0 && <p className="mt-1 text-[10px] text-gray-500">关闭观察不恢复实际份额，请重新分配真实比例。</p>}
     {readError && <p role="alert" className="mt-1 text-[10px] text-amber-700">{readError}</p>}

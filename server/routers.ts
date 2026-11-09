@@ -17225,6 +17225,8 @@ ${klinesSummary}
         ledgerId: z.number(),
         targetUserId: z.number(),
         balances: z.record(z.string(), z.union([z.number(), z.string()])),
+        // 37号普通标签详情仅保存当前用户当前标签，不清理其他股票兼容配置。
+        scopedOrdinaryCategoryId: z.number().int().positive().optional(),
         // 已嵌入逐笔押金明细的历史标签备注；只在初始余额保存成功后删除旧行。
         migratedMarginNoteIds: z.array(z.number().int().positive()).optional(),
         // 由隐藏操作的两次确认生成；服务端按当前账务快照复核，防止确认后账务变化。
@@ -17234,6 +17236,17 @@ ${klinesSummary}
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (input.scopedOrdinaryCategoryId !== undefined) {
+          if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
+          if ((input.migratedMarginNoteIds?.length ?? 0) > 0 || (input.hideAcknowledgements?.length ?? 0) > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: '详情限域保存不迁移历史备注或处理标签隐藏' });
+          if (process.env.DEV_BYPASS_AUTH === 'true' || process.env.PREVIEW_READONLY === 'true') throw new TRPCError({ code: 'FORBIDDEN', message: '只读预览不能保存正式配置' });
+          const connection = await getDbTransactionConnection();
+          if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
+          try {
+            const detail = await import('./ordinary-tag-detail-config');
+            return await detail.saveOrdinaryTagMemberDetailConfig({ ledgerId: input.ledgerId, targetUserId: input.targetUserId, scopedOrdinaryCategoryId: input.scopedOrdinaryCategoryId, balances: input.balances, actorUserId: ctx.realUser.id }, connection);
+          } finally { connection.release(); }
+        }
         await requireLedger52Creator(ctx.user.id, input.ledgerId);
         // 验证操作者是owner或admin
         const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
@@ -17292,6 +17305,29 @@ ${klinesSummary}
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
         const observation = await import('./ordinary-tag-observation');
         return observation.adminSetOrdinaryTagObservationConfig({ ...input, actorUserId: ctx.realUser.id });
+      }),
+    adminGetOrdinaryTagClearImpact: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
+        const connection = await getDbTransactionConnection();
+        if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
+        try {
+          const clear = await import('./ordinary-tag-clear-config');
+          return await clear.getOrdinaryTagClearImpact({ ...input, actorUserId: ctx.realUser.id }, { connection, readOnly: true });
+        } finally { connection.release(); }
+      }),
+    adminClearOrdinaryTagMemberConfig: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive(), impactHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict())
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
+        if (process.env.DEV_BYPASS_AUTH === 'true' || process.env.PREVIEW_READONLY === 'true') throw new TRPCError({ code: 'FORBIDDEN', message: '只读预览不能清空正式配置' });
+        const connection = await getDbTransactionConnection();
+        if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
+        try {
+          const clear = await import('./ordinary-tag-clear-config');
+          return await clear.clearOrdinaryTagMemberConfig({ ...input, actorUserId: ctx.realUser.id, impactHash: input.impactHash }, { connection, readOnly: false });
+        } finally { connection.release(); }
       }),
     getMyOrdinaryTagObservationOverview: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().optional() }))

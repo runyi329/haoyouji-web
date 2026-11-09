@@ -117,7 +117,7 @@ describe("头像与共享草稿安全接线", () => {
     expect(badge.props.style.backgroundColor).toBe(pauseStatus === 'paused' ? '#1976D2' : '#388E3C');
     expect(badge.props.style.filter).toBeUndefined();
     expect(renderToStaticMarkup(tree)).toContain('grayscale(100%)');
-    expect(page).toContain('visible={batchSelectMode ? editState[member.userId]?.[cat.name]?.visible ?? visible : visible}');
+    expect(page).toContain('visible={batchSelectMode ? ordinaryVisibilityDrafts[ordinaryVisibilityScope(member.userId, cat.name)] ?? visible : visible}');
     expect(page).toContain('pauseStatus={pauseStatus} remainingRatio={100 - total} batchSelectMode={batchSelectMode}');
   });
   it("仅37号普通标签三处共享新字段/草稿/保存，其他账本原日期与金额表单不重复进入37", () => {

@@ -243,6 +243,8 @@ const trpcClient = trpc.createClient({
           || op.path === "ledger.getMyOrdinaryTagObservationOverview"
           || op.path === "ledger.adminGetOrdinaryTagObservationConfig"
           || op.path === "ledger.adminSetOrdinaryTagObservationConfig"
+          || op.path === "ledger.adminGetOrdinaryTagClearImpact"
+          || op.path === "ledger.adminClearOrdinaryTagMemberConfig"
           || op.path === "ledger.funderUpdateParticipantOrder"
           || op.path === "ledger.t0CreateEntry"
           || op.path === "ledger.t0UpdateOpeningEntry"

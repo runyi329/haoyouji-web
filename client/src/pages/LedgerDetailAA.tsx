@@ -460,8 +460,9 @@ export default function LedgerDetailAA({
       staleTime: 0, gcTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true,
     },
   );
+  // 同一目标的后台刷新沿用已核验权限，不卸载/重建押金按钮；首次加载、失败或无权限仍隐藏。
   const canManageMargins = ledgerId === 37 && marginActorPermission.isFetchedAfterMount
-    && !marginActorPermission.isFetching && !marginActorPermission.error
+    && !marginActorPermission.error
     && marginActorPermission.data?.canManageMargins === true
     && marginActorPermission.data.operator?.id === 870413;
   // 管理员维护端仍需完整看到暂停后的后续录入，以便更正或重启；普通成员及管理员代看
