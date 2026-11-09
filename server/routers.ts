@@ -576,6 +576,13 @@ async function assertLedger37AllocationTripletOnChange(params: {
       && !sameLedger37Number(previous[key], params.balances[key]));
     if (!hasTripletChange) continue;
 
+    try {
+      const { assertOrdinaryObservationAllocationChange } = await import('../shared/ordinary-tag-observation');
+      assertOrdinaryObservationAllocationChange(previous, params.balances, tagName);
+    } catch (cause) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: cause instanceof Error ? cause.message : '请先关闭观察再分配真实比例' });
+    }
+
     const effective = (key: string) => Object.prototype.hasOwnProperty.call(params.balances, key) ? params.balances[key] : previous[key];
     const amount = readLedger37NonNegativeNumber(effective(tagName));
     const ratio = readLedger37NonNegativeNumber(effective(`${tagName}__ratio`));
@@ -17266,6 +17273,35 @@ ${klinesSummary}
           }
         }
         return { success: true };
+      }),
+
+    // 普通观察独立展示；开启时原子归零此人的实际比例/权益，不改本金、押金、分红或钱包。
+    adminGetOrdinaryTagObservationConfig: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
+        const observation = await import('./ordinary-tag-observation');
+        return observation.adminGetOrdinaryTagObservationConfig({ ...input, actorUserId: ctx.realUser.id });
+      }),
+    adminSetOrdinaryTagObservationConfig: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive(),
+        config: z.object({ enabled: z.boolean(), initialAmount: z.number().finite().nonnegative(), ratio: z.number().finite().min(0).max(100), startDate: z.string(), pauseDate: z.string().nullable() }).strict(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
+        const observation = await import('./ordinary-tag-observation');
+        return observation.adminSetOrdinaryTagObservationConfig({ ...input, actorUserId: ctx.realUser.id });
+      }),
+    getMyOrdinaryTagObservationOverview: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().optional() }))
+      .query(async ({ ctx, input }) => {
+        // viewAs只用于区分查询缓存；有效身份由认证上下文确定，不允许参数读取第三人。
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '请在当前成员视角查看观察账户' });
+        }
+        const observation = await import('./ordinary-tag-observation');
+        return observation.getMyOrdinaryTagObservationOverview({ ledgerId: input.ledgerId, userId: ctx.user.id });
       }),
 
     // 37号：纠正一笔“历史手工保证金迁入并冻结”的录入错误。

@@ -656,9 +656,13 @@ export async function migrateLedger37ManualMarginToWalletHold(params: {
     if (ownConnection) await transaction.beginTransaction();
     const [existingRows] = await transaction.execute(
       `SELECT migration_no, hold_id, asset_code, amount FROM ai_wallet_project_hold_migrations
-       WHERE request_id = ? LIMIT 1 FOR UPDATE`,
-      [requestId],
+       WHERE ledger_id = ? AND user_id = ?
+         AND (request_id = ? OR (tag_name = ? AND margin_entry_id = ?))
+       ORDER BY id ASC LIMIT 2 FOR UPDATE`,
+      [LEDGER_37_ID, params.userId, requestId, tagName, marginEntryId],
     );
+    // 显式改名保留原request_id；同一来源条目不能因名称改变再次迁入和冻结。
+    if (rowsOf(existingRows).length > 1) throw new Error('历史保证金来源存在重复关联，请先核对');
     const existing = rowsOf(existingRows)[0];
     if (existing) {
       if (String(existing.asset_code).toUpperCase() !== assetCode || Number(existing.amount) !== Number(amount)) {

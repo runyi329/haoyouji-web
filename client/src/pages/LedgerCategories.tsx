@@ -32,6 +32,7 @@ interface Category {
 const LedgerCategories = () => {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
+  const utils = trpc.useUtils();
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -137,7 +138,14 @@ const LedgerCategories = () => {
   const updateCategoryMutation = trpc.ledger.updateCategory.useMutation({
     onSuccess: () => {
       toast.success("分类重命名成功");
-      refetchCategories();
+      // 名称关联已由后端原子保留；回到配置/报表页必须读取同一版本，不能复用旧名缓存。
+      void utils.invalidate(undefined, {
+        predicate: query => {
+          const input = query.queryKey[1] as { input?: { ledgerId?: number } } | undefined;
+          return Number(input?.input?.ledgerId) === Number(id);
+        },
+        refetchType: 'active',
+      });
       setShowRenameDialog(false);
       setCategoryToRename(null);
       setRenameValue("");

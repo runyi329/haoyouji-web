@@ -19,7 +19,7 @@
  *   tagName__startDate     → 开始日期 (YYYY-MM-DD)
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
-import { Fragment, useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -27,6 +27,14 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
 import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
+import OrdinaryTagInlineMemberRow from "@/components/OrdinaryTagInlineMemberRow";
+import {
+  emptyInlineObservation, inlineObservationFromConfig, inlineObservationsEqual, ordinaryInlineScope,
+  readInlineObservationPreview, readOrdinaryActualPreview, toggleInlineObservation, zeroOrdinaryActual,
+  saveOrdinaryInlineTag,
+  type OrdinaryActualAllocation, type OrdinaryInlineObservationDraft, type OrdinaryInlineSaveRow,
+} from "@/components/ordinaryTagInlineAllocation";
+import { readOrdinaryTagObservationConfig, type OrdinaryTagObservationConfig } from "@shared/ordinary-tag-observation";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
@@ -414,8 +422,59 @@ export default function LedgerAAInitialBalance() {
   const [editState, setEditState] = useState<
     Record<number, Record<string, TagEntry>>
   >({});
+  const [ordinaryObservationDrafts, setOrdinaryObservationDrafts] = useState<Record<string, OrdinaryInlineObservationDraft>>({});
+  const [ordinaryObservationSaved, setOrdinaryObservationSaved] = useState<Record<string, OrdinaryTagObservationConfig | null>>({});
+  const [ordinaryActualSaved, setOrdinaryActualSaved] = useState<Record<string, OrdinaryActualAllocation>>({});
+  const [ordinaryActualDirty, setOrdinaryActualDirty] = useState<Record<string, boolean>>({});
+  const [ordinarySavingTags, setOrdinarySavingTags] = useState<Set<number>>(new Set());
+  const [ordinaryTagErrors, setOrdinaryTagErrors] = useState<Record<number, string>>({});
+  const ordinaryDirtyRef = useRef(ordinaryActualDirty);
+  ordinaryDirtyRef.current = ordinaryActualDirty;
+  const [ordinaryPreviewVersion, setOrdinaryPreviewVersion] = useState(0);
+  useEffect(() => {
+    if (!isLocalHotPreview) return;
+    const change = () => setOrdinaryPreviewVersion(value => value + 1);
+    window.addEventListener('ordinary-tag-observation-preview-change', change);
+    return () => window.removeEventListener('ordinary-tag-observation-preview-change', change);
+  }, [isLocalHotPreview]);
+  const ordinaryObservationMutation = (trpc as any).ledger.adminSetOrdinaryTagObservationConfig.useMutation();
+  const ordinaryActualMutation = trpc.ledger.adminSetMemberInitialBalances.useMutation();
+  const onOrdinaryConfigRead = useCallback((userId: number, categoryId: number, config: OrdinaryTagObservationConfig | null) => {
+    const scope = ordinaryInlineScope(ledgerId, userId, categoryId);
+    setOrdinaryObservationSaved(previous => {
+      if (Object.prototype.hasOwnProperty.call(previous, scope) && JSON.stringify(previous[scope]) === JSON.stringify(config)) return previous;
+      return { ...previous, [scope]: config };
+    });
+  }, [ledgerId]);
+  const ordinarySavedObservation = (userId: number, category: any): OrdinaryInlineObservationDraft => {
+    const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+    let preview: OrdinaryTagObservationConfig | null = null;
+    if (isLocalHotPreview) {
+      try { preview = readInlineObservationPreview(window.sessionStorage, userId, Number(category.id)); } catch { /* unavailable storage does not trigger POST */ }
+    }
+    return inlineObservationFromConfig(preview ?? ordinaryObservationSaved[scope]
+      ?? readOrdinaryTagObservationConfig((allBalancesData as any)?.balancesMap?.[userId] ?? {}, category.name));
+  };
+  const ordinaryEffectiveObservation = (userId: number, category: any) =>
+    ordinaryObservationDrafts[ordinaryInlineScope(ledgerId, userId, Number(category.id))] ?? ordinarySavedObservation(userId, category);
+  const ordinarySavedActual = (userId: number, category: any): OrdinaryActualAllocation => {
+    const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+    if (ordinaryActualSaved[scope]) return ordinaryActualSaved[scope];
+    if (isLocalHotPreview) {
+      try {
+        const preview = readOrdinaryActualPreview(window.sessionStorage, ledgerId, userId, Number(category.id));
+        if (preview) return preview;
+      } catch { /* unavailable storage */ }
+    }
+    const balances = (allBalancesData as any)?.balancesMap?.[userId] ?? {};
+    const actual = { amount: String(balances[category.name] ?? ''), ratio: String(balances[`${category.name}__ratio`] ?? '0'), targetAmount: String(balances[`${category.name}__targetAmount`] ?? '0') };
+    if (actual.amount && Number(actual.amount) > 0 && Number(actual.ratio) >= 0) actual.targetAmount = String(Number((Number(actual.amount) * Number(actual.ratio) / 100).toFixed(2)));
+    return ordinarySavedObservation(userId, category).enabled ? zeroOrdinaryActual(actual) : actual;
+  };
   const [dirtyUsers, setDirtyUsers] = useState<Set<number>>(new Set());
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
+  const dirtyMemberDraftsRef = useRef(dirtyUsers);
+  dirtyMemberDraftsRef.current = dirtyUsers;
   // 逐笔押金备注的未提交输入，按用户、标签和押金明细ID隔离。
   const [marginNoteDrafts, setMarginNoteDrafts] = useState<Record<string, string>>({});
   // 有账务记录的标签隐藏必须完成两次确认；立即保存的股票标签与普通草稿保存共用同一保护。
@@ -506,8 +565,24 @@ export default function LedgerAAInitialBalance() {
         };
       }
     }
-    setEditState(initial);
-    setDirtyUsers(new Set());
+    setEditState(previous => {
+      for (const member of (allBalancesData as any).members) {
+        for (const cat of categories) {
+          if (ledgerId !== 37 || isStockPortfolioTag(cat)) continue;
+          const scope = ordinaryInlineScope(ledgerId, member.userId, Number(cat.id));
+          if ((ordinaryDirtyRef.current[scope] || dirtyMemberDraftsRef.current.has(member.userId)) && previous[member.userId]?.[cat.name]) initial[member.userId][cat.name] = previous[member.userId][cat.name];
+          else {
+            let preview: OrdinaryActualAllocation | null = null;
+            if (isLocalHotPreview) { try { preview = readOrdinaryActualPreview(window.sessionStorage, ledgerId, member.userId, Number(cat.id)); } catch {} }
+            const saved = ordinaryActualSaved[scope] ?? preview;
+            if (saved) initial[member.userId][cat.name] = { ...initial[member.userId][cat.name], ...saved };
+          }
+        }
+      }
+      return initial;
+    });
+    // 标签三键保存后的刷新不能清掉尚未保存的真实日期、暂停方案或押金草稿。
+    setDirtyUsers(previous => Object.keys(ordinaryDirtyRef.current).length || dirtyMemberDraftsRef.current.size ? previous : new Set());
   }, [allBalancesData, categories]);
 
   const setMutation = trpc.ledger.adminSetMemberInitialBalances.useMutation({
@@ -697,8 +772,18 @@ export default function LedgerAAInitialBalance() {
     tagName: string,
     changedField: 'amount' | 'ratio' | 'targetAmount',
     rawValue: string,
+    sourceEntry?: TagEntry,
   ) => {
-    const current = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
+    const current = sourceEntry ?? editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
+    const ordinaryCategory = categories.find((category: any) => category.name === tagName && !isStockPortfolioTag(category));
+    if (ledgerId === 37 && ordinaryCategory) {
+      if (ordinaryEffectiveObservation(userId, ordinaryCategory).enabled) {
+        toast.info('观察成员不分配真实份额；请先在标签人员列表关闭观察，再重新分配');
+        return;
+      }
+      const scope = ordinaryInlineScope(ledgerId, userId, Number(ordinaryCategory.id));
+      setOrdinaryActualDirty(previous => ({ ...previous, [scope]: true }));
+    }
     const next = { amount: current.amount, ratio: current.ratio, targetAmount: current.targetAmount, [changedField]: rawValue };
     const key = allocationKey(userId, tagName);
     if (rawValue.trim() === '') {
@@ -708,7 +793,7 @@ export default function LedgerAAInitialBalance() {
         delete nextDerived[key];
         return nextDerived;
       });
-      updateEntry(userId, tagName, { [changedField]: rawValue });
+      updateEntry(userId, tagName, next);
       return;
     }
 
@@ -764,6 +849,117 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, next);
   };
 
+  const ordinaryEffectiveActual = (userId: number, category: any): OrdinaryActualAllocation => {
+    const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+    if (!ordinaryActualDirty[scope]) return ordinarySavedActual(userId, category);
+    const entry = editState[userId]?.[category.name] ?? defaultEntry();
+    return { amount: entry.amount, ratio: entry.ratio, targetAmount: entry.targetAmount };
+  };
+  const editOrdinaryObservation = (userId: number, category: any, patch: Partial<OrdinaryInlineObservationDraft>) => {
+    const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+    const current = ordinaryEffectiveObservation(userId, category);
+    setOrdinaryObservationDrafts(previous => ({ ...previous, [scope]: { ...current, ...patch } }));
+    setOrdinaryTagErrors(previous => ({ ...previous, [category.id]: '' }));
+  };
+  const toggleOrdinaryObservation = (userId: number, category: any, enabled: boolean) => {
+    const current = ordinaryEffectiveObservation(userId, category);
+    const actual = ordinaryEffectiveActual(userId, category);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const next = toggleInlineObservation(current, enabled, { ...actual, startDate: editState[userId]?.[category.name]?.startDate || '' }, today);
+    editOrdinaryObservation(userId, category, next);
+    // 已保存的观察关闭绝不恢复旧真实草稿；未保存的开启/取消仍可回退保存基线。
+    if (!enabled && ordinarySavedObservation(userId, category).enabled) {
+      const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+      setEditState(previous => ({ ...previous, [userId]: { ...previous[userId], [category.name]: { ...(previous[userId]?.[category.name] ?? defaultEntry()), ...zeroOrdinaryActual(actual) } } }));
+      setOrdinaryActualDirty(previous => { const nextDirty = { ...previous }; delete nextDirty[scope]; return nextDirty; });
+    }
+  };
+  const editOrdinaryActual = (userId: number, category: any, field: 'amount' | 'ratio' | 'targetAmount', value: string) => {
+    if (ordinaryEffectiveObservation(userId, category).enabled) return;
+    const scope = ordinaryInlineScope(ledgerId, userId, Number(category.id));
+    const baseline = ordinaryEffectiveActual(userId, category);
+    // updateAllocationLink 仍是唯一真实三联动逻辑。预览基线/观察关闭的零份额先落到实际editState。
+    const current = editState[userId]?.[category.name] ?? defaultEntry();
+    updateAllocationLink(userId, category.name, field, value, { ...current, ...baseline });
+    setOrdinaryActualDirty(previous => ({ ...previous, [scope]: true }));
+    setOrdinaryTagErrors(previous => ({ ...previous, [category.id]: '' }));
+  };
+  const ordinaryTagIsDirty = (category: any) => ((allBalancesData as any)?.members ?? []).some((member: any) => {
+    const scope = ordinaryInlineScope(ledgerId, member.userId, Number(category.id));
+    const observation = ordinaryObservationDrafts[scope];
+    return Boolean(ordinaryActualDirty[scope]) || Boolean(observation && !inlineObservationsEqual(observation, ordinarySavedObservation(member.userId, category)));
+  });
+  const cancelOrdinaryTag = (category: any) => {
+    const scopes = ((allBalancesData as any)?.members ?? []).map((member: any) => ordinaryInlineScope(ledgerId, member.userId, Number(category.id)));
+    setOrdinaryObservationDrafts(previous => { const next = { ...previous }; scopes.forEach((scope: string) => delete next[scope]); return next; });
+    setOrdinaryActualDirty(previous => { const next = { ...previous }; scopes.forEach((scope: string) => delete next[scope]); return next; });
+    setEditState(previous => {
+      const next = { ...previous };
+      for (const member of (allBalancesData as any)?.members ?? []) next[member.userId] = { ...next[member.userId], [category.name]: { ...(next[member.userId]?.[category.name] ?? defaultEntry()), ...ordinarySavedActual(member.userId, category) } };
+      return next;
+    });
+    setOrdinaryTagErrors(previous => ({ ...previous, [category.id]: '' }));
+  };
+  const handleSaveOrdinaryTag = async (category: any): Promise<boolean> => {
+    const categoryId = Number(category.id);
+    if (ordinarySavingTags.has(categoryId)) return false;
+    const rows: OrdinaryInlineSaveRow[] = ((allBalancesData as any)?.members ?? []).map((member: any) => {
+      const scope = ordinaryInlineScope(ledgerId, member.userId, categoryId);
+      const observation = ordinaryEffectiveObservation(member.userId, category);
+      const original = ordinarySavedActual(member.userId, category);
+      const actual = ordinaryEffectiveActual(member.userId, category);
+      const storedRatio = (allBalancesData as any)?.balancesMap?.[member.userId]?.[`${category.name}__ratio`];
+      let hasActualPreview = false;
+      if (isLocalHotPreview) { try { hasActualPreview = Boolean(readOrdinaryActualPreview(window.sessionStorage, ledgerId, member.userId, categoryId)); } catch {} }
+      const previousActualRatio = ordinaryActualSaved[scope] || hasActualPreview ? Number(original.ratio) || 0 : Number(storedRatio) || 0;
+      return { userId: member.userId, name: member.nickname || member.username || '未知', observation,
+        observationChanged: !inlineObservationsEqual(observation, ordinarySavedObservation(member.userId, category)),
+        actual, actualChanged: Boolean(ordinaryActualDirty[scope]), previousActual: original, previousActualRatio };
+    });
+    setOrdinarySavingTags(previous => new Set(previous).add(categoryId));
+    try {
+      const saved = await saveOrdinaryInlineTag({ ledgerId, categoryId, tagName: category.name, rows }, {
+        isDev: isLocalHotPreview,
+        storage: { setItem: (key, value) => window.sessionStorage.setItem(key, value) },
+        confirm: message => window.confirm(message),
+        dispatchPreviewChange: detail => window.dispatchEvent(new CustomEvent('ordinary-tag-observation-preview-change', { detail })),
+        saveObservation: input => ordinaryObservationMutation.mutateAsync(input),
+        saveActual: input => ordinaryActualMutation.mutateAsync(input),
+        onObservationSaved: (row, config) => {
+          const scope = ordinaryInlineScope(ledgerId, row.userId, categoryId);
+          const wasObserving = ordinarySavedObservation(row.userId, category).enabled;
+          if (!config.enabled && wasObserving) setOrdinaryActualSaved(previous => ({ ...previous, [scope]: zeroOrdinaryActual(row.actual) }));
+          setOrdinaryObservationSaved(previous => ({ ...previous, [scope]: config }));
+          setOrdinaryObservationDrafts(previous => { const next = { ...previous }; delete next[scope]; return next; });
+          if (config.enabled) {
+            const zero = zeroOrdinaryActual(row.previousActual ?? row.actual);
+            setOrdinaryActualSaved(previous => ({ ...previous, [scope]: zero }));
+            setOrdinaryActualDirty(previous => { const next = { ...previous }; delete next[scope]; return next; });
+            setEditState(previous => ({ ...previous, [row.userId]: { ...previous[row.userId], [category.name]: { ...(previous[row.userId]?.[category.name] ?? defaultEntry()), ...zero } } }));
+          }
+        },
+        onActualSaved: row => {
+          const scope = ordinaryInlineScope(ledgerId, row.userId, categoryId);
+          setOrdinaryActualSaved(previous => ({ ...previous, [scope]: row.actual }));
+          setOrdinaryActualDirty(previous => { const next = { ...previous }; delete next[scope]; return next; });
+        },
+      });
+      if (saved) {
+        setOrdinaryTagErrors(previous => ({ ...previous, [categoryId]: '' }));
+        toast.success(isLocalHotPreview ? '本标签预览已保存至当前会话，未提交正式账本' : '本标签已保存；观察转换不改历史、押金和钱包');
+        if (!isLocalHotPreview) void refetch();
+      }
+      return saved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存失败；未成功的草稿已保留';
+      setOrdinaryTagErrors(previous => ({ ...previous, [categoryId]: message }));
+      toast.error(message);
+      return false;
+    } finally {
+      setOrdinarySavingTags(previous => { const next = new Set(previous); next.delete(categoryId); return next; });
+    }
+  };
+
   const allocationValueChanged = (before: unknown, after: unknown) => {
     const beforeText = before === undefined || before === null ? '' : String(before).trim();
     const afterText = after === undefined || after === null ? '' : String(after).trim();
@@ -784,6 +980,7 @@ export default function LedgerAAInitialBalance() {
       if (isStockPortfolioTag(category)) continue;
       const tagName = category.name;
       const entry = userEdit[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
+      if (ordinaryEffectiveObservation(userId, category).enabled) continue;
       const changed = allocationValueChanged(originalBalances[tagName], entry.amount)
         || allocationValueChanged(originalBalances[`${tagName}__ratio`], entry.ratio)
         || allocationValueChanged(originalBalances[`${tagName}__targetAmount`], entry.targetAmount);
@@ -829,24 +1026,37 @@ export default function LedgerAAInitialBalance() {
     return { effectiveUserEdit, memberPausePlans: Array.from(plansByTag.values()) };
   };
 
-  const handleSaveMember = async (userId: number) => {
+  const handleSaveMember = async (userId: number): Promise<boolean> => {
+    if (isLocalHotPreview) {
+      const dirtyTags = categories.filter((category: any) => !isStockPortfolioTag(category) && ordinaryTagIsDirty(category));
+      for (const category of dirtyTags) {
+        if (!await handleSaveOrdinaryTag(category)) return false;
+      }
+      if (dirtyTags.length === 0) toast.info('热预览不提交真实日期、暂停或押金；金额/观察请保存本标签预览');
+      return dirtyTags.length > 0;
+    }
+    if (ledgerId === 37 && categories.some((category: any) => !isStockPortfolioTag(category) && ordinaryTagIsDirty(category))) {
+      toast.error('请先在当前编辑区保存或取消本标签金额/观察草稿，再保存日期和押金；其他标签的草稿也需先处理');
+      return false;
+    }
     const { effectiveUserEdit: userEdit, memberPausePlans } = materializeMemberPausePlans(userId, editState[userId] ?? {});
     const allocationError = getChangedAllocationError(userId, userEdit);
     if (allocationError) {
       toast.error(allocationError);
-      return;
+      return false;
     }
     const balances: Record<string, number | string> = {};
     for (const cat of categories) {
       const n = cat.name;
       const entry = userEdit[n] ?? defaultEntry(getSavedTagVisible(userId, n));
       const isStockTag = isStockPortfolioTag(cat);
+      const isOrdinaryObserver = ledgerId === 37 && !isStockTag && ordinaryEffectiveObservation(userId, cat).enabled;
 
-      if (!isStockTag && entry.amount !== "") {
+      if (!isStockTag && !isOrdinaryObserver && entry.amount !== "") {
         const num = parseFloat(entry.amount);
         if (!isNaN(num)) balances[n] = num;
       }
-      if (!isStockTag && entry.ratio !== "") {
+      if (!isStockTag && !isOrdinaryObserver && entry.ratio !== "") {
         const num = parseFloat(entry.ratio);
         if (!isNaN(num)) balances[`${n}__ratio`] = Math.max(0, num);
       }
@@ -911,7 +1121,7 @@ export default function LedgerAAInitialBalance() {
         balances[`${n}__endDate`] = entry.endDate;
       }
       balances[`${n}__visible`] = entry.visible ? 1 : 0;
-      if (!isStockTag && entry.targetAmount !== "") {
+      if (!isStockTag && !isOrdinaryObserver && entry.targetAmount !== "") {
         const num = parseFloat(entry.targetAmount);
         if (!isNaN(num)) balances[`${n}__targetAmount`] = num;
       }
@@ -919,7 +1129,7 @@ export default function LedgerAAInitialBalance() {
     // 热预览可以读取真实金额，但暂停与解冻均不允许落库或改动真实资金。
     if (isLocalHotPreview && memberPausePlans.length > 0) {
       toast.info('热预览仅展示暂停后的保证金处理，不会暂停标签或解冻真实钱包资金');
-      return;
+      return false;
     }
     // 先把已物化的暂停记录同步到本地视图，成功后仍以服务端 refetch 结果为准。
     setEditState((previous) => ({ ...previous, [userId]: userEdit }));
@@ -974,9 +1184,69 @@ export default function LedgerAAInitialBalance() {
         });
         setPauseWalletHandlingDraft((previous) => previous?.userId === userId ? null : previous);
       }
+      return true;
     } catch {
       // 各 mutation 已给出错误提示；草稿与暂停选择均保留，方便管理员修正后重试。
+      return false;
     }
+  };
+
+  // 三处共用同一纯字段UI、同一观察/真实草稿；日期不进入标签三键保存。
+  const renderOrdinaryTagSaveControls = (category: any) => ledgerId === 37 && !isStockPortfolioTag(category) && <div data-ordinary-inline-tag-save={category.id} className="mt-2 min-w-0 space-y-1">
+    <p className="text-[10px] leading-4 text-gray-500">金额/观察在本标签保存；真实日期、暂停历史和押金须另点“保存日期与押金”。观察不参与结算，开启保存后真实比例/分配金额归零；关闭不恢复。</p>
+    {ordinaryTagErrors[category.id] && <p role="alert" className="text-xs text-red-600">{ordinaryTagErrors[category.id]}；未成功草稿已保留</p>}
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <span className="mr-auto text-[10px] text-gray-400">{ordinaryTagIsDirty(category) ? '本标签有未保存修改' : '本标签金额/观察已保存'}</span>
+      <button type="button" disabled={ordinarySavingTags.has(Number(category.id)) || !ordinaryTagIsDirty(category)} onClick={() => cancelOrdinaryTag(category)} className="h-7 px-2 text-xs text-gray-500 disabled:opacity-40">取消本标签草稿</button>
+      <button type="button" disabled={ordinarySavingTags.has(Number(category.id)) || !ordinaryTagIsDirty(category)} onClick={() => void handleSaveOrdinaryTag(category)} className="h-7 rounded-md px-2.5 text-xs text-white disabled:opacity-40" style={{ backgroundColor: category.color || '#2F6F85' }}>{ordinarySavingTags.has(Number(category.id)) ? '保存中…' : isLocalHotPreview ? '保存本标签预览' : '保存本标签金额/观察'}</button>
+    </div>
+  </div>;
+
+  const renderOrdinaryTagEditor = (userId: number, category: any, member: any) => {
+    if (ledgerId !== 37 || isStockPortfolioTag(category)) return null;
+    const tagName = category.name;
+    const entry = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
+    const history = entry.pauseHistory ?? [];
+    const latestIndex = history.length - 1;
+    const latest = history[latestIndex];
+    const latestIsGlobalPause = latest?.pauseSource === 'tag_global';
+    const handlingDraft = pauseWalletHandlingDraft?.userId === userId && pauseWalletHandlingDraft.tagName === tagName ? pauseWalletHandlingDraft : null;
+    const displayedPauseDate = latest?.pauseDate || entry.pauseDate || handlingDraft?.pauseDate || '';
+    const editPauseDate = (value: string) => {
+      if (latestIsGlobalPause) return;
+      if (latest) {
+        updateEntry(userId, tagName, { pauseHistory: history.map((item, index) => index === latestIndex ? { ...item, pauseDate: value } : item) });
+        setPauseWalletPlans(previous => {
+          const key = `${userId}|${tagName}`;
+          if (!value) { const next = { ...previous }; delete next[key]; return next; }
+          return previous[key] ? { ...previous, [key]: { ...previous[key], pauseDate: value } } : previous;
+        });
+      } else if (ledgerId === 37 && value) {
+        // 只打开原资金处理草稿；日期输入绝不直接暂停、解冻或结算。
+        setPauseWalletHandlingDraft(previous => previous?.userId === userId && previous.tagName === tagName
+          ? { ...previous, pauseDate: value } : { userId, tagName, pauseDate: value, action: 'retain' });
+      } else {
+        if (handlingDraft) setPauseWalletHandlingDraft(null);
+        updateEntry(userId, tagName, { pauseDate: value });
+        setPauseWalletPlans(previous => { const next = { ...previous }; delete next[`${userId}|${tagName}`]; return next; });
+      }
+    };
+    const pauseStatus = latest ? latest.resumeDate ? 'running' : 'paused' : entry.pauseDate ? 'paused' : entry.startDate ? 'running' : 'none';
+    const totalRatio = members.reduce((total: number, item: any) => total + (ordinaryEffectiveObservation(item.userId, category).enabled
+      ? 0 : Number(ordinaryEffectiveActual(item.userId, category).ratio) || 0), 0);
+    return <section data-ordinary-detail-editor={category.id} className="min-w-0 rounded-md pt-2">
+      <OrdinaryTagInlineMemberRow key={ordinaryInlineScope(ledgerId, userId, Number(category.id))}
+        ledgerId={ledgerId} categoryId={Number(category.id)} member={member || { userId }} showAvatar={false}
+        observation={ordinaryEffectiveObservation(userId, category)} actual={ordinaryEffectiveActual(userId, category)}
+        actualStartDate={entry.startDate} actualPauseDate={displayedPauseDate} pauseStatus={pauseStatus} pauseLocked={latestIsGlobalPause}
+        remainingRatio={100 - totalRatio} visible={entry.visible} saving={ordinarySavingTags.has(Number(category.id)) || savingUsers.has(userId)} accentColor={category.color || '#2F6F85'}
+        onConfigRead={onOrdinaryConfigRead} onToggle={enabled => toggleOrdinaryObservation(userId, category, enabled)}
+        onObservationEdit={patch => editOrdinaryObservation(userId, category, patch)}
+        onActualEdit={(field, value) => editOrdinaryActual(userId, category, field, value)}
+        onActualStartDateEdit={value => updateEntry(userId, tagName, { startDate: value })} onActualPauseDateEdit={editPauseDate}
+        onDetails={() => {}} />
+      {ledgerId === 37 && renderOrdinaryTagSaveControls(category)}
+    </section>;
   };
 
   const getMarginEntryCNY = (entry: MarginEntry): number | null => {
@@ -2436,6 +2706,7 @@ export default function LedgerAAInitialBalance() {
 
   const handleSaveTagConfig = () => {
     if (!selectedTagName) return;
+    if (isLocalHotPreview) { toast.info('热预览不会提交标签配置'); return; }
     setTagConfigSaving(true);
     // 将 marginEdits 转换为 JSON 字符串保存
     const marginByCoinJson = marginEdits.filter(e => e.amount).length > 0
@@ -2496,7 +2767,7 @@ export default function LedgerAAInitialBalance() {
   // 标签视角：计算每个标签下各用户的占比
   const tagRatioView = useMemo(() => {
     if (!allBalancesData || categories.length === 0) return {};
-    const result: Record<string, Array<{ member: any; ratio: number; amount: string; visible: boolean; pauseStatus: 'paused' | 'running' | 'none' }>> = {};
+    const result: Record<string, Array<{ member: any; ratio: number; amount: string; visible: boolean; pauseStatus: 'paused' | 'running' | 'none'; observing: boolean; observationRatio: number; savedRatio: number }>> = {};
     for (const cat of categories) {
       const n = cat.name;
       const rows: Array<{ member: any; ratio: number; amount: string; visible: boolean; pauseStatus: 'paused' | 'running' | 'none' }> = [];
@@ -2521,16 +2792,20 @@ export default function LedgerAAInitialBalance() {
         } else if (balances[`${n}__startDate`]) {
           pauseStatus = 'running';
         }
-        rows.push({ member, ratio: isNaN(ratio) ? 0 : ratio, amount, visible, pauseStatus });
+        const inline = ledgerId === 37 && !isStockPortfolioTag(cat);
+        const observation = inline ? ordinaryEffectiveObservation(member.userId, cat) : emptyInlineObservation();
+        const actual = inline ? ordinaryEffectiveActual(member.userId, cat) : { amount, ratio: String(ratio), targetAmount: '' };
+        rows.push({ member, ratio: observation.enabled ? 0 : (Number(actual.ratio) || 0), amount: actual.amount, visible, pauseStatus,
+          observing: observation.enabled, observationRatio: Number(observation.ratio) || 0, savedRatio: isNaN(ratio) ? 0 : ratio });
       }
       result[n] = rows.sort((a, b) => {
         // 不可见的用户排到最后
         if (a.visible !== b.visible) return a.visible ? -1 : 1;
-        return b.ratio - a.ratio;
+        return b.savedRatio - a.savedRatio;
       });
     }
     return result;
-  }, [allBalancesData, categories]);
+  }, [allBalancesData, categories, ledgerId, editState, ordinaryObservationDrafts, ordinaryObservationSaved, ordinaryActualSaved, ordinaryActualDirty, ordinaryPreviewVersion]);
 
   const members = (allBalancesData as any)?.members ?? [];
 
@@ -2784,7 +3059,7 @@ export default function LedgerAAInitialBalance() {
                       />
                       <span className="text-sm font-semibold text-gray-800 truncate">{selectedTagName}</span>
                     </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-xs">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
                       <span
                         className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
                         style={{
@@ -2795,6 +3070,7 @@ export default function LedgerAAInitialBalance() {
                         合计 {total.toFixed(2)}%
                       </span>
                       <span className="text-gray-500 tabular-nums whitespace-nowrap">金额 {totalShareAmountText}</span>
+                      {ledgerId === 37 && <span className="text-[10px] text-[#7C3AED]">观察 {rows.filter(row => row.observing).length} 人 · {rows.reduce((sum, row) => sum + (row.observing ? row.observationRatio : 0), 0).toFixed(2)}%（不计合计）</span>}
                     </div>
                   </div>
                   {/* 批量按钮：与第二行统计信息对齐，不干扰标签名称阅读。 */}
@@ -2824,6 +3100,36 @@ export default function LedgerAAInitialBalance() {
                 {/* 各用户占比列表 */}
                 <div className="px-4 py-2 space-y-2">
                   {rows.map(({ member, ratio, amount, visible, pauseStatus }) => {
+                    if (ledgerId === 37 && cat) {
+                      return <OrdinaryTagInlineMemberRow key={ordinaryInlineScope(ledgerId, member.userId, Number(cat.id))}
+                        ledgerId={ledgerId} categoryId={Number(cat.id)} member={member}
+                        observation={ordinaryEffectiveObservation(member.userId, cat)} actual={ordinaryEffectiveActual(member.userId, cat)}
+                        actualStartDate={editState[member.userId]?.[cat.name]?.startDate || ''}
+                        actualPauseDate={editState[member.userId]?.[cat.name]?.pauseHistory?.slice(-1)[0]?.pauseDate || editState[member.userId]?.[cat.name]?.pauseDate || ''}
+                        pauseStatus={pauseStatus} remainingRatio={100 - total} batchSelectMode={batchSelectMode}
+                        visible={batchSelectMode ? editState[member.userId]?.[cat.name]?.visible ?? visible : visible}
+                        saving={ordinarySavingTags.has(Number(cat.id))} accentColor={cat.color || '#D32F2F'}
+                        onConfigRead={onOrdinaryConfigRead}
+                        onToggle={enabled => toggleOrdinaryObservation(member.userId, cat, enabled)}
+                        onObservationEdit={patch => editOrdinaryObservation(member.userId, cat, patch)}
+                        onActualEdit={(field, value) => editOrdinaryActual(member.userId, cat, field, value)}
+                        onDateDetails={() => {
+                          const savedTT = (tagConfigData as any)?.target_total ?? null;
+                          setTagEditModal({ userId: member.userId, tagName: cat.name, catColor: cat.color || '#D32F2F' });
+                          setTagTargetTotalSaved(savedTT); setTagTargetTotalInput(savedTT ?? '');
+                        }}
+                        onDetails={() => {
+                          if (batchSelectMode) {
+                            const currentVisible = editState[member.userId]?.[cat.name]?.visible ?? visible;
+                            updateEntry(member.userId, cat.name, { visible: !currentVisible });
+                            setBatchSelectedUsers(previous => new Set(previous).add(member.userId));
+                            return;
+                          }
+                          const savedTT = (tagConfigData as any)?.target_total ?? null;
+                          setTagEditModal({ userId: member.userId, tagName: cat.name, catColor: cat.color || '#D32F2F' });
+                          setTagTargetTotalSaved(savedTT); setTagTargetTotalInput(savedTT ?? '');
+                        }} />;
+                    }
                     const pct = ratio;
                     // 每人独立计算：基准 = max(100, 自己的比例)
                     const base = Math.max(100, pct);
@@ -2980,6 +3286,16 @@ export default function LedgerAAInitialBalance() {
                     {total.toFixed(2)}% / 100%
                   </span>
                 </div>
+
+                {ledgerId === 37 && cat && <div data-ordinary-inline-tag-save={cat.id} className="mx-4 mb-4 rounded-lg border border-purple-100 bg-purple-50/40 px-2.5 py-2">
+                  <p className="text-[10px] leading-4 text-gray-500">观察不占实际份额、不参与结算；保存后真实比例/分配金额归零，历史、押金和钱包不动。关闭需重新分配真实比例。</p>
+                  {ordinaryTagErrors[cat.id] && <p role="alert" className="mt-1 text-xs text-red-600">{ordinaryTagErrors[cat.id]}；未成功草稿已保留</p>}
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="flex-1 text-[10px] text-gray-500">{ordinaryTagIsDirty(cat) ? '本标签有未保存修改' : isLocalHotPreview ? '当前会话预览，所有保存不提交正式账本' : '本标签已保存'}</span>
+                    <button type="button" disabled={ordinarySavingTags.has(Number(cat.id)) || !ordinaryTagIsDirty(cat)} onClick={() => cancelOrdinaryTag(cat)} className="h-7 px-2 text-xs text-gray-500 disabled:opacity-40">取消</button>
+                    <button type="button" disabled={ordinarySavingTags.has(Number(cat.id)) || !ordinaryTagIsDirty(cat)} onClick={() => void handleSaveOrdinaryTag(cat)} className="flex h-7 items-center gap-1 rounded-md px-2.5 text-xs text-white disabled:opacity-40" style={{ backgroundColor: cat.color || '#D32F2F' }}><Save size={12} />{ordinarySavingTags.has(Number(cat.id)) ? '保存中…' : isLocalHotPreview ? '保存本标签预览' : '保存本标签'}</button>
+                  </div>
+                </div>}
 
                 {/* 批量操作栏（批量模式且有选中时显示） */}
                 {batchSelectMode && (
@@ -3820,8 +4136,10 @@ export default function LedgerAAInitialBalance() {
                           </div>
                           {/* 展开内容 */}
                           {isCatExpanded && <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid #F0E8E0' }}>
+                          {ledgerId === 37 && !isStockTag && renderOrdinaryTagEditor(userId, cat, member)}
                           {/* 手工标签沿用标签级日期；股票标签改为每个“成员 × 批次”的日期，在下方批次行内管理。 */}
                           {!isStockTag && <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                            {ledgerId === 37 ? <div className="text-xs font-medium text-gray-700">暂停与资金处理</div> : <>
                             <div className="text-xs font-medium text-gray-700">日期设置</div>
                             <div className="grid grid-cols-2 gap-2">
                             <div className="min-w-0">
@@ -3891,6 +4209,7 @@ export default function LedgerAAInitialBalance() {
                               </div>
                               </div>
                             </div>
+                            </>}
                             {ledgerId === 37 && pauseWalletHandlingDraft?.userId === userId && pauseWalletHandlingDraft!.tagName === cat.name && (
                               <div className="rounded-xl p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #B8D7F3' }}>
                                 <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>暂停后的资金处理</div>
@@ -3914,7 +4233,8 @@ export default function LedgerAAInitialBalance() {
                             {ledgerId === 37 && pauseWalletPlans[`${userId}|${cat.name}`] && <div className="rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: '#F2F8FF', color: '#45616F' }}>已选择：{pauseWalletPlans[`${userId}|${cat.name}`].action === 'settle_and_release' ? '暂停保存后，解冻本标签的冻结保证金，并按标签差额自动分红或回填' : pauseWalletPlans[`${userId}|${cat.name}`].action === 'release_wallet_holds' ? '暂停保存后，解冻本标签仍冻结的钱包保证金并退回成员账户' : '暂停保存后，继续保留保证金冻结'}。</div>}
                           </section>}
 
-                          {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' }) : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                          {isStockTag && renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' })}
+                          {ledgerId !== 37 && !isStockTag && <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs font-medium text-gray-700">金额与比例</div>
                               <span className="text-[11px] text-gray-400 whitespace-nowrap">0%=不参与，自动归零</span>
@@ -3975,6 +4295,10 @@ export default function LedgerAAInitialBalance() {
                           <div className="space-y-1.5">
                             {MarginEntriesEditor({ userId, tagName: cat.name, entry, accentColor: "#D32F2F", compact: true })}
                           </div>
+                          {ledgerId === 37 && !isStockTag && <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                            <button type="button" onClick={() => setTagEditModal({ userId, tagName: cat.name, catColor: cat.color || '#2F6F85' })} className="h-7 text-[10px] text-gray-500">暂停/重启历史详情</button>
+                            <button type="button" disabled={isSaving || ordinarySavingTags.has(Number(cat.id)) || isLocalHotPreview} onClick={() => void handleSaveMember(userId)} className="h-7 rounded-md px-2.5 text-xs text-white disabled:opacity-40" style={{ backgroundColor: cat.color || '#2F6F85' }}>{isLocalHotPreview ? '真实日期与押金仅预览' : isSaving ? '保存中…' : '保存日期与押金'}</button>
+                          </div>}
                           </div>}
                           </div>
                         </Fragment>
@@ -4008,7 +4332,8 @@ export default function LedgerAAInitialBalance() {
         const { userId, tagName, catColor } = tagEditModal;
         const member = members.find((m: any) => m.userId === userId);
         const entry = editState[userId]?.[tagName] ?? defaultEntry(getSavedTagVisible(userId, tagName));
-        const isStockTag = isStockPortfolioTag(categories.find((category: any) => category.name === tagName));
+        const category = categories.find((category: any) => category.name === tagName);
+        const isStockTag = isStockPortfolioTag(category);
         const allocationDisplay = resolveAllocationDisplay(entry, userId, tagName);
         const isSaving = savingUsers.has(userId);
         return (
@@ -4042,8 +4367,10 @@ export default function LedgerAAInitialBalance() {
               </div>
               {/* 内容区 */}
               <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
+                {ledgerId === 37 && !isStockTag && category && renderOrdinaryTagEditor(userId, category, member)}
                 {/* 手工标签使用标签级日期；股票标签在每笔成员参与记录内设置日期。 */}
                 {!isStockTag && <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                  {ledgerId === 37 ? <div className="text-xs font-medium text-gray-700">暂停历史与资金处理</div> : <>
                   <div className="text-xs font-medium text-gray-700">日期设置</div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="min-w-0">
@@ -4136,6 +4463,7 @@ export default function LedgerAAInitialBalance() {
                       })()}
                     </div>
                   </div>
+                  </>}
                   {/* 暂停/重启记录 */}
                   <div className="space-y-2 pt-1">
                     <div className="flex justify-end">
@@ -4322,7 +4650,8 @@ export default function LedgerAAInitialBalance() {
                   )}
                   </div>
                 </section>}
-                {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: catColor }) : <>
+                {isStockTag && renderStockParticipationEditor({ selectedUserId: userId, accentColor: catColor })}
+                {ledgerId !== 37 && !isStockTag && <>
                 {/* 比例、初始金额、实际权益三联动 */}
                 <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                   <div className="flex items-center justify-between gap-2">
@@ -4387,15 +4716,19 @@ export default function LedgerAAInitialBalance() {
               {/* 弹窗底部保存按鈕 */}
               <div className="px-4 py-3 flex-shrink-0" style={{ borderTop: '1px solid #F0E8E0' }}>
                 <button
-                  onClick={() => {
-                    handleSaveMember(userId);
-                    setTagEditModal(null);
+                  onClick={async () => {
+                    if (ledgerId !== 37) {
+                      handleSaveMember(userId);
+                      setTagEditModal(null);
+                      return;
+                    }
+                    if (await handleSaveMember(userId)) setTagEditModal(null);
                   }}
-                  disabled={isSaving}
+                  disabled={isSaving || (ledgerId === 37 && (ordinarySavingTags.has(Number(category?.id)) || (isLocalHotPreview && !isStockTag)))}
                   className="w-full py-2.5 rounded-xl text-sm font-semibold"
                   style={{ backgroundColor: isSaving ? '#BDBDBD' : catColor, color: '#FFFFFF' }}
                 >
-                  {isSaving ? '保存中...' : '保存'}
+                  {isSaving ? '保存中...' : ledgerId === 37 && !isStockTag ? isLocalHotPreview ? '真实日期与押金仅预览，不提交' : '保存日期与押金（先保存本标签草稿）' : '保存'}
                 </button>
               </div>
             </div>
@@ -4470,7 +4803,7 @@ export default function LedgerAAInitialBalance() {
               <button
                 type="button"
                 disabled={revokeWalletReleaseMutation.isPending}
-                onClick={() => revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'reverse' })}
+                onClick={() => { if (isLocalHotPreview) { toast.info('热预览不提交保证金冲正'); return; } revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'reverse' }); }}
                 className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
                 style={{ borderColor: '#BBE0C2', backgroundColor: '#F0F9F1', color: '#237A39' }}
               >
@@ -4480,7 +4813,7 @@ export default function LedgerAAInitialBalance() {
               <button
                 type="button"
                 disabled={revokeWalletReleaseMutation.isPending}
-                onClick={() => revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'delete' })}
+                onClick={() => { if (isLocalHotPreview) { toast.info('热预览不提交保证金撤回'); return; } revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'delete' }); }}
                 className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
                 style={{ borderColor: '#F3CDD1', backgroundColor: '#FFF5F5', color: '#C62828' }}
               >

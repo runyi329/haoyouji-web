@@ -1603,64 +1603,16 @@ export async function updateLedgerCategory(
     }
     await requireLedger52CreatorInDb(db, category.ledgerId, userId);
   }
-  // 如果是改名，需要同步更新所有成员 initial_balances 里的旧标签名 key
-  if (data.name) {
-    // 先获取旧名称和所属账本
-    const oldCategory = await db
-      .select({ id: ledgerCategories.id, ledgerId: ledgerCategories.ledgerId, name: ledgerCategories.name })
-      .from(ledgerCategories)
-      .where(eq(ledgerCategories.id, categoryId))
-      .then((rows: any[]) => rows[0]);
-
-    if (oldCategory && oldCategory.name !== data.name) {
-      const oldName = oldCategory.name;
-      const newName = data.name;
-      const ledgerId = oldCategory.ledgerId;
-
-      // 获取该账本所有有 initial_balances 的成员
-      const members = await db
-        .select({ id: ledgerMembers.id, initialBalances: ledgerMembers.initialBalances })
-        .from(ledgerMembers)
-        .where(eq(ledgerMembers.ledgerId, ledgerId));
-
-      for (const member of members) {
-        if (!member.initialBalances) continue;
-        try {
-          const balances: Record<string, any> = typeof member.initialBalances === 'string'
-            ? JSON.parse(member.initialBalances)
-            : { ...(member.initialBalances as Record<string, any>) };
-
-          // 检查是否有任何与旧名相关的键（主键或后缀键如 oldName__ratio）
-          const hasOldKeys = Object.keys(balances).some(k => k === oldName || k.startsWith(oldName + '__'));
-          if (!hasOldKeys) continue;
-
-          const newBalances: Record<string, any> = {};
-          for (const [k, v] of Object.entries(balances)) {
-            if (k === oldName) {
-              // 主键：直接替换为新名称
-              newBalances[newName] = v;
-            } else if (k.startsWith(oldName + '__')) {
-              // 后缀键（如 oldName__ratio）：替换前缀为新名称
-              const suffix = k.slice(oldName.length); // 包含 "__ratio" 等
-              newBalances[newName + suffix] = v;
-            } else {
-              newBalances[k] = v;
-            }
-          }
-
-          await db
-            .update(ledgerMembers)
-            .set({ initialBalances: JSON.stringify(newBalances) })
-            .where(eq(ledgerMembers.id, member.id));
-        } catch (e) {
-          // 解析失败则跳过，不影响主流程
-        }
-      }
-
-      // 同步更新 ledger_tag_config 中的 tag_name
-      await db.execute(
-        sql`UPDATE ledger_tag_config SET tag_name = ${newName} WHERE ledger_id = ${ledgerId} AND tag_name = ${oldName}`
-      );
+  // 仅处理本次显式改名：当前名称与当前配置一起提交，不追溯/合并以前遗留数据。
+  if (data.name !== undefined) {
+    const { getDbTransactionConnection } = await import('./db');
+    const { renameLedgerCategoryPreservingConfig } = await import('./ledger-category-rename');
+    const connection = await getDbTransactionConnection();
+    if (!connection) throw new Error("Ledger database connection failed");
+    try {
+      return await renameLedgerCategoryPreservingConfig(connection, categoryId, { ...data, name: data.name });
+    } finally {
+      (connection as any).release?.();
     }
   }
 
@@ -6247,6 +6199,17 @@ export async function updateMyInitialBalances(
   userId: number,
   balances: Record<string, number | string>
 ): Promise<void> {
+  if (ledgerId === 37) {
+    const { getDbTransactionConnection } = await import('./db');
+    const { updateLedger37InitialBalances } = await import('./ledger37-initial-balances');
+    const connection = await getDbTransactionConnection();
+    if (!connection) throw new Error("Ledger database connection failed");
+    try {
+      return await updateLedger37InitialBalances(connection, userId, balances);
+    } finally {
+      (connection as any).release?.();
+    }
+  }
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 

@@ -31,6 +31,7 @@ import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import Ledger37MarginWalletActions from "@/components/Ledger37MarginWalletActions";
+import OrdinaryTagObservationPanel from "@/components/OrdinaryTagObservationPanel";
 import {
   AreaChart,
   Area,
@@ -2648,7 +2649,15 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* 观察账户仅在股票标签详情内部展示，首页不再单独列出观察入口。 */}
+      {/* 股票观察仍在股票详情内部；普通标签观察独立列出，不加入真实汇总。 */}
+      {ledgerId === 37 && overviewTab === 'overview' && (!selectedTag || !isSelectedStockPortfolio) && (
+        <OrdinaryTagObservationPanel
+          key={`ordinary-observation:${marginTargetUserId}`}
+          ledgerId={ledgerId}
+          userId={marginTargetUserId}
+          categoryId={selectedTagId}
+        />
+      )}
       {/* 全部与单标签共用的视图切换；更换标签时保留当前模式。 */}
       {categories && categories.length > 0 && (
         <div className="mx-3 mt-2 flex rounded-lg bg-white shadow-sm" style={{ border: '1px solid #F0F0F0', borderRadius: 8 }}>
