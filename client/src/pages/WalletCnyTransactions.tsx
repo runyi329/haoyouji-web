@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
@@ -71,6 +71,65 @@ function getCnyFlowPresentation(noteValue: unknown, isIn: boolean) {
   return { primary: isIn ? "入账" : "扣除", secondary: detail, status: isIn ? "已入账" : "已扣除" };
 }
 
+type CnyHistoryPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+};
+
+function HistoryPagination({ data, pageSize, isFetching, isError, isYaban, onPageChange, onPageSizeChange }: {
+  data?: CnyHistoryPagination;
+  pageSize: number;
+  isFetching: boolean;
+  isError: boolean;
+  isYaban: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  const textColor = isYaban ? "#5A7A92" : "rgba(255,255,255,.65)";
+  const controlStyle = {
+    background: isYaban ? "#fff" : "#171717",
+    color: isYaban ? "#0E5A9E" : "#F5D78E",
+    border: isYaban ? "1px solid #D3E7F5" : "1px solid rgba(201,168,76,.25)",
+  };
+  return (
+    <nav aria-label="人民币流水分页" aria-busy={isFetching} className="space-y-2.5 rounded-xl p-3" style={{ background: isYaban ? "#E8F3FA" : "#171717", color: textColor }}>
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span>{isError ? "总笔数暂不可用" : data ? `共 ${data.total.toLocaleString("zh-CN")} 笔` : "总笔数加载中…"}</span>
+        <label className="flex shrink-0 items-center gap-1.5">
+          每页
+          <select aria-label="每页流水笔数" value={pageSize} disabled={isFetching} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="h-8 rounded-lg px-2 outline-none disabled:opacity-40" style={controlStyle}>
+            {[20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+          笔
+        </label>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <button type="button" disabled={isFetching || isError || !data?.hasPrevious} onClick={() => { if (!isFetching && !isError && data?.hasPrevious) onPageChange(Math.max(1, data.page - 1)); }} className="h-9 shrink-0 rounded-lg px-3 text-xs disabled:cursor-not-allowed disabled:opacity-40" style={controlStyle}>上一页</button>
+        <span aria-live="polite" className="min-w-0 text-center text-[11px]">
+          {isError ? "读取失败" : data ? `第 ${data.totalPages === 0 ? 0 : data.page} 页 / 共 ${data.totalPages} 页` : "页码加载中…"}
+        </span>
+        <button type="button" disabled={isFetching || isError || !data?.hasNext} onClick={() => { if (!isFetching && !isError && data?.hasNext) onPageChange(data.page + 1); }} className="h-9 shrink-0 rounded-lg px-3 text-xs disabled:cursor-not-allowed disabled:opacity-40" style={controlStyle}>下一页</button>
+      </div>
+    </nav>
+  );
+}
+
+function TransactionNote({ note, isYaban }: { note: string; isYaban: boolean }) {
+  if (!note.trim()) return null;
+  return (
+    <details className="mt-2 text-[11px]" style={{ color: isYaban ? "#5A7A92" : "rgba(255,255,255,.65)" }}>
+      <summary className="w-fit cursor-pointer select-none rounded py-1 focus-visible:outline focus-visible:outline-2" style={{ color: isYaban ? "#1E88D6" : "#C9A84C" }}>查看备注</summary>
+      <div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg p-2.5 leading-5 [overflow-wrap:anywhere]" style={{ background: isYaban ? "#F4F8FB" : "rgba(255,255,255,.04)" }}>
+        {note}
+      </div>
+    </details>
+  );
+}
+
 export default function WalletCnyTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -92,17 +151,46 @@ export default function WalletCnyTransactions() {
     if (isMiban) return setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&from=miban&account=CRYPTO`);
     setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=${sourceLedgerId}&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
-  const [filter, setFilter] = useState<"all" | "in" | "out">("all");
+  const [historyParams, setHistoryParams] = useState<{ page: number; pageSize: number; filter: "all" | "in" | "out" }>({ page: 1, pageSize: 50, filter: "all" });
+  const { page, pageSize, filter } = historyParams;
 
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyBalanceSummaryQuery = trpc.recharge.getCnyBalanceSummary.useQuery();
-  const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 200 });
+  const cnyHistoryQuery = trpc.recharge.getCnyHistoryPage.useQuery({ page, pageSize, filter }, { retry: false });
+  useEffect(() => {
+    const correctedPage = cnyHistoryQuery.data?.page;
+    if (!cnyHistoryQuery.isFetching && !cnyHistoryQuery.isError && correctedPage && correctedPage !== page) {
+      setHistoryParams((previous) => previous.page === page ? { ...previous, page: correctedPage } : previous);
+    }
+  }, [cnyHistoryQuery.data?.page, cnyHistoryQuery.isFetching, cnyHistoryQuery.isError, page]);
+  const changeFilter = (nextFilter: "all" | "in" | "out") => {
+    if (cnyHistoryQuery.isFetching) return;
+    setHistoryParams((previous) => ({ ...previous, filter: nextFilter, page: 1 }));
+  };
+  const changePageSize = (nextPageSize: number) => {
+    if (cnyHistoryQuery.isFetching) return;
+    setHistoryParams((previous) => ({ ...previous, pageSize: nextPageSize, page: 1 }));
+  };
+  const changePage = (nextPage: number) => {
+    if (cnyHistoryQuery.isFetching) return;
+    setHistoryParams((previous) => ({ ...previous, page: nextPage }));
+  };
+  const isRefreshing = cnyBalanceQuery.isFetching || cnyBalanceSummaryQuery.isFetching || cnyHistoryQuery.isFetching;
+  const refresh = () => {
+    if (isRefreshing) return;
+    void cnyBalanceQuery.refetch();
+    void cnyBalanceSummaryQuery.refetch();
+    void cnyHistoryQuery.refetch();
+  };
+  const pagination = <HistoryPagination data={cnyHistoryQuery.data} pageSize={pageSize} isFetching={cnyHistoryQuery.isFetching} isError={cnyHistoryQuery.isError} isYaban={isYaban} onPageChange={changePage} onPageSizeChange={changePageSize} />;
 
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
 
-  const allTx = (cnyHistoryQuery.data ?? []).map((m: any) => {
-    const rawNote = (m.note || "").replace(/^\[CNY\]/, "");
+  // 流水方向、总笔数和每笔历史余额均以服务端全历史计算结果为准。
+  const transactions = (cnyHistoryQuery.data?.items ?? []).map((m: any) => {
+    const originalNote = String(m.note ?? "");
+    const rawNote = originalNote.replace(/^\[CNY\]/, "");
     const isIn = Number(m.amount) > 0;
     const presentation = getCnyFlowPresentation(m.note, isIn);
     const wcCode = extractWcTeamCode(rawNote);
@@ -115,15 +203,10 @@ export default function WalletCnyTransactions() {
       primaryLabel: presentation.primary,
       secondaryLabel: presentation.secondary,
       status: presentation.status,
+      rawNote: originalNote,
       wcCode,
       createdAt: m.created_at,
     };
-  });
-
-  const filtered = allTx.filter((tx) => {
-    if (filter === "in") return tx.isIn;
-    if (filter === "out") return !tx.isIn;
-    return true;
   });
 
   // ============ 牙伴蓝白主题 ============
@@ -147,8 +230,10 @@ export default function WalletCnyTransactions() {
             <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
           </select>
           <button
-            onClick={() => { cnyBalanceQuery.refetch(); cnyBalanceSummaryQuery.refetch(); cnyHistoryQuery.refetch(); }}
-            className="flex items-center justify-center w-9 h-9 rounded-full"
+            onClick={refresh}
+            disabled={isRefreshing}
+            aria-label="刷新人民币流水"
+            className="flex items-center justify-center w-9 h-9 rounded-full disabled:opacity-40"
             style={{ background: "rgba(255,255,255,0.18)" }}
           >
             <RefreshCw className="w-4 h-4 text-white" />
@@ -181,32 +266,39 @@ export default function WalletCnyTransactions() {
             {(["all", "in", "out"] as const).map((f) => (
               <button
                 key={f}
-                onClick={() => setFilter(f)}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                onClick={() => changeFilter(f)}
+                disabled={cnyHistoryQuery.isFetching}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
                 style={
                   filter === f
                     ? { background: "#1E88D6", color: "#fff" }
                     : { color: "#5A7A92", background: "transparent" }
                 }
               >
-                {f === "all" ? "全部" : f === "in" ? "充值" : "提现"}
+                {f === "all" ? "全部" : f === "in" ? "收入" : "支出"}
               </button>
             ))}
           </div>
 
           {/* 流水列表 */}
           <div className="rounded-2xl overflow-hidden" style={{ background: "#fff", boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
-            {cnyHistoryQuery.isLoading ? (
-              <div className="py-12 text-center text-xs text-gray-400">加载中...</div>
-            ) : filtered.length === 0 ? (
+            {cnyHistoryQuery.isError ? (
+              <div role="alert" className="px-5 py-12 text-center text-xs text-[#5A7A92]">
+                <p>流水读取失败，请重试</p>
+                <button type="button" disabled={cnyHistoryQuery.isFetching} onClick={() => { if (!cnyHistoryQuery.isFetching) void cnyHistoryQuery.refetch(); }} className="mt-3 rounded-lg bg-[#E8F3FA] px-4 py-2 font-semibold text-[#1E88D6] disabled:opacity-40">{cnyHistoryQuery.isFetching ? "重试中…" : "重试"}</button>
+              </div>
+            ) : cnyHistoryQuery.isLoading || cnyHistoryQuery.isFetching ? (
+              <div role="status" className="py-12 text-center text-xs text-gray-400">加载中...</div>
+            ) : transactions.length === 0 ? (
               <div className="py-12 text-center text-xs text-gray-400">
-                暂无{filter === "in" ? "充值" : filter === "out" ? "提现" : ""}记录
+                暂无{filter === "in" ? "收入" : filter === "out" ? "支出" : ""}记录
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {filtered.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between px-5 py-4">
-                    <div className="flex items-center space-x-3">
+                {transactions.map((tx) => (
+                  <div key={tx.id} className="px-5 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center space-x-3">
                       <div
                         className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
                         style={{ background: tx.isIn ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)" }}
@@ -226,24 +318,28 @@ export default function WalletCnyTransactions() {
                             : <ArrowUpCircle className="w-4 h-4 text-red-500" />
                         )}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         {!tx.wcCode && (
                           <div className="text-sm font-medium text-gray-700">
                             {tx.primaryLabel}
                           </div>
                         )}
-                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}{tx.secondaryLabel ? ` · ${tx.secondaryLabel}` : ""}</div>
+                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}</div>
+                        {tx.secondaryLabel && <div className="mt-1 truncate text-xs text-gray-400">{tx.secondaryLabel}</div>}
                       </div>
                     </div>
-                    <div className="text-base font-bold tabular-nums" style={{ color: tx.isIn ? "#16a34a" : "#ef4444" }}>
+                    <div className="shrink-0 whitespace-nowrap text-base font-bold tabular-nums" style={{ color: tx.isIn ? "#16a34a" : "#ef4444" }}>
                       {tx.isIn ? "+" : "-"}{tx.amount.toFixed(2)}
                       <span className="text-xs font-normal ml-1 text-gray-400">CNY</span>
                     </div>
+                    </div>
+                    <TransactionNote note={tx.rawNote} isYaban />
                   </div>
                 ))}
               </div>
             )}
           </div>
+          {pagination}
         </div>
       </div>
     );
@@ -275,8 +371,10 @@ export default function WalletCnyTransactions() {
           <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,0.48)" }}>人民币账户 · 全部真实资金流水</p>
         </div>
         <button
-          onClick={() => { cnyBalanceQuery.refetch(); cnyBalanceSummaryQuery.refetch(); cnyHistoryQuery.refetch(); }}
-          className="flex items-center justify-center w-9 h-9 rounded-full"
+          onClick={refresh}
+          disabled={isRefreshing}
+          aria-label="刷新人民币流水"
+          className="flex items-center justify-center w-9 h-9 rounded-full disabled:opacity-40"
           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(201,168,76,0.22)" }}
         >
           <RefreshCw className="w-4 h-4" style={{ color: "#C9A84C" }} />
@@ -290,29 +388,35 @@ export default function WalletCnyTransactions() {
               <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,.9)" }}>筛选明细</p>
               <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,.48)" }}>查看全部、收入或支出资金流水</p>
             </div>
-            <span className="rounded-full px-2 py-1 text-[10px]" style={{ background: "rgba(201,168,76,.12)", color: "#F5D78E" }}>{filtered.length} 笔</span>
+            <span className="shrink-0 rounded-full px-2 py-1 text-[10px]" style={{ background: "rgba(201,168,76,.12)", color: "#F5D78E" }}>{cnyHistoryQuery.isError ? "读取失败" : cnyHistoryQuery.data ? `${cnyHistoryQuery.data.total.toLocaleString("zh-CN")} 笔` : "加载中…"}</span>
           </div>
           <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
             {(["all", "in", "out"] as const).map((f) => {
               const selected = filter === f;
-              return <button key={f} type="button" onClick={() => setFilter(f)} className="h-7 shrink-0 rounded-full px-3 text-[11px] font-semibold" style={{ background: selected ? "linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)" : "rgba(255,255,255,.06)", color: selected ? "#15110A" : "rgba(255,255,255,.48)", border: selected ? "1px solid transparent" : "1px solid rgba(201,168,76,0.22)" }}>{f === "all" ? "全部类型" : f === "in" ? "收入" : "支出"}</button>;
+              return <button key={f} type="button" onClick={() => changeFilter(f)} disabled={cnyHistoryQuery.isFetching} className="h-7 shrink-0 rounded-full px-3 text-[11px] font-semibold disabled:opacity-40" style={{ background: selected ? "linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)" : "rgba(255,255,255,.06)", color: selected ? "#15110A" : "rgba(255,255,255,.48)", border: selected ? "1px solid transparent" : "1px solid rgba(201,168,76,0.22)" }}>{f === "all" ? "全部类型" : f === "in" ? "收入" : "支出"}</button>;
             })}
           </div>
         </section>
 
         <section className="overflow-hidden rounded-2xl" style={{ background: "#171717", border: "1px solid rgba(201,168,76,0.22)" }}>
-          {cnyHistoryQuery.isLoading ? (
-            <div className="py-20 text-center text-xs" style={{ color: "rgba(255,255,255,.25)" }}>加载中...</div>
-          ) : filtered.length === 0 ? (
+          {cnyHistoryQuery.isError ? (
+            <div role="alert" className="px-5 py-16 text-center" style={{ color: "rgba(255,255,255,.78)" }}>
+              <p className="text-sm font-medium">流水读取失败，请重试</p>
+              <button type="button" disabled={cnyHistoryQuery.isFetching} onClick={() => { if (!cnyHistoryQuery.isFetching) void cnyHistoryQuery.refetch(); }} className="mt-3 rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-40" style={{ background: "rgba(201,168,76,.12)", color: "#F5D78E" }}>{cnyHistoryQuery.isFetching ? "重试中…" : "重试"}</button>
+            </div>
+          ) : cnyHistoryQuery.isLoading || cnyHistoryQuery.isFetching ? (
+            <div role="status" className="py-20 text-center text-xs" style={{ color: "rgba(255,255,255,.48)" }}>加载中...</div>
+          ) : transactions.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,.78)" }}>此筛选条件下暂无资金明细</p>
               <p className="mt-1 text-xs" style={{ color: "rgba(255,255,255,.48)" }}>可调整筛选条件后再查看</p>
             </div>
           ) : (
             <div>
-              {filtered.map((tx, index) => {
+              {transactions.map((tx, index) => {
                 const iconSrc = tx.wcCode ? `/flags/${tx.wcCode}.png` : getCryptoAssetIconSrc("CNY");
-                return <div key={tx.id} className="flex items-start justify-between gap-3 px-4 py-3.5" style={{ borderBottom: index < filtered.length - 1 ? "1px solid rgba(255,255,255,.07)" : "none" }}>
+                return <div key={tx.id} className="px-4 py-3.5" style={{ borderBottom: index < transactions.length - 1 ? "1px solid rgba(255,255,255,.07)" : "none" }}>
+                  <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-2.5">
                     <span className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(201,168,76,0.22)" }}>
                       {iconSrc ? <img src={iconSrc} alt={tx.wcCode ? tx.wcCode : "人民币图标"} className="h-full w-full object-cover" /> : <span className="text-xs font-bold" style={{ color: "#F5D78E" }}>¥</span>}
@@ -330,11 +434,14 @@ export default function WalletCnyTransactions() {
                     {Number.isFinite(tx.balanceAfter) && <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,.48)" }}>余额 ¥{tx.balanceAfter.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
                     {Number.isFinite(tx.availableAfter) && <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,.48)" }}>可用 ¥{tx.availableAfter.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
                   </div>
+                  </div>
+                  <TransactionNote note={tx.rawNote} isYaban={false} />
                 </div>;
               })}
             </div>
           )}
         </section>
+        {pagination}
 
         <p className="px-1 text-center text-[10px] leading-4" style={{ color: "rgba(255,255,255,.48)" }}>仅展示真实影响人民币余额的流水；担保仅改变可用额，已在每笔明细中体现。</p>
       </main>

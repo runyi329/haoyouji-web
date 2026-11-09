@@ -6357,26 +6357,142 @@ export default function LedgerDetailAA({
       {/* 押金明细弹窗：每笔金额、人民币折算、记录时间及该笔备注 */}
       {marginNoteTag && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          className="fixed inset-0 z-50 flex items-center justify-center px-3"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={() => setMarginNoteTag(null)}
         >
           <div
-            className="w-full rounded-2xl overflow-hidden"
-            style={{ backgroundColor: '#FFFFFF', maxWidth: 400, maxHeight: '76vh' }}
+            className="w-full rounded-2xl overflow-hidden flex flex-col"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 420, maxHeight: '85vh' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <div>
-                <div className="text-base font-semibold" style={{ color: '#1A1A1A' }}>押金明细 · {marginNoteTag}</div>
-                <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>每笔金额、时间与备注分别记录</div>
+            <div className="flex shrink-0 items-start justify-between gap-3 px-3 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5" style={{ color: '#1A1A1A' }}>
+                  <span className="text-sm font-semibold">押金明细</span>
+                  {currentMarginDetailSummary && <span className="text-[10px] font-normal leading-4" style={{ color: '#888888' }}>
+                    {currentMarginDetailSummary.activePauseDate
+                      ? <><PauseCircle aria-hidden="true" size={11} strokeWidth={1.8} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 3, color: '#3B82F6' }} />{`暂停中 · 当前所需 ¥0.00 · ${currentMarginDetailSummary.activePauseDate.replace(/-/g, '/')} 暂停`}</>
+                      : currentMarginDetailSummary.hasUnpricedEntry
+                        ? '当前所需待核实'
+                        : `当前所需 ${formatSignedMarginCny(currentMarginDetailSummary.referenceDeposit)}`}
+                  </span>}
+                </div>
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-1 text-sm font-medium leading-5" style={{ color: '#424242' }}>
+                  <span className="break-words">{viewAsMember?.nickname || viewAsMember?.name || viewAsMember?.username || (viewAsUserId ? '当前代看成员' : user?.name || user?.username || '当前成员')}</span>
+                  <span className="font-normal" style={{ color: '#9E9E9E' }}>→</span>
+                  <span className="break-words">{marginNoteTag}</span>
+                </div>
               </div>
-              <button onClick={() => setMarginNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+              <button onClick={() => setMarginNoteTag(null)} className="shrink-0 text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
-            <div className="px-4 py-4 overflow-y-auto space-y-3" style={{ maxHeight: '61vh' }}>
-              {canManageMargins && (
+            <div className="min-h-0 flex-1 px-3 py-3 overflow-y-auto space-y-2.5">
+              {currentMarginDetailEntries.length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无押金记录</div>
+              ) : (
+                <div className="rounded-xl px-3 py-1" style={{ backgroundColor: '#FFFFFF', border: '1px solid #EEEEEE' }}>
+                  <div className="py-2 text-sm font-semibold" style={{ color: '#424242' }}>资金明细</div>
+                  {currentMarginDetailEntries.map((entry, index) => {
+                    const targetName = viewAsMember?.nickname || viewAsMember?.name || viewAsMember?.username || (viewAsUserId ? '当前代看成员' : user?.nickname || user?.name || user?.username || '当前成员');
+                    const formatRecordedAt = (value?: string) => {
+                      if (!value) return '未记录时间';
+                      const date = new Date(value);
+                      return Number.isNaN(date.getTime()) ? '未记录时间' : date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+                    };
+                    const isOutflow = entry.amount < 0;
+                    const isReversal = entry.entryKind === 'reversal';
+                    const hasWalletEvidence = entry.source === 'wallet_hold';
+                    const isWalletFreeze = !isOutflow && entry.source === 'wallet_hold' && !isReversal && entry.entryKind !== 'release';
+                    const isWalletRelease = isOutflow && entry.entryKind === 'release' && hasWalletEvidence;
+                    const isWalletReversal = isReversal && hasWalletEvidence;
+                    const isReversedRelease = entry.entryKind === 'release' && entry.reversalStatus === 'reversed';
+                    const walletDestination = `${targetName}的全局钱包 · ${entry.coin}可用余额`;
+                    const flowLabel = isReversal || isReversedRelease ? '冲正' : isWalletRelease ? '解冻' : isWalletFreeze ? '冻结' : isOutflow ? '转出' : '登记';
+                    const fundPath = isWalletReversal
+                      ? `${isOutflow ? `本标签押金 → ${walletDestination}` : `${targetName}的全局钱包 → 本标签押金`}（冲正方向）`
+                      : isWalletRelease
+                        ? `${isReversedRelease ? '原方向：' : ''}本标签押金 → ${walletDestination}${isReversedRelease ? '（已冲正）' : ''}`
+                        : isWalletFreeze
+                          ? '全局钱包 → 本标签押金（冻结）'
+                          : isReversal
+                            ? `本标签押金${isOutflow ? '减少' : '增加'} · 未记录关联钱包`
+                            : isOutflow
+                              ? `${entry.entryKind === 'release' ? '解冻转出' : '手动转出'} · 未记录资金去向`
+                              : '手动登记至本标签押金 · 未关联钱包流水';
+                    const amountLabel = entry.coin === 'CNY'
+                      ? formatSignedMarginCny(entry.amount)
+                      : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`;
+                    const remarkText = [fundPath, ...(entry.notes ?? []).map(note => note.content), ...(isReversedRelease || isReversal ? [isReversedRelease ? '该次解冻已冲正，不代表当前钱包仍有该笔入账。' : '冲正流水，不是新的解冻入账。'] : [])].join(' · ');
+                    return (
+                      <div key={entry.id || `${entry.coin}-${index}`} className="py-3 first:pt-2 last:pb-2" style={{ borderBottom: index < currentMarginDetailEntries.length - 1 ? '1px solid #EEEEEE' : undefined }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', alignItems: 'center', gap: 8 }}>
+                          <div className="min-w-0 whitespace-nowrap text-xs font-semibold tabular-nums" style={{ color: '#424242' }}>{formatRecordedAt(entry.createdAt)}</div>
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium leading-4" style={{ color: isOutflow ? '#388E3C' : '#D32F2F', backgroundColor: isOutflow ? '#F0F8F1' : '#FFF1F2' }}>{flowLabel}</span>
+                          <div className="min-w-0 text-right tabular-nums">
+                            <div className="text-sm font-bold break-words" style={{ color: isOutflow ? '#388E3C' : '#D32F2F' }}>{amountLabel}</div>
+                            {(entry.coin !== 'CNY' || entry.cnyValue === null) && <div className="text-[11px] mt-0.5" style={{ color: entry.cnyValue === null ? '#B26A00' : '#757575' }}>{entry.cnyValue === null ? '暂无可靠报价' : `≈ ${formatSignedMarginCny(entry.cnyValue)}`}</div>}
+                          </div>
+                        </div>
+                        <details className="mt-1.5 text-[11px] leading-4" style={{ color: '#616161' }}>
+                          <summary className="list-none cursor-pointer truncate" title={remarkText}>
+                            <span className="font-medium" style={{ color: '#9E9E9E' }}>备注：</span>{remarkText}
+                          </summary>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{remarkText}</div>
+                        </details>
+                      </div>
+                    );
+                  })}
+                  {!currentMarginDetailSummary && <div className="flex items-center justify-between px-1 pt-1 text-sm" style={{ color: '#424242' }}>
+                    <span>押金人民币净额</span>
+                    <span className="font-bold">{formatSignedMarginCny(currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0))}</span>
+                  </div>}
+                  {currentMarginDetailEntries.some((entry) => entry.cnyValue === null) && (
+                    <div className="text-xs px-1" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入人民币总额</div>
+                  )}
+                </div>
+              )}
+              {currentMarginDetailSummary && (() => {
+                const summary = currentMarginDetailSummary;
+                const formatCny = (value: number) => formatSignedMarginCny(value);
+                const formatAbsoluteCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const shortfallText = summary.shortfall > 0
+                  ? formatAbsoluteCny(summary.shortfall)
+                  : summary.shortfall < 0
+                    ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
+                    : '¥0.00（已达标）';
+                return (
+                  <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #EAEAEA' }}>
+                    <div className="border-b pb-1.5 text-[11px] font-semibold" style={{ color: '#757575', borderColor: '#EAEAEA' }}>{summary.activePauseDate ? '暂停前保留记录' : '押金汇总'}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: '#616161' }}>{summary.isStockPortfolio ? '参考所需押金' : '参考押金'}</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: '#333333' }}>{formatCny(summary.referenceDeposit)}</span>
+                    </div>
+                    {summary.isStockPortfolio ? summary.latestMarketValue === null ? (
+                      <div className="text-[11px]" style={{ color: '#888888' }}>当前个人持仓尚无完整价格，暂无法计算参考押金</div>
+                    ) : (
+                      <>
+                        <div className="text-[11px]" style={{ color: '#888888' }}>当前个人持仓价值 {formatCny(summary.latestMarketValue)} × 20%</div>
+                        <div className="text-[11px]" style={{ color: '#888888' }}>个人持仓成本 {formatCny(summary.currentPrincipal)}；已按所有当前获配股票逐笔市值相加</div>
+                      </>
+                    ) : <div className="text-[11px]" style={{ color: '#888888' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>}
+                    <div className="flex items-center justify-between" style={{ borderTop: '1px solid #EAEAEA', paddingTop: 7 }}>
+                      <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: '#333333' }}>{formatCny(summary.actualDeposit)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: '#616161' }}>押金缺口</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: '#333333' }}>{shortfallText}</span>
+                    </div>
+                    {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#888888' }}>{summary.isStockPortfolio ? '部分价格或实际押金币种暂无可靠报价，人民币净额未纳入该部分' : '无可靠报价的外币明细未计入当前实际押金'}</div>}
+                  </div>
+                );
+              })()}
+            </div>
+            {canManageMargins && (
+              <div className="shrink-0 border-t bg-white px-3 py-3" style={{ borderColor: '#EEEEEE' }}>
                 <Ledger37MarginWalletActions
                   key={`${marginActorPermission.data?.operator?.id}|${marginTargetUserId}|${marginNoteTag}`}
+                  footerLayout
                   targetUserId={marginTargetUserId}
                   targetName={viewAsMember?.name || viewAsMember?.nickname || viewAsMember?.username || user?.name || user?.username}
                   tagName={marginNoteTag}
@@ -6391,165 +6507,8 @@ export default function LedgerDetailAA({
                     ]);
                   }}
                 />
-              )}
-              {currentMarginDetailSummary && (() => {
-                const summary = currentMarginDetailSummary;
-                const formatCny = (value: number) => formatSignedMarginCny(value);
-                const formatAbsoluteCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                const pausedMarginNotice = summary.activePauseDate ? (() => {
-                  const [year, month, day] = summary.activePauseDate.split('-').map(Number);
-                  const pauseDateText = year && month && day ? `${year}年${month}月${day}日` : summary.activePauseDate;
-                  return (
-                    <div className="rounded-xl px-3.5 py-3 shadow-sm" style={{ backgroundColor: '#FFF7E8', border: '1.5px solid #E7A42A' }}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-bold" style={{ color: '#875C00' }}>当前暂停状态</div>
-                          <div className="mt-0.5 text-[11px]" style={{ color: '#A46F00' }}>{pauseDateText} 起暂停</div>
-                        </div>
-                        <span className="rounded-full px-2 py-1 text-[11px] font-bold" style={{ backgroundColor: '#A66B00', color: '#FFFFFF' }}>暂停中</span>
-                      </div>
-                      <div className="mt-3 flex items-end justify-between gap-3 border-t pt-2.5" style={{ borderColor: '#F2D49A' }}>
-                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前所需押金</span>
-                        <span className="text-lg font-bold font-mono leading-none" style={{ color: '#A65D00' }}>¥0.00</span>
-                      </div>
-                      <div className="mt-2 text-[11px] leading-4" style={{ color: '#7B6A48' }}>暂停期间不再产生新的所需押金。下方保留暂停前的押金记录，不受当前零需求影响。</div>
-                    </div>
-                  );
-                })() : null;
-                if (summary.isStockPortfolio) {
-                  const shortfallText = summary.shortfall > 0
-                    ? formatAbsoluteCny(summary.shortfall)
-                    : summary.shortfall < 0
-                      ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
-                      : '¥0.00（已达标）';
-                  return (
-                    <>
-                      {pausedMarginNotice}
-                      <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
-                        {summary.activePauseDate && <div className="border-b pb-1.5 text-[11px] font-semibold" style={{ color: '#607D8B', borderColor: '#D7E6FF' }}>暂停前保留记录</div>}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考所需押金</span>
-                          <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
-                        </div>
-                        {summary.latestMarketValue === null ? (
-                          <div className="text-[11px]" style={{ color: '#B26A00' }}>当前个人持仓尚无完整价格，暂无法计算参考押金</div>
-                        ) : (
-                          <>
-                            <div className="text-[11px]" style={{ color: '#78909C' }}>当前个人持仓价值 {formatCny(summary.latestMarketValue)} × 20%</div>
-                            <div className="text-[11px]" style={{ color: '#78909C' }}>个人持仓成本 {formatCny(summary.currentPrincipal)}；已按所有当前获配股票逐笔市值相加</div>
-                          </>
-                        )}
-                        <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
-                          <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
-                          <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
-                          <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
-                        </div>
-                        {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>部分价格或实际押金币种暂无可靠报价，人民币净额未纳入该部分</div>}
-                      </div>
-                    </>
-                  );
-                }
-                const shortfallText = summary.shortfall > 0
-                  ? formatAbsoluteCny(summary.shortfall)
-                  : summary.shortfall < 0
-                    ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
-                    : '¥0.00（已达标）';
-                return (
-                  <>
-                    {pausedMarginNotice}
-                    <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
-                      {summary.activePauseDate && <div className="border-b pb-1.5 text-[11px] font-semibold" style={{ color: '#607D8B', borderColor: '#D7E6FF' }}>暂停前保留记录</div>}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
-                      </div>
-                      <div className="text-[11px]" style={{ color: '#78909C' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>
-                      <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
-                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
-                      </div>
-                      {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入当前实际押金</div>}
-                    </div>
-                  </>
-                );
-              })()}
-              {currentMarginDetailEntries.length === 0 ? (
-                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无押金记录</div>
-              ) : (
-                <>
-                  {currentMarginDetailEntries.map((entry, index) => {
-                    const formatRecordedAt = (value?: string) => {
-                      if (!value) return '历史押金（未记录时间）';
-                      const date = new Date(value);
-                      return Number.isNaN(date.getTime()) ? '历史押金（未记录时间）' : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-                    };
-                    const isOutflow = entry.amount < 0;
-                    const isWalletFreeze = !isOutflow && entry.source === 'wallet_hold';
-                    const isReversal = entry.entryKind === 'reversal';
-                    const isReversedRelease = entry.entryKind === 'release' && entry.reversalStatus === 'reversed';
-                    const amountLabel = entry.coin === 'CNY'
-                      ? formatSignedMarginCny(entry.amount)
-                      : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`;
-                    return (
-                      <div key={entry.id || `${entry.coin}-${index}`} className="rounded-xl p-3" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#9E9E9E' }}>
-                              第 {index + 1} 笔押金
-                              <span className="px-1.5 py-0.5 rounded" style={isReversal ? { color: '#1565C0', backgroundColor: '#EFF6FF' } : isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isReversal ? '解冻冲正' : isReversedRelease ? '已冲正解冻' : isOutflow ? '转出' : isWalletFreeze ? '钱包冻结' : '存入'}</span>
-                            </div>
-                            <div className="text-base font-bold mt-0.5" style={{ color: isOutflow ? '#D32F2F' : '#1A1A1A' }}>{amountLabel}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold" style={{ color: entry.cnyValue === null ? '#B26A00' : isOutflow ? '#D32F2F' : '#424242' }}>
-                              {entry.cnyValue === null ? '暂无可靠报价' : `≈ ${formatSignedMarginCny(entry.cnyValue)}`}
-                            </div>
-                            <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>{formatRecordedAt(entry.createdAt)}</div>
-                          </div>
-                        </div>
-                        {isWalletFreeze && (
-                          <div className="mt-2.5 rounded-lg px-2.5 py-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #D7E6FF' }}>
-                            <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>来源：从全局钱包冻结</div>
-                            {entry.walletBalanceSnapshot ? (
-                              <div className="mt-1 text-[11px] leading-5 tabular-nums" style={{ color: '#607D8B' }}>
-                                冻结后可用余额 <span className="font-semibold" style={{ color: '#1565C0' }}>{formatWalletSnapshotBalance(entry.walletBalanceSnapshot.available, entry.walletBalanceSnapshot.assetCode)}</span>
-                                <span> · 已冻结 {formatWalletSnapshotBalance(entry.walletBalanceSnapshot.frozen, entry.walletBalanceSnapshot.assetCode)} · 总额 {formatWalletSnapshotBalance(entry.walletBalanceSnapshot.total, entry.walletBalanceSnapshot.assetCode)}</span>
-                              </div>
-                            ) : (
-                              <div className="mt-1 text-[11px] leading-5" style={{ color: '#78909C' }}>该笔为钱包冻结；冻结后余额快照将在新流水中自动保存。</div>
-                            )}
-                          </div>
-                        )}
-                        {(entry.notes ?? []).length > 0 && (
-                          <div className="mt-2.5 pt-2.5 space-y-2" style={{ borderTop: '1px solid #EAEAEA' }}>
-                            {(entry.notes ?? []).map((note) => (
-                              <div key={note.id}>
-                                <div className="text-xs" style={{ color: '#9E9E9E' }}>{formatRecordedAt(note.createdAt)}</div>
-                                <div className="text-sm mt-0.5 whitespace-pre-wrap" style={{ color: '#424242' }}>{note.content}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div className="flex items-center justify-between px-1 pt-1 text-sm" style={{ color: '#424242' }}>
-                    <span>押金人民币净额</span>
-                    <span className="font-bold">{formatSignedMarginCny(currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0))}</span>
-                  </div>
-                  {currentMarginDetailEntries.some((entry) => entry.cnyValue === null) && (
-                    <div className="text-xs px-1" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入人民币总额</div>
-                  )}
-                </>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

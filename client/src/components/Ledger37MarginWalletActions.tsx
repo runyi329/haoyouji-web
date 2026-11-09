@@ -14,6 +14,7 @@ export type Ledger37MarginWalletActionsProps = {
   /** 每单位资产的人民币价格；缺价时不提供补足换算。 */
   prices?: Record<string, number>;
   onChanged?: () => void | Promise<void>;
+  footerLayout?: boolean;
 };
 
 type Mode = "freeze" | "release";
@@ -51,7 +52,7 @@ const quick = "rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dis
 
 /** 只由父层按已登录操作者 id=870413 挂载；不使用被观察成员的角色判断权限。 */
 export function Ledger37MarginWalletActions({
-  targetUserId, tagName, targetName, paused = false, requiredCny, actualCny = 0, prices, onChanged,
+  targetUserId, tagName, targetName, paused = false, requiredCny, actualCny = 0, prices, onChanged, footerLayout = false,
 }: Ledger37MarginWalletActionsProps) {
   const id = useId();
   const [mode, setMode] = useState<Mode | null>(null);
@@ -169,18 +170,20 @@ export function Ledger37MarginWalletActions({
 
   return (
     <section className="space-y-2 text-slate-700" aria-label="钱包押金操作">
-      <div className="flex flex-wrap gap-2">
+      <div className={footerLayout ? "grid w-full grid-cols-2 gap-2" : "flex flex-wrap gap-2"}>
         <button type="button" disabled={busy || paused} aria-expanded={mode === "freeze"} onClick={() => switchMode("freeze")}
-          className="inline-flex items-center gap-1 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 disabled:opacity-40">
-          <LockKeyhole size={13} />存入押金
+          className={footerLayout ? "h-10 w-full rounded-lg text-sm font-medium text-white disabled:opacity-40" : "inline-flex items-center gap-1 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 disabled:opacity-40"}
+          style={footerLayout ? { backgroundColor: "#D32F2F" } : undefined}>
+          {footerLayout ? "存入押金" : <><LockKeyhole size={13} />存入押金</>}
         </button>
         <button type="button" disabled={busy} aria-expanded={mode === "release"} onClick={() => switchMode("release")}
-          className="inline-flex items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 disabled:opacity-40">
-          <Unlock size={13} />解冻回钱包
+          className={footerLayout ? "h-10 w-full rounded-lg text-sm font-medium text-white disabled:opacity-40" : "inline-flex items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 disabled:opacity-40"}
+          style={footerLayout ? { backgroundColor: "#388E3C" } : undefined}>
+          {footerLayout ? "解冻押金" : <><Unlock size={13} />解冻回钱包</>}
         </button>
       </div>
       {mode && (
-        <div className={`space-y-2.5 rounded-xl border bg-white p-3 ${mode === "freeze" ? "border-blue-100" : "border-emerald-100"}`}>
+        <div className={`space-y-2.5 rounded-xl border bg-white p-3 ${mode === "freeze" ? "border-blue-100" : "border-emerald-100"}`} style={footerLayout ? { maxHeight: "50vh", overflowY: "auto" } : undefined}>
           <div className="flex items-center justify-between gap-2 text-xs">
             <span className="inline-flex items-center gap-1"><ArrowRight size={13} />{direction(mode)}</span>
             <div className="flex gap-2">

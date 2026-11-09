@@ -5281,6 +5281,17 @@ ${klinesSummary}
         return await dbRecharge.getUserCnyHistory(ctx.user.id, input?.limit ?? 50);
       }),
 
+    // 全历史人民币流水分页；余额先全量回放，再按类型筛选/截页。
+    getCnyHistoryPage: protectedProcedure
+      .input(z.object({
+        page: z.number().int().min(1).max(10000).default(1),
+        pageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).default(50),
+        filter: z.enum(['all', 'in', 'out']).default('all'),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserCnyHistoryPage(ctx.user.id, input ?? {});
+      }),
+
     // 管理员手动调整 CNY 余额（充値/提现）
     adminAdjustCny: protectedProcedure
       .input(z.object({
@@ -5313,6 +5324,17 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
         return await dbRecharge.getUserCnyHistory(input.userId, input.limit ?? 20);
+      }),
+    adminGetUserCnyHistoryPage: protectedProcedure
+      .input(z.object({
+        userId: z.number().int().positive(),
+        page: z.number().int().min(1).max(10000).default(1),
+        pageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).default(50),
+        filter: z.enum(['all', 'in', 'out']).default('all'),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.getUserCnyHistoryPage(input.userId, input);
       }),
     // 充值订单与链上证据均属资金审计记录，不允许后台物理批量删除。
     adminBulkClearOrders: protectedProcedure
