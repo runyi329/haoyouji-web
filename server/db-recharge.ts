@@ -5,6 +5,7 @@ import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizz
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 import { assertGlobalWalletDebit, fundingAmountText, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import { getWalletFlowCurrency, isWalletFlowCurrency } from "../shared/wallet-flow-currency";
+import { parseHistoricalPrincipalSources, type HistoricalPrincipalSource } from "../shared/wallet-historical-principal";
 
 // ========== 短信通知（腾讯云SMS） ==========
 const SMS_SECRET_ID = process.env.SMS_SECRET_ID ?? '';
@@ -2677,7 +2678,7 @@ export async function getUserCnyBalanceBreakdown(userId: number) {
  * 每条记录同时返回 balance_after：新统一账本直接使用写入时的余额快照；早期
  * 手工/担保流水则按第一笔事件正向累计，不从当前余额向过去倒推，保证展示口径可追溯。
  */
-export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, flowFilter: 'all' | 'in' | 'out' = 'all'): Promise<any[]> {
+export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, flowFilter: 'all' | 'in' | 'out' = 'all', historicalSources: HistoricalPrincipalSource[] = []): Promise<any[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
   // 该生产 MySQL 对 server-side prepared statement 的 `LIMIT ?` 兼容性有问题，
@@ -2689,6 +2690,14 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
   const safeOffset = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number.isFinite(offsetValue) ? offsetValue : 0)));
   // 筛选只放在全历史余额回放之后；SQL片段只来自固定枚举，不接受输入拼接。
   const flowCondition = flowFilter === 'in' ? 'WHERE e.amount > 0' : flowFilter === 'out' ? 'WHERE e.amount < 0' : '';
+  // 已核对的来源仅加入最终显示层。所有正文/日期/金额都绑定，不拼接到SQL。
+  const sourceBindings: unknown[] = [];
+  const sourceUnion = historicalSources.map((source) => {
+    sourceBindings.push(source.id, userId, source.amount, `[CNY]历史微信存入 · ${source.sourceTag} · ${source.note}`,
+      `${source.businessDate} 00:00:00`, source.linkedWalletEntryId);
+    return `UNION ALL SELECT ?, ?, CAST(? AS DECIMAL(36,18)), ?, CAST(? AS DATETIME),
+      'historical_principal_source', NULL, NULL, 0, ?`;
+  }).join('\n');
   await ensureLedger37WalletInfrastructure();
   const [rows] = await conn.execute(
     // 全部资金变动按发生时间从早到晚正向累计。担保只占用可用额，绝不从总余额扣除；
@@ -2771,9 +2780,8 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
        SELECT user_id, snapshot_sequence, recorded_balance, amount AS snapshot_amount, legacy_balance_total
          FROM state_after_snapshot
         WHERE has_recorded_balance = 1
-     )
+     ), wallet_display_rows AS (
      SELECT CONCAT(e.source_type, '-', e.event_id) AS id, e.user_id, e.amount, e.note, e.created_at, e.source_type,
-            COUNT(*) OVER () AS total_count,
             COALESCE(CASE WHEN e.snapshot_sequence = 0
               THEN first_snapshot.recorded_balance - first_snapshot.snapshot_amount
               ELSE current_snapshot.recorded_balance + current_snapshot.legacy_balance_total
@@ -2781,18 +2789,47 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
             GREATEST(0, COALESCE(CASE WHEN e.snapshot_sequence = 0
               THEN first_snapshot.recorded_balance - first_snapshot.snapshot_amount
               ELSE current_snapshot.recorded_balance + current_snapshot.legacy_balance_total
-            END, 0) + e.legacy_delta_since_snapshot - e.frozen_after) AS available_after
+            END, 0) + e.legacy_delta_since_snapshot - e.frozen_after) AS available_after,
+            e.source_order, e.event_id
        FROM state_after_snapshot e
        LEFT JOIN snapshot_values first_snapshot
          ON first_snapshot.user_id = e.user_id AND first_snapshot.snapshot_sequence = 1
        LEFT JOIN snapshot_values current_snapshot
          ON current_snapshot.user_id = e.user_id AND current_snapshot.snapshot_sequence = e.snapshot_sequence
+     ), combined_display_rows AS (
+       SELECT * FROM wallet_display_rows
+       ${sourceUnion}
+     )
+     SELECT e.id, e.user_id, e.amount, e.note, e.created_at, e.source_type,
+            CASE WHEN e.source_type = 'historical_principal_source'
+              THEN DATE_FORMAT(e.created_at, '%Y-%m-%d') ELSE NULL END AS business_date,
+            e.balance_after, e.available_after, COUNT(*) OVER () AS total_count
+       FROM combined_display_rows e
       ${flowCondition}
       ORDER BY e.created_at DESC, e.source_order DESC, e.event_id DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}`,
-    [userId, userId, userId, userId, userId]
+    [userId, userId, userId, userId, userId, ...sourceBindings]
   ) as any;
   return Array.isArray(rows) ? rows : [];
+}
+
+/** 只读来源说明；没有金额写入、冻结或余额回放，不对旧备注猜测日期。 */
+export async function getUserCnyHistoricalPrincipalSources(userId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('历史本金来源暂时无法读取');
+  const [rows] = await conn.execute(
+    `SELECT id, ledger_id, amount, note,
+            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+       FROM af_manual_balances
+      WHERE user_id = ? AND ledger_id = 37
+        AND note LIKE '[CNY]历史手工保证金迁入并冻结%'
+        AND LOCATE('[历史微信本金V1:', note) > 0
+      ORDER BY id ASC`,
+    [userId]
+  ) as any;
+  return (Array.isArray(rows) ? rows : [])
+    .flatMap((row: any) => parseHistoricalPrincipalSources(row))
+    .sort((a, b) => b.businessDate.localeCompare(a.businessDate) || a.id.localeCompare(b.id));
 }
 
 /** 独立分页契约；旧 getUserCnyHistory 仍返回数组，其他钱包/快照调用无需改动。 */
@@ -2805,19 +2842,21 @@ export async function getUserCnyHistoryPage(userId: number, input: {
   let page = Math.min(10000, Math.max(1, Math.floor(Number.isFinite(pageValue) ? pageValue : 1)));
   const pageSize = input.pageSize === 20 || input.pageSize === 100 ? input.pageSize : 50;
   const filter = input.filter === 'in' || input.filter === 'out' ? input.filter : 'all';
-  let items = await getUserCnyHistory(userId, pageSize, (page - 1) * pageSize, filter);
+  const historicalSources = filter === 'out' ? [] : await getUserCnyHistoricalPrincipalSources(userId);
+  let items = await getUserCnyHistory(userId, pageSize, (page - 1) * pageSize, filter, historicalSources);
   let total = Math.max(0, Number(items[0]?.total_count ?? 0));
   // 旧页在刷新后越界时，空数组无法携带 COUNT(*)，先取一条获得同口径总数。
   if (items.length === 0 && page > 1) {
-    const first = await getUserCnyHistory(userId, 1, 0, filter);
+    const first = await getUserCnyHistory(userId, 1, 0, filter, historicalSources);
     total = Math.max(0, Number(first[0]?.total_count ?? 0));
   }
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (page > totalPages) {
     page = totalPages;
-    items = total > 0 ? await getUserCnyHistory(userId, pageSize, (page - 1) * pageSize, filter) : [];
+    items = total > 0 ? await getUserCnyHistory(userId, pageSize, (page - 1) * pageSize, filter, historicalSources) : [];
   }
-  return { items, page, pageSize, total, totalPages, hasPrevious: page > 1, hasNext: page < totalPages };
+  return { items, page, pageSize, total, totalPages, hasPrevious: page > 1, hasNext: page < totalPages,
+    historicalSourceCount: historicalSources.length };
 }
 
 /** 管理员手动调整 CNY 余额（写入 af_manual_balances，note 以 [CNY] 开头） */

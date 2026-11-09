@@ -98,7 +98,7 @@ function HistoryPagination({ data, pageSize, isFetching, isError, isYaban, onPag
   return (
     <nav aria-label="人民币流水分页" aria-busy={isFetching} className="space-y-2.5 rounded-xl p-3" style={{ background: isYaban ? "#E8F3FA" : "#171717", color: textColor }}>
       <div className="flex items-center justify-between gap-2 text-xs">
-        <span>{isError ? "总笔数暂不可用" : data ? `共 ${data.total.toLocaleString("zh-CN")} 笔` : "总笔数加载中…"}</span>
+        <span>{isError ? "总笔数暂不可用" : data ? `共${data.total.toLocaleString("zh-CN")}笔记录` : "总笔数加载中…"}</span>
         <label className="flex shrink-0 items-center gap-1.5">
           每页
           <select aria-label="每页流水笔数" value={pageSize} disabled={isFetching} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="h-8 rounded-lg px-2 outline-none disabled:opacity-40" style={controlStyle}>
@@ -183,29 +183,34 @@ export default function WalletCnyTransactions() {
     void cnyHistoryQuery.refetch();
   };
   const pagination = <HistoryPagination data={cnyHistoryQuery.data} pageSize={pageSize} isFetching={cnyHistoryQuery.isFetching} isError={cnyHistoryQuery.isError} isYaban={isYaban} onPageChange={changePage} onPageSizeChange={changePageSize} />;
+  const historyDisclaimer = <p className="px-1 text-center text-[10px] leading-4" style={{ color: isYaban ? "#5A7A92" : "rgba(255,255,255,.48)" }}>明细按日期分页；历史补录仅还原已含迁入资金，不重复计入余额。</p>;
 
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
 
-  // 流水方向、总笔数和每笔历史余额均以服务端全历史计算结果为准。
+  // 明细排序、方向、总笔数和真实流水历史余额均以服务端返回结果为准。
   const transactions = (cnyHistoryQuery.data?.items ?? []).map((m: any) => {
     const originalNote = String(m.note ?? "");
     const rawNote = originalNote.replace(/^\[CNY\]/, "");
     const isIn = Number(m.amount) > 0;
-    const presentation = getCnyFlowPresentation(m.note, isIn);
+    const historicalSource = m.source_type === "historical_principal_source";
+    const presentation = historicalSource
+      ? { primary: "微信存入", secondary: summarizeNote(m.note), status: "历史补录 · 已含迁入金额" }
+      : getCnyFlowPresentation(m.note, isIn);
     const wcCode = extractWcTeamCode(rawNote);
     return {
       id: m.id,
       amount: Math.abs(Number(m.amount)),
       isIn,
-      balanceAfter: Number(m.balance_after),
-      availableAfter: Number(m.available_after),
+      historicalSource,
+      balanceAfter: historicalSource ? Number.NaN : Number(m.balance_after),
+      availableAfter: historicalSource ? Number.NaN : Number(m.available_after),
       primaryLabel: presentation.primary,
       secondaryLabel: presentation.secondary,
       status: presentation.status,
       rawNote: originalNote,
       wcCode,
-      createdAt: m.created_at,
+      createdAt: historicalSource ? String(m.business_date ?? "日期待核实") : m.created_at,
     };
   });
 
@@ -324,8 +329,9 @@ export default function WalletCnyTransactions() {
                             {tx.primaryLabel}
                           </div>
                         )}
-                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}</div>
+                        <div className="text-xs mt-0.5 text-gray-400">{tx.historicalSource ? tx.createdAt.slice(0, 10) : formatTime(tx.createdAt)}</div>
                         {tx.secondaryLabel && <div className="mt-1 truncate text-xs text-gray-400">{tx.secondaryLabel}</div>}
+                        {tx.historicalSource && <div className="mt-1 text-[10px] text-[#5A7A92]">{tx.status}</div>}
                       </div>
                     </div>
                     <div className="shrink-0 whitespace-nowrap text-base font-bold tabular-nums" style={{ color: tx.isIn ? "#16a34a" : "#ef4444" }}>
@@ -340,6 +346,7 @@ export default function WalletCnyTransactions() {
             )}
           </div>
           {pagination}
+          {historyDisclaimer}
         </div>
       </div>
     );
@@ -368,7 +375,7 @@ export default function WalletCnyTransactions() {
         </button>
         <div className="min-w-0 flex-1 text-center">
           <p className="text-base font-semibold tracking-wide" style={{ color: "#F5D78E" }}>资金明细</p>
-          <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,0.48)" }}>人民币账户 · 全部真实资金流水</p>
+          <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,0.48)" }}>人民币账户 · 资金明细</p>
         </div>
         <button
           onClick={refresh}
@@ -386,9 +393,9 @@ export default function WalletCnyTransactions() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,.9)" }}>筛选明细</p>
-              <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,.48)" }}>查看全部、收入或支出资金流水</p>
+              <p className="mt-0.5 text-[10px]" style={{ color: "rgba(255,255,255,.48)" }}>查看全部、收入或支出记录</p>
             </div>
-            <span className="shrink-0 rounded-full px-2 py-1 text-[10px]" style={{ background: "rgba(201,168,76,.12)", color: "#F5D78E" }}>{cnyHistoryQuery.isError ? "读取失败" : cnyHistoryQuery.data ? `${cnyHistoryQuery.data.total.toLocaleString("zh-CN")} 笔` : "加载中…"}</span>
+            <span className="shrink-0 rounded-full px-2 py-1 text-[10px]" style={{ background: "rgba(201,168,76,.12)", color: "#F5D78E" }}>{cnyHistoryQuery.isError ? "读取失败" : cnyHistoryQuery.data ? `共${cnyHistoryQuery.data.total.toLocaleString("zh-CN")}笔记录` : "加载中…"}</span>
           </div>
           <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
             {(["all", "in", "out"] as const).map((f) => {
@@ -424,7 +431,7 @@ export default function WalletCnyTransactions() {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.9)" }}>{tx.primaryLabel} <span className="font-normal" style={{ color: "rgba(255,255,255,.48)" }}>· CNY</span></p>
-                      <p className="mt-0.5 text-[11px]" style={{ color: "rgba(255,255,255,.48)" }}>{formatTime(tx.createdAt)}</p>
+                      <p className="mt-0.5 text-[11px]" style={{ color: "rgba(255,255,255,.48)" }}>{tx.historicalSource ? tx.createdAt.slice(0, 10) : formatTime(tx.createdAt)}</p>
                       {tx.secondaryLabel && <p className="mt-1 max-w-52 truncate text-[10px]" style={{ color: "rgba(255,255,255,.48)" }}>{tx.secondaryLabel}</p>}
                       <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.48)" }}>{tx.status}</p>
                     </div>
@@ -443,7 +450,7 @@ export default function WalletCnyTransactions() {
         </section>
         {pagination}
 
-        <p className="px-1 text-center text-[10px] leading-4" style={{ color: "rgba(255,255,255,.48)" }}>仅展示真实影响人民币余额的流水；担保仅改变可用额，已在每笔明细中体现。</p>
+        {historyDisclaimer}
       </main>
     </div>
   );
