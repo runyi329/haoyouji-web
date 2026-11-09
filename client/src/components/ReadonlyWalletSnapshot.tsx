@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { selectWalletAccountByLatestFlow } from "@/lib/walletAccountSelection";
+import { WalletDigitalAssetList } from "@/components/WalletDigitalAssetList";
+import { buildWalletDigitalAssets } from "@/lib/walletDigitalAssets";
 import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
 
 // MySQL timestamp strings are stored as Beijing wall-clock values; format with UTC accessors.
@@ -61,27 +63,20 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   ));
   const [flowFilter, setFlowFilter] = useState('USDT');
   const autoFlowFilterRef = useRef(true);
-  const usdtBalance = Number(snapshot?.usdtBalance || 0);
-  const cnyBalance = Number(snapshot?.cnyBalance || 0);
+  const usdtBalance = Number(snapshot?.usdtBalanceSummary?.total ?? snapshot?.usdtBalance ?? 0);
+  const cnyBalance = Number(snapshot?.cnyBalanceSummary?.total ?? snapshot?.cnyBalance ?? 0);
   const unifiedPrices = ((unifiedPriceData as any)?.prices ?? {}) as Record<string, number>;
   const liveUsdtCnyRate = Number((unifiedPriceData as any)?.usdtCnyRate ?? 0);
   const usdtCnyRate = liveUsdtCnyRate > 0 ? liveUsdtCnyRate : Number(snapshot?.usdtCnyRate || 7.25);
-  const visibleAssets = new Set((snapshot?.visibleAssets || []).map((asset: unknown) => String(asset).toUpperCase()));
+  // 成员快照与正式钱包都展示全局真实持仓，不因项目可交易币种配置隐藏已持有或担保的币。
   const multiAssets = (snapshot?.multiAssetBalances || [])
-    .filter((asset: any) =>
-      visibleAssets.has(String(asset.assetCode || '').toUpperCase())
-      && Number(asset.totalBalance ?? (Number(asset.availableBalance || 0) + Number(asset.frozenBalance || 0))) > 0,
-    )
     .map((asset: any) => {
       const assetCode = String(asset.assetCode || '').toUpperCase();
       const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
       return { ...asset, priceUsdt: livePriceUsdt > 0 ? livePriceUsdt : Number(asset.priceUsdt || 0) };
     });
-  const digitalAssets = [
-    ...(usdtBalance > 0 ? [{ assetCode: 'USDT', totalBalance: usdtBalance, availableBalance: usdtBalance, frozenBalance: 0, priceUsdt: 1 }] : []),
-    ...multiAssets,
-  ];
-  const digitalTotalUsdt = usdtBalance + multiAssets.reduce((sum: number, asset: any) => sum + Number(asset.totalBalance || 0) * Number(asset.priceUsdt || 0), 0);
+  const digitalAssets = buildWalletDigitalAssets(snapshot?.usdtBalanceSummary, multiAssets, usdtBalance);
+  const digitalTotalUsdt = digitalAssets.reduce((sum, asset) => sum + asset.totalBalance * asset.priceUsdt, 0);
   const multiHistory = (snapshot?.multiAssetHistory || [])
     .filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release');
   const usdtFlows = (snapshot?.balanceHistory || [])
@@ -109,11 +104,6 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
     .filter((entry: any) => flowFilter === 'ALL' || String(entry.assetCode || '').toUpperCase() === flowFilter)
     .slice(0, 10);
   const money = (value: number, decimals = 2) => value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  const assetAmount = (asset: any) => {
-    const code = String(asset.assetCode || '').toUpperCase();
-    const digits = code === 'USDT' ? 2 : code === 'BTC' ? 8 : 4;
-    return Number(asset.totalBalance || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
-  };
   const flowPresentation = (entry: any) => {
     const amount = Number(entry.amount || 0);
     const incoming = amount >= 0;
@@ -167,18 +157,11 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
               <div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(digitalTotalUsdt)}</span><span className="text-sm font-semibold text-[#a88942]">USDT</span></div>
               <div className="mt-1 text-[11px] text-white/45">≈ ¥{money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值</div>
             </div>
-            <div className="overflow-hidden rounded-xl" style={{ border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.025)' }}>
-              <div className="flex items-center justify-between border-b px-3 py-2 text-[11px]" style={{ borderColor: 'rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><span className="font-semibold text-white/85">数字资产</span><span>数量 / 估值（u）</span></div>
-              {digitalAssets.length ? digitalAssets.map((asset: any, index: number) => {
-                const available = Number(asset.availableBalance || 0);
-                const frozen = Number(asset.frozenBalance || 0);
-                const valuation = Number(asset.totalBalance || 0) * Number(asset.priceUsdt || 0);
-                return <div key={asset.assetCode} className="flex items-center justify-between gap-2 px-3 py-3" style={{ borderBottom: index < digitalAssets.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
-                  <div className="flex min-w-0 items-center gap-2.5"><SnapshotAssetIcon assetCode={asset.assetCode} /><div className="min-w-0"><div className="text-sm font-bold text-white">{asset.assetCode}</div><div className="mt-0.5 text-[10px] text-white/45">可用 {assetAmount({ ...asset, totalBalance: available })}{frozen > 0 ? ` · 冻结 ${assetAmount({ ...asset, totalBalance: frozen })}` : ''}</div></div></div>
-                  <div className="shrink-0 text-right"><div className="text-base font-bold tabular-nums text-white">{assetAmount(asset)} <span className="text-[10px] text-white/50">{asset.assetCode}</span></div><div className="mt-0.5 text-[11px] text-[#f5d78e]">≈ {money(valuation)} u</div></div>
-                </div>;
-              }) : <div className="px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
+            <div className="mb-2 flex items-center justify-between px-1 text-xs">
+              <span className="font-semibold text-white/85">我的数字资产</span>
+              <span className="text-white/45">{digitalAssets.length ? '数量 / 估值' : '暂无持仓'}</span>
             </div>
+            {digitalAssets.length ? <WalletDigitalAssetList assets={digitalAssets} usdtCnyRate={usdtCnyRate} /> : <div className="rounded-xl border border-white/10 px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
             <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}>
               <div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">优先最近变动币种</span></div>
               <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">

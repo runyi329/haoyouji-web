@@ -32561,12 +32561,12 @@ ${klinesSummary}
         } catch { visibleAssets = []; }
         if (!profile || Number(profile.enabled) !== 1) visibleAssets = [];
 
-        const [usdtBalance, recharges, withdrawals, balanceHistory, cnyBalance, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
-          dbRecharge.getUserBalance(targetUserId, input.ledgerId),
+        const [usdtBalanceSummary, recharges, withdrawals, balanceHistory, cnyBalanceSummary, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
+          dbRecharge.getUserUsdtBalanceSummary(targetUserId),
           dbRecharge.getUserRechargeOrders(targetUserId, 20),
           dbRecharge.getUserWithdrawHistory(targetUserId, 20),
           dbRecharge.getUserBalanceHistory(targetUserId, 30),
-          dbRecharge.getUserCnyBalance(targetUserId),
+          dbRecharge.getUserCnyBalanceSummary(targetUserId),
           dbRecharge.getUserCnyHistory(targetUserId, 20),
           dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
           dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
@@ -32586,8 +32586,10 @@ ${klinesSummary}
           member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
           visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
           usdtCnyRate: usdtCnyRate || 7.25,
-          usdtBalance,
-          cnyBalance,
+          usdtBalance: usdtBalanceSummary.total,
+          cnyBalance: cnyBalanceSummary.total,
+          usdtBalanceSummary,
+          cnyBalanceSummary,
           recharges,
           withdrawals,
           manualBalances: Array.isArray(manualRows) ? manualRows : [],
@@ -37094,12 +37096,12 @@ insights 数组每项包含：
       } catch { visibleAssets = []; }
       if (!profile || Number(profile.enabled) !== 1) visibleAssets = [];
 
-      const [usdtBalance, recharges, withdrawals, balanceHistory, cnyBalance, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
-        dbRecharge.getUserBalance(targetUserId, input.ledgerId),
+      const [usdtBalanceSummary, recharges, withdrawals, balanceHistory, cnyBalanceSummary, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
+        dbRecharge.getUserUsdtBalanceSummary(targetUserId),
         dbRecharge.getUserRechargeOrders(targetUserId, 20),
         dbRecharge.getUserWithdrawHistory(targetUserId, 20),
         dbRecharge.getUserBalanceHistory(targetUserId, 30),
-        dbRecharge.getUserCnyBalance(targetUserId),
+        dbRecharge.getUserCnyBalanceSummary(targetUserId),
         dbRecharge.getUserCnyHistory(targetUserId, 20),
         dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
         dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
@@ -37119,8 +37121,10 @@ insights 数组每项包含：
         member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
         visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
         usdtCnyRate: usdtCnyRate || 7.25,
-        usdtBalance,
-        cnyBalance,
+        usdtBalance: usdtBalanceSummary.total,
+        cnyBalance: cnyBalanceSummary.total,
+        usdtBalanceSummary,
+        cnyBalanceSummary,
         recharges,
         withdrawals,
         manualBalances: Array.isArray(manualRows) ? manualRows : [],

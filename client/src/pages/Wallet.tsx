@@ -25,6 +25,8 @@ import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
+import { WalletDigitalAssetList } from "@/components/WalletDigitalAssetList";
+import { buildWalletDigitalAssets, formatDigitalAssetAmount } from "@/lib/walletDigitalAssets";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -100,23 +102,6 @@ type WalletTransferAsset = "USDT" | "CNY" | AiWalletSettlementAsset;
 type WalletAccountAsset = WalletTransferAsset | "CRYPTO";
 // 数字币账户内，USDT 与其他数字资产共用一个总览；USDT 仍是默认明细口径。
 type DigitalAssetHistoryCode = "USDT" | AiWalletSettlementAsset;
-
-function getDigitalAssetDisplayDigits(assetCode: string, amount: number): number {
-  if (assetCode === "USDT") return 2;
-  const absoluteAmount = Math.abs(amount);
-  if (absoluteAmount >= 1_000) return 2;
-  if (absoluteAmount >= 1) return 4;
-  if (absoluteAmount >= 0.01) return 6;
-  return 8;
-}
-
-function formatDigitalAssetAmount(assetCode: string, amount: number): string {
-  const maximumFractionDigits = getDigitalAssetDisplayDigits(assetCode, amount);
-  return amount.toLocaleString("zh-CN", {
-    minimumFractionDigits: assetCode === "USDT" ? 2 : 0,
-    maximumFractionDigits,
-  });
-}
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed" || status === "approved")
@@ -945,26 +930,7 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
     Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0,
   );
   // 稳定币是数字资产主计价单位：有余额时始终固定首位，其余资产按真实 USDT 估值从高到低排列。
-  const visibleDigitalAssetBalances = [
-    ...(usdtTotalBalance > 0 ? [{
-      assetCode: "USDT",
-      totalBalance: usdtTotalBalance,
-      availableBalance: usdtAvailableBalance,
-      frozenBalance: Number(usdtSummary.frozen ?? 0),
-      priceUsdt: 1,
-      isStablecoin: true,
-    }] : []),
-    ...visibleMultiAssetBalances.filter((asset) => String(asset.assetCode || "").toUpperCase() !== "USDT"),
-  ].sort((left: any, right: any) => {
-    const leftCode = String(left.assetCode || "").toUpperCase();
-    const rightCode = String(right.assetCode || "").toUpperCase();
-    if (leftCode === "USDT" && rightCode !== "USDT") return -1;
-    if (rightCode === "USDT" && leftCode !== "USDT") return 1;
-    const leftValueUsdt = Number(left.totalBalance ?? (Number(left.availableBalance ?? 0) + Number(left.frozenBalance ?? 0))) * Number(left.priceUsdt ?? 0);
-    const rightValueUsdt = Number(right.totalBalance ?? (Number(right.availableBalance ?? 0) + Number(right.frozenBalance ?? 0))) * Number(right.priceUsdt ?? 0);
-    if (rightValueUsdt !== leftValueUsdt) return rightValueUsdt - leftValueUsdt;
-    return leftCode.localeCompare(rightCode);
-  });
+  const visibleDigitalAssetBalances = buildWalletDigitalAssets(usdtBalanceSummaryQuery.data, visibleMultiAssetBalances, usdtTotalBalance);
   const cryptoTotalUsdt = visibleMultiAssetBalances.reduce(
     (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
@@ -1549,38 +1515,8 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
                 <span className="font-semibold" style={{ color: G.white }}>我的数字资产</span>
                 <span style={{ color: G.whiteDim }}>{visibleDigitalAssetBalances.length > 0 ? "数量 / 估值" : "暂无持仓"}</span>
               </div>
-              {visibleDigitalAssetBalances.length > 0 ? <div className="overflow-hidden rounded-xl" style={{ background: "var(--wallet-asset-surface, rgba(0,0,0,0.14))", border: `1px solid ${G.divider}` }}>
-              {visibleDigitalAssetBalances.map((asset: any, index: number) => {
-                const assetCode = String(asset.assetCode || "").toUpperCase() as DigitalAssetHistoryCode;
-                const amount = Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0)));
-                const availableAmount = Number(asset.availableBalance ?? 0);
-                const frozenAmount = Number(asset.frozenBalance ?? 0);
-                const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
-                const valueCny = valueUsdt * usdtCnyRate;
-                const hasMarketPrice = Number(asset.priceUsdt ?? 0) > 0;
-                const isUsdtAsset = assetCode === "USDT";
-                const hasCollateral = frozenAmount > 0;
-                const assetAccent = assetCode === "USDT" ? "#26A17B" : assetCode === "ETH" ? "#627EEA" : assetCode === "BTC" ? "#F7931A" : assetCode === "SOL" ? "#A55CFF" : assetCode === "BNB" ? "#F3BA2F" : assetCode === "SUI" ? "#4DA2FF" : "#8AA0B8";
-                const assetIconSrc = getCryptoAssetIconSrc(assetCode);
-                return (
-                  <div key={assetCode} className="relative px-3 py-3" style={{ background: hasCollateral ? "linear-gradient(90deg, rgba(var(--wallet-accent-rgb,201,168,76),0.075) 0%, rgba(var(--wallet-accent-rgb,201,168,76),0.018) 42%, transparent 72%)" : "transparent", borderBottom: index < visibleDigitalAssetBalances.length - 1 ? "1px solid rgba(var(--wallet-neutral-rgb,255,255,255),0.10)" : "none" }}>
-                    {hasCollateral && <div className="absolute inset-y-3 left-0 w-px rounded-full" style={{ background: "linear-gradient(180deg, transparent, rgba(245,215,142,0.82), transparent)" }} />}
-                    <div className="grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem_1rem] items-start gap-x-2.5 text-left">
-                      <div className="row-span-3 flex h-9 w-9 shrink-0 items-center justify-center self-start overflow-hidden rounded-full text-xs font-bold" style={{ background: `${assetAccent}25`, color: assetAccent, border: `1px solid ${assetAccent}55` }}>
-                        {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : assetCode.slice(0, 1)}
-                      </div>
-                      <div className="min-w-0 truncate text-sm font-semibold leading-5" style={{ color: G.white }}>{assetCode}</div>
-                      <div className="shrink-0 text-right text-xl font-bold leading-5 tabular-nums" style={{ color: G.white }}>{mask(formatDigitalAssetAmount(assetCode, amount))}</div>
-                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>可用 {mask(formatDigitalAssetAmount(assetCode, availableAmount))}</div>
-                      <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{hasMarketPrice ? (isUsdtAsset ? `≈ ¥${mask(valueCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))}` : `≈ ${mask(valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))} u`) : "行情加载中"}</div>
-                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: hasCollateral ? G.goldLight : G.whiteDim }}>担保 {mask(formatDigitalAssetAmount(assetCode, frozenAmount))}</div>
-                      {!isUsdtAsset && <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{hasMarketPrice ? `≈ ${mask(valueCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))}元` : "—"}</div>}
-                    </div>
-                    </div>
-                );
-              })}
-              </div> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.025)", border: `1px dashed ${G.divider}` }}>
-                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(var(--wallet-accent-rgb,201,168,76),0.10)", border: "1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.20)" }}>
+              {visibleDigitalAssetBalances.length > 0 ? <WalletDigitalAssetList assets={visibleDigitalAssetBalances} usdtCnyRate={usdtCnyRate} mask={mask} /> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.025)", border: `1px dashed ${G.divider}` }}>
+                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(var(--wallet-accent-rgb,201,168,76),0.10)", border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.20)` }}>
                   <WalletIcon className="h-4 w-4" style={{ color: G.goldDim }} />
                 </div>
                 <p className="text-xs font-medium" style={{ color: G.whiteDim }}>暂无持仓资产</p>

@@ -290,7 +290,9 @@ export default function AfInviteTreePage() {
     {
       enabled: !!walletSnapshotUser?.id && ledgerLoaded && canSeeInviteWalletSnapshots,
       staleTime: 0,
-      refetchOnWindowFocus: false,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      refetchInterval: 15000,
     },
   );
 
