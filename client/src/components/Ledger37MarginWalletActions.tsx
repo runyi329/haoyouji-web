@@ -68,6 +68,7 @@ export function Ledger37MarginWalletActions({
   const freeze = trpc.ledger.freezeLedger37MarginFromWallet.useMutation();
   const release = trpc.ledger.releaseLedger37MarginToWallet.useMutation();
   const busy = working || freeze.isPending || release.isPending;
+  // 后台刷新继续使用当前已读取的数据，不让快捷键与下一步反复变灰；点击后仍重新读取并校验真实余额。
   const reset = () => { setMode(null); setAmount(""); setHoldId(""); setConfirmation(null); };
   useEffect(() => {
     setMode(null); setAmount(""); setHoldId(""); setConfirmation(null); setAssetCode("CNY");
@@ -223,14 +224,14 @@ export function Ledger37MarginWalletActions({
                 value={amount} disabled={busy || (mode === "freeze" && paused)} onChange={(event) => setAmount(event.target.value)} />
               <div className="flex flex-wrap gap-1.5">
                 {mode === "release" ? [25, 50, 100].map((percent) => <button type="button" key={percent} className={quick}
-                  disabled={busy || !selectedHold || context.isFetching} onClick={() => setAmount(text(remaining * BigInt(percent) / 100n))}>{percent === 100 ? "全部" : `${percent}%`}</button>) : <>
-                  <button type="button" className={quick} disabled={busy || paused || available <= 0n || context.isFetching} onClick={() => setAmount(text(available))}>可用余额</button>
-                  <button type="button" className={quick} disabled={busy || paused || topUp === null || topUp <= 0n || context.isFetching} onClick={() => topUp !== null && setAmount(text(topUp))}>补足参考</button>
+                  disabled={busy || !selectedHold} onClick={() => setAmount(text(remaining * BigInt(percent) / 100n))}>{percent === 100 ? "全部" : `${percent}%`}</button>) : <>
+                  <button type="button" className={quick} disabled={busy || paused || available <= 0n} onClick={() => setAmount(text(available))}>可用余额</button>
+                  <button type="button" className={quick} disabled={busy || paused || topUp === null || topUp <= 0n} onClick={() => topUp !== null && setAmount(text(topUp))}>补足参考</button>
                 </>}
               </div>
               {mode === "freeze" && <p className="text-[11px] text-slate-400">{required === null ? "参考押金未确定，不设虚构存入上限。" : price === null || price <= 0n ? "缺少该币种人民币价格，无法换算补足参考。" : "补足仅为参考，按可用余额取较小值并向下截至 18 位；不限制手动存入。"}</p>}
               {amount && invalid && <p role="alert" className="text-xs text-red-600">{invalid}</p>}
-              <button type="submit" disabled={busy || context.isFetching || !!context.error || !context.data || !!invalid || (mode === "freeze" && paused)}
+              <button type="submit" disabled={busy || !!context.error || !context.data || !!invalid || (mode === "freeze" && paused)}
                 className={`w-full rounded-lg py-2 text-xs font-medium text-white disabled:opacity-40 ${mode === "freeze" ? "bg-blue-600" : "bg-emerald-600"}`}>{busy ? "核对最新余额…" : "下一步：核对并确认"}</button>
             </form>
           )}
