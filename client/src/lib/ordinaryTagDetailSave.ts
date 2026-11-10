@@ -67,7 +67,7 @@ export type DetailSavePlan = {
 };
 /** All changed inputs are checked before the first request. Only this user/tag's changed keys are emitted. */
 export function buildOrdinaryDetailSavePlan(input: {
-  target: DetailSavePlan["target"]; current: DetailSnapshot; saved: DetailSnapshot; otherSavedRatio: number;
+  target: DetailSavePlan["target"]; current: DetailSnapshot; saved: DetailSnapshot;
   clearRequest?: OrdinaryClearRequest | null;
 }): DetailSavePlan {
   const { target, current } = input;
@@ -104,7 +104,6 @@ export function buildOrdinaryDetailSavePlan(input: {
   const actualChanged = !current.observation.enabled && !detailActualEqual(entry, saved.entry);
   if (actualChanged) {
     validateInlineActual(entry);
-    if (!Number.isFinite(input.otherSavedRatio) || input.otherSavedRatio + Number(entry.ratio) > 100.00000001) throw new Error("真实比例合计不能超过 100%（其他成员按已保存份额核算）");
     balances[n] = Number(entry.amount); balances[`${n}__ratio`] = Number(entry.ratio); balances[`${n}__targetAmount`] = Number(entry.targetAmount);
   }
   for (const key of ["startDate", "endDate"] as const) if (entry[key] !== saved.entry[key]) {

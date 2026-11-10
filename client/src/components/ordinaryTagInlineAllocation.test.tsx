@@ -58,16 +58,21 @@ describe("普通标签行内草稿纯函数", () => {
     ]);
     expect(total).toEqual({ actualRatio: 25.5, actualAmount: 20400, actualCount: 1, observationRatio: 12.5, observerCount: 1 });
   });
-  it("加减一百分点保持小数、边界0和100，不接受负数/超限/非法符号", () => {
+  it("加减一百分点保持小数、仅下限0，允许超过100但拒绝非有限/负数/非法符号", () => {
     expect(stepInlineRatio("12.5", 1)).toBe("13.5");
     expect(stepInlineRatio("12.5", -1)).toBe("11.5");
     expect(stepInlineRatio("0.25", -1)).toBe("0");
-    expect(stepInlineRatio("99.75", 1)).toBe("100");
-    expect(stepInlineRatio("100", 1)).toBe("100");
+    expect(stepInlineRatio("99.75", 1)).toBe("100.75");
+    expect(stepInlineRatio("100", 1)).toBe("101");
+    expect(stepInlineRatio("1234.5", 1)).toBe("1235.5");
     expect(stepInlineRatio("0", -1)).toBe("0");
     expect(stepInlineRatio("0.1", 1)).toBe("1.1");
     expect(parseInlineRatioInput("12.50%")).toBe("12.50");
-    expect(parseInlineRatioInput("100.01")).toBe("100");
+    expect(parseInlineRatioInput("100.01")).toBe("100.01");
+    expect(parseInlineRatioInput("1234.50%")).toBe("1234.50");
+    expect(parseInlineRatioInput("9".repeat(309))).toBeNull();
+    expect(parseInlineRatioInput("Infinity")).toBeNull();
+    expect(parseInlineRatioInput("NaN")).toBeNull();
     expect(parseInlineRatioInput("-1")).toBeNull();
     expect(parseInlineRatioInput("a")).toBeNull();
     expect(parseInlineRatioInput("")).toBe("");
@@ -78,6 +83,15 @@ describe("普通标签行内草稿纯函数", () => {
     expect(() => validateInlineActual({ ...actual, ratio: "" })).toThrow();
     expect(() => validateInlineActual({ ...actual, ratio: "-1" })).toThrow();
     expect(() => validateInlineActual({ ...actual, targetAmount: "1" })).toThrow("分配金额");
+  });
+  it("单人比例超过100合法，保留金额公式、有限值和算术溢出守卫", () => {
+    const over = { amount: "1000", ratio: "125.5", targetAmount: "1255" };
+    expect(validateInlineActual(over)).toEqual(over);
+    for (const field of ["amount", "ratio", "targetAmount"] as const) {
+      for (const value of ["Infinity", "-Infinity", "NaN", "-1"]) expect(() => validateInlineActual({ ...over, [field]: value })).toThrow();
+    }
+    expect(() => validateInlineActual({ amount: "1e308", ratio: "200", targetAmount: "1e308" })).toThrow("溢出");
+    expect(() => validateInlineActual({ ...over, targetAmount: "1254" })).toThrow("分配金额");
   });
 });
 
@@ -162,7 +176,7 @@ describe("标签级保存观察与真实请求隔离", () => {
     expect(partial.onActualSaved).not.toHaveBeenCalled();
     expect([r, a]).toEqual(before);
   });
-  it("存储失败不回退POST，实际超100总量拒绝；观察100不占总量", async () => {
+  it("存储失败不回退POST，多成员实际合计超100成功且观察不占总量", async () => {
     const d = deps(true);
     d.storage = { setItem: () => { throw new Error("会话存储不可用"); } };
     await expect(saveOrdinaryInlineTag(saveInput([row()]), d)).rejects.toThrow("会话存储不可用");
@@ -170,9 +184,22 @@ describe("标签级保存观察与真实请求隔离", () => {
     expect(d.saveActual).not.toHaveBeenCalled();
     const over = row({ observation: emptyInlineObservation(), observationChanged: false, actualChanged: true, actual: { amount: "100000", ratio: "60", targetAmount: "60000" } });
     const live = deps();
-    await expect(saveOrdinaryInlineTag(saveInput([over, { ...over, userId: 102 }]), live)).rejects.toThrow("不能超过 100%");
-    expect(live.saveActual).not.toHaveBeenCalled();
+    await expect(saveOrdinaryInlineTag(saveInput([over, { ...over, userId: 102 }]), live)).resolves.toBe(true);
+    expect(live.saveActual).toHaveBeenCalledTimes(2);
+    expect(live.saveActual).toHaveBeenCalledWith(expect.objectContaining({ targetUserId: 101, balances: { 普通标签: 100000, 普通标签__ratio: 60, 普通标签__targetAmount: 60000 } }));
+    expect(live.saveActual).toHaveBeenCalledWith(expect.objectContaining({ targetUserId: 102 }));
     await expect(saveOrdinaryInlineTag(saveInput([row({ observation: { ...observation, ratio: "100" } }), over]), deps())).resolves.toBe(true);
+  });
+  it("单人超100实际保存成功，任何非法实际行在首个观察或真实请求前拒绝", async () => {
+    const over = row({ observation: emptyInlineObservation(), observationChanged: false, actualChanged: true, actual: { amount: "1000", ratio: "101", targetAmount: "1010" } });
+    const live = deps();
+    await expect(saveOrdinaryInlineTag(saveInput([over]), live)).resolves.toBe(true);
+    expect(live.saveActual).toHaveBeenCalledWith(expect.objectContaining({ balances: { 普通标签: 1000, 普通标签__ratio: 101, 普通标签__targetAmount: 1010 } }));
+    for (const ratio of ["-1", "NaN", "Infinity"]) {
+      const d = deps();
+      await expect(saveOrdinaryInlineTag(saveInput([row(), { ...over, userId: 102, actual: { ...over.actual, ratio } }]), d)).rejects.toThrow();
+      expect(d.saveObservation).not.toHaveBeenCalled(); expect(d.saveActual).not.toHaveBeenCalled();
+    }
   });
 });
 

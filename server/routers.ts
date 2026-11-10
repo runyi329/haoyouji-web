@@ -588,14 +588,14 @@ async function assertLedger37AllocationTripletOnChange(params: {
     const ratio = readLedger37NonNegativeNumber(effective(`${tagName}__ratio`));
     const actualAmount = readLedger37NonNegativeNumber(effective(`${tagName}__targetAmount`));
     const isZeroParticipation = amount === 0 && ratio === 0 && actualAmount === 0;
-    if (amount === null || ratio === null || ratio > 100 || actualAmount === null || (!isZeroParticipation && amount <= 0)) {
+    if (amount === null || ratio === null || actualAmount === null || (!isZeroParticipation && amount <= 0)) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message: `「${tagName}」需填写完整的正数金额与比例，或三项均为 0 表示不参与`,
       });
     }
     const expectedActual = amount * ratio / 100;
-    if (Math.abs(actualAmount - expectedActual) > 0.01) {
+    if (!Number.isFinite(expectedActual) || Math.abs(actualAmount - expectedActual) > 0.01) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message: `「${tagName}」实际权益必须等于初始金额 × 比例（应为 ${expectedActual.toFixed(2)}）`,
@@ -17328,7 +17328,7 @@ ${klinesSummary}
     adminSetOrdinaryTagObservationConfig: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive(),
-        config: z.object({ enabled: z.boolean(), initialAmount: z.number().finite().nonnegative(), ratio: z.number().finite().min(0).max(100), startDate: z.string(), pauseDate: z.string().nullable() }).strict(),
+        config: z.object({ enabled: z.boolean(), initialAmount: z.number().finite().nonnegative(), ratio: z.number().finite().min(0), startDate: z.string(), pauseDate: z.string().nullable() }).strict(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });

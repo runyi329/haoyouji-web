@@ -33,20 +33,20 @@ export function toggleInlineObservation(
   return { enabled: true, initialAmount: actual.amount, ratio: actual.ratio, startDate: actual.startDate || today, pauseDate: "" };
 }
 
-/** 保留小数，不按整数四舍五入；每次加减恰为一百分点并截在 0..100。 */
+/** 保留小数，不按整数四舍五入；每次加减恰为一百分点，仅限制下限为 0。 */
 export function stepInlineRatio(raw: string, direction: -1 | 1): string {
   const parsed = Number(raw);
-  const next = Math.min(100, Math.max(0, (Number.isFinite(parsed) ? parsed : 0) + direction));
+  const next = Math.max(0, (Number.isFinite(parsed) ? parsed : 0) + direction);
   return String(Number(next.toFixed(10)));
 }
 export function parseInlineRatioInput(raw: string): string | null {
   const text = raw.replace(/%/g, "");
   if (!/^\d*\.?\d*$/.test(text)) return null;
   if (text === "" || text === ".") return text;
-  return Number(text) > 100 ? "100" : text;
+  return Number.isFinite(Number(text)) && Number(text) >= 0 ? text : null;
 }
 export function inlineConfigFromDraft(draft: OrdinaryInlineObservationDraft): OrdinaryTagObservationConfig {
-  if (!draft.initialAmount.trim() || !draft.ratio.trim()) throw new Error("请填写参考初始金额和 0 至 100% 比例");
+  if (!draft.initialAmount.trim() || !draft.ratio.trim()) throw new Error("请填写参考初始金额和非负有限比例");
   return validateOrdinaryTagObservationConfig({ enabled: draft.enabled, initialAmount: Number(draft.initialAmount), ratio: Number(draft.ratio), startDate: draft.startDate, pauseDate: draft.pauseDate || null });
 }
 export function readInlineObservationPreview(storage: Pick<Storage, "getItem">, userId: number, categoryId: number): OrdinaryTagObservationConfig | null {
@@ -72,8 +72,12 @@ export function validateInlineActual(actual: OrdinaryActualAllocation): Ordinary
   if ([actual.amount, actual.ratio, actual.targetAmount].some(value => value.trim() === "")) throw new Error("请填写完整的初始金额、比例和分配金额");
   const amount = Number(actual.amount), ratio = Number(actual.ratio), target = Number(actual.targetAmount);
   const zeroExit = amount === 0 && ratio === 0 && target === 0;
-  if (!Number.isFinite(amount) || (!zeroExit && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || ratio > 100 || !Number.isFinite(target) || target < 0) throw new Error("需填写正数初始金额及 0 至 100% 比例，或三项均为 0 退出");
-  if (Math.abs(target - amount * ratio / 100) > 0.01) throw new Error("分配金额须等于初始金额 × 比例");
+  if (!Number.isFinite(amount) || (!zeroExit && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || !Number.isFinite(target) || target < 0) throw new Error("需填写有限正数初始金额及非负有限比例和分配金额，或三项均为 0 退出");
+  const product = amount * ratio;
+  const expected = product / 100;
+  const difference = target - expected;
+  if (!Number.isFinite(product) || !Number.isFinite(expected) || !Number.isFinite(difference)) throw new Error("分配金额计算溢出，请调整初始金额或比例");
+  if (Math.abs(difference) > 0.01) throw new Error("分配金额须等于初始金额 × 比例");
   return actual;
 }
 export function summarizeOrdinaryInlineRows(rows: ReadonlyArray<{ enabled: boolean; actual: OrdinaryActualAllocation; observationRatio: string }>) {
@@ -126,8 +130,6 @@ export async function saveOrdinaryInlineTag(
   // 观察开启的行不生成真实载荷，哪怕之前已有真实草稿。
   const actuals = input.rows.filter(row => !row.observation.enabled && row.actualChanged);
   for (const row of actuals) validateInlineActual(row.actual);
-  const total = summarizeOrdinaryInlineRows(input.rows.map(row => ({ enabled: row.observation.enabled, actual: row.actual, observationRatio: row.observation.ratio })));
-  if (actuals.length > 0 && total.actualRatio > 100.00000001) throw new Error(`真实比例合计 ${total.actualRatio.toFixed(2)}%，不能超过 100%`);
   const releases = observations.filter(({ row, config }) => config.enabled && row.previousActualRatio > 0);
   if (releases.length > 0 && !deps.confirm([
     `确认将「${input.tagName}」以下成员切换为观察？`,

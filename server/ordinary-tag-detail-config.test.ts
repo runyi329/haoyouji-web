@@ -34,6 +34,27 @@ describe('37号普通标签详情限域保存', () => {
     await saveOrdinaryTagMemberDetailConfig(input(balances), f.connection); expect(f.state.updates).toHaveLength(1);
     expect(f.state.updates[0].values).not.toContain(JSON.stringify(previous)); expect(f.state.updates[0].values).toHaveLength(11);
   });
+  it.each([125, 200])('普通标签%s%%按初始金额×比例/100保存，不校验成员合计上限', async ratio => {
+    const f = fixture();
+    const balances = { [name]: 200000, [`${name}__ratio`]: ratio, [`${name}__targetAmount`]: 200000 * ratio / 100 };
+    await expect(saveOrdinaryTagMemberDetailConfig(input(balances), f.connection)).resolves.toEqual({ success: true });
+    expect(f.state.updates).toHaveLength(1);
+    expect(f.state.updates[0].values).toEqual([`$.${JSON.stringify(name)}`, 200000, `$.${JSON.stringify(`${name}__ratio`)}`, ratio, `$.${JSON.stringify(`${name}__targetAmount`)}`, balances[`${name}__targetAmount`], 2, 37, 102]);
+    expect(f.connection.execute.mock.calls.some(([sql]) => /SUM|wallet|ledger_records|DELETE|INSERT/i.test(sql))).toBe(false);
+  });
+  it.each([
+    [1000, -1, 0], [1000, NaN, 0], [1000, Infinity, 0], [1000, 125, 1000],
+    [Number.MAX_VALUE, 200, Number.MAX_VALUE], [Number.MAX_VALUE, 0, Infinity],
+  ])('非法数字、权益不符或乘积溢出拒绝，金额=%s比例=%s权益=%s', async (amount, ratio, target) => {
+    const f = fixture();
+    await expect(saveOrdinaryTagMemberDetailConfig(input({ [name]: amount, [`${name}__ratio`]: ratio, [`${name}__targetAmount`]: target }), f.connection)).rejects.toThrow();
+    expect(f.state.updates).toHaveLength(0); expect(f.state.commits).toBe(0); expect(f.state.rollbacks).toBe(1);
+  });
+  it('旧杠杆三键不完整时只维护日期，不修改或迁移旧金额', async () => {
+    const f = fixture({ raw: JSON.stringify({ ...previous, [`${name}__ratio`]: 200, [`${name}__targetAmount`]: 'legacy' }) });
+    await saveOrdinaryTagMemberDetailConfig(input(), f.connection);
+    expect(f.state.updates[0].values).toEqual([`$.${JSON.stringify(`${name}__startDate`)}`, '2026-02-01', 2, 37, 102]);
+  });
   it.each([{ category: { accountingMode: 'stock_portfolio' } }, { category: { parentId: 3 } }, { category: { isDefault: 1 } }, { actor: { role: 'member' } }, { actor: { realUserId: null } }, { target: { memberType: 'ai' } }, { raw: 'null' }, { raw: '{bad' }])('异常范围/权限/配置拒绝且回滚：%j', async overrides => {
     const f = fixture(overrides); await expect(saveOrdinaryTagMemberDetailConfig(input(), f.connection)).rejects.toThrow();
     expect(f.state.updates).toHaveLength(0); expect(f.state.commits).toBe(0); expect(f.state.rollbacks).toBe(1);
@@ -54,6 +75,8 @@ describe('37号普通标签详情限域保存', () => {
   it('观察状态下禁止回写正的真实份额', () => {
     const before = { ...previous, [`${name}__ordinaryObservation`]: JSON.stringify({ enabled: true, initialAmount: 200000, ratio: 5, startDate: '2026-01-01', pauseDate: null }) };
     expect(() => validateOrdinaryDetailPatch(name, { [name]: 200000, [`${name}__ratio`]: 5, [`${name}__targetAmount`]: 10000 }, before)).toThrow();
+    expect(() => validateOrdinaryDetailPatch(name, { [name]: 200000, [`${name}__ratio`]: 125, [`${name}__targetAmount`]: 250000 }, before)).toThrow('先关闭观察');
+    expect(() => validateOrdinaryDetailPatch(name, { [name]: 200000, [`${name}__ratio`]: 0, [`${name}__targetAmount`]: 0 }, before)).not.toThrow();
   });
   it('损坏的观察配置不能按未开启绕过校验', () => {
     expect(() => validateOrdinaryDetailPatch(name, { [`${name}__startDate`]: '2026-02-01' }, { ...previous, [`${name}__ordinaryObservation`]: '{bad' })).toThrow('观察配置格式异常');

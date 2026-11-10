@@ -9,7 +9,7 @@ const target = { ledgerId: 37, targetUserId: 201, categoryId: 9, tagName: '普�
 const entry = (): DetailEntry => ({ amount: '1000', ratio: '20', targetAmount: '200', startDate: '2026-01-01', pauseDate: '', endDate: '', visible: true, pauseHistory: [], margins: [], legacyMarginNoteIds: [] });
 const snapshot = (): DetailSnapshot => ({ entry: entry(), observation: { enabled: false, initialAmount: '', ratio: '', startDate: '', pauseDate: '' } });
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
-const build = (current: DetailSnapshot, saved = snapshot(), otherSavedRatio = 30) => buildOrdinaryDetailSavePlan({ target, current, saved, otherSavedRatio });
+const build = (current: DetailSnapshot, saved = snapshot()) => buildOrdinaryDetailSavePlan({ target, current, saved });
 const deps = (): DetailSaveDependencies => ({ inFlight: new Set(), confirm: vi.fn(() => true), saveObservation: vi.fn(async () => ({})), saveConfig: vi.fn(async () => ({})), saveWalletPlan: vi.fn(async () => ({})), onObservationSaved: vi.fn(), onConfigSaved: vi.fn(), onWalletSaved: vi.fn() });
 
 describe('ordinary detail baseline and narrow request', () => {
@@ -46,10 +46,14 @@ describe('ordinary detail baseline and narrow request', () => {
     const saved = clone(current); current.entry.ratio = '21'; current.entry.targetAmount = '210';
     expect(build(current, saved).configRequest?.balances).toEqual({ 普通: 1000, 普通__ratio: 21, 普通__targetAmount: 210 });
   });
-  it('actual triplet emits exactly three keys and uses other saved ratios', () => {
-    const current = snapshot(); current.entry.ratio = '50'; current.entry.targetAmount = '500';
-    expect(build(current, snapshot(), 50).configRequest?.balances).toEqual({ 普通: 1000, 普通__ratio: 50, 普通__targetAmount: 500 });
-    expect(() => build(current, snapshot(), 51)).toThrow('100%');
+  it('actual triplet above 100 emits exactly three scoped keys with no other-member dependency', async () => {
+    const current = snapshot(); current.entry.ratio = '125.5'; current.entry.targetAmount = '1255';
+    const plan = build(current);
+    expect(plan.configRequest).toEqual({ ledgerId: 37, targetUserId: 201, scopedOrdinaryCategoryId: 9, migratedMarginNoteIds: [], balances: { 普通: 1000, 普通__ratio: 125.5, 普通__targetAmount: 1255 } });
+    const d = deps(); expect(await saveOrdinaryDetail(plan, d)).toBe(true);
+    expect(d.saveConfig).toHaveBeenCalledWith(plan.configRequest); expect(d.saveObservation).not.toHaveBeenCalled();
+    const helper = readFileSync(new URL('./ordinaryTagDetailSave.ts', import.meta.url), 'utf8');
+    expect(helper).not.toContain('otherSavedRatio'); expect(helper).not.toContain('100.00000001');
   });
   it('visible is detected but kept on its own independently confirmed save path', () => {
     const current = snapshot(); current.entry.visible = false;
@@ -102,6 +106,14 @@ describe('complete validation before first write', () => {
   it.each(['', '.', '-1', 'NaN'])('invalid amount %s fails before observation can be saved', amount => {
     const current = snapshot(); current.entry.amount = amount; current.observation = { enabled: false, initialAmount: '1000', ratio: '20', startDate: '2026-01-01', pauseDate: '' };
     expect(() => build(current)).toThrow();
+  });
+  it.each(['', '.', '-1', 'NaN', 'Infinity', '-Infinity'])('invalid individual ratio %s still rejects before writes', ratio => {
+    const current = snapshot(); current.entry.ratio = ratio;
+    expect(() => build(current)).toThrow();
+  });
+  it('finite operands whose allocation formula overflows reject', () => {
+    const current = snapshot(); current.entry = { ...current.entry, amount: '1e308', ratio: '200', targetAmount: '1e308' };
+    expect(() => build(current)).toThrow('溢出');
   });
   it('invalid changed date, pause chronology and margin reject before writes', () => {
     let current = snapshot(); current.entry.startDate = '2026-02-30'; expect(() => build(current)).toThrow('有效日期');
@@ -163,7 +175,7 @@ describe('staged clear uses a dedicated receipt-validated first segment', () => 
     firstDate: '2026-01-01', lastDate: '2026-01-01', impactHash: 'a'.repeat(64), hasConfiguredStartDate: true };
   const staged = (): DetailSnapshot => ({ ...snapshot(), entry: { ...entry(), ...clearedOrdinaryConfig() }, pendingClear: clearTarget });
   const receipt = () => ({ success: true, ledgerId: 37, userId: 201, categoryId: 9, cleared: clearedOrdinaryConfig() });
-  const clearPlan = (current = staged(), saved = snapshot()) => buildOrdinaryDetailSavePlan({ target, current, saved, otherSavedRatio: 30,
+  const clearPlan = (current = staged(), saved = snapshot()) => buildOrdinaryDetailSavePlan({ target, current, saved,
     clearRequest: ordinaryClearRequest(clearTarget, impact) });
   const clearDeps = (): DetailSaveDependencies => ({ ...deps(), saveClear: vi.fn(async () => receipt()), onClearSaved: vi.fn() });
 

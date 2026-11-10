@@ -9,7 +9,6 @@ export type OrdinaryTagAllocationFieldsProps = {
   ratio: string;
   startDate: string;
   pauseDate: string;
-  remainingRatio?: number;
   disabled?: boolean;
   pauseLocked?: boolean;
   onInitialAmountChange: (value: string) => void;
@@ -26,7 +25,7 @@ export const ordinaryCompactDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test
 /** 仅展示/转发草稿输入；真实日期、暂停确认与保存由页面原路径负责。 */
 export default function OrdinaryTagAllocationFields(props: OrdinaryTagAllocationFieldsProps) {
   const { name, observing, initialAmount, targetAmount, ratio, startDate, pauseDate,
-    remainingRatio = 100, disabled = false, pauseLocked = false } = props;
+    disabled = false, pauseLocked = false } = props;
   const color = observing ? "#7C3AED" : disabled ? "#9CA3AF" : "#4B5563";
   const borderColor = disabled ? "#ECECEC" : "#D9E8EE";
   const fieldStyle = { color, borderColor };
@@ -54,7 +53,6 @@ export default function OrdinaryTagAllocationFields(props: OrdinaryTagAllocation
         onClick={event => { event.stopPropagation(); onChange?.(""); }} className="absolute right-0 top-0 flex h-full w-4 items-center justify-center text-gray-400"><X size={11} /></button>}
     </div>;
   };
-  const remainingText = remainingRatio < 0 ? `超出 ${Number(Math.abs(remainingRatio).toFixed(2))}%` : `剩余 ${Number(remainingRatio.toFixed(2))}%`;
   return <div data-ordinary-allocation-fields data-mode={observing ? "observation" : "actual"} className="min-w-0 w-full">
     <div data-ordinary-allocation-row="reference-dates" className="ml-auto grid w-full max-w-[264px] gap-1.5" style={{ gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr)" }}>
       {money(initialAmount, `${name}的${observing ? "观察参考初始" : "真实初始"}金额`, "初始金额", props.onInitialAmountChange)}
@@ -62,19 +60,18 @@ export default function OrdinaryTagAllocationFields(props: OrdinaryTagAllocation
       {date(pauseDate, `${name}的${observing ? "观察" : "真实"}暂停日期`, "暂停日期", props.onPauseDateChange, pauseLocked && !observing)}
     </div>
     <div data-ordinary-allocation-row="allocation-ratio" className="ml-auto mt-1 grid w-full max-w-[264px] items-center gap-1.5" style={{ gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr)" }}>
-      {/* 普通标签没有股数：剩余与分配合占前两列，右侧比例与暂停日期同列对齐。 */}
-      <div data-ordinary-allocation-span="2" className="col-span-2 flex min-w-0 items-center justify-between gap-1.5">
-        <span className="shrink-0 text-[10px] font-medium" style={{ color: remainingRatio < 0 ? "#D32F2F" : "#6B7280" }}>{remainingText}</span>
-        <div className="min-w-0 flex-1 max-w-[174px]">{money(targetAmount, `${name}的${observing ? "观察" : "真实"}分配金额`, "分配金额", props.onTargetAmountChange)}</div>
+      {/* 普通标签没有股数或总比例上限：分配金额填满前两列，右侧比例与暂停日期同列对齐。 */}
+      <div data-ordinary-allocation-span="2" className="col-span-2 min-w-0 w-full">
+        {money(targetAmount, `${name}的${observing ? "观察" : "真实"}分配金额`, "分配金额", props.onTargetAmountChange)}
       </div>
       <div data-ordinary-ratio-control className={`${fieldClass} w-full`} style={fieldStyle}>
         <button type="button" aria-label={`${name}减少${observing ? "观察" : "真实"}比例`} disabled={disabled || Number(ratio) <= 0}
           onClick={() => props.onRatioChange(stepInlineRatio(ratio, -1))} className="flex h-full w-4 shrink-0 items-center justify-center border-r text-gray-400 disabled:opacity-30" style={{ borderColor, ...(observing ? { color } : {}) }}><Minus size={10} /></button>
         <input type="text" inputMode="decimal" aria-label={`${name}的${observing ? "观察" : "真实"}比例`} value={ratio} placeholder="0" disabled={disabled}
           onChange={event => { const value = parseInlineRatioInput(event.target.value); if (value !== null) props.onRatioChange(value); }}
-          className="h-full min-w-0 flex-1 bg-transparent pl-0.5 text-right text-xs font-medium tabular-nums outline-none" style={{ color }} />
+          className="h-full min-w-0 flex-1 bg-transparent pl-0.5 text-right text-xs font-medium tabular-nums outline-none" style={{ color, fontSize: ratio.length >= 8 ? "8px" : ratio.length >= 5 ? "10px" : "12px" }} />
         <span className="shrink-0 pr-0.5 text-[10px]">%</span>
-        <button type="button" aria-label={`${name}增加${observing ? "观察" : "真实"}比例`} disabled={disabled || Number(ratio) >= 100}
+        <button type="button" aria-label={`${name}增加${observing ? "观察" : "真实"}比例`} disabled={disabled}
           onClick={() => props.onRatioChange(stepInlineRatio(ratio, 1))} className="flex h-full w-4 shrink-0 items-center justify-center border-l text-gray-400 disabled:opacity-30" style={{ borderColor, ...(observing ? { color } : {}) }}><Plus size={10} /></button>
       </div>
     </div>

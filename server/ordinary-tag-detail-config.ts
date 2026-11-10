@@ -56,7 +56,8 @@ export function validateOrdinaryDetailPatch(name: string, balances: Record<strin
     if (values.some(value => typeof value !== 'number' || !Number.isFinite(value))) reject('金额比例须为明确有效数字');
     const [amount, ratio, target] = values as number[];
     const zeroExit = amount === 0 && ratio === 0 && target === 0;
-    if ((!zeroExit && amount <= 0) || ratio < 0 || ratio > 100 || target < 0 || Math.abs(target - amount * ratio / 100) > 0.01) reject('金额比例及权益不一致');
+    const expected = amount * ratio / 100;
+    if ((!zeroExit && amount <= 0) || ratio < 0 || target < 0 || !Number.isFinite(expected) || Math.abs(target - expected) > 0.01) reject('金额比例及权益不一致');
   }
   if (Object.hasOwn(balances, `${name}__margin`) && (typeof balances[`${name}__margin`] !== 'number' || !Number.isFinite(balances[`${name}__margin`]))) reject('押金参考金额无效');
   if (Object.hasOwn(balances, `${name}__marginCoin`) && typeof balances[`${name}__marginCoin`] !== 'string') reject('押金币种无效');

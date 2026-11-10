@@ -23,12 +23,20 @@ function compile(source: string, deps: Record<string, unknown>) {
   const code = transformSync(source, { loader: 'ts', target: 'es2022' }).code;
   return new Function(...Object.keys(deps), code)(...Object.values(deps));
 }
-function routeNode(node: ts.Node): ts.PropertyAssignment | undefined {
-  if (ts.isPropertyAssignment(node) && node.name.getText(routerAst) === 'adminSetMemberInitialBalances') return node;
-  return ts.forEachChild(node, routeNode);
+function routeNode(node: ts.Node, name = 'adminSetMemberInitialBalances'): ts.PropertyAssignment | undefined {
+  if (ts.isPropertyAssignment(node) && node.name.getText(routerAst) === name) return node;
+  return ts.forEachChild(node, child => routeNode(child, name));
 }
 const productionRoute = routeNode(routerAst);
 if (!productionRoute) throw new Error('生产管理员保存入口不存在');
+const observationRoute = routeNode(routerAst, 'adminSetOrdinaryTagObservationConfig');
+function inputSchema(node: ts.Node): ts.Expression | undefined {
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'input') return node.arguments[0];
+  return ts.forEachChild(node, inputSchema);
+}
+const observationSchemaNode = observationRoute && inputSchema(observationRoute);
+if (!observationSchemaNode) throw new Error('生产普通观察schema不存在');
+const observationSchema = compile(`return ${observationSchemaNode.getText(routerAst)};`, { z }) as z.ZodTypeAny;
 
 const TAG = '普通';
 const TARGET = 201;
@@ -163,8 +171,13 @@ function fixture(raw: string | null = '{}') {
     isLedger52Creator: forbiddenDb, getLedgerMemberTagHideImpact: impact, getLedgerDb: forbiddenDb,
     sql: forbiddenDb,
   });
+  const assertTriplet = compile(helpers + '\nreturn assertLedger37AllocationTripletOnChange;', {
+    TRPCError, dbLedger, LEDGER_37_ID: 37,
+    mockedObservationModule: async () => ({ assertOrdinaryObservationAllocationChange }),
+  });
   return { state, tx, log, forbiddenDb, service, dbLedger, impact, transactionConnection,
     invoke: (input: any = payload()) => handler({ ctx: { user: { id: ACTOR } }, input }),
+    assertTriplet: (balances: Record<string, number | string>) => assertTriplet({ targetUserId: TARGET, actorUserId: ACTOR, balances }),
     saved: () => JSON.parse(state.raw!),
     writes: () => log.filter(({ sql }) => /^UPDATE/.test(sql)),
   };
@@ -188,6 +201,59 @@ function retainedFixture() {
     alias: '保留别名', unknownHistory: { nested: ['a', 'b'] },
   };
 }
+
+describe('37普通标签三联动场外杠杆：提取生产函数，完全离线', () => {
+  it.each([125, 200])('%s%%按公式通过，即使另一普通标签超过100也不汇总限制', async ratio => {
+    const f = fixture(JSON.stringify({ 其他: 1000, 其他__ratio: 200, 其他__targetAmount: 2000 }));
+    f.state.categories.push(category(11, '其他'));
+    await expect(f.assertTriplet({ 普通: 1000, 普通__ratio: ratio, 普通__targetAmount: 1000 * ratio / 100 })).resolves.toBeUndefined();
+    expect(f.dbLedger.getLedgerCategories).toHaveBeenCalledWith(37, ACTOR, undefined, null);
+    expect(f.log).toEqual([]); expect(f.transactionConnection).not.toHaveBeenCalled();
+  });
+  it('部分patch继承旧初始金额，但比例和实际权益仍须符合公式', async () => {
+    const f = fixture('{"普通":1000,"普通__ratio":50,"普通__targetAmount":500}');
+    await expect(f.assertTriplet({ 普通__ratio: 125, 普通__targetAmount: 1250 })).resolves.toBeUndefined();
+    await expect(f.assertTriplet({ 普通__ratio: 200 })).rejects.toThrow('实际权益必须等于');
+  });
+  it.each([
+    [1000, -1, 0], [1000, NaN, 0], [1000, Infinity, 0], [1000, 125, 1000],
+    [Number.MAX_VALUE, 200, Number.MAX_VALUE], [1000, 200, Infinity],
+  ])('拒绝非法或溢出的三联动 %s/%s/%s', async (amount, ratio, target) => {
+    const f = fixture();
+    await expect(f.assertTriplet({ 普通: amount, 普通__ratio: ratio, 普通__targetAmount: target })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(f.log).toEqual([]); expect(f.transactionConnection).not.toHaveBeenCalled();
+  });
+  it('观察开启即使参考比例125%，仍拒绝正真实份额并允许全零', async () => {
+    const f = fixture(JSON.stringify({ [ordinaryTagObservationKey(TAG)]: JSON.stringify({ ...OBSERVATION, ratio: 125 }) }));
+    await expect(f.assertTriplet({ 普通: 1000, 普通__ratio: 200, 普通__targetAmount: 2000 })).rejects.toThrow('先关闭观察');
+    await expect(f.assertTriplet({ 普通: 0, 普通__ratio: 0, 普通__targetAmount: 0 })).resolves.toBeUndefined();
+  });
+  it('未触及的非法旧数据不阻塞日期维护且不迁移', async () => {
+    const raw = '{"普通":1000,"普通__ratio":200,"普通__targetAmount":"legacy"}';
+    const f = fixture(raw);
+    await expect(f.assertTriplet({ 普通__startDate: '2026-11-03' })).resolves.toBeUndefined();
+    expect(f.state.raw).toBe(raw); expect(f.log).toEqual([]);
+  });
+  it.each(['accountingMode', 'accounting_mode'])('股票标签由独立实股校验负责，普通函数跳过%s', async modeKey => {
+    const f = fixture();
+    f.state.categories = [{ ...category(11, 'R1', modeKey === 'accountingMode' ? 'stock_portfolio' : 'manual_balance'), [modeKey]: 'stock_portfolio' }];
+    await expect(f.assertTriplet({ R1: 1000, R1__ratio: 200, R1__targetAmount: 1 })).resolves.toBeUndefined();
+    expect(f.log).toEqual([]);
+  });
+  it.each([0, 125, 200, 999])('生产普通观察路由schema允许非负有限比例%s', ratio => {
+    const input = { ledgerId: 37, categoryId: 10, targetUserId: TARGET, config: { ...OBSERVATION, ratio } };
+    expect(observationSchema.parse(input)).toEqual(input);
+  });
+  it.each([-1, NaN, Infinity, -Infinity])('生产普通观察路由schema仍拒绝非法比例%s', ratio => {
+    expect(() => observationSchema.parse({ ledgerId: 37, categoryId: 10, targetUserId: TARGET, config: { ...OBSERVATION, ratio } })).toThrow();
+  });
+  it('观察schema仍限37号、正成员ID和严格观察配置，不放行其他账本', () => {
+    const input = { ledgerId: 37, categoryId: 10, targetUserId: TARGET, config: { ...OBSERVATION, ratio: 125 } };
+    for (const patch of [{ ledgerId: 52 }, { targetUserId: 0 }, { categoryId: 0 }, { config: { ...input.config, walletBalance: 1 } }]) {
+      expect(() => observationSchema.parse({ ...input, ...patch })).toThrow();
+    }
+  });
+});
 
 describe('37普通标签独立清空：真实路由校验→真实委托→真实事务服务（完全离线）', () => {
   it('严格四键0/0/0/空日期接受；旧普通标签、保证金、暂停history、观察与可见性完整保留', async () => {

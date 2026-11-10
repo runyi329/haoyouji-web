@@ -104,9 +104,10 @@ export function validateOrdinaryTagObservationConfig(value: unknown): OrdinaryTa
   if (typeof c.initialAmount !== 'number' || !Number.isFinite(c.initialAmount) || c.initialAmount < 0) {
     throw new Error('参考初始金额必须是非负有限数字');
   }
-  if (typeof c.ratio !== 'number' || !Number.isFinite(c.ratio) || c.ratio < 0 || c.ratio > 100) {
-    throw new Error('观察比例必须是0到100之间的有限数字');
+  if (typeof c.ratio !== 'number' || !Number.isFinite(c.ratio) || c.ratio < 0) {
+    throw new Error('观察比例必须是非负有限数字');
   }
+  if (!Number.isFinite(c.initialAmount * (c.ratio / 100))) throw new Error('观察金额与比例计算溢出');
   if (!isOrdinaryTagObservationDate(c.startDate)) throw new Error('观察开始日期必须是有效的YYYY-MM-DD日期');
   if (c.pauseDate !== null && !isOrdinaryTagObservationDate(c.pauseDate)) throw new Error('观察暂停日期必须是有效日期或null');
   if (c.pauseDate !== null && c.pauseDate < c.startDate) throw new Error('观察暂停日期不能早于开始日期');
@@ -164,6 +165,13 @@ export function calculateOrdinaryTagObservationSummary(
     todayPnl: null,
     points: [],
   };
+  const invalidCalculation = (): OrdinaryTagObservationSummary => {
+    result.status = 'invalid_config';
+    result.points = [];
+    result.latestDate = result.latestBalance = result.totalPnl = result.todayPnl = null;
+    result.capitalChange = result.withdrawTotal = 0;
+    return result;
+  };
   try {
     validateOrdinaryTagObservationConfig(config);
     if (input.ledgerId !== ORDINARY_TAG_OBSERVATION_LEDGER_ID || !isOrdinaryTagObservationDate(today)) throw new Error('非法计算边界');
@@ -188,6 +196,7 @@ export function calculateOrdinaryTagObservationSummary(
       if (record.description?.startsWith('capital_')) day.capital += record.description.startsWith('capital_add') ? amount : -amount;
       else day.withdraw += amount;
     }
+    if (![day.income, day.expense, day.capital, day.withdraw].every(Number.isFinite)) return invalidCalculation();
     days.set(record.recordDate, day);
   }
   let previousBalance: number | null = null;
@@ -198,6 +207,7 @@ export function calculateOrdinaryTagObservationSummary(
     withdraw += day.withdraw;
     intervalCapital += day.capital;
     intervalWithdraw += day.withdraw;
+    if (![capital, withdraw, intervalCapital, intervalWithdraw].every(Number.isFinite)) return invalidCalculation();
     // AA原算法明确跳过income=expense=0的无效日期。
     if (day.income === 0 && day.expense === 0) continue;
     const balance = day.income > 0 ? day.income : day.expense;
@@ -207,11 +217,7 @@ export function calculateOrdinaryTagObservationSummary(
       const dailyPnl = previousBalance === null ? null
         : (previousBalance + intervalCapital - intervalWithdraw - balance) * ratio;
       if (!Number.isFinite(pnl) || (dailyPnl !== null && !Number.isFinite(dailyPnl))) {
-        result.status = 'invalid_config';
-        result.points = [];
-        result.latestDate = result.latestBalance = result.totalPnl = result.todayPnl = null;
-        result.capitalChange = result.withdrawTotal = 0;
-        return result;
+        return invalidCalculation();
       }
       // 仅规范已计算出来的真实零，不把缺失余额/收益转换为0。
       const normalizedPnl = pnl === 0 ? 0 : pnl;

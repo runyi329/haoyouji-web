@@ -19,7 +19,6 @@ export type OrdinaryTagInlineMemberRowProps = {
   actualPauseDate?: string;
   pauseStatus?: "paused" | "running" | "none";
   pauseLocked?: boolean;
-  remainingRatio?: number;
   batchSelectMode?: boolean;
   showAvatar?: boolean;
   visible: boolean;
@@ -53,7 +52,7 @@ export default function OrdinaryTagInlineMemberRow(props: OrdinaryTagInlineMembe
 /** 纯UI。三处编辑共用同一观察/真实草稿；无mutation和第二套弹窗比例表单。 */
 export function OrdinaryTagInlineMemberFields({
   member, observation, actual, actualStartDate, actualPauseDate = "", pauseStatus = "none", pauseLocked = false,
-  remainingRatio = 100, batchSelectMode = false, showAvatar = true, visible, saving, readError,
+  batchSelectMode = false, showAvatar = true, visible, saving, readError,
   onToggle, onObservationEdit, onActualEdit, onActualStartDateEdit, onActualPauseDateEdit, onDateDetails, onDetails,
   onToggleVisibility, visibilitySaving = false,
 }: OrdinaryTagInlineMemberRowProps) {
@@ -87,7 +86,7 @@ export function OrdinaryTagInlineMemberFields({
     <OrdinaryTagAllocationFields name={name} observing={observing} initialAmount={initialAmount}
       targetAmount={observing ? observedAmount : actual.targetAmount} ratio={ratio}
       startDate={observing ? observation.startDate : actualStartDate} pauseDate={observing ? observation.pauseDate : actualPauseDate}
-      remainingRatio={remainingRatio} disabled={saving} pauseLocked={pauseLocked}
+      disabled={saving} pauseLocked={pauseLocked}
       onInitialAmountChange={value => observing ? onObservationEdit({ initialAmount: value }) : onActualEdit("amount", value)}
       onTargetAmountChange={observing ? Number(initialAmount) > 0 ? value => onObservationEdit({ ratio: value === "" ? "" : String(Number((Number(value) / Number(initialAmount) * 100).toFixed(4))) }) : undefined : value => onActualEdit("targetAmount", value)}
       onRatioChange={value => observing ? onObservationEdit({ ratio: value }) : onActualEdit("ratio", value)}

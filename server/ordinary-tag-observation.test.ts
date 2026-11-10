@@ -188,10 +188,33 @@ describe('普通标签观察：AA对赌纯计算', () => {
     expect(calculate([record('2026-11-02', 'income', 200)], { ...CONFIG, initialAmount: 300, ratio: 10 }).totalPnl).toBe(10);
     expect(calculate([record('2026-11-02', 'income', 200)], { ...CONFIG, initialAmount: 0, ratio: 0 }).totalPnl).toBe(0);
   });
+  it.each([125, 200, 999])('观察比例%s%%合法，累计与每日收益沿用原公式', ratio => {
+    const config = { ...CONFIG, ratio };
+    expect(validateOrdinaryTagObservationConfig(config)).toEqual(config);
+    const result = calculate([record('2026-11-01', 'income', 1000), record('2026-11-02', 'income', 900), record('2026-11-09', 'income', 850)], config);
+    expect(result.status).toBe('active');
+    expect(result.totalPnl).toBe(150 * (ratio / 100));
+    expect(result.todayPnl).toBe(50 * (ratio / 100));
+    expect(result.points[0].dailyPnl).toBe(100 * (ratio / 100));
+  });
+  it.each([
+    ['同日余额', [record('2026-11-02', 'income', Number.MAX_VALUE), record('2026-11-02', 'income', Number.MAX_VALUE)], CONFIG],
+    ['同日支出即使income优先', [record('2026-11-02', 'expense', Number.MAX_VALUE), record('2026-11-02', 'expense', Number.MAX_VALUE), record('2026-11-02', 'income', 900)], CONFIG],
+    ['同日本金', [record('2026-11-02', 'transfer', Number.MAX_VALUE, 'capital_add'), record('2026-11-02', 'transfer', Number.MAX_VALUE, 'capital_add')], CONFIG],
+    ['同日提现', [record('2026-11-02', 'transfer', Number.MAX_VALUE), record('2026-11-02', 'transfer', Number.MAX_VALUE)], CONFIG],
+    ['跨日本金无余额', [record('2026-11-02', 'transfer', Number.MAX_VALUE, 'capital_add'), record('2026-11-03', 'transfer', Number.MAX_VALUE, 'capital_add')], CONFIG],
+    ['跨日提现无余额', [record('2026-11-02', 'transfer', Number.MAX_VALUE), record('2026-11-03', 'transfer', Number.MAX_VALUE)], CONFIG],
+    ['杠杆累计收益', [record('2026-11-02', 'income', Number.MAX_VALUE)], { ...CONFIG, initialAmount: 0, ratio: 200 }],
+    ['杠杆每日收益', [record('2026-11-01', 'income', Number.MAX_VALUE), record('2026-11-02', 'income', 1)], { ...CONFIG, initialAmount: 0, ratio: 200 }],
+    ['先有有效点再溢出', [record('2026-11-02', 'income', 900), record('2026-11-03', 'income', Number.MAX_VALUE)], { ...CONFIG, initialAmount: 0, ratio: 200 }],
+  ])('%s算术溢出明确invalid_config，不输出无限累计或残留收益点', (_, rows, config) => {
+    const result = calculate(rows as OrdinaryTagObservationRecord[], config as OrdinaryTagObservationConfig);
+    expect(result).toMatchObject({ status: 'invalid_config', points: [], latestDate: null, latestBalance: null, totalPnl: null, todayPnl: null, capitalChange: 0, withdrawTotal: 0 });
+  });
   it.each([
     ['无金额', { initialAmount: undefined }], ['金额字符串', { initialAmount: '1000' }],
     ['负金额', { initialAmount: -1 }], ['非有限金额', { initialAmount: Infinity }],
-    ['超限比例', { ratio: 101 }], ['负比例', { ratio: -1 }], ['非有限比例', { ratio: NaN }],
+    ['配置乘积溢出', { initialAmount: Number.MAX_VALUE, ratio: 200 }], ['负比例', { ratio: -1 }], ['非有限比例', { ratio: NaN }], ['无限比例', { ratio: Infinity }],
     ['无开关', { enabled: undefined }], ['非法开始日', { startDate: '2026-02-30' }],
     ['日期格式不严格', { startDate: '2026-2-03' }], ['暂停早于开始', { pauseDate: '2026-11-01' }],
     ['空暂停不是null', { pauseDate: '' }], ['无暂停参数', { pauseDate: undefined }],
@@ -295,6 +318,15 @@ describe('普通标签观察服务：仅mock DB', () => {
     expect(await adminGetOrdinaryTagObservationConfig(ADMIN)).toEqual({ config: null });
     expect(await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).toEqual({ userId: 201, observations: [] });
     expect(mocks.execute.mock.calls.some(([sql]) => /FROM ledger_records/.test(sql))).toBe(false);
+  });
+  it.each([125, 200])('开启%s%%杠杆观察只归零真实比例和权益，不产生真实资金', async ratio => {
+    const real = { 普通: 1000, 普通__ratio: 150, 普通__targetAmount: 1500, 普通__margin: 200, 其他__ratio: 200 };
+    ownBalances(real);
+    const config = { ...CONFIG, ratio };
+    await expect(adminSetOrdinaryTagObservationConfig({ ...ADMIN, config })).resolves.toEqual({ success: true, config });
+    expect(currentBalances()).toEqual({ ...real, 普通__ratio: 0, 普通__targetAmount: 0, [ordinaryTagObservationKey('普通')]: JSON.stringify(config) });
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0][0]).not.toMatch(/wallet|ledger_records|INSERT|DELETE|JSON_REMOVE/i);
   });
   it('原子UPDATE只改专用字符串键，保留全部真实字段和并发兄弟字段变更', async () => {
     const real = {
@@ -452,7 +484,7 @@ describe('普通标签观察服务：仅mock DB', () => {
     expect(result.observations[1]).toMatchObject({ status: 'no_data', totalPnl: null, latestBalance: null });
   });
   it('结构完整但非法旧观察参数明确invalid_config，不读取行情', async () => {
-    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify({ ...CONFIG, ratio: 999 }) });
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify({ ...CONFIG, ratio: -1 }) });
     const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
     expect(result.observations[0].status).toBe('invalid_config');
     expect(result.observations[0].totalPnl).toBeNull();

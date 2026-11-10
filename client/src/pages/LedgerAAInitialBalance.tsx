@@ -6,7 +6,7 @@
  * 每个成员 × 每个标签 可设置：
  *  - 显示开关（visible）：是否在该用户界面显示该标签
  *  - 开始日期（startDate）：该标签对该用户生效的起始日期
- *  - 初始比例（ratio）：0%~100%
+ *  - 初始比例（ratio）：普通标签非负且可超过100%；股票配股仍沿用专用上限
  *  - 初始金额（amount）：¥
  *  - 押金（margin）：数字币数量 or 人民币
  *  - 押金币种（marginCoin）：BTC/ETH/SOL/LDO/""（空=人民币）
@@ -1134,11 +1134,11 @@ export default function LedgerAAInitialBalance() {
       const ratio = Number(entry.ratio);
       const actualAmount = Number(entry.targetAmount);
       const isZeroParticipation = amount === 0 && ratio === 0 && actualAmount === 0;
-      if (!Number.isFinite(amount) || (!isZeroParticipation && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount < 0) {
+      if (!Number.isFinite(amount) || (!isZeroParticipation && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || !Number.isFinite(actualAmount) || actualAmount < 0) {
         return `「${tagName}」需填写完整的正数金额与比例，或三项均为 0 表示不参与`;
       }
       const expectedActual = amount * ratio / 100;
-      if (Math.abs(actualAmount - expectedActual) > 0.01) {
+      if (!Number.isFinite(expectedActual) || Math.abs(actualAmount - expectedActual) > 0.01) {
         return `「${tagName}」实际权益应为 ¥${expectedActual.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}（初始金额 × 比例）`;
       }
     }
@@ -1413,9 +1413,7 @@ export default function LedgerAAInitialBalance() {
         if (typeof ordinaryClearMutation.mutateAsync !== 'function') throw new Error('专用清空保存能力不可用');
       }
       plan = buildOrdinaryDetailSavePlan({ target: { ledgerId, targetUserId: userId, categoryId, tagName: category.name }, current, saved,
-        clearRequest,
-        otherSavedRatio: ((allBalancesData as any)?.members ?? []).reduce((sum: number, member: any) => member.userId === userId ? sum
-          : sum + Number(ordinarySavedActual(member.userId, category).ratio || 0), 0) });
+        clearRequest });
       if (plan.walletPlan?.action !== undefined && plan.walletPlan.action !== 'retain') {
         if (isLocalHotPreview || capabilities?.walletActions === false) throw new Error('热预览不执行暂停解冻或结算；请改为保留保证金后保存配置');
         if (Number(user?.id) !== 870413) throw new Error('37号暂停解冻/结算仅胡大叔可操作，请改为保留保证金');
@@ -1568,14 +1566,12 @@ export default function LedgerAAInitialBalance() {
       }
     };
     const pauseStatus = latest ? latest.resumeDate ? 'running' : 'paused' : entry.pauseDate ? 'paused' : entry.startDate ? 'running' : 'none';
-    const totalRatio = members.reduce((total: number, item: any) => total + (ordinaryEffectiveObservation(item.userId, category).enabled
-      ? 0 : Number(ordinaryEffectiveActual(item.userId, category).ratio) || 0), 0);
     return <section data-ordinary-detail-editor={category.id} className="min-w-0 rounded-md pt-2">
       <OrdinaryTagInlineMemberRow key={ordinaryInlineScope(ledgerId, userId, Number(category.id))}
         ledgerId={ledgerId} categoryId={Number(category.id)} member={member || { userId }} showAvatar={false}
         observation={ordinaryEffectiveObservation(userId, category)} actual={ordinaryEffectiveActual(userId, category)}
         actualStartDate={entry.startDate} actualPauseDate={displayedPauseDate} pauseStatus={pauseStatus} pauseLocked={latestIsGlobalPause}
-        remainingRatio={100 - totalRatio} visible={entry.visible} saving={ordinaryDetailSavingScopes.has(ordinaryInlineScope(ledgerId, userId, Number(category.id))) || ordinarySavingTags.has(Number(category.id)) || savingUsers.has(userId) || isOrdinaryClearBusy(userId, Number(category.id))} accentColor={category.color || '#2F6F85'}
+        visible={entry.visible} saving={ordinaryDetailSavingScopes.has(ordinaryInlineScope(ledgerId, userId, Number(category.id))) || ordinarySavingTags.has(Number(category.id)) || savingUsers.has(userId) || isOrdinaryClearBusy(userId, Number(category.id))} accentColor={category.color || '#2F6F85'}
         onConfigRead={onOrdinaryConfigRead} onToggle={enabled => toggleOrdinaryObservation(userId, category, enabled)}
         onObservationEdit={patch => editOrdinaryObservation(userId, category, patch)}
         onActualEdit={(field, value) => editOrdinaryActual(userId, category, field, value)}
@@ -3341,8 +3337,8 @@ export default function LedgerAAInitialBalance() {
                     <span>{selectedTagName ? (isStockPortfolioTag(selectedCat) ? `${selectedTagName} · 股票批次分配` : (() => {
                       const rows = tagRatioView[selectedTagName] ?? [];
                       const total = rows.reduce((s: number, r: any) => s + r.ratio, 0);
-                      const isComplete = Math.abs(total - 100) < 0.01;
-                      const isOver = total > 100.01;
+                      const isComplete = ledgerId !== 37 && Math.abs(total - 100) < 0.01;
+                      const isOver = ledgerId !== 37 && total > 100.01;
                       return `${selectedTagName}${isComplete ? ' ✓' : isOver ? ' !' : ''}  ${total.toFixed(2)}%`;
                     })()) : '— 请选择标签 —'}</span>
                   </div>
@@ -3381,8 +3377,8 @@ export default function LedgerAAInitialBalance() {
                       }).map((cat: any) => {
                         const rows = tagRatioView[cat.name] ?? [];
                         const total = rows.reduce((s: number, r: any) => s + r.ratio, 0);
-                        const isComplete = Math.abs(total - 100) < 0.01;
-                        const isOver = total > 100.01;
+                        const isComplete = ledgerId !== 37 && Math.abs(total - 100) < 0.01;
+                        const isOver = ledgerId !== 37 && total > 100.01;
                         const isSelected = selectedTagName === cat.name;
                         // 检测暂停：找到最早的暂停日期
                         const allUsers = Object.values(editState) as Record<string, TagEntry>[];
@@ -3413,8 +3409,8 @@ export default function LedgerAAInitialBalance() {
                               <span
                                 className="text-xs px-2 py-0.5 rounded-full"
                                 style={{
-                                  backgroundColor: isComplete ? '#E8F5E9' : isOver ? '#FFEBEE' : '#FFF3E0',
-                                  color: isComplete ? '#2E7D32' : isOver ? '#C62828' : '#E65100',
+                                  backgroundColor: ledgerId === 37 ? '#F3F4F6' : isComplete ? '#E8F5E9' : isOver ? '#FFEBEE' : '#FFF3E0',
+                                  color: ledgerId === 37 ? '#4B5563' : isComplete ? '#2E7D32' : isOver ? '#C62828' : '#E65100',
                                 }}
                               >
                                 {isComplete ? '✓ ' : isOver ? '! ' : ''}{total.toFixed(2)}%
@@ -3463,15 +3459,15 @@ export default function LedgerAAInitialBalance() {
             }
             const rows = tagRatioView[selectedTagName] ?? [];
             const total = rows.reduce((s, r) => s + r.ratio, 0);
-            const isComplete = Math.abs(total - 100) < 0.01;
-            const isOver = total > 100.01;
+            const isComplete = ledgerId !== 37 && Math.abs(total - 100) < 0.01;
+            const isOver = ledgerId !== 37 && total > 100.01;
             // 所有人份额金额之和
             const totalShareAmt = rows.reduce((s, r) => {
               const totalAmt = r.amount ? parseFloat(r.amount) : NaN;
               const share = !isNaN(totalAmt) && totalAmt !== 0 ? totalAmt * r.ratio / 100 : 0;
               return s + share;
             }, 0);
-            const totalShareAmountText = `¥${Math.round(totalShareAmt).toLocaleString('zh-CN')}`;
+            const totalShareAmountText = `¥${totalShareAmt.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`;
             return (
               <>
               <div className="mx-4 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
@@ -3492,13 +3488,13 @@ export default function LedgerAAInitialBalance() {
                       <span
                         className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
                         style={{
-                          backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
-                          color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
+                          backgroundColor: ledgerId === 37 ? "#F3F4F6" : isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
+                          color: ledgerId === 37 ? "#4B5563" : isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
                         }}
                       >
                         合计 {total.toFixed(2)}%
                       </span>
-                      <span className="text-gray-500 tabular-nums whitespace-nowrap">金额 {totalShareAmountText}</span>
+                      <span className="text-gray-500 tabular-nums whitespace-nowrap">权益合计 {totalShareAmountText}</span>
                       {ledgerId === 37 && <span className="text-[10px] text-[#7C3AED]">观察 {rows.filter(row => row.observing).length} 人 · {rows.reduce((sum, row) => sum + (row.observing ? row.observationRatio : 0), 0).toFixed(2)}%（不计合计）</span>}
                     </div>
                   </div>
@@ -3537,7 +3533,7 @@ export default function LedgerAAInitialBalance() {
                         observation={ordinaryEffectiveObservation(member.userId, cat)} actual={ordinaryEffectiveActual(member.userId, cat)}
                         actualStartDate={editState[member.userId]?.[cat.name]?.startDate || ''}
                         actualPauseDate={editState[member.userId]?.[cat.name]?.pauseHistory?.slice(-1)[0]?.pauseDate || editState[member.userId]?.[cat.name]?.pauseDate || ''}
-                        pauseStatus={pauseStatus} remainingRatio={100 - total} batchSelectMode={batchSelectMode}
+                        pauseStatus={pauseStatus} batchSelectMode={batchSelectMode}
                         visible={batchSelectMode ? ordinaryVisibilityDrafts[ordinaryVisibilityScope(member.userId, cat.name)] ?? visible : visible}
                         saving={ordinarySavingTags.has(Number(cat.id)) || isOrdinaryClearBusy(member.userId, Number(cat.id))} accentColor={cat.color || '#D32F2F'}
                         visibilitySaving={batchSaving || savingUsers.has(member.userId) || isVisibilityBusy(member.userId, cat.name)}
@@ -4701,7 +4697,6 @@ export default function LedgerAAInitialBalance() {
                                     inputMode="decimal"
                                     placeholder="0"
                                     min={0}
-                                    max={100}
                                     step="0.01"
                                     value={allocationDisplay.ratio}
                                     onChange={e => updateAllocationLink(userId, cat.name, 'ratio', e.target.value)}
@@ -5135,7 +5130,6 @@ export default function LedgerAAInitialBalance() {
                           inputMode="decimal"
                           placeholder="0"
                           min={0}
-                          max={100}
                           step="0.01"
                           value={allocationDisplay.ratio}
                           onChange={e => updateAllocationLink(userId, tagName, 'ratio', e.target.value)}

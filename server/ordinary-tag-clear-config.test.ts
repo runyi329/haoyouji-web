@@ -138,6 +138,26 @@ describe('普通标签真实余额登记日影响预检（GET只SELECT）', () =
   it('缺失/null实际比例遵循累计普通回报默认100%，不是观察比例默认0', async () => {
     const f = fixture('{"普通":1000,"普通__startDate":"2026-11-02"}'); expect((await f.impact()).affectedDays).toBe(2);
   });
+  it.each([125, 200, '200'])('杠杆实际比例%s正常预检并仅清空四键，不触碰真实资金', async ratio => {
+    const retained = { 其他__ratio: 200, 普通__margins: '[{"amount":200}]', 普通__pauseHistory: '[]', 普通__ordinaryObservation: '{"enabled":false}' };
+    const f = fixture(JSON.stringify({ ...BASE, ...retained, 普通__ratio: ratio, 普通__targetAmount: 1000 * Number(ratio) / 100 }));
+    const impact = await f.impact();
+    expect(impact).toMatchObject({ affectedDays: 2, firstDate: '2026-11-02', lastDate: '2026-11-05' });
+    expect(impact.impactHash).toMatch(/^[a-f0-9]{64}$/); expect(f.writes()).toHaveLength(0);
+    await f.clear(impact.impactHash);
+    expect(JSON.parse(f.state.raw!)).toEqual({ 普通: 0, 普通__ratio: 0, 普通__targetAmount: 0, 普通__startDate: '', ...retained });
+    expect(f.writes()).toHaveLength(1);
+    expect(f.writes()[0].sql).not.toMatch(/ledger_records|wallet|DELETE|INSERT|JSON_REMOVE/i);
+  });
+  it('杠杆比例变更即使影响天数不变仍改变hash，旧确认不能清空', async () => {
+    const f = fixture(JSON.stringify({ ...BASE, 普通__ratio: 125, 普通__targetAmount: 1250 }));
+    const first = await f.impact();
+    f.state.raw = JSON.stringify({ ...BASE, 普通__ratio: 200, 普通__targetAmount: 2000 });
+    const second = await f.impact();
+    expect(second.affectedDays).toBe(first.affectedDays); expect(second.impactHash).not.toBe(first.impactHash);
+    await expect(f.clear(first.impactHash)).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(f.writes()).toHaveLength(0);
+  });
   it('暂停日当天保留、暂停之后至恢复之前排除、恢复当天保留，结束日期为含当天截止', async () => {
     const f = fixture(JSON.stringify({ ...BASE, 普通__endDate: '2026-11-08', 普通__pauseHistory: JSON.stringify([
       { pauseDate: '2026-11-03', resumeDate: '2026-11-06', snapshotAmount: 'KEEP' }, { pauseDate: '2026-11-08' },
@@ -164,7 +184,7 @@ describe('普通标签真实余额登记日影响预检（GET只SELECT）', () =
     await expect(f.clear('a'.repeat(64))).rejects.toThrow(); expect(f.state.raw).toBe(raw); expect(f.writes()).toHaveLength(0);
   });
   it.each([{ 普通__startDate: '2026-02-30' }, { 普通__startDate: 0 }, { 普通__endDate: 'bad' },
-    { 普通__endDate: '2026-11-01' }, { 普通__ratio: '' }, { 普通__ratio: 'NaN' }, { 普通__ratio: 101 },
+    { 普通__endDate: '2026-11-01' }, { 普通__ratio: '' }, { 普通__ratio: 'NaN' }, { 普通__ratio: -1 }, { 普通__ratio: 'Infinity' },
     { 普通__pauseDate: 'bad' }, { 普通__pauseHistory: '{broken' }, { 普通__pauseHistory: '[{}]' },
     { 普通__pauseHistory: '[{"pauseDate":"2026-11-05","resumeDate":"2026-11-02"}]' },
     { 普通__pauseHistory: '[{"pauseDate":"2026-11-05"},{"pauseDate":"2026-11-07"}]' }])('损坏参与配置 %j拒绝且无写', async patch => {

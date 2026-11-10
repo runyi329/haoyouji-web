@@ -9,11 +9,11 @@ vi.mock("@/lib/trpc", () => ({ trpc: {} }));
 vi.mock("@/components/UserAvatar", () => ({ UserAvatar: (props: any) => createElement("span", { "data-avatar": props.username }, props.nickname || props.username) }));
 const actual = { amount: "975951.89", ratio: "20", targetAmount: "195190.38" };
 const fieldProps = (): OrdinaryTagAllocationFieldsProps => ({ name: "成员甲", observing: false, initialAmount: actual.amount,
-  targetAmount: actual.targetAmount, ratio: actual.ratio, startDate: "2026-11-01", pauseDate: "2026-11-09", remainingRatio: 35,
+  targetAmount: actual.targetAmount, ratio: actual.ratio, startDate: "2026-11-01", pauseDate: "2026-11-09",
   onInitialAmountChange: vi.fn(), onTargetAmountChange: vi.fn(), onRatioChange: vi.fn(), onStartDateChange: vi.fn(), onPauseDateChange: vi.fn(), onOpenDateDetails: vi.fn() });
 const rowProps = (): OrdinaryTagInlineMemberRowProps => ({ ledgerId: 37, categoryId: 201, member: { userId: 101, username: "member", nickname: "成员甲" },
   actual, observation: { enabled: false, initialAmount: "", ratio: "", startDate: "", pauseDate: "" }, actualStartDate: "2026-11-01", actualPauseDate: "2026-11-09",
-  remainingRatio: 35, pauseStatus: "paused", visible: true, saving: false, accentColor: "#D32F2F", onConfigRead: vi.fn(), onToggle: vi.fn(),
+  pauseStatus: "paused", visible: true, saving: false, accentColor: "#D32F2F", onConfigRead: vi.fn(), onToggle: vi.fn(),
   onObservationEdit: vi.fn(), onActualEdit: vi.fn(), onDetails: vi.fn() });
 function descendants(element: any): ReactElement<any>[] {
   if (!element || typeof element !== "object" || !element.props) return [];
@@ -23,7 +23,7 @@ function descendants(element: any): ReactElement<any>[] {
 const page = readFileSync(new URL("../pages/LedgerAAInitialBalance.tsx", import.meta.url), "utf8");
 
 describe("普通标签统一股票同款布局", () => {
-  it("姓名观察在首行，下方第一行初始/开始/暂停，第二行剩余、分配、±比例，无股数或重复金额", () => {
+  it("姓名观察在首行，下方第一行初始/开始/暂停，第二行分配占满两列与±比例，无剩余、股数或重复金额", () => {
     const html = renderToStaticMarkup(createElement(OrdinaryTagInlineMemberFields, rowProps()));
     const headerEnd = html.indexOf('data-ordinary-allocation-fields');
     expect(html.slice(0, headerEnd)).toContain('普通标签观察');
@@ -31,7 +31,7 @@ describe("普通标签统一股票同款布局", () => {
     expect(html.indexOf('reference-dates')).toBeLessThan(html.indexOf('allocation-ratio'));
     expect(html.indexOf('真实初始金额')).toBeLessThan(html.indexOf('真实开始日期'));
     expect(html.indexOf('真实开始日期')).toBeLessThan(html.indexOf('真实暂停日期'));
-    expect(html.indexOf('剩余 35%')).toBeLessThan(html.indexOf('真实分配金额'));
+    expect(html).not.toContain('剩余'); expect(html).not.toContain('超出');
     expect(html.indexOf('真实分配金额')).toBeLessThan(html.indexOf('减少真实比例'));
     expect(html.match(/inputMode="decimal"/g)).toHaveLength(3);
     expect(html).not.toContain('股数');
@@ -56,15 +56,37 @@ describe("普通标签统一股票同款布局", () => {
     }
     const span = descendants(tree).find(item => item.props['data-ordinary-allocation-span']);
     expect(span?.props.className).toContain('col-span-2');
+    expect(span?.props.className).toContain('w-full');
+    expect(descendants(span).some(item => /max-w/.test(item.props.className || ''))).toBe(false);
     // 页面卡片左右32px、展开内边距24px、行内边距16px；minmax(0,fr)不产生固定最小宽度。
     const available = Math.min(264, viewport - 32 - 24 - 16);
     const initialColumn = (available - 12) * 1.15 / 3.15;
     expect(initialColumn).toBeGreaterThan(72);
     const html = renderToStaticMarkup(tree);
     for (const value of [actual.amount, actual.targetAmount]) expect(html).toContain(`value="${value}"`);
-    const moneyInputs = descendants(tree).filter(item => item.type === 'input' && item.props.inputMode === 'decimal' && item.props.style?.fontSize);
+    const moneyInputs = descendants(tree).filter(item => item.type === 'input' && /金额$/.test(item.props['aria-label'] || ''));
     expect(moneyInputs).toHaveLength(2);
     for (const input of moneyInputs) { expect(input.props.style.fontSize).toBe('10px'); expect(input.props.className).not.toContain('truncate'); }
+  });
+  it.each([false, true])("观察=%s无剩余文字，比例100仍能加到101，长比例保留原值并缩字号", observing => {
+    const props = { ...fieldProps(), observing, ratio: '100' };
+    const all = descendants(OrdinaryTagAllocationFields(props));
+    const plus = all.find(item => item.type === 'button' && /增加.*比例/.test(item.props['aria-label'] || ''))!;
+    expect(plus.props.disabled).toBe(false); plus.props.onClick();
+    expect(props.onRatioChange).toHaveBeenCalledWith('101');
+    for (const ratio of ['1234.5', '12345.67']) {
+      const tree = OrdinaryTagAllocationFields({ ...props, ratio });
+      const input = descendants(tree).find(item => item.type === 'input' && /比例$/.test(item.props['aria-label'] || ''))!;
+      expect(input.props.value).toBe(ratio);
+      expect(input.props.style.fontSize).toBe(ratio.length >= 8 ? '8px' : '10px');
+      expect(input.props.className).toContain('min-w-0'); expect(input.props.className).not.toContain('truncate');
+      const html = renderToStaticMarkup(tree);
+      expect(html).toContain(`value="${ratio}"`); expect(html).not.toContain('剩余'); expect(html).not.toContain('超出');
+      input.props.onChange({ target: { value: '125.5' } }); expect(props.onRatioChange).toHaveBeenCalledWith('125.5');
+    }
+    const fields = readFileSync(new URL('./OrdinaryTagAllocationFields.tsx', import.meta.url), 'utf8');
+    const row = readFileSync(new URL('./OrdinaryTagInlineMemberRow.tsx', import.meta.url), 'utf8');
+    expect(fields).not.toContain('remainingText'); expect(fields).not.toContain('remainingRatio'); expect(row).not.toContain('remainingRatio');
   });
   it("超长历史精度金额只适配字号，不四舍五入或截断原值", () => {
     const tree = OrdinaryTagAllocationFields({ ...fieldProps(), initialAmount: '975951.893333' });
@@ -118,11 +140,31 @@ describe("头像与共享草稿安全接线", () => {
     expect(badge.props.style.filter).toBeUndefined();
     expect(renderToStaticMarkup(tree)).toContain('grayscale(100%)');
     expect(page).toContain('visible={batchSelectMode ? ordinaryVisibilityDrafts[ordinaryVisibilityScope(member.userId, cat.name)] ?? visible : visible}');
-    expect(page).toContain('pauseStatus={pauseStatus} remainingRatio={100 - total} batchSelectMode={batchSelectMode}');
+    expect(page).toContain('pauseStatus={pauseStatus}'); expect(page).toContain('batchSelectMode={batchSelectMode}');
+  });
+  it("R1股票配股仍走独立0到100分支，不使用普通比例helper", () => {
+    const start = page.indexOf('const renderStockParticipationEditor =');
+    const end = page.indexOf('// 用户视图的收起卡片');
+    expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
+    const stock = page.slice(start, end);
+    expect(stock).toContain('const maxPercentage = 100;');
+    expect(stock).toContain('Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)))');
+    expect(stock).not.toContain('stepInlineRatio'); expect(stock).not.toContain('parseInlineRatioInput');
+  });
+  it("普通行不显示剩余分配，但顶部权益合计仍按初始金额乘比例合计并最多两位小数", () => {
+    const start = page.indexOf('const rows = tagRatioView[selectedTagName] ?? [];');
+    const header = page.slice(start, page.indexOf('/* 批量按钮：', start));
+    expect(header).toContain('权益合计 {totalShareAmountText}');
+    expect(header).toContain('totalAmt * r.ratio / 100');
+    expect(header).toContain("totalShareAmt.toLocaleString('zh-CN', { maximumFractionDigits: 2 })");
+    expect(header).toContain('ledgerId !== 37 && Math.abs(total - 100) < 0.01');
+    expect(header).toContain('ledgerId !== 37 && total > 100.01');
+    expect(header).not.toContain('剩余');
+    expect(page).not.toContain('remainingRatio=');
   });
   it("仅37号普通标签三处共享新字段/草稿/保存，其他账本原日期与金额表单不重复进入37", () => {
     expect(page).toContain('ledgerId === 37 && !isStockTag && renderOrdinaryTagEditor(userId, cat, member)');
-    expect(page).toContain('ledgerId === 37 && !isStockTag && category && renderOrdinaryTagEditor(userId, category, member)');
+    expect(page).toContain('ledgerId === 37 && !isStockTag && category && renderOrdinaryTagEditor(userId, category, member, true)');
     expect(page).toContain('if (ledgerId !== 37 || isStockPortfolioTag(category)) return null;');
     expect(page).toContain('const renderOrdinaryTagSaveControls = (category: any) => ledgerId === 37 && !isStockPortfolioTag(category) && <div');
     expect(page).toContain('ledgerId === 37 && !isStockTag && <div className="flex flex-wrap items-center justify-end gap-2 pt-1">');
@@ -138,7 +180,7 @@ describe("头像与共享草稿安全接线", () => {
     expect(page).toContain('onActualEdit={(field, value) => editOrdinaryActual');
     expect(page).toContain('updateAllocationLink(userId, category.name, field, value');
     expect(page).toContain('renderOrdinaryTagSaveControls(category)');
-    expect(page).toContain('取消本标签草稿'); expect(page).toContain('保存本标签金额/观察');
+    expect(page).toContain('onClick={() => cancelOrdinaryTag(category)}'); expect(page).toContain('保存金额与观察');
   });
   it("标签保存只走原helper：独立mutation不清成员日期/押金草稿，取消/失败返回false且弹窗不关闭", () => {
     expect(page).toContain('saveActual: input => ordinaryActualMutation.mutateAsync(input)');
@@ -146,7 +188,8 @@ describe("头像与共享草稿安全接线", () => {
     expect(page).toContain('dirtyMemberDraftsRef.current.has(member.userId)');
     expect(page).toContain('if (!await handleSaveOrdinaryTag(category)) return false;');
     expect(page).toContain('if (ledgerId !== 37) {\n                      handleSaveMember(userId);\n                      setTagEditModal(null);');
-    expect(page).toContain('disabled={isSaving || (ledgerId === 37 && (ordinarySavingTags.has(Number(category?.id)) || (isLocalHotPreview && !isStockTag)))}');
+    expect(page).toContain('const saveDisabled = isSaving || isOrdinaryClearMemberBusy(userId) || (ledgerId === 37 && ordinarySavingTags.has(Number(category?.id)))');
+    expect(page).toContain('disabled={saveDisabled}');
     expect(page).toContain('if (await handleSaveMember(userId)) setTagEditModal(null);');
     const save = page.slice(page.indexOf('const handleSaveOrdinaryTag'), page.indexOf('const allocationValueChanged'));
     expect(save).toContain('return saved;'); expect(save).toContain('return false;');

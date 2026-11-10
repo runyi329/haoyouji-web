@@ -172,7 +172,6 @@ async function readImpact(input: OrdinaryTagClearInput, deps: OrdinaryTagClearDe
   numberConfig(config[`${name}__targetAmount`], 0, '实际权益');
   // 与allTagsChartData累计回报相同：缺失/null比例默认100%，明确0比例没有实际收益。
   const ratio = numberConfig(config[`${name}__ratio`], 100, '实际比例');
-  if (ratio > 100) invalid('实际比例超出0到100');
   const start = optionalDate(config[`${name}__startDate`], '开始日期');
   const end = optionalDate(config[`${name}__endDate`], '结束日期');
   if (start && end && end < start) invalid('结束日期早于开始日期，请先核实配置');
