@@ -1,5 +1,5 @@
 import {
-  inlineConfigFromDraft, zeroOrdinaryActual, validateInlineActual,
+  inlineObservationConfigForSave, zeroOrdinaryActual, validateInlineActual,
   type OrdinaryActualAllocation, type OrdinaryInlineObservationDraft,
 } from "@/components/ordinaryTagInlineAllocation";
 import type { OrdinaryTagObservationConfig } from "@shared/ordinary-tag-observation";
@@ -30,8 +30,8 @@ const marginsForCompare = (margins: DetailMargin[]) => margins.map(item => ({ ..
   notes: item.notes.map(note => ({ ...note, content: note.content.trim() })),
 }));
 export function detailObservationEqual(a: OrdinaryInlineObservationDraft, b: OrdinaryInlineObservationDraft) {
-  // An unsaved on/off round-trip can leave seeded references behind; absent disabled config has no persisted observation settings.
-  if (!a.enabled && !b.enabled && !b.startDate && !b.initialAmount && !b.ratio) return true;
+  // Disabled references are inactive, including old saved disabled configurations and unsaved on/off round-trips.
+  if (!a.enabled && !b.enabled) return true;
   return a.enabled === b.enabled && numeric(a.initialAmount) === numeric(b.initialAmount) && numeric(a.ratio) === numeric(b.ratio)
     && a.startDate === b.startDate && a.pauseDate === b.pauseDate;
 }
@@ -91,7 +91,7 @@ export function buildOrdinaryDetailSavePlan(input: {
     || !["retain", "release_wallet_holds", "settle_and_release"].includes(walletPlan.action))) throw new Error("暂停方案或日期无效");
   const observationChanged = !detailObservationEqual(current.observation, saved.observation);
   const observationRequest = observationChanged || (current.observation.enabled && Number(saved.entry.ratio) > 0)
-    ? { ledgerId: 37, targetUserId: target.targetUserId, categoryId: target.categoryId, config: inlineConfigFromDraft(current.observation) } : null;
+    ? { ledgerId: 37, targetUserId: target.targetUserId, categoryId: target.categoryId, config: inlineObservationConfigForSave(current.observation, saved.observation)! } : null;
   const savedActual = { amount: saved.entry.amount, ratio: saved.entry.ratio, targetAmount: saved.entry.targetAmount };
   const entry = materializeDetailPause({ ...current.entry, ...(current.observation.enabled ? zeroOrdinaryActual(savedActual) : {}) }, walletPlan);
   const balances: Record<string, number | string> = {};

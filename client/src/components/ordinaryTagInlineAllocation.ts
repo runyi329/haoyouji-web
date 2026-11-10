@@ -1,4 +1,5 @@
 import {
+  isOrdinaryTagObservationDate,
   validateOrdinaryTagObservationConfig,
   type OrdinaryTagObservationConfig,
 } from "@shared/ordinary-tag-observation";
@@ -19,7 +20,7 @@ export const inlineObservationFromConfig = (config: OrdinaryTagObservationConfig
   enabled: config.enabled, initialAmount: String(config.initialAmount), ratio: String(config.ratio), startDate: config.startDate, pauseDate: config.pauseDate || "",
 }) : emptyInlineObservation();
 export const inlineObservationsEqual = (a: OrdinaryInlineObservationDraft, b: OrdinaryInlineObservationDraft) =>
-  a.enabled === b.enabled && a.initialAmount === b.initialAmount && a.ratio === b.ratio && a.startDate === b.startDate && a.pauseDate === b.pauseDate;
+  (!a.enabled && !b.enabled) || (a.enabled === b.enabled && a.initialAmount === b.initialAmount && a.ratio === b.ratio && a.startDate === b.startDate && a.pauseDate === b.pauseDate);
 
 /** 只在管理员明确点击开启时调用；首次种子采用当前真实三联动参考值，不自动开启。 */
 export function toggleInlineObservation(
@@ -46,8 +47,22 @@ export function parseInlineRatioInput(raw: string): string | null {
   return Number.isFinite(Number(text)) && Number(text) >= 0 ? text : null;
 }
 export function inlineConfigFromDraft(draft: OrdinaryInlineObservationDraft): OrdinaryTagObservationConfig {
-  if (!draft.initialAmount.trim() || !draft.ratio.trim()) throw new Error("请填写参考初始金额和非负有限比例");
+  if (!draft.initialAmount.trim()) throw new Error("观察初始金额未填写");
+  if (!Number.isFinite(Number(draft.initialAmount)) || Number(draft.initialAmount) < 0) throw new Error("观察初始金额须为非负有限数字");
+  if (!draft.ratio.trim()) throw new Error("观察比例未填写");
+  if (!Number.isFinite(Number(draft.ratio)) || Number(draft.ratio) < 0) throw new Error("观察比例须为非负有限数字");
+  if (!draft.startDate.trim()) throw new Error("观察开始日期未填写");
+  if (!isOrdinaryTagObservationDate(draft.startDate)) throw new Error("观察开始日期无效");
+  if (draft.pauseDate && !isOrdinaryTagObservationDate(draft.pauseDate)) throw new Error("观察暂停日期无效");
   return validateOrdinaryTagObservationConfig({ enabled: draft.enabled, initialAmount: Number(draft.initialAmount), ratio: Number(draft.ratio), startDate: draft.startDate, pauseDate: draft.pauseDate || null });
+}
+/** 关闭的参考参数不活跃；只有真正关闭已保存观察时，提交原基线的 disabled，不造空配置。 */
+export function inlineObservationConfigForSave(
+  draft: OrdinaryInlineObservationDraft,
+  previous?: OrdinaryInlineObservationDraft | null,
+): OrdinaryTagObservationConfig | null {
+  if (draft.enabled) return inlineConfigFromDraft(draft);
+  return previous?.enabled ? inlineConfigFromDraft({ ...previous, enabled: false }) : null;
 }
 export function readInlineObservationPreview(storage: Pick<Storage, "getItem">, userId: number, categoryId: number): OrdinaryTagObservationConfig | null {
   try {
@@ -69,15 +84,19 @@ export function zeroOrdinaryActual(actual: OrdinaryActualAllocation): OrdinaryAc
   return { ...actual, ratio: "0", targetAmount: "0" };
 }
 export function validateInlineActual(actual: OrdinaryActualAllocation): OrdinaryActualAllocation {
-  if ([actual.amount, actual.ratio, actual.targetAmount].some(value => value.trim() === "")) throw new Error("请填写完整的初始金额、比例和分配金额");
+  for (const [value, label] of [[actual.amount, "真实初始金额"], [actual.ratio, "真实比例"], [actual.targetAmount, "真实分配金额"]]) {
+    if (!value.trim()) throw new Error(`${label}未填写`);
+  }
   const amount = Number(actual.amount), ratio = Number(actual.ratio), target = Number(actual.targetAmount);
   const zeroExit = amount === 0 && ratio === 0 && target === 0;
-  if (!Number.isFinite(amount) || (!zeroExit && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || !Number.isFinite(target) || target < 0) throw new Error("需填写有限正数初始金额及非负有限比例和分配金额，或三项均为 0 退出");
+  if (!Number.isFinite(amount) || (!zeroExit && amount <= 0)) throw new Error("真实初始金额须为有限正数，或三项均为 0 退出");
+  if (!Number.isFinite(ratio) || ratio < 0) throw new Error("真实比例须为非负有限数字");
+  if (!Number.isFinite(target) || target < 0) throw new Error("真实分配金额须为非负有限数字");
   const product = amount * ratio;
   const expected = product / 100;
   const difference = target - expected;
-  if (!Number.isFinite(product) || !Number.isFinite(expected) || !Number.isFinite(difference)) throw new Error("分配金额计算溢出，请调整初始金额或比例");
-  if (Math.abs(difference) > 0.01) throw new Error("分配金额须等于初始金额 × 比例");
+  if (!Number.isFinite(product) || !Number.isFinite(expected) || !Number.isFinite(difference)) throw new Error("真实分配金额计算溢出，请调整初始金额或比例");
+  if (Math.abs(difference) > 0.01) throw new Error("真实分配金额须等于初始金额 × 比例");
   return actual;
 }
 export function summarizeOrdinaryInlineRows(rows: ReadonlyArray<{ enabled: boolean; actual: OrdinaryActualAllocation; observationRatio: string }>) {
@@ -100,6 +119,8 @@ export type OrdinaryInlineSaveRow = {
   name: string;
   observation: OrdinaryInlineObservationDraft;
   observationChanged: boolean;
+  /** 已保存观察基线（非当前草稿）；null/省略表示未启用，关闭时绝不由金额猜测配置。 */
+  previousObservation?: OrdinaryInlineObservationDraft | null;
   actual: OrdinaryActualAllocation;
   actualChanged: boolean;
   previousActual?: OrdinaryActualAllocation;
@@ -123,13 +144,23 @@ export async function saveOrdinaryInlineTag(
   input: { ledgerId: number; categoryId: number; tagName: string; rows: readonly OrdinaryInlineSaveRow[] },
   deps: OrdinaryInlineSaveDependencies,
 ): Promise<boolean> {
-  if (input.ledgerId !== 37 || !Number.isSafeInteger(input.categoryId) || input.categoryId <= 0 || !input.tagName
-    || input.rows.some(row => !Number.isSafeInteger(row.userId) || row.userId <= 0)) throw new Error("仅支持 37 号账本有效普通标签成员");
-  const observations = input.rows.filter(row => row.observationChanged || (row.observation.enabled && row.previousActualRatio > 0))
-    .map(row => ({ row, config: inlineConfigFromDraft(row.observation) }));
+  if (input.ledgerId !== 37 || !Number.isSafeInteger(input.categoryId) || input.categoryId <= 0 || !input.tagName) {
+    throw new Error(`${input.rows.map(row => row.name).join("、") || "本标签"}：观察/真实保存目标无效，仅支持 37 号账本有效普通标签`);
+  }
+  for (const row of input.rows) if (!Number.isSafeInteger(row.userId) || row.userId <= 0) throw new Error(`${row.name}：观察/真实保存成员无效`);
+  const observations = input.rows.filter(row => row.observation.enabled
+    ? row.observationChanged || row.previousActualRatio > 0
+    : row.previousObservation?.enabled === true)
+    .map(row => {
+      try { return { row, config: inlineObservationConfigForSave(row.observation, row.previousObservation)! }; }
+      catch (error) { throw new Error(`${row.name}：${(error as Error).message}`); }
+    });
   // 观察开启的行不生成真实载荷，哪怕之前已有真实草稿。
   const actuals = input.rows.filter(row => !row.observation.enabled && row.actualChanged);
-  for (const row of actuals) validateInlineActual(row.actual);
+  for (const row of actuals) {
+    try { validateInlineActual(row.actual); }
+    catch (error) { throw new Error(`${row.name}：${(error as Error).message}`); }
+  }
   const releases = observations.filter(({ row, config }) => config.enabled && row.previousActualRatio > 0);
   if (releases.length > 0 && !deps.confirm([
     `确认将「${input.tagName}」以下成员切换为观察？`,
@@ -139,24 +170,32 @@ export async function saveOrdinaryInlineTag(
     deps.isDev ? "本次仅存当前浏览器会话预览，不会提交正式账本。" : "",
   ].filter(Boolean).join("\n"))) return false;
   for (const { row, config } of observations) {
-    if (deps.isDev) {
-      deps.storage.setItem(ordinaryInlinePreviewKey(row.userId, input.categoryId), JSON.stringify(config));
-      if (config.enabled) deps.storage.setItem(ordinaryActualPreviewKey(input.ledgerId, row.userId, input.categoryId), JSON.stringify(zeroOrdinaryActual(row.previousActual ?? row.actual)));
-    } else {
-      await deps.saveObservation({ ledgerId: input.ledgerId, categoryId: input.categoryId, targetUserId: row.userId, config });
+    try {
+      if (deps.isDev) {
+        deps.storage.setItem(ordinaryInlinePreviewKey(row.userId, input.categoryId), JSON.stringify(config));
+        if (config.enabled) deps.storage.setItem(ordinaryActualPreviewKey(input.ledgerId, row.userId, input.categoryId), JSON.stringify(zeroOrdinaryActual(row.previousActual ?? row.actual)));
+      } else {
+        await deps.saveObservation({ ledgerId: input.ledgerId, categoryId: input.categoryId, targetUserId: row.userId, config });
+      }
+      deps.onObservationSaved(row, config);
+      if (deps.isDev) deps.dispatchPreviewChange({ userId: row.userId, categoryId: input.categoryId });
+    } catch {
+      throw new Error(`${row.name}：观察${deps.isDev ? "会话预览" : ""}保存失败，未成功的修改已保留，请重试`);
     }
-    deps.onObservationSaved(row, config);
-    if (deps.isDev) deps.dispatchPreviewChange({ userId: row.userId, categoryId: input.categoryId });
   }
   for (const row of [...actuals].sort((a, b) => (Number(a.actual.ratio) - a.previousActualRatio) - (Number(b.actual.ratio) - b.previousActualRatio))) {
-    if (deps.isDev) {
-      deps.storage.setItem(ordinaryActualPreviewKey(input.ledgerId, row.userId, input.categoryId), JSON.stringify(row.actual));
-    } else {
-      await deps.saveActual({ ledgerId: input.ledgerId, targetUserId: row.userId, balances: {
-        [input.tagName]: Number(row.actual.amount), [`${input.tagName}__ratio`]: Number(row.actual.ratio), [`${input.tagName}__targetAmount`]: Number(row.actual.targetAmount),
-      }, migratedMarginNoteIds: [] });
+    try {
+      if (deps.isDev) {
+        deps.storage.setItem(ordinaryActualPreviewKey(input.ledgerId, row.userId, input.categoryId), JSON.stringify(row.actual));
+      } else {
+        await deps.saveActual({ ledgerId: input.ledgerId, targetUserId: row.userId, balances: {
+          [input.tagName]: Number(row.actual.amount), [`${input.tagName}__ratio`]: Number(row.actual.ratio), [`${input.tagName}__targetAmount`]: Number(row.actual.targetAmount),
+        }, migratedMarginNoteIds: [] });
+      }
+      deps.onActualSaved(row);
+    } catch {
+      throw new Error(`${row.name}：真实${deps.isDev ? "会话预览" : ""}保存失败，未成功的修改已保留，请重试`);
     }
-    deps.onActualSaved(row);
   }
   return true;
 }

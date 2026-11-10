@@ -1056,6 +1056,7 @@ export default function LedgerAAInitialBalance() {
       if (isLocalHotPreview) { try { hasActualPreview = Boolean(readOrdinaryActualPreview(window.sessionStorage, ledgerId, member.userId, categoryId)); } catch {} }
       const previousActualRatio = ordinaryActualSaved[scope] || hasActualPreview ? Number(original.ratio) || 0 : Number(storedRatio) || 0;
       return { userId: member.userId, name: member.nickname || member.username || '未知', observation,
+        previousObservation: ordinarySavedObservation(member.userId, category),
         observationChanged: !inlineObservationsEqual(observation, ordinarySavedObservation(member.userId, category)),
         actual, actualChanged: Boolean(ordinaryActualDirty[scope]), previousActual: original, previousActualRatio };
     });
@@ -3703,8 +3704,8 @@ export default function LedgerAAInitialBalance() {
                   })}
                 </div>
 
-                {/* 底部合计条 */}
-                <div
+                {/* 37号普通标签仅使用顶部比例与权益合计，不设100%总量参照。 */}
+                {ledgerId !== 37 && <div
                   className="mx-4 mb-4 mt-1 rounded-xl px-4 py-2 flex items-center justify-between"
                   style={{ backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF8E1" }}
                 >
@@ -3715,7 +3716,7 @@ export default function LedgerAAInitialBalance() {
                   >
                     {total.toFixed(2)}% / 100%
                   </span>
-                </div>
+                </div>}
 
                 {ledgerId === 37 && cat && <div data-ordinary-inline-tag-save={cat.id} className="mx-4 mb-4 rounded-lg border border-purple-100 bg-purple-50/40 px-2.5 py-2">
                   <p className="text-[10px] leading-4 text-gray-500">观察不占实际份额、不参与结算；保存后真实比例/分配金额归零，历史、押金和钱包不动。关闭需重新分配真实比例。</p>

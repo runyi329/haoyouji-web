@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  buildOrdinaryDetailSavePlan, ordinaryDetailIsChanged, saveOrdinaryDetail,
+  buildOrdinaryDetailSavePlan, detailObservationEqual, ordinaryDetailIsChanged, saveOrdinaryDetail,
   type DetailEntry, type DetailSnapshot, type DetailSaveDependencies,
 } from './ordinaryTagDetailSave';
 import { clearedOrdinaryConfig, ordinaryClearRequest, type OrdinaryClearImpact } from './ordinaryTagMemberClear';
@@ -30,6 +30,41 @@ describe('ordinary detail baseline and narrow request', () => {
     current.observation = { enabled: false, initialAmount: '1000', ratio: '20', startDate: '2026-01-01', pauseDate: '' };
     expect(ordinaryDetailIsChanged(current, saved)).toBe(false);
     expect(build(current).observationRequest).toBeNull();
+  });
+  it('any two disabled states ignore inactive references symmetrically in dirty and saving', async () => {
+    const variants = [snapshot().observation,
+      { enabled: false, initialAmount: '10000', ratio: '100', startDate: '2026-11-11', pauseDate: '' },
+      { enabled: false, initialAmount: 'NaN', ratio: '-1', startDate: 'bad', pauseDate: 'Infinity' }];
+    for (const a of variants) for (const b of variants) {
+      expect(detailObservationEqual(a, b)).toBe(true);
+      const saved = { ...snapshot(), observation: b }, current = { ...snapshot(), observation: a };
+      expect(ordinaryDetailIsChanged(current, saved)).toBe(false);
+      const plan = build(current, saved), d = deps();
+      expect(plan.observationRequest).toBeNull(); expect(plan.configRequest).toBeNull();
+      await expect(saveOrdinaryDetail(plan, d)).resolves.toBe(true);
+      expect(d.saveObservation).not.toHaveBeenCalled(); expect(d.saveConfig).not.toHaveBeenCalled();
+    }
+  });
+  it('actual detail edits save despite blank disabled on/off observation draft', async () => {
+    const saved = snapshot(), current = clone(saved), d = deps();
+    current.entry.ratio = '125.5'; current.entry.targetAmount = '1255';
+    current.observation = { ...current.observation, startDate: '2026-11-11' };
+    const plan = build(current, saved);
+    expect(plan.observationRequest).toBeNull();
+    await saveOrdinaryDetail(plan, d);
+    expect(d.saveConfig).toHaveBeenCalledTimes(1); expect(d.saveObservation).not.toHaveBeenCalled();
+  });
+  it('closing persisted enabled observation submits saved disabled references even with empty draft, never restores actual', async () => {
+    const saved = snapshot(); saved.entry.ratio = '0'; saved.entry.targetAmount = '0';
+    saved.observation = { enabled: true, initialAmount: '10000', ratio: '100', startDate: '2026-11-11', pauseDate: '' };
+    const current = clone(saved); current.observation = snapshot().observation;
+    expect(ordinaryDetailIsChanged(current, saved)).toBe(true);
+    const plan = build(current, saved), d = deps();
+    expect(plan.observationRequest?.config).toEqual({ enabled: false, initialAmount: 10000, ratio: 100, startDate: '2026-11-11', pauseDate: null });
+    expect(plan.configRequest).toBeNull();
+    await saveOrdinaryDetail(plan, d);
+    expect(d.saveObservation).toHaveBeenCalledTimes(1); expect(d.saveConfig).not.toHaveBeenCalled();
+    expect(d.confirm).not.toHaveBeenCalled();
   });
   it('normalizes numeric observation references but detects real fields', () => {
     const saved = snapshot(); saved.observation = { enabled: true, initialAmount: '1000', ratio: '20', startDate: '2026-01-01', pauseDate: '' };
@@ -97,6 +132,19 @@ describe('ordinary detail baseline and narrow request', () => {
 });
 
 describe('complete validation before first write', () => {
+  it.each([
+    ['initialAmount', '观察初始金额未填写'], ['ratio', '观察比例未填写'], ['startDate', '观察开始日期未填写'],
+  ] as const)('enabled blank %s rejects with its specific field before any write', async (field, message) => {
+    const current = snapshot(), d = deps();
+    current.observation = { enabled: true, initialAmount: '10000', ratio: '100', startDate: '2026-11-11', pauseDate: '', [field]: '' };
+    current.entry.startDate = '2026-02-01';
+    await expect(async () => saveOrdinaryDetail(build(current), d)).rejects.toThrow(message);
+    expect(d.saveObservation).not.toHaveBeenCalled(); expect(d.saveConfig).not.toHaveBeenCalled(); expect(d.saveWalletPlan).not.toHaveBeenCalled();
+  });
+  it('enabled future start and over-100 observation ratio remain legal', () => {
+    const current = snapshot(); current.observation = { enabled: true, initialAmount: '10000', ratio: '125.5', startDate: '2026-11-11', pauseDate: '' };
+    expect(build(current).observationRequest?.config.ratio).toBe(125.5);
+  });
   it('full clearing is rejected before any observation/config request and requires separate confirmation', () => {
     const current = snapshot(); current.entry = { ...current.entry, amount: '0', ratio: '0', targetAmount: '0', startDate: '' };
     expect(() => build(current)).toThrow('完整清空');
