@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-10
+// 生成时间：2026-11-11
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9942,5 +9942,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-11-10": [
     { date: "2026-11-09T16:07:48Z", type: "fix", cleanMessage: "show confirmed historical principal dates in CNY history" },
+    { date: "2026-11-10T00:52:59Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-10T11:38:00Z", type: "fix", cleanMessage: "precompute stock calendars with aligned daily settlement" },
+    { date: "2026-11-10T15:28:59Z", type: "fix", cleanMessage: "allow leveraged ordinary-tag allocations" },
+  ],
+  "2026-11-11": [
+    { date: "2026-11-10T16:09:27Z", type: "fix", cleanMessage: "skip inactive ordinary observation validation and identify invalid members" },
   ],
 };
