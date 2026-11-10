@@ -1,7 +1,16 @@
 import { getDbConnection } from "./db";
 import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes } from "./price-scanner";
-import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots, refreshLedgerStockTagIntradaySnapshots } from "./ledger-stock-portfolio";
+import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots, refreshLedgerStockTagIntradaySnapshots, warmAllStockTagCalendarResults, repairPendingStockTagCalendarEvidence } from "./ledger-stock-portfolio";
 import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
+import {
+  getBeijingStockClock,
+  getUnifiedStockCloseCandidateDates,
+  getUnifiedStockCloseVersion,
+  isUnifiedStockClosePublicationComplete,
+  isUnifiedStockCloseReady,
+  isUnifiedStockCloseRetryWindow,
+  millisecondsUntilNextUnifiedStockClose,
+} from "@shared/stock-unified-close-policy";
 
 type StoredManualStockClose = {
   symbol: string;
@@ -15,8 +24,14 @@ type StoredManualStockClose = {
 let tableReady: Promise<void> | null = null;
 let dailyTimer: NodeJS.Timeout | null = null;
 let intradayTimer: NodeJS.Timeout | null = null;
+let unifiedCloseTimer: NodeJS.Timeout | null = null;
+let unifiedCloseRetryTimer: NodeJS.Timeout | null = null;
+let unifiedCloseTableReady: Promise<void> | null = null;
+let unifiedCloseInProgress = false;
 let refreshInProgress = false;
 let lastUsCloseSession = '';
+// 复用既有重试timer；只在当日15:05–18:05窗口内每5分钟重试，不回扫历史14日。
+const UNIFIED_STOCK_CLOSE_SCHEDULER_RETRY_INTERVAL_MS = 5 * 60 * 1000;
 
 function beijingDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -158,7 +173,7 @@ export async function refreshManualStockCloseSnapshots(): Promise<{ symbols: num
 
 /**
  * 盘中每五分钟刷新52号手工股票与37号股票保证金引用的参考价。
- * 只更新当前可见价格与浮动盈亏，不创建日结记录；15:05 的独立盘尾任务仍负责固化收盘价。
+ * 只更新当前可见价格与浮动盈亏，不创建日结记录；37号仅A交易日15:05发布A当天+此前US收盘。
  */
 export async function refreshManualStockIntradaySnapshotsForSymbols(rawSymbols: string[]): Promise<{ symbols: number; updated: number }> {
   const symbols = Array.from(new Set(rawSymbols
@@ -250,25 +265,136 @@ function millisecondsUntilNextBeijingClose(): number {
   const next = new Date(now);
   next.setUTCHours(7, 5, 0, 0);
   if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-  // 37号标签按自然日统一结算，不因周末或海外市场休市跳过；休市时使用15:05
-  // 行情源可取得的最后有效价，保证人民币与美元仓位在同一时刻形成完整日结。
   return next.getTime() - now.getTime();
 }
 
 function scheduleNextManualStockClose(): void {
   dailyTimer = setTimeout(async () => {
     try {
-      // 52号融资订单与37号股票标签分别持久化，绝不混写到同一快照表。
-      await Promise.all([
-        refreshManualStockCloseSnapshots(),
-        refreshLedgerStockTagCloseSnapshots(),
-      ]);
+      // 保留52号原15:05独立采集及共用参考报价；37号日结另按市场会话验价后发布。
+      await refreshManualStockCloseSnapshots();
     } catch (error) {
       console.error("[股票盘尾] 同步失败:", error instanceof Error ? error.message : error);
     } finally {
       scheduleNextManualStockClose();
     }
   }, millisecondsUntilNextBeijingClose());
+}
+
+/** 成功标记只记录后台完整发布确认；是否可跳过由publisher当前generation及目标日覆盖决定。 */
+async function ensureUnifiedClosePublicationTable(): Promise<void> {
+  if (!unifiedCloseTableReady) {
+    unifiedCloseTableReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接不可用，无法读取37日结发布状态");
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_unified_close_publications (
+          ledger_id INT NOT NULL,
+          snapshot_date DATE NOT NULL,
+          policy_version VARCHAR(96) NOT NULL,
+          published_categories INT NOT NULL,
+          published_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (ledger_id, snapshot_date, policy_version)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    })().catch((error) => {
+      unifiedCloseTableReady = null;
+      throw error;
+    });
+  }
+  await unifiedCloseTableReady;
+}
+
+/**
+ * 有界回查最近14个自然日，仅补已到15:05发布时间的A交易日，按旧到新发布。
+ * A使用D、US使用此前最近纽约交易日（严格<D）；后台仍须验证真实常规收盘。
+ * 缺报价、无效交易日、忙碌或部分标签发布均不得写成功标记。
+ * 后台还须按(category,date,version)幂等，防止“写日结后进程退出”重试重复统计。
+ * 有限重试只传入原A日，不建立新日期；旧价格来源表的provenance版本不在这里转写。
+ */
+async function refreshUnifiedStockCloseCandidates(now = new Date(), retrySnapshotDate?: string): Promise<void> {
+  if (unifiedCloseInProgress) return;
+  unifiedCloseInProgress = true;
+  try {
+    await ensureLedgerStockPortfolioTables();
+    await ensureUnifiedClosePublicationTable();
+    const conn = await getDbConnection();
+    if (!conn) throw new Error("数据库连接不可用，无法补跑37日结");
+    const candidates = retrySnapshotDate
+      ? [retrySnapshotDate].filter(date => date === getBeijingStockClock(now).date
+        && isUnifiedStockCloseRetryWindow(now) && isUnifiedStockCloseReady(date, now))
+      : getUnifiedStockCloseCandidateDates(now);
+    for (const snapshotDate of candidates) {
+      const version = getUnifiedStockCloseVersion(snapshotDate);
+      // 全日published不能阻断历史交易新增symbol的证据补齐。每轮让publisher检查
+      // cache generation == computed_generation且目标日calendar ready时轻量跳过；
+      // 否则由publisher补真实历史quotes/FX缺失证据（INSERT）、markDirty + warm，保留旧immutable publication。
+      try {
+        const result = await refreshLedgerStockTagCloseSnapshots({ snapshotDate });
+        if (!isUnifiedStockClosePublicationComplete(result, snapshotDate)) {
+          console.log(`[37统一日结] ${snapshotDate}：A当天及此前US收盘证据或本版本发布确认未齐，不记成功（${version}）`);
+          continue;
+        }
+        await (conn as any).execute(
+          `INSERT IGNORE INTO ledger_stock_unified_close_publications
+           (ledger_id, snapshot_date, policy_version, published_categories, published_at)
+           VALUES (37, ?, ?, ?, NOW())`,
+          [snapshotDate, version, result.categories],
+        );
+        console.log(`[37统一日结] ${snapshotDate}：${result.categories} 个标签发布完成（${version}）`);
+      } catch (error) {
+        // 单日失败不阻止后续日期；下一有限重试或下一天再补，不标成功。
+        console.error(`[37统一日结] ${snapshotDate}补跑失败:`, error instanceof Error ? error.message : error);
+      }
+    }
+    // 日历数字由后台一次预计算并持久化；即使收盘证据已经发布，启动时也补齐缺失结果。
+    // warm 只更新缺失、交易已改或新日结版本的标签，不因盘中报价变化重算旧格子。
+    await warmAllStockTagCalendarResults();
+    // 历史补录可能早于14日回查窗口；从已存派生结果挑有限缺格补真实证据，不在用户查询时做。
+    await repairPendingStockTagCalendarEvidence();
+  } finally {
+    unifiedCloseInProgress = false;
+  }
+}
+
+function scheduleUnifiedStockCloseRetry(snapshotDate: string): void {
+  const now = new Date();
+  if (unifiedCloseRetryTimer || !isUnifiedStockCloseRetryWindow(now) || getBeijingStockClock(now).date !== snapshotDate) return;
+  const nextAttempt = new Date(now.getTime() + UNIFIED_STOCK_CLOSE_SCHEDULER_RETRY_INTERVAL_MS);
+  if (!isUnifiedStockCloseRetryWindow(nextAttempt)) return;
+  unifiedCloseRetryTimer = setTimeout(() => {
+    unifiedCloseRetryTimer = null;
+    // 事件循环延迟越过有限窗口时不在夜间继续发布。
+    if (!isUnifiedStockCloseRetryWindow() || getBeijingStockClock().date !== snapshotDate) return;
+    void runUnifiedStockCloseWithRetry(snapshotDate);
+  }, UNIFIED_STOCK_CLOSE_SCHEDULER_RETRY_INTERVAL_MS);
+}
+
+async function runUnifiedStockCloseWithRetry(retrySnapshotDate?: string): Promise<void> {
+  const now = new Date();
+  try {
+    await refreshUnifiedStockCloseCandidates(now, retrySnapshotDate);
+  } catch (error) {
+    console.error("[37统一日结] 发布检查失败:", error instanceof Error ? error.message : error);
+  } finally {
+    // A交易日15:05–18:05每5分钟只重试同A日同版本；历史缺证据留待下一每日有界首试。
+    scheduleUnifiedStockCloseRetry(retrySnapshotDate ?? getBeijingStockClock(now).date);
+  }
+}
+
+function scheduleNextUnifiedStockClose(): void {
+  unifiedCloseTimer = setTimeout(async () => {
+    try {
+      const now = new Date();
+      // 定时首试只能在当前A日发布窗口执行；若事件循环拖到夜间，等下次A日或启动补跑。
+      if (isUnifiedStockCloseRetryWindow(now)) {
+        // 每日首试同启动一样默认有界回查14日；后续5分钟重试仍仅限当天。
+        await runUnifiedStockCloseWithRetry();
+      }
+    } finally {
+      scheduleNextUnifiedStockClose();
+    }
+  }, millisecondsUntilNextUnifiedStockClose());
 }
 
 function isBeijingTradingWindow(now = new Date()): boolean {
@@ -309,7 +435,7 @@ function isUsTradingWindow(now = new Date()): boolean {
   return clock.minutes >= 9 * 60 + 30 && clock.minutes <= 16 * 60;
 }
 
-/** 收盘后首个十分钟窗口固化美股日结；交易所休市日由上游实际交易日价格兜底跳过。 */
+/** 52号纽约收盘后首个十分钟采集窗口；只保存共用行情参考，不写37号日结。 */
 function getUsCloseSessionToRun(now = new Date()): string | null {
   const clock = getNewYorkClock(now);
   if (clock.weekday === 'Sat' || clock.weekday === 'Sun') return null;
@@ -334,10 +460,9 @@ function scheduleNextManualStockIntradayRefresh(): void {
       }
       const usCloseSession = getUsCloseSessionToRun();
       if (usCloseSession && usCloseSession !== lastUsCloseSession) {
-        lastUsCloseSession = usCloseSession;
-        // 52号订单可在美股收盘后补充其独立盘尾价；37号标签严格只在北京时间
-        // 15:05统一折人民币结算，避免纽约收盘时以另一交易时点改写日历。
+        // 52号独立收盘采集不改37号日历；只有采集实际完成才标记此窗口已执行。
         await refreshManualStockCloseSnapshots();
+        lastUsCloseSession = usCloseSession;
       }
     } catch (error) {
       console.error("[股票盘中] 同步失败:", error instanceof Error ? error.message : error);
@@ -357,9 +482,9 @@ function refreshIntradayQuotesOnStartup(): void {
   });
 }
 
-/** 启动52号订单与37号股票标签的盘中报价及北京时间15:05统一日结任务。 */
+/** 52保持原独立采集；37盘中5min只估值，每个A交易日北京时间15:05统一日结。 */
 export function startManualStockCloseScheduler(): void {
-  if (dailyTimer || intradayTimer) return;
+  if (dailyTimer || intradayTimer || unifiedCloseTimer) return;
   void ensureTable().catch((error) => {
     console.error("[股票盘尾] 快照表初始化失败:", error instanceof Error ? error.message : error);
   });
@@ -367,8 +492,11 @@ export function startManualStockCloseScheduler(): void {
     console.error("[37股票盘尾] 标签数据表初始化失败:", error instanceof Error ? error.message : error);
   });
   scheduleNextManualStockClose();
+  scheduleNextUnifiedStockClose();
+  // 应用启动仅补最近14个自然日窗口已到15:05发布时间的A日；不提前发今天或创建周末日结。
+  void runUnifiedStockCloseWithRetry();
   // 部署或 PM2 重启发生在交易时段时，先立即取一次报价，之后再对齐每五分钟整点。
   refreshIntradayQuotesOnStartup();
   scheduleNextManualStockIntradayRefresh();
-  console.log("[股票行情] 52订单、37股票标签及其股票保证金按中美交易时段每5分钟更新；37标签北京时间15:05统一折人民币日结，52订单美股纽约16:00后独立固化盘尾快照");
+  console.log("[股票行情] 盘中每5分钟仅更新当前估值；37标签每个A股交易日北京时间15:05发布A当天D+此前最近纽约US交易日（严格<D），当天夜间US归下一A日；15:05–18:05每5分钟同日同版本有限重试，启动及每日首试有界回查14日已可发布A日，由publisher按generation及覆盖轻量跳过，周末/假期不另日结；52保留15:05及纽约16:00独立采集");
 }

@@ -14065,6 +14065,13 @@ ${klinesSummary}
         const { getStockTagPublicPortfolio } = await import('./ledger-stock-portfolio');
         return getStockTagPublicPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    // 日历显示整个标签的真实总盘；个人份额仅用于概览，不改变资金或管理权限。
+    getStockTagCalendar: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const { getStockTagCalendar } = await import('./ledger-stock-portfolio');
+        return getStockTagCalendar({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     // 普通成员及观察视角只读取本人按批次分配的份额；盈亏基准是该份额的入场参考价，
     // 不回退到股票标签的总市值或旧版初始金额。
     getMyStockTagParticipantPortfolio: protectedProcedure
@@ -39229,6 +39236,15 @@ insights 数组每项包含：
       } catch (e) {
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
+    }),
+    /** 美股陈列专用：真实USD/CNY，不与USDT/CNY场外价格混用。 */
+    getUsdCnyRate: publicProcedure.query(async () => {
+      const { getLiveStockUsdCnyQuote } = await import('./stock-usd-cny-rate');
+      const quote = await getLiveStockUsdCnyQuote();
+      return quote ? { success: true, ...quote } : {
+        success: false, rate: null, asOf: null, source: null,
+        pair: 'USD/CNY' as const, stale: true,
+      };
     }),
     /** 人民币双价格：在岸CNY + 离岸CNH（新浪财经） */
     getCnyDualPrice: publicProcedure.query(async () => {

@@ -2,6 +2,12 @@ import { getDbConnection, getDbTransactionConnection } from "./db";
 import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 import { readTagVisible } from "../shared/tag-visibility";
+import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
+import { fetchOvernightUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
+import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
+import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, type UnifiedStockClosePublicationResult } from '../shared/stock-unified-close-policy';
+import { fetchStockUsdCnyAtClose } from './stock-usd-cny-rate';
+import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
 
 import {
   buildStockObservationHolding,
@@ -44,6 +50,7 @@ const STOCK_LEDGER_ID = 37;
 const EPSILON = 0.00000001;
 /** 股票标签统一按买卖双边各千分之一计入交易成本。 */
 const STOCK_TRADE_FEE_RATE = 0.001;
+const STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION = 'cn-day-us-overnight-1505-v1';
 
 // 成员首页会同时读取标签列表、当前详情和行情。相同用户的并发读取必须合并，
 // 否则远程数据库会被同一页的重复请求拖慢。缓存只保留极短时间，所有交易和份额
@@ -104,6 +111,20 @@ function toIso(value: unknown): string {
   if (!value) return "";
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
+
+/** FX archive DATETIME values are Beijing wall-clock timestamps. */
+function toBeijingWallClockIso(value: unknown): string {
+  if (!value) return "";
+  const raw = String(value).trim().replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) return `${raw}+08:00`;
+  return toIso(value);
+}
+
+function toMysqlBeijingDateTime(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) throw new Error('FX quote时间无效');
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
 }
 
 function numberValue(value: unknown): number {
@@ -332,6 +353,31 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
            ADD COLUMN usd_cny_rate DECIMAL(16,8) NULL COMMENT '北京时间15:05快照的USD/CNY折算汇率' AFTER position_count`,
         );
       }
+      // 新正规收盘版本与旧15:05快照并存；不改写旧历史金额。唯一键加事务确保crash可重试。
+      await (conn as any).execute(`CREATE TABLE IF NOT EXISTS ledger_stock_unified_close_category_publications (
+        ledger_id INT NOT NULL, category_id INT NOT NULL, snapshot_date DATE NOT NULL,
+        policy_version VARCHAR(80) NOT NULL,
+        market_value DECIMAL(24,8) NOT NULL, cost_value DECIMAL(24,8) NOT NULL,
+        floating_pnl DECIMAL(24,8) NOT NULL, realized_pnl DECIMAL(24,8) NOT NULL,
+        total_pnl DECIMAL(24,8) NOT NULL, position_count INT NOT NULL,
+        usd_cny_rate DECIMAL(16,8) NULL, quotes_json JSON NOT NULL,
+        captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (ledger_id, category_id, snapshot_date, policy_version)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await (conn as any).execute(`CREATE TABLE IF NOT EXISTS ledger_stock_unified_close_prices (
+        ledger_id INT NOT NULL, category_id INT NOT NULL, symbol VARCHAR(20) NOT NULL,
+        session_date DATE NOT NULL, price DECIMAL(20,8) NOT NULL, currency VARCHAR(8) NOT NULL,
+        source VARCHAR(64) NOT NULL, policy_version VARCHAR(64) NOT NULL,
+        captured_at DATETIME NOT NULL, evidence_sha256 CHAR(64) NULL,
+        PRIMARY KEY (ledger_id, category_id, symbol, session_date, policy_version)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await (conn as any).execute(`CREATE TABLE IF NOT EXISTS ledger_stock_unified_close_fx (
+        ledger_id INT NOT NULL, category_id INT NOT NULL, snapshot_date DATE NOT NULL,
+        policy_version VARCHAR(80) NOT NULL, usd_cny_rate DECIMAL(16,8) NOT NULL,
+        source VARCHAR(64) NOT NULL, quote_as_of DATETIME NOT NULL, locked_at DATETIME NOT NULL,
+        evidence_sha256 CHAR(64) NULL, captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (ledger_id, category_id, snapshot_date, policy_version)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
       // 每位成员对每个全局买入批次的参与股数。它不是标签“初始金额”：
       // 进入后的盈亏只从该次分配的参考价开始计算，买卖资金本身不会被当成盈亏。
@@ -471,21 +517,20 @@ async function assertStockTagAccess(
   if (!conn) throw new Error("数据库连接不可用");
 
   const [categoryRows] = await (conn as any).execute(
-    `SELECT id, ledgerId, name, parentId, accounting_mode
-     FROM ledger_categories
-     WHERE id = ? AND ledgerId = ? LIMIT 1`,
-    [categoryId, ledgerId],
+    `SELECT c.id, c.ledgerId, c.name, c.parentId, c.accounting_mode,
+            m.userId AS member_user_id, m.role AS member_role, m.initial_balances AS initialBalances
+     FROM ledger_categories c
+     LEFT JOIN ledger_members m ON m.ledgerId=c.ledgerId AND m.userId=?
+     WHERE c.id = ? AND c.ledgerId = ? LIMIT 1`,
+    [userId, categoryId, ledgerId],
   );
   const category = (categoryRows as any[])[0];
   if (!category || category.parentId !== null || category.accounting_mode !== "stock_portfolio") {
     throw new Error("该标签不是股票持仓模式");
   }
 
-  const [memberRows] = await (conn as any).execute(
-    `SELECT role, initial_balances AS initialBalances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
-    [ledgerId, userId],
-  );
-  const member = (memberRows as any[])[0];
+  const member = category.member_user_id == null ? null
+    : { role: category.member_role, initialBalances: category.initialBalances };
   const isSystemAdmin = systemRole === "admin" || systemRole === "super_admin";
   if (!member && !isSystemAdmin) throw new Error("您不是此账本的成员");
 
@@ -1189,6 +1234,176 @@ export async function getStockTagPublicPortfolio(input: {
   return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, positions: publicPositions, history: [] as any[] };
 }
 
+/** Tag-wide calendar only. Keeps the personal overview and all funds APIs untouched. */
+export async function getStockTagCalendar(input: {
+  ledgerId: number; categoryId: number; userId: number; systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
+  if (!access.canEdit && !await isStockCalendarMemberEligible(access, input.userId)) {
+    throw new Error("该股票标签尚未对您开放");
+  }
+  // Cache miss/pending keeps the compatible [] shape; absolutely no DDL/rebuild/quote calls here.
+  return readStockCalendarResult(access.categoryId);
+}
+
+/** Exactly the previous visibleParticipations definition, including settled real allocations.
+ * Observations and future allocations do not grant access; pause/remaining quantity don't revoke it.
+ */
+async function isStockCalendarMemberEligible(access: Access, userId: number): Promise<boolean> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(
+    `SELECT 1 AS eligible FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+     WHERE p.ledger_id=? AND p.category_id=? AND p.user_id=? AND p.allocated_quantity>0
+       AND COALESCE(DATE_FORMAT(p.start_date,'%Y-%m-%d'),DATE_FORMAT(l.opened_at,'%Y-%m-%d'),?)<=?
+     LIMIT 1`, [access.ledgerId, access.categoryId, userId, beijingDate(), beijingDate()]);
+  return (rows as any[]).length > 0;
+}
+
+/** Background-only: reuse all original sources and the same ready/unready reconstruction engine. */
+async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'ledgerId'>, now: Date, conn: any) {
+  const [lotRows] = await (conn as any).execute(
+    `SELECT l.id,l.symbol,l.initial_quantity,l.unit_cost,opening.transaction_fee AS opening_fee,
+      DATE_FORMAT(opening.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+       AND opening.ledger_id=l.ledger_id AND opening.category_id=l.category_id AND opening.status='active'
+     WHERE l.ledger_id=? AND l.category_id=?`, [STOCK_LEDGER_ID, access.categoryId]);
+  if (!(lotRows as any[]).length) return [];
+  const [saleRows] = await (conn as any).execute(
+    `SELECT a.lot_id,a.quantity,e.execution_price,e.quantity AS event_quantity,e.transaction_fee,l.symbol,
+      DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
+     FROM ledger_stock_event_lot_allocations a
+     INNER JOIN ledger_stock_events e ON e.id=a.event_id AND e.status='active' AND e.event_type IN ('reduce','sell')
+     INNER JOIN ledger_stock_lots l ON l.id=a.lot_id AND l.ledger_id=e.ledger_id AND l.category_id=e.category_id
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id AND opening.status='active'
+     WHERE e.ledger_id=? AND e.category_id=?`, [STOCK_LEDGER_ID, access.categoryId]);
+  const [tableRows] = await (conn as any).execute(
+    `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE()
+     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_fx')`);
+  const tableNames = new Set((tableRows as any[]).map(row => String(row.TABLE_NAME || row.table_name)));
+  const [legacyRows] = await (conn as any).execute(
+    `SELECT symbol,DATE_FORMAT(price_date,'%Y-%m-%d') AS price_date,price,
+      DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+     FROM ledger_stock_price_snapshots WHERE ledger_id=? AND category_id=? ORDER BY captured_at ASC`,
+    [STOCK_LEDGER_ID, access.categoryId]);
+  const [quoteRows] = tableNames.has('ledger_stock_unified_close_prices')
+    ? await (conn as any).execute(
+      `SELECT symbol,DATE_FORMAT(session_date,'%Y-%m-%d') AS price_date,price,source,
+        DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+       FROM ledger_stock_unified_close_prices WHERE ledger_id=? AND category_id=? ORDER BY captured_at ASC`,
+      [STOCK_LEDGER_ID, access.categoryId]) : [[]];
+  const [fxRows] = tableNames.has('ledger_stock_unified_close_fx')
+    ? await (conn as any).execute(
+      `SELECT DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date,usd_cny_rate,source,
+        DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+        DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
+       FROM ledger_stock_unified_close_fx WHERE ledger_id=? AND category_id=? AND policy_version=? ORDER BY snapshot_date ASC`,
+      [STOCK_LEDGER_ID, access.categoryId, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]) : [[]];
+  const { buildStockTotalCalendar } = await import('./shared/stock-total-calendar');
+  return buildStockTotalCalendar({
+    lots: (lotRows as any[]).map(row => ({ id: Number(row.id), symbol: String(row.symbol),
+      initialQuantity: calendarSourceNumber(row.initial_quantity), unitCost: calendarSourceNumber(row.unit_cost),
+      openingFee: row.opening_fee == null ? null : Number(row.opening_fee),
+      openedDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol))) })),
+    sales: (saleRows as any[]).map(row => ({ lotId: Number(row.lot_id), quantity: calendarSourceNumber(row.quantity),
+      salePrice: calendarSourceNumber(row.execution_price), eventQuantity: calendarSourceNumber(row.event_quantity),
+      transactionFee: row.transaction_fee == null ? null : Number(row.transaction_fee),
+      closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol))) })),
+    quotes: [...(legacyRows as any[]).filter(row => stockMarket(String(row.symbol)) === 'A')
+      .map(row => ({ ...row, source: 'price_snapshot' })), ...(quoteRows as any[])].map(row => ({
+        symbol: String(row.symbol), price: calendarSourceNumber(row.price), priceDate: String(row.price_date),
+        capturedAt: toBeijingWallClockIso(row.captured_at), source: String(row.source) })),
+    fx: (fxRows as any[]).map(row => ({ snapshotDate: String(row.snapshot_date),
+      usdCnyRate: row.usd_cny_rate == null ? null : Number(row.usd_cny_rate), source: String(row.source),
+      asOf: toBeijingWallClockIso(row.quote_as_of), lockedAt: toBeijingWallClockIso(row.locked_at) })),
+    now,
+  }).sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate));
+}
+
+/** Never convert unknown required historical numbers into a plausible zero. */
+function calendarSourceNumber(value: unknown): number {
+  return value == null || value === '' ? Number.NaN : Number(value);
+}
+
+/** Internal scheduler/admin tool API; category validation is not a replacement for route authorization. */
+export function rebuildStockTagCalendarResult(input: { categoryId: number; now?: Date; force?: boolean }) {
+  return rebuildCachedStockCalendarResult({ ...input, calculate: async (conn, now) => {
+    const [rows] = await conn.execute(`SELECT id FROM ledger_categories
+      WHERE id=? AND ledgerId=? AND parentId IS NULL AND accounting_mode='stock_portfolio' LIMIT 1`,
+    [input.categoryId, STOCK_LEDGER_ID]);
+    if (!(rows as any[]).length) throw new Error("该标签不是37号股票持仓模式");
+    return calculateStockTagCalendar({ categoryId: input.categoryId, ledgerId: STOCK_LEDGER_ID }, now, conn);
+  } });
+}
+
+/** Startup/15:05/retry warm. Unchanged generations and settlement versions skip full reconstruction. */
+export async function warmAllStockTagCalendarResults(options: { force?: boolean; now?: Date } = {}) {
+  await ensureStockCalendarResultTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(`SELECT id FROM ledger_categories
+    WHERE ledgerId=? AND parentId IS NULL AND accounting_mode='stock_portfolio'`, [STOCK_LEDGER_ID]);
+  const results: Array<Awaited<ReturnType<typeof rebuildStockTagCalendarResult>> & { error?: string }> = [];
+  // Sequential tags keep startup repair bounded; per-tag singleflight also merges trade-triggered warm.
+  for (const row of rows as any[]) {
+    const categoryId = Number(row.id);
+    try { results.push(await rebuildStockTagCalendarResult({ categoryId, ...options })); }
+    catch (error) {
+      console.error(`[37股票日历] ${categoryId} 后台生成失败，旧结果保留`, error);
+      results.push({ categoryId, saved: false, status: 'superseded', error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { categories: results.length, saved: results.filter(result => result.saved).length,
+    complete: results.every(result => result.status === 'saved' || result.status === 'up-to-date'), results };
+}
+
+/** Only successful physical-trade mutations request background warm, never intraday/member config. */
+function queueStockCalendarResultRebuild(categoryId: number) {
+  // A mutation may arrive just as a shared flight completes; one clean metadata recheck
+  // after it settles avoids losing that dirty signal without adding another full compute.
+  void rebuildStockTagCalendarResult({ categoryId }).then(async () => {
+    await rebuildStockTagCalendarResult({ categoryId });
+    await repairPendingStockTagCalendarEvidence({ categoryId });
+  }).catch(error => {
+    console.error(`[37股票日历] ${categoryId} 成交后重建失败，等待后台重试`, error);
+  });
+}
+
+let calendarEvidenceRepairInProgress = false;
+/** Background-only repair of older pending cells, including backdated trades outside the 14-day startup window.
+ * Only missing verified close/FX evidence is inserted by the publisher; existing amounts and wallet are untouched.
+ * A bounded batch keeps repair out of request latency; later scheduler retries continue any remaining cells.
+ */
+export async function repairPendingStockTagCalendarEvidence(options: { categoryId?: number } = {}) {
+  if (calendarEvidenceRepairInProgress) return { attempted: 0, busy: true };
+  calendarEvidenceRepairInProgress = true;
+  let attempted = 0;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) throw new Error('数据库连接不可用');
+    const [categories] = await (conn as any).execute(
+      `SELECT id FROM ledger_categories WHERE ledgerId=? AND parentId IS NULL AND accounting_mode='stock_portfolio'
+       ${options.categoryId === undefined ? '' : 'AND id=?'}`,
+      options.categoryId === undefined ? [STOCK_LEDGER_ID] : [STOCK_LEDGER_ID, options.categoryId]);
+    for (const category of categories as any[]) {
+      const categoryId = Number(category.id);
+      const pendingDates = (await readStockCalendarResult(categoryId))
+        .filter(point => (!point.ready || point.dailyPnl === null) && isUnifiedStockCloseReady(point.snapshotDate))
+        .map(point => point.snapshotDate).sort().slice(0, 14);
+      for (const snapshotDate of pendingDates) {
+        attempted++;
+        await refreshLedgerStockTagCloseSnapshots({ categoryId, snapshotDate });
+      }
+      if (pendingDates.length) await rebuildStockTagCalendarResult({ categoryId });
+    }
+    return { attempted, busy: false };
+  } finally {
+    calendarEvidenceRepairInProgress = false;
+  }
+}
+
 /**
  * A member's view is deliberately separate from the administrator's tag-wide
  * portfolio.  A member's baseline is each allocated lot's entry price and
@@ -1201,12 +1416,15 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     `SELECT p.id, p.lot_id, p.allocated_quantity, p.remaining_quantity, p.entry_price,
             p.start_date, p.pause_date, p.assigned_at,
             l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
+            DATE_FORMAT(opening.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS opening_actual_traded_at,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
             COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
             MAX(c.closed_at) AS closed_at,
             COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
      INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+     LEFT JOIN ledger_stock_events opening ON opening.id = l.opened_event_id
+       AND opening.ledger_id = p.ledger_id AND opening.category_id = p.category_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
      WHERE p.category_id = ? AND p.user_id = ? AND p.allocated_quantity > 0
      GROUP BY p.id
@@ -1217,6 +1435,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const today = beijingDate();
   const participations = (rows as any[]).map((row) => {
     const startDate = normalizeStoredDate(row.start_date) || normalizeStoredDate(row.opened_at) || today;
+    const openingSessionDate = marketSessionDateFromBeijingTradeTimestamp(row.opening_actual_traded_at, stockMarket(String(row.symbol)));
+    const businessEffectiveDate = normalizeStoredDate(row.start_date) || openingSessionDate;
     const pauseDate = normalizeStoredDate(row.pause_date);
     const allocatedQuantity = numberValue(row.allocated_quantity);
     const remainingQuantity = numberValue(row.remaining_quantity);
@@ -1229,6 +1449,10 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       openedAt: toIso(row.opened_at),
       startDate,
       pauseDate,
+      // Manual start_date is an A business-effective date, not a NY physical opening session.
+      // Physical US opening requires actual time; CNY may use its explicit business date if absent.
+      historyStartDate: openingSessionDate || (stockMarket(String(row.symbol)) === 'A' ? businessEffectiveDate : null),
+      participationEffectiveDate: businessEffectiveDate,
       allocatedQuantity,
       remainingQuantity,
       closedQuantity: numberValue(row.closed_quantity),
@@ -1243,9 +1467,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const visibleParticipations = participations.filter((item) => item.startDate <= today);
   const activeParticipations = visibleParticipations.filter((item) => item.remainingQuantity > EPSILON);
   const symbols = Array.from(new Set(activeParticipations.map((item) => item.symbol)));
-  // 当前浮盈可读取当日盘中报价；按日历史与日历仍只使用15:05盘尾快照。
+  // 持仓/资金API的当前浮盈可读取盘中报价；A日15:05历史和R1概览使用独立日结。
   // 买入审计已保存的参考价仅作为“没有任何已存价格”的最后回退，不能覆盖盘中或盘尾报价。
-  // 这样盘后新登记的股票在下一个15:05盘尾前，个人概览仍可按可追溯的登记参考价计算。
+  // 盘后新登记可在实时持仓页显示参考价，但绝不能据此改变已完成日结统计。
   const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
@@ -1341,72 +1565,89 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const marketValue = cnySummary.marketValue;
   const floatingPnl = cnySummary.floatingPnl;
   const quoteDates = positions.map((position) => position.quoteDate).filter((date): date is string => Boolean(date));
-  // A 股和美股闭市时点不同；只要全部持仓都有有效报价，概览即可按各自最新交易日
-  // 以人民币统一估值。不能因日期不同而把用户的当前回报和参考押金清空。
+  // 实时持仓/资金summary仍按各自最新报价估值，不改变参考押金或冻结/提现口径。
+  // R1概览另映射settlementSummary，不允许实时行情带动日结累计回报。
   const valuationDate = allPositionsPriced && quoteDates.length === positions.length
     ? quoteDates.sort().at(-1) || null
     : null;
 
-  const [priceRows] = symbols.length > 0
+  const historicalSymbols = Array.from(new Set(visibleParticipations.map(item => item.symbol)));
+  const [priceRows] = historicalSymbols.length > 0
     ? await (conn as any).execute(
-      `SELECT symbol, price_date, price
+      `SELECT symbol, DATE_FORMAT(price_date,'%Y-%m-%d') AS price_date, price,
+         DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
        FROM ledger_stock_price_snapshots
-       WHERE category_id = ? AND symbol IN (${symbols.map(() => '?').join(',')})
+       WHERE ledger_id = ? AND category_id = ? AND symbol IN (${historicalSymbols.map(() => '?').join(',')})
        ORDER BY price_date ASC`,
-      [categoryId, ...symbols],
+      [STOCK_LEDGER_ID, categoryId, ...historicalSymbols],
     )
     : [[]];
-  const priceByDate = new Map<string, Map<string, number>>();
-  for (const row of priceRows as any[]) {
-    const date = normalizeStoredDate(row.price_date);
-    if (!date) continue;
-    const bySymbol = priceByDate.get(date) || new Map<string, number>();
-    bySymbol.set(String(row.symbol), numberValue(row.price));
-    priceByDate.set(date, bySymbol);
-  }
-  // 用户端概览固定按人民币显示。不能因为同一标签同时有 A 股和美股，就把
-  // 成员此前的日历与走势图整段置空；美元部分以当前 USD/CNY 做人民币折算，
-  // 各股票价格仍严格使用已保存的当日盘尾价。
-  const snapshotUsdCnyRate = usdCnyRate > 0 ? usdCnyRate : 0;
-  const dailySnapshots = Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
-    const effective = activeParticipations.filter((item) => (
-      item.startDate <= snapshotDate && (!item.pauseDate || snapshotDate <= item.pauseDate)
-    ));
-    const allPriced = effective.every((item) => priceBySymbol.has(item.symbol));
-    const hasHistoricalFx = effective.every((item) => stockCurrency(item.symbol) !== 'USD' || snapshotUsdCnyRate > 0);
-    const snapshotCost = effective.reduce((total, item) => {
-      const multiplier = stockCurrency(item.symbol) === 'USD' ? snapshotUsdCnyRate : 1;
-      return total + item.remainingQuantity * item.entryPrice * multiplier;
-    }, 0);
-    const snapshotMarket = allPriced && hasHistoricalFx
-      ? effective.reduce((total, item) => {
-        const multiplier = stockCurrency(item.symbol) === 'USD' ? snapshotUsdCnyRate : 1;
-        return total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0) * multiplier;
-      }, 0)
-      : null;
-    // 成员获配仓位是账户长仓的对手盘：股票账户市值下跌，成员回报应上升。
-    // 必须与当前持仓的 `成本 − 市值` 口径一致，避免概览日历误把账户方向展示给成员。
-    const snapshotFloating = snapshotMarket === null ? null : snapshotCost - snapshotMarket;
-    return {
-      snapshotDate,
-      marketValue: snapshotMarket,
-      costValue: snapshotCost,
-      floatingPnl: snapshotFloating,
-      realizedPnl,
-      totalPnl: snapshotFloating === null ? null : snapshotFloating + realizedPnl,
-      positionCount: new Set(effective.map((item) => item.symbol)).size,
-    };
-  }).filter((snapshot) => (
-    snapshot.positionCount > 0
-    && snapshot.marketValue !== null
-    && snapshot.totalPnl !== null
-  ));
+  const [closureRows] = await (conn as any).execute(
+    `SELECT c.participation_id, c.quantity, c.sale_price,
+            DATE_FORMAT(e.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS actual_traded_at
+     FROM ledger_stock_participation_closures c
+     INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+     INNER JOIN ledger_stock_events e ON e.id = c.sell_event_id
+     WHERE p.ledger_id = ? AND p.category_id = ? AND p.user_id = ?
+       AND e.ledger_id = p.ledger_id AND e.category_id = p.category_id AND e.status = 'active'`,
+    [STOCK_LEDGER_ID, categoryId, userId],
+  );
+  const [newTables] = await (conn as any).execute(
+    `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE()
+     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_category_publications','ledger_stock_unified_close_fx')`,
+  );
+  const tableNames = new Set((newTables as any[]).map(row => String(row.TABLE_NAME || row.table_name)));
+  const [fxRows] = tableNames.has('ledger_stock_unified_close_fx')
+    ? await (conn as any).execute(
+      `SELECT DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date, usd_cny_rate, source,
+         DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+         DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
+       FROM ledger_stock_unified_close_fx
+       WHERE ledger_id = ? AND category_id = ? AND policy_version = ? ORDER BY snapshot_date ASC`,
+      [STOCK_LEDGER_ID, categoryId, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION],
+    ) : [[]];
+  const [unifiedRows] = tableNames.has('ledger_stock_unified_close_prices') && historicalSymbols.length > 0
+    ? await (conn as any).execute(
+      `SELECT symbol, DATE_FORMAT(session_date,'%Y-%m-%d') AS price_date, price,
+         DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at, source
+       FROM ledger_stock_unified_close_prices
+       WHERE ledger_id = ? AND category_id = ?
+         AND source IN ('unified_close_yahoo','unified_close_tushare')
+         AND symbol IN (${historicalSymbols.map(() => '?').join(',')})`,
+      [STOCK_LEDGER_ID, categoryId, ...historicalSymbols],
+    ) : [[]];
+  const [publicationRows] = tableNames.has('ledger_stock_unified_close_category_publications')
+    ? await (conn as any).execute(
+      `SELECT DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date, usd_cny_rate FROM ledger_stock_unified_close_category_publications
+       WHERE ledger_id = ? AND category_id = ?
+         AND policy_version IN (CONCAT('cn-us-regular-close-v1:', snapshot_date), CONCAT('cn-day-us-overnight-1505-v1:', snapshot_date))
+         ORDER BY snapshot_date ASC, CASE WHEN policy_version LIKE 'cn-day-us-overnight-1505-v1:%' THEN 1 ELSE 0 END ASC`,
+      [STOCK_LEDGER_ID, categoryId],
+    ) : [[]];
+  const historicalQuotes: MemberCalendarQuote[] = [...(priceRows as any[]).filter(row => stockMarket(String(row.symbol)) === 'A')
+    .map(row => ({ ...row, source: 'price_snapshot' })), ...(unifiedRows as any[])].map(row => ({
+      symbol: String(row.symbol), price: numberValue(row.price), priceDate: normalizeStoredDate(row.price_date) || '',
+      capturedAt: toBeijingWallClockIso(row.captured_at), source: String(row.source),
+    }));
+  const dailySnapshots = buildMemberStockCalendar({
+    participations: visibleParticipations,
+    closures: (closureRows as any[]).map(row => ({ participationId: Number(row.participation_id),
+      quantity: numberValue(row.quantity), salePrice: numberValue(row.sale_price),
+      closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at,
+        stockMarket(visibleParticipations.find(item => item.id === Number(row.participation_id))?.symbol || '')) || '' })),
+    quotes: historicalQuotes,
+    candidateDates: (priceRows as any[]).map(row => normalizeStoredDate(row.price_date) || ''),
+    fx: (fxRows as any[]).map(row => ({
+      snapshotDate: normalizeStoredDate(row.snapshot_date) || '',
+      usdCnyRate: row.usd_cny_rate == null ? null : numberValue(row.usd_cny_rate),
+      source: row.source == null ? null : String(row.source),
+      asOf: row.quote_as_of == null ? null : toBeijingWallClockIso(row.quote_as_of),
+      lockedAt: row.locked_at == null ? null : toBeijingWallClockIso(row.locked_at),
+    })),
+  });
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
   const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
-  // 成员视图同样按个人累计盈亏的相邻盘尾差额计算，避免新增参与份额被误算成盈亏。
-  const dailyChange = latestSnapshot && priorSnapshot && latestSnapshot.totalPnl !== null && priorSnapshot.totalPnl !== null
-    ? latestSnapshot.totalPnl - priorSnapshot.totalPnl
-    : null;
+  const dailyChange = latestSnapshot?.dailyPnl ?? null;
   const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.costValue !== null && Math.abs(priorSnapshot.costValue) > EPSILON
     ? dailyChange / priorSnapshot.costValue
     : null;
@@ -1417,6 +1658,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     isEligible: visibleParticipations.length > 0,
     startDate: visibleParticipations.map((item) => item.startDate).sort()[0] || null,
     dailySnapshots: dailySnapshots.slice().reverse(),
+    settlementSummary: memberCalendarSettlementSummary(dailySnapshots),
     summary: {
       reportingCurrency: 'CNY' as const,
       usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
@@ -1431,10 +1673,13 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       isMixedCurrency,
       dailyChange,
       dailyChangePercent,
+      dailyChangeReady: latestSnapshot?.dailyPnlReady ?? false,
+      dailyChangeDate: latestSnapshot?.snapshotDate ?? null,
+      previousDate: latestSnapshot?.previousDate ?? null,
       latestSnapshot,
       priorSnapshot,
       valuationDate,
-      awaitingFirstClose: positions.length > 0 && latestSnapshot === null,
+      awaitingFirstClose: positions.length > 0 && !dailySnapshots.some(snapshot => snapshot.ready),
     },
   };
 }
@@ -1716,55 +1961,17 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
     }
     const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
-    const chronological: any[] = portfolio.dailySnapshots.slice().reverse();
-    const valuationDate = portfolio.summary.valuationDate;
-    const valuationPnl = portfolio.summary.totalPnl;
-    const valuationMarketValue = portfolio.summary.marketValue;
-    const valuationCostValue = portfolio.summary.costValue;
-    const valuationFloatingPnl = portfolio.summary.floatingPnl;
-    const valuationRealizedPnl = portfolio.summary.realizedPnl;
-    // 历史日历只认15:05盘尾；但当该日期的某个新批次尚未被盘尾任务覆盖时，
-    // 使用同一批次已落库的审计参考价补齐“当前累计回报”。不覆盖任何已有有效盘尾。
-    if (valuationDate && valuationPnl !== null && valuationMarketValue !== null && valuationCostValue !== null && valuationFloatingPnl !== null && valuationRealizedPnl !== null) {
-      const valuationSnapshot = {
-        snapshotDate: valuationDate,
-        marketValue: valuationMarketValue,
-        costValue: valuationCostValue,
-        floatingPnl: valuationFloatingPnl,
-        realizedPnl: valuationRealizedPnl,
-        totalPnl: valuationPnl,
-        positionCount: portfolio.summary.positionCount,
-        // R1 新增美元仓位后，历史盘尾仍是旧的单币种口径；首次合并人民币实时估值
-        // 只能作为累计回报基准，不能把全部历史累计回报误报为“今日”回报。
-        suppressDailyPnl: portfolio.summary.isMixedCurrency && chronological.length === 0,
-      };
-      const sameDateIndex = chronological.findIndex((snapshot) => snapshot.snapshotDate === valuationDate);
-      if (sameDateIndex >= 0 && chronological[sameDateIndex].totalPnl === null) {
-        chronological[sameDateIndex] = valuationSnapshot;
-      } else if (sameDateIndex < 0 && (chronological.length === 0 || chronological[chronological.length - 1].snapshotDate < valuationDate)) {
-        chronological.push(valuationSnapshot);
-      }
-    }
-    const points = chronological.map((snapshot, index) => ({
+    // R1只展示最近已过A交易日15:05的同scope日结；持仓/资金summary仍独立实时估值。
+    const points = portfolio.dailySnapshots.slice().reverse().map(snapshot => ({
+      ...snapshot,
       date: snapshot.snapshotDate,
-      pnl: snapshot.totalPnl ?? 0,
-      dailyPnl: snapshot.suppressDailyPnl
-        ? null
-        : index > 0 && snapshot.totalPnl !== null && chronological[index - 1].totalPnl !== null
-        ? snapshot.totalPnl - (chronological[index - 1].totalPnl as number)
-        // 首个有效盘尾以入场时的 0 盈亏为基准；若此时已有盈亏，必须计入当天概览。
-        : (snapshot.totalPnl ?? 0),
-      marketValue: snapshot.marketValue,
+      pnl: snapshot.totalPnl,
     }));
-    // The tag must become visible immediately after a valid allocation, even before its first 15:05 close.
-    if (points.length === 0) {
-      points.push({ date: beijingDate(), pnl: 0, dailyPnl: 0, marketValue: null });
-    }
     result.push({
       categoryId: access.categoryId,
       name: access.categoryName,
       startDate: portfolio.startDate,
-      summary: portfolio.summary,
+      summary: portfolio.settlementSummary,
       points,
     });
   }
@@ -1967,6 +2174,7 @@ export async function createStockTagEvent(input: {
     }
   }
 
+  if (type !== 'note') await ensureStockCalendarResultTable();
   const tx = await getDbTransactionConnection();
   if (!tx) throw new Error("数据库连接不可用");
   try {
@@ -2034,8 +2242,10 @@ export async function createStockTagEvent(input: {
         await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!, executionPrice!);
       }
     }
+    if (type !== 'note') await markStockCalendarResultDirty(tx, access.categoryId);
     await (tx as any).commit();
     invalidateMemberStockReadCaches();
+    if (type !== 'note') queueStockCalendarResultRebuild(access.categoryId);
     return { id: eventId };
   } catch (error) {
     await (tx as any).rollback();
@@ -2057,6 +2267,7 @@ export async function voidStockTagEvent(input: {
   await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const reason = String(input.reason || "").trim().slice(0, 300);
   if (!reason) throw new Error("请填写作废原因");
+  await ensureStockCalendarResultTable();
   const conn = await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接不可用");
   try {
@@ -2152,8 +2363,10 @@ export async function voidStockTagEvent(input: {
        WHERE id = ? AND category_id = ? AND status = 'active'`,
       [input.userId, reason, input.eventId, input.categoryId],
     );
+    if (event.event_type !== 'note') await markStockCalendarResultDirty(conn, input.categoryId);
     await (conn as any).commit();
     invalidateMemberStockReadCaches();
+    if (event.event_type !== 'note') queueStockCalendarResultRebuild(input.categoryId);
     return { success: true };
   } catch (error) {
     await (conn as any).rollback();
@@ -2256,27 +2469,28 @@ export async function correctStockTagEvent(input: {
   });
 }
 
-/**
- * 默认由每日15:05调度调用。categoryId 与 snapshotDate 仅供受控的运维修复使用：
- * 可将“现在能取到的最后有效行情”补写到指定标签的缺失日，不会影响其他标签。
- */
+/** A股D15:05发布 A_D + 严格早于D的最近已收盘纽约交易日；raw proof和旧金额不改写。 */
 export async function refreshLedgerStockTagCloseSnapshots(options: {
   categoryId?: number;
   snapshotDate?: string;
-} = {}): Promise<{ categories: number; symbols: number; updated: number }> {
-  if (closeRefreshInProgress) return { categories: 0, symbols: 0, updated: 0 };
+} = {}): Promise<UnifiedStockClosePublicationResult> {
+  const snapshotDate = options.snapshotDate || getUnifiedStockCloseSnapshotDate();
+  const version = getUnifiedStockCloseVersion(snapshotDate);
+  const result: UnifiedStockClosePublicationResult = { categories: 0, symbols: 0, updated: 0,
+    publishedCategories: 0, alreadyPublishedCategories: 0, skippedCategories: 0,
+    complete: false, snapshotDate, version };
+  const usSessionDate = getOvernightUsSessionDate(snapshotDate);
+  if (!isStockMarketSession(snapshotDate, 'A') || !usSessionDate || !isUnifiedStockCloseReady(snapshotDate) || closeRefreshInProgress) return result;
+  const marketCutoff = (symbol: string) => stockCurrency(symbol) === 'USD' ? usSessionDate : snapshotDate;
   closeRefreshInProgress = true;
   try {
     await ensureLedgerStockPortfolioTables();
+    await ensureStockCalendarResultTable();
     const conn = await getDbConnection();
     if (!conn) throw new Error("数据库连接不可用");
     const requestedCategoryId = Number(options.categoryId || 0);
     if (options.categoryId !== undefined && (!Number.isInteger(requestedCategoryId) || requestedCategoryId <= 0)) {
       throw new Error("补写日结时必须提供有效标签编号");
-    }
-    const requestedSnapshotDate = String(options.snapshotDate || "").trim();
-    if (requestedSnapshotDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedSnapshotDate)) {
-      throw new Error("补写日结时日期必须为 YYYY-MM-DD");
     }
     const [rows] = await (conn as any).execute(
       `SELECT id FROM ledger_categories
@@ -2284,82 +2498,194 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
        ${requestedCategoryId ? 'AND id = ?' : ''}`,
       requestedCategoryId ? [STOCK_LEDGER_ID, requestedCategoryId] : [STOCK_LEDGER_ID],
     );
-    const categoryIds = (rows as any[]).map((row) => Number(row.id));
-    const symbolsByCategory = new Map<number, string[]>();
-    const allSymbols = new Set<string>();
-    for (const categoryId of categoryIds) {
-      const lots = await getActiveLots(categoryId);
-      const symbols = Array.from(new Set(lots.filter((lot) => lot.remainingQuantity > EPSILON).map((lot) => lot.symbol)));
-      symbolsByCategory.set(categoryId, symbols);
-      symbols.forEach((symbol) => allSymbols.add(symbol));
-    }
-    if (allSymbols.size === 0) return { categories: categoryIds.length, symbols: 0, updated: 0 };
-
-    // 37号标签的唯一日结时点是北京时间15:05：A股取该时点的收盘后报价，
-    // 美股无论开市与否都取该时点的最后有效价，并统一折算成人民币。
-    await refreshUsdtCnyRate();
-    const quotes = await fetchIntradayStockQuotes(Array.from(allSymbols));
-    const forcedSnapshotDate = requestedSnapshotDate || beijingDate();
-    let updated = 0;
-    for (const [categoryId, symbols] of Array.from(symbolsByCategory.entries())) {
-      const pricedSymbols = new Set<string>();
-      for (const symbol of symbols) {
-        const quote = quotes[symbol];
-        if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) continue;
-        // 保留行情源实际交易日；日结日期固定为本次北京时间15:05所在自然日。
-        const priceDate = quote.priceDate || "";
-        if (!priceDate) continue;
-        // 先append保留每次采集，原日结表继续原行为；不能UPDATE历史或把补写日当采集日。
-        await (conn as any).execute(
-          `INSERT INTO ledger_stock_quote_history
-           (ledger_id, category_id, symbol, price, price_date, captured_at, source)
-           VALUES (?, ?, ?, ?, ?, NOW(), 'close')`,
-          [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
-        );
-        await (conn as any).execute(
-          `INSERT INTO ledger_stock_price_snapshots
-           (ledger_id, category_id, symbol, price, price_date, captured_at)
-           VALUES (?, ?, ?, ?, ?, NOW())
-           ON DUPLICATE KEY UPDATE price = VALUES(price), captured_at = NOW()`,
-          [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
-        );
-        pricedSymbols.add(symbol);
-        updated += 1;
-      }
-      // 某一只股票报价失败时，绝不把该仓位按零估值写入日结。
-      if (symbols.some((symbol) => !pricedSymbols.has(symbol))) continue;
-      const portfolio = await buildPortfolio(categoryId);
-      const hasUsdPosition = symbols.some((symbol) => stockCurrency(symbol) === 'USD');
-      const usdCnyRate = Number(portfolio.summary.usdCnyRate || 0);
-      // 人民币标签不依赖汇率；含美元标签则只有拿到本次有效汇率才允许固化。
-      if (hasUsdPosition && (!Number.isFinite(usdCnyRate) || usdCnyRate <= 0)) continue;
-      // A failed quote leaves the previous valid quote in the calculation; no zero-value snapshot is written.
-      if (portfolio.summary.unpricedPositionCount > 0 || portfolio.summary.marketValue === null || portfolio.summary.costValue === null || portfolio.summary.floatingPnl === null || portfolio.summary.realizedPnl === null || portfolio.summary.totalPnl === null) continue;
-      await (conn as any).execute(
-        `INSERT INTO ledger_stock_daily_snapshots
-         (ledger_id, category_id, snapshot_date, market_value, cost_value, floating_pnl, realized_pnl, total_pnl, position_count, usd_cny_rate, captured_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-         ON DUPLICATE KEY UPDATE
-           market_value = VALUES(market_value), cost_value = VALUES(cost_value),
-           floating_pnl = VALUES(floating_pnl), realized_pnl = VALUES(realized_pnl),
-           total_pnl = VALUES(total_pnl), position_count = VALUES(position_count),
-           usd_cny_rate = VALUES(usd_cny_rate), captured_at = NOW()`,
-        [
-          STOCK_LEDGER_ID,
-          categoryId,
-          forcedSnapshotDate,
-          portfolio.summary.marketValue,
-          portfolio.summary.costValue,
-          portfolio.summary.floatingPnl,
-          portfolio.summary.realizedPnl,
-          portfolio.summary.totalPnl,
-          portfolio.summary.positionCount,
-          hasUsdPosition ? usdCnyRate : null,
-        ],
+    const observedSymbols = new Set<string>();
+    for (const row of rows as any[]) {
+      const categoryId = Number(row.id);
+      // Reconstruct at each market's price date; registration time is not a trade-date substitute.
+      const [lotRows] = await (conn as any).execute(
+        `SELECT l.id, l.symbol, l.unit_cost, l.initial_quantity,
+          DATE_FORMAT(opening.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS actual_traded_at
+         FROM ledger_stock_lots l
+         INNER JOIN ledger_stock_events opening ON opening.id = l.opened_event_id
+          AND opening.ledger_id = l.ledger_id AND opening.category_id = l.category_id AND opening.status = 'active'
+         WHERE l.ledger_id = ? AND l.category_id = ?`, [STOCK_LEDGER_ID, categoryId],
       );
+      if (!(lotRows as any[]).length) continue;
+      const [saleRows] = await (conn as any).execute(
+        `SELECT e.id, e.symbol, e.quantity, e.execution_price, e.transaction_fee,
+          DATE_FORMAT(e.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS actual_traded_at,
+          COALESCE(SUM(a.quantity * l.unit_cost), 0) AS allocated_cost,
+          COALESCE(SUM(CASE WHEN e.transaction_fee IS NOT NULL
+            THEN a.quantity * COALESCE(opening.transaction_fee / NULLIF(l.initial_quantity, 0), l.unit_cost * ?)
+            ELSE 0 END), 0) AS allocated_buy_fee,
+          JSON_ARRAYAGG(JSON_OBJECT('lotId', a.lot_id, 'quantity', a.quantity)) AS allocations
+         FROM ledger_stock_events e
+         LEFT JOIN ledger_stock_event_lot_allocations a ON a.event_id = e.id
+         LEFT JOIN ledger_stock_lots l ON l.id = a.lot_id AND l.ledger_id = e.ledger_id AND l.category_id = e.category_id
+         LEFT JOIN ledger_stock_events opening ON opening.id = l.opened_event_id
+         WHERE e.ledger_id = ? AND e.category_id = ? AND e.status = 'active' AND e.event_type IN ('reduce','sell')
+         GROUP BY e.id`, [STOCK_TRADE_FEE_RATE, STOCK_LEDGER_ID, categoryId]);
+      const lots = (lotRows as any[]).map(lot => ({ ...lot,
+        start_date: marketSessionDateFromBeijingTradeTimestamp(lot.actual_traded_at, stockMarket(String(lot.symbol))) }));
+      const sales = (saleRows as any[]).map(sale => ({ ...sale,
+        close_date: marketSessionDateFromBeijingTradeTimestamp(sale.actual_traded_at, stockMarket(String(sale.symbol))) }));
+      if (lots.some(lot => !lot.start_date) || sales.some(sale => !sale.close_date)) {
+        result.categories++; result.skippedCategories!++; continue;
+      }
+      const applicableLots = lots.filter(lot => String(lot.start_date) <= marketCutoff(String(lot.symbol)));
+      if (!applicableLots.length) continue;
+      const applicableSales = sales.filter(sale => String(sale.close_date) <= marketCutoff(String(sale.symbol)));
+      const soldByLot = new Map<number, number>();
+      for (const sale of applicableSales) {
+        const allocations = typeof sale.allocations === 'string' ? JSON.parse(sale.allocations) : sale.allocations;
+        for (const allocation of allocations ?? []) if (allocation.lotId != null) {
+          const id = Number(allocation.lotId);
+          soldByLot.set(id, (soldByLot.get(id) ?? 0) + numberValue(allocation.quantity));
+        }
+      }
+      const active = applicableLots.map(lot => ({ symbol: String(lot.symbol), unitCost: numberValue(lot.unit_cost),
+        quantity: Math.max(0, numberValue(lot.initial_quantity) - (soldByLot.get(Number(lot.id)) ?? 0)) })).filter(lot => lot.quantity > EPSILON);
+      const symbols = Array.from(new Set(active.map(lot => lot.symbol)));
+      result.categories++;
+      symbols.forEach(symbol => observedSymbols.add(symbol));
+      const tx = await getDbTransactionConnection();
+      if (!tx) throw new Error('数据库事务连接不可用');
+      const lockName = `stock37:${categoryId}:${snapshotDate}:${version.split(':')[0]}`;
+      let locked = false, transaction = false;
+      try {
+        const [lockRows] = await (tx as any).execute('SELECT GET_LOCK(?,0) AS acquired', [lockName]);
+        locked = Number((lockRows as any[])[0]?.acquired) === 1;
+        if (!locked) { result.skippedCategories!++; continue; }
+        const [existing] = await (tx as any).execute(
+          `SELECT category_id FROM ledger_stock_unified_close_category_publications
+           WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=?`,
+          [STOCK_LEDGER_ID, categoryId, snapshotDate, version]);
+        const alreadyPublished = (existing as any[]).length > 0;
+        // An immutable publication must not hide evidence needed by a later backdated trade.
+        // Recheck the current symbol coverage, but never overwrite the old publication amount.
+        // Both old and new raw proofs are accepted by source + true session, never publication version.
+        const quotes: Record<string, UnifiedCloseQuote> = {};
+        if (symbols.length) {
+          const [proofRows] = await (tx as any).execute(
+            `SELECT symbol, DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date, price, currency, source,
+               DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+             FROM ledger_stock_unified_close_prices WHERE ledger_id=? AND category_id=?
+               AND session_date IN (?,?) AND symbol IN (${symbols.map(() => '?').join(',')})
+               AND source IN ('unified_close_yahoo','unified_close_tushare') ORDER BY captured_at ASC`,
+            [STOCK_LEDGER_ID, categoryId, snapshotDate, usSessionDate, ...symbols]);
+          for (const proof of proofRows as any[]) {
+            const symbol = String(proof.symbol), priceDate = normalizeStoredDate(proof.session_date) || '';
+            const quote = { price: numberValue(proof.price), currency: stockCurrency(symbol), source: String(proof.source), updatedAt: toBeijingWallClockIso(proof.captured_at), priceDate };
+            if (proof.currency === quote.currency && priceDate === marketCutoff(symbol)
+              && isTrustedMemberCalendarClose({ ...quote, symbol, capturedAt: quote.updatedAt })) quotes[symbol] = quote;
+          }
+        }
+        const missing = symbols.filter(symbol => !quotes[symbol]);
+        if (missing.length) Object.assign(quotes, await fetchOvernightUnifiedCloseQuotes(missing, snapshotDate));
+        if (symbols.some(symbol => !isUnifiedStockCloseQuoteForDate(quotes[symbol], marketCutoff(symbol))
+          || quotes[symbol]?.currency !== stockCurrency(symbol)
+          || !isTrustedMemberCalendarClose({ ...quotes[symbol], symbol, capturedAt: quotes[symbol]?.updatedAt }))) {
+          result.skippedCategories!++; continue;
+        }
+        const hasUsd = applicableLots.some(lot => stockCurrency(String(lot.symbol)) === 'USD');
+        const [savedFxRows] = hasUsd ? await (tx as any).execute(
+          `SELECT usd_cny_rate, source,
+             DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+             DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at FROM ledger_stock_unified_close_fx
+           WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=?`,
+          [STOCK_LEDGER_ID, categoryId, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]) : [[]];
+        let fxArchive = (savedFxRows as any[])[0] || null;
+        let rate = numberValue(fxArchive?.usd_cny_rate);
+        if (hasUsd && rate <= 0) {
+          const fetched = await fetchStockUsdCnyAtClose(snapshotDate);
+          if (fetched && fetched.usdCnyRate > 0 && Date.parse(fetched.asOf) <= Date.parse(`${snapshotDate}T15:05:00+08:00`)) {
+            rate = Number(fetched.usdCnyRate.toFixed(8));
+            fxArchive = { usd_cny_rate: rate, source: fetched.source, quote_as_of: fetched.asOf, locked_at: fetched.lockedAt };
+          }
+        }
+        if (hasUsd && (!Number.isFinite(rate) || rate <= 0)) { result.skippedCategories!++; continue; }
+        if (hasUsd) {
+          const cutoff = Date.parse(`${snapshotDate}T15:05:00+08:00`);
+          const quoteAt = Date.parse(toBeijingWallClockIso(fxArchive?.quote_as_of));
+          const lockedAt = Date.parse(toBeijingWallClockIso(fxArchive?.locked_at));
+          if (!['yahoo_usdcny_5m', 'sina_usdcny'].includes(String(fxArchive?.source))
+            || !Number.isFinite(quoteAt) || quoteAt > cutoff || cutoff - quoteAt > 30 * 60_000
+            || lockedAt !== cutoff) { result.skippedCategories!++; continue; }
+        }
+        if (alreadyPublished && !missing.length && (!hasUsd || (savedFxRows as any[]).length > 0)) {
+          result.alreadyPublishedCategories!++; continue;
+        }
+        // Writer-only historical realized amount; never alter the existing funds API helper.
+        const realized = applicableSales.reduce((total, sale) => {
+          const multiplier = stockCurrency(String(sale.symbol)) === 'USD' ? rate : 1;
+          return total + (numberValue(sale.quantity) * numberValue(sale.execution_price)
+            - numberValue(sale.transaction_fee) - numberValue(sale.allocated_cost) - numberValue(sale.allocated_buy_fee)) * multiplier;
+        }, 0);
+        let cost = 0, marketValue = 0;
+        for (const lot of active) {
+          const multiplier = stockCurrency(lot.symbol) === 'USD' ? rate : 1;
+          cost += lot.quantity * lot.unitCost * multiplier;
+          marketValue += lot.quantity * quotes[lot.symbol].price * multiplier;
+        }
+        await (tx as any).beginTransaction(); transaction = true;
+        for (const symbol of symbols) {
+          const quote = quotes[symbol];
+          // Existing verified evidence is immutable, including the administrator's historic import.
+          await (tx as any).execute(
+            `INSERT IGNORE INTO ledger_stock_unified_close_prices
+             (ledger_id,category_id,symbol,session_date,price,currency,source,policy_version,captured_at)
+             VALUES (?,?,?,?,?,?,?,?,NOW())`,
+            [STOCK_LEDGER_ID, categoryId, symbol, quote.priceDate, quote.price, quote.currency, quote.source, 'cn-us-regular-close-v1']);
+        }
+        if (hasUsd && fxArchive) {
+          await (tx as any).execute(
+            `INSERT IGNORE INTO ledger_stock_unified_close_fx
+             (ledger_id,category_id,snapshot_date,policy_version,usd_cny_rate,source,quote_as_of,locked_at)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [STOCK_LEDGER_ID, categoryId, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION, rate, fxArchive.source,
+              typeof fxArchive.quote_as_of === 'string' && fxArchive.quote_as_of.includes('T') ? toMysqlBeijingDateTime(fxArchive.quote_as_of) : fxArchive.quote_as_of,
+              typeof fxArchive.locked_at === 'string' && fxArchive.locked_at.includes('T') ? toMysqlBeijingDateTime(fxArchive.locked_at) : fxArchive.locked_at]);
+          const [lockedFxRows] = await (tx as any).execute(
+            `SELECT usd_cny_rate,source,
+               DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+               DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at FROM ledger_stock_unified_close_fx
+             WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=? FOR UPDATE`,
+            [STOCK_LEDGER_ID, categoryId, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]);
+          const lockedFx = (lockedFxRows as any[])[0];
+          if (!lockedFx || Math.abs(numberValue(lockedFx.usd_cny_rate) - rate) > 0.00000001
+            || lockedFx.source !== fxArchive.source
+            || Date.parse(toBeijingWallClockIso(lockedFx.quote_as_of)) !== Date.parse(toBeijingWallClockIso(fxArchive.quote_as_of))
+            || Date.parse(toBeijingWallClockIso(lockedFx.locked_at)) !== Date.parse(toBeijingWallClockIso(fxArchive.locked_at))) {
+            throw new Error('已锁定的日结汇率冲突，禁止覆盖或按另一汇率发布');
+          }
+        }
+        if (!alreadyPublished) await (tx as any).execute(
+          `INSERT INTO ledger_stock_unified_close_category_publications
+           (ledger_id,category_id,snapshot_date,policy_version,market_value,cost_value,floating_pnl,realized_pnl,total_pnl,position_count,usd_cny_rate,quotes_json)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [STOCK_LEDGER_ID, categoryId, snapshotDate, version, marketValue, cost, marketValue - cost, realized,
+            marketValue - cost + realized, symbols.length, hasUsd ? rate : null, JSON.stringify({ ...quotes,
+              ...(hasUsd && fxArchive ? { __usdCnyFx: { pair: 'USD/CNY', rate, source: fxArchive.source,
+                quoteAsOf: toBeijingWallClockIso(fxArchive.quote_as_of), lockedAt: toBeijingWallClockIso(fxArchive.locked_at) } } : {}) })]);
+        await markStockCalendarResultDirty(tx, categoryId);
+        await (tx as any).commit(); transaction = false;
+        if (alreadyPublished) result.alreadyPublishedCategories!++;
+        else result.publishedCategories!++;
+        result.updated += symbols.length;
+      } catch (error) {
+        if (transaction) await (tx as any).rollback();
+        result.skippedCategories!++;
+        console.error(`[37正规收盘] ${categoryId}/${snapshotDate} 未发布`, error);
+      } finally {
+        if (locked) await (tx as any).execute('SELECT RELEASE_LOCK(?)', [lockName]);
+        if (typeof (tx as any).release === 'function') (tx as any).release();
+      }
     }
-    console.log(`[37股票盘尾] ${forcedSnapshotDate}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
-    return { categories: categoryIds.length, symbols: allSymbols.size, updated };
+    result.symbols = observedSymbols.size;
+    result.complete = result.categories > 0 && result.skippedCategories === 0
+      && Number(result.publishedCategories) + Number(result.alreadyPublishedCategories) === result.categories;
+    if (result.publishedCategories || result.updated) invalidateMemberStockReadCaches();
+    return result;
   } finally {
     closeRefreshInProgress = false;
   }
@@ -3118,6 +3444,7 @@ export async function updateStockTagSale(input: {
   const actualTradedAt = new Date(input.actualTradedAt);
   if (Number.isNaN(actualTradedAt.getTime())) throw new Error("实际成交时间无效");
   const note = String(input.note || "").trim().slice(0, 3000);
+  await ensureStockCalendarResultTable();
   const tx = await getDbTransactionConnection();
   if (!tx) throw new Error("数据库连接不可用");
   try {
@@ -3274,8 +3601,10 @@ export async function updateStockTagSale(input: {
       sellFee,
       createdBy: input.userId,
     });
+    await markStockCalendarResultDirty(tx, access.categoryId);
     await (tx as any).commit();
     invalidateMemberStockReadCaches();
+    queueStockCalendarResultRebuild(access.categoryId);
     return { success: true, eventId: input.eventId, lotId };
   } catch (error) {
     await (tx as any).rollback();

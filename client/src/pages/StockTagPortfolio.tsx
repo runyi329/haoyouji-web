@@ -136,14 +136,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const utils = trpc.useUtils();
   const { user: currentUser } = useAuth();
   // 股票原始成交与行情仍按交易所币种保存；账户与成员展示统一折算为人民币。
-  const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: "USD", tocoin: "CNY", money: 1 },
+  const { data: usdCnyRateData } = trpc.stock.getUsdCnyRate.useQuery(
+    undefined,
     { staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
   );
-  const quotedUsdCnyRate = Number((usdCnyRateData as any)?.money);
-  const usdCnyRate = Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 7.2;
+  const quotedUsdCnyRate = Number(usdCnyRateData?.rate);
+  const usdCnyRate = usdCnyRateData?.success && Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 0;
   const toCny = (value: number | null | undefined, currency: StockCurrency) => (
-    value === null || value === undefined || !Number.isFinite(value)
+    value === null || value === undefined || !Number.isFinite(value) || (currency === 'USD' && usdCnyRate <= 0)
       ? null
       : value * (currency === "USD" ? usdCnyRate : 1)
   );
