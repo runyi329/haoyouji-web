@@ -1612,7 +1612,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
          DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at, source
        FROM ledger_stock_unified_close_prices
        WHERE ledger_id = ? AND category_id = ?
-         AND source IN ('unified_close_yahoo','unified_close_tushare')
+         AND source IN ('unified_close_yahoo','unified_close_tushare','unified_close_sina')
          AND symbol IN (${historicalSymbols.map(() => '?').join(',')})`,
       [STOCK_LEDGER_ID, categoryId, ...historicalSymbols],
     ) : [[]];
@@ -2476,9 +2476,18 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
 } = {}): Promise<UnifiedStockClosePublicationResult> {
   const snapshotDate = options.snapshotDate || getUnifiedStockCloseSnapshotDate();
   const version = getUnifiedStockCloseVersion(snapshotDate);
+  type CloseFailureDetails = {
+    symbol?: string; expectedDate?: string; actualDate?: string; currency?: string; source?: string };
   const result: UnifiedStockClosePublicationResult = { categories: 0, symbols: 0, updated: 0,
     publishedCategories: 0, alreadyPublishedCategories: 0, skippedCategories: 0,
     complete: false, snapshotDate, version };
+  const fail = (categoryId: number, stage: string, reason: string, details: CloseFailureDetails = {}) => {
+    const failure = { categoryId, snapshotDate, reason,
+      ...(details.symbol ? { missingSymbols: [details.symbol] } : {}), details: { stage, ...details } };
+    (result.failures ??= []).push(failure);
+    // Deliberately log only evidence metadata, never upstream errors, URLs or credentials.
+    console.error('[37正规收盘] 未发布原因', failure);
+  };
   const usSessionDate = getOvernightUsSessionDate(snapshotDate);
   if (!isStockMarketSession(snapshotDate, 'A') || !usSessionDate || !isUnifiedStockCloseReady(snapshotDate) || closeRefreshInProgress) return result;
   const marketCutoff = (symbol: string) => stockCurrency(symbol) === 'USD' ? usSessionDate : snapshotDate;
@@ -2499,8 +2508,11 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
       requestedCategoryId ? [STOCK_LEDGER_ID, requestedCategoryId] : [STOCK_LEDGER_ID],
     );
     const observedSymbols = new Set<string>();
+    let evidenceChanged = false;
     for (const row of rows as any[]) {
       const categoryId = Number(row.id);
+      let categoryCounted = false;
+      try {
       // Reconstruct at each market's price date; registration time is not a trade-date substitute.
       const [lotRows] = await (conn as any).execute(
         `SELECT l.id, l.symbol, l.unit_cost, l.initial_quantity,
@@ -2530,7 +2542,8 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
       const sales = (saleRows as any[]).map(sale => ({ ...sale,
         close_date: marketSessionDateFromBeijingTradeTimestamp(sale.actual_traded_at, stockMarket(String(sale.symbol))) }));
       if (lots.some(lot => !lot.start_date) || sales.some(sale => !sale.close_date)) {
-        result.categories++; result.skippedCategories!++; continue;
+        fail(categoryId, 'trade_history', 'missing_actual_trade_date');
+        result.categories++; categoryCounted = true; result.skippedCategories!++; continue;
       }
       const applicableLots = lots.filter(lot => String(lot.start_date) <= marketCutoff(String(lot.symbol)));
       if (!applicableLots.length) continue;
@@ -2547,6 +2560,7 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
         quantity: Math.max(0, numberValue(lot.initial_quantity) - (soldByLot.get(Number(lot.id)) ?? 0)) })).filter(lot => lot.quantity > EPSILON);
       const symbols = Array.from(new Set(active.map(lot => lot.symbol)));
       result.categories++;
+      categoryCounted = true;
       symbols.forEach(symbol => observedSymbols.add(symbol));
       const tx = await getDbTransactionConnection();
       if (!tx) throw new Error('数据库事务连接不可用');
@@ -2555,7 +2569,7 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
       try {
         const [lockRows] = await (tx as any).execute('SELECT GET_LOCK(?,0) AS acquired', [lockName]);
         locked = Number((lockRows as any[])[0]?.acquired) === 1;
-        if (!locked) { result.skippedCategories!++; continue; }
+        if (!locked) { fail(categoryId, 'lock', 'busy'); result.skippedCategories!++; continue; }
         const [existing] = await (tx as any).execute(
           `SELECT category_id FROM ledger_stock_unified_close_category_publications
            WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=?`,
@@ -2564,29 +2578,6 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
         // An immutable publication must not hide evidence needed by a later backdated trade.
         // Recheck the current symbol coverage, but never overwrite the old publication amount.
         // Both old and new raw proofs are accepted by source + true session, never publication version.
-        const quotes: Record<string, UnifiedCloseQuote> = {};
-        if (symbols.length) {
-          const [proofRows] = await (tx as any).execute(
-            `SELECT symbol, DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date, price, currency, source,
-               DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
-             FROM ledger_stock_unified_close_prices WHERE ledger_id=? AND category_id=?
-               AND session_date IN (?,?) AND symbol IN (${symbols.map(() => '?').join(',')})
-               AND source IN ('unified_close_yahoo','unified_close_tushare') ORDER BY captured_at ASC`,
-            [STOCK_LEDGER_ID, categoryId, snapshotDate, usSessionDate, ...symbols]);
-          for (const proof of proofRows as any[]) {
-            const symbol = String(proof.symbol), priceDate = normalizeStoredDate(proof.session_date) || '';
-            const quote = { price: numberValue(proof.price), currency: stockCurrency(symbol), source: String(proof.source), updatedAt: toBeijingWallClockIso(proof.captured_at), priceDate };
-            if (proof.currency === quote.currency && priceDate === marketCutoff(symbol)
-              && isTrustedMemberCalendarClose({ ...quote, symbol, capturedAt: quote.updatedAt })) quotes[symbol] = quote;
-          }
-        }
-        const missing = symbols.filter(symbol => !quotes[symbol]);
-        if (missing.length) Object.assign(quotes, await fetchOvernightUnifiedCloseQuotes(missing, snapshotDate));
-        if (symbols.some(symbol => !isUnifiedStockCloseQuoteForDate(quotes[symbol], marketCutoff(symbol))
-          || quotes[symbol]?.currency !== stockCurrency(symbol)
-          || !isTrustedMemberCalendarClose({ ...quotes[symbol], symbol, capturedAt: quotes[symbol]?.updatedAt }))) {
-          result.skippedCategories!++; continue;
-        }
         const hasUsd = applicableLots.some(lot => stockCurrency(String(lot.symbol)) === 'USD');
         const [savedFxRows] = hasUsd ? await (tx as any).execute(
           `SELECT usd_cny_rate, source,
@@ -2594,57 +2585,128 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
              DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at FROM ledger_stock_unified_close_fx
            WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=?`,
           [STOCK_LEDGER_ID, categoryId, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]) : [[]];
-        let fxArchive = (savedFxRows as any[])[0] || null;
-        let rate = numberValue(fxArchive?.usd_cny_rate);
-        if (hasUsd && rate <= 0) {
-          const fetched = await fetchStockUsdCnyAtClose(snapshotDate);
-          if (fetched && fetched.usdCnyRate > 0 && Date.parse(fetched.asOf) <= Date.parse(`${snapshotDate}T15:05:00+08:00`)) {
-            rate = Number(fetched.usdCnyRate.toFixed(8));
-            fxArchive = { usd_cny_rate: rate, source: fetched.source, quote_as_of: fetched.asOf, locked_at: fetched.lockedAt };
+        // Archive first. Start the 15:05 capture BEFORE stock HTTP work; a slow stock source
+        // must not push a Sina FX observation beyond cutoff. Attach rejection handling now.
+        const fxPromise = hasUsd && !(savedFxRows as any[]).length
+          ? Promise.resolve().then(() => fetchStockUsdCnyAtClose(snapshotDate))
+            .then(quote => ({ quote, failed: false }), () => ({ quote: null, failed: true }))
+          : Promise.resolve({ quote: null, failed: false });
+        const allowedSources = ['unified_close_yahoo', 'unified_close_tushare', 'unified_close_sina'];
+        const quoteFailure = (symbol: string, quote: UnifiedCloseQuote | undefined): string | null => {
+          if (!quote) return 'not_found';
+          if (!quote.priceDate) return 'missing_date';
+          if (!isUnifiedStockCloseQuoteForDate(quote, marketCutoff(symbol))) return 'bad_price_or_date';
+          if (quote.currency !== stockCurrency(symbol)) return 'bad_currency';
+          if (!allowedSources.includes(quote.source)) return 'bad_source';
+          if (!isTrustedMemberCalendarClose({ ...quote, symbol, capturedAt: quote.updatedAt })) return 'untrusted_close';
+          return null;
+        };
+        const quotes: Record<string, UnifiedCloseQuote> = {};
+        const rejectedProofs: Record<string, UnifiedCloseQuote> = {};
+        if (symbols.length) {
+          const [proofRows] = await (tx as any).execute(
+            `SELECT symbol, DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date, price, currency, source,
+               DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+             FROM ledger_stock_unified_close_prices WHERE ledger_id=? AND category_id=?
+               AND session_date IN (?,?) AND symbol IN (${symbols.map(() => '?').join(',')})
+               AND source IN ('unified_close_yahoo','unified_close_tushare','unified_close_sina') ORDER BY captured_at ASC`,
+            [STOCK_LEDGER_ID, categoryId, snapshotDate, usSessionDate, ...symbols]);
+          for (const proof of proofRows as any[]) {
+            const symbol = String(proof.symbol), priceDate = normalizeStoredDate(proof.session_date) || '';
+            const quote: UnifiedCloseQuote = { price: numberValue(proof.price), currency: proof.currency,
+              source: String(proof.source), updatedAt: toBeijingWallClockIso(proof.captured_at), priceDate };
+            if (!quoteFailure(symbol, quote)) quotes[symbol] = quote;
+            else rejectedProofs[symbol] = quote;
           }
         }
-        if (hasUsd && (!Number.isFinite(rate) || rate <= 0)) { result.skippedCategories!++; continue; }
+        const missing = symbols.filter(symbol => !quotes[symbol]);
+        const quotesPromise = missing.length
+          ? Promise.resolve().then(() => fetchOvernightUnifiedCloseQuotes(missing, snapshotDate))
+            .then(fetched => ({ fetched, failed: false }), () => ({ fetched: {} as Record<string, UnifiedCloseQuote>, failed: true }))
+          : Promise.resolve({ fetched: {} as Record<string, UnifiedCloseQuote>, failed: false });
+        const [fxFetch, quoteFetch] = await Promise.all([fxPromise, quotesPromise]);
+        for (const symbol of missing) {
+          const candidate = quoteFetch.fetched[symbol];
+          const reason = quoteFailure(symbol, candidate);
+          if (!reason) quotes[symbol] = candidate;
+          else {
+            const rejected = candidate || rejectedProofs[symbol];
+            fail(categoryId, 'quote', rejected ? quoteFailure(symbol, rejected)! : quoteFetch.failed ? 'fetch_failed' : reason,
+              { symbol, expectedDate: marketCutoff(symbol), actualDate: rejected?.priceDate || '',
+                currency: rejected?.currency || '', source: rejected?.source || '' });
+          }
+        }
+        let fxArchive = (savedFxRows as any[])[0] || null;
+        let rate = numberValue(fxArchive?.usd_cny_rate);
+        if (!fxArchive && fxFetch.quote) {
+          const fetched = fxFetch.quote;
+          rate = Number(Number(fetched.usdCnyRate).toFixed(8));
+          fxArchive = { usd_cny_rate: rate, source: fetched.source, quote_as_of: fetched.asOf, locked_at: fetched.lockedAt };
+        }
+        let validFx = !hasUsd;
         if (hasUsd) {
           const cutoff = Date.parse(`${snapshotDate}T15:05:00+08:00`);
           const quoteAt = Date.parse(toBeijingWallClockIso(fxArchive?.quote_as_of));
           const lockedAt = Date.parse(toBeijingWallClockIso(fxArchive?.locked_at));
-          if (!['yahoo_usdcny_5m', 'sina_usdcny'].includes(String(fxArchive?.source))
-            || !Number.isFinite(quoteAt) || quoteAt > cutoff || cutoff - quoteAt > 30 * 60_000
-            || lockedAt !== cutoff) { result.skippedCategories!++; continue; }
+          validFx = Number.isFinite(rate) && rate > 0
+            && ['yahoo_usdcny_5m', 'sina_usdcny'].includes(String(fxArchive?.source))
+            && Number.isFinite(quoteAt) && quoteAt <= cutoff && cutoff - quoteAt <= 30 * 60_000 && lockedAt === cutoff;
+          if (!validFx) fail(categoryId, 'fx', !fxArchive ? 'not_found'
+            : !Number.isFinite(rate) || rate <= 0 ? 'bad_rate'
+            : !['yahoo_usdcny_5m', 'sina_usdcny'].includes(String(fxArchive.source)) ? 'bad_source' : 'bad_cutoff',
+          { expectedDate: `${snapshotDate}T15:05:00+08:00`, actualDate: fxArchive ? toBeijingWallClockIso(fxArchive.quote_as_of) : '',
+            currency: 'USD/CNY', source: fxArchive?.source || '' });
         }
-        if (alreadyPublished && !missing.length && (!hasUsd || (savedFxRows as any[]).length > 0)) {
+        let completeEvidence = symbols.every(symbol => !!quotes[symbol]) && validFx;
+        if (alreadyPublished && !missing.length && completeEvidence && (!hasUsd || (savedFxRows as any[]).length > 0)) {
           result.alreadyPublishedCategories!++; continue;
         }
-        // Writer-only historical realized amount; never alter the existing funds API helper.
-        const realized = applicableSales.reduce((total, sale) => {
-          const multiplier = stockCurrency(String(sale.symbol)) === 'USD' ? rate : 1;
-          return total + (numberValue(sale.quantity) * numberValue(sale.execution_price)
-            - numberValue(sale.transaction_fee) - numberValue(sale.allocated_cost) - numberValue(sale.allocated_buy_fee)) * multiplier;
-        }, 0);
-        let cost = 0, marketValue = 0;
-        for (const lot of active) {
-          const multiplier = stockCurrency(lot.symbol) === 'USD' ? rate : 1;
-          cost += lot.quantity * lot.unitCost * multiplier;
-          marketValue += lot.quantity * quotes[lot.symbol].price * multiplier;
+        const verifiedSymbols = symbols.filter(symbol => !!quotes[symbol]);
+        if (!verifiedSymbols.length && !(hasUsd && validFx) && !completeEvidence) {
+          result.skippedCategories!++; continue;
         }
         await (tx as any).beginTransaction(); transaction = true;
-        for (const symbol of symbols) {
+        let addedEvidence = 0;
+        for (const symbol of verifiedSymbols) {
           const quote = quotes[symbol];
           // Existing verified evidence is immutable, including the administrator's historic import.
-          await (tx as any).execute(
+          const [inserted] = await (tx as any).execute(
             `INSERT IGNORE INTO ledger_stock_unified_close_prices
              (ledger_id,category_id,symbol,session_date,price,currency,source,policy_version,captured_at)
              VALUES (?,?,?,?,?,?,?,?,NOW())`,
             [STOCK_LEDGER_ID, categoryId, symbol, quote.priceDate, quote.price, quote.currency, quote.source, 'cn-us-regular-close-v1']);
+          const added = Number(inserted.affectedRows || 0);
+          addedEvidence += added;
+          // An ignored fetch is not proof of persistence: the immutable key may contain
+          // an invalid older row. Never publish a fetched price that was not archived.
+          if (!added && missing.includes(symbol)) {
+            const [persistedRows] = await (tx as any).execute(
+              `SELECT symbol, DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date, price, currency, source,
+                 DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+               FROM ledger_stock_unified_close_prices WHERE ledger_id=? AND category_id=? AND symbol=?
+                 AND session_date=? AND policy_version=? FOR UPDATE`,
+              [STOCK_LEDGER_ID, categoryId, symbol, quote.priceDate, 'cn-us-regular-close-v1']);
+            const proof = (persistedRows as any[])[0];
+            const persisted = proof ? { price: numberValue(proof.price), currency: proof.currency,
+              source: String(proof.source), updatedAt: toBeijingWallClockIso(proof.captured_at),
+              priceDate: normalizeStoredDate(proof.session_date) || '' } : undefined;
+            if (persisted && !quoteFailure(symbol, persisted)) quotes[symbol] = persisted;
+            else {
+              delete quotes[symbol]; completeEvidence = false;
+              fail(categoryId, 'quote', 'evidence_insert_ignored', { symbol, expectedDate: marketCutoff(symbol),
+                actualDate: persisted?.priceDate || '', currency: persisted?.currency || '', source: persisted?.source || '' });
+            }
+          }
         }
-        if (hasUsd && fxArchive) {
-          await (tx as any).execute(
+        if (hasUsd && validFx && fxArchive) {
+          const [inserted] = await (tx as any).execute(
             `INSERT IGNORE INTO ledger_stock_unified_close_fx
              (ledger_id,category_id,snapshot_date,policy_version,usd_cny_rate,source,quote_as_of,locked_at)
              VALUES (?,?,?,?,?,?,?,?)`,
             [STOCK_LEDGER_ID, categoryId, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION, rate, fxArchive.source,
               typeof fxArchive.quote_as_of === 'string' && fxArchive.quote_as_of.includes('T') ? toMysqlBeijingDateTime(fxArchive.quote_as_of) : fxArchive.quote_as_of,
               typeof fxArchive.locked_at === 'string' && fxArchive.locked_at.includes('T') ? toMysqlBeijingDateTime(fxArchive.locked_at) : fxArchive.locked_at]);
+          addedEvidence += Number(inserted.affectedRows || 0);
           const [lockedFxRows] = await (tx as any).execute(
             `SELECT usd_cny_rate,source,
                DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
@@ -2659,32 +2721,60 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
             throw new Error('已锁定的日结汇率冲突，禁止覆盖或按另一汇率发布');
           }
         }
-        if (!alreadyPublished) await (tx as any).execute(
-          `INSERT INTO ledger_stock_unified_close_category_publications
-           (ledger_id,category_id,snapshot_date,policy_version,market_value,cost_value,floating_pnl,realized_pnl,total_pnl,position_count,usd_cny_rate,quotes_json)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [STOCK_LEDGER_ID, categoryId, snapshotDate, version, marketValue, cost, marketValue - cost, realized,
-            marketValue - cost + realized, symbols.length, hasUsd ? rate : null, JSON.stringify({ ...quotes,
-              ...(hasUsd && fxArchive ? { __usdCnyFx: { pair: 'USD/CNY', rate, source: fxArchive.source,
-                quoteAsOf: toBeijingWallClockIso(fxArchive.quote_as_of), lockedAt: toBeijingWallClockIso(fxArchive.locked_at) } } : {}) })]);
-        await markStockCalendarResultDirty(tx, categoryId);
+        if (completeEvidence && !alreadyPublished) {
+          // Writer-only historical realized amount; never alter the existing funds API helper.
+          const realized = applicableSales.reduce((total, sale) => {
+            const multiplier = stockCurrency(String(sale.symbol)) === 'USD' ? rate : 1;
+            return total + (numberValue(sale.quantity) * numberValue(sale.execution_price)
+              - numberValue(sale.transaction_fee) - numberValue(sale.allocated_cost) - numberValue(sale.allocated_buy_fee)) * multiplier;
+          }, 0);
+          let cost = 0, marketValue = 0;
+          for (const lot of active) {
+            const multiplier = stockCurrency(lot.symbol) === 'USD' ? rate : 1;
+            cost += lot.quantity * lot.unitCost * multiplier;
+            marketValue += lot.quantity * quotes[lot.symbol].price * multiplier;
+          }
+          await (tx as any).execute(
+            `INSERT INTO ledger_stock_unified_close_category_publications
+             (ledger_id,category_id,snapshot_date,policy_version,market_value,cost_value,floating_pnl,realized_pnl,total_pnl,position_count,usd_cny_rate,quotes_json)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [STOCK_LEDGER_ID, categoryId, snapshotDate, version, marketValue, cost, marketValue - cost, realized,
+              marketValue - cost + realized, symbols.length, hasUsd ? rate : null, JSON.stringify({ ...quotes,
+                ...(hasUsd && fxArchive ? { __usdCnyFx: { pair: 'USD/CNY', rate, source: fxArchive.source,
+                  quoteAsOf: toBeijingWallClockIso(fxArchive.quote_as_of), lockedAt: toBeijingWallClockIso(fxArchive.locked_at) } } : {}) })]);
+        }
+        // Generation and new proof must commit together, including a partial recovery.
+        if (addedEvidence > 0) await markStockCalendarResultDirty(tx, categoryId);
         await (tx as any).commit(); transaction = false;
-        if (alreadyPublished) result.alreadyPublishedCategories!++;
+        if (!completeEvidence) result.skippedCategories!++;
+        else if (alreadyPublished) result.alreadyPublishedCategories!++;
         else result.publishedCategories!++;
-        result.updated += symbols.length;
+        result.updated += verifiedSymbols.length;
+        evidenceChanged ||= addedEvidence > 0;
       } catch (error) {
-        if (transaction) await (tx as any).rollback();
+        if (transaction) {
+          try { await (tx as any).rollback(); } catch { fail(categoryId, 'rollback', 'publication_error'); }
+        }
         result.skippedCategories!++;
-        console.error(`[37正规收盘] ${categoryId}/${snapshotDate} 未发布`, error);
+        fail(categoryId, 'transaction', 'publication_error');
       } finally {
-        if (locked) await (tx as any).execute('SELECT RELEASE_LOCK(?)', [lockName]);
-        if (typeof (tx as any).release === 'function') (tx as any).release();
+        try {
+          if (locked) await (tx as any).execute('SELECT RELEASE_LOCK(?)', [lockName]);
+        } catch { fail(categoryId, 'release_lock', 'publication_error'); }
+        try {
+          if (typeof (tx as any).release === 'function') (tx as any).release();
+        } catch { fail(categoryId, 'release_connection', 'publication_error'); }
+      }
+      } catch {
+        if (!categoryCounted) result.categories++;
+        result.skippedCategories!++;
+        fail(categoryId, 'category', 'publication_error');
       }
     }
     result.symbols = observedSymbols.size;
     result.complete = result.categories > 0 && result.skippedCategories === 0
       && Number(result.publishedCategories) + Number(result.alreadyPublishedCategories) === result.categories;
-    if (result.publishedCategories || result.updated) invalidateMemberStockReadCaches();
+    if (result.publishedCategories || evidenceChanged) invalidateMemberStockReadCaches();
     return result;
   } finally {
     closeRefreshInProgress = false;

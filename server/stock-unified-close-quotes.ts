@@ -1,5 +1,5 @@
 /** 37号日结专属：只读取指定会话日的常规未复权收盘，不把实时行情倒填到过去。 */
-import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
+import { getOvernightUsSessionDate, isStockMarketSession, previousStockMarketSession } from '../shared/stock-market-session';
 
 export type UnifiedCloseQuote = {
   price: number;
@@ -56,6 +56,79 @@ export function parseYahooSessionClose(payload: any, market: 'A' | 'US', session
     return { price, currency: expectedCurrency, source: 'unified_close_yahoo', updatedAt: new Date().toISOString(), priceDate: sessionDate };
   }
   return null;
+}
+
+function sinaSymbolForClose(symbol: string): string | null {
+  const aShare = /^(\d{6})\.(SH|SZ|BJ)$/.exec(symbol);
+  if (aShare) return `${aShare[2].toLowerCase()}${aShare[1]}`;
+  // Do not guess Sina's escaping for class/dotted tickers; historical providers still support them.
+  return /^[A-Z][A-Z0-9]{0,14}$/.test(symbol) ? `gb_${symbol.toLowerCase()}` : null;
+}
+
+function positiveSinaPrice(value: string | undefined): number | null {
+  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value.trim())) return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+/** Pure evidence parser: now is explicit, no current/previous/after-hours price substitution. */
+export function parseSinaSessionClose(payload: unknown, rawSymbol: string, sessionDate: string, now: Date): UnifiedCloseQuote | null {
+  const symbol = normalizeSymbol(rawSymbol);
+  if (!symbol || !Number.isFinite(now.getTime())) return null;
+  const sinaSymbol = sinaSymbolForClose(symbol);
+  const market = /^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) ? 'A' : 'US';
+  if (!sinaSymbol || !isUnifiedMarketCloseCompleted(sessionDate, market, now)) return null;
+  const text = typeof payload === 'string' ? payload
+    : payload instanceof Uint8Array ? new TextDecoder('gb18030').decode(payload) : null;
+  if (!text || text.length > 65_536) return null;
+  // Fetch one symbol. Reject wrong variable, duplicate assignments and malformed envelopes.
+  const match = /^\s*var\s+hq_str_([A-Za-z0-9_]+)\s*=\s*"([^"\r\n]*)";?\s*$/.exec(text);
+  if (!match || match[1] !== sinaSymbol) return null;
+  const parts = match[2].split(',');
+  if (market === 'A') {
+    if (parts.length < 32 || parts[30] !== sessionDate
+      || !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(parts[31])) return null;
+    const quoteAt = Date.parse(`${parts[30]}T${parts[31]}+08:00`);
+    const price = positiveSinaPrice(parts[3]);
+    if (price === null || !Number.isFinite(quoteAt)
+      || quoteAt < Date.parse(`${sessionDate}T15:00:00+08:00`) || quoteAt > now.getTime()) return null;
+    return { price, currency: 'CNY', source: 'unified_close_sina', updatedAt: now.toISOString(), priceDate: sessionDate };
+  }
+  // [1] regular price; [25] regular timestamp; [29] explicit year.
+  // [21] price and [24] timestamp are AFTER HOURS and are never read here.
+  if (parts.length < 30 || !/^\d{4}$/.test(parts[29]) || Number(parts[29]) < 1900) return null;
+  const stamp = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{2}):([0-5]\d)(AM|PM)\s+(EST|EDT)$/.exec(parts[25]);
+  // The shared calendar does not specify early-close hours: reject 13:00 fail-closed.
+  if (!stamp || stamp[3] !== '04' || stamp[4] !== '00' || stamp[5] !== 'PM') return null;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const date = `${parts[29]}-${String(months.indexOf(stamp[1]) + 1).padStart(2, '0')}-${stamp[2].padStart(2, '0')}`;
+  if (date !== sessionDate || !isValidCloseSessionDate(date)) return null;
+  const regularAt = Date.parse(`${date}T16:00:00${stamp[6] === 'EST' ? '-05:00' : '-04:00'}`);
+  if (!Number.isFinite(regularAt) || regularAt > now.getTime()) return null;
+  const nyParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short',
+  }).formatToParts(new Date(regularAt));
+  const get = (type: Intl.DateTimeFormatPartTypes) => nyParts.find(part => part.type === type)?.value || '';
+  // Validate the claimed offset against the actual NY date/time/DST, not Beijing's date.
+  if (`${get('year')}-${get('month')}-${get('day')}` !== date
+    || get('hour') !== '16' || get('minute') !== '00' || get('timeZoneName') !== stamp[6]) return null;
+  const price = positiveSinaPrice(parts[1]);
+  return price === null ? null
+    : { price, currency: 'USD', source: 'unified_close_sina', updatedAt: now.toISOString(), priceDate: sessionDate };
+}
+
+async function fetchSinaSessionClose(symbol: string, sessionDate: string): Promise<UnifiedCloseQuote | null> {
+  const sinaSymbol = sinaSymbolForClose(symbol);
+  if (!sinaSymbol) return null;
+  try {
+    const response = await fetch(`https://hq.sinajs.cn/list=${encodeURIComponent(sinaSymbol)}`, {
+      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return null;
+    return parseSinaSessionClose(new Uint8Array(await response.arrayBuffer()), symbol, sessionDate, new Date());
+  } catch { return null; }
 }
 
 async function fetchTushareSessionClose(symbol: string, sessionDate: string): Promise<UnifiedCloseQuote | null> {
@@ -136,7 +209,17 @@ export async function fetchUnifiedCloseQuotes(rawSymbols: string[], target: stri
       const symbol = symbols[cursor++];
       const market = /^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) ? 'A' : 'US';
       const sessionDate = dates[market];
-      const quote = await fetchTushareSessionClose(symbol, sessionDate) || await fetchYahooSessionClose(symbol, sessionDate);
+      const now = new Date();
+      const today = marketDateFromTimestamp(now.getTime() / 1000, market)!;
+      // At A_D15:05 prefer the available domestic endpoint for A_D and the latest completed NY close.
+      // Older dates keep historical daily providers first; Sina must still prove the exact date.
+      const latestClose = market === 'A' || isUnifiedMarketCloseCompleted(today, market, now)
+        ? today : previousStockMarketSession(today, market);
+      const preferSina = sessionDate === latestClose;
+      const quote = (preferSina ? await fetchSinaSessionClose(symbol, sessionDate) : null)
+        || await fetchTushareSessionClose(symbol, sessionDate)
+        || await fetchYahooSessionClose(symbol, sessionDate)
+        || (!preferSina ? await fetchSinaSessionClose(symbol, sessionDate) : null);
       if (quote) result[symbol] = quote;
     }
   }));

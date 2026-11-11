@@ -8,6 +8,7 @@ import {
   getUnifiedStockCloseVersion,
   isUnifiedStockClosePublicationComplete,
   isUnifiedStockCloseQuoteForDate,
+  prioritizeUnifiedStockCloseCandidates,
   isUnifiedStockCloseReady,
   isUnifiedStockCloseRetryWindow,
   millisecondsUntilNextUnifiedStockClose,
@@ -78,6 +79,16 @@ describe('37 A-day 15:05 + overnight US policy (offline; no DB or capture)', () 
     expect(candidates.every(day => isUnifiedStockCloseReady(day, now))).toBe(true);
     expect(() => getUnifiedStockCloseCandidateDates(now, 0)).toThrow();
     expect(() => getUnifiedStockCloseCandidateDates(now, 367)).toThrow();
+  });
+  it('prioritizes today after 15:05 while preserving bounded historical dates and caller input', () => {
+    const days = ['2026-11-06', '2026-11-09', '2026-11-10', '2026-11-11'];
+    expect(prioritizeUnifiedStockCloseCandidates(days, at('2026-11-11T15:05:00')))
+      .toEqual(['2026-11-11', '2026-11-06', '2026-11-09', '2026-11-10']);
+    expect(days).toEqual(['2026-11-06', '2026-11-09', '2026-11-10', '2026-11-11']);
+    expect(prioritizeUnifiedStockCloseCandidates(days.slice(0, 3), at('2026-11-11T15:04:59')))
+      .toEqual(days.slice(0, 3));
+    expect(prioritizeUnifiedStockCloseCandidates(['2026-11-10', '2026-11-09'], at('2026-11-14T15:05:00')))
+      .toEqual(['2026-11-09', '2026-11-10']);
   });
   it('daily first attempt uses default bounded 14-day candidates and delegates published dates to publisher', () => {
     const now = at('2026-11-10T15:05:00');
@@ -163,9 +174,12 @@ describe('37 A-day 15:05 + overnight US policy (offline; no DB or capture)', () 
     expect(source).not.toContain('UPDATE ledger_stock_unified_close_prices');
     const publication = source.slice(source.indexOf('async function refreshUnifiedStockCloseCandidates'), source.indexOf('function scheduleUnifiedStockCloseRetry'));
     expect(publication).toContain('await warmAllStockTagCalendarResults();');
-    expect(publication.indexOf('await warmAllStockTagCalendarResults();')).toBeGreaterThan(publication.indexOf('for (const snapshotDate of candidates)'));
+    expect(publication).toContain('for (const snapshotDate of prioritizeUnifiedStockCloseCandidates(candidates, now))');
+    expect(publication).toContain('if (snapshotDate === getBeijingStockClock(now).date) await warmAllStockTagCalendarResults();');
     const intraday = source.slice(source.indexOf('function scheduleNextManualStockIntradayRefresh'), source.indexOf('function refreshIntradayQuotesOnStartup'));
     expect(intraday).not.toContain('refreshLedgerStockTagCloseSnapshots');
     expect(intraday).not.toContain('warmAllStockTagCalendarResults');
+    expect(intraday).toContain('await captureStockUsdCnyBeforeClose()');
+    expect(intraday.indexOf('await captureStockUsdCnyBeforeClose()')).toBeLessThan(intraday.indexOf('refreshManualStockIntradaySnapshots()'));
   });
 });

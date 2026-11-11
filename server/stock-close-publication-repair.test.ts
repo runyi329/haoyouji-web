@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
-import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate } from '../shared/stock-unified-close-policy';
+import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, prioritizeUnifiedStockCloseCandidates } from '../shared/stock-unified-close-policy';
 import { marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { isTrustedMemberCalendarClose } from './shared/stock-member-calendar';
 
@@ -194,6 +194,7 @@ describe('background-only pending close repair wiring (real production functions
       ensureLedgerStockPortfolioTables: vi.fn(), ensureUnifiedClosePublicationTable: vi.fn(),
       getDbConnection: async () => ({ execute: vi.fn(() => { throw new Error('No publication SQL expected for empty candidates'); }) }),
       getUnifiedStockCloseCandidateDates: () => [], refreshLedgerStockTagCloseSnapshots: publisher,
+      prioritizeUnifiedStockCloseCandidates,
       warmAllStockTagCalendarResults: async () => { order.push('warm'); }, repairPendingStockTagCalendarEvidence: repair,
     }, schedulerSource);
     await scheduler.refreshUnifiedStockCloseCandidates(now);

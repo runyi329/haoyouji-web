@@ -45,7 +45,7 @@ export function isTrustedMemberCalendarClose(quote: MemberCalendarQuote): boolea
   if (!isStockMarketSession(quote.priceDate, market)) return false;
   const capture = Date.parse(quote.capturedAt);
   if (!Number.isFinite(capture)) return false;
-  if (quote.source === 'unified_close_yahoo' || quote.source === 'unified_close_tushare') {
+  if (quote.source === 'unified_close_yahoo' || quote.source === 'unified_close_tushare' || quote.source === 'unified_close_sina') {
     if (market === 'A') return capture >= Date.parse(`${quote.priceDate}T15:00:00+08:00`);
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(capture));
     const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';

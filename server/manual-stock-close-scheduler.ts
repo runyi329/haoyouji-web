@@ -2,10 +2,12 @@ import { getDbConnection } from "./db";
 import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes } from "./price-scanner";
 import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots, refreshLedgerStockTagIntradaySnapshots, warmAllStockTagCalendarResults, repairPendingStockTagCalendarEvidence } from "./ledger-stock-portfolio";
 import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
+import { captureStockUsdCnyBeforeClose } from './stock-usd-cny-rate';
 import {
   getBeijingStockClock,
   getUnifiedStockCloseCandidateDates,
   getUnifiedStockCloseVersion,
+  prioritizeUnifiedStockCloseCandidates,
   isUnifiedStockClosePublicationComplete,
   isUnifiedStockCloseReady,
   isUnifiedStockCloseRetryWindow,
@@ -324,7 +326,7 @@ async function refreshUnifiedStockCloseCandidates(now = new Date(), retrySnapsho
       ? [retrySnapshotDate].filter(date => date === getBeijingStockClock(now).date
         && isUnifiedStockCloseRetryWindow(now) && isUnifiedStockCloseReady(date, now))
       : getUnifiedStockCloseCandidateDates(now);
-    for (const snapshotDate of candidates) {
+    for (const snapshotDate of prioritizeUnifiedStockCloseCandidates(candidates, now)) {
       const version = getUnifiedStockCloseVersion(snapshotDate);
       // 全日published不能阻断历史交易新增symbol的证据补齐。每轮让publisher检查
       // cache generation == computed_generation且目标日calendar ready时轻量跳过；
@@ -333,6 +335,7 @@ async function refreshUnifiedStockCloseCandidates(now = new Date(), retrySnapsho
         const result = await refreshLedgerStockTagCloseSnapshots({ snapshotDate });
         if (!isUnifiedStockClosePublicationComplete(result, snapshotDate)) {
           console.log(`[37统一日结] ${snapshotDate}：A当天及此前US收盘证据或本版本发布确认未齐，不记成功（${version}）`);
+          if (result.failures?.length) console.warn('[37统一日结缺项]', JSON.stringify(result.failures));
           continue;
         }
         await (conn as any).execute(
@@ -342,6 +345,8 @@ async function refreshUnifiedStockCloseCandidates(now = new Date(), retrySnapsho
           [snapshotDate, version, result.categories],
         );
         console.log(`[37统一日结] ${snapshotDate}：${result.categories} 个标签发布完成（${version}）`);
+        // 今日完整发布后立即落可读结果，不等待其他历史日或外部历史源结束。
+        if (snapshotDate === getBeijingStockClock(now).date) await warmAllStockTagCalendarResults();
       } catch (error) {
         // 单日失败不阻止后续日期；下一有限重试或下一天再补，不标成功。
         console.error(`[37统一日结] ${snapshotDate}补跑失败:`, error instanceof Error ? error.message : error);
@@ -388,7 +393,11 @@ function scheduleNextUnifiedStockClose(): void {
       const now = new Date();
       // 定时首试只能在当前A日发布窗口执行；若事件循环拖到夜间，等下次A日或启动补跑。
       if (isUnifiedStockCloseRetryWindow(now)) {
-        // 每日首试同启动一样默认有界回查14日；后续5分钟重试仍仅限当天。
+        // 先保留截止时点之前的真实汇率；15:05后的报价不会被倒填成锁定值。
+        await captureStockUsdCnyBeforeClose(now).catch(error => {
+          console.warn('[37日结汇率采样] 未取得有效截止报价:', error instanceof Error ? error.message : '取数失败');
+        });
+        // 每日首试仍回查14日，但先发布当天；后续5分钟重试仍仅限当天。
         await runUnifiedStockCloseWithRetry();
       }
     } finally {
@@ -452,6 +461,10 @@ function millisecondsUntilNextFiveMinuteBoundary(now = new Date()): number {
 function scheduleNextManualStockIntradayRefresh(): void {
   intradayTimer = setTimeout(async () => {
     try {
+      // 复用原五分钟边界在截止前预采样；函数仅在A交易日14:35–15:05取数。
+      await captureStockUsdCnyBeforeClose().catch(error => {
+        console.warn('[37日结汇率预采样] 取数失败:', error instanceof Error ? error.message : '报价不可用');
+      });
       if (isBeijingTradingWindow() || isUsTradingWindow()) {
         await Promise.all([
           refreshManualStockIntradaySnapshots(),

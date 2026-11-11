@@ -38,6 +38,8 @@ export type UnifiedStockClosePublicationResult = {
   snapshotDate?: string;
   /** getUnifiedStockCloseVersion(D)，而非原始价格来源表的policy_version。 */
   version?: string;
+  /** 后台可定位缺项；失败仍不可标成完整发布，不包含认证或请求密钥。 */
+  failures?: Array<{ categoryId: number; snapshotDate: string; reason: string; missingSymbols?: string[]; details?: unknown }>;
 };
 
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -76,6 +78,17 @@ export function getUnifiedStockCloseCandidateDates(now = new Date(), lookbackDay
   const latest = getUnifiedStockCloseSnapshotDate(now);
   return Array.from({ length: lookbackDays }, (_, index) => shiftStockSessionDate(latest, index - lookbackDays + 1))
     .filter(date => isUnifiedStockCloseReady(date, now));
+}
+
+/** 15:05首试先发布当天；历史补跑仍旧到新，不让海外历史源延迟挡住今日。 */
+export function prioritizeUnifiedStockCloseCandidates(candidates: readonly string[], now = new Date()): string[] {
+  const today = getBeijingStockClock(now).date;
+  const todayDue = isUnifiedStockCloseReady(today, now);
+  return [...new Set(candidates)].sort((a, b) => {
+    if (todayDue && a === today && b !== today) return -1;
+    if (todayDue && b === today && a !== today) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 /** 仅A交易日15:05–18:05重试同一天同一版本，不形成额外日结。 */
