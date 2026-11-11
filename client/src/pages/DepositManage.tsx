@@ -1691,7 +1691,9 @@ export default function DepositManage() {
                             {(() => {
                               // 自动读取最新余额和日期（来自 P117 日历图最新记录）
                               const latestBalance = (rightTagSummary as any)?.latestBalance;
-                              const autoBalanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
+                              const parsedBalance = latestBalance?.balance !== null && latestBalance?.balance !== undefined
+                                && String(latestBalance.balance).trim() !== '' ? Number(latestBalance.balance) : NaN;
+                              const autoBalanceNum = Number.isFinite(parsedBalance) ? parsedBalance : null;
                               const autoBalanceDate = latestBalance?.recordDate as string | undefined;
                               const settlementCutoffDate = (rightTagSummary as any)?.settlementCutoffDate as string | undefined;
 

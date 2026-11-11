@@ -11,6 +11,7 @@ import { getStockChipDistribution } from "./stock-chip-distribution";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
+import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHash, createHmac } from "crypto";
@@ -15985,6 +15986,12 @@ ${klinesSummary}
         })),
       }))
       .mutation(async ({ ctx, input }) => {
+        // 整批预检先于分类创建和账目写入，不能先导入前几笔再发现未来误填。
+        const importNow = new Date();
+        for (let index = 0; index < input.records.length; index++) {
+          const dateError = getLedgerRecordDateError(input.ledgerId, input.records[index].date, importNow);
+          if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: `第${index + 1}笔：${dateError}` });
+        }
         const db_instance = await getDb();
         if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
 
@@ -18682,13 +18689,16 @@ ${klinesSummary}
         const category = categoryList.length > 0 ? categoryList[0] : null;
         // 手工余额标签只认同一标签内「业务日期、登记时间、ID」均最新的一条余额。
         // 不能仅按日期排序，否则同日补录会让52订单读到旧市值。
+        // 37号已误录的未来记录保留供管理员纠正，但不能作为今日真实余额。
+        const recordToday = getBeijingLedgerRecordToday();
         const latestBalanceRows = category ? await db.execute(
-          sql`SELECT lr.amount, lr.recordDate
+          sql`SELECT lr.amount, DATE_FORMAT(lr.recordDate, '%Y-%m-%d') AS recordDate
               FROM ledger_records lr
               WHERE lr.ledgerId = ${input.ledgerId}
                 AND lr.categoryId = ${Number(category.id)}
                 AND lr.type != 'transfer'
                 AND lr.deleted_at IS NULL
+                AND (${input.ledgerId} != ${LEDGER_37_ID} OR lr.recordDate <= ${recordToday})
                 AND (${settlementCutoffDate} IS NULL OR lr.recordDate <= ${settlementCutoffDate})
               ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC
               LIMIT 1`
@@ -18817,13 +18827,36 @@ ${klinesSummary}
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂时不可用，请稍后重试' });
         // 查询所有标签的配置
         const configRows = await db.execute(
           sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date, margin_pause_date, target_total FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
         // 查询每个标签最新一条记录的余额（排除transfer类型和已删除记录）
-        const latestRows = await db.execute(
+        // 37号按业务日期选取，历史补录的更大ID不能覆盖今天；其它账本保持原查询。
+        const recordToday = getBeijingLedgerRecordToday();
+        const latestRows = input.ledgerId === LEDGER_37_ID ? await db.execute(
+          sql`SELECT ranked.tag_name, ranked.amount, ranked.recordDate
+              FROM (
+                SELECT lc.name AS tag_name, lr.amount,
+                  DATE_FORMAT(lr.recordDate, '%Y-%m-%d') AS recordDate,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY BINARY lc.name
+                    ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC
+                  ) AS balance_rank
+                FROM ledger_records lr
+                INNER JOIN ledger_categories lc ON lc.id = lr.categoryId AND lc.ledgerId = lr.ledgerId
+                LEFT JOIN ledger_tag_config cfg
+                  ON cfg.ledger_id = lr.ledgerId AND BINARY cfg.tag_name = BINARY lc.name
+                WHERE lr.ledgerId = ${input.ledgerId}
+                  AND lr.type != 'transfer'
+                  AND lr.deleted_at IS NULL
+                  AND lr.recordDate <= ${recordToday}
+                  AND lr.recordDate <= COALESCE(cfg.margin_pause_date, cfg.pause_date, '9999-12-31')
+              ) ranked
+              WHERE ranked.balance_rank = 1`
+        ) : await db.execute(
           sql`SELECT lc.name as tag_name, lr.amount, lr.recordDate
               FROM ledger_records lr
               INNER JOIN ledger_categories lc ON lc.id = lr.categoryId

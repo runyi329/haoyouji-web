@@ -1,6 +1,8 @@
 import { getLedgerDb, getDbConnection, withDatabaseLock } from "./db";
 import { pinyin } from 'pinyin-pro';
 import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
+import { TRPCError } from '@trpc/server';
+import { getLedgerRecordDateError } from '../shared/ledger-record-date';
 
 /**
  * 从公司名提取拼音首字母缩写
@@ -3088,6 +3090,10 @@ export async function addTransaction(data: {
   overwriteExisting?: boolean; // 37号账本重复日期+标签时，仅在用户明确确认后覆盖
   aaLockHeld?: boolean; // 内部标记：同日同标签命名锁已持有
 }): Promise<{ id: number; success: boolean; needApproval: boolean; approverIds: number[]; overwritten: boolean }> {
+  // 仅限制37号实际账目；必须在加锁、覆盖旧记录及其他写入前拒绝未来日期。
+  const dateError = getLedgerRecordDateError(data.ledgerId, data.transactionDate);
+  if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
+
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
@@ -4037,7 +4043,7 @@ export async function restoreTransaction(
   
   // 获取记录信息
   const [recordRows] = await conn.execute(
-    'SELECT id, ledgerId, deleted_at FROM ledger_records WHERE id = ? LIMIT 1',
+    "SELECT id, ledgerId, DATE_FORMAT(recordDate, '%Y-%m-%d') AS recordDate, deleted_at FROM ledger_records WHERE id = ? LIMIT 1",
     [recordId]
   ) as any;
   
@@ -4046,6 +4052,9 @@ export async function restoreTransaction(
   }
   
   const record = recordRows[0];
+  // 恢复同样是实际账目写入：按记录真实账本校验，不删除或改动未来误录的旧记录。
+  const dateError = getLedgerRecordDateError(record.ledgerId, record.recordDate);
+  if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
   
   if (!record.deleted_at) {
     throw new Error("该记录未被删除");
@@ -4146,6 +4155,10 @@ export async function updateTransaction(
   const finalType = data.type ?? oldRecord.type;
   const finalCategoryId = data.categoryId ?? oldRecord.categoryId;
   const finalTransactionDate = data.transactionDate ?? oldRecord.recordDate;
+  // 即使仅编辑备注/金额，也必须校验最终日期；可将历史未来误录纠正为今天或过去。
+  const dateError = getLedgerRecordDateError(oldRecord.ledgerId, finalTransactionDate);
+  if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
+
   if (oldRecord.ledgerId === 37 && finalType !== 'transfer' && !data.aaLockHeld) {
     const lockName = `ledger37:${finalCategoryId}:${finalTransactionDate}`;
     return withDatabaseLock(lockName, () => updateTransaction(recordId, userId, { ...data, aaLockHeld: true }));

@@ -9,6 +9,8 @@
 
 import { getDbConnection } from "./db";
 import { isAIFeatureEnabled } from './ai-monitor';
+import { TRPCError } from '@trpc/server';
+import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from '../shared/ledger-record-date';
 
 // ==================== 数据库迁移 ====================
 
@@ -455,6 +457,11 @@ async function executeTask(
   for (const action of parsedPlan.actions) {
     if (action.type === 'add_transaction') {
       try {
+        // 仅37号实际账目使用北京时间今天；历史补录允许，未来误录必须在INSERT前拒绝。
+        const today = action.record_date || (ledgerId === 37 ? getBeijingLedgerRecordToday() : new Date().toISOString().split('T')[0]);
+        const dateError = getLedgerRecordDateError(ledgerId, today);
+        if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
+
         // 获取AI分身的memberId
         const [aiMemberRows] = await conn.execute(
           'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? LIMIT 1',
@@ -476,9 +483,6 @@ async function executeTask(
           categoryId = otherCat?.[0]?.id || 1;
         }
 
-        // 获取今天的日期
-        // 使用action中指定的日期，如果没有则用今天（支持补录历史账目）
-        const today = action.record_date || new Date().toISOString().split('T')[0];
         // 计算实际金额：支持随机范围围
         let actualAmount: number;
         if (action.amount_min !== undefined && action.amount_max !== undefined) {

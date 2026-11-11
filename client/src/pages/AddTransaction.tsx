@@ -41,6 +41,8 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
 import { setSmartAccountingLastPage } from "@/lib/smartAccountingNavigation";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
+import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
+import { formatLedgerRecordDate, getLedgerRecordInitialDate } from "@/lib/ledgerRecordDate";
 
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -177,10 +179,10 @@ const AddTransaction = () => {
   
   // 日期相关状态：支持 ?date=YYYY-MM-DD URL 参数预设日期
   const presetDateStr = urlParams.get('date');
-  const initDate = presetDateStr ? new Date(presetDateStr + 'T00:00:00') : new Date();
+  const initDate = getLedgerRecordInitialDate(ledgerId, presetDateStr);
   const [selectedDate, setSelectedDate] = useState(initDate);
   const [displayDate, setDisplayDate] = useState(initDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
-  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarMonth, setCalendarMonth] = useState(initDate);
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
   const [showDateConfirm, setShowDateConfirm] = useState(false);
   const [pendingDate, setPendingDate] = useState<Date | null>(null);
@@ -197,12 +199,15 @@ const AddTransaction = () => {
   }, [amount]);
 
   // 当天日期字符串
-  const selectedDateStr = useMemo(() => {
-    const y = selectedDate.getFullYear();
-    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const d = String(selectedDate.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }, [selectedDate]);
+  const selectedDateStr = useMemo(() => formatLedgerRecordDate(selectedDate), [selectedDate]);
+  const recordDateError = getLedgerRecordDateError(ledgerId, selectedDateStr);
+
+  // max/禁用日历仅是交互提示；每个写账入口仍须实时校验，防止键盘或URL绕过。
+  const validateRecordDate = (date: unknown) => {
+    const error = getLedgerRecordDateError(ledgerId, date);
+    if (error) toast.error(error);
+    return !error;
+  };
 
   // 当前选中的最终类目 ID
   const currentCategoryId = selectedCategoryPath.length > 0
@@ -355,15 +360,14 @@ const AddTransaction = () => {
       toast.error('请输入金额');
       return;
     }
-    const y = capitalDate.getFullYear();
-    const m = String(capitalDate.getMonth() + 1).padStart(2, '0');
-    const d = String(capitalDate.getDate()).padStart(2, '0');
+    const transactionDate = formatLedgerRecordDate(capitalDate);
+    if (!validateRecordDate(transactionDate)) return;
     addCapitalMutation.mutate({
       ledgerId,
       amount: parseFloat(capitalAmount),
       type: 'transfer',
       categoryId: currentCategoryId!,
-      transactionDate: `${y}-${m}-${d}`,
+      transactionDate,
       description: capitalNote ? `${capitalSubType}:${capitalNote}` : capitalSubType,
     });
   };
@@ -397,15 +401,14 @@ const AddTransaction = () => {
       toast.error('请输入金额');
       return;
     }
-    const y = transferDate.getFullYear();
-    const m = String(transferDate.getMonth() + 1).padStart(2, '0');
-    const d = String(transferDate.getDate()).padStart(2, '0');
+    const transactionDate = formatLedgerRecordDate(transferDate);
+    if (!validateRecordDate(transactionDate)) return;
     addTransferMutation.mutate({
       ledgerId,
       amount: parseFloat(transferAmount),
       type: 'transfer',
       categoryId: currentCategoryId!,
-      transactionDate: `${y}-${m}-${d}`,
+      transactionDate,
       description: transferNote ? `${transferSubType}:${transferNote}` : transferSubType,
     });
   };
@@ -424,8 +427,13 @@ const AddTransaction = () => {
       setTransactionType(editTransaction.type as TransactionType);
       setAmount(editTransaction.amount.toString());
       setNote(editTransaction.description || "");
-      setSelectedDate(new Date(editTransaction.recordDate));
-      setDisplayDate(new Date(editTransaction.recordDate).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      // 保留历史未来日期供用户修正，不自动改成今天；保存时必须通过同一校验。
+      const recordDate = ledgerId === 37
+        ? getLedgerRecordInitialDate(ledgerId, editTransaction.recordDate)
+        : new Date(editTransaction.recordDate);
+      setSelectedDate(recordDate);
+      setDisplayDate(recordDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      setCalendarMonth(recordDate);
       
       // 设置分类路径
       if (editTransaction.categoryPath && editTransaction.categoryPath.length > 0) {
@@ -627,6 +635,7 @@ const AddTransaction = () => {
 
   // 判断是否是今天
   const isToday = (date: Date) => {
+    if (ledgerId === 37) return formatLedgerRecordDate(date) === getBeijingLedgerRecordToday();
     const today = new Date();
     return date.getDate() === today.getDate() &&
            date.getMonth() === today.getMonth() &&
@@ -713,6 +722,7 @@ const AddTransaction = () => {
 
   // 处理日期选择
   const handleDateSelect = (date: Date) => {
+    if (!validateRecordDate(formatLedgerRecordDate(date))) return;
     // 非交易日不可选
     if (isNonTradingDay(date)) {
       const label = isNonTradingDay(date);
@@ -734,6 +744,7 @@ const AddTransaction = () => {
   // 确认日期选择
   const confirmDateSelect = () => {
     if (pendingDate) {
+      if (!validateRecordDate(formatLedgerRecordDate(pendingDate))) return;
       setSelectedDate(pendingDate);
       setDisplayDate(pendingDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
       setIsDateSheetOpen(false);
@@ -750,7 +761,7 @@ const AddTransaction = () => {
 
   // 切换到今天
   const goToToday = () => {
-    const today = new Date();
+    const today = getLedgerRecordInitialDate(ledgerId);
     setSelectedDate(today);
     setDisplayDate(today.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
     setCalendarMonth(today);
@@ -877,6 +888,7 @@ const AddTransaction = () => {
 
   const handleConfirmOverwrite = () => {
     if (!pendingDuplicatePayload || addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
+    if (!validateRecordDate(pendingDuplicatePayload.transactionDate)) return;
     const overwritePayload = {
       ...pendingDuplicatePayload,
       overwriteExisting: true,
@@ -891,6 +903,11 @@ const AddTransaction = () => {
   // 处理保存
   const handleSave = () => {
     if (addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
+    if (isEditMode && !editTransaction) {
+      toast.error("账目详情尚未加载，请稍后重试");
+      return;
+    }
+    if (!validateRecordDate(selectedDateStr)) return;
     // 余额记录保存（底部按钮仅用于余额记录，提现/入金已在折叠面板中独立处理）
     if (selectedCategoryPath.length === 0) {
       toast.error("请选择分类");
@@ -901,18 +918,13 @@ const AddTransaction = () => {
     // 调用后端API保存记账
     // selectedAccounts是数组,取第一个元素(如果存在)
     const accountIdNum = selectedAccounts.length > 0 ? parseInt(selectedAccounts[0]) : NaN;
-    // 格式化为 YYYY-MM-DD 格式，使用本地时间
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(selectedDate.getDate()).padStart(2, '0');
-    const formattedDate = `${year}-${month}-${day}`;
     
     const payload: any = {
       ledgerId,
       amount: Math.abs(parseFloat(amount) || 0),
       type: transactionType as 'income' | 'expense',
       categoryId: selectedCategoryPath[selectedCategoryPath.length - 1],
-      transactionDate: formattedDate,
+      transactionDate: selectedDateStr,
       description: note || undefined,
       images: uploadedImages.length > 0 ? uploadedImages : undefined,
       stockCodes: isCustomAA ? stockInputs.filter(s => s.code.trim()).map(s => ({ code: s.code.trim(), name: s.name })) : undefined,
@@ -1495,6 +1507,15 @@ const AddTransaction = () => {
                 {userRole === 'owner' && (
                 <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
                   <div className="text-xs text-gray-400 mb-3 font-medium">添加提现记录</div>
+                  {ledgerId === 37 && (
+                    <label className="block mb-2 text-xs text-gray-500">
+                      提现日期
+                      <input type="date" value={formatLedgerRecordDate(transferDate)}
+                        max={getBeijingLedgerRecordToday()}
+                        onChange={(event) => setTransferDate(new Date(`${event.target.value}T00:00:00`))}
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                    </label>
+                  )}
                   {/* 金额输入 */}
                   <div className="flex gap-2 mb-2">
                     <input
@@ -1598,6 +1619,15 @@ const AddTransaction = () => {
                 {userRole === 'owner' && (
                 <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
                   <div className="text-xs text-gray-400 mb-3 font-medium">添加本金变动</div>
+                  {ledgerId === 37 && (
+                    <label className="block mb-2 text-xs text-gray-500">
+                      本金变动日期
+                      <input type="date" value={formatLedgerRecordDate(capitalDate)}
+                        max={getBeijingLedgerRecordToday()}
+                        onChange={(event) => setCapitalDate(new Date(`${event.target.value}T00:00:00`))}
+                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                    </label>
+                  )}
                   {/* 类型切换 */}
                   <div className="flex gap-2 mb-3">
                     <button
@@ -2449,6 +2479,20 @@ const AddTransaction = () => {
       <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
         <SheetContent side="bottom" className="h-auto max-h-[90vh] overflow-y-auto">
           <div className="p-4 max-w-lg mx-auto">
+            {ledgerId === 37 && <label className="block mb-3 text-sm text-gray-600">
+              账目日期
+              <input
+                type="date"
+                value={selectedDateStr}
+                max={ledgerId === 37 ? getBeijingLedgerRecordToday() : undefined}
+                onChange={(event) => {
+                  if (!event.target.value) return;
+                  handleDateSelect(new Date(`${event.target.value}T00:00:00`));
+                }}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </label>}
+            {recordDateError && <p role="alert" className="mb-3 text-sm text-red-600">{recordDateError}，请选择今天或历史日期后保存。</p>}
             {/* 日期导航 */}
             <div className="flex items-center mb-3 relative">
               {/* 外层箭头 - 控制年份 */}
@@ -2501,19 +2545,22 @@ const AddTransaction = () => {
                 const isSelected = isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
                 const nonTradingLabel = isCurrentMonth ? isNonTradingDay(day) : null;
+                const dateError = getLedgerRecordDateError(ledgerId, formatLedgerRecordDate(day));
+                const isDisabled = !!nonTradingLabel || !!dateError;
 
                 return (
                   <button
                     key={index}
                     onClick={() => handleDateSelect(day)}
-                    disabled={!!nonTradingLabel}
+                    disabled={isDisabled}
+                    title={dateError || undefined}
                     className={`
                       h-9 sm:h-10 flex flex-col items-center justify-center text-sm rounded
                       ${!isCurrentMonth ? "text-gray-300" : ""}
-                      ${nonTradingLabel ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}
-                      ${isSelected && !nonTradingLabel ? "bg-[#D32F2F] text-white font-semibold" : ""}
-                      ${isTodayDate && !isSelected && !nonTradingLabel ? "border border-[#D32F2F]" : ""}
-                      ${isCurrentMonth && !isSelected && !nonTradingLabel ? "hover:bg-gray-100 text-[#222222]" : ""}
+                      ${isDisabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}
+                      ${isSelected && !isDisabled ? "bg-[#D32F2F] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected && !isDisabled ? "border border-[#D32F2F]" : ""}
+                      ${isCurrentMonth && !isSelected && !isDisabled ? "hover:bg-gray-100 text-[#222222]" : ""}
                     `}
                   >
                     <span className="leading-none">{day.getDate()}</span>
