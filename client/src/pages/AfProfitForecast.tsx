@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 
 // 折扣档位系数（与AfOrderManage一致）
 const EQUITY_DISCOUNT_RATES: Record<number, number> = {
@@ -39,6 +40,11 @@ export default function AfProfitForecast() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
+  const { data: switch525Data } = trpc.ledger.af525GetSwitch.useQuery(
+    { ledgerId },
+    { enabled: ledgerId === 52, staleTime: 30_000, refetchOnWindowFocus: true }
+  );
+  const orderMultiplier = ledgerId === 52 && (switch525Data as any)?.enabled ? 5 : 5.25;
 
   // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
@@ -121,10 +127,12 @@ export default function AfProfitForecast() {
     return coinOrders
       .filter((o: any) => o.side === 'buy' && o.status === 'completed' && o.sellStatus !== 'sold')
       .reduce((sum: number, o: any) => {
+        const feeStartAt = getAfManagementFeeStartAt(o);
+        if (!feeStartAt) return sum;
         const amount = parseFloat(o.amount || '0');
         const tradeValue = o.isGift ? amount : amount * orderMultiplier;
         const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-        const confirmedDate = new Date(o.createdAt);
+        const confirmedDate = new Date(feeStartAt);
         const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
         const holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
         return sum + dailyFee * holdDays;
@@ -362,6 +370,7 @@ export default function AfProfitForecast() {
                     const oPnlColor = oPnl >= 0 ? "text-red-400" : "text-green-700";
                     const name = o.nickname || o.username || `用户${o.userId}`;
                     const tierLabel = rate < 1.0 ? `${Math.round(rate * 100)}%` : null;
+                    const feeStartAt = getAfManagementFeeStartAt(o);
                     return (
                       <div key={o.id} className="flex items-center px-4 py-2 gap-2 text-xs">
                         <span className="text-gray-700 font-medium w-16 truncate">{name}</span>
@@ -369,6 +378,7 @@ export default function AfProfitForecast() {
                           {fmtQ(activeCoin, qty)}
                           {tierLabel && <span className="text-gray-300 ml-0.5">×{tierLabel}</span>}
                           {rate < 1 && <span className={`ml-1 ${COIN_COLOR[activeCoin] || "text-gray-600"}`}>={fmtQ(activeCoin, effQ)}</span>}
+                          {(o.isAdvanced || o.advancedOrderId || !feeStartAt) && <span className="block text-[10px] text-gray-400">{feeStartAt ? `成交日起计费 ${new Date(feeStartAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })}` : '成交时间待核对 · 0天 / 0管理费'}</span>}
                         </span>
                         {currentSimulPrice > 0 && (
                           <span className={`font-semibold ${oPnlColor}`}>

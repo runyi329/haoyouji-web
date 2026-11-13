@@ -9,6 +9,7 @@ import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
 import { getStockChipDistribution } from "./stock-chip-distribution";
 import { afEffectiveOrderStatusSql, getAfGiftActivationError } from "@shared/af-gift-order-state";
+import { afManagementFeeStartAtSql, afHasAdvancedFeeSourceSql, getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
@@ -20996,7 +20997,7 @@ ${klinesSummary}
         // 幂等：确保 prepaid_fee 字段存在
         try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN prepaid_fee DECIMAL(20,8) NOT NULL DEFAULT 0`); } catch {}
         const [rows] = await db.execute(
-          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
+          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at, ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
@@ -21093,6 +21094,7 @@ ${klinesSummary}
             weeklyYieldRate: isAdvanced ? Number(r.weekly_yield_rate || 0) : null,
             reachedAt: r.reached_at || null,
             fulfilledAt: r.fulfilled_at || null,
+            managementFeeStartAt: r.management_fee_start_at || null,
             fulfilledPrice: isAdvanced && r.fulfilled_price ? String(r.fulfilled_price) : null,
             fulfilledQuantity: isAdvanced && r.fulfilled_quantity ? String(r.fulfilled_quantity) : null,
             cancelledAt: r.cancelled_at || null,
@@ -21248,7 +21250,7 @@ ${klinesSummary}
         }
         // prepaid_fee 字段和 af_fee_prepaid_logs 表已在生产环境建好，无需每次 ALTER
         const [rows] = await db.execute(
-          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
+          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at, ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
                      u.username, COALESCE(u.name,'') as user_name,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
@@ -21293,6 +21295,7 @@ ${klinesSummary}
           weeklyYieldRate: r.weekly_yield_rate ? Number(r.weekly_yield_rate) : null,
           reachedAt: r.reached_at || null,
           fulfilledAt: r.fulfilled_at || null,
+          managementFeeStartAt: r.management_fee_start_at || null,
           fulfilledPrice: r.fulfilled_price ? String(r.fulfilled_price) : null,
           fulfilledQuantity: r.fulfilled_quantity ? String(r.fulfilled_quantity) : null,
           cancelledAt: r.cancelled_at || null,
@@ -21397,7 +21400,7 @@ ${klinesSummary}
               // 查询赠予订单基本信息
               const [giftRows] = await (conn as any).execute(
                 `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
-                        ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
+                        ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at, ${afManagementFeeStartAtSql("g")} AS management_fee_start_at,
                         COALESCE(g.tier_mode, 'step') as tier_mode,
                         u.username, COALESCE(u.name,'') as user_name,
                         CASE WHEN r525.id IS NULL THEN 0 ELSE 1 END as is_525_gift
@@ -21457,6 +21460,7 @@ ${klinesSummary}
                     status: String(g.status || ''),
                     sellStatus: g.sell_status ? String(g.sell_status) : null,
                     giftMultiplier: String(g.gift_multiplier || ''),
+                    managementFeeStartAt: g.management_fee_start_at || null,
                     // 常规拨比以赠单生成当日冻结的倍率为准，不再关联当前配置表，避免历史重复行放大为多条展示。
                     payoutRatio: Number(g.is_525_gift || 0) === 1 ? null : (Number(g.gift_multiplier || 0) * 100).toFixed(2),
                     is525Gift: Number(g.is_525_gift || 0) === 1,
@@ -21614,7 +21618,7 @@ ${klinesSummary}
         //    进行中 = 已成交且未卖出的买单（status='completed' 且没有对应卖单已成交）
         //    已结清 = 已卖出的买单（对应卖单status='completed'）
         const buyOrderRows = await db.execute(
-          sql`SELECT o.id, o.amount, o.status, o.updated_at, o.created_at,
+          sql`SELECT o.id, o.amount, o.status, o.updated_at, o.created_at, ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
                      COALESCE(o.is_gift, 0) as is_gift,
                      COALESCE(o.gift_multiplier, '5.25') as gift_multiplier,
                      COALESCE(o.sell_status, '') as sell_status_val,
@@ -21644,8 +21648,10 @@ ${klinesSummary}
           const isGift = parseInt(bo.is_gift || '0') === 1;
           const tradeValue = isGift ? amount : amount * activeOrderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-          // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
-          const confirmedDate = new Date(bo.created_at);
+          // 高级委托从履约成交日起计费；普通订单仍从原下单日起计费。
+          const feeStartAt = getAfManagementFeeStartAt(bo);
+          if (!feeStartAt) continue;
+          const confirmedDate = new Date(feeStartAt);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
           if (bo.sell_status_val === 'sold') {
             // 已结清：从下单日到卖出确认日
@@ -21958,7 +21964,10 @@ ${klinesSummary}
         await ensureAfSimulationColumns();
         if (input.ledgerId === 52) await ensureAfWalletHoldColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated,
+              ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
+              ${sql.raw(afHasAdvancedFeeSourceSql("o"))} AS has_advanced_fee_source
+              FROM af_orders o WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -22064,8 +22073,10 @@ ${klinesSummary}
           }
           console.log(`[AF卖出成交] 订单#${input.orderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${actualSellPrice}, 原始币数=${originalQty}, 模式=${resolvedTierMode}, 折扣率=${discountRate.toFixed(4)}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
           
-          // 计算累计管理费：从下单时间（created_at）开始，修改价格等操作不影响管理费
-          const confirmedDate = new Date(order.created_at);
+          // 高级委托及关联赠单从真实履约成交日起算，不计挂单等待期。
+          const feeStartAt = getAfManagementFeeStartAt(order);
+          if (!feeStartAt) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未取得有效计费起点，请核对高级委托成交时间后再结算' });
+          const confirmedDate = new Date(feeStartAt);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
           const todayNow = new Date();
           const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
@@ -22081,7 +22092,7 @@ ${klinesSummary}
           ) as any;
           const prepaidFee = parseFloat((prepaidFeeRow[0]?.[0] ?? prepaidFeeRow[0])?.prepaid_fee || '0');
           const managementFee = Math.max(0, totalManagementFee - prepaidFee);
-          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 下单日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 总管理费=${totalManagementFee.toFixed(4)}, 已预收=${prepaidFee.toFixed(4)}, 待付管理费=${managementFee.toFixed(4)}`);
+          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 计费起始日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 总管理费=${totalManagementFee.toFixed(4)}, 已预收=${prepaidFee.toFixed(4)}, 待付管理费=${managementFee.toFixed(4)}`);
 
           // 所有赠单均按赠送价值收取一次性2‰手续费；它不从正单本金中扣除。
           const handlingFee = isGift ? oldAmount * 0.002 : 0;
@@ -22908,8 +22919,9 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, amount, status, sell_status, created_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift
-              FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, amount, status, sell_status, created_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift,
+              ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at
+              FROM af_orders o WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -22920,7 +22932,9 @@ ${klinesSummary}
         const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
         const tradeValue = isGift ? oldAmount : oldAmount * activeOrderMultiplier;
         const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-        const confirmedDate = new Date(order.created_at);
+        const feeStartAt = getAfManagementFeeStartAt(order);
+        if (!feeStartAt) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '高级委托尚未成交或成交时间缺失，不能收取管理费' });
+        const confirmedDate = new Date(feeStartAt);
         const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
         const todayDay = new Date(); const td = new Date(todayDay.getFullYear(), todayDay.getMonth(), todayDay.getDate());
         const holdDays = Math.max(1, Math.floor((td.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
@@ -22973,8 +22987,10 @@ ${klinesSummary}
         const myRole2 = (roleRows2[0]?.[0]?.role ?? roleRows2[0]?.role ?? '');
         const isAdmin = myRole2 === 'owner' || myRole2 === 'admin';
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, amount, created_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift
-              FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}
+          sql`SELECT id, user_id, coin, amount, created_at, sell_status, sell_confirmed_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift,
+              ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
+              ${sql.raw(afHasAdvancedFeeSourceSql("o"))} AS has_advanced_fee_source
+              FROM af_orders o WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}
               ${isAdmin ? sql`` : sql`AND user_id = ${targetUserId}`} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
@@ -22996,10 +23012,12 @@ ${klinesSummary}
           const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
           const tradeValue = isGift ? oldAmount : oldAmount * activeOrderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-          const confirmedDate = new Date(order.created_at);
-          const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-          const todayDay = new Date(); const td = new Date(todayDay.getFullYear(), todayDay.getMonth(), todayDay.getDate());
-          const holdDays = Math.max(1, Math.floor((td.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          const feeStartAt = getAfManagementFeeStartAt(order);
+          const confirmedDate = feeStartAt ? new Date(feeStartAt) : null;
+          const confirmedDay = confirmedDate ? new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate()) : null;
+          const todayDay = Number(order.has_advanced_fee_source) === 1 && order.sell_status === 'sold' && order.sell_confirmed_at ? new Date(order.sell_confirmed_at) : new Date();
+          const td = new Date(todayDay.getFullYear(), todayDay.getMonth(), todayDay.getDate());
+          const holdDays = confirmedDay ? Math.max(1, Math.floor((td.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
           const totalFee = dailyFee * holdDays;
           const prepaidFee = parseFloat(order.prepaid_fee || '0');
           return { logs, totalFee: +totalFee.toFixed(4), prepaidFee: +prepaidFee.toFixed(4), remainingFee: +(totalFee - prepaidFee).toFixed(4) };
@@ -23053,7 +23071,9 @@ ${klinesSummary}
         const targetUserId = input.viewAsUserId || ctx.user.id;
         // 查询目标用户所有买单（委托中 + 已成交 + 委卖中 + 已卖出，不含已撤销）
         const orderRows = await db.execute(
-          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift, o.sell_confirmed_at, o.created_at, o.updated_at
+          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift, o.sell_confirmed_at, o.created_at, o.updated_at,
+              ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at,
+              ${sql.raw(afHasAdvancedFeeSourceSql("o"))} AS has_advanced_fee_source
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
                 AND o.side = 'buy' AND o.status IN ('pending', 'completed')
@@ -23118,10 +23138,11 @@ ${klinesSummary}
             const isGift2 = parseInt(order.is_gift || '0') === 1;
             const tradeValue2 = isGift2 ? principal2 : principal2 * activeOrderMultiplier;
             const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
-            const createdDay2 = new Date(order.created_at);
-            const createdDayStart2 = new Date(createdDay2.getFullYear(), createdDay2.getMonth(), createdDay2.getDate());
+            const feeStartAt2 = getAfManagementFeeStartAt(order);
+            const createdDay2 = feeStartAt2 ? new Date(feeStartAt2) : null;
+            const createdDayStart2 = createdDay2 ? new Date(createdDay2.getFullYear(), createdDay2.getMonth(), createdDay2.getDate()) : null;
             const todayStart2 = new Date(); const ts2 = new Date(todayStart2.getFullYear(), todayStart2.getMonth(), todayStart2.getDate());
-            const holdDays2 = Math.max(1, Math.floor((ts2.getTime() - createdDayStart2.getTime()) / (1000*60*60*24)) + 1);
+            const holdDays2 = createdDayStart2 ? Math.max(1, Math.floor((ts2.getTime() - createdDayStart2.getTime()) / (1000*60*60*24)) + 1) : 0;
             coinPnl[coin].totalMgmtFee += dailyFee2 * holdDays2;
           }
           if (order.sell_status === 'sold') {
@@ -23138,7 +23159,15 @@ ${klinesSummary}
               const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
               const todayDayOnly = new Date();
               const todayDay = new Date(todayDayOnly.getFullYear(), todayDayOnly.getMonth(), todayDayOnly.getDate());
-              const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+              let holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+              if (Number(order.has_advanced_fee_source) === 1) {
+                const feeStartAt = getAfManagementFeeStartAt(order);
+                const feeStart = feeStartAt ? new Date(feeStartAt) : null;
+                const feeEnd = order.sell_confirmed_at ? new Date(order.sell_confirmed_at) : null;
+                const startDay = feeStart ? new Date(feeStart.getFullYear(), feeStart.getMonth(), feeStart.getDate()) : null;
+                const endDay = feeEnd ? new Date(feeEnd.getFullYear(), feeEnd.getMonth(), feeEnd.getDate()) : null;
+                holdDays = startDay && endDay ? Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / 86400000) + 1) : 0;
+              }
               const tradeValue = isGift ? principal : principal * activeOrderMultiplier;
               const dailyFee = tradeValue / 0.75 * 0.12 / 365;
               const managementFee = dailyFee * holdDays;
@@ -23185,7 +23214,7 @@ ${klinesSummary}
 
         // 计算团队均价：查询整个账本所有用户的持仓订单，算含费均价
         const teamOrderRows = await db.execute(
-          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.is_gift, o.created_at
+          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.is_gift, o.created_at, ${sql.raw(afManagementFeeStartAtSql("o"))} AS management_fee_start_at
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'
                 AND (o.sell_status IS NULL OR o.sell_status != 'sold')
@@ -23220,9 +23249,10 @@ ${klinesSummary}
           const isGift = parseInt(order.is_gift || '0') === 1;
           const tv = isGift ? principal : principal * activeOrderMultiplier;
           const df = tv / 0.75 * 0.12 / 365;
-          const cd = new Date(order.created_at);
-          const cds = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate());
-          const days = Math.max(1, Math.floor((todayTeamStart.getTime() - cds.getTime()) / (1000*60*60*24)) + 1);
+          const feeStartAt = getAfManagementFeeStartAt(order);
+          const cd = feeStartAt ? new Date(feeStartAt) : null;
+          const cds = cd ? new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()) : null;
+          const days = cds ? Math.max(1, Math.floor((todayTeamStart.getTime() - cds.getTime()) / (1000*60*60*24)) + 1) : 0;
           teamPnl[coin].mgmtFee += df * days;
         }
         // 将团队均价写入 coins
@@ -32816,7 +32846,7 @@ ${klinesSummary}
         const total = Number((countRows as any[])[0]?.cnt || 0);
         const [rows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.quantity, o.limit_price, o.sell_price, o.status, o.order_type, o.sell_status,
-                  o.is_gift, o.tier_mode, o.created_at, o.confirmed_at, o.sell_confirmed_at,
+                  o.is_gift, o.tier_mode, o.created_at, o.confirmed_at, o.sell_confirmed_at, ${afManagementFeeStartAtSql("o")} AS management_fee_start_at,
                   o.all_time_low_price,
                   COALESCE(t.max_tier, 0) as equity_tier,
                   u.name as userName, u.username
@@ -32839,13 +32869,13 @@ ${klinesSummary}
           const ph2 = ids.map(() => '?').join(',');
           const [extraRows] = await (conn as any).execute(
             `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
-                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at, ${afManagementFeeStartAtSql("g")} AS management_fee_start_at,
                     g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
                     gu.name as userName, gu.username,
                     src.id as src_id, src.coin as src_coin, src.amount as src_amount, src.quantity as src_quantity,
                     src.limit_price as src_limit_price, src.sell_price as src_sell_price, src.status as src_status,
                     src.sell_status as src_sell_status, src.order_type as src_order_type,
-                    src.created_at as src_created_at, src.confirmed_at as src_confirmed_at,
+                    src.created_at as src_created_at, src.confirmed_at as src_confirmed_at, ${afManagementFeeStartAtSql("src")} AS src_management_fee_start_at,
                     src.sell_confirmed_at as src_sell_confirmed_at, src.tier_mode as src_tier_mode,
                     COALESCE(st.max_tier,0) as src_equity_tier, src.all_time_low_price as src_all_time_low_price,
                     su.name as src_userName, su.username as src_username
@@ -32870,7 +32900,7 @@ ${klinesSummary}
           const gph = mainOrderIds.map(() => '?').join(',');
           const [giftRows] = await (conn as any).execute(
             `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
-                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at, ${afManagementFeeStartAtSql("g")} AS management_fee_start_at,
                     g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
                     gu.name as userName, gu.username
              FROM af_orders g
@@ -32897,6 +32927,7 @@ ${klinesSummary}
               equityTier: Number(g.equity_tier || 0),
               allTimeLowPrice: g.all_time_low_price ? parseFloat(g.all_time_low_price) : null,
               createdAt: g.created_at ? String(g.created_at) : '',
+              managementFeeStartAt: g.management_fee_start_at || null,
               confirmedAt: g.confirmed_at ? String(g.confirmed_at) : '',
               sellConfirmedAt: g.sell_confirmed_at ? String(g.sell_confirmed_at) : '',
               userName: g.userName || g.username || '',
@@ -32916,6 +32947,7 @@ ${klinesSummary}
           status: g.status || '',
           orderType: '',
           createdAt: g.created_at ? String(g.created_at) : '',
+              managementFeeStartAt: g.management_fee_start_at || null,
           confirmedAt: g.confirmed_at ? String(g.confirmed_at) : '',
           sellConfirmedAt: g.sell_confirmed_at ? String(g.sell_confirmed_at) : '',
           isGift: true,
@@ -32937,6 +32969,7 @@ ${klinesSummary}
             sellStatus: g.src_sell_status || null,
             orderType: g.src_order_type || '',
             createdAt: g.src_created_at ? String(g.src_created_at) : '',
+            managementFeeStartAt: g.src_management_fee_start_at || null,
             confirmedAt: g.src_confirmed_at ? String(g.src_confirmed_at) : '',
             sellConfirmedAt: g.src_sell_confirmed_at ? String(g.src_sell_confirmed_at) : '',
             tierMode: g.src_tier_mode || 'step',
@@ -32958,6 +32991,7 @@ ${klinesSummary}
             status: r.status || '',
             orderType: r.order_type || '',
             createdAt: r.created_at ? String(r.created_at) : '',
+            managementFeeStartAt: r.management_fee_start_at || null,
             confirmedAt: r.confirmed_at ? String(r.confirmed_at) : '',
             sellConfirmedAt: r.sell_confirmed_at ? String(r.sell_confirmed_at) : '',
             isGift: r.is_gift === 1 || r.is_gift === '1',

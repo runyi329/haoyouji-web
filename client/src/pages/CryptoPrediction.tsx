@@ -11,6 +11,7 @@ import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/Fu
 import { OkxCommissionPreview } from "@/components/OkxCommissionPreview";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Bitcoin,
   AlertCircle, WifiOff, CheckCircle2, Circle, Loader2, Users,
@@ -1458,6 +1459,9 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
   const isAdvanced = Boolean((order as any).isAdvanced || order.orderType === '高级委托');
   const isContract = !isAdvanced && (!!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约');
   const isCompleted = order.status === 'completed';
+  const feeStartAt = getAfManagementFeeStartAt({ ...order, isAdvanced });
+  const showFulfillmentFeeStart = isAdvanced || order.advancedOrderId || !feeStartAt
+    || new Date(feeStartAt).getTime() !== new Date(order.createdAt).getTime();
   // MySQL时间按北京时间写入；tRPC可能还原为Date对象，展示时使用UTC字段避免重复加8小时。
   const formatOrderDateTime = (value: any): string => {
     if (!value) return '(无数据)';
@@ -1640,8 +1644,8 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
           </>
         )}
 
-        {/* 管理费（仅已成交订单显示） */}
-        {order.side === 'buy' && isContract && (() => {
+        {/* 管理费：高级委托成交后开始计费，普通订单规则不变 */}
+        {order.side === 'buy' && (isContract || isAdvanced) && (() => {
           // 成交价値：普通订单按当前开关倍率计算，赠送订单直接使用自身市值
           const amount = parseFloat(order.amount);
           const tradeValue = order.isGift ? amount : amount * orderMultiplier;
@@ -1649,13 +1653,13 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
           // 已撤单的委买订单：管理费为0（撤单时全额退回本金，未实际收取管理费）
           const isCancelledBuy = order.status === 'cancelled';
           // 持仓天数：已卖出锁定到卖出成交日，否则实时到今天
-          const startDate = new Date(order.createdAt);
-          const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          const startDate = feeStartAt ? new Date(feeStartAt) : null;
+          const startDay = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()) : null;
           const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
           const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
           endDay.setHours(0,0,0,0);
-          const holdDays = isCancelledBuy ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-          const totalFee = isCancelledBuy ? 0 : dailyFee * holdDays;
+          const holdDays = isCancelledBuy || !startDay ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+          const totalFee = isCancelledBuy || !startDay ? 0 : dailyFee * holdDays;
           return (
             <>
               <div className="flex justify-between items-center">
@@ -1664,7 +1668,12 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
                   {isCancelledBuy ? '0 u（已撤单）' : `${dailyFee.toFixed(4)}u × ${holdDays}天 = ${totalFee.toFixed(4)}u`}
                 </span>
               </div>
-
+              {showFulfillmentFeeStart && (
+                <div className="flex justify-between items-center text-[11px] text-[#9CA3AF]">
+                  <span>成交日起计费</span>
+                  <span>{feeStartAt ? formatOrderDateTime(feeStartAt) : order.status === 'pending' ? '成交后开始计费' : '成交时间待核对'}</span>
+                </div>
+              )}
             </>
           );
         })()}
@@ -1707,13 +1716,13 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
           // 重新计算管理费（与上方管理费区块保持一致）
           const tradeValue2 = order.isGift ? actualInvestment : actualInvestment * orderMultiplier;
           const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
-          const startDate2 = new Date(order.createdAt);
-          const startDay2 = new Date(startDate2.getFullYear(), startDate2.getMonth(), startDate2.getDate());
+          const startDate2 = feeStartAt ? new Date(feeStartAt) : null;
+          const startDay2 = startDate2 ? new Date(startDate2.getFullYear(), startDate2.getMonth(), startDate2.getDate()) : null;
           const endDate2 = order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
           const endDay2 = new Date(endDate2.getFullYear(), endDate2.getMonth(), endDate2.getDate());
           endDay2.setHours(0,0,0,0);
-          const holdDays2 = Math.max(1, Math.floor((endDay2.getTime() - startDay2.getTime()) / (1000*60*60*24)) + 1);
-          const totalFee2 = dailyFee2 * holdDays2;
+          const holdDays2 = !startDay2 ? 0 : Math.max(1, Math.floor((endDay2.getTime() - startDay2.getTime()) / (1000*60*60*24)) + 1);
+          const totalFee2 = startDay2 ? dailyFee2 * holdDays2 : 0;
           const netProfit = grossProfit - totalFee2; // 净利润 = 差价收益 - 管理费
           const profitRatio = actualInvestment > 0 ? (netProfit / actualInvestment) * 100 : 0;
           const priceGrowth = buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice) * 100 : 0;
@@ -2083,13 +2092,13 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
               const dailyFee = tradeValue / 0.75 * 0.12 / 365;
               // 已撤单的委买订单：管理费为0
               const isCancelledBuy = order.status === 'cancelled';
-              const startDate = new Date(order.createdAt);
-              const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+              const startDate = feeStartAt ? new Date(feeStartAt) : null;
+              const startDay = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()) : null;
               const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
               const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
               endDay.setHours(0,0,0,0);
-              const holdDays = isCancelledBuy ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-              const totalFee = isCancelledBuy ? 0 : dailyFee * holdDays;
+              const holdDays = isCancelledBuy || !startDay ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+              const totalFee = isCancelledBuy || !startDay ? 0 : dailyFee * holdDays;
               const tierColor = currentTier === 0 ? '#0EA56A' : '#EF4444';
               const labelStyle = { color: '#6B7A9A' } as React.CSSProperties;
               const dimStyle = { color: '#9CA3AF' } as React.CSSProperties;
@@ -3599,7 +3608,7 @@ export default function CryptoPrediction() {
               )}
               {/* 管理费虚线触发区 */}
               {(!ordersLoading && orders.length > 0) && (() => {
-                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
+                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹' || o.isAdvanced || o.advancedOrderId || o.orderType === '高级委托'));
                 const activeFeeOrders = feeOrders.filter((o: any) => o.sellStatus !== 'sold');
                 if (activeFeeOrders.length === 0) return null;
                 let totalFee = 0;
@@ -3607,11 +3616,12 @@ export default function CryptoPrediction() {
                   const amount = parseFloat(o.amount);
                   const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                  const startDate = new Date(o.createdAt);
-                  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                  const feeStartAt = getAfManagementFeeStartAt(o);
+                  const startDate = feeStartAt ? new Date(feeStartAt) : null;
+                  const startDay = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()) : null;
                   const endDay = new Date(); endDay.setHours(0,0,0,0);
-                  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-                  totalFee += dailyFee * holdDays;
+                  const holdDays = !startDay ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                  totalFee += startDay ? dailyFee * holdDays : 0;
                 });
                 return (
                   <button
@@ -3626,21 +3636,25 @@ export default function CryptoPrediction() {
               })()}
               {/* 管理费小票弹窗 */}
               {showFeeModal && (() => {
-                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹') && o.sellStatus !== 'sold');
+                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹' || o.isAdvanced || o.advancedOrderId || o.orderType === '高级委托') && o.sellStatus !== 'sold');
                 const feeItems = feeOrders.map((o: any) => {
                   const amount = parseFloat(o.amount);
                   const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                  const startDate = new Date(o.createdAt);
-                  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                  const feeStartAt = getAfManagementFeeStartAt(o);
+                  const startDate = feeStartAt ? new Date(feeStartAt) : null;
+                  const startDay = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()) : null;
                   const endDay = new Date(); endDay.setHours(0,0,0,0);
-                  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-                  const fee = dailyFee * holdDays;
+                  const holdDays = !startDay ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                  const fee = startDay ? dailyFee * holdDays : 0;
                   const dateStr = (() => {
-                    const d = new Date(o.createdAt);
+                    if (!startDate) return o.status === 'pending' ? '成交后开始计费' : '成交时间待核对';
+                    const d = startDate;
                     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                   })();
-                  return { id: o.id, coin: o.coin, amount, dateStr, holdDays, dailyFee, fee };
+                  const showFulfillmentFeeStart = o.isAdvanced || o.advancedOrderId || o.orderType === '高级委托' || !feeStartAt
+                    || new Date(feeStartAt).getTime() !== new Date(o.createdAt).getTime();
+                  return { id: o.id, coin: o.coin, amount, dateStr, holdDays, dailyFee, fee, showFulfillmentFeeStart };
                 });
                 const totalFee = feeItems.reduce((s: number, i: any) => s + i.fee, 0);
                 return (
@@ -3665,7 +3679,7 @@ export default function CryptoPrediction() {
                         {/* 明细行 */}
                         {feeItems.map((item: any, idx: number) => (
                           <div key={item.id} className="grid text-xs py-2.5 px-4 items-center" style={{ gridTemplateColumns: '3fr 2fr 2fr 3fr', borderBottom: idx < feeItems.length - 1 ? '1px dashed #EEF2FF' : 'none' }}>
-                            <span style={{ color: '#6B7A9A' }}>{item.dateStr}</span>
+                            <span style={{ color: '#6B7A9A' }}>{item.dateStr}{item.showFulfillmentFeeStart && <span className="block text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>成交日起计费</span>}</span>
                             <span className="text-center font-medium" style={{ color: '#1A2340' }}>{item.coin}</span>
                             <span className="text-center" style={{ color: '#6B7A9A' }}>{item.holdDays}天</span>
                             <span className="text-right font-semibold" style={{ color: '#1A2340' }}>{item.fee.toFixed(4)}u</span>

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 import { matchesUserSearch } from "@/lib/userIdentity";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import Lottie from "lottie-react";
@@ -2725,11 +2726,13 @@ export default function LedgerDetail() {
     for (const o of (afAdminOrdersForTree as any[])) {
       if (o.side !== 'buy' || o.status !== 'completed') continue;
       if (o.sellStatus === 'sold') continue; // 已结清不计入应付
+      const feeStartAt = getAfManagementFeeStartAt(o);
+      if (!feeStartAt) continue;
       const amount = parseFloat(o.amount || '0');
       if (amount <= 0) continue;
       const tradeValue = o.isGift ? amount : amount * 5.25;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-      const confirmedDay = new Date(new Date(o.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }));
+      const confirmedDay = new Date(new Date(feeStartAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }));
       const holdDays = Math.max(1, Math.floor((todayStart2.getTime() - confirmedDay.getTime()) / 86400000) + 1);
       const totalFee = dailyFee * holdDays;
       const prepaid = parseFloat(o.prepaidFee || '0');

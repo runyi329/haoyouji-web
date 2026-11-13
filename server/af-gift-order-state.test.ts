@@ -8,6 +8,7 @@ import {
   afEffectiveOrderStatusSql,
   getAfGiftActivationError,
 } from '../shared/af-gift-order-state';
+import { afManagementFeeStartAtSql, afHasAdvancedFeeSourceSql, getAfManagementFeeStartAt } from '../shared/af-management-fee-start';
 
 // Do not import server/routers, any DB module, or business entry points here:
 // routers starts timers and DB modules may access/migrate the production database.
@@ -399,6 +400,7 @@ function pageHarness() {
     ({ tag, props: props ?? {}, children }));
   const context: Record<string, any> = {
     React: { createElement }, ChevronDown: 'offline-chevron', getBJDateOnly, getTodayBJDateOnly,
+    getAfManagementFeeStartAt,
   };
   runInNewContext(compiledPageFunctions, context, { timeout: 1000 });
   return {
@@ -1037,6 +1039,7 @@ function fullMutationHarness(name: 'afAdminUpdateOrder' | 'afCancelOrder', optio
     ensureAfWalletHoldColumns: vi.fn(async () => undefined),
     ensureAfAdvancedOrdersTable: vi.fn(async () => undefined),
     getAfGiftActivationError, setTimeout: timer,
+    getAfManagementFeeStartAt, afManagementFeeStartAtSql, afHasAdvancedFeeSourceSql,
     offlineImport: vi.fn(async (path: string) => {
       if (path !== './db') throw new Error(`Forbidden offline dynamic import: ${path}`);
       return { getDbConnection };

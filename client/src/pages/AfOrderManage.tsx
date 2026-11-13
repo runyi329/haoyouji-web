@@ -15,6 +15,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 
 // 综合状态标签（买入状态 + 卖出状态）
 const ORDER_TAG_CLASS = "inline-flex shrink-0 items-center rounded-[1px] px-1.5 py-0.5 text-[10px] font-medium leading-none text-white";
@@ -174,16 +175,17 @@ function FeeDetailModal({ orders, onClose, orderMultiplier }: { orders: any[], o
       const amount = parseFloat(o.amount || '0');
       const tradeValue = o.isGift ? amount : amount * orderMultiplier;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-      // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
-      const confirmedDay = getBJDateOnly(o.createdAt);
+      // 普通订单沿用下单日，高级委托从成交日起计费；修改价格不重置起点。
+      const feeStartAt = getAfManagementFeeStartAt(o);
+      const confirmedDay = feeStartAt ? getBJDateOnly(feeStartAt) : null;
       let holdDays: number;
       let feeType: string;
       if (o.sellStatus === 'sold' && o.sellConfirmedAt) {
         const sellDay = getBJDateOnly(o.sellConfirmedAt);
-        holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+        holdDays = confirmedDay ? Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1) : 0;
         feeType = '已结清';
       } else {
-        holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+        holdDays = confirmedDay ? Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1) : 0;
         feeType = '进行中';
       }
       const totalFee = dailyFee * holdDays;
@@ -250,6 +252,7 @@ function FeeDetailModal({ orders, onClose, orderMultiplier }: { orders: any[], o
                   <p className="text-xs font-medium">{item.dailyFee.toFixed(4)}</p>
                 </div>
               </div>
+              {(item.isAdvanced || item.advancedOrderId || !getAfManagementFeeStartAt(item)) && <p className="mt-1 text-[10px] text-gray-400">{getAfManagementFeeStartAt(item) ? `成交日起计费 ${new Date(getAfManagementFeeStartAt(item)!).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })}` : '成交时间待核对 · 0天 / 0管理费'}</p>}
             </div>
           ))}
           {feeItems.length === 0 && (
@@ -267,10 +270,15 @@ function FeeRow({ order, ledgerId, orderMultiplier, isExpanded = true, onToggle 
   if (order.status === 'cancelled' && order.sellStatus !== 'sold') {
     return <div className="mt-0 border-t border-gray-200 px-3 py-2 text-[11px] leading-4 text-gray-400">订单已撤销，管理费及手续费作废</div>;
   }
+  const feeStartAt = getAfManagementFeeStartAt(order);
+  if (!feeStartAt) {
+    const awaitingFulfillment = order.status === 'pending' || order.advancedStatus === 'active' || order.advancedStatus === 'reached';
+    return <div className="mt-0 border-t border-gray-200 px-3 py-2 text-[11px] leading-4 text-gray-400">管理费 · {awaitingFulfillment ? '成交后开始计费' : '成交时间待核对'} · 0天 / 0管理费</div>;
+  }
   const amount = parseFloat(order.amount);
   const tradeValue = order.isGift ? amount : amount * orderMultiplier;
   const dailyFee = tradeValue * 0.16 / 365;
-  const startDay = getBJDateOnly(order.createdAt);
+  const startDay = getBJDateOnly(feeStartAt);
   const endDay = (order.sellStatus === 'sold' && order.sellConfirmedAt)
     ? getBJDateOnly(order.sellConfirmedAt)
     : getTodayBJDateOnly();
@@ -300,6 +308,7 @@ function FeeRow({ order, ledgerId, orderMultiplier, isExpanded = true, onToggle 
         <span className="min-w-0 text-right font-medium text-gray-900">{fmtDay(startDay)}至{fmtDay(endDay)}，共{holdDays}天{isPending ? ' · 撤单则作废' : ''}{isSold ? ' · 已停计' : ''}</span>
       </button>
       {isExpanded && <div className="space-y-2">
+      {(order.isAdvanced || order.advancedOrderId) && <div className="flex justify-between"><span className="text-gray-900">成交日起计费</span><span className="font-medium text-gray-900">{fmtDay(startDay)}</span></div>}
       <div className="flex justify-between">
         <span className="text-gray-900">每日费用</span>
         <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
@@ -516,16 +525,16 @@ export default function AfOrderManage() {
     const isGiftOrder = order.isGift === true || order.isGift === 1;
     const totalRefund = isGiftOrder ? Math.max(0, totalProfit) : principal + Math.max(0, totalProfit);
 
-    // 管理费计算：从下单时间（createdAt）开始，修改价格等操作不影响管理费
+    // 普通订单保留下单日起算，高级委托从成交日起算，修改价格不重置计费起点。
     const tradeValue = isGiftOrder ? principal : principal * orderMultiplier;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-    // 开始日期：从下单时间（createdAt）算起，撤单则作废，成交后累计不重置
-    const confirmedDay = getBJDateOnly(order.createdAt);
+    const feeStartAt = getAfManagementFeeStartAt(order);
+    const confirmedDay = feeStartAt ? getBJDateOnly(feeStartAt) : null;
     // 结束日期：已卖出用 sellConfirmedAt，其他状态用北京时间今天
     const endDay = (order.sellStatus === 'sold' && order.sellConfirmedAt)
       ? getBJDateOnly(order.sellConfirmedAt)
       : getTodayBJDateOnly();
-    const holdDays = Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const holdDays = confirmedDay ? Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
     const managementFee = dailyFee * holdDays;
     const actualRefund = Math.max(0, totalRefund - managementFee);
 
@@ -1036,7 +1045,8 @@ export default function AfOrderManage() {
                       const calc = calculateProfit(order, order.sellPrice);
                       if (!calc) return null;
                       const isGift = order.isGift === true || order.isGift === 1;
-                      const startDate = new Date(order.createdAt);
+                      const feeStartAt = getAfManagementFeeStartAt(order);
+                      const startDate = feeStartAt ? new Date(feeStartAt) : null;
                       const endDate = new Date(order.sellConfirmedAt);
                       const fmtD = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
                       return (
@@ -1098,7 +1108,7 @@ export default function AfOrderManage() {
                               <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
                             </div>
                             <div className="text-[10px] text-red-400">
-                              计费区间：{fmtD(startDate)} → {fmtD(endDate)}（共{calc.holdDays}天，{calc.dailyFee.toFixed(4)} USDT/天）
+                              {startDate ? `计费区间：${fmtD(startDate)} → ${fmtD(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）` : '成交时间待核对 · 0天 / 0管理费'}
                             </div>
                             {/* 实际到账 */}
                             <div className="flex justify-between bg-green-50 rounded-lg px-2 py-1.5 border border-green-200 mt-1">
@@ -1441,8 +1451,9 @@ export default function AfOrderManage() {
                               </div>
                               <div className="text-[10px] text-red-400">
                                 {(() => {
-                                  // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
-                                  const startDate = new Date(order.createdAt);
+                                  const feeStartAt = getAfManagementFeeStartAt(order);
+                                  if (!feeStartAt) return `${order.status === 'pending' ? '成交后开始计费' : '成交时间待核对'} · 0天 / 0管理费`;
+                                  const startDate = new Date(feeStartAt);
                                   const endDate = (order.sellStatus === 'sold' && order.sellConfirmedAt)
                                     ? new Date(order.sellConfirmedAt)
                                     : new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
@@ -1557,10 +1568,11 @@ return (
                 }
                 // 计算该订单实时管理费
                 const amount = parseFloat(o.amount) || 0;
-                if (amount > 0) {
+                const feeStartAt = getAfManagementFeeStartAt(o);
+                if (amount > 0 && feeStartAt) {
                   const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                  const createdDay = getBJDateOnly(o.createdAt);
+                  const createdDay = getBJDateOnly(feeStartAt);
                   const holdDays = Math.max(1, Math.floor((todayStart.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
                   totalFeeUsdt[o.coin] = (totalFeeUsdt[o.coin] || 0) + dailyFee * holdDays;
                 }

@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { OrderDetail } from "@/pages/CryptoPrediction";
 import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 
 // 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
 const getBJDateOnly_Tree = (d: any): Date => {
@@ -210,12 +211,16 @@ export default function AfInviteTreePage() {
       if (!uid) continue;
       // 只处理进行中订单（已成交且未卖出）
       if (o.status !== 'completed' || o.sellStatus) continue;
+      const feeStartAt = getAfManagementFeeStartAt(o);
+      if (!feeStartAt) continue;
       // 管理费公式：amount×5.25/0.75×0.12/365×持有天数（赠予订单直接用 amount）
       const amount = parseFloat(o.amount || '0');
       if (amount <= 0) continue;
       const tradeValue = o.isGift ? amount : amount * 5.25;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-      const confirmedDay = getBJDateOnly_Tree(o.confirmedAt || o.createdAt);
+      const isAdvancedFee = Boolean(o.isAdvanced || o.advancedOrderId)
+        || new Date(feeStartAt).getTime() !== new Date(o.createdAt).getTime();
+      const confirmedDay = getBJDateOnly_Tree(isAdvancedFee ? feeStartAt : (o.confirmedAt || o.createdAt));
       const todayDay = getTodayBJDateOnly_Tree();
       const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
       const fee = dailyFee * holdDays - (o.prepaidFee ?? 0);
@@ -959,6 +964,7 @@ export default function AfInviteTreePage() {
                           const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
                           const dd = String(orderDate.getUTCDate()).padStart(2, '0');
                           const orderNo = `AF${yy}${mm}${dd}${String(o.id).padStart(6, '0')}`;
+                          const feeStartAt = getAfManagementFeeStartAt(o);
                           return (
                             <div key={o.id} className="rounded-lg overflow-hidden" style={{ border: '1px solid #E5E7EB', backgroundColor: '#FAFAFA' }}>
                               {/* 第一行：用户 + 订单号 + 状态 */}
@@ -1003,8 +1009,8 @@ export default function AfInviteTreePage() {
                                 <div>
                                   <div style={{ fontSize: 9, color: '#9CA3AF' }}>天数</div>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{(() => {
-                                    if (!o.createdAt) return '—';
-                                    const buyD = getBJDateOnly_Tree(o.createdAt);
+                                    if (!feeStartAt) return '0天';
+                                    const buyD = getBJDateOnly_Tree(feeStartAt);
                                     const endD = (o.status === 'completed' && o.sellConfirmedAt)
                                       ? getBJDateOnly_Tree(o.sellConfirmedAt)
                                       : getTodayBJDateOnly_Tree();
@@ -1045,6 +1051,12 @@ export default function AfInviteTreePage() {
                                   </div>
                                 )}
                               </div>
+                              {(o.isAdvanced || o.advancedOrderId || !feeStartAt || (feeStartAt && new Date(feeStartAt).getTime() !== new Date(o.createdAt).getTime())) && (
+                                <div className="flex justify-between px-3 pb-2 text-[10px] text-gray-500">
+                                  <span>成交日起计费</span>
+                                  <span>{feeStartAt ? fmtBJTime_Tree(feeStartAt, false) : o.status === 'pending' ? '成交后开始计费' : '成交时间待核对'}</span>
+                                </div>
+                              )}
                               {/* 赠单折叠区块 */}
                               {(() => {
                                 const gifts: any[] = (o as any).giftOrders || [];

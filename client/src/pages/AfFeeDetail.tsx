@@ -5,6 +5,7 @@ import Tooltip from "@/components/Tooltip";
 import { trpc } from "@/lib/trpc";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { OrderDetail as GdOrderDetail } from "@/pages/CryptoPrediction";
+import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 
 // 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
 function formatQty(val: string | number, coin?: string): string {
@@ -47,23 +48,24 @@ const EQUITY_DISCOUNT_RATES: Record<number, number> = {
 function calcFeeItem(o: any, orderMultiplier: number) {
   const amount = parseFloat(o.amount || '0');
   const tradeValue = o.isGift ? amount : amount * orderMultiplier;
-  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-  const confirmedDate = new Date(o.createdAt);
-  const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+  const feeStartAt = getAfManagementFeeStartAt(o);
+  const dailyFee = feeStartAt ? tradeValue / 0.75 * 0.12 / 365 : 0;
+  const confirmedDate = feeStartAt ? new Date(feeStartAt) : null;
+  const confirmedDay = confirmedDate ? new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate()) : null;
   let holdDays: number;
   let feeType: 'ongoing' | 'settled';
   if (o.sellStatus === 'sold' && o.sellConfirmedAt) {
     const sellDate = new Date(o.sellConfirmedAt);
     const sellDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
-    holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    holdDays = confirmedDay ? Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
     feeType = 'settled';
   } else {
-    holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    holdDays = confirmedDay ? Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
     feeType = 'ongoing';
   }
   const totalFee = dailyFee * holdDays;
   // 按年化 12% 口径：日费率 = 订单价值 × 0.12 ÷ 365，累计 = × 持有天数
-  const dailyFee12 = tradeValue * 0.12 / 365;
+  const dailyFee12 = feeStartAt ? tradeValue * 0.12 / 365 : 0;
   const totalFee12 = dailyFee12 * holdDays;
   // 名义年化费率 与 实际年化费率（按档位折扣率折算）
   const nominalApr = tradeValue > 0 ? (dailyFee * 365 / tradeValue) : 0;
@@ -407,6 +409,7 @@ export default function AfFeeDetail() {
           let todayFee = 0;
           let todayOrderCount = 0;
           for (const item of feeItems) {
+            if (!getAfManagementFeeStartAt(item)) continue;
             if (item.feeType === 'settled') {
               const sellDate = item.sellConfirmedAt ? new Date(item.sellConfirmedAt) : null;
               if (sellDate) {
@@ -421,7 +424,9 @@ export default function AfFeeDetail() {
           }
           // 预测计算：当前活跃订单的日费合计
           const todayActive = feeItems.filter((item: any) => {
-            const startBJ = new Date(new Date(item.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            const feeStartAt = getAfManagementFeeStartAt(item);
+            if (!feeStartAt) return false;
+            const startBJ = new Date(new Date(feeStartAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
             const startKey = `${startBJ.getFullYear()}-${String(startBJ.getMonth()+1).padStart(2,'0')}-${String(startBJ.getDate()).padStart(2,'0')}`;
             if (startKey > todayKey2) return false;
             if (item.feeType === 'settled' && item.sellConfirmedAt) {
@@ -809,8 +814,10 @@ export default function AfFeeDetail() {
           const todayBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
           const todayKey = `${todayBJ.getFullYear()}-${String(todayBJ.getMonth()+1).padStart(2,'0')}-${String(todayBJ.getDate()).padStart(2,'0')}`;
           for (const item of feeItems) {
-            // 开仓日（北京时间）
-            const startBJ = new Date(new Date(item.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            // 普通订单为开仓日，高级委托为成交日（北京时间）。
+            const feeStartAt = getAfManagementFeeStartAt(item);
+            if (!feeStartAt) continue;
+            const startBJ = new Date(new Date(feeStartAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
             const startDay = new Date(startBJ.getFullYear(), startBJ.getMonth(), startBJ.getDate());
             // 结束日：已卖出用卖出日，否则用今天
             let endDay: Date;
@@ -1081,6 +1088,7 @@ export default function AfFeeDetail() {
                           const orderNo = String(item.id).padStart(4, '0');
                           const dailyDisplay = item.dailyFee > 0 ? '-' + item.dailyFee.toFixed(2) + '/天' : '-';
                           const startLabel = '开仓' + (stShort !== '-' ? ' ' + stShort : '');
+                          const feeStartAt = getAfManagementFeeStartAt(item);
                           const numColor = (v: number) => v > 0 ? '#dc2626' : v < 0 ? '#16a34a' : '#94a3b8';
                           const numDisplay = (v: number) => v === 0 ? '0.00' : (v > 0 ? '+' : '') + v.toFixed(2);
                           const qty = parseFloat((item as any).quantity || '0');
@@ -1102,6 +1110,7 @@ export default function AfFeeDetail() {
                           ];
                           return (
                             <div key={item.id ?? i} className="px-2 py-2" style={{ borderBottom: '1px solid #b8cfe8' }}>
+                              {(item.isAdvanced || item.advancedOrderId || !feeStartAt) && <div className="flex justify-between pb-1 text-[10px] text-gray-500"><span>成交日起计费</span><span>{feeStartAt ? new Date(feeStartAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '成交时间待核对 · 0天 / 0管理费'}</span></div>}
                               <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderLeft: '1px solid #b8cfe8', borderRight: '1px solid #b8cfe8', borderTop: '1px solid #b8cfe8', borderBottom: 'none', borderRadius: '3px 3px 0 0', overflow: 'hidden' }}>
                                 {gjOrdRow1.map((col, ci) => (
                                   <div key={ci}
@@ -2636,6 +2645,7 @@ export default function AfFeeDetail() {
         const d = detailOrder;
         const amount = parseFloat(d.amount || '0');
         const statusText = d.feeType === 'settled' ? '已结清' : (d.sellStatus === 'selling' ? '委卖中' : '进行中');
+        const feeStartAt = getAfManagementFeeStartAt(d);
         const Row = ({ k, v, color }: { k: string; v: any; color?: string }) => (
           <div className="flex justify-between border-b border-gray-100 py-2 text-xs">
             <span className="text-gray-500">{k}</span>
@@ -2658,6 +2668,7 @@ export default function AfFeeDetail() {
                 <Row k="下单金额" v={`${amount.toFixed(2)} U`} />
                 <Row k="订单价值" v={`${(d.tradeValue || 0).toFixed(2)} U`} />
                 <Row k="权益档位" v={`第${d.equityTier}档 · ${(d.discountRate * 100).toFixed(2)}%`} />
+                {(d.isAdvanced || d.advancedOrderId || !feeStartAt) && <Row k="成交日起计费" v={feeStartAt ? new Date(feeStartAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '成交时间待核对'} />}
                 <Row k="持有天数" v={`${d.holdDays} 天`} />
                 <Row k="日费率" v={`${d.dailyFee.toFixed(4)} U`} />
                 <Row k="累计管理费" v={`${d.totalFee.toFixed(2)} U`} />
@@ -2711,9 +2722,10 @@ export default function AfFeeDetail() {
         const { order, totalFee, prepaidFee } = collectModal;
         const remaining = Math.max(0, totalFee - prepaidFee);
         // 计费说明数据
-        const startDateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-') : '-';
+        const feeStartAt = getAfManagementFeeStartAt(order);
+        const startDateStr = feeStartAt ? new Date(feeStartAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-') : '成交时间待核对';
         const todayStr = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        const holdDays = order.holdDays || 1;
+        const holdDays = feeStartAt ? (order.holdDays ?? 1) : 0;
         const dailyFee = order.dailyFee || 0;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setCollectModal(null)}>
@@ -2732,6 +2744,7 @@ export default function AfFeeDetail() {
                   <span className="font-bold text-gray-800">{totalFee.toFixed(2)} U</span>
                 </div>
                 <div className="text-[10px] text-gray-400 leading-relaxed">
+                  {(order.isAdvanced || order.advancedOrderId) && '成交日起计费：'}
                   {startDateStr} → {todayStr}，共 {holdDays} 天，{dailyFee.toFixed(2)} U/天
                 </div>
                 <div className="flex justify-between text-xs">
