@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, History, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -18,6 +18,8 @@ import StockParticipantProfitChart from "@/components/StockParticipantProfitChar
 import StockQuoteUpdateIndicator from "@/components/StockQuoteUpdateIndicator";
 import StockObservationPortfolio from "@/components/StockObservationPortfolio";
 import StockObservationAccountSummary from "@/components/StockObservationAccountSummary";
+
+const StockAllocationPanel = lazy(() => import("./LedgerAAInitialBalance").then((module) => ({ default: module.LedgerAAInitialBalanceContent })));
 
 type AccountFilter = "all" | "observation" | "actual";
 type EventType = "buy" | "add" | "reduce" | "sell" | "note";
@@ -309,6 +311,19 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const [expandedAdminLotIds, setExpandedAdminLotIds] = useState<Set<number>>(new Set());
   const [adminHoldingPerspective, setAdminHoldingPerspective] = useState<"position" | "member">("position");
   const [expandedAdminMemberId, setExpandedAdminMemberId] = useState<number | null>(null);
+  const [stockAllocationTarget, setStockAllocationTarget] = useState<{ ledgerId: number; categoryId: number; lotId: number } | null>(null);
+  const openStockAllocation = (lotId: number) => {
+    if (!canEdit || participantView || ledgerId !== 37 || !Number.isInteger(lotId) || lotId <= 0) return;
+    setStockAllocationTarget({ ledgerId, categoryId, lotId });
+  };
+  const refreshStockAllocation = async () => {
+    await Promise.all([
+      utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId }),
+      utils.ledger.getStockLotParticipationMatrix.invalidate({ ledgerId: 37, categoryId }),
+      utils.ledger.getMyStockTagParticipantPortfolio.invalidate({ ledgerId: 37, categoryId }),
+      utils.ledger.getStockTagPublicPortfolio.invalidate({ ledgerId: 37, categoryId }),
+    ]);
+  };
 
   const shouldSearchStock = showActionDialog && !!correctingEvent && eventType !== "note" && symbolQuery.trim().length >= (correctionStockMarket === 'US' ? 1 : 2) && !selectedStock;
   const { data: suggestionsData, isFetching: isSearchingStock } = trpc.searchManualStocks.useQuery(
@@ -515,6 +530,20 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   }
   if (error || !data) {
     return <div className="min-h-screen bg-[#FAF3ED] p-5"><button onClick={onBack} className="flex items-center text-sm text-gray-600"><ArrowLeft className="w-4 h-4 mr-1" />返回</button><div className="mt-10 text-center text-gray-500">股票标签无法加载：{error?.message || "请稍后重试"}</div></div>;
+  }
+
+  if (canEdit && ledgerId === 37 && stockAllocationTarget?.ledgerId === ledgerId && stockAllocationTarget.categoryId === categoryId) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#FAF3ED] p-4"><button type="button" onClick={() => setStockAllocationTarget(null)} className="flex items-center gap-1 text-sm text-gray-600"><ArrowLeft size={16} />返回股票维护</button><div className="mt-10 flex justify-center gap-2 text-sm text-gray-500"><Loader2 size={18} className="animate-spin" />正在加载原成员分配界面…</div></div>}>
+        <StockAllocationPanel
+          key={`${ledgerId}:${categoryId}:${stockAllocationTarget.lotId}`}
+          ledgerIdOverride={ledgerId}
+          stockAllocationFocus={{ categoryId, lotId: stockAllocationTarget.lotId }}
+          onCloseStockAllocation={() => setStockAllocationTarget(null)}
+          onStockAllocationSaved={refreshStockAllocation}
+        />
+      </Suspense>
+    );
   }
 
   // A 股惯例：红涨绿跌。标签总账与“我的参与”必须各自使用独立口径。
@@ -1088,7 +1117,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                   {!participantView && <div className="mt-0.5 whitespace-nowrap text-[10px] leading-4 text-gray-400">仓位开始 {formatDateTime(holding.lot.openedAt).split(" ")[0]}{positionElapsedDays === null ? "" : ` · 至今 ${positionElapsedDays} 天`}</div>}
                 </div>
               </div>
-              {canEdit && <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{hasRemainingLotQuantity && <button type="button" onClick={() => openTrade("sell", lotId)} className="text-[#C62828]">卖出</button>}{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
+              {canEdit && <div className="flex shrink-0 items-center gap-2">{ledgerId === 37 && hasRemainingLotQuantity && <button type="button" onClick={() => openStockAllocation(lotId)} aria-label={`分配持仓编号 ${positionNumber} ${holding.stockName}`} className="rounded border border-[#C62828] px-1.5 py-0.5 font-medium text-[#C62828]">分配</button>}<button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{hasRemainingLotQuantity && <button type="button" onClick={() => openTrade("sell", lotId)} className="text-[#C62828]">卖出</button>}{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
             </div>
           </div>
           {!participantView && canEdit && !isAdminLotExpanded && (

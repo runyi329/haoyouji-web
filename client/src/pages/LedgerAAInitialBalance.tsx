@@ -261,12 +261,20 @@ const isTagEntryPaused = (entry: Pick<TagEntry, 'pauseHistory' | 'pauseDate'>) =
   return latest ? !latest.resumeDate : Boolean(entry.pauseDate);
 };
 
-export default function LedgerAAInitialBalance() {
+type InitialBalanceContentProps = {
+  ledgerIdOverride?: number;
+  stockAllocationFocus?: { categoryId: number; lotId: number };
+  onCloseStockAllocation?: () => void;
+  onStockAllocationSaved?: () => Promise<void>;
+};
+
+// 股票维护快捷入口与设置页共享同一个编辑器，不能复制另一套分配或保存规则。
+export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocationFocus, onCloseStockAllocation, onStockAllocationSaved }: InitialBalanceContentProps = {}) {
   // 本地热预览复用生产只读数据，不能把试填比例、价格或可见性写回正式账本。
   const isLocalHotPreview = import.meta.env.DEV;
   const params = useParams();
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const ledgerId = ledgerIdOverride ?? (params?.id ? parseInt(params.id) : 0);
   const { user } = useAuth();
   const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
@@ -2196,13 +2204,20 @@ export default function LedgerAAInitialBalance() {
     const activeLots = matrix.lots.filter((lot: any) => lot.status !== 'closed');
     const closedLots = matrix.lots.filter((lot: any) => lot.status === 'closed');
     const activeLotNumbers = new Map<number, string>(activeLots.map((lot: any, index: number) => [Number(lot.id), String(index + 1).padStart(2, '0')]));
+    const focusedLot = stockAllocationFocus
+      ? matrix.lots.find((lot: any) => Number(lot.id) === stockAllocationFocus.lotId)
+      : undefined;
     const renderLot = (lot: any) => {
           const globalClosed = lot.status === 'closed';
           const lotId = Number(lot.id);
           const lotNumber = activeLotNumbers.get(lotId) || '历史';
           const isExpanded = expandedStockLots.has(lotId);
-          const isEditing = !globalClosed && editingStockLots.has(lotId);
+          const isEditing = !globalClosed && editingStockLots.has(lotId) && (!stockAllocationFocus || matrix.canEdit);
           const isSaving = savingStockLots.has(lotId);
+          const stockTagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
+          const isStockMemberVisible = (userId: number) => stockTagName
+            ? (editState[userId]?.[stockTagName]?.visible ?? getSavedTagVisible(userId, stockTagName))
+            : true;
           const allocationQuantityBase = Number(lot.currentQuantity || 0);
           // 观察与真实互斥：开启草稿立即退出实际统计；取消草稿恢复保存态，关闭已保存观察不复原释放量。
           const effectiveRealAllocations = (matrix.members as any[]).map((member: any) => {
@@ -2221,6 +2236,8 @@ export default function LedgerAAInitialBalance() {
               : savedQuantity;
             return { userId: Number(member.userId), quantity };
           });
+          // 同一批次的股数与比例顺序一致；沿用当前有效草稿，观察不占真实份额。
+          const allocationQuantityByUser = new Map<number, number>(effectiveRealAllocations.map((row) => [row.userId, row.quantity]));
           const activeParticipations = effectiveRealAllocations.filter((item) => item.quantity > 0.00000001);
           const totalAllocatedQuantity = effectiveRealAllocations.reduce((total, item) => total + item.quantity, 0);
           const availableQuantity = Math.max(0, allocationQuantityBase - totalAllocatedQuantity);
@@ -2398,6 +2415,7 @@ export default function LedgerAAInitialBalance() {
               discardStockLotDrafts(lotId);
               finishStockLotEditing(lotId);
               await refetchStockParticipationMatrix();
+              await onStockAllocationSaved?.();
             } catch {
               // mutation 的 onError 已给出明确错误提示，保留当前草稿供管理员修正。
             } finally {
@@ -2450,29 +2468,12 @@ export default function LedgerAAInitialBalance() {
               {isExpanded && <div className="space-y-1.5 p-2.5">
                 <div className="space-y-1.5">
                 {[...matrix.members].sort((left: any, right: any) => {
-                  const fixedTopOrder = ['visn', '张慧', 'juicy', '刘居允', '胡大叔', '胡毅'];
-                  const fixedBottomOrder = ['江sir', '大饼', 'andy', 'why'];
-                  const normalizedMemberName = (member: any) => String(member.name || '').replace(/\s+/g, '').toLowerCase();
-                  const fixedTopRank = (member: any) => fixedTopOrder.findIndex((name) => normalizedMemberName(member) === name);
-                  const fixedBottomRank = (member: any) => {
-                    const normalizedName = normalizedMemberName(member);
-                    return fixedBottomOrder.findIndex((name) => normalizedName === name || (name === '大饼' && normalizedName.includes(name)));
-                  };
-                  const leftTopRank = fixedTopRank(left);
-                  const rightTopRank = fixedTopRank(right);
-                  if (leftTopRank >= 0 || rightTopRank >= 0) {
-                    if (leftTopRank >= 0 && rightTopRank >= 0) return leftTopRank - rightTopRank;
-                    return leftTopRank >= 0 ? -1 : 1;
-                  }
-                  const leftBottomRank = fixedBottomRank(left);
-                  const rightBottomRank = fixedBottomRank(right);
-                  if (leftBottomRank >= 0 || rightBottomRank >= 0) {
-                    if (leftBottomRank >= 0 && rightBottomRank >= 0) return leftBottomRank - rightBottomRank;
-                    return leftBottomRank >= 0 ? 1 : -1;
-                  }
-                  // 编辑中的全部字段仅写入本地草稿；保存并刷新数据前，成员顺序始终按已保存份额固定。
-                  const leftQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(left.userId))?.remainingQuantity || 0);
-                  const rightQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(right.userId))?.remainingQuantity || 0);
+                  // 先可见、再隐藏；各组按分配比例从大到小，相同比例保留原始顺序。
+                  const leftVisible = isStockMemberVisible(Number(left.userId));
+                  const rightVisible = isStockMemberVisible(Number(right.userId));
+                  if (leftVisible !== rightVisible) return leftVisible ? -1 : 1;
+                  const leftQuantity = allocationQuantityByUser.get(Number(left.userId)) ?? 0;
+                  const rightQuantity = allocationQuantityByUser.get(Number(right.userId)) ?? 0;
                   return rightQuantity - leftQuantity;
                 }).map((member: any) => {
                   const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
@@ -2481,8 +2482,7 @@ export default function LedgerAAInitialBalance() {
                   const observationFallback = getStockObservationFallback(lot, Number(member.userId));
                   const currentQuantity = observationFallback.enabled ? 0 : Number(participation?.remainingQuantity || 0);
                   const share = lot.currentQuantity > 0 ? currentQuantity / lot.currentQuantity * 100 : 0;
-                  const stockTagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
-                  const isMemberVisible = stockTagName ? (editState[Number(member.userId)]?.[stockTagName]?.visible ?? getSavedTagVisible(Number(member.userId), stockTagName)) : true;
+                  const isMemberVisible = isStockMemberVisible(Number(member.userId));
                   // 同批次允许先完整调整所有成员；编辑期间单个成员只限制 0–100%，最终总量在保存时统一校验。
                   const maxPercentage = 100;
                   const draftKey = `${lot.id}:${member.userId}`;
@@ -2808,6 +2808,11 @@ export default function LedgerAAInitialBalance() {
             </div>
           );
     };
+    if (stockAllocationFocus) {
+      return focusedLot ? renderLot(focusedLot) : (
+        <section className="rounded-xl bg-white p-4 text-center text-xs text-gray-500">该股票批次已不存在或不属于当前标签，请返回后重新打开。</section>
+      );
+    }
     return (
       <section className="space-y-2">
         {matrix.lots.length > 0 && <div className="px-0.5 text-[11px] font-medium text-[#2F7660]">进行中 {activeLots.length} 笔</div>}
@@ -2912,7 +2917,7 @@ export default function LedgerAAInitialBalance() {
       && !window.confirm('当前标签详情有未保存修改（含待清空），关闭不会自动保存或清空。保留本次待保存状态并关闭？重新打开后仍可点击底部“保存”。')) return;
     setTagEditModal(null); setTargetTotalInput('');
   };
-  const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(null);
+  const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(stockAllocationFocus?.categoryId ?? null);
   const [stockTradeDialog, setStockTradeDialog] = useState<{ categoryId: number; categoryName: string; type: "buy" | "sell" } | null>(null);
   // 用户视图的收起卡片也需要展示股票成员权益，因此先预取首个股票标签的只读分配矩阵。
   // 具体展开其他股票标签时，仍会按点击标签切换矩阵，不影响原有编辑流程。
@@ -2943,8 +2948,8 @@ export default function LedgerAAInitialBalance() {
     onError: (error) => toast.error(error.message || '保存股票观察配额失败'),
   });
   // 默认只展示每个持仓编号的摘要；成员份额在展开后才显示，编辑与保存也严格按单个批次隔离。
-  const [expandedStockLots, setExpandedStockLots] = useState<Set<number>>(new Set());
-  const [editingStockLots, setEditingStockLots] = useState<Set<number>>(new Set());
+  const [expandedStockLots, setExpandedStockLots] = useState<Set<number>>(new Set(stockAllocationFocus ? [stockAllocationFocus.lotId] : []));
+  const [editingStockLots, setEditingStockLots] = useState<Set<number>>(new Set(stockAllocationFocus ? [stockAllocationFocus.lotId] : []));
   const [savingStockLots, setSavingStockLots] = useState<Set<number>>(new Set());
   // 移动端输入保持在本地草稿中，避免每次输入都触发查询重渲染而丢失键盘焦点。
   const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; amount: string; entryPrice: string; startDate: string; pauseDate: string }>>({});
@@ -3067,13 +3072,13 @@ export default function LedgerAAInitialBalance() {
   // 获取标签配置
   const { data: tagConfigData, refetch: refetchTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !!ledgerId && !!selectedTagName }
+    { enabled: !stockAllocationFocus && !!ledgerId && !!selectedTagName }
   );
 
   // 获取标签押金汇总和最新市值
   const { data: tagSummaryData } = trpc.ledger.getTagSummary.useQuery(
     { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !!ledgerId && !!selectedTagName }
+    { enabled: !stockAllocationFocus && !!ledgerId && !!selectedTagName }
   );
 
   // categories 加载完成后自动初始化 selectedTagName（防止标签页默认为空）
@@ -3084,11 +3089,12 @@ export default function LedgerAAInitialBalance() {
   }, [categories]);
 
   useEffect(() => {
+    if (stockAllocationFocus) return;
     const selectedCategory = categories.find((category: any) => category.name === selectedTagName);
     if (selectedCategory && isStockPortfolioTag(selectedCategory)) {
       setActiveStockParticipationCategoryId(Number(selectedCategory.id));
     }
-  }, [categories, selectedTagName]);
+  }, [categories, selectedTagName, stockAllocationFocus]);
 
   // 当标签配置数据加载时，同步到表单
   useEffect(() => {
@@ -3237,6 +3243,15 @@ export default function LedgerAAInitialBalance() {
   }, [allBalancesData, categories, ledgerId, editState, ordinaryObservationDrafts, ordinaryObservationSaved, ordinaryActualSaved, ordinaryActualDirty, ordinaryPreviewVersion]);
 
   const members = (allBalancesData as any)?.members ?? [];
+  const closeStockAllocation = () => {
+    if (savingStockLots.size > 0 || visibilitySavingScopes.size > 0 || savingUsers.size > 0) {
+      toast.info('正在保存，请完成后再关闭分配'); return;
+    }
+    if (hideConfirmation) { toast.info('请先完成或取消标签隐藏确认'); return; }
+    if ((Object.keys(stockParticipationDrafts).length > 0 || Object.keys(stockObservationDrafts).length > 0)
+      && !window.confirm('当前股票分配有未保存修改，返回将放弃本次修改，是否返回？')) return;
+    onCloseStockAllocation?.();
+  };
 
 
   if (!ledgerData) {
@@ -3263,8 +3278,15 @@ export default function LedgerAAInitialBalance() {
 
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
+    <div className={stockAllocationFocus ? "min-h-full" : "min-h-screen"} style={{ backgroundColor: "#FAF3ED" }}>
       {/* 顶部导航栏 */}
+      {stockAllocationFocus ? (
+        <div className="sticky top-0 z-10 flex items-center gap-3 bg-[#D32F2F] px-4 py-3 text-white">
+          <button type="button" onClick={closeStockAllocation} aria-label="返回股票维护" className="flex h-8 w-8 shrink-0 items-center justify-center"><ChevronLeft size={22} /></button>
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold">成员分配</h1>
+          <button type="button" onClick={closeStockAllocation} aria-label="关闭成员分配" className="flex h-8 w-8 shrink-0 items-center justify-center"><X size={20} /></button>
+        </div>
+      ) : (
       <div
         className="flex items-center px-4 py-3 sticky top-0 z-10"
         style={{ backgroundColor: "#D32F2F" }}
@@ -3304,9 +3326,14 @@ export default function LedgerAAInitialBalance() {
           </button>
         </div>
       </div>
+      )}
 
 
-      {categories.length === 0 ? (
+      {stockAllocationFocus ? (
+        <div className="px-4 py-3 pb-8">
+          {ledgerId === 37 ? renderStockParticipationEditor({ selectedUserId: 0, accentColor: categories.find((cat: any) => Number(cat.id) === stockAllocationFocus.categoryId)?.color || '#2F6F85' }) : <div className="text-sm text-gray-500">该快捷分配仅适用于37号股票标签。</div>}
+        </div>
+      ) : categories.length === 0 ? (
         <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
           该账本暂无标签，请先在分类管理中添加标签
         </div>
@@ -5305,4 +5332,8 @@ export default function LedgerAAInitialBalance() {
 
     </div>
   );
+}
+
+export default function LedgerAAInitialBalance() {
+  return <LedgerAAInitialBalanceContent />;
 }
