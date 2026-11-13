@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-13
+// 生成时间：2026-11-14
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9954,5 +9954,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-11-12": [
     { date: "2026-11-11T23:44:28Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-11-13": [
+    { date: "2026-11-12T22:54:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-13T04:18:58Z", type: "feat", cleanMessage: "reuse stock allocation editor and sort member shares" },
+    { date: "2026-11-13T04:32:04Z", type: "fix", cleanMessage: "reconcile AF52 gifts after source order cancellation" },
+    { date: "2026-11-13T07:08:07Z", type: "fix", cleanMessage: "accrue advanced AF52 management fees from fulfillment" },
   ],
 };
