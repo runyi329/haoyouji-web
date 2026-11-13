@@ -40,6 +40,22 @@ const formatAfQuantity = (value: unknown, coin: string, decimals = 8): string =>
   return coin === 'ETH' ? amount.toFixed(2) : amount.toFixed(decimals).replace(/\.?0+$/, '');
 };
 
+// 关联记录全部保留供审计；有效合计仅排除撤单，不改变已卖出历史的数量语义。
+export function calculateAfActiveRelatedOrdersSummary(main: any, gifts: any[]) {
+  const linkedOrders = main ? [main, ...gifts] : gifts;
+  const activeMainCount = main && main.status !== 'cancelled' ? 1 : 0;
+  const activeGifts = gifts.filter(gift => gift.status !== 'cancelled');
+  const activeOrders = activeMainCount ? [main, ...activeGifts] : activeGifts;
+  return {
+    nominalQuantityTotal: linkedOrders.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0),
+    activeQuantityTotal: activeOrders.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0),
+    activeMainCount,
+    activeGiftCount: activeGifts.length,
+    activeOrderCount: activeOrders.length,
+    hasCancelledOrders: linkedOrders.some(item => item.status === 'cancelled'),
+  };
+}
+
 // 优先显示中文用户名或昵称；两个字段都没有中文时再回退显示英文名称。
 const getPreferredAfName = (username: unknown, nickname: unknown, fallback: string): string => {
   const candidates = [nickname, username]
@@ -247,6 +263,10 @@ function FeeDetailModal({ orders, onClose, orderMultiplier }: { orders: any[], o
 
 // 订单详情管理费行（独立子组件，避免在IIFE中使用Hooks）
 function FeeRow({ order, ledgerId, orderMultiplier, isExpanded = true, onToggle }: { order: any; ledgerId: number; orderMultiplier: number; isExpanded?: boolean; onToggle?: () => void }) {
+  // 已卖出订单保留停计后的结算历史；未结算撤单不再展示日费累计及应付费用。
+  if (order.status === 'cancelled' && order.sellStatus !== 'sold') {
+    return <div className="mt-0 border-t border-gray-200 px-3 py-2 text-[11px] leading-4 text-gray-400">订单已撤销，管理费及手续费作废</div>;
+  }
   const amount = parseFloat(order.amount);
   const tradeValue = order.isGift ? amount : amount * orderMultiplier;
   const dailyFee = tradeValue * 0.16 / 365;
@@ -1168,8 +1188,9 @@ export default function AfOrderManage() {
                     );
                     const regularGifts = giftOrders.filter((gift: any) => !isDirected525Gift(gift));
                     const directedGifts = giftOrders.filter((gift: any) => isDirected525Gift(gift));
-                    const linkedQuantityTotal = Number(relationOrder.quantity || 0) + giftOrders.reduce((sum: number, gift: any) => sum + Number(gift.quantity || 0), 0);
-                    const linkedOrderCount = giftOrders.length + 1;
+                    const relatedSummary = calculateAfActiveRelatedOrdersSummary(relationOrder, giftOrders);
+                    const linkedQuantityTotal = relatedSummary.activeQuantityTotal;
+                    const linkedOrderCount = relatedSummary.activeOrderCount;
                     const recipientName = (gift: any) => gift.nickname || gift.username || `用户${gift.userId}`;
                     const isSelfRecipient = (gift: any) => String(gift.userId) === String(relationOrder.userId);
                     return (
@@ -1184,27 +1205,29 @@ export default function AfOrderManage() {
                             关联订单
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isRelationExpanded ? '' : '-rotate-90'}`} />
                           </span>
-                          {!isRelationExpanded && <span className="min-w-0 truncate text-right text-[11px] font-medium leading-4 text-gray-900">{linkedOrderCount}单 · {formatAfQuantity(linkedQuantityTotal, relationOrder.coin)} {relationOrder.coin}</span>}
+                          {!isRelationExpanded && <span className="min-w-0 truncate text-right text-[11px] font-medium leading-4 text-gray-900">{relatedSummary.hasCancelledOrders ? '有效合计 ' : ''}{linkedOrderCount}单 · {formatAfQuantity(linkedQuantityTotal, relationOrder.coin)} {relationOrder.coin}</span>}
                         </button>
                         {isRelationExpanded && <>
                         {isGiftOrder && sourceOrder && <div className="flex items-center justify-between gap-3">
                           <span className="flex min-w-0 items-center gap-1.5 truncate">
-                            <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.normal}`}>正单</span>
-                            <span className="truncate font-medium text-gray-900">{sourceOrder.username && sourceOrder.nickname && sourceOrder.username !== sourceOrder.nickname ? `${sourceOrder.username}/${sourceOrder.nickname}` : sourceOrder.nickname || sourceOrder.username || `用户${sourceOrder.userId}`}</span>
+                            <span className={`${ORDER_TAG_CLASS} ${sourceOrder.status === 'cancelled' ? ORDER_TAG_COLORS.cancelled : ORDER_TAG_COLORS.normal}`}>正单</span>
+                            <span className={`truncate font-medium ${sourceOrder.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{sourceOrder.username && sourceOrder.nickname && sourceOrder.username !== sourceOrder.nickname ? `${sourceOrder.username}/${sourceOrder.nickname}` : sourceOrder.nickname || sourceOrder.username || `用户${sourceOrder.userId}`}</span>
+                            {sourceOrder.status === 'cancelled' && <span className="shrink-0 text-[10px] font-normal text-gray-400">已撤单</span>}
                           </span>
                           <span className="flex shrink-0 items-baseline gap-1.5">
-                            <span className="font-medium text-gray-900">{formatAfQuantity(sourceOrder.quantity, sourceOrder.coin || relationOrder.coin)} {sourceOrder.coin || relationOrder.coin}</span>
+                            <span className={`font-medium ${sourceOrder.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{formatAfQuantity(sourceOrder.quantity, sourceOrder.coin || relationOrder.coin)} {sourceOrder.coin || relationOrder.coin}</span>
                           </span>
                         </div>}
                         {giftOrders.length > 0 ? <>
                           {regularGifts.map((gift: any) => <div key={gift.id} className="flex items-center justify-between gap-3">
                             <span className="flex min-w-0 items-center gap-1.5 truncate">
-                              <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.gift}`}>赠单</span>
-                              <span className="truncate font-medium text-gray-900">{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                              <span className={`${ORDER_TAG_CLASS} ${gift.status === 'cancelled' ? ORDER_TAG_COLORS.cancelled : ORDER_TAG_COLORS.gift}`}>赠单</span>
+                              <span className={`truncate font-medium ${gift.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                              {gift.status === 'cancelled' && <span className="shrink-0 text-[10px] font-normal text-gray-400">已作废</span>}
                             </span>
                             <span className="flex shrink-0 items-baseline gap-1.5">
                               <span className="text-xs text-gray-400">{Number(gift.payoutRatio || 0).toFixed(2)}%</span>
-                              <span className="font-medium text-gray-900">{formatAfQuantity(gift.quantity, gift.coin || relationOrder.coin)} {gift.coin || relationOrder.coin}</span>
+                              <span className={`font-medium ${gift.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{formatAfQuantity(gift.quantity, gift.coin || relationOrder.coin)} {gift.coin || relationOrder.coin}</span>
                             </span>
                           </div>)}
                           {directedGifts.map((gift: any) => {
@@ -1212,16 +1235,17 @@ export default function AfOrderManage() {
                             const multiplier = Number(gift.giftMultiplier || 0.25);
                             return <div key={gift.id} className="flex items-center justify-between gap-3">
                               <div className="flex min-w-0 items-center gap-1.5 truncate">
-                                <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.special}`}>{multiplier.toFixed(2)}</span>
-                                <span className="truncate font-medium text-gray-900">{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                                <span className={`${ORDER_TAG_CLASS} ${gift.status === 'cancelled' ? ORDER_TAG_COLORS.cancelled : ORDER_TAG_COLORS.special}`}>{multiplier.toFixed(2)}</span>
+                                <span className={`truncate font-medium ${gift.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                                {gift.status === 'cancelled' && <span className="shrink-0 text-[10px] font-normal text-gray-400">已作废</span>}
                               </div>
                               <span className="flex shrink-0 items-baseline gap-1.5">
-                                <span className="font-medium text-gray-900">{formatAfQuantity(gift.quantity, giftCoin)} {giftCoin}</span>
+                                <span className={`font-medium ${gift.status === 'cancelled' ? 'text-gray-400' : 'text-gray-900'}`}>{formatAfQuantity(gift.quantity, giftCoin)} {giftCoin}</span>
                               </span>
                             </div>;
                           })}
                           <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-2">
-                            <span className="font-medium text-gray-900">合计<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{giftOrders.length + 1}）</span> = 正<span className="ml-0.5 text-[10px] font-normal text-gray-400">（1）</span> + 赠<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{giftOrders.length}）</span></span>
+                            <span className="font-medium text-gray-900">{relatedSummary.hasCancelledOrders ? '有效合计' : '合计'}<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{linkedOrderCount}）</span> = 正<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{relatedSummary.activeMainCount}）</span> + 赠<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{relatedSummary.activeGiftCount}）</span></span>
                             <span className="shrink-0 font-semibold text-gray-900">{formatAfQuantity(linkedQuantityTotal, relationOrder.coin)} {relationOrder.coin}</span>
                           </div>
                         </> : <>
@@ -1301,7 +1325,7 @@ export default function AfOrderManage() {
                     </>}
                   </div>
 
-                  {(order.status === 'completed' || order.status === 'pending') && (
+                  {(order.status === 'completed' || order.status === 'pending' || order.status === 'cancelled') && (
                     <FeeRow
                       order={order}
                       ledgerId={ledgerId}

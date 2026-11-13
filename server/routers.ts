@@ -8,6 +8,7 @@ import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
 import { getStockChipDistribution } from "./stock-chip-distribution";
+import { afEffectiveOrderStatusSql, getAfGiftActivationError } from "@shared/af-gift-order-state";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
@@ -20995,7 +20996,7 @@ ${klinesSummary}
         // 幂等：确保 prepaid_fee 字段存在
         try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN prepaid_fee DECIMAL(20,8) NOT NULL DEFAULT 0`); } catch {}
         const [rows] = await db.execute(
-          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
+          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
@@ -21021,7 +21022,8 @@ ${klinesSummary}
                     COALESCE(o.is_gift, 0) = 1
                     AND EXISTS (
                       SELECT 1 FROM af_orders src
-                      WHERE src.id = o.source_order_id AND src.status = 'completed'
+                      WHERE src.id = o.source_order_id AND src.ledger_id = o.ledger_id
+                        AND COALESCE(src.is_gift, 0) = 0 AND src.side = 'buy' AND src.status = 'completed'
                     )
                   )
                 )
@@ -21141,9 +21143,10 @@ ${klinesSummary}
         // 已成交买入的数量总和（未卖出的 + 委托卖中的）
         const buyRows = await db.execute(
           sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-              FROM af_orders
+              FROM af_orders o
               WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
                 AND coin = ${input.coin} AND side = 'buy' AND status = 'completed'
+                AND ${sql.raw(afEffectiveOrderStatusSql("o"))} = 'completed'
                 AND (sell_status IS NULL OR sell_status = '' OR sell_status = 'sell_cancelled')`
         ) as any;
         const available = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
@@ -21245,7 +21248,7 @@ ${klinesSummary}
         }
         // prepaid_fee 字段和 af_fee_prepaid_logs 表已在生产环境建好，无需每次 ALTER
         const [rows] = await db.execute(
-          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
+          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, ${sql.raw(afEffectiveOrderStatusSql("o"))} AS status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      u.username, COALESCE(u.name,'') as user_name,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
@@ -21394,16 +21397,16 @@ ${klinesSummary}
               // 查询赠予订单基本信息
               const [giftRows] = await (conn as any).execute(
                 `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
-                        g.status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
+                        ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
                         COALESCE(g.tier_mode, 'step') as tier_mode,
                         u.username, COALESCE(u.name,'') as user_name,
                         CASE WHEN r525.id IS NULL THEN 0 ELSE 1 END as is_525_gift
                  FROM af_orders g
                  LEFT JOIN users u ON u.id = g.user_id
                  LEFT JOIN af_525_gift_records r525 ON r525.gift_order_id = g.id
-                 WHERE g.source_order_id IN (${placeholders}) AND g.is_gift = 1
+                 WHERE g.ledger_id = ? AND g.source_order_id IN (${placeholders}) AND g.is_gift = 1
                  ORDER BY g.gift_multiplier DESC, g.amount DESC`,
-                normalOrderIds
+                [input.ledgerId, ...normalOrderIds]
               );
               const giftList = giftRows as any[];
               // 批量查询赠予订单的权益档位
@@ -21618,6 +21621,7 @@ ${klinesSummary}
                      o.sell_confirmed_at
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'
+                AND ${sql.raw(afEffectiveOrderStatusSql("o"))} = 'completed'
                 AND COALESCE(o.is_simulated, 0) = 0`
         ) as any;
         const buyOrders = ((buyOrderRows[0] || buyOrderRows) as any[]);
@@ -21958,6 +21962,19 @@ ${klinesSummary}
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
+        // 历史遗留赠单不能绕过已撤销/未成交正单，先校验再执行任何成交或钱包结算。
+        if (input.ledgerId === 52 && Number(order.is_gift) === 1) {
+          const sourceRows = await db.execute(sql`SELECT status FROM af_orders
+            WHERE id = ${order.source_order_id} AND ledger_id = ${input.ledgerId}
+              AND COALESCE(is_gift, 0) = 0 AND side = 'buy' LIMIT 1`) as any;
+          const source = (sourceRows[0]?.[0] ?? sourceRows[0]);
+          const activationError = getAfGiftActivationError({
+            ledgerId: input.ledgerId, isGift: order.is_gift,
+            status: input.status, sellStatus: input.sellStatus,
+            sourceStatus: source?.status ? String(source.status) : null,
+          });
+          if (activationError) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: activationError });
+        }
         if (input.ledgerId === 52) {
           await ensureAfAdvancedOrdersTable();
           const [advancedRows] = await (await getDbConnection())!.execute(
@@ -22240,7 +22257,7 @@ ${klinesSummary}
           }
         }
         // 2. 状态变化：待定→已撤单
-        if (oldStatus === 'pending' && newStatus === 'cancelled') {
+        if (oldStatus === 'pending' && newStatus === 'cancelled' && Number(order.is_gift || 0) !== 1) {
           // 委买撤单：退回已扣除的金额
           balanceAdjust = oldAmount;
           balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
@@ -22252,7 +22269,8 @@ ${klinesSummary}
           balanceNote = `撤单退回 市价单 ${coin} ${oldAmount} USDT`;
         }
         // 3. 金额参数修改（仅当状态为 pending 时）
-        if (input.amount && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
+        // 赠单未扣过本金，调整名义赠送金额不得扣款或退款。
+        if (Number(order.is_gift || 0) !== 1 && input.amount && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
           const diff = newAmount - oldAmount;
           balanceAdjust += -diff;
           balanceNote = `订单调整 委买 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
@@ -22337,7 +22355,8 @@ ${klinesSummary}
           if (ratiosForUpdate.length > 0) console.log(`[拨比联动] 订单#${input.orderId}修改价格/金额，已同步更新${ratiosForUpdate.length}笔pending赠予订单`);
         }
         // 如果管理员将订单改为已撤单，联动撤销关联的所有赠予订单（包括pending和completed，市价单赠单直接是completed）
-        if (newStatus === 'cancelled' && oldStatus !== 'cancelled') {
+        // 重复保存撤销状态也补齐历史漏联动；不因此重复退款。
+        if (newStatus === 'cancelled') {
           await db.execute(
             sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
                 WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status != 'cancelled'`
@@ -22527,7 +22546,7 @@ ${klinesSummary}
         await ensureAfSimulationColumns();
         if (input.ledgerId === 52) await ensureAfWalletHoldColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, status, sell_status, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders
+          sql`SELECT id, user_id, coin, side, amount, status, COALESCE(is_gift, 0) AS is_gift, sell_status, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
@@ -22626,7 +22645,8 @@ ${klinesSummary}
           }
         }
         // 买单撤单：退回冻结金额
-        if (Number(order.is_simulated || 0) !== 1 && amount > 0.001) {
+        // 赠单从未扣除投入本金，撤销只作废订单，不能按赠送价值生成钱包退款。
+        if (Number(order.is_gift || 0) !== 1 && Number(order.is_simulated || 0) !== 1 && amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${ctx.user.id}, ${amount}, ${`用户撤单 委买 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
@@ -32518,6 +32538,7 @@ ${klinesSummary}
            LEFT JOIN users u ON u.id = o.user_id
            LEFT JOIN users u2 ON u2.id = o.source_user_id
            WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=1
+             AND ${afEffectiveOrderStatusSql("o")} = 'completed'
            ORDER BY o.created_at DESC LIMIT 10`,
           [input.ledgerId, input.ledgerId]
         );
@@ -32565,8 +32586,12 @@ ${klinesSummary}
                       THEN 1 ELSE 0 END) as currentGiftHoldingCount,
              SUM(CASE WHEN is_gift=0 AND status='pending' AND side='buy' THEN 1 ELSE 0 END) as currentNormalPendingBuyCount,
              SUM(CASE WHEN is_gift=1 AND status='pending' AND side='buy' THEN 1 ELSE 0 END) as currentGiftPendingBuyCount
-           FROM af_orders
-           WHERE ledger_id=${input.ledgerId} AND user_id IN (${ph})`,
+           FROM (
+             SELECT o.is_gift, o.side, o.sell_status, o.amount,
+                    ${afEffectiveOrderStatusSql("o")} AS status
+             FROM af_orders o
+             WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph})
+           ) af_effective_orders`,
           ids
         );
         // 按币种分组统计：持仓数量（应用档位折扣，与人员视图一致）+ 订单数（用于小字显示）
@@ -32583,6 +32608,7 @@ ${klinesSummary}
            LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
            WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph})
              AND o.status = 'completed' AND o.side = 'buy'
+             AND ${afEffectiveOrderStatusSql("o")} = 'completed'
              AND (o.sell_status IS NULL OR o.sell_status IN ('pending', 'selling'))
            GROUP BY o.id, o.coin, o.is_gift, o.quantity`,
           ids
@@ -32813,7 +32839,7 @@ ${klinesSummary}
           const ph2 = ids.map(() => '?').join(',');
           const [extraRows] = await (conn as any).execute(
             `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
-                    g.status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
                     g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
                     gu.name as userName, gu.username,
                     src.id as src_id, src.coin as src_coin, src.amount as src_amount, src.quantity as src_quantity,
@@ -32832,6 +32858,7 @@ ${klinesSummary}
              WHERE g.ledger_id=${input.ledgerId} AND g.is_gift=1
                AND g.user_id IN (${ph2})
                AND g.status='completed'
+               AND ${afEffectiveOrderStatusSql("g")} = 'completed'
                AND (g.sell_status IS NULL OR g.sell_status='' OR g.sell_status='sell_cancelled')
                AND g.source_order_id NOT IN (${mainOrderIds.length > 0 ? mainOrderIds.map(() => '?').join(',') : '0'})
              ORDER BY g.created_at DESC`,
@@ -32843,7 +32870,7 @@ ${klinesSummary}
           const gph = mainOrderIds.map(() => '?').join(',');
           const [giftRows] = await (conn as any).execute(
             `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
-                    g.status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    ${afEffectiveOrderStatusSql("g")} AS status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
                     g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
                     gu.name as userName, gu.username
              FROM af_orders g
@@ -41796,6 +41823,7 @@ export const adminFeatureRouter = router({
              LEFT JOIN users u ON u.id = o.user_id
              LEFT JOIN users su ON su.id = o.source_user_id
              WHERE o.ledger_id=${ledgerIdG} AND o.is_gift=1 AND o.status='completed' AND o.source_user_id IN (${ph2G})
+               AND ${afEffectiveOrderStatusSql("o")} = 'completed'
              ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
             idsG
           );
