@@ -18,6 +18,13 @@ export default function FinanceUnified() {
   const handleRecycleBinRef = useCallback((openFn: () => void) => {
     openRecycleBinRef.current = openFn;
   }, []);
+  const openCreateOrderRef = useRef<(() => void) | null>(null);
+  const [canCreateOrder, setCanCreateOrder] = useState(false);
+  const handleCreateOrderRef = useCallback((openFn: (() => void) | null) => {
+    openCreateOrderRef.current = openFn;
+    setCanCreateOrder(Boolean(openFn));
+  }, []);
+  const createOrderRefHandler = ledgerId === 52 ? handleCreateOrderRef : undefined;
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
       {/* 顶部导航 */}
@@ -50,6 +57,18 @@ export default function FinanceUnified() {
             style={{ color: 'rgba(255,255,255,0.9)', background: 'rgba(255,255,255,0.15)' }}
           >刷新</button>
         </div>
+        {ledgerId === 52 && canCreateOrder && activeTab !== 'finance' && (
+          <div className="px-4 pb-3">
+            <button
+              type="button"
+              onClick={() => openCreateOrderRef.current?.()}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-lg font-bold text-blue-700 shadow-lg shadow-blue-950/15 transition-colors hover:bg-blue-50 active:bg-blue-100"
+              aria-label="添加融资付息订单"
+            >
+              添加订单
+            </button>
+          </div>
+        )}
         {/* Tab 切换 - 三个 tab */}
         <div className="flex px-4 pb-0">
           <button
@@ -87,13 +106,13 @@ export default function FinanceUnified() {
       {/* Tab 内容 */}
       <div>
         {activeTab === 'funder' && (
-          <FunderManagement ledgerIdProp={ledgerId} onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} onRecycleBinRef={handleRecycleBinRef} onCreateOrderRef={createOrderRefHandler} />
         )}
         {activeTab === 'admin' && (
-          <FunderManagement ledgerIdProp={ledgerId} adminOnly onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} adminOnly onRecycleBinRef={handleRecycleBinRef} onCreateOrderRef={createOrderRefHandler} />
         )}
         {activeTab === 'finance' && (
-          <FunderManagement ledgerIdProp={ledgerId} financeOnly onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} financeOnly onRecycleBinRef={handleRecycleBinRef} onCreateOrderRef={createOrderRefHandler} />
         )}
       </div>
     </div>

@@ -27,6 +27,7 @@ interface FunderManagementProps {
   financeOnly?: boolean;
   ledgerIdProp?: number;
   onRecycleBinRef?: (openFn: () => void) => void;
+  onCreateOrderRef?: (openFn: (() => void) | null) => void;
 }
 
 type FormulaPreviewState = {
@@ -398,7 +399,7 @@ function readFunderOwnerRecency(storageKey: string): number[] {
   }
 }
 
-export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
+export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly, onRecycleBinRef, onCreateOrderRef }: FunderManagementProps = {}) {
   const [, routeParams] = useRoute("/ledger/:id/finance-unified");
   const ledgerId = ledgerIdProp || (routeParams?.id ? parseInt(routeParams.id) : 0);
   const trpcUtils = trpc.useUtils();
@@ -3308,6 +3309,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     setShowForm(true);
   };
 
+  // 蓝色页头只复用当前页面的创建表单；稳定 ref 避免父子注册回调引起循环更新。
+  const createOrderActionRef = useRef(handleOpenCreate);
+  createOrderActionRef.current = handleOpenCreate;
+  useEffect(() => {
+    if (!onCreateOrderRef) return;
+    onCreateOrderRef(isAdminUser && !financeOnly ? () => createOrderActionRef.current() : null);
+    return () => onCreateOrderRef(null);
+  }, [onCreateOrderRef, isAdminUser, financeOnly]);
+
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
   const handleOpenEdit = (order: any, scrollTo?: string, preserveEditorRoot = false) => {
     primaryOrderDirtyRef.current = false;
@@ -4446,7 +4456,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             <option value="settled">已结清</option>
           </select>
           {/* 添加订单按钮：借方模式下隐藏，统一在左侧资方Tab添加 */}
-          {!financeOnly && (
+          {!financeOnly && !onCreateOrderRef && (
           <button
             onClick={() => handleOpenCreate()}
             className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white text-sm font-medium shadow-md"

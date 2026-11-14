@@ -98,6 +98,111 @@ function formatWalletStyleAssetAmount(assetCode: unknown, value: unknown): strin
   });
 }
 
+// 仅担保说明弹窗使用：金额四舍五入显示整数，不将展示值回写或参与计算。
+export function formatFunderCollateralPopupAmount(value: unknown): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '--';
+  const roundedAbsolute = Math.abs(amount).toFixed(0);
+  return amount < 0 && roundedAbsolute !== '0' ? `-${roundedAbsolute}` : roundedAbsolute;
+}
+
+export function formatFunderCollateralPopupQuantity(coin: unknown, quantity: unknown): string {
+  return String(coin || '').trim().toUpperCase() === 'USDT'
+    ? formatFunderCollateralPopupAmount(quantity)
+    : formatWalletStyleAssetAmount(coin, quantity);
+}
+
+export function FunderCollateralAssetTypeBadge({ assetType }: { assetType: unknown }) {
+  const label = assetType === 'crypto_option' ? '期' : assetType === 'stock' ? '股' : '币';
+  const backgroundColor = assetType === 'crypto_option' ? '#7C3AED' : assetType === 'stock' ? '#D97706' : '#059669';
+  return <span className="ml-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle text-[10px] font-medium leading-none text-white whitespace-nowrap" style={{ backgroundColor }}>{label}</span>;
+}
+
+const funderPopupClockFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+export function FunderCollateralPopupLiveClock() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timer = window.setInterval(update, 1000);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+  return <time dateTime={new Date(now).toISOString()} title="北京时间，非行情或担保数据更新时间" className="ml-auto shrink-0 whitespace-nowrap font-mono text-[10px] font-normal tabular-nums text-slate-400">{funderPopupClockFormatter.format(now)}</time>;
+}
+
+export function FunderSharedCollateralSectionHeading() {
+  return <div className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-semibold" style={{ color: '#374151' }}>
+    <span>④ 共享担保物汇总</span>
+    <FunderCollateralPopupLiveClock />
+  </div>;
+}
+
+export function FunderSharedHoldingSectionHeading() {
+  const [open, setOpen] = useState(false);
+  return <>
+    <div className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-semibold" style={{ color: '#374151' }}>
+      <span>③ 各共享成员持仓差额</span>
+      <button type="button" onClick={() => setOpen(value => !value)} aria-label="查看持仓差额计算口径" aria-expanded={open} className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold leading-none text-blue-600">?</button>
+      <FunderCollateralPopupLiveClock />
+    </div>
+    {open && <div className="mb-2 space-y-1 rounded-md bg-blue-50/60 px-2 py-1.5 text-[10px] leading-4 text-slate-500">
+      <div>担保差值：−买入价值 − 待结利息 + 已结利息。</div>
+      <div>担保＋浮盈：浮动盈亏 − 待结利息 + 已结利息。</div>
+      <div>除息：本项固定为0，利息不计入；真实担保物在第④项汇总。</div>
+      <div>以各订单保存的口径和最终缺口为准；本项不含担保物。</div>
+    </div>}
+  </>;
+}
+
+export function FunderSharedCollateralCalculationNotes() {
+  return <div className="mt-3 space-y-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-[10px] leading-4 text-gray-500">
+    <div className="text-[11px] font-semibold text-gray-700">计算说明</div>
+    <div><strong>① 总计担保缺口</strong> = ③ 共享成员持仓差额合计 + ④ 共享担保物合计；正数表示有余量，负数表示需补充担保。</div>
+    <div><strong>② 保证金比例</strong> = 总计担保缺口 ÷ 上方列出的风险基准 × 100%；基准依各订单保存口径确定。</div>
+    <div><strong>③ 持仓差额</strong>：担保差值按“−买入价值 − 待结利息 + 已结利息”；担保＋浮盈按“浮盈亏 − 待结利息 + 已结利息”。此项不重复加入担保物。</div>
+    <div><strong>④ 担保物</strong>：仅汇总参加共享的真实担保物，每笔只计一次。</div>
+    <div><strong>⑤ 非共享订单</strong>独立计算，列表及其合计均不计入①共享总额。“持仓全额”和“初始本金”也按各自口径独立计算，不加入共享合计。</div>
+    <div><strong>除息</strong>表示币本位担保：订单盈亏与正负利息在③中均为0；真实担保物仍计入④。不是删除或扣款记录。</div>
+    <div><strong>标签与数量</strong>：期＝期权、币＝数字币、股＝股票；期权数量取实际张数，币种取对应标的。USDT／u显示为四舍五入整数，计算与比例仍使用原始精度。</div>
+  </div>;
+}
+
+export function findFunderCollateralPopupSourceOrder(poolInfo: any, summary: any): any {
+  const memberKey = String(summary?.memberKey || `${Number(summary?.orderId ?? summary?.id)}:${String(summary?.jointSegmentId || '__primary__')}`);
+  const sources = [
+    ...(Array.isArray(poolInfo?.sharedOrderCardSources) ? poolInfo.sharedOrderCardSources : []),
+    ...(Array.isArray(poolInfo?.nonSharedOrderCardSources) ? poolInfo.nonSharedOrderCardSources : []),
+  ];
+  return sources.find((source: any) => String(source._sharedPoolMemberKey || `${Number(source.id)}:${String(source._sharedPoolSegmentId || '__primary__')}`) === memberKey);
+}
+
+// 仅展示订单/该段实际数量。期权优先用 buyQty 张数，绝不以权利金或买入价推算。
+export function getFunderOrderAssetQuantityLabel(order: any, sourceOrder?: any): string {
+  const source = sourceOrder ?? order?.sourceOrder ?? order;
+  const parseOptionInfo = (value: unknown): any => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch { return null; }
+  };
+  const isOption = (order?.assetType ?? order?.asset_type ?? source?.asset_type) === 'crypto_option';
+  const optionInfo = isOption ? (parseOptionInfo(source?.option_info) ?? parseOptionInfo(order?.option_info)) : null;
+  const coin = String(optionInfo?.coin || order?.coin || source?.coin || '').trim().toUpperCase();
+  const candidates = isOption
+    ? [optionInfo?.buyQty, source?.buy_quantity, order?.quantity, order?.buy_quantity]
+    : [order?.quantity, order?.buy_quantity, order?.buyQuantity, source?.buy_quantity];
+  const quantity = candidates.find(value => value !== null && value !== undefined
+    && String(value).trim() !== '' && Number.isFinite(Number(value)));
+  const quantityLabel = quantity !== undefined ? formatFunderCollateralPopupQuantity(coin, quantity) : '--';
+  return coin ? `${coin} × ${quantityLabel}` : '--';
+}
+
 /**
  * 左栏主卡的浮动盈亏：六位数及以上不显示小数，避免移动端数值拥挤或换行。
  * 仅改变可见文本；担保、风险敞口和所有内部计算继续使用完整精度。
@@ -4469,7 +4574,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>各订单持有资产差额合计 + 共享担保物</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{formatFunderCollateralGap(holdingBalance)} + {formatFunderCollateralGap(totalColl)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} u</span></>
+                                      ? <>{formatFunderCollateralPopupAmount(holdingBalance)} + {formatFunderCollateralPopupAmount(totalColl)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} u</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                 </div>
@@ -4478,10 +4583,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保缺口 ÷ 总风险基准</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralGap(diff)} ÷ {totalGapBase.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} ÷ {formatFunderCollateralPopupAmount(totalGapBase)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
-                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {totalGapBase.toFixed(2)} u（担保减买入价值按真实买入价值；其余按保存口径）</div>
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {formatFunderCollateralPopupAmount(totalGapBase)} u（担保减买入价值按真实买入价值；其余按保存口径）</div>
                                 </div>
                               </>
                             );
@@ -4489,8 +4594,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
                           {/* ③ 所有共享订单的持仓差额（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各共享成员持仓差额</div>
-                                    <div className="mb-1" style={{ color: '#9CA3AF' }}>浮盈亏口径：当前持有资产 − 缺口基准；担保减买入价值口径：−买入价值；币本位担保：订单盈亏与利息均固定为0；本项均不含担保物</div>
+                            <FunderSharedHoldingSectionHeading />
                                     {sharedPoolInfo ? (
                                       <>
                                         <div className="space-y-1.5">
@@ -4519,7 +4623,6 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     const oQty = Number(o.quantity ?? 0);
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
-                                    const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     // 标的为CNY仅影响市值；计息基数和待结利息必须按各自币种换算为U。
                                     const isCNY = oCoin === 'CNY';
@@ -4538,9 +4641,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     const oPaidInterest = oLinkedPaidInterestCny !== null && oLinkedPaidInterestCny !== undefined
                                       ? Number(oLinkedPaidInterestCny) / cnyRate
                                       : (oInterestBaseIsCNY ? oPaidInterestRaw / cnyRate : oPaidInterestRaw);
-                                    // 期权订单且 quantity=0：当前持有资产按 0 处理。
-                                    const isOptionNoQty = o.assetType === 'crypto_option';
-                                    if (isOptionNoQty) {
+                                    // 期权行显示真实张数；担保金额仍使用原订单卡已确认的最终缺口。
+                                    const isOptionHoldingRow = o.assetType === 'crypto_option';
+                                    if (isOptionHoldingRow) {
                                       const oPrincipalUOpt = isCNY ? oPrincipal / cnyRate : oPrincipal;
                                       const oServerGapBase = Number(o.collateralGapBaseU);
                                       const oGapBase = Number.isFinite(oServerGapBase) && oServerGapBase > 0 ? oServerGapBase : oPrincipalUOpt;
@@ -4549,15 +4652,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                         <div key={memberKey} className="flex justify-between items-center">
                                           <div>
                                             <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
-                                            <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                             <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                            <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                            {isCoinNativeCollateral && <div className="ml-5 mt-0.5 text-[10px]" style={{ color: '#6B7280' }}>订单盈亏 0.00 u</div>}
+                                            <FunderCollateralAssetTypeBadge assetType={o.assetType} />
+                                            {isCoinNativeCollateral && <span className="ml-1.5 inline-flex items-center rounded-sm bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-medium leading-none text-white whitespace-nowrap" title="币本位担保：利息与订单盈亏不计入本项">除息</span>}
+                                            <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{getFunderOrderAssetQuantityLabel(o, findFunderCollateralPopupSourceOrder(sharedPoolInfo, o))}</span>
                                           </div>
                                           <div className="text-right">
-                                            {isCoinNativeCollateral && gap !== null && <div className="text-[10px]" style={{ color: '#6B7280' }}>利息暂不计入</div>}
                                             {gap !== null
-                                              ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralGap(gap)} u</span>
+                                              ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(gap)} u</span>
                                               : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                           </div>
                                         </div>
@@ -4596,16 +4698,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                       <div key={memberKey} className="flex justify-between items-center">
                                         <div>
                                           <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
-                                          <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                          <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                          {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : formatCoinQtyFunder(o.quantity, oCoin)}</span> : null}
-                                          {isCoinNativeCollateral && <div className="ml-5 mt-0.5 text-[10px]" style={{ color: '#6B7280' }}>订单盈亏 0.00 u</div>}
+                                          <FunderCollateralAssetTypeBadge assetType={o.assetType} />
+                                          {isCoinNativeCollateral && <span className="ml-1.5 inline-flex items-center rounded-sm bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-medium leading-none text-white whitespace-nowrap" title="币本位担保：利息与订单盈亏不计入本项">除息</span>}
+                                          <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{getFunderOrderAssetQuantityLabel(o, findFunderCollateralPopupSourceOrder(sharedPoolInfo, o))}</span>
                                         </div>
                                         <div className="text-right">
-                                          {isCoinNativeCollateral && gap !== null && <div className="text-[10px]" style={{ color: '#6B7280' }}>利息暂不计入</div>}
                                           {gap !== null
-                                            ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralGap(gap)} u</span>
+                                            ? <span className="font-mono font-semibold" style={{ color: gap < 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(gap)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                           </div>
                                         </div>
@@ -4621,7 +4721,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计共享成员持仓差额</span>
                                       {allKnown
-                                        ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{formatFunderCollateralGap(totalHoldingGap)} u</span>
+                                        ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(totalHoldingGap)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );
@@ -4634,13 +4734,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
                           {/* ④ 所有担保物汇总 */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>④ 共享担保物汇总</div>
+                            <FunderSharedCollateralSectionHeading />
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
                                     const collateralAssets = Array.isArray(o.collateralAssets) ? o.collateralAssets : [];
-                                    const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
                                     const memberKey = String(o.memberKey || `${Number(o.orderId)}:${String(o.jointSegmentId || '__primary__')}`);
                                     const collateralItems = collateralAssets.map((asset: any) => {
                                       const coin = String(asset?.coin || '').trim().toUpperCase();
@@ -4658,14 +4757,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     });
                                     const primaryCollateral = collateralItems.slice().sort((a: { valueU: number | null }, b: { valueU: number | null }) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity))[0];
                                     const primaryCollateralQuantity = primaryCollateral?.qty
-                                      ? formatWalletStyleAssetAmount(primaryCollateral.coin, primaryCollateral.qty)
+                                      ? formatFunderCollateralPopupQuantity(primaryCollateral.coin, primaryCollateral.qty)
                                       : '';
                                     return (
                                       <div key={memberKey} className="flex justify-between items-center gap-2">
                                         <div className="min-w-0 flex flex-wrap items-baseline">
                                           <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
-                                          <span className="mr-1.5 text-[10px] font-medium shrink-0" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer shrink-0" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <FunderCollateralAssetTypeBadge assetType={o.assetType} />
+                                          {o.collateralRiskFormula === 'coin_native_collateral' && <span className="ml-1.5 inline-flex items-center rounded-sm bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-medium leading-none text-white whitespace-nowrap" title="币本位担保：利息与订单盈亏不计入本项">除息</span>}
                                           {collateralItems.length > 1 ? (
                                             <button
                                               type="button"
@@ -4681,7 +4781,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                             : null}
                                         </div>
                                         <span className="font-mono font-semibold shrink-0" style={{ color: '#DC2626' }}>
-                                          {collateralAssets.length > 0 && o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '0.00 u'}
+                                          {collateralAssets.length > 0 && o.collateralValue > 0 ? `+${formatFunderCollateralPopupAmount(o.collateralValue)} u` : '0 u'}
                                         </span>
                                       </div>
                                     );
@@ -4689,7 +4789,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 </div>
                                 <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计担保物价值</span>
-                                  <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
+                                  <span className="font-mono" style={{ color: '#DC2626' }}>+{formatFunderCollateralPopupAmount(((sharedPoolInfo as any).totalCollateralValue ?? 0))} u</span>
                                 </div>
                               </>
                             ) : (
@@ -4725,19 +4825,17 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               <div className="space-y-1.5">
                                 {nonSharedOwnerOrders.map((nonSharedOrder: any, index: number) => {
                                   const assetType = nonSharedOrder.assetType ?? nonSharedOrder.asset_type;
-                                  const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
                                   const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
-                                  const cashFlowLabel = nonSharedOrder.isJointMember === true
-                                    ? (String(nonSharedOrder.jointSegmentId || '__primary__') === '__primary__' ? '资金流出' : '资金流入')
-                                    : (nonSharedOrder.principalLentOut === true || nonSharedOrder.principalLentOut === 1 ? '资金流出' : '资金流入');
+                                  const assetQuantityLabel = getFunderOrderAssetQuantityLabel(nonSharedOrder, findFunderCollateralPopupSourceOrder(sharedPoolInfo, nonSharedOrder));
                                   const gap = readConfirmedExposureGap(nonSharedOrder.collateralGap);
-                                  const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${formatFunderCollateralGap(gap)} u` : '加载中...';
+                                  const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${formatFunderCollateralPopupAmount(gap)} u` : '加载中...';
                                   return <div key={nonSharedOrder.memberKey ?? nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0 flex items-center gap-1.5">
+                                    <div className="min-w-0 flex-1">
                                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
-                                      <span className="text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                       <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{orderNo}</button>
-                                      <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>{cashFlowLabel} · 独立担保</span>
+                                      <FunderCollateralAssetTypeBadge assetType={assetType} />
+                                      {nonSharedOrder.collateralRiskFormula === 'coin_native_collateral' && <span className="ml-1.5 inline-flex items-center rounded-sm bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-medium leading-none text-white whitespace-nowrap" title="币本位担保：利息与订单盈亏不计入本项">除息</span>}
+                                      <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>{assetQuantityLabel}</span>
                                     </div>
                                     <span className="font-mono font-semibold shrink-0" style={{ color: gap === null ? '#9CA3AF' : gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
                                   </div>;
@@ -4746,23 +4844,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
                                 <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
                                 {nonSharedGapReady
-                                  ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{formatFunderCollateralGap(nonSharedGapTotal)} u</span>
+                                  ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(nonSharedGapTotal)} u</span>
                                   : <span className="font-mono shrink-0" style={{ color: '#9CA3AF' }}>加载中...</span>}
                               </div>
                             </div>
                           )}
-
-                          {/* 共享担保计算说明 */}
-                          <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
-                            <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                            <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
-                            <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。</div>
-                            <div>• <strong>持仓全额</strong> = 本段实时可变现市值 − 待结利息 + 已结利息；不计额外担保物，固定独立计算。</div>
-                            <div>• <strong>币本位担保</strong> = 第③项订单盈亏与利息均固定为0；真实担保物仍在第④项汇总。</div>
-                            <div>• <strong>共享担保总计</strong>汇总经济共享成员的第③项持仓差额与第④项担保物；持仓全额和初始本金仍按各自独立规则处理。</div>
-                            <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单缺口基准，负数表示担保不足需补仓</div>
-                            <div>• <strong>每张订单的基准选择</strong>在订单编辑页保存后，同步用于共享池和订单卡片。</div>
-                          </div>
 
                         </>
                       ) : (
@@ -4868,6 +4954,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </>
                       )}
                       {/* 计算说明注释 */}
+                      {useUnifiedSharedDialog ? <FunderSharedCollateralCalculationNotes /> : (
                       <div className="mt-3 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                         {usesCoinNativeCollateralFormula ? (
@@ -4888,6 +4975,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         )}
                         <div>• <strong>正数表示担保充足</strong>（担保物覆盖了所有风险），负数表示担保不足（需要补充担保物）</div>
                       </div>
+                      )}
                     </div>
                     </div>
                     )}
@@ -4930,8 +5018,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     <div className="py-2 space-y-1.5">
                       {collateralDetail.assets.slice().sort((a, b) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity)).map((asset, index) => (
                         <div key={`${asset.coin}-${index}`} className="flex items-center justify-between py-1.5">
-                          <span className="font-mono text-sm" style={{ color: '#374151' }}>{asset.coin || '未知资产'}{asset.qty ? ` × ${formatWalletStyleAssetAmount(asset.coin, asset.qty)}` : ''}</span>
-                          <span className="font-mono text-sm font-semibold" style={{ color: '#DC2626' }}>{asset.valueU === null ? '实时价加载中' : `≈ ${asset.valueU.toFixed(2)} u`}</span>
+                          <span className="font-mono text-sm" style={{ color: '#374151' }}>{asset.coin || '未知资产'}{asset.qty ? ` × ${formatFunderCollateralPopupQuantity(asset.coin, asset.qty)}` : ''}</span>
+                          <span className="font-mono text-sm font-semibold" style={{ color: '#DC2626' }}>{asset.valueU === null ? '实时价加载中' : `≈ ${formatFunderCollateralPopupAmount(asset.valueU)} u`}</span>
                         </div>
                       ))}
                     </div>
@@ -4940,7 +5028,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       const totalValue = collateralDetail.assets.reduce((sum, asset) => sum + (asset.valueU ?? 0), 0);
                       return <div className="pt-3 flex items-center justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                         <span style={{ color: '#374151' }}>担保物合计</span>
-                        <span className="font-mono" style={{ color: '#DC2626' }}>{allKnown ? `≈ ${totalValue.toFixed(2)} u` : '实时价加载中'}</span>
+                        <span className="font-mono" style={{ color: '#DC2626' }}>{allKnown ? `≈ ${formatFunderCollateralPopupAmount(totalValue)} u` : '实时价加载中'}</span>
                       </div>;
                     })()}
                   </div>
