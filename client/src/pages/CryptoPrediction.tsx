@@ -1457,8 +1457,10 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
 
   // 模拟订单复用真实的谷底增筹详情、费用和收益权展示，但不参与真实资金及汇总。
   const isAdvanced = Boolean((order as any).isAdvanced || order.orderType === '高级委托');
-  const isContract = !isAdvanced && (!!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约');
   const isCompleted = order.status === 'completed';
+  const isCompletedAdvancedContract = ledgerId === 52 && isAdvanced && isCompleted && order.advancedStatus === 'fulfilled';
+  const isContract = (!isAdvanced && (!!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约'))
+    || isCompletedAdvancedContract;
   const feeStartAt = getAfManagementFeeStartAt({ ...order, isAdvanced });
   const showFulfillmentFeeStart = isAdvanced || order.advancedOrderId || !feeStartAt
     || new Date(feeStartAt).getTime() !== new Date(order.createdAt).getTime();
@@ -1857,7 +1859,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMulti
 
       </div>
 
-      {/* 收益权档位表（无损合约买单均显示，包括委托中） */}
+      {/* 收益权档位表：普通无损合约沿用原展示；高级委托在真实履约成交后共用同一权益区。 */}
       {isContract && order.side === 'buy' && (
         <div className="pt-2" style={{ borderTop: '1px solid #E0E8FF' }}>
           {/* 扫描状态栏 */}

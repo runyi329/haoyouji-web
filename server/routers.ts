@@ -21927,10 +21927,16 @@ ${klinesSummary}
                 }
               }
             }
-            const { triggerImmediateScan } = await import('./af-tier-scanner');
-            triggerImmediateScan(fulfilledOrder.id);
           } catch (error) {
             console.error('[高级委托] 成交后的赠单或扫描联动失败:', error);
+          } finally {
+            // 成交扫描不依赖5.25赠单资格；提前return或赠单失败也必须调度同源正赠单补扫。
+            try {
+              const { triggerImmediateScan } = await import('./af-tier-scanner');
+              triggerImmediateScan(fulfilledOrder.id);
+            } catch (scanError) {
+              console.error('[高级委托] 成交后的档位扫描调度失败:', scanError);
+            }
           }
         }, 0);
         return { success: true, orderId: fulfilledOrder.id, fulfilledPrice: fulfilledOrder.limitPrice };

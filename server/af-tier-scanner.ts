@@ -103,12 +103,51 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
   return null;
 }
 
+// 高级委托成交后与普通无损合约共用扫描；保留高级委托类型和履约审计，不改写订单。
+export function getAfTierScanOrdersQuery(coin: string, targetOrderId?: number) {
+  let query = `SELECT o.id, o.ledger_id, o.user_id, o.coin, o.limit_price FROM af_orders o
+    LEFT JOIN af_orders source_order
+      ON source_order.id = CASE WHEN COALESCE(o.is_gift, 0) = 1 THEN o.source_order_id ELSE o.id END
+      AND source_order.ledger_id = o.ledger_id AND source_order.coin = o.coin
+      AND source_order.side = 'buy' AND COALESCE(source_order.is_gift, 0) = 0
+    LEFT JOIN af_advanced_orders ao
+      ON o.ledger_id = 52 AND ao.ledger_id = source_order.ledger_id AND ao.order_id = source_order.id
+    WHERE o.coin = ? AND o.side = 'buy' AND o.status = 'completed'
+      AND (
+        (o.ledger_id <> 52 AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = ''))
+        OR (
+          o.ledger_id = 52 AND source_order.status = 'completed'
+          AND (
+            (ao.id IS NULL
+              AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '')
+              AND (source_order.order_type = '无损合约' OR source_order.order_type IS NULL OR source_order.order_type = ''))
+            OR (ao.status = 'fulfilled' AND source_order.order_type = '高级委托'
+              AND COALESCE(ao.fulfilled_at, source_order.confirmed_at) IS NOT NULL
+              AND (
+                (COALESCE(o.is_gift, 0) = 0 AND o.order_type = '高级委托')
+                OR (COALESCE(o.is_gift, 0) = 1
+                  AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '' OR o.order_type = '高级委托'))
+              ))
+          )
+        )
+      )
+      AND (o.sell_status IS NULL OR o.sell_status = '' OR o.sell_status = 'selling' OR o.sell_status = 'sell_cancelled')`;
+  const params: Array<string | number> = [coin];
+  if (targetOrderId) {
+    query += ` AND (o.id = ? OR (o.ledger_id = 52 AND COALESCE(o.is_gift, 0) = 1 AND o.source_order_id = ?))`;
+    params.push(targetOrderId, targetOrderId);
+  }
+  return { query, params };
+}
+
 /**
  * 执行一次扫描：检查所有已成交买入订单，触发档位
  * @param targetOrderId 可选，指定只扫描某笔订单（新订单即时扫描用）
  * @param targetCoin 可选，定向扫描时只刷新该订单币种，避免为了打开详情额外请求其他行情。
  */
 export async function runTierScan(targetOrderId?: number, targetCoin?: string) {
+  // 只读热预览不能因打开订单查询而写入扫描日志、历史低点或收益权档位。
+  if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true') return;
   // 全量扫描防重入：如果已有全量扫描在运行，跳过（即时扫描不受锁影响）
   if (!targetOrderId && globalScanLock) {
     console.log('[AF扫描] 已有全量扫描运行中，跳过本次');
@@ -163,18 +202,8 @@ export async function runTierScan(targetOrderId?: number, targetCoin?: string) {
       // 更新内存扫描状态
       scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lowestPrice: lowStr };
 
-      // 3. 查询该币种所有已成交买入订单（无损合约）
-      let ordersQuery = `SELECT id, ledger_id, user_id, coin, limit_price FROM af_orders
-         WHERE coin = ? AND side = 'buy' AND status = 'completed'
-           AND (order_type = '无损合约' OR order_type IS NULL OR order_type = '')
-           AND (sell_status IS NULL OR sell_status = '' OR sell_status = 'selling' OR sell_status = 'sell_cancelled')`;
-      const queryParams: any[] = [coin];
-
-      if (targetOrderId) {
-        ordersQuery += ` AND id = ?`;
-        queryParams.push(targetOrderId);
-      }
-
+      // 3. 普通无损合约与52号账本已履约高级委托使用同一组扫描、统计和不可逆档位规则。
+      const { query: ordersQuery, params: queryParams } = getAfTierScanOrdersQuery(coin, targetOrderId);
       const [orders] = await conn.execute(ordersQuery, queryParams) as any[];
 
       if (!Array.isArray(orders) || orders.length === 0) {
