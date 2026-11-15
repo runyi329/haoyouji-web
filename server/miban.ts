@@ -37,6 +37,7 @@ import {
   ensureMultiAssetWalletInfrastructure,
   getMultiAssetBalancesForUsers,
   getUserMultiAssetHistory,
+  getUserMultiAssetHistoryPage,
   revokeMultiAssetAdminAdjustment,
   updateMultiAssetAdminAdjustmentNote,
 } from "./db-multi-asset-wallet";
@@ -5449,6 +5450,18 @@ export const mibanAdminUserRouter = router({
     )
     .query(async ({ input }) => {
       return await getUserMultiAssetHistory(input.userId, input.limit ?? 100);
+    }),
+  multiAssetWalletHistoryPage: mibanAdminProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        page: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(1),
+        pageSize: z.number().int().min(1).max(100).default(10),
+        assetCode: z.enum(AI_WALLET_SETTLEMENT_ASSETS).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await getUserMultiAssetHistoryPage(input.userId, input.page, input.pageSize, input.assetCode);
     }),
   // 数字资产采用独立不可变账本。仅允许撤回管理员手动调账；转账与担保冻结保持不可撤回。
   multiAssetWalletRevokeAdjustment: mibanAdminProcedure

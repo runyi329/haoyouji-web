@@ -508,6 +508,19 @@ export default function AfRechargeManage() {
   });
   const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global" | "balances">("user");
   const [adjLogPage, setAdjLogPage] = useState(1);
+  const [adjAssetFlowScope, setAdjAssetFlowScope] = useState<{
+    userId: number;
+    assetCode: "all" | (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
+    page: number;
+  }>({ userId: 0, assetCode: "all", page: 1 });
+  const adjAssetFlowUserId = Number(adjSelectedUser?.id || 0);
+  // 切换用户的首个渲染就使用第一页，不先请求上一个用户的页码或币种。
+  const adjAssetFlowPage = adjAssetFlowScope.userId === adjAssetFlowUserId ? adjAssetFlowScope.page : 1;
+  const adjAssetFlowCurrency = adjAssetFlowScope.userId === adjAssetFlowUserId ? adjAssetFlowScope.assetCode : "all";
+  useEffect(() => {
+    setAdjAssetFlowScope((current) => current.userId === adjAssetFlowUserId
+      ? current : { userId: adjAssetFlowUserId, assetCode: "all", page: 1 });
+  }, [adjAssetFlowUserId]);
   const [adjBalanceSearch, setAdjBalanceSearch] = useState("");
   const [adjHideZeroAssetUsers, setAdjHideZeroAssetUsers] = useState(true);
   const [adjHideZeroAssetTypes, setAdjHideZeroAssetTypes] = useState(true);
@@ -550,13 +563,28 @@ export default function AfRechargeManage() {
     { ...(adjSelectedUser?.id ? { viewAsUserId: Number(adjSelectedUser.id) } : {}) },
     { enabled: !!adjSelectedUser, staleTime: 0 }
   );
-  const adjMultiAssetHistoryQuery = mtrpc.adminUser.multiAssetWalletHistory.useQuery(
-    { userId: Number(adjSelectedUser?.id || 0), limit: 100 },
+  const adjMultiAssetHistoryQuery = mtrpc.adminUser.multiAssetWalletHistoryPage.useQuery(
+    {
+      userId: adjAssetFlowUserId,
+      page: adjAssetFlowPage,
+      pageSize: ADJ_PAGE_SIZE,
+      ...(adjAssetFlowCurrency !== "all" ? { assetCode: adjAssetFlowCurrency } : {}),
+    },
     { enabled: !!adjSelectedUser?.id, staleTime: 0 },
   );
-  // 冻结与解冻保留在不可变审计账本中，但不作为管理员资金流水展示；余额卡仍显示冻结数量。
-  const adjVisibleMultiAssetHistory = ((adjMultiAssetHistoryQuery.data ?? []) as any[])
-    .filter((entry) => entry.eventType !== "collateral_lock" && entry.eventType !== "collateral_release");
+  // 担保事件及币种由服务端在COUNT和分页前筛选，不占页数、不截断更早的流水。
+  const adjVisibleMultiAssetHistory = adjMultiAssetHistoryQuery.data?.items ?? [];
+  const adjAssetFlowTotal = adjMultiAssetHistoryQuery.data?.total ?? 0;
+  const adjAssetFlowTotalPages = adjMultiAssetHistoryQuery.data?.totalPages ?? 1;
+  const adjAssetFlowDisplayedPage = adjMultiAssetHistoryQuery.data?.page ?? adjAssetFlowPage;
+  useEffect(() => {
+    const resolvedPage = adjMultiAssetHistoryQuery.data?.page;
+    if (resolvedPage == null || resolvedPage === adjAssetFlowPage) return;
+    // 撤回删除使最后一页变空时，接受服务端校正；旧用户/旧币种的响应不能改新筛选。
+    setAdjAssetFlowScope((current) => current.userId === adjAssetFlowUserId
+      && current.assetCode === adjAssetFlowCurrency && current.page === adjAssetFlowPage
+      ? { ...current, page: resolvedPage } : current);
+  }, [adjMultiAssetHistoryQuery.data?.page, adjAssetFlowUserId, adjAssetFlowCurrency, adjAssetFlowPage]);
   const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
   const refetchAdjHistory = adjHistoryQuery.refetch;
   const refetchAdjMultiAssetHistory = adjMultiAssetHistoryQuery.refetch;
@@ -652,6 +680,8 @@ export default function AfRechargeManage() {
       adjUtils.adminUser.list.invalidate();
       adjUtils.adminUser.walletGlobalHistory.invalidate();
       adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
+      setAdjAssetFlowScope({ userId: adjAssetFlowUserId, assetCode: adjAssetFlowCurrency, page: 1 });
       refetchAdjHistory();
       setAdjLogPage(1);
       refetchAdjGlobal();
@@ -666,6 +696,7 @@ export default function AfRechargeManage() {
       adjUtils.adminUser.list.invalidate();
       adjUtils.adminUser.walletGlobalHistory.invalidate();
       adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
       refetchAdjMultiAssetHistory();
       refetchAdjGlobal();
     },
@@ -678,6 +709,7 @@ export default function AfRechargeManage() {
       setNoteTarget(null);
       setNoteContent("");
       adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
       adjUtils.adminUser.walletGlobalHistory.invalidate();
       refetchAdjMultiAssetHistory();
       refetchAdjGlobal();
@@ -2217,17 +2249,47 @@ export default function AfRechargeManage() {
                 days={adjUserTrendDays}
                 onDaysChange={setAdjUserTrendDays}
               />
-              {adjVisibleMultiAssetHistory.length > 0 && (
+              {
                 <div className="mb-3 rounded-2xl border border-violet-100 bg-white p-3.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[13px] font-bold text-gray-900">数字资产流水</p>
-                      <p className="mt-0.5 text-[10px] text-gray-400">独立不可变账本；后台手动调账可撤回或编辑备注</p>
+                      <p className="mt-0.5 text-[10px] text-gray-400">已过滤担保锁定、解锁；手动调账可撤回或编辑备注</p>
                     </div>
-                    <span className="text-[10px] text-violet-500">{adjVisibleMultiAssetHistory.length} 条</span>
+                    <span className="shrink-0 text-[11px] font-medium text-violet-600">
+                      {adjMultiAssetHistoryQuery.isLoading ? "统计中…" : adjMultiAssetHistoryQuery.isError ? "统计失败" : `共 ${adjAssetFlowTotal} 条`}
+                    </span>
                   </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <label htmlFor="adj-digital-flow-currency" className="shrink-0 text-[11px] text-gray-500">币种</label>
+                    <select
+                      id="adj-digital-flow-currency"
+                      value={adjAssetFlowCurrency}
+                      onChange={(event) => setAdjAssetFlowScope({
+                        userId: adjAssetFlowUserId,
+                        assetCode: event.target.value as typeof adjAssetFlowCurrency,
+                        page: 1,
+                      })}
+                      className="min-w-0 flex-1 rounded-lg border border-violet-200 bg-white px-2.5 py-2 text-[12px] text-gray-700 outline-none focus:border-violet-400"
+                    >
+                      <option value="all">全部币种</option>
+                      {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => (
+                        <option key={assetCode} value={assetCode}>{assetCode}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {adjMultiAssetHistoryQuery.isLoading ? (
+                    <p className="py-6 text-center text-[12px] text-gray-400">数字资产流水加载中…</p>
+                  ) : adjMultiAssetHistoryQuery.isError ? (
+                    <div className="py-5 text-center">
+                      <p className="text-[12px] text-red-500">流水加载失败，请重试</p>
+                      <button type="button" onClick={() => void refetchAdjMultiAssetHistory()} className="mt-2 text-[12px] text-violet-600">重新加载</button>
+                    </div>
+                  ) : adjVisibleMultiAssetHistory.length === 0 ? (
+                    <p className="py-6 text-center text-[12px] text-gray-400">{adjAssetFlowCurrency === "all" ? "暂无数字资产流水" : `暂无 ${adjAssetFlowCurrency} 流水`}</p>
+                  ) : (
                   <div className="mt-2 divide-y divide-violet-50">
-                    {adjVisibleMultiAssetHistory.slice(0, 8).map((entry: any) => {
+                    {adjVisibleMultiAssetHistory.map((entry: any) => {
                       const amount = Number(entry.amount ?? 0);
                       const label = entry.eventType === "transfer_in"
                         ? "站内转账收款"
@@ -2275,8 +2337,26 @@ export default function AfRechargeManage() {
                       );
                     })}
                   </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-violet-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setAdjAssetFlowScope({ userId: adjAssetFlowUserId, assetCode: adjAssetFlowCurrency, page: Math.max(1, adjAssetFlowDisplayedPage - 1) })}
+                      disabled={adjMultiAssetHistoryQuery.isFetching || adjMultiAssetHistoryQuery.isError || adjAssetFlowDisplayedPage <= 1}
+                      className="flex items-center gap-1 rounded-lg border border-violet-200 px-3 py-2 text-[12px] text-violet-600 disabled:opacity-30"
+                    ><PrevIcon className="h-3.5 w-3.5" />上一页</button>
+                    <span className="text-[11px] text-gray-500" aria-live="polite">
+                      {adjMultiAssetHistoryQuery.isFetching ? "加载中…" : adjMultiAssetHistoryQuery.isError ? "—" : `${adjAssetFlowDisplayedPage} / ${adjAssetFlowTotalPages} 页`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAdjAssetFlowScope({ userId: adjAssetFlowUserId, assetCode: adjAssetFlowCurrency, page: Math.min(adjAssetFlowTotalPages, adjAssetFlowDisplayedPage + 1) })}
+                      disabled={adjMultiAssetHistoryQuery.isFetching || adjMultiAssetHistoryQuery.isError || adjAssetFlowDisplayedPage >= adjAssetFlowTotalPages}
+                      className="flex items-center gap-1 rounded-lg border border-violet-200 px-3 py-2 text-[12px] text-violet-600 disabled:opacity-30"
+                    >下一页<NextIcon className="h-3.5 w-3.5" /></button>
+                  </div>
                 </div>
-              )}
+              }
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>

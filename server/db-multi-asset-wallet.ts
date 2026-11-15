@@ -391,6 +391,56 @@ export async function getUserMultiAssetHistory(userId: number, limit = 20): Prom
   return asRows(rows).map(entryResult);
 }
 
+/** 管理员充值页只读明细：排除担保冻结/解冻，按全量历史统计和分页；缺表直接报错。 */
+export async function getUserMultiAssetHistoryPage(userId: number, page = 1, pageSize = 10, assetCode?: MultiAssetWalletAsset | string): Promise<{
+  items: MultiAssetHistoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("钱包用户无效");
+  if (!Number.isSafeInteger(page) || page <= 0) throw new Error("流水页码无效");
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new Error("每页流水数量必须为1到100之间的整数");
+  }
+  const normalizedAssetCode = assetCode === undefined ? undefined : normalizeMultiAssetWalletAsset(assetCode);
+  const queryParams = normalizedAssetCode === undefined ? [userId] : [userId, normalizedAssetCode];
+  // 此查询不得调用含 CREATE / ALTER 的基础设施初始化，也不补建缺失表。
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const where = "entry.user_id = ? AND entry.event_type NOT IN ('collateral_lock', 'collateral_release')"
+    + (normalizedAssetCode === undefined ? "" : " AND entry.asset_code = ?");
+  const [countRows] = await (conn as any).execute(
+    `SELECT COUNT(*) AS total FROM ai_wallet_asset_entries entry WHERE ${where}`,
+    queryParams,
+  );
+  const total = Number(asRows(countRows)[0]?.total);
+  if (!Number.isSafeInteger(total) || total < 0) throw new Error("流水总数无效");
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  if (total === 0) return { items: [], total, page: 1, pageSize, totalPages };
+  const safeOffset = (safePage - 1) * pageSize;
+  if (!Number.isSafeInteger(safeOffset) || safeOffset < 0) throw new Error("流水分页偏移无效");
+  // LIMIT / OFFSET 仅插入已校验的有界整数，沿用旧查询以兼容 MySQL 预处理限制。
+  const [rows] = await (conn as any).execute(
+    `SELECT entry.id, entry.entry_no, entry.request_id, entry.asset_code, entry.amount, entry.balance_after,
+            entry.event_type, entry.note, entry.source_ledger_id, entry.created_at,
+            transfer.transfer_no,
+            sender.name AS sender_name, sender.username AS sender_username,
+            recipient.name AS recipient_name, recipient.username AS recipient_username
+       FROM ai_wallet_asset_entries entry
+       LEFT JOIN ai_wallet_asset_transfers transfer ON transfer.id = entry.related_transfer_id
+       LEFT JOIN users sender ON sender.id = transfer.from_user_id
+       LEFT JOIN users recipient ON recipient.id = transfer.to_user_id
+      WHERE ${where}
+      ORDER BY entry.created_at DESC, entry.id DESC
+      LIMIT ${pageSize} OFFSET ${safeOffset}`,
+    queryParams,
+  );
+  return { items: asRows(rows).map(entryResult), total, page: safePage, pageSize, totalPages };
+}
+
 export async function adjustMultiAssetBalance(params: {
   userId: number;
   assetCode: MultiAssetWalletAsset | string;
