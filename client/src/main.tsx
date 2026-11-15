@@ -251,6 +251,7 @@ const trpcClient = trpc.createClient({
           // 充值记录和可提额度单独读取，不等待同批行情或重型统计。
           || op.path === "ledger.t0GetPayoutLogs"
           || op.path === "ledger.t0GetPayoutAvailability"
+          || op.path === "ledger.t0GetProjectStatusData"
           || op.path === "ledger.t0GetMarketContributionFacts"
           || op.path === "ledger.t0GetSharedIncomeAnnualizedRule"
           || op.path === "ledger.t0GetSharedIncomeAnnualizedUsers"

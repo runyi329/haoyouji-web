@@ -100,3 +100,24 @@
   contain: layout style paint;
   z-index: -1;
 }
+
+/* 筛选三栏先按完整内容回收空白；实在超出整行时换行，不裁字或缩放。 */
+[data-t0-adaptive-filter-row] > button,
+[data-t0-adaptive-filter-row] > div > button,
+[data-t0-adaptive-filter-row] > div:not(.relative) {
+  min-height: 40px;
+  height: auto;
+  align-self: stretch;
+  flex-wrap: wrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+[data-t0-adaptive-filter-row] > button > span,
+[data-t0-adaptive-filter-row] > div > button > span,
+[data-t0-adaptive-filter-row] > div:not(.relative) > span {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}

@@ -12381,6 +12381,17 @@ ${klinesSummary}
 
     // 52号账本 T+0 速记账本：管理员读取完整管理视图；普通成员仅读取本人订单及明确分层给本人的订单。
     // 推荐关系不构成订单读取授权；管理员代入成员时同样保持该成员的严格只读范围。
+    t0GetProjectStatusData: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), viewerScopeUserId: z.number().int().positive().optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '代入成员视角不可查看项目状态' });
+        if (input.viewerScopeUserId && input.viewerScopeUserId !== Number(ctx.user.id)) throw new TRPCError({ code: 'FORBIDDEN', message: '查询身份作用域与当前会话不一致' });
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({ id: ctx.user.id, role: ctx.user.role, isViewingAs: ctx.isViewingAs });
+        if (scope.mode !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看项目状态' });
+        return journal.getLedger52T0ProjectStatusData(scope);
+      }),
+
     t0GetJournal: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),

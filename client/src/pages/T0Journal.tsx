@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -33,6 +34,7 @@ import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { useT0ResponsiveLayout } from "@/hooks/useT0ResponsiveLayout";
 import "@/styles/t0-responsive.css";
+import { T0AdaptiveFilterRow } from "@/components/T0AdaptiveFilterRow";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { T0TeamAnnualizedDialog, type T0TeamAnnualizedDetail } from "@/components/T0TeamAnnualizedDialog";
 import { T0TeamDepositDialog } from "@/components/T0TeamDepositDialog";
@@ -3640,6 +3642,35 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
 
   return allocations;
 }
+type T0ProjectStatusItem = { id: string; relatedUserId: string; name: string; relatedUserName: string; relatedUsername?: string; pendingCount: number; holdingCount: number };
+type T0ProjectStatusGroup = { userId: string; name: string; username?: string; projects: T0ProjectStatusItem[] };
+
+/** 清单从已保存目录起步，不从当前报价/账户筛选反推；平仓后项目仍保留。 */
+function buildT0ProjectStatusGroups(projects: Array<Omit<T0ProjectStatusItem, "pendingCount" | "holdingCount">>, trades: PreviewTrade[]): T0ProjectStatusGroup[] {
+  const projectByKey = new Map<string, T0ProjectStatusItem>();
+  for (const project of projects) {
+    projectByKey.set(`${project.relatedUserId}:${project.id}`, { ...project, pendingCount: 0, holdingCount: 0 });
+  }
+  const validTrades = trades.filter((trade) => trade.symbol === "ETH" && ACTIONS[trade.action] && Number.isFinite(trade.quantity) && trade.quantity > 0);
+  // 挂单（包括待成交平仓单）不能提前消耗真实仓位；账户仍在原匹配器内部严格隔离。
+  const allocations = buildOpeningClosingAllocations(validTrades.filter((trade) => !trade.isPending));
+  for (const trade of validTrades) {
+    if (!ACTIONS[trade.action].opening) continue;
+    const project = projectByKey.get(`${trade.relatedUserId}:${trade.relatedFundId}`);
+    if (!project) continue;
+    if (trade.isPending) { project.pendingCount += 1; continue; }
+    const closedQuantity = (allocations.get(trade.id) ?? []).reduce((total, match) => total + match.quantity, 0);
+    if (trade.quantity - closedQuantity > 0.0000001) project.holdingCount += 1;
+  }
+  const groups = new Map<string, T0ProjectStatusGroup>();
+  for (const project of projectByKey.values()) {
+    const group = groups.get(project.relatedUserId) ?? { userId: project.relatedUserId, name: project.relatedUserName, username: project.relatedUsername, projects: [] };
+    group.projects.push(project);
+    groups.set(project.relatedUserId, group);
+  }
+  return Array.from(groups.values()).sort((left, right) => left.name.localeCompare(right.name, "zh-CN") || left.userId.localeCompare(right.userId));
+}
+
 function invertTradeAction(action: TradeAction): TradeAction {
   switch (action) {
     case "openLong": return "openShort";
@@ -4413,6 +4444,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("individual");
   const [showLadderPnlSettings, setShowLadderPnlSettings] = useState(false);
+  const [showProjectStatus, setShowProjectStatus] = useState(false);
   const [ladderPnlSettings, setLadderPnlSettings] = useState<LadderPnlDisplaySettings>(DEFAULT_LADDER_PNL_DISPLAY);
   const [hydratedLadderPnlStorageKey, setHydratedLadderPnlStorageKey] = useState<string | null>(null);
   /** 仅控制整合报价的显示聚合宽度；真实成交、FIFO 与平仓匹配始终使用十美元档。 */
@@ -4667,6 +4699,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const activeJournalData = isPreviewSwitching ? undefined : rawJournalData;
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
+  const projectStatusQueryClient = useQueryClient();
+  const projectStatusQuery = trpc.ledger.t0GetProjectStatusData.useQuery(
+    { ledgerId: 52, viewerScopeUserId: Number((me as any)?.id) || undefined },
+    { enabled: canManage && !isMemberView && showProjectStatus, staleTime: 0, refetchOnWindowFocus: true,
+      refetchInterval: canManage && !isMemberView && showProjectStatus ? 15_000 : false, refetchIntervalInBackground: false },
+  );
+  const projectStatusGroups = useMemo(() => {
+    if (!canManage || isMemberView || !showProjectStatus || !projectStatusQuery.data) return [];
+    return buildT0ProjectStatusGroups(projectStatusQuery.data.projects, projectStatusQuery.data.entries.map(previewTradeFromEntry));
+  }, [canManage, isMemberView, showProjectStatus, projectStatusQuery.data]);
+  useEffect(() => { if (!canManage || isMemberView) setShowProjectStatus(false); }, [canManage, isMemberView]);
+  useEffect(() => {
+    if (!canManage || isMemberView || !showProjectStatus) return;
+    const statusWrites = new Set(["t0CreateEntry", "t0UpdateOpeningEntry", "t0ReassignOpeningRemaining", "t0UpdatePartialOpeningHistoricalAttribution",
+      "t0DeleteOpeningEntry", "t0RevertEntry", "t0RestoreEntry", "t0RenameRelatedFund", "t0DeleteDirectoryItem", "t0SetProfitShareRule"]);
+    // 不修改任何原写入回调；只在服务端确认保存成功后更新这一张只读面板。
+    return projectStatusQueryClient.getMutationCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success") return;
+      const path = event.mutation.options.mutationKey?.[0];
+      if (Array.isArray(path) && path[0] === "ledger" && statusWrites.has(String(path[1]))) void projectStatusQuery.refetch();
+    });
+  }, [canManage, isMemberView, showProjectStatus, projectStatusQueryClient, projectStatusQuery.refetch]);
   const sharedIncomeRulesNeeded = canManage && (showSharedIncomeAllocationGuide || showSharedIncomeWeightedOrderRuleSettings || showSharedIncomeContributionRuleSettings || showSharedIncomeMarketRuleSettings || (showEntrySheet && sharedIncomeAllocationMetrics.length > 0));
   const t0AllocationRulesQuery = trpc.ledger.t0GetAllocationRules.useQuery(
     { ledgerId: 52 },
@@ -7689,7 +7743,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
     // 管理员保留账户、用户、项目三项；成员端仅展示用户与项目，均按内容智能分配宽度。
     const accountSummary = summaryFor("账户", accountFilterOptions, selectedAccountIds);
-    const userSummary = summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
+    const userSummary = canManage ? `用户${adminFilterSummary}` : summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
     const fundSummary = shouldLockMemberFundFilter
       ? `项目${lockedRelatedFundName}`
       : summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds);
@@ -7711,7 +7765,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return buildT0FilterGridTemplateColumns(isMemberView
       ? [userSpec, fundSpec]
       : [accountSpec, userSpec, fundSpec]);
-  }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
+  }, [accountFilterOptions, adminFilterSummary, canManage, isMemberView, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter, shouldHideLockedForDisplay);
   const topTypeStatusGridTemplateColumns = useMemo(
@@ -12213,9 +12267,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.10)",
             }}
           >
-            <div
-              data-t0-filter-row
-              className={`grid gap-1.5 transition-[grid-template-columns] duration-200 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
+            <T0AdaptiveFilterRow
+              className={`grid gap-1.5 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
               style={{
                 gridTemplateColumns: topFilterGridTemplateColumns,
               }}
@@ -12279,7 +12332,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }}
                 />
               )}
-            </div>
+            </T0AdaptiveFilterRow>
             {(canManage || isMemberView) && <div className="mt-2 grid grid-cols-2 gap-1.5 transition-[grid-template-columns] duration-200" style={{ gridTemplateColumns: topTypeStatusGridTemplateColumns }}>
               <T0MultiSelect
                 label="类型"
@@ -12357,6 +12410,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               盈亏显示
               {(ladderPnlSettings.mode !== "all" || Number(ladderPnlSettings.minPercent) > 0) && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="已设置显示条件" />}
             </button>
+            {canManage && !isMemberView && <button
+              type="button"
+              onClick={() => setShowProjectStatus((current) => !current)}
+              aria-expanded={showProjectStatus}
+              aria-controls="t0-project-status"
+              className={`inline-flex h-6 items-center rounded border px-2 text-[11px] font-semibold active:scale-[0.98] ${showProjectStatus ? "border-slate-700 bg-slate-700 text-white" : "border-slate-300 bg-white/80 text-slate-700"}`}
+            >项目状态</button>}
           </div>}
           {(canManage || isMemberView) && showLadderPnlSettings && <div id="t0-ladder-pnl-settings" className="space-y-2.5 border-b border-slate-300 bg-white/90 px-3 py-3">
             <div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-700">报价单盈亏显示</span><button type="button" onClick={() => setLadderPnlSettings({ ...DEFAULT_LADDER_PNL_DISPLAY })} className="text-[11px] text-slate-500 active:text-slate-900">恢复默认</button></div>
@@ -12375,6 +12435,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>
             <p className="text-[10px] leading-4 text-slate-400">{ladderPnlSettings.mode === "hidden" ? "隐藏所有报价单的盈亏金额和百分比。" : ladderPnlSettings.mode === "profit" ? "例如填5，仅盈利达到5%的报价单显示所选数字。" : ladderPnlSettings.mode === "loss" ? "例如填5，仅亏损达到5%的报价单显示所选数字。" : "按盈亏幅度绝对值筛选；留空或0表示不设门槛。"}订单、数量及价格仍保留，不改变收益计算。</p>
           </div>}
+          {canManage && !isMemberView && showProjectStatus && <section id="t0-project-status" aria-label="项目状态" className="border-b border-slate-300 bg-white/95 px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold text-slate-700">项目状态</h3>
+              <button type="button" disabled={projectStatusQuery.isFetching} onClick={() => void projectStatusQuery.refetch()} className="text-[11px] text-slate-500 disabled:opacity-50">{projectStatusQuery.isFetching ? "更新中…" : "刷新"}</button>
+            </div>
+            <p className="mt-1 text-[10px] leading-4 text-slate-400">全部已添加项目，不受上方账户筛选影响；平仓后没有新订单显示“未开单”。</p>
+            {projectStatusQuery.isError && <div role="alert" className="mt-2 text-[11px] text-rose-600">项目状态更新失败，请刷新重试。{projectStatusQuery.data ? "下方为上次读取结果。" : "未读取完成，不判断是否开单。"}</div>}
+            {!projectStatusQuery.data && !projectStatusQuery.isError && <div role="status" className="py-4 text-center text-xs text-slate-400">正在读取完整项目状态…</div>}
+            {projectStatusQuery.data && <>
+              <div className="mt-2 text-[10px] text-slate-500">{projectStatusGroups.length} 人 · {projectStatusGroups.reduce((total, group) => total + group.projects.length, 0)} 个项目 · 未开单 {projectStatusGroups.reduce((total, group) => total + group.projects.filter((project) => !project.pendingCount && !project.holdingCount).length, 0)} 个</div>
+              {projectStatusGroups.length === 0 ? <div className="py-4 text-center text-xs text-slate-400">暂无已添加项目</div> : <div className="mt-2 max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain">
+                {projectStatusGroups.map((group) => <div key={group.userId} className="rounded border border-slate-200 bg-white">
+                  <div className="flex items-baseline gap-1.5 border-b border-slate-100 bg-slate-50 px-2.5 py-1.5"><span className="break-words text-xs font-semibold text-slate-700">{group.name}</span><span className="shrink-0 text-[10px] text-slate-400">{group.projects.length} 个项目</span>{group.username && <span className="min-w-0 truncate text-[10px] text-slate-400">{group.username}</span>}</div>
+                  <div className="divide-y divide-slate-100">
+                    {group.projects.map((project) => <div key={project.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2.5 py-2">
+                      <span className="min-w-0 break-words text-xs text-slate-600">{project.name}</span>
+                      <div className="flex shrink-0 flex-wrap gap-1 text-[10px] font-medium">
+                        {!project.pendingCount && !project.holdingCount && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">未开单</span>}
+                        {project.pendingCount > 0 && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-700">挂单中 · {project.pendingCount}笔</span>}
+                        {project.holdingCount > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">已成交持仓中 · {project.holdingCount}笔</span>}
+                      </div>
+                    </div>)}
+                  </div>
+                </div>)}
+              </div>}
+            </>}
+          </section>}
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#aeb8c1]/50 px-3 py-2.5"
             style={{
@@ -12936,9 +13023,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     </b>
                   </p>}
                 </div> : <>
-                <div
-                  data-t0-filter-row
-                  className={`grid gap-1.5 transition-[grid-template-columns] duration-200 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
+                <T0AdaptiveFilterRow
+                  className={`grid gap-1.5 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
                   style={{ gridTemplateColumns: historyFilterGridTemplateColumns }}
                 >
                   {!isMemberView && <T0MultiSelect
@@ -12976,7 +13062,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setRecentJournalPage(1);
                     }}
                   />
-                </div>
+                </T0AdaptiveFilterRow>
                 <div
                   className="mt-2 grid grid-cols-2 gap-2 transition-[grid-template-columns] duration-200"
                   style={{ gridTemplateColumns: historyTypeStatusGridTemplateColumns }}

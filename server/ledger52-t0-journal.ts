@@ -7611,3 +7611,71 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     tx.release?.();
   }
 }
+
+/** 项目状态独立于报价筛选与历史分页；只读完整目录/订单，不读取钱包或收益分配。 */
+export async function getLedger52T0ProjectStatusData(scope: T0JournalReadScope) {
+  if (scope.mode !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可查看项目状态" });
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "项目状态数据库连接失败" });
+  let transactionStarted = false;
+  try {
+    await conn.query("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY");
+    transactionStarted = true;
+    const [projectResult] = await conn.execute(
+      `SELECT f.id, f.related_user_id, f.name,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', f.related_user_id)) AS related_user_name,
+              u.username AS related_username
+         FROM ledger52_t0_journal_related_funds f
+         LEFT JOIN users u ON u.id = f.related_user_id
+        WHERE f.ledger_id = ? AND f.user_id = ? AND f.is_active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions d
+             WHERE d.ledger_id = f.ledger_id AND d.user_id = f.user_id
+               AND d.dimension = 'related_user' AND d.dimension_id = f.related_user_id
+          )
+        ORDER BY f.related_user_id ASC, f.id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID, scope.journalOwnerUserId],
+    );
+    const [entryResult] = await conn.execute(
+      `SELECT e.id, e.account_id, e.related_user_id, e.related_fund_id, e.symbol,
+              e.instrument_type, e.action, e.execution_status, e.filled_at, e.filled_price,
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.target_opening_entry_id,
+              e.trade_time, e.created_at
+         FROM ledger52_t0_journal_entries e
+        WHERE e.ledger_id = ? AND e.user_id = ?
+          AND COALESCE(e.execution_status, 'filled') NOT IN ('cancelled', 'canceled')
+        ORDER BY e.id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID, scope.journalOwnerUserId],
+    );
+    // 直接止盈外键必须保留，防止历史时间异常让已结束项目被误报为仍有持仓。
+    const [planResult] = await conn.execute(
+      `SELECT p.id, p.opening_entry_id, p.status, p.quantity, p.triggered_quantity, p.closing_entry_id
+         FROM ledger52_t0_journal_take_profit_plans p
+         INNER JOIN ledger52_t0_journal_entries e ON e.id = p.opening_entry_id AND e.ledger_id = p.ledger_id AND e.user_id = p.user_id
+        WHERE e.ledger_id = ? AND e.user_id = ? AND p.status = 'triggered'
+        ORDER BY p.opening_entry_id ASC, p.id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID, scope.journalOwnerUserId],
+    );
+    const plansByEntryId = new Map<number, any[]>();
+    for (const row of asRows(planResult)) {
+      const id = toNumber(row.opening_entry_id);
+      const plans = plansByEntryId.get(id) ?? [];
+      plans.push(row);
+      plansByEntryId.set(id, plans);
+    }
+    const projects = asRows(projectResult).map((row) => ({
+      id: String(row.id), relatedUserId: String(row.related_user_id), name: String(row.name),
+      relatedUserName: String(row.related_user_name), relatedUsername: row.related_username ? String(row.related_username) : undefined,
+    }));
+    const entries = asRows(entryResult).map((row) => mapEntry({ ...row, take_profit_plans: plansByEntryId.get(toNumber(row.id)) ?? [] }));
+    await conn.commit();
+    transactionStarted = false;
+    return { projects, entries, asOf: new Date().toISOString() };
+  } catch (error) {
+    if (transactionStarted) await conn.rollback();
+    throw error;
+  } finally {
+    // 连接池归还借用连接；备用普通连接由db模块持有，不能释放或关闭共享连接。
+    if ("release" in conn && typeof conn.release === "function") conn.release();
+  }
+}
