@@ -474,6 +474,8 @@ export default function AfRechargeManage() {
   const [adjSearch, setAdjSearch] = useState("");
   const [adjShowDropdown, setAdjShowDropdown] = useState(false);
   const [adjSelectedUser, setAdjSelectedUser] = useState<any>(null);
+  const [adjPageRefreshing, setAdjPageRefreshing] = useState(false);
+  const adjPageRefreshInFlightRef = useRef(false);
   const adjSelectedUserExportRef = useRef<HTMLDivElement | null>(null);
   const [adjCurrency, setAdjCurrency] = useState<AdjustmentAsset>("USDT");
   const [adjDirection, setAdjDirection] = useState<"add" | "sub">("add");
@@ -507,6 +509,7 @@ export default function AfRechargeManage() {
     }
   });
   const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global" | "balances">("user");
+  const [adjUserHistoryTab, setAdjUserHistoryTab] = useState<"digital" | "funding">("digital");
   const [adjLogPage, setAdjLogPage] = useState(1);
   const [adjAssetFlowScope, setAdjAssetFlowScope] = useState<{
     userId: number;
@@ -550,7 +553,7 @@ export default function AfRechargeManage() {
 
   // ===== 内嵌调账 Tab 数据查询 =====
   const adjUtils = mtrpc.useUtils();
-  const { data: adjAllUsers = [] } = mtrpc.adminUser.list.useQuery();
+  const { data: adjAllUsers = [], refetch: refetchAdjUsers } = mtrpc.adminUser.list.useQuery();
   // 调账页复用服务端统一行情缓存，将选中用户或全部用户的 USDT、人民币和数字资产统一折算为总价值。
   const adjWalletPricesQuery = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: mainTab === "adjust" && (!!adjSelectedUser?.id || adjFlowTab === "balances"),
@@ -627,7 +630,7 @@ export default function AfRechargeManage() {
       ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
     }
   );
-  const { data: adjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
+  const { data: adjRecentHistory, refetch: refetchAdjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
     // 从较宽的最新流水窗口中去重，确保下拉可稳定给出最近 10 位不同用户。
     { page: 1, pageSize: 50, includeAllWalletEvents: true },
     { staleTime: 30_000 }
@@ -640,6 +643,43 @@ export default function AfRechargeManage() {
     { days: adjUserTrendDays, ...(adjSelectedUser?.id ? { userId: Number(adjSelectedUser.id) } : {}) },
     { enabled: adjFlowTab === "user" && !!adjSelectedUser?.id, staleTime: 30_000, refetchOnWindowFocus: false },
   );
+  // 不重载浏览器或清空表单：强制读取整页已启用查询，包含余额卡所依赖的用户目录。
+  // 用户目录更新由下方同ID同步effect投影到当前用户，切人期间旧响应不会覆盖新用户。
+  const handleAdjPageRefresh = async () => {
+    if (adjPageRefreshInFlightRef.current) return;
+    adjPageRefreshInFlightRef.current = true;
+    setAdjPageRefreshing(true);
+    const options = { cancelRefetch: true, throwOnError: true };
+    try {
+      const requests: Promise<unknown>[] = [
+        refetchAdjUsers(options),
+        refetchAdjGlobal(options),
+        refetchAdjRecentHistory(options),
+        ordersQuery.refetch(options),
+        pendingOrdersQuery.refetch(options),
+        statsQuery.refetch(options),
+        heartbeatQuery.refetch(options),
+        unmatchedQuery.refetch(options),
+      ];
+      if (adjSelectedUser?.id) {
+        requests.push(refetchAdjHistory(options), refetchAdjMultiAssetHistory(options));
+        if (adjFlowTab === "user") requests.push(adjUserTrendQuery.refetch(options));
+      }
+      if (adjSelectedUser?.id || adjFlowTab === "balances") requests.push(adjWalletPricesQuery.refetch(options));
+      if (adjFlowTab === "balances") requests.push(adjGlobalTrendQuery.refetch(options));
+      const results = await Promise.allSettled(requests);
+      if (results.some((result) => result.status === "rejected")) {
+        toast.error("部分数据更新失败，请再点更新重试");
+      } else {
+        toast.success("页面数据已更新");
+      }
+    } catch {
+      toast.error("更新失败，请重试");
+    } finally {
+      adjPageRefreshInFlightRef.current = false;
+      setAdjPageRefreshing(false);
+    }
+  };
   const adjLogItems = adjGlobalLog?.items ?? [];
   const adjRecentHistoryItems = adjRecentHistory?.items ?? [];
   const adjLogTotal = adjGlobalLog?.total ?? 0;
@@ -1917,7 +1957,18 @@ export default function AfRechargeManage() {
           {/* 用户选择与调账参数合并为同一张紧凑表单卡。 */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[14px] font-bold text-black">手动调账</p>
+              <div className="flex items-center gap-2.5">
+                <p className="text-[14px] font-bold text-black">手动调账</p>
+                <button
+                  type="button"
+                  onClick={() => void handleAdjPageRefresh()}
+                  disabled={adjPageRefreshing}
+                  aria-label="更新整页钱包数据"
+                  aria-busy={adjPageRefreshing}
+                  title="重新读取余额、担保数量、估值及流水"
+                  className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-600 active:bg-orange-100 disabled:opacity-50"
+                >更新</button>
+              </div>
               <span className="text-[10px] text-gray-400">选择用户后填写金额</span>
             </div>
             <div>
@@ -2249,8 +2300,28 @@ export default function AfRechargeManage() {
                 days={adjUserTrendDays}
                 onDaysChange={setAdjUserTrendDays}
               />
-              {
-                <div className="mb-3 rounded-2xl border border-violet-100 bg-white p-3.5 shadow-sm">
+              <div className="flex gap-1 rounded-xl border border-orange-100 bg-orange-50 p-1" role="tablist" aria-label="用户钱包流水类型">
+                <button
+                  type="button"
+                  role="tab"
+                  id="adj-digital-history-tab"
+                  aria-selected={adjUserHistoryTab === "digital"}
+                  aria-controls="adj-digital-history-panel"
+                  onClick={() => setAdjUserHistoryTab("digital")}
+                  className={`min-w-0 flex-1 rounded-lg py-2.5 text-[12px] font-semibold transition-colors ${adjUserHistoryTab === "digital" ? "bg-white text-violet-600 shadow-sm" : "text-gray-500"}`}
+                >数字币</button>
+                <button
+                  type="button"
+                  role="tab"
+                  id="adj-funding-history-tab"
+                  aria-selected={adjUserHistoryTab === "funding"}
+                  aria-controls="adj-funding-history-panel"
+                  onClick={() => setAdjUserHistoryTab("funding")}
+                  className={`min-w-0 flex-1 rounded-lg py-2.5 text-[12px] font-semibold transition-colors ${adjUserHistoryTab === "funding" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+                >人民币 / USDT</button>
+              </div>
+              {adjUserHistoryTab === "digital" && (
+                <div id="adj-digital-history-panel" role="tabpanel" aria-labelledby="adj-digital-history-tab" className="rounded-2xl border border-violet-100 bg-white p-3.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[13px] font-bold text-gray-900">数字资产流水</p>
@@ -2356,8 +2427,9 @@ export default function AfRechargeManage() {
                     >下一页<NextIcon className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
-              }
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              )}
+              {adjUserHistoryTab === "funding" && (
+              <div id="adj-funding-history-panel" role="tabpanel" aria-labelledby="adj-funding-history-tab" className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
                 <span className="text-[11px] text-gray-400">
@@ -2472,6 +2544,7 @@ export default function AfRechargeManage() {
                 </div>
               )}
               </div>
+              )}
             </>
           ) : (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
