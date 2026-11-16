@@ -32,15 +32,19 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { RightInterestDetail } from "@/components/RightInterestDetail";
+import { TagMarginStockSaleEditor, type TagMarginStockSaleEdit } from "@/components/TagMarginStockSaleEditor";
+import { TagMarginStockSaleDetails } from "@/components/TagMarginStockSaleDetails";
 import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
+  getTagMarginStockSaleSummary,
   getTagMarginStockRecords,
   formatTagMarginCoinLabel,
   getTagMarginStockSymbols,
   formatTagMarginStockQuoteUpdatedAt,
   parseTagMarginRecords,
   resolveTagMarginStockQuote,
+  resolveTagMarginTotalCny,
   type TagMarginRecord,
 } from "@shared/tag-margin-assets";
 
@@ -67,16 +71,18 @@ type RightMarginEdit = {
   referencePrice: string;
   priceDate: string;
   priceUpdatedAt: string;
+  purchasePrice: string;
+  sales: TagMarginStockSaleEdit[];
 };
 
 const emptyCurrencyMargin = (date = new Date().toISOString().slice(0, 10)): RightMarginEdit => ({
   assetType: 'currency', coin: 'ETH', amount: '', label: '', date,
-  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '', purchasePrice: '', sales: [],
 });
 
 const emptyStockMargin = (date = new Date().toISOString().slice(0, 10)): RightMarginEdit => ({
   assetType: 'stock', coin: '', amount: '', label: '', date,
-  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '', purchasePrice: '', sales: [],
 });
 
 function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEdit {
@@ -86,11 +92,15 @@ function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEd
       symbol: record.symbol, code: record.code, name: record.name, quantity: String(record.quantity),
       referencePrice: record.referencePrice > 0 ? String(record.referencePrice) : '',
       priceDate: record.priceDate, priceUpdatedAt: record.priceUpdatedAt,
+      purchasePrice: record.purchasePrice !== undefined ? String(record.purchasePrice) : '',
+      sales: Array.isArray(record.sales)
+        ? record.sales.map((sale) => ({ quantity: String(sale?.quantity ?? ''), price: String(sale?.price ?? '') }))
+        : Object.prototype.hasOwnProperty.call(record, 'sales') ? [{ quantity: '', price: '' }] : [],
     };
   }
   return {
     assetType: 'currency', coin: record.coin || '元', amount: String(record.amount), label: record.label, date: record.date || date,
-    symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+    symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '', purchasePrice: '', sales: [],
   };
 }
 
@@ -715,6 +725,8 @@ export default function DepositManage() {
           quantity: Number(entry.quantity), referencePrice: Number(entry.referencePrice),
           priceDate: entry.priceDate, priceUpdatedAt: entry.priceUpdatedAt,
           label: entry.label, date: entry.date,
+          ...(entry.purchasePrice.trim() ? { purchasePrice: Number(entry.purchasePrice) } : {}),
+          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price) })) } : {}),
         }
         : { assetType: 'currency', coin: entry.coin, amount: Number(entry.amount), label: entry.label, date: entry.date }
       )));
@@ -804,6 +816,11 @@ export default function DepositManage() {
   };
 
   const selectRightMarginAshareStock = (index: number, suggestion: { symbol: string; code: string; name: string; latestPrice?: number; latestPriceDate?: string; latestPriceUpdatedAt?: string }) => {
+    const previous = rightMarginEdits[index];
+    if (previous?.code && previous.code !== suggestion.code && (previous.purchasePrice.trim() || previous.sales.length)) {
+      toast.error('这档已有买入价或卖出记录，请新增股票条目，避免把成交数据套到另一股票');
+      return;
+    }
     updateRightMarginEntry(index, {
       symbol: suggestion.symbol,
       code: suggestion.code,
@@ -837,8 +854,9 @@ export default function DepositManage() {
     // 数字币/人民币支持正负流水；股票以有效代码和持仓股数作为一笔标签级担保物。
     const todayStr = new Date().toISOString().slice(0, 10);
     const incompleteStock = rightMarginEdits.find((entry) => entry.assetType === 'stock'
-      && (entry.symbol.trim() || entry.name.trim() || entry.quantity.trim())
-      && (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(entry.symbol.trim().toUpperCase()) || !Number.isFinite(Number(entry.quantity)) || Number(entry.quantity) <= 0));
+      && (entry.symbol.trim() || entry.name.trim() || entry.quantity.trim() || entry.purchasePrice.trim() || entry.sales.length)
+      && (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(entry.symbol.trim().toUpperCase()) || !Number.isFinite(Number(entry.quantity)) || Number(entry.quantity) <= 0
+        || ((entry.purchasePrice.trim() || entry.sales.length) && /^\d{6}$/.test(entry.code) && entry.code !== entry.symbol.trim().slice(0, 6))));
     if (incompleteStock) {
       toast.error('股票保证金请完成选择股票和填写持股数量后再保存');
       setRightSaving(false);
@@ -850,7 +868,7 @@ export default function DepositManage() {
         const symbol = entry.symbol.trim().toUpperCase();
         const quantity = Number(entry.quantity);
         if (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) || !Number.isFinite(quantity) || quantity === 0) continue;
-        validEntries.push({
+        const stockRecord: Extract<TagMarginRecord, { assetType: 'stock' }> = {
           assetType: 'stock' as const,
           symbol,
           code: entry.code.trim() || symbol.slice(0, 6),
@@ -861,7 +879,16 @@ export default function DepositManage() {
           priceUpdatedAt: entry.priceUpdatedAt || '',
           label: entry.label || '',
           date: entry.date || todayStr,
-        });
+          ...(entry.purchasePrice.trim() ? { purchasePrice: Number(entry.purchasePrice) } : {}),
+          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price) })) } : {}),
+        };
+        if ((stockRecord.purchasePrice !== undefined && (!Number.isFinite(stockRecord.purchasePrice) || stockRecord.purchasePrice <= 0))
+          || !getTagMarginStockSaleSummary(stockRecord).valid) {
+          toast.error('请填写有效的买入价、卖出价和股数，累计卖出股数不能超过原持股数');
+          setRightSaving(false);
+          return;
+        }
+        validEntries.push(stockRecord);
         continue;
       }
       const amount = Number(entry.amount);
@@ -886,7 +913,7 @@ export default function DepositManage() {
       // 写入操作日志
       const detail = chronologicalEntries.length > 0
         ? chronologicalEntries.map((entry) => entry.assetType === 'stock'
-          ? `${entry.name || entry.code} ${entry.quantity}股${entry.label ? ' (' + entry.label + ')' : ''}`
+          ? `${entry.name || entry.code} ${entry.quantity}股${entry.purchasePrice !== undefined ? `，买入价¥${entry.purchasePrice}` : ''}${entry.sales?.length ? `，卖出${entry.sales.map((sale) => `${sale.quantity}股×¥${sale.price}`).join('、')}` : ''}${entry.label ? ' (' + entry.label + ')' : ''}`
           : `${entry.coin} ${entry.amount}${entry.label ? ' (' + entry.label + ')' : ''}`).join('、')
         : '清空保证金';
       await addMarginLogMutation.mutateAsync({
@@ -968,8 +995,12 @@ export default function DepositManage() {
   const rightMarginData = currentRightMarginRecords;
 
   const locallyComputedRightTotalCNY = useMemo(() => {
-    return rightMarginData.reduce((sum, entry) => {
-      if (entry.assetType === 'stock') return sum + (getTagMarginStockMarketValue(entry, allMarginStockQuotes) ?? 0);
+    return rightMarginData.reduce<number | null>((sum, entry) => {
+      if (sum === null) return null;
+      if (entry.assetType === 'stock') {
+        const value = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
+        return value === null ? null : sum + value;
+      }
       return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
     }, 0);
   }, [rightMarginData, cryptoPrices, allMarginStockQuotes]);
@@ -988,8 +1019,7 @@ export default function DepositManage() {
       cnyValueCNY: Object.entries(currencyTotals).reduce((sum, [coin, amount]) => isCnyMarginCoin(coin) ? sum + amount : sum, 0),
     };
   }, [rightMarginData, allMarginStockQuotes]);
-  const canonicalRightTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
-  const rightTotalCNY = Number.isFinite(canonicalRightTotalCNY) ? canonicalRightTotalCNY : locallyComputedRightTotalCNY;
+  const rightTotalCNY = resolveTagMarginTotalCny(canonicalMarginValuation as { totalCny?: unknown } | undefined, locallyComputedRightTotalCNY);
   const rightTagInterestSummary = useMemo(
     () => summarizeTagInterestDifference(
       Array.isArray(rightTagInterestPeriods)
@@ -1006,7 +1036,7 @@ export default function DepositManage() {
   }, [rightTagConfig]);
   const includedInterestDifferenceCny = includePendingInterest ? rightTagInterestSummary.differenceCny : 0;
   // 合并口径 = 手工/股票等保证金资产 − 待结利息；利息页零或负数不增加保证金。
-  const combinedRightMarginCNY = rightTotalCNY + includedInterestDifferenceCny;
+  const combinedRightMarginCNY = rightTotalCNY !== null ? rightTotalCNY + includedInterestDifferenceCny : null;
 
   // 解析提现/入金数据（当前选中标签）
   const fundFlowData = useMemo(() => {
@@ -1448,8 +1478,12 @@ export default function DepositManage() {
                   const marginBase = parseFloat(tagSummaryData.marginBase || '0') || 0;
                   if (marginBase > 0) {
                     // 与展开详情共用的口径：数字币/人民币按实时币价，A 股按最后一笔可用盘尾价估值。
-                    const totalMarginCNY = parseTagMarginRecords(tagSummaryData.marginByCoin).reduce((sum, entry) => {
-                      if (entry.assetType === 'stock') return sum + (getTagMarginStockMarketValue(entry, allMarginStockQuotes) ?? 0);
+                    const totalMarginCNY = parseTagMarginRecords(tagSummaryData.marginByCoin).reduce<number | null>((sum, entry) => {
+                      if (sum === null) return null;
+                      if (entry.assetType === 'stock') {
+                        const value = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
+                        return value === null ? null : sum + value;
+                      }
                       return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
                     }, 0);
                     // 盈亏净值（与展开里 pnl 逻辑完全一致）
@@ -1458,8 +1492,8 @@ export default function DepositManage() {
                     const initialNum = parseFloat(tagSummaryData.initialAmount || '0') || 0;
                     const multiplierNum = parseFloat(tagSummaryData.accountMultiplier || '1') || 1;
                     const pnl = (balNum - initialNum) * multiplierNum;
-                    const remaining = pnl + totalMarginCNY;
-                    collapseRatio = marginBase > 0 ? (remaining / marginBase) * 100 : null;
+                    const remaining = totalMarginCNY !== null ? pnl + totalMarginCNY : null;
+                    collapseRatio = marginBase > 0 && remaining !== null ? (remaining / marginBase) * 100 : null;
                   }
                 }
                 const isWarning = collapseRatio !== null && collapseRatio < 10;
@@ -1578,6 +1612,7 @@ export default function DepositManage() {
                                       const marketValue = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
                                       const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt);
                                       const cnyRate = cryptoPrices.USDT ?? CNY_RATE_FALLBACK;
+                                      const saleSummary = getTagMarginStockSaleSummary(entry);
                                       const isStockReduction = entry.quantity < 0;
                                       return (
                                         <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: '1px solid #E5E7EB' }}>
@@ -1592,12 +1627,13 @@ export default function DepositManage() {
                                               <span className="text-xs truncate" style={{ color: '#2563EB' }}>{entry.name || '未命名股票'}</span>
                                               <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
                                             </div>
-                                            <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>
+                                            {saleSummary.remainingQuantity !== 0 && <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>}
+                                            <TagMarginStockSaleDetails record={entry} />
                                             {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>备注：{entry.label}</span> : null}
                                           </div>
                                           <div className="flex flex-col items-end">
                                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
-                                            <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+                                            <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '估值待获取' : `${saleSummary.soldQuantity > 0 ? (saleSummary.remainingQuantity === 0 ? '卖出价值' : '保证金价值') : '约'} ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`}</span>
                                             {marketValue !== null && cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>}
                                           </div>
                                         </div>
@@ -1678,8 +1714,8 @@ export default function DepositManage() {
                                       )}
                                       <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 pt-1.5" style={{ borderTop: '1px solid #E5E7EB' }}>
                                         <span className="text-sm font-bold" style={{ color: '#111827' }}>总担保价值</span>
-                                        <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">≈ {(rightTotalCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
-                                        <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">¥{rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                                        <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">{rightTotalCNY !== null ? `≈ ${(rightTotalCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u` : '估值待获取'}</span>
+                                        <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">{rightTotalCNY !== null ? `¥${rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}</span>
                                       </div>
                                     </div>
                                   </div>
@@ -1716,11 +1752,11 @@ export default function DepositManage() {
                               const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
                               const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
                               // 剩余保证金 = 盈亏净值 + 保证金资产 + 利息差额（已结 − 待结）。
-                              const remainingMargin = pnl !== null ? pnl + combinedRightMarginCNY : null;
+                              const remainingMargin = pnl !== null && combinedRightMarginCNY !== null ? pnl + combinedRightMarginCNY : null;
                               // 保证金占基数比 = 剩余保证金 / 保证金基数
                               const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
                               // 保证金占余额比（降级备用）
-                              const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (combinedRightMarginCNY / autoBalanceNum * 100) : null;
+                              const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 && combinedRightMarginCNY !== null ? (combinedRightMarginCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div ref={rightBalanceExportRef} className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
                                   {/* 设置与下载不纳入账户余额图片 */}
@@ -2234,12 +2270,14 @@ export default function DepositManage() {
                                         </div>
                                       )}
                                       <div className="grid grid-cols-2 gap-2 mt-1.5">
-                                        <input type="number" min="0" step="any" value={entry.quantity} onChange={(event) => updateRightMarginEntry(idx, { quantity: event.target.value })} placeholder="持股数量" className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
+                                        <input aria-label="原持股数（保留）" type="number" min="0" step="any" value={entry.quantity} onChange={(event) => updateRightMarginEntry(idx, { quantity: event.target.value })} placeholder="原持股数（保留）" className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
                                         <input type="date" value={entry.date || new Date().toISOString().slice(0, 10)} onChange={(event) => updateRightMarginEntry(idx, { date: event.target.value })} className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', WebkitAppearance: 'none' }} />
                                       </div>
                                       <div className="mt-1.5 rounded-lg px-2 py-1.5 text-[11px]" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8' }}>
                                         当前参考价：{entry.referencePrice ? `¥${Number(entry.referencePrice).toLocaleString('zh-CN', { maximumFractionDigits: 3 })}` : '选择股票后自动带入'}{formatTagMarginStockQuoteUpdatedAt(entry.priceUpdatedAt) ? ` · 更新于 ${formatTagMarginStockQuoteUpdatedAt(entry.priceUpdatedAt)}` : ''}；保存后将自动同步最新参考价。
                                       </div>
+                                      <TagMarginStockSaleEditor quantity={entry.quantity} purchasePrice={entry.purchasePrice} sales={entry.sales}
+                                        onChange={(patch) => updateRightMarginEntry(idx, patch)} />
                                     </>
                                   )}
                                   <textarea value={entry.label || ''} onChange={(event) => updateRightMarginEntry(idx, { label: event.target.value })} placeholder="备注（可输入多行）" rows={2} className="w-full mt-1.5 text-sm border rounded-lg px-2 py-1.5 outline-none resize-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', lineHeight: '1.5' }} />

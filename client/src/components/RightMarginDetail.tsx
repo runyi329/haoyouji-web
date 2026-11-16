@@ -6,15 +6,18 @@
  */
 import React, { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { TagMarginStockSaleDetails } from "@/components/TagMarginStockSaleDetails";
 import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
+  getTagMarginStockSaleSummary,
   getTagMarginStockRecords,
   formatTagMarginCoinLabel,
   getTagMarginStockSymbols,
   formatTagMarginStockQuoteUpdatedAt,
   parseTagMarginRecords,
   resolveTagMarginStockQuote,
+  resolveTagMarginTotalCny,
 } from "@shared/tag-margin-assets";
 
 const CNY_RATE_FALLBACK = 6.8;
@@ -148,9 +151,14 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
   const rightMarginStockQuotes = ((rightMarginStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
 
   const locallyComputedTotalCNY = useMemo(() => {
-    return rightMarginData.reduce((sum, entry) => entry.assetType === 'stock'
-      ? sum + (getTagMarginStockMarketValue(entry, rightMarginStockQuotes) ?? 0)
-      : sum + toCNY(String(entry.amount), entry.coin, cryptoPrices), 0);
+    return rightMarginData.reduce<number | null>((sum, entry) => {
+      if (sum === null) return null;
+      if (entry.assetType === 'stock') {
+        const value = getTagMarginStockMarketValue(entry, rightMarginStockQuotes);
+        return value === null ? null : sum + value;
+      }
+      return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
+    }, 0);
   }, [rightMarginData, cryptoPrices, rightMarginStockQuotes]);
   const rightMarginValueSummary = useMemo(() => {
     const currencyTotals = getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
@@ -167,8 +175,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
       cnyValueCNY: Object.entries(currencyTotals).reduce((sum, [coin, amount]) => isCnyMarginCoin(coin) ? sum + amount : sum, 0),
     };
   }, [rightMarginData, rightMarginStockQuotes]);
-  const canonicalTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
-  const rightTotalCNY = Number.isFinite(canonicalTotalCNY) ? canonicalTotalCNY : locallyComputedTotalCNY;
+  const rightTotalCNY = resolveTagMarginTotalCny(canonicalMarginValuation as { totalCny?: unknown } | undefined, locallyComputedTotalCNY);
 
   // ── 账户信息计算 ──
   const latestBalance = (rightTagSummary as any)?.latestBalance;
@@ -190,9 +197,9 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
   const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
   const _cnyRate = Number(cryptoPrices["USDT"]) > 0 ? Number(cryptoPrices["USDT"]) : CNY_RATE_FALLBACK;
   const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
-  const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
+  const remainingMargin = pnl !== null && rightTotalCNY !== null ? pnl + rightTotalCNY : null;
   const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
-  const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
+  const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 && rightTotalCNY !== null ? (rightTotalCNY / autoBalanceNum * 100) : null;
   const shouldShowLinkedPaidInterest = linkedPaidInterestCny === null
     || (linkedPaidInterestCny !== undefined && Number(linkedPaidInterestCny) > 0);
   const hasLinkedInterestAdjustment = linkedPendingInterestCny !== undefined || shouldShowLinkedPaidInterest;
@@ -210,6 +217,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
                 const quote = resolveTagMarginStockQuote(entry, rightMarginStockQuotes);
                 const marketValue = getTagMarginStockMarketValue(entry, rightMarginStockQuotes);
                 const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt);
+                const saleSummary = getTagMarginStockSaleSummary(entry);
                 const isStockReduction = entry.quantity < 0;
                 return (
                   <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: "1px solid #E5E7EB" }}>
@@ -224,12 +232,13 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
                         <span className="truncate text-xs" style={{ color: '#2563EB' }}>{entry.name || '未命名股票'}</span>
                         <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
                       </div>
-                      <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>
+                      {saleSummary.remainingQuantity !== 0 && <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>}
+                      <TagMarginStockSaleDetails record={entry} />
                       {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>备注：{entry.label}</span> : null}
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
-                      <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+                      <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '估值待获取' : `${saleSummary.soldQuantity > 0 ? (saleSummary.remainingQuantity === 0 ? '卖出价值' : '保证金价值') : '约'} ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`}</span>
                       {marketValue !== null && _cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>}
                     </div>
                   </div>
@@ -297,8 +306,8 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
                 )}
                 <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 pt-1.5" style={{ borderTop: '1px solid #E5E7EB' }}>
                   <span className="text-sm font-bold" style={{ color: '#111827' }}>总担保价值</span>
-                  <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">≈ {(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
-                  <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}</span>
+                  <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">{rightTotalCNY !== null ? `≈ ${(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u` : '估值待获取'}</span>
+                  <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">{rightTotalCNY !== null ? `¥${rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}` : '--'}</span>
                 </div>
                 {hasLinkedInterestAdjustment && (
                   <div className="mt-2 rounded-lg px-2.5 py-2" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>

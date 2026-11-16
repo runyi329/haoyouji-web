@@ -11,6 +11,7 @@ import { getStockChipDistribution } from "./stock-chip-distribution";
 import { afEffectiveOrderStatusSql, getAfGiftActivationError } from "@shared/af-gift-order-state";
 import { afManagementFeeStartAtSql, afHasAdvancedFeeSourceSql, getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
+import { validateTagMarginStockSales } from "./tag-margin-stock-sales-validation";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
@@ -18436,6 +18437,7 @@ ${klinesSummary}
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置标签配置' });
         }
+        validateTagMarginStockSales(input);
         const linkedGlobalPauseResult = input.ledgerId === LEDGER_37_ID && input.pauseDate !== undefined
           ? await setLedger37TagGlobalPause({
             ledgerId: input.ledgerId,
@@ -25213,7 +25215,7 @@ ${klinesSummary}
             const collateralConfig = source.collateralTagName ? linkedTagConfigByName.get(source.collateralTagName) : null;
             const pnlConfig = source.floatingPnlTagName ? linkedTagConfigByName.get(source.floatingPnlTagName) : null;
             if ((source.useCollateral && !collateralConfig) || (source.useFloatingPnl && !pnlConfig)) return null;
-            let entries: Array<{ coin: string; qty: number; note: string; assetType?: 'stock'; name?: string; code?: string; price?: number | null; priceDate?: string }> = [];
+            let entries: Array<{ coin: string; qty: number; note: string; assetType?: 'stock'; name?: string; code?: string; price?: number | null; valueCny?: number | null; priceDate?: string }> = [];
             try {
               const rawMargins = source.collateralTagName ? (linkedTagMarginByName.get(source.collateralTagName) ?? {}) : {};
               const currencyEntries = Array.isArray(rawMargins)
@@ -25234,19 +25236,20 @@ ${klinesSummary}
                     name: stock.name,
                     code: stock.code,
                     price,
+                    valueCny: getTagMarginStockMarketValue(stock, linkedMarginStockQuotes),
                     priceDate: String(snapshot?.priceDate || stock.priceDate || ''),
                   };
                 })
                 : [];
-              entries = [...currencyEntries, ...stockEntries].filter(entry => Number.isFinite(entry.qty) && entry.qty !== 0);
+              entries = [...currencyEntries, ...stockEntries].filter(entry => ('assetType' in entry && entry.assetType === 'stock') || (Number.isFinite(entry.qty) && entry.qty !== 0));
             } catch { entries = []; }
             let allPricesKnown = true;
             let collateralValue = 0;
             for (const entry of entries) {
               if (entry.assetType === 'stock') {
-                if (!entry.price || entry.price <= 0) { allPricesKnown = false; continue; }
+                if (entry.valueCny == null) { allPricesKnown = false; continue; }
                 // A 股参考价是人民币；共享池使用 U 作为风险口径。
-                collateralValue += entry.qty * entry.price / usdtCnyRate;
+                collateralValue += entry.valueCny / usdtCnyRate;
                 continue;
               }
               const coin = entry.coin.trim().toUpperCase();

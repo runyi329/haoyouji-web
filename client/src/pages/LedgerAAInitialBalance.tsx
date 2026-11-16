@@ -3221,6 +3221,10 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     const marginByCoinJson = marginEdits.filter(e => e.amount).length > 0
       ? JSON.stringify(Object.fromEntries(marginEdits.filter(e => e.amount).map(e => [e.coin, parseFloat(e.amount) || 0])))
       : undefined;
+    // 37号逐笔保证金（含股票/卖出）由保证金管理维护；保存此页其它配置不能把它转成旧字典覆盖。
+    const keepStructuredMarginRecords = ledgerId === 37 && (() => {
+      try { return Array.isArray(JSON.parse(tagConfigData?.margin_by_coin || '')); } catch { return false; }
+    })();
     // 将 pnlManualEdits 转换为 JSON 数组字符串保存 [{reason, amount}]
     const validPnlEdits = pnlManualEdits.filter(e => e.amount);
     const pnlManualJson = validPnlEdits.length > 0
@@ -3237,7 +3241,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
       pauseDate: tagConfigForm.pauseDate || undefined,
       endDate: tagConfigForm.endDate || undefined,
       note: tagConfigForm.note || undefined,
-      marginByCoin: marginByCoinJson,
+      marginByCoin: keepStructuredMarginRecords ? undefined : marginByCoinJson,
       pnlManual: pnlManualJson,
       pnlNote: tagConfigForm.pnlNote || undefined,
       originalAmount: tagConfigForm.originalAmount || undefined,

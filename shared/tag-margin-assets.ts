@@ -12,6 +12,10 @@ export type TagMarginStockRecord = {
   code: string;
   name: string;
   quantity: number;
+  /** Explicitly entered purchase price only; never inferred from a quote. */
+  purchasePrice?: number;
+  /** Sale registrations do not change the original quantity or execute a trade. */
+  sales?: Array<{ quantity: number; price: number }>;
   /** Selected quote retained as a temporary fallback before a 15:05 close snapshot exists. */
   referencePrice: number;
   priceDate: string;
@@ -84,21 +88,28 @@ function normalizeStockRecord(value: unknown): TagMarginStockRecord | null {
   const record = value as Record<string, unknown>;
   const symbol = normalizeSymbol(record.symbol);
   const quantity = numeric(record.quantity ?? record.amount);
-  if (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) || quantity === null || quantity === 0) return null;
+  const hasNewFields = Object.prototype.hasOwnProperty.call(record, 'purchasePrice')
+    || Object.prototype.hasOwnProperty.call(record, 'sales');
+  // Keep rows with new fields even when malformed, so they remain visible for correction.
+  if (!hasNewFields && (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) || quantity === null || quantity === 0)) return null;
   const code = text(record.code) || symbol.slice(0, 6);
   const referencePrice = numeric(record.referencePrice ?? record.latestPrice ?? record.initialPrice) ?? 0;
-  return {
+  const normalized: TagMarginStockRecord = {
     assetType: 'stock',
     symbol,
     code,
     name: text(record.name),
-    quantity,
+    quantity: quantity ?? NaN,
     referencePrice: referencePrice > 0 ? referencePrice : 0,
     priceDate: text(record.priceDate ?? record.latestPriceDate ?? record.initialPriceDate),
     priceUpdatedAt: text(record.priceUpdatedAt ?? record.latestPriceUpdatedAt),
     label: text(record.label ?? record.note),
     date: text(record.date ?? record.createdAt),
   };
+  // Do not coerce, discard, or repair invalid historical additions: valuation fails closed.
+  if (Object.prototype.hasOwnProperty.call(record, 'purchasePrice')) normalized.purchasePrice = record.purchasePrice as number;
+  if (Object.prototype.hasOwnProperty.call(record, 'sales')) normalized.sales = record.sales as TagMarginStockRecord['sales'];
+  return normalized;
 }
 
 function normalizeCurrencyRecord(value: unknown): TagMarginCurrencyRecord | null {
@@ -118,6 +129,7 @@ function normalizeCurrencyRecord(value: unknown): TagMarginCurrencyRecord | null
 /**
  * Parses the current array format and the legacy `{ coin: amount }` format.
  * Bad rows are ignored so one historical malformed record cannot hide valid collateral.
+ * Stock rows carrying invalid new fields are retained for correction, not treated as unsold.
  */
 export function parseTagMarginRecords(raw: unknown): TagMarginRecord[] {
   let value = raw;
@@ -156,8 +168,38 @@ export function getTagMarginCurrencyRecords(records: TagMarginRecord[]): TagMarg
   return records.filter((record): record is TagMarginCurrencyRecord => record.assetType === 'currency');
 }
 
+/** Strict validation of explicit additions; legacy unsold negative/fractional holdings are unchanged. */
+export function getTagMarginStockSaleSummary(record: TagMarginStockRecord): {
+  soldQuantity: number; saleValue: number; remainingQuantity: number; valid: boolean;
+} {
+  const invalid = () => ({ soldQuantity: 0, saleValue: 0, remainingQuantity: record.quantity, valid: false });
+  const hasPurchasePrice = Object.prototype.hasOwnProperty.call(record, 'purchasePrice');
+  const hasSales = Object.prototype.hasOwnProperty.call(record, 'sales');
+  if ((hasPurchasePrice || hasSales) && (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(record.symbol)
+    || !Number.isFinite(record.quantity) || record.quantity === 0)) return invalid();
+  if (hasPurchasePrice && (typeof record.purchasePrice !== 'number'
+    || !Number.isFinite(record.purchasePrice) || record.purchasePrice <= 0)) return invalid();
+  if (!hasSales) return { soldQuantity: 0, saleValue: 0, remainingQuantity: record.quantity, valid: true };
+  if (!Array.isArray(record.sales) || record.quantity <= 0) return invalid();
+  let soldQuantity = 0;
+  let saleValue = 0;
+  for (const sale of record.sales) {
+    if (!sale || typeof sale !== 'object' || Array.isArray(sale)
+      || !Number.isSafeInteger(sale.quantity) || sale.quantity <= 0
+      || typeof sale.price !== 'number' || !Number.isFinite(sale.price) || sale.price <= 0) return invalid();
+    soldQuantity += sale.quantity;
+    saleValue += sale.quantity * sale.price;
+    // Safe integer totals prevent floating-point rounding from permitting an oversale.
+    if (!Number.isSafeInteger(soldQuantity) || soldQuantity > record.quantity || !Number.isFinite(saleValue)) return invalid();
+  }
+  return { soldQuantity, saleValue, remainingQuantity: record.quantity - soldQuantity, valid: true };
+}
+
 export function getTagMarginStockSymbols(records: TagMarginRecord[]): string[] {
-  return Array.from(new Set(getTagMarginStockRecords(records).map((record) => record.symbol))).slice(0, 100);
+  return Array.from(new Set(getTagMarginStockRecords(records).filter((record) => {
+    const summary = getTagMarginStockSaleSummary(record);
+    return summary.valid && (!Object.prototype.hasOwnProperty.call(record, 'sales') || summary.remainingQuantity !== 0);
+  }).map((record) => record.symbol))).slice(0, 100);
 }
 
 /** A 15:05 close snapshot always wins; the selected quote is only the pre-snapshot fallback. */
@@ -187,6 +229,26 @@ export function getTagMarginStockMarketValue(
   record: TagMarginStockRecord,
   quotes: Record<string, TagMarginStockQuote | undefined> | undefined,
 ): number | null {
+  const summary = getTagMarginStockSaleSummary(record);
+  if (!summary.valid) return null;
+  if (!Object.prototype.hasOwnProperty.call(record, 'sales')) {
+    const quote = resolveTagMarginStockQuote(record, quotes);
+    return quote.price === null ? null : quote.price * record.quantity;
+  }
+  // Fully sold collateral is registered cash and no longer depends on any quote.
+  if (summary.remainingQuantity === 0) return summary.saleValue;
   const quote = resolveTagMarginStockQuote(record, quotes);
-  return quote.price === null ? null : quote.price * record.quantity;
+  return quote.price === null ? null : summary.saleValue + quote.price * summary.remainingQuantity;
+}
+
+/** Only an unloaded canonical query may use local values; an explicit unknown stays unknown. */
+export function resolveTagMarginTotalCny(
+  canonical: { totalCny?: unknown } | null | undefined,
+  localTotal: number | null,
+): number | null {
+  if (canonical === undefined) return localTotal !== null && Number.isFinite(localTotal) ? localTotal : null;
+  const value = canonical?.totalCny;
+  if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
