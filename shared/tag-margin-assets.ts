@@ -1,3 +1,7 @@
+import { getTagMarginStockSaleAmounts } from './tag-margin-stock-fees';
+import { getLedgerRecordDateError } from './ledger-record-date';
+export { getTagMarginStockSaleAmounts, TAG_MARGIN_STOCK_FEE_RATE } from './tag-margin-stock-fees';
+
 export type TagMarginCurrencyRecord = {
   assetType: 'currency';
   coin: string;
@@ -15,7 +19,7 @@ export type TagMarginStockRecord = {
   /** Explicitly entered purchase price only; never inferred from a quote. */
   purchasePrice?: number;
   /** Sale registrations do not change the original quantity or execute a trade. */
-  sales?: Array<{ quantity: number; price: number }>;
+  sales?: Array<{ quantity: number; price: number; feeRate?: number; date?: string }>;
   /** Selected quote retained as a temporary fallback before a 15:05 close snapshot exists. */
   referencePrice: number;
   priceDate: string;
@@ -184,11 +188,11 @@ export function getTagMarginStockSaleSummary(record: TagMarginStockRecord): {
   let soldQuantity = 0;
   let saleValue = 0;
   for (const sale of record.sales) {
-    if (!sale || typeof sale !== 'object' || Array.isArray(sale)
-      || !Number.isSafeInteger(sale.quantity) || sale.quantity <= 0
-      || typeof sale.price !== 'number' || !Number.isFinite(sale.price) || sale.price <= 0) return invalid();
+    const amounts = getTagMarginStockSaleAmounts(sale, record.purchasePrice);
+    if (!amounts.valid) return invalid();
+    if (Object.prototype.hasOwnProperty.call(sale, 'date') && getLedgerRecordDateError(37, sale.date) !== null) return invalid();
     soldQuantity += sale.quantity;
-    saleValue += sale.quantity * sale.price;
+    saleValue += amounts.netValue;
     // Safe integer totals prevent floating-point rounding from permitting an oversale.
     if (!Number.isSafeInteger(soldQuantity) || soldQuantity > record.quantity || !Number.isFinite(saleValue)) return invalid();
   }

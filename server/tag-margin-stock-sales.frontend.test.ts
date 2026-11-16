@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import * as margin from '../shared/tag-margin-assets';
+import { getBeijingLedgerRecordToday } from '../shared/ledger-record-date';
 
 // Offline only: execute production AST expressions/TSX with inert state setters and tRPC spies.
 // No parallel valuation/save implementation, browser, application bootstrap, DB or HTTP imports.
@@ -87,7 +88,8 @@ const emptyStockMargin = actual(pageSource, 'emptyStockMargin');
 const toRightMarginEdit = actual(pageSource, 'toRightMarginEdit');
 const sortTagMarginRecordsByBusinessDate = actual(pageSource, 'sortTagMarginRecordsByBusinessDate');
 const Details = actual(detailsSource, 'TagMarginStockSaleDetails', margin);
-const Editor = actual(editorSource, 'TagMarginStockSaleEditor', { Plus: 'svg', X: 'svg' });
+const today = getBeijingLedgerRecordToday();
+const Editor = actual(editorSource, 'TagMarginStockSaleEditor', { ...margin, getBeijingLedgerRecordToday, Plus: 'svg', X: 'svg' });
 const fixtureStock = (patch: Record<string, any> = {}): any => ({
   assetType: 'stock', symbol: '600519.SH', code: '600519', name: '贵州茅台', quantity: 100,
   purchasePrice: 9.125, sales: [{ quantity: 20, price: 12.5 }, { quantity: 30, price: 15 }],
@@ -292,7 +294,7 @@ describe('37号质押A股卖出登记：真实生产前端（完全离线）', (
     field(Editor(component().props), '第1笔卖出股数').props.onChange({ target: { value: '20' } });
     field(Editor(component().props), '第1笔卖出价格').props.onChange({ target: { value: '12.5' } });
     await h.save();
-    expect(h.savedRecords()[0]).toMatchObject({ quantity: 100, purchasePrice: 9.125, sales: [{ quantity: 20, price: 12.5 }] });
+    expect(h.savedRecords()[0]).toMatchObject({ quantity: 100, purchasePrice: 9.125, sales: [{ quantity: 20, price: 12.5, feeRate: 0.001, date: today }] });
   });
   it('真实Editor连续登记两笔，改单笔股数/价不改变另一笔或原买入价，移除只删目标', () => {
     const h = editorHarness();
@@ -300,11 +302,11 @@ describe('37号质押A股卖出登记：真实生产前端（完全离线）', (
     h.click('登记卖出'); h.change('第2笔卖出股数', '30'); h.change('第2笔卖出价格', '15');
     const untouched = h.state.sales[1];
     h.change('第1笔卖出价格', '13.25'); h.change('第1笔卖出股数', '25');
-    expect(h.state.sales).toEqual([{ quantity: '25', price: '13.25' }, { quantity: '30', price: '15' }]);
+    expect(h.state.sales).toEqual([{ quantity: '25', price: '13.25', feeRate: 0.001, date: today }, { quantity: '30', price: '15', feeRate: 0.001, date: today }]);
     expect(h.state.sales[1]).toBe(untouched);
     expect(h.state.purchasePrice).toBe('9.125'); expect(h.state.quantity).toBe('100');
     h.click('移除第1笔卖出');
-    expect(h.state.sales).toEqual([{ quantity: '30', price: '15' }]);
+    expect(h.state.sales).toEqual([{ quantity: '30', price: '15', feeRate: 0.001, date: today }]);
     expect(h.state.sales[0]).toBe(untouched); expect(h.state.purchasePrice).toBe('9.125');
   });
   it('剩余全卖只填扣除其它销售的剩余股数，保留该笔成交价和其他行及买入价', () => {
@@ -323,7 +325,7 @@ describe('37号质押A股卖出登记：真实生产前端（完全离线）', (
     h.change('买入价（保留）', '7.875');
     expect(h.state.sales).toBe(sales); expect(h.state.purchasePrice).toBe('7.875');
     h.click('登记卖出');
-    expect(h.state.sales[1]).toEqual({ quantity: '', price: '' });
+    expect(h.state.sales[1]).toEqual({ quantity: '', price: '', feeRate: 0.001, date: today });
     expect(text(h.render())).toContain('这里只登记，不发起实际交易');
   });
   it.each(['', '0', '-1', 'NaN'])('原股数%s时登记卖出入口禁用', quantity => {
@@ -625,5 +627,563 @@ describe('旧标签设置页不覆盖37号结构化保证金：真实handleSaveT
     h.run();
     expect(h.scope.saveTagConfigMutation.mutate).not.toHaveBeenCalled();
     expect(h.scope.setTagConfigSaving).not.toHaveBeenCalled();
+  });
+});
+
+// Fee regressions reuse the production AST harness above; all amounts/valuation come
+// from the actual shared exports. Literal expectations pin the business contract.
+function pageEditor(h: ReturnType<typeof pageHarness>, index = 0) {
+  const render = () => {
+    const component = nodes(h.render()).filter(node => node.type === Editor)[index];
+    if (!component) throw new Error(`Missing production Editor ${index}`);
+    return Editor(component.props);
+  };
+  return {
+    render,
+    click: (label: string) => {
+      const target = button(render(), label);
+      expect(target.props.disabled).not.toBe(true);
+      target.props.onClick();
+    },
+    change: (label: string, value: string) => field(render(), label).props.onChange({ target: { value } }),
+  };
+}
+const feeStock = (patch: Record<string, any> = {}) => fixtureStock({
+  sales: [{ quantity: 20, price: 12.5, feeRate: 0.001 }, { quantity: 30, price: 15, feeRate: 0.001 }], ...patch,
+});
+const registeredFeeStock = () => feeStock({
+  sales: [{ quantity: 20, price: 12.5, feeRate: 0.001, date: today }, { quantity: 30, price: 15, feeRate: 0.001, date: today }],
+});
+function expectNoSave(h: ReturnType<typeof pageHarness>) {
+  expect(h.scope.saveTagConfigMutation.mutateAsync).not.toHaveBeenCalled();
+  expect(h.scope.addMarginLogMutation.mutateAsync).not.toHaveBeenCalled();
+  expect(h.scope.setSavedRightMarginEdits).not.toHaveBeenCalled();
+  expect(h.scope.refetchMarginLogs).not.toHaveBeenCalled();
+  expect(h.scope.rightSaving).toBe(false);
+}
+function feeTotalHarness(source: string, localName: string, records: any[], canonical: any = undefined) {
+  const scope: Record<string, any> = {
+    ...margin, useMemo: (fn: any) => fn(), rightMarginData: records,
+    cryptoPrices: { USDT: 7, CNY: 1, RMB: 1 }, CNY_RATE_FALLBACK: 6.8, _cnyRate: 7,
+    allMarginStockQuotes: {}, rightMarginStockQuotes: {}, canonicalMarginValuation: canonical,
+  };
+  scope.isCnyMarginCoin = actual(source, 'isCnyMarginCoin');
+  scope.toCNY = actual(source, 'toCNY', scope);
+  scope[localName] = actual(source, localName, scope);
+  scope.rightMarginValueSummary = actual(source, 'rightMarginValueSummary', scope);
+  scope.rightTotalCNY = actual(source, 'rightTotalCNY', scope);
+  const label = unique(source, (node, file) => ts.isJsxElement(node)
+    && node.openingElement.tagName.getText(file) === 'span'
+    && node.children.some(child => ts.isJsxText(child) && child.text.trim() === '总担保价值'), 'fee total label');
+  if (!ts.isJsxElement(label.parent)) throw new Error('Missing actual total row');
+  return { scope, html: renderToStaticMarkup(evaluate(label.parent.getText(ast(source)), scope)) };
+}
+
+describe('1‰手续费：真实前端事件、保存、缓存与共享估值', () => {
+  it('真实公开helper固定1‰且旧summary契约不增加key，legacy仍为gross', () => {
+    expect(margin.TAG_MARGIN_STOCK_FEE_RATE).toBe(0.001);
+    expect(margin.getTagMarginStockSaleAmounts({ quantity: 20, price: 12.5, feeRate: 0.001 }, 9.125))
+      .toEqual({ valid: true, grossValue: 250, buyFee: 0.18, sellFee: 0.25, totalFee: 0.43, netValue: 249.57 });
+    expect(margin.getTagMarginStockSaleAmounts({ quantity: 20, price: 12.5 }))
+      .toEqual({ valid: true, grossValue: 250, buyFee: 0, sellFee: 0, totalFee: 0, netValue: 250 });
+    expect(margin.getTagMarginStockSaleSummary(fixtureStock()))
+      .toEqual({ valid: true, soldQuantity: 50, saleValue: 700, remainingQuantity: 50 });
+    expect(Object.keys(margin.getTagMarginStockSaleSummary(feeStock())).sort())
+      .toEqual(['remainingQuantity', 'saleValue', 'soldQuantity', 'valid']);
+  });
+  it('新行自动1‰；输入、剩余全卖和删除保留本行费率且不动另一行、买价、原库存', () => {
+    const h = editorHarness();
+    h.click('登记卖出');
+    expect(h.state.sales).toEqual([{ quantity: '', price: '', feeRate: 0.001, date: today }]);
+    h.change('第1笔卖出股数', '20'); h.change('第1笔卖出价格', '12.5');
+    h.click('登记卖出'); h.change('第2笔卖出价格', '15');
+    const first = h.state.sales[0];
+    const secondRow = nodes(h.render()).find(node => node.props?.['data-stock-sale-row'] === 1);
+    button(secondRow, '剩余全卖').props.onClick();
+    expect(h.state.sales).toEqual([{ quantity: '20', price: '12.5', feeRate: 0.001, date: today }, { quantity: '80', price: '15', feeRate: 0.001, date: today }]);
+    expect(h.state.sales[0]).toBe(first);
+    expect(text(h.render())).toContain('已卖 100 股 · 剩余 0 股');
+    expect(button(h.render(), '登记卖出').props.disabled).toBe(true);
+    h.click('移除第2笔卖出');
+    expect(h.state.sales).toEqual([{ quantity: '20', price: '12.5', feeRate: 0.001, date: today }]);
+    expect(h.state.sales[0]).toBe(first);
+    expect(h.state).toMatchObject({ quantity: '100', purchasePrice: '9.125' });
+  });
+  it('Editor与Details逐笔显示本笔q的两费、合计、净额，不按原库存收取买入费', () => {
+    const record = feeStock(), before = structuredClone(record);
+    const edit = toRightMarginEdit(record, '2026-11-16');
+    const editor = Editor({ ...edit, onChange: vi.fn() }), details = Details({ record });
+    const expected = [
+      { buy: '0.18', sell: '0.25', total: '0.43', net: '249.57' },
+      { buy: '0.27', sell: '0.45', total: '0.72', net: '449.28' },
+    ];
+    expected.forEach((value, index) => {
+      const editText = text(nodes(editor).find(node => node.props?.['data-stock-sale-fees'] === index));
+      const detailText = text(nodes(details).find(node => node.props?.['data-stock-sale-detail'] === index));
+      expect(editText).toContain(`买入手续费 ¥${value.buy}`);
+      expect(editText).toContain(`卖出手续费 ¥${value.sell}`);
+      expect(detailText).toContain(`买入手续费（1‰）：¥${value.buy}`);
+      expect(detailText).toContain(`卖出手续费（1‰）：¥${value.sell}`);
+      for (const output of [editText, detailText]) {
+        expect(output).toContain(`手续费合计：¥${value.total}`);
+        expect(output).toContain(`扣费后卖出价值：¥${value.net}`);
+      }
+    });
+    expect(text(details)).toContain('买入价：¥9.125');
+    expect(text(details)).toContain('已卖出价值：¥698.85（已扣登记手续费）');
+    expect(margin.getTagMarginStockSaleSummary(record))
+      .toEqual({ valid: true, soldQuantity: 50, saleValue: expect.closeTo(698.85, 10), remainingQuantity: 50 });
+    expect(margin.getTagMarginStockMarketValue(record, {})).toBe(1598.85);
+    expect(record).toEqual(before);
+  });
+  it('分别half-up到分，分两笔不可先合并股数/两费才舍入；真实显示保留结果', async () => {
+    const record = feeStock({ purchasePrice: 5, referencePrice: 0, quantity: 2,
+      sales: [{ quantity: 1, price: 5, feeRate: 0.001 }, { quantity: 1, price: 5, feeRate: 0.001 }] });
+    for (const sale of record.sales) expect(margin.getTagMarginStockSaleAmounts(sale, 5))
+      .toEqual({ valid: true, grossValue: 5, buyFee: 0.01, sellFee: 0.01, totalFee: 0.02, netValue: 4.98 });
+    const h = pageHarness([record]);
+    await h.save();
+    expect(h.savedRecords()).toEqual([record]);
+    expect(margin.getTagMarginStockMarketValue(h.currentRecords()[0] as any, {})).toBe(9.96);
+    const html = renderToStaticMarkup(React.createElement(Details, { record }));
+    expect(html.match(/买入手续费（1‰）：¥0\.01/g)).toHaveLength(2);
+    expect(html.match(/卖出手续费（1‰）：¥0\.01/g)).toHaveLength(2);
+    expect(html).toContain('已卖出价值：¥9.96');
+    expect(margin.getTagMarginStockSaleAmounts({ quantity: 1000, price: 1.005, feeRate: 0.001 }, 1.005))
+      .toMatchObject({ buyFee: 1.01, sellFee: 1.01, totalFee: 2.02 });
+  });
+  it.each(['0', '-1', 'bad', 'NaN', 'Infinity'])('计费行显式非法买入价%s：不显示假0费，真实保存阻断全部mutation；补有效买价后可保存', async purchasePrice => {
+    const stock = fixtureStock({ sales: [] }); delete stock.purchasePrice;
+    const h = pageHarness([fixtureCurrency(), stock]);
+    const editor = pageEditor(h);
+    editor.click('登记卖出'); editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    editor.change('买入价（保留）', purchasePrice);
+    const before = structuredClone(h.scope.rightMarginEdits), output = text(editor.render());
+    expect(output).toContain('买入价选填，填写时须为正数');
+    expect(output).not.toMatch(/买入手续费 ¥0\.00|卖出手续费 ¥0\.00|手续费合计：¥0\.00|扣费后卖出价值：¥0\.00/);
+    const invalidRecord = feeStock({ purchasePrice: purchasePrice.trim() ? Number(purchasePrice) : undefined });
+    const html = renderToStaticMarkup(React.createElement(Details, { record: invalidRecord }));
+    expect(html).toContain('卖出数据待纠正，估值暂不可用');
+    expect(html).not.toMatch(/买入手续费（1‰）|扣费后卖出价值：¥0\.00/);
+    await h.save();
+    expectNoSave(h);
+    expect(h.scope.toast.error).toHaveBeenCalledOnce();
+    expect(h.scope.rightMarginEdits).toEqual(before);
+    editor.change('买入价（保留）', '9.125');
+    await h.save();
+    expect(h.scope.saveTagConfigMutation.mutateAsync).toHaveBeenCalledOnce();
+    expect(h.scope.addMarginLogMutation.mutateAsync).toHaveBeenCalledOnce();
+    expect(h.savedRecords()[1]).toMatchObject({ quantity: 100, purchasePrice: 9.125,
+      sales: [{ quantity: 20, price: 12.5, feeRate: 0.001, date: today }] });
+  });
+  it.each(['', '   '])('买价选填%s：新登记双边按卖额各1‰，保存/cache/回填不伪造买价且feeRate保留', async purchasePrice => {
+    const stock = fixtureStock({ sales: [] }); delete stock.purchasePrice;
+    const h = pageHarness([fixtureCurrency(), stock]), editor = pageEditor(h);
+    editor.change('买入价（保留）', purchasePrice);
+    editor.click('登记卖出'); editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    editor.click('登记卖出'); editor.change('第2笔卖出股数', '30'); editor.change('第2笔卖出价格', '15');
+    const rows = nodes(editor.render()).filter(node => node.props?.['data-stock-sale-fees'] !== undefined);
+    expect(text(rows[0])).toContain('买入手续费 ¥0.25'); expect(text(rows[0])).toContain('卖出手续费 ¥0.25');
+    expect(text(rows[0])).toContain('手续费合计：¥0.50'); expect(text(rows[0])).toContain('扣费后卖出价值：¥249.50');
+    expect(text(rows[1])).toContain('买入手续费 ¥0.45'); expect(text(rows[1])).toContain('卖出手续费 ¥0.45');
+    expect(text(rows[1])).toContain('手续费合计：¥0.90'); expect(text(rows[1])).toContain('扣费后卖出价值：¥449.10');
+    const expected = registeredFeeStock(); delete expected.purchasePrice;
+    await h.save();
+    expect(h.scope.toast.error).not.toHaveBeenCalled();
+    expect(h.scope.saveTagConfigMutation.mutateAsync).toHaveBeenCalledOnce();
+    expect(h.savedRecords()).toEqual([fixtureCurrency(), expected]);
+    expect(h.savedRecords()[1]).not.toHaveProperty('purchasePrice');
+    expect(h.currentRecords()).toEqual([fixtureCurrency(), expected]);
+    const wire = h.payload().marginByCoin;
+    expect(margin.parseTagMarginRecords(wire)).toEqual([fixtureCurrency(), expected]);
+    expect(toRightMarginEdit(expected, '2026-11-16')).toMatchObject({ quantity: '100', purchasePrice: '',
+      sales: [{ quantity: '20', price: '12.5', feeRate: 0.001 }, { quantity: '30', price: '15', feeRate: 0.001 }] });
+    h.scope.handleStartRightEditing();
+    expect(h.scope.rightMarginEdits[1]).toMatchObject({ purchasePrice: '', quantity: '100' });
+    expect(margin.getTagMarginStockSaleSummary(h.currentRecords()[1] as any))
+      .toEqual({ valid: true, soldQuantity: 50, remainingQuantity: 50, saleValue: expect.closeTo(698.60, 10) });
+    await h.save(); expect(h.payload().marginByCoin).toBe(wire);
+    const detail = h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail;
+    expect(detail).toContain('20股×¥12.5，买入费¥0.25、卖出费¥0.25，净额¥249.50');
+    expect(detail).toContain('30股×¥15，买入费¥0.45、卖出费¥0.45，净额¥449.10');
+    expect(detail).not.toContain('买入价¥');
+    editor.change('买入价（保留）', '9.125'); await h.save();
+    expect(h.savedRecords()[1]).toEqual(registeredFeeStock());
+    expect(text(editor.render())).toContain('买入手续费 ¥0.18');
+  });
+  it('JSON、parse、current缓存、再次编辑回填保留.001，旧查询刷新前重复保存不二次扣股或扣费；日志净额一致', async () => {
+    const stale = fixtureStock({ sales: [] }); delete stale.purchasePrice;
+    const h = pageHarness([stale]), editor = pageEditor(h);
+    editor.change('买入价（保留）', '9.125');
+    editor.click('登记卖出'); editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    editor.click('登记卖出'); editor.change('第2笔卖出股数', '30'); editor.change('第2笔卖出价格', '15');
+    const draft = structuredClone(h.scope.rightMarginEdits);
+    await h.save();
+    const wire = h.payload().marginByCoin;
+    expect(h.savedRecords()).toEqual([registeredFeeStock()]);
+    expect(margin.parseTagMarginRecords(wire)).toEqual([registeredFeeStock()]);
+    expect(h.scope.rightMarginEdits).toEqual(draft);
+    expect(h.currentRecords()).toEqual([registeredFeeStock()]);
+    expect(h.scope.savedRightMarginEdits[0]).toMatchObject({ quantity: '100', purchasePrice: '9.125',
+      sales: [{ quantity: '20', price: '12.5', feeRate: 0.001 }, { quantity: '30', price: '15', feeRate: 0.001 }] });
+    expect(JSON.parse(h.scope.rightTagConfig.margin_by_coin)[0]).toEqual(stale);
+    expect(toRightMarginEdit(h.currentRecords()[0], '2026-11-16')).toEqual(h.scope.savedRightMarginEdits[0]);
+    const log = h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0];
+    expect(log).toMatchObject({ ledgerId: 37, tagName: '测试担保标签', action: '修改保证金' });
+    expect(log.detail).toContain('20股×¥12.5，买入费¥0.18、卖出费¥0.25，净额¥249.57');
+    expect(log.detail).toContain('30股×¥15，买入费¥0.27、卖出费¥0.45，净额¥449.28');
+    h.scope.handleStartRightEditing();
+    expect(h.scope.rightMarginEdits).toEqual(draft);
+    expect(text(pageEditor(h).render())).toContain('扣费后卖出价值：¥249.57');
+    await h.save();
+    expect(h.payload().marginByCoin).toBe(wire);
+    expect(h.currentRecords()).toEqual([registeredFeeStock()]);
+    expect(margin.getTagMarginStockMarketValue(h.currentRecords()[0] as any, {})).toBe(1598.85);
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[1][0].detail).toBe(log.detail);
+  });
+  it('同一原100股分两次登记保存：只扣各笔q，原库存不改，第二次不再收第一笔费', async () => {
+    const h = pageHarness([fixtureStock({ sales: [] })]), editor = pageEditor(h);
+    editor.click('登记卖出'); editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    await h.save();
+    expect(margin.getTagMarginStockSaleSummary(h.currentRecords()[0] as any))
+      .toEqual({ valid: true, soldQuantity: 20, saleValue: 249.57, remainingQuantity: 80 });
+    h.scope.handleStartRightEditing();
+    const next = pageEditor(h);
+    next.click('登记卖出'); next.change('第2笔卖出价格', '15');
+    next.change('第2笔卖出股数', '30');
+    await h.save();
+    expect(h.savedRecords()).toEqual([registeredFeeStock()]);
+    expect((h.currentRecords()[0] as any).quantity).toBe(100);
+    expect(margin.getTagMarginStockSaleSummary(h.currentRecords()[0] as any))
+      .toEqual({ valid: true, soldQuantity: 50, saleValue: expect.closeTo(698.85, 10), remainingQuantity: 50 });
+    expect(text(next.render())).toContain('已卖 50 股 · 剩余 50 股');
+  });
+  it('old无费率保存不加新字段、gross及旧日志不变；改买价/成交价也不自动添加费率', async () => {
+    const record = fixtureStock(), h = pageHarness([record]), editor = pageEditor(h);
+    expect(text(editor.render())).toContain('原记录未计手续费');
+    expect(text(editor.render())).not.toContain('扣费后卖出价值');
+    await h.save();
+    expect(h.savedRecords()).toEqual([record]);
+    for (const sale of h.savedRecords()[0].sales) expect(Object.keys(sale).sort()).toEqual(['price', 'quantity']);
+    const log = h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail;
+    expect(log).toBe(`贵州茅台 100股，买入价¥9.125，卖出20股×¥12.5、30股×¥15 (${record.label})`);
+    expect(log).not.toMatch(/买入费|卖出费|净额/);
+    editor.change('买入价（保留）', '8.75'); editor.change('第1笔卖出价格', '13.25');
+    await h.save();
+    expect(h.savedRecords()[0]).toMatchObject({ quantity: 100, purchasePrice: 8.75,
+      sales: [{ quantity: 20, price: 13.25 }, { quantity: 30, price: 15 }] });
+    for (const sale of h.savedRecords()[0].sales) expect(sale).not.toHaveProperty('feeRate');
+    expect(margin.getTagMarginStockSaleSummary(h.savedRecords()[0]).saleValue).toBe(715);
+  });
+  it('old缺买价无费率仍可保存gross；只有真实手动按1‰才生成费率且只修改目标旧行', async () => {
+    const stock = fixtureStock(); delete stock.purchasePrice;
+    const h = pageHarness([stock]), editor = pageEditor(h);
+    await h.save();
+    expect(h.savedRecords()).toEqual([stock]);
+    expect(margin.getTagMarginStockMarketValue(h.currentRecords()[0] as any, {})).toBe(1600);
+    h.scope.handleStartRightEditing();
+    const secondBefore = h.scope.rightMarginEdits[0].sales[1];
+    const firstRow = nodes(editor.render()).find(node => node.props?.['data-stock-sale-row'] === 0);
+    button(firstRow, '按 1‰ 计费').props.onClick();
+    expect(h.scope.rightMarginEdits[0].sales).toEqual([
+      { quantity: '20', price: '12.5', feeRate: 0.001 }, { quantity: '30', price: '15' },
+    ]);
+    expect(h.scope.rightMarginEdits[0].sales[1]).toBe(secondBefore);
+    await h.save();
+    expect(h.scope.saveTagConfigMutation.mutateAsync).toHaveBeenCalledTimes(2);
+    expect(h.savedRecords()[0]).not.toHaveProperty('purchasePrice');
+    expect(h.savedRecords()[0].sales).toEqual([{ quantity: 20, price: 12.5, feeRate: 0.001 }, { quantity: 30, price: 15 }]);
+    expect(text(editor.render())).toContain('买入手续费 ¥0.25');
+    expect(text(editor.render())).toContain('扣费后卖出价值：¥249.50');
+    expect(margin.getTagMarginStockSaleSummary(h.savedRecords()[0]).saleValue).toBe(699.5);
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[1][0].detail)
+      .toContain('买入费¥0.25、卖出费¥0.25，净额¥249.50、30股×¥15');
+    editor.change('买入价（保留）', '9.125');
+    await h.save();
+    expect(h.savedRecords()[0].sales).toEqual([{ quantity: 20, price: 12.5, feeRate: 0.001 }, { quantity: 30, price: 15 }]);
+    expect(margin.getTagMarginStockSaleSummary(h.savedRecords()[0]).saleValue).toBeCloseTo(699.57, 10);
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[2][0].detail)
+      .toContain('净额¥249.57、30股×¥15');
+  });
+  it.each([
+    ['none/undefined', undefined], ['零', 0], ['false', false], ['null', null], ['字符串率', '0.001'],
+    ['none字符串', 'none'], ['空字符串', ''], ['其它率', 0.002], ['负率', -0.001],
+    ['NaN', NaN], ['Infinity', Infinity], ['数组', []], ['对象', {}],
+  ] as Array<[string, any]>)('显式非法feeRate %s必须保留，不降级legacy，真实save阻断；手动恢复才可保存', async (_label, feeRate) => {
+    const record = fixtureStock({ sales: [{ quantity: 20, price: 12.5, feeRate }] });
+    const direct = toRightMarginEdit(record, '2026-11-16');
+    expect(direct.sales[0]).toHaveProperty('feeRate');
+    expect(direct.sales[0].feeRate).toEqual(feeRate);
+    const h = pageHarness([fixtureCurrency(), fixtureStock({ sales: [] })]);
+    h.scope.updateRightMarginEntry(1, { sales: direct.sales });
+    const editor = pageEditor(h);
+    editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    expect(h.scope.rightMarginEdits[1].sales[0]).toHaveProperty('feeRate');
+    expect(h.scope.rightMarginEdits[1].sales[0].feeRate).toEqual(feeRate);
+    h.scope.savedRightMarginEdits = structuredClone(h.scope.rightMarginEdits);
+    const cached = h.currentRecords().find((entry: any) => entry.assetType === 'stock') as any;
+    expect(cached.sales[0]).toHaveProperty('feeRate'); expect(cached.sales[0].feeRate).toEqual(feeRate);
+    expect(margin.getTagMarginStockSaleSummary(cached).valid).toBe(false);
+    const output = text(editor.render());
+    expect(output).toContain('恢复 1‰ 费率');
+    expect(output).not.toContain('扣费后卖出价值：¥');
+    expect(renderToStaticMarkup(React.createElement(Details, { record: cached })))
+      .toContain('卖出数据待纠正，估值暂不可用');
+    const before = structuredClone(h.scope.rightMarginEdits);
+    await h.save(); expectNoSave(h);
+    expect(h.scope.rightMarginEdits).toEqual(before);
+    editor.click('恢复 1‰ 费率'); await h.save();
+    expect(h.scope.saveTagConfigMutation.mutateAsync).toHaveBeenCalledOnce();
+    expect(h.savedRecords()[1].sales).toEqual([{ quantity: 20, price: 12.5, feeRate: 0.001 }]);
+  });
+  it.each(['累计超卖', '负股数', '小数股数', '空卖价', '未核验symbol'])('feeRate存在仍不弱化%s守卫，前面有效currency不得部分提交', async mode => {
+    const h = pageHarness([fixtureCurrency(), feeStock()]);
+    const patches: Record<string, any> = {
+      累计超卖: { sales: [{ quantity: '101', price: '15', feeRate: 0.001 }] },
+      负股数: { sales: [{ quantity: '-1', price: '15', feeRate: 0.001 }] },
+      小数股数: { sales: [{ quantity: '1.5', price: '15', feeRate: 0.001 }] },
+      空卖价: { sales: [{ quantity: '20', price: '', feeRate: 0.001 }] },
+      未核验symbol: { symbol: 'AAPL' },
+    };
+    h.scope.updateRightMarginEntry(1, patches[mode]);
+    const before = structuredClone(h.scope.rightMarginEdits);
+    await h.save(); expectNoSave(h);
+    expect(h.scope.rightMarginEdits).toEqual(before);
+  });
+  it('计费新字段不套另一股票：真实选股拒绝切码，手输symbol也不能绕过保存身份守卫', async () => {
+    const h = pageHarness([feeStock()]);
+    const before = structuredClone(h.scope.rightMarginEdits);
+    h.scope.selectRightMarginAshareStock(0, { symbol: '000001.SZ', code: '000001', name: '平安银行', latestPrice: 20 });
+    expect(h.scope.rightMarginEdits).toEqual(before);
+    expect(h.scope.toast.error).toHaveBeenCalledOnce();
+    expect(h.scope.setRightMarginEdits).toHaveBeenCalledOnce();
+    h.scope.updateRightMarginEntry(0, { symbol: '000001.SZ' });
+    await h.save(); expectNoSave(h);
+    expect(h.scope.rightMarginEdits[0].sales).toEqual(before[0].sales);
+    expect(h.scope.rightMarginEdits[0]).toMatchObject({ code: '600519', quantity: '100', purchasePrice: '9.125' });
+  });
+  it('另一股票新条目不会继承旧股票计费行、买价或净额', async () => {
+    const h = pageHarness([feeStock()]);
+    button(h.render(), '添加股票').props.onClick();
+    expect(h.scope.rightMarginEdits[1]).toMatchObject({ sales: [], purchasePrice: '', quantity: '' });
+    h.scope.selectRightMarginAshareStock(1, { symbol: '000001.SZ', code: '000001', name: '平安银行', latestPrice: 20 });
+    h.scope.updateRightMarginEntry(1, { quantity: '10' });
+    await h.save();
+    const original = h.savedRecords().find((entry: any) => entry.symbol === '600519.SH');
+    const added = h.savedRecords().find((entry: any) => entry.symbol === '000001.SZ');
+    expect(original).toEqual(feeStock());
+    expect(added).toMatchObject({ quantity: 10, referencePrice: 20 });
+    expect(added).not.toHaveProperty('purchasePrice'); expect(added).not.toHaveProperty('sales');
+  });
+  it('负净额真实保存、cache、Editor及日志保留-99，不clamp零', async () => {
+    const record = feeStock({ purchasePrice: 1000, referencePrice: 0,
+      sales: [{ quantity: 100, price: 0.01, feeRate: 0.001 }] });
+    const h = pageHarness([record]);
+    expect(text(pageEditor(h).render())).toContain('扣费后卖出价值：¥-99.00');
+    expect(margin.getTagMarginStockSaleAmounts(record.sales[0], record.purchasePrice))
+      .toEqual({ valid: true, grossValue: 1, buyFee: 100, sellFee: 0, totalFee: 100, netValue: -99 });
+    await h.save();
+    expect(h.savedRecords()).toEqual([record]); expect(h.currentRecords()).toEqual([record]);
+    expect(margin.getTagMarginStockMarketValue(h.currentRecords()[0] as any, {})).toBe(-99);
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail)
+      .toContain('100股×¥0.01，买入费¥100.00、卖出费¥0.00，净额¥-99.00');
+  });
+  it('半分净额2.985：编辑器、详情与真实保存日志均显示2.99，不记录2.98', async () => {
+    const record = feeStock({ quantity: 3, purchasePrice: 10, referencePrice: 0,
+      sales: [{ quantity: 3, price: 1.005, feeRate: 0.001 }] });
+    const h = pageHarness([record]);
+    expect(text(pageEditor(h).render())).toContain('扣费后卖出价值：¥2.99');
+    expect(renderToStaticMarkup(React.createElement(Details, { record }))).toContain('¥2.99');
+    await h.save();
+    const detail = h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail;
+    expect(detail).toContain('买入费¥0.03、卖出费¥0.00，净额¥2.99');
+    expect(detail).not.toContain('净额¥2.98');
+    expect(h.savedRecords()).toEqual([record]);
+    expect(margin.getTagMarginStockMarketValue(h.currentRecords()[0] as any, {})).toBe(2.985);
+  });
+});
+
+const feePages = [['管理页', pageSource, 'locallyComputedRightTotalCNY'],
+  ['只读详情', readOnlySource, 'locallyComputedTotalCNY']] as const;
+describe.each(feePages)('%s手续费显示与unknown传播：真实生产AST', (_name, source, localName) => {
+  it('partial本笔两费金额与同一Details一致，仍用原100股减本笔50股估剩余', () => {
+    const record = feeStock(), before = structuredClone(record);
+    const rendered = rowRender(source, record);
+    const detailNode = nodes(rendered.row).find(node => node.type === Details);
+    expect(detailNode.props.record).toBe(record);
+    expect(renderToStaticMarkup(detailNode)).toBe(renderToStaticMarkup(React.createElement(Details, { record })));
+    expect(rendered.html).toContain('保证金价值 ¥1,598.85');
+    expect(rendered.html).toContain('买入价：¥9.125');
+    expect(rendered.html).toContain('买入手续费（1‰）：¥0.18 · 卖出手续费（1‰）：¥0.25');
+    expect(rendered.html).toContain('买入手续费（1‰）：¥0.27 · 卖出手续费（1‰）：¥0.45');
+    expect(rendered.html).toContain('已卖出价值：¥698.85（已扣登记手续费）');
+    expect(rendered.html).toContain('剩余 50股按参考价估值');
+    expect(feeTotalHarness(source, localName, [record]).scope.rightTotalCNY).toBe(1598.85);
+    expect(record).toEqual(before);
+  });
+  it('full扣费净额无quote仍正确，不二次扣原库存，报价改变不能改变fixed现金', () => {
+    const record = feeStock({ referencePrice: 0,
+      sales: [{ quantity: 20, price: 12.5, feeRate: 0.001 }, { quantity: 80, price: 15, feeRate: 0.001 }] });
+    const before = structuredClone(record);
+    expect(margin.getTagMarginStockSaleSummary(record))
+      .toEqual({ valid: true, soldQuantity: 100, saleValue: expect.closeTo(1447.64, 10), remainingQuantity: 0 });
+    const noQuote = rowRender(source, record), changed = rowRender(source, record, { '600519.SH': { price: 999 } });
+    expect(noQuote.html).toContain('卖出价值 ¥1,447.64');
+    expect(noQuote.html).toContain('已卖出价值：¥1,447.64（已扣登记手续费）');
+    expect(noQuote.html).toContain('买入手续费（1‰）：¥0.73 · 卖出手续费（1‰）：¥1.20');
+    expect(noQuote.html).toContain('手续费合计：¥1.93 · 扣费后卖出价值：¥1,198.07');
+    expect(noQuote.html).toContain('全部卖出，价值按成交价固定');
+    expect(noQuote.html).not.toMatch(/估值待获取|暂用参考价|参考价 ¥|999/);
+    expect(changed.html).toBe(noQuote.html);
+    expect(margin.getTagMarginStockSymbols([record])).toEqual([]);
+    expect(feeTotalHarness(source, localName, [record]).scope.rightTotalCNY).toBeCloseTo(1447.64, 10);
+    expect(record).toEqual(before);
+  });
+  it.each(['非法买价', '非法费率', 'partial缺报价'])('%s计费行与有效CNY800并存，真实local total与合计仍unknown，不伪0/已卖款', mode => {
+    const record = feeStock({ referencePrice: 0 });
+    if (mode === '非法买价') record.purchasePrice = 0;
+    if (mode === '非法费率') record.sales[0].feeRate = null;
+    const cny = { ...fixtureCurrency(), coin: 'CNY', amount: 800 };
+    for (const records of [[record, cny], [cny, record]]) {
+      const h = feeTotalHarness(source, localName, records);
+      expect(h.scope[localName]).toBeNull(); expect(h.scope.rightTotalCNY).toBeNull();
+      expect(h.scope.rightMarginValueSummary.stockValueReady).toBe(false);
+      expect(h.html).toContain('估值待获取'); expect(h.html).toContain('--');
+      expect(h.html).not.toMatch(/¥(?:0|800)(?:<|\b)|NaN|Infinity|≈\s*0/);
+      const html = rowRender(source, record).html;
+      expect(html).toContain('估值待获取');
+      if (mode !== 'partial缺报价') expect(html).toContain('卖出数据待纠正，估值暂不可用');
+    }
+  });
+  it.each([null, {}, { totalCny: null }])('canonical显式unknown %j不回退已知full净额，不能把未知变0', canonical => {
+    const record = feeStock({ referencePrice: 0, sales: [{ quantity: 100, price: 15, feeRate: 0.001 }] });
+    const h = feeTotalHarness(source, localName, [record], canonical);
+    expect(h.scope[localName]).not.toBeNull(); expect(h.scope.rightTotalCNY).toBeNull();
+    expect(h.html).toContain('估值待获取'); expect(h.html).toContain('--');
+    expect(h.html).not.toMatch(/¥0|≈\s*0/);
+  });
+  it('负净额两页Details、行价值和总额真实保留，不clamp零', () => {
+    const record = feeStock({ purchasePrice: 1000, referencePrice: 0,
+      sales: [{ quantity: 100, price: 0.01, feeRate: 0.001 }] });
+    const html = rowRender(source, record).html;
+    expect(html).toContain('卖出价值 ¥-99');
+    expect(html).toContain('买入价：¥1,000');
+    expect(html).toContain('扣费后卖出价值：¥-99.00');
+    expect(html).toContain('已卖出价值：¥-99.00');
+    const h = feeTotalHarness(source, localName, [record]);
+    expect(h.scope[localName]).toBe(-99); expect(h.scope.rightTotalCNY).toBe(-99);
+    expect(h.html).toContain('¥-99'); expect(h.html).not.toContain('估值待获取');
+  });
+});
+
+describe('买入价选填：真实helper及两页回归', () => {
+  it('未填买价双边按成交金额各自half-up，非合并2‰后舍入；显式非法值仍拒绝', () => {
+    expect(margin.getTagMarginStockSaleAmounts({ quantity: 1, price: 5, feeRate: 0.001 }))
+      .toEqual({ valid: true, grossValue: 5, buyFee: 0.01, sellFee: 0.01, totalFee: 0.02, netValue: 4.98 });
+    expect(margin.getTagMarginStockSaleAmounts({ quantity: 20, price: 12.5, feeRate: 0.001 }))
+      .toEqual({ valid: true, grossValue: 250, buyFee: 0.25, sellFee: 0.25, totalFee: 0.5, netValue: 249.5 });
+    for (const invalid of [0, -1, NaN, Infinity, null, false, '']) {
+      expect(margin.getTagMarginStockSaleAmounts({ quantity: 20, price: 12.5, feeRate: 0.001 }, invalid as any).valid).toBe(false);
+    }
+  });
+  it.each(feePages)('%s未填买价full净额不依赖quote，两笔双边费一致且不展示虚构买价', (_name, source, localName) => {
+    const record = feeStock({ referencePrice: 0, quantity: 2,
+      sales: [{ quantity: 1, price: 5, feeRate: 0.001 }, { quantity: 1, price: 5, feeRate: 0.001 }] });
+    delete record.purchasePrice;
+    const before = structuredClone(record), html = rowRender(source, record).html;
+    expect(html).toContain('买入价：未登记');
+    expect(html).not.toContain('买入价：¥');
+    expect(html.match(/买入手续费（1‰）：¥0\.01/g)).toHaveLength(2);
+    expect(html.match(/卖出手续费（1‰）：¥0\.01/g)).toHaveLength(2);
+    expect(html.match(/手续费合计：¥0\.02 · 扣费后卖出价值：¥4\.98/g)).toHaveLength(2);
+    expect(html).toContain('已卖出价值：¥9.96'); expect(html).toContain('全部卖出，价值按成交价固定');
+    expect(html).not.toContain('估值待获取');
+    expect(margin.getTagMarginStockSymbols([record])).toEqual([]);
+    expect(feeTotalHarness(source, localName, [record]).scope.rightTotalCNY).toBe(9.96);
+    expect(record).toEqual(before);
+  });
+});
+
+describe('逐笔卖出日期：真实Editor处理器、save及两页Details', () => {
+  it('新登记使用真实北京时间今天，type=date及max一致，改单笔日期不改另一笔或原买入/质押日期', async () => {
+    const h = pageHarness([fixtureStock({ sales: [] })]), editor = pageEditor(h);
+    editor.click('登记卖出'); editor.change('第1笔卖出股数', '20'); editor.change('第1笔卖出价格', '12.5');
+    editor.click('登记卖出'); editor.change('第2笔卖出股数', '30'); editor.change('第2笔卖出价格', '15');
+    expect(h.scope.rightMarginEdits[0].sales.map((sale: any) => sale.date)).toEqual([today, today]);
+    expect(field(editor.render(), '第1笔卖出日期').props).toMatchObject({ type: 'date', value: today, max: today });
+    const second = h.scope.rightMarginEdits[0].sales[1], originalDate = h.scope.rightMarginEdits[0].date;
+    editor.change('第1笔卖出日期', '2026-11-13');
+    expect(h.scope.rightMarginEdits[0].sales[1]).toBe(second);
+    expect(h.scope.rightMarginEdits[0]).toMatchObject({ date: originalDate, purchasePrice: '9.125', quantity: '100' });
+    editor.change('第2笔卖出日期', '2026-11-14');
+    const record = feeStock({ sales: [
+      { quantity: 20, price: 12.5, feeRate: 0.001, date: '2026-11-13' },
+      { quantity: 30, price: 15, feeRate: 0.001, date: '2026-11-14' },
+    ] });
+    await h.save();
+    expect(h.savedRecords()).toEqual([record]); expect(h.currentRecords()).toEqual([record]);
+    expect(margin.parseTagMarginRecords(h.payload().marginByCoin)).toEqual([record]);
+    expect(toRightMarginEdit(record, today)).toEqual(h.scope.savedRightMarginEdits[0]);
+    const wire = h.payload().marginByCoin;
+    h.scope.handleStartRightEditing();
+    expect(field(pageEditor(h).render(), '第1笔卖出日期').props.value).toBe('2026-11-13');
+    expect(field(pageEditor(h).render(), '第2笔卖出日期').props.value).toBe('2026-11-14');
+    await h.save(); expect(h.payload().marginByCoin).toBe(wire);
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail)
+      .toContain('2026-11-13 20股×¥12.5，买入费¥0.18、卖出费¥0.25，净额¥249.57');
+    expect(h.scope.addMarginLogMutation.mutateAsync.mock.calls[0][0].detail)
+      .toContain('2026-11-14 30股×¥15，买入费¥0.27、卖出费¥0.45，净额¥449.28');
+    expect(margin.getTagMarginStockSaleSummary(record).saleValue).toBeCloseTo(698.85, 10);
+  });
+  it('旧无date/feeRate回显未登记，不因查看或改价格/买价插入日期；真实补单笔日期不追计手续费', async () => {
+    const record = fixtureStock(), h = pageHarness([record]), editor = pageEditor(h);
+    expect(field(editor.render(), '第1笔卖出日期').props.value).toBe('');
+    expect(text(editor.render())).toContain('原卖出日期未登记');
+    expect(text(Details({ record })).match(/卖出日期：未登记/g)).toHaveLength(2);
+    await h.save(); expect(h.savedRecords()).toEqual([record]);
+    editor.change('买入价（保留）', '9.125'); editor.change('第1笔卖出价格', '12.5');
+    await h.save(); expect(h.savedRecords()).toEqual([record]);
+    editor.change('第1笔卖出日期', '2026-11-13'); await h.save();
+    expect(h.savedRecords()[0].sales).toEqual([{ quantity: 20, price: 12.5, date: '2026-11-13' }, { quantity: 30, price: 15 }]);
+    expect(h.savedRecords()[0].date).toBe(record.date);
+    expect(margin.getTagMarginStockSaleSummary(h.savedRecords()[0]).saleValue).toBe(700);
+    for (const sale of h.savedRecords()[0].sales) expect(sale).not.toHaveProperty('feeRate');
+  });
+  it.each([
+    ['空', ''], ['非补零', '2026-1-02'], ['坏字符串', 'bad'], ['不存在日期', '2026-02-30'],
+    ['非闰年', '2025-02-29'], ['未来', '9999-01-01'], ['null', null], ['undefined', undefined], ['数字', 20261113],
+  ] as Array<[string, any]>)('显式非法sale日期%s必须保留，shared与真实handleSave拦截整批提交', async (_label, date) => {
+    const record = feeStock({ sales: [{ quantity: 20, price: 12.5, feeRate: 0.001, date }] });
+    const edit = toRightMarginEdit(record, today);
+    expect(edit.sales[0]).toHaveProperty('date'); expect(edit.sales[0].date).toBe(String(date ?? ''));
+    expect(margin.getTagMarginStockSaleSummary(record).valid).toBe(false);
+    const h = pageHarness([fixtureCurrency(), fixtureStock({ sales: [] })]);
+    h.scope.updateRightMarginEntry(1, { sales: edit.sales });
+    h.scope.savedRightMarginEdits = structuredClone(h.scope.rightMarginEdits);
+    const cached = h.currentRecords()[1] as any;
+    expect(cached.sales[0]).toHaveProperty('date'); expect(cached.sales[0].date).toBe(String(date ?? ''));
+    const before = structuredClone(h.scope.rightMarginEdits);
+    await h.save(); expectNoSave(h);
+    expect(h.scope.toast.error).toHaveBeenCalledOnce(); expect(h.scope.rightMarginEdits).toEqual(before);
+    pageEditor(h).change('第1笔卖出日期', '2026-11-13'); await h.save();
+    expect(h.savedRecords()[1].sales).toEqual([{ quantity: 20, price: 12.5, feeRate: 0.001, date: '2026-11-13' }]);
+  });
+  it.each(feePages)('%s逐笔不同日期与价格两费同栏，日期不参与估值且原质押日期不变', (_name, source) => {
+    const record = feeStock({ sales: [
+      { quantity: 20, price: 12.5, feeRate: 0.001, date: '2026-11-13' },
+      { quantity: 30, price: 15, feeRate: 0.001, date: '2026-11-14' },
+    ] }), before = structuredClone(record);
+    const details = Details({ record });
+    const first = text(nodes(details).find(node => node.props?.['data-stock-sale-detail'] === 0));
+    const second = text(nodes(details).find(node => node.props?.['data-stock-sale-detail'] === 1));
+    expect(first).toContain('卖出日期：2026-11-13'); expect(first).toContain('卖出 ¥12.5 × 20股');
+    expect(first).toContain('买入手续费（1‰）：¥0.18'); expect(first).toContain('扣费后卖出价值：¥249.57');
+    expect(second).toContain('卖出日期：2026-11-14'); expect(second).toContain('卖出 ¥15 × 30股');
+    expect(second).toContain('买入手续费（1‰）：¥0.27'); expect(second).toContain('扣费后卖出价值：¥449.28');
+    const html = rowRender(source, record).html;
+    expect(html).toContain('卖出日期：2026-11-13'); expect(html).toContain('卖出日期：2026-11-14');
+    expect(html).toContain('买入价：¥9.125'); expect(html).toContain('保证金价值 ¥1,598.85');
+    expect(margin.getTagMarginStockMarketValue(record, {})).toBe(margin.getTagMarginStockMarketValue(feeStock(), {}));
+    expect(record).toEqual(before); expect(record.date).toBe('2026-11-12');
   });
 });

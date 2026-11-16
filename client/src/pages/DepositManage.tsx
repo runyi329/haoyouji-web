@@ -38,6 +38,7 @@ import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
   getTagMarginStockSaleSummary,
+  getTagMarginStockSaleAmounts,
   getTagMarginStockRecords,
   formatTagMarginCoinLabel,
   getTagMarginStockSymbols,
@@ -94,7 +95,9 @@ function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEd
       priceDate: record.priceDate, priceUpdatedAt: record.priceUpdatedAt,
       purchasePrice: record.purchasePrice !== undefined ? String(record.purchasePrice) : '',
       sales: Array.isArray(record.sales)
-        ? record.sales.map((sale) => ({ quantity: String(sale?.quantity ?? ''), price: String(sale?.price ?? '') }))
+        ? record.sales.map((sale) => ({ quantity: String(sale?.quantity ?? ''), price: String(sale?.price ?? ''),
+          ...(sale && Object.prototype.hasOwnProperty.call(sale, 'feeRate') ? { feeRate: sale.feeRate } : {}),
+          ...(sale && Object.prototype.hasOwnProperty.call(sale, 'date') ? { date: String(sale.date ?? '') } : {}) }))
         : Object.prototype.hasOwnProperty.call(record, 'sales') ? [{ quantity: '', price: '' }] : [],
     };
   }
@@ -726,7 +729,9 @@ export default function DepositManage() {
           priceDate: entry.priceDate, priceUpdatedAt: entry.priceUpdatedAt,
           label: entry.label, date: entry.date,
           ...(entry.purchasePrice.trim() ? { purchasePrice: Number(entry.purchasePrice) } : {}),
-          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price) })) } : {}),
+          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price),
+            ...(Object.prototype.hasOwnProperty.call(sale, 'feeRate') ? { feeRate: sale.feeRate } : {}),
+            ...(Object.prototype.hasOwnProperty.call(sale, 'date') ? { date: sale.date } : {}) })) } : {}),
         }
         : { assetType: 'currency', coin: entry.coin, amount: Number(entry.amount), label: entry.label, date: entry.date }
       )));
@@ -880,11 +885,13 @@ export default function DepositManage() {
           label: entry.label || '',
           date: entry.date || todayStr,
           ...(entry.purchasePrice.trim() ? { purchasePrice: Number(entry.purchasePrice) } : {}),
-          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price) })) } : {}),
+          ...(entry.sales.length ? { sales: entry.sales.map((sale) => ({ quantity: Number(sale.quantity), price: Number(sale.price),
+            ...(Object.prototype.hasOwnProperty.call(sale, 'feeRate') ? { feeRate: sale.feeRate } : {}),
+            ...(Object.prototype.hasOwnProperty.call(sale, 'date') ? { date: sale.date } : {}) })) } : {}),
         };
         if ((stockRecord.purchasePrice !== undefined && (!Number.isFinite(stockRecord.purchasePrice) || stockRecord.purchasePrice <= 0))
           || !getTagMarginStockSaleSummary(stockRecord).valid) {
-          toast.error('请填写有效的买入价、卖出价和股数，累计卖出股数不能超过原持股数');
+          toast.error('请填写有效的买入价（选填）、卖出价、股数和卖出日期；累计卖出股数不能超过原持股数，卖出日期不能晚于北京时间当天');
           setRightSaving(false);
           return;
         }
@@ -913,7 +920,12 @@ export default function DepositManage() {
       // 写入操作日志
       const detail = chronologicalEntries.length > 0
         ? chronologicalEntries.map((entry) => entry.assetType === 'stock'
-          ? `${entry.name || entry.code} ${entry.quantity}股${entry.purchasePrice !== undefined ? `，买入价¥${entry.purchasePrice}` : ''}${entry.sales?.length ? `，卖出${entry.sales.map((sale) => `${sale.quantity}股×¥${sale.price}`).join('、')}` : ''}${entry.label ? ' (' + entry.label + ')' : ''}`
+          ? `${entry.name || entry.code} ${entry.quantity}股${entry.purchasePrice !== undefined ? `，买入价¥${entry.purchasePrice}` : ''}${entry.sales?.length ? `，卖出${entry.sales.map((sale) => {
+            const trade = `${sale.date ? sale.date + ' ' : ''}${sale.quantity}股×¥${sale.price}`;
+            if (!Object.prototype.hasOwnProperty.call(sale, 'feeRate')) return trade;
+            const amounts = getTagMarginStockSaleAmounts(sale, entry.purchasePrice);
+            return `${trade}，买入费¥${amounts.buyFee.toFixed(2)}、卖出费¥${amounts.sellFee.toFixed(2)}，净额¥${amounts.netValue.toLocaleString('zh-CN', { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          }).join('、')}` : ''}${entry.label ? ' (' + entry.label + ')' : ''}`
           : `${entry.coin} ${entry.amount}${entry.label ? ' (' + entry.label + ')' : ''}`).join('、')
         : '清空保证金';
       await addMarginLogMutation.mutateAsync({

@@ -29,7 +29,7 @@ export function validateTagMarginStockSales(input: { ledgerId: number; marginByC
     if (!getTagMarginStockSaleSummary(record).valid) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
-        message: `第 ${index + 1} 笔股票保证金的买入价或卖出登记无效：买入价和成交价须为有限正数，卖出股数须为正整数且累计不得超过原正股数`,
+        message: `第 ${index + 1} 笔股票保证金的买入价或卖出登记无效：买入价选填，填写时须为有限正数；成交价须为有限正数，卖出股数须为正整数且累计不得超过原正股数；买卖手续费固定千分之一，卖出日期须为有效日期且不得晚于北京时间当天`,
       });
     }
   });
