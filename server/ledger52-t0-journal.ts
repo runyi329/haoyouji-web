@@ -131,6 +131,7 @@ export type T0JournalProfitShareSnapshot = {
 
 /** 管理员记录、关联用户同步查看的投入/提现资金流水；不参与任何订单收益计算。 */
 export type T0JournalPayoutDirection = "withdrawal" | "deposit";
+export type T0JournalWithdrawalSource = "income" | "principal";
 export type T0JournalPayoutLog = {
   id: string;
   relatedUserId: number;
@@ -138,6 +139,8 @@ export type T0JournalPayoutLog = {
   occurredOn: string;
   direction: T0JournalPayoutDirection;
   amount: number;
+  /** withdrawal only; legacy rows and omitted create input are income. */
+  withdrawalSource?: T0JournalWithdrawalSource;
   /** 仅新登记的投入保存；历史资金流水保持为空，绝不按今日行情回填。 */
   ethReferencePrice?: string;
   /** U录入时由服务端折算；ETH录入时为用户实际交付的固定数量。 */
@@ -1577,6 +1580,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         occurred_on DATE NOT NULL,
         amount DECIMAL(18,2) NOT NULL,
         direction ENUM('withdrawal','deposit') NOT NULL DEFAULT 'withdrawal',
+        withdrawal_source ENUM('income','principal') NOT NULL DEFAULT 'income',
         eth_reference_price DECIMAL(36,18) DEFAULT NULL,
         eth_quantity DECIMAL(36,18) DEFAULT NULL,
         deposit_input_mode ENUM('u','eth') NOT NULL DEFAULT 'u',
@@ -1698,6 +1702,13 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_payout_logs
           ADD COLUMN direction ENUM('withdrawal','deposit') NOT NULL DEFAULT 'withdrawal' AFTER amount
       `);
+    }
+    // 默认保持历史提现的收益分类，不更新任何历史金额；只读预览不迁移真实库。
+    if (!isLedger52T0ReadonlyPreview()) {
+      const [payoutWithdrawalSourceColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'withdrawal_source'`);
+      if (asRows(payoutWithdrawalSourceColumns).length === 0) {
+        await db.execute(`ALTER TABLE ledger52_t0_journal_payout_logs ADD COLUMN withdrawal_source ENUM('income','principal') NOT NULL DEFAULT 'income' AFTER direction`);
+      }
     }
     // 仅未来新登记的投入写入 ETH 固定快照；旧存入绝不使用今日价格补算，保留 NULL 以清楚区分历史口径。
     const [payoutEthReferenceColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'eth_reference_price'`);
@@ -2759,18 +2770,51 @@ export async function getLedger52T0JournalSettlementFinancialFacts(input: { jour
   };
 }
 
+async function payoutWithdrawalSourceSelectSql(conn: any): Promise<string> {
+  if (isLedger52T0ReadOnlyPreview()) {
+    const [columns] = await conn.execute(
+      `SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'withdrawal_source'`
+    );
+    return asRows(columns).length
+      ? "payout.withdrawal_source"
+      : "'income' AS withdrawal_source";
+  }
+  return "payout.withdrawal_source";
+}
+
+function normalizeWithdrawalSource(value: unknown): T0JournalWithdrawalSource {
+  return String(value) === "principal" ? "principal" : "income";
+}
+
 function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {
-  const ethReferencePrice = row.eth_reference_price == null ? undefined : String(row.eth_reference_price).trim() || undefined;
-  const ethQuantity = row.eth_quantity == null ? undefined : String(row.eth_quantity).trim() || undefined;
-  const direction: T0JournalPayoutDirection = String(row.direction) === "deposit" ? "deposit" : "withdrawal";
-  const depositInputMode = direction === "deposit" && String(row.deposit_input_mode) === "eth" ? "eth" as const : "u" as const;
+  const ethReferencePrice =
+    row.eth_reference_price == null
+      ? undefined
+      : String(row.eth_reference_price).trim() || undefined;
+  const ethQuantity =
+    row.eth_quantity == null
+      ? undefined
+      : String(row.eth_quantity).trim() || undefined;
+  const direction: T0JournalPayoutDirection =
+    String(row.direction) === "deposit" ? "deposit" : "withdrawal";
+  const withdrawalSource =
+    direction === "withdrawal"
+      ? normalizeWithdrawalSource(row.withdrawal_source)
+      : undefined;
+  const depositInputMode =
+    direction === "deposit" && String(row.deposit_input_mode) === "eth"
+      ? ("eth" as const)
+      : ("u" as const);
   return {
     id: String(row.id),
     relatedUserId: toNumber(row.related_user_id),
-    relatedUserName: String(row.related_user_name || `用户#${toNumber(row.related_user_id)}`),
+    relatedUserName: String(
+      row.related_user_name || `用户#${toNumber(row.related_user_id)}`
+    ),
     occurredOn: String(row.occurred_on || "").slice(0, 10),
     direction,
     amount: toNumber(row.amount),
+    withdrawalSource,
     ethReferencePrice,
     ethQuantity,
     depositInputMode: direction === "deposit" ? depositInputMode : undefined,
@@ -2789,34 +2833,49 @@ export async function getLedger52T0JournalPayoutLogs(input: {
   allUsers?: boolean;
 }) {
   const conn = await getDbConnection();
-  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  if (!conn)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "T+0速记账本数据库连接失败",
+    });
   await ensureLedger52T0JournalTables(conn);
   const requestedRelatedUserId = Number(input.relatedUserId || 0);
   const adminScope = input.scope.mode === "admin" ? input.scope : null;
   const memberScope = input.scope.mode === "member" ? input.scope : null;
   const readAllUsers = Boolean(adminScope && input.allUsers);
-  const relatedUserId = readAllUsers ? 0 : (adminScope ? requestedRelatedUserId : memberScope?.relatedUserId || 0);
-  if (!readAllUsers && (!Number.isInteger(relatedUserId) || relatedUserId <= 0)) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请先选择一位关联用户后查看资金流水" });
+  const relatedUserId = readAllUsers
+    ? 0
+    : adminScope
+      ? requestedRelatedUserId
+      : memberScope?.relatedUserId || 0;
+  if (
+    !readAllUsers &&
+    (!Number.isInteger(relatedUserId) || relatedUserId <= 0)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请先选择一位关联用户后查看资金流水",
+    });
   }
+  const withdrawalSourceSelect = await payoutWithdrawalSourceSelectSql(conn);
   const sql = readAllUsers
     ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
+              payout.amount, payout.direction, ${withdrawalSourceSelect}, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.ledger_id = ? AND payout.user_id = ?
         ORDER BY payout.occurred_on DESC, payout.id DESC`
     : adminScope
-    ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
+      ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, ${withdrawalSourceSelect}, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.ledger_id = ? AND payout.user_id = ? AND payout.related_user_id = ?
         ORDER BY payout.occurred_on DESC, payout.id DESC`
-    : `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
+      : `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, ${withdrawalSourceSelect}, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
@@ -2826,8 +2885,8 @@ export async function getLedger52T0JournalPayoutLogs(input: {
   const params = readAllUsers
     ? [LEDGER_52_T0_JOURNAL_ID, adminScope!.journalOwnerUserId]
     : adminScope
-    ? [LEDGER_52_T0_JOURNAL_ID, adminScope.journalOwnerUserId, relatedUserId]
-    : [LEDGER_52_T0_JOURNAL_ID, relatedUserId];
+      ? [LEDGER_52_T0_JOURNAL_ID, adminScope.journalOwnerUserId, relatedUserId]
+      : [LEDGER_52_T0_JOURNAL_ID, relatedUserId];
   const [rows] = await conn.execute(sql, params);
   return asRows(rows).map(mapT0JournalPayoutLog);
 }
@@ -2853,41 +2912,98 @@ async function getLedger52T0JournalWithdrawalIncomeCap(input: {
   };
 }
 
-/** 资金登记页的只读权威可提额度：完整已实现收益减同一用户全部已登记提现。 */
+/** 收益减收益提现；账面本金减本金提现。均为完整成员资金口径，不扣持仓占用或亏损。 */
 export async function getLedger52T0JournalPayoutAvailability(input: {
   journalOwnerUserId: number;
   relatedUserId: number;
 }) {
   const relatedUserId = Number(input.relatedUserId);
-  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
-  }
-  const [income, conn] = await Promise.all([
-    getLedger52T0JournalWithdrawalIncomeCap({
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的关联用户",
+    });
+  const conn = await getDbConnection();
+  if (!conn)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "T+0速记账本数据库连接失败",
+    });
+  const [columns] = await conn.execute(
+    `SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'withdrawal_source'`
+  );
+  const hasSource = asRows(columns).length > 0;
+  const sourceExpr = hasSource ? "withdrawal_source" : "'income'";
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(SUM(CASE WHEN direction = 'deposit' THEN amount ELSE 0 END),0) AS deposit_total,
+            COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND ${sourceExpr} = 'income' THEN amount ELSE 0 END),0) AS income_withdrawal_total,
+            COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND ${sourceExpr} = 'principal' THEN amount ELSE 0 END),0) AS principal_withdrawal_total,
+            COALESCE(SUM(CASE WHEN direction = 'withdrawal' THEN amount ELSE 0 END),0) AS withdrawal_total
+       FROM ledger52_t0_journal_payout_logs
+      WHERE ledger_id = ? AND user_id = ? AND related_user_id = ?`,
+    [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId]
+  );
+  const facts = asRows(rows)[0] || {};
+  const depositTotal = toNumber(facts.deposit_total);
+  const incomeWithdrawalTotal = toNumber(facts.income_withdrawal_total);
+  const principalWithdrawalTotal = toNumber(facts.principal_withdrawal_total);
+  let income: any = null;
+  let incomeUnavailableReason: string | undefined;
+  try {
+    income = await getLedger52T0JournalWithdrawalIncomeCap({
       journalOwnerUserId: input.journalOwnerUserId,
       relatedUserId,
-    }),
-    getDbConnection(),
-  ]);
-  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
-  const [withdrawalRows] = await conn.execute(
-    `SELECT COALESCE(SUM(amount), 0) AS total_amount
-       FROM ledger52_t0_journal_payout_logs
-      WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal'`,
-    [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
-  );
-  const withdrawalTotal = toNumber(asRows(withdrawalRows)[0]?.total_amount);
-  const availableCents = Math.max(0, floorPayoutAmountToCents(income.total) - payoutAmountToCents(withdrawalTotal));
+    });
+  } catch (error) {
+    incomeUnavailableReason =
+      error instanceof Error
+        ? error.message
+        : "完整收益事实读取失败，暂不可提收益";
+  }
+  const principalBookBalance = Math.max(0, payoutAmountToCents(depositTotal) - payoutAmountToCents(principalWithdrawalTotal)) / 100;
+  const availableIncomeAmount = income
+    ? Math.max(
+        0,
+        floorPayoutAmountToCents(income.total) -
+          payoutAmountToCents(incomeWithdrawalTotal)
+      ) / 100
+    : null;
   return {
     relatedUserId,
     income,
-    withdrawalTotal,
-    availableAmount: payoutCentsToAmount(availableCents),
+    depositTotal,
+    incomeWithdrawalTotal,
+    principalWithdrawalTotal,
+    principalBookBalance,
+    availablePrincipalAmount: principalBookBalance,
+    availableIncomeAmount,
+    availableAmount: availableIncomeAmount,
+    withdrawalTotal: toNumber(facts.withdrawal_total),
+    incomeUnavailableReason,
     calculatedAt: new Date().toISOString(),
   };
 }
 
-/** 管理员新增投入/提现资金流水；仅提现受当前可见总收益上限约束，服务器锁定已有提现记录防止并发穿透。 */
+/** 编辑前只读识别来源；在借用事务连接前完成收益读取，锁内仍重读并验证原来源。 */
+async function getLedger52T0JournalWithdrawalSourceForEdit(input: {
+  journalOwnerUserId: number;
+  relatedUserId: number;
+  payoutLogId: number;
+}): Promise<T0JournalWithdrawalSource> {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资金流水来源读取失败" });
+  const [columns] = await conn.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'withdrawal_source'`);
+  const sourceSql = asRows(columns).length ? "withdrawal_source" : "'income' AS withdrawal_source";
+  const [rows] = await conn.execute(
+    `SELECT ${sourceSql} FROM ledger52_t0_journal_payout_logs WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? LIMIT 1`,
+    [input.payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, input.relatedUserId],
+  );
+  const row = asRows(rows)[0];
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可编辑的资金流水记录" });
+  return normalizeWithdrawalSource(row.withdrawal_source);
+}
+
+/** 管理员分别登记收益提现/本金返还；稳定用户锁内重读各自累计金额，防止并发超提。 */
 export async function createLedger52T0JournalPayoutLog(input: {
   journalOwnerUserId: number;
   operatorUserId: number;
@@ -2895,6 +3011,7 @@ export async function createLedger52T0JournalPayoutLog(input: {
   occurredOn: string;
   amount?: string;
   direction: T0JournalPayoutDirection;
+  withdrawalSource?: T0JournalWithdrawalSource;
   ethReferencePrice?: string;
   ethQuantity?: string;
   note?: string;
@@ -2902,54 +3019,120 @@ export async function createLedger52T0JournalPayoutLog(input: {
   const relatedUserId = Number(input.relatedUserId);
   const occurredOn = String(input.occurredOn || "").trim();
   let amountText = String(input.amount || "").trim();
-  const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
+  const direction: T0JournalPayoutDirection =
+    input.direction === "deposit" ? "deposit" : "withdrawal";
+  const withdrawalSource: T0JournalWithdrawalSource =
+    direction === "withdrawal" && input.withdrawalSource === "principal"
+      ? "principal"
+      : "income";
+  if (direction === "deposit" && input.withdrawalSource)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "存入流水不能设置提现来源",
+    });
   const rawEthReferencePrice = String(input.ethReferencePrice || "").trim();
   const rawEthQuantity = String(input.ethQuantity || "").trim();
-  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的关联用户",
+    });
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) ||
+    Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的登记日期",
+    });
   }
   // 新投入必须固定参考价。ETH录入时由服务器按 ETH × 参考价生成唯一U入账金额。
-  const ethPrincipal = direction === "deposit"
-    ? resolveDepositEthPrincipal({ amountText, rawReferencePrice: rawEthReferencePrice, rawEthQuantity })
-    : null;
+  const ethPrincipal =
+    direction === "deposit"
+      ? resolveDepositEthPrincipal({
+          amountText,
+          rawReferencePrice: rawEthReferencePrice,
+          rawEthQuantity,
+        })
+      : null;
   if (ethPrincipal) amountText = ethPrincipal.amount;
   const amount = Number(amountText);
-  if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
+  if (
+    !/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "登记金额须为最多两位小数的正数",
+    });
   }
   const note = String(input.note || "").trim();
-  if (note.length > 300) throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
-  const maximumTotalAmount = direction === "withdrawal"
+  if (note.length > 300)
+    throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
+  // 完整收益读取另借池连接，必须先完成，避免持写事务等待第二条连接。
+  const maximumTotalAmount = direction === "withdrawal" && withdrawalSource === "income"
     ? (await getLedger52T0JournalWithdrawalIncomeCap({ journalOwnerUserId: input.journalOwnerUserId, relatedUserId })).total
     : 0;
   const connection = await getDbTransactionConnection();
-  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  if (!connection)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "T+0速记账本数据库连接失败",
+    });
   const tx: any = connection;
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     await assertExistingGlobalUser(tx, relatedUserId, "关联用户");
+    await tx.execute(`SELECT id FROM users WHERE id = ? FOR UPDATE`, [
+      relatedUserId,
+    ]);
     if (direction === "withdrawal") {
       const [sumRows] = await tx.execute(
-        `SELECT COALESCE(SUM(amount), 0) AS total_amount
-           FROM ledger52_t0_journal_payout_logs
-          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' FOR UPDATE`,
-        [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+        `SELECT COALESCE(SUM(amount), 0) AS total_amount FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' AND withdrawal_source = ? FOR UPDATE`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          input.journalOwnerUserId,
+          relatedUserId,
+          withdrawalSource,
+        ]
       );
       const existingTotal = toNumber(asRows(sumRows)[0]?.total_amount);
-      // 提现金额上限由服务端完整事实即时重算；投入资金从不占用收益提现额度。
-      if (payoutAmountToCents(existingTotal) + payoutAmountToCents(amount) > payoutAmountToCents(maximumTotalAmount)) {
+      const [availabilityRows] = await tx.execute(
+        `SELECT COALESCE(SUM(CASE WHEN direction = 'deposit' THEN amount ELSE 0 END),0) AS deposits, COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND withdrawal_source = 'principal' THEN amount ELSE 0 END),0) AS principal_withdrawals FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId]
+      );
+      const facts = asRows(availabilityRows)[0] || {};
+      if (
+        withdrawalSource === "principal" &&
+        payoutAmountToCents(amount) >
+          Math.max(
+            0,
+            payoutAmountToCents(toNumber(facts.deposits)) -
+              payoutAmountToCents(toNumber(facts.principal_withdrawals))
+          )
+      )
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `累计提现 ${(existingTotal + amount).toFixed(2)} U 将超过当前总收益 ${maximumTotalAmount.toFixed(2)} U`,
+          message: "本金提现将超过累计有效投入本金",
         });
+      if (withdrawalSource === "income") {
+
+        if (
+          payoutAmountToCents(existingTotal) + payoutAmountToCents(amount) >
+          payoutAmountToCents(maximumTotalAmount)
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `累计收益提现将超过当前可提收益 ${maximumTotalAmount.toFixed(2)} U`,
+          });
       }
     }
     const [result] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_payout_logs
-        (ledger_id, user_id, related_user_id, occurred_on, amount, direction, eth_reference_price, eth_quantity, deposit_input_mode, note, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (ledger_id, user_id, related_user_id, occurred_on, amount, direction, withdrawal_source, eth_reference_price, eth_quantity, deposit_input_mode, note, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
         input.journalOwnerUserId,
@@ -2957,29 +3140,36 @@ export async function createLedger52T0JournalPayoutLog(input: {
         occurredOn,
         amountText,
         direction,
+        direction === "withdrawal" ? withdrawalSource : "income",
         ethPrincipal?.ethReferencePrice ?? null,
         ethPrincipal?.ethQuantity ?? null,
         ethPrincipal?.depositInputMode ?? "u",
         note || null,
         input.operatorUserId,
-      ],
+      ]
     );
     const insertedId = toNumber((result as any)?.insertId);
     const [rows] = await tx.execute(
       `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.withdrawal_source, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.id = ? AND payout.ledger_id = ? AND payout.user_id = ? LIMIT 1`,
-      [insertedId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId],
+      [insertedId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId]
     );
     const row = asRows(rows)[0];
-    if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资金流水写入后读取失败" });
+    if (!row)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "资金流水写入后读取失败",
+      });
     await tx.commit();
     return mapT0JournalPayoutLog(row);
   } catch (error) {
-    try { await tx.rollback(); } catch {}
+    try {
+      await tx.rollback();
+    } catch {}
     throw error;
   } finally {
     tx.release?.();
@@ -2994,6 +3184,7 @@ export async function updateLedger52T0JournalPayoutLog(input: {
   occurredOn: string;
   amount?: string;
   direction: T0JournalPayoutDirection;
+  withdrawalSource?: T0JournalWithdrawalSource;
   ethReferencePrice?: string;
   ethQuantity?: string;
   note?: string;
@@ -3002,72 +3193,202 @@ export async function updateLedger52T0JournalPayoutLog(input: {
   const payoutLogId = Number(input.payoutLogId);
   const occurredOn = String(input.occurredOn || "").trim();
   let amountText = String(input.amount || "").trim();
-  const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
+  const direction: T0JournalPayoutDirection =
+    input.direction === "deposit" ? "deposit" : "withdrawal";
+  if (direction === "deposit" && input.withdrawalSource)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "存入流水不能设置提现来源",
+    });
   const rawEthReferencePrice = String(input.ethReferencePrice || "").trim();
   const rawEthQuantity = String(input.ethQuantity || "").trim();
   let amount = Number.NaN;
-  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
-  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的关联用户",
+    });
+  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0)
+    throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) ||
+    Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的登记日期",
+    });
   }
   const note = String(input.note || "").trim();
-  if (note.length > 300) throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
-  const maximumTotalAmount = direction === "withdrawal"
+  if (note.length > 300)
+    throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
+  const sourceForIncomeCap = direction === "withdrawal"
+    ? input.withdrawalSource ?? await getLedger52T0JournalWithdrawalSourceForEdit({ journalOwnerUserId: input.journalOwnerUserId, relatedUserId, payoutLogId })
+    : "income";
+  const maximumTotalAmount = direction === "withdrawal" && sourceForIncomeCap === "income"
     ? (await getLedger52T0JournalWithdrawalIncomeCap({ journalOwnerUserId: input.journalOwnerUserId, relatedUserId })).total
     : 0;
   const connection = await getDbTransactionConnection();
-  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  if (!connection)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "T+0速记账本数据库连接失败",
+    });
   const tx: any = connection;
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
+    await tx.execute(`SELECT id FROM users WHERE id = ? FOR UPDATE`, [
+      relatedUserId,
+    ]);
     const [existingRows] = await tx.execute(
-      `SELECT id, direction, eth_reference_price, eth_quantity, deposit_input_mode FROM ledger52_t0_journal_payout_logs
+      `SELECT id, direction, withdrawal_source, eth_reference_price, eth_quantity, deposit_input_mode FROM ledger52_t0_journal_payout_logs
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
-      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+      [
+        payoutLogId,
+        LEDGER_52_T0_JOURNAL_ID,
+        input.journalOwnerUserId,
+        relatedUserId,
+      ]
     );
     const existingRow = asRows(existingRows)[0];
-    if (!existingRow) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可编辑的资金流水记录" });
-    const isLegacyDepositWithoutEthPrincipal = String(existingRow.direction) === "deposit"
-      && existingRow.eth_reference_price == null
-      && existingRow.eth_quantity == null;
-    let ethPrincipal: ReturnType<typeof resolveDepositEthPrincipal> | null = null;
+    if (!existingRow)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "未找到可编辑的资金流水记录",
+      });
+    if (String(existingRow.direction) !== direction) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "已有资金流水的存入/提现方向不能切换，未改账" });
+    }
+    const existingSource =
+      String(existingRow.withdrawal_source) === "principal"
+        ? "principal"
+        : "income";
+    const requestedSource =
+      direction === "withdrawal"
+        ? input.withdrawalSource === undefined
+          ? existingSource
+          : normalizeWithdrawalSource(input.withdrawalSource)
+        : "income";
+    if (
+      direction === "withdrawal" &&
+      input.withdrawalSource !== undefined &&
+      requestedSource !== existingSource
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "为避免误改历史分类，提现来源不可切换",
+      });
+    const isLegacyDepositWithoutEthPrincipal =
+      String(existingRow.direction) === "deposit" &&
+      existingRow.eth_reference_price == null &&
+      existingRow.eth_quantity == null;
+    let ethPrincipal: ReturnType<typeof resolveDepositEthPrincipal> | null =
+      null;
     if (direction === "deposit") {
       if (rawEthQuantity || rawEthReferencePrice) {
-        ethPrincipal = resolveDepositEthPrincipal({ amountText, rawReferencePrice: rawEthReferencePrice, rawEthQuantity });
+        ethPrincipal = resolveDepositEthPrincipal({
+          amountText,
+          rawReferencePrice: rawEthReferencePrice,
+          rawEthQuantity,
+        });
         amountText = ethPrincipal.amount;
       } else if (!isLegacyDepositWithoutEthPrincipal) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "请确认本笔投入的 ETH 参考价" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "请确认本笔投入的 ETH 参考价",
+        });
       }
     }
     amount = Number(amountText);
-    if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
+    if (
+      !/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "登记金额须为最多两位小数的正数",
+      });
+    }
+    if (direction === "deposit") {
+      const [principalRows] = await tx.execute(
+        `SELECT COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND withdrawal_source = 'principal' THEN amount ELSE 0 END),0) AS principal_withdrawals, COALESCE(SUM(CASE WHEN direction = 'deposit' AND id <> ? THEN amount ELSE 0 END),0) AS other_deposits FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
+        [
+          payoutLogId,
+          LEDGER_52_T0_JOURNAL_ID,
+          input.journalOwnerUserId,
+          relatedUserId,
+        ]
+      );
+      const pf = asRows(principalRows)[0] || {};
+      if (
+        payoutAmountToCents(toNumber(pf.principal_withdrawals)) >
+        payoutAmountToCents(toNumber(pf.other_deposits)) +
+          payoutAmountToCents(amount)
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "减少投入后将低于已返还本金，未改账",
+        });
     }
     if (direction === "withdrawal") {
       const [sumRows] = await tx.execute(
-        `SELECT COALESCE(SUM(amount), 0) AS total_amount
-           FROM ledger52_t0_journal_payout_logs
-          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' AND id <> ? FOR UPDATE`,
-        [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId, payoutLogId],
+        `SELECT COALESCE(SUM(amount), 0) AS total_amount FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' AND withdrawal_source = ? AND id <> ? FOR UPDATE`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          input.journalOwnerUserId,
+          relatedUserId,
+          requestedSource,
+          payoutLogId,
+        ]
       );
       const otherWithdrawalTotal = toNumber(asRows(sumRows)[0]?.total_amount);
-      if (payoutAmountToCents(otherWithdrawalTotal) + payoutAmountToCents(amount) > payoutAmountToCents(maximumTotalAmount)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `累计提现 ${(otherWithdrawalTotal + amount).toFixed(2)} U 将超过当前总收益 ${maximumTotalAmount.toFixed(2)} U`,
-        });
+      if (requestedSource === "principal") {
+        const [r] = await tx.execute(
+          `SELECT COALESCE(SUM(CASE WHEN direction = 'deposit' THEN amount ELSE 0 END),0) AS deposits, COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND withdrawal_source = 'principal' AND id <> ? THEN amount ELSE 0 END),0) AS principal_withdrawals FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
+          [
+            payoutLogId,
+            LEDGER_52_T0_JOURNAL_ID,
+            input.journalOwnerUserId,
+            relatedUserId,
+          ]
+        );
+        const f = asRows(r)[0] || {};
+        if (
+          payoutAmountToCents(amount) >
+          Math.max(
+            0,
+            payoutAmountToCents(toNumber(f.deposits)) -
+              payoutAmountToCents(toNumber(f.principal_withdrawals))
+          )
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "本金提现将超过累计有效投入本金",
+          });
+      } else {
+
+        if (
+          payoutAmountToCents(otherWithdrawalTotal) +
+            payoutAmountToCents(amount) >
+          payoutAmountToCents(maximumTotalAmount)
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "累计收益提现将超过当前可提收益",
+          });
       }
     }
     await tx.execute(
       `UPDATE ledger52_t0_journal_payout_logs
-          SET occurred_on = ?, amount = ?, direction = ?, eth_reference_price = ?, eth_quantity = ?, deposit_input_mode = ?, note = ?
+          SET occurred_on = ?, amount = ?, direction = ?, withdrawal_source = ?, eth_reference_price = ?, eth_quantity = ?, deposit_input_mode = ?, note = ?
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?`,
       [
         occurredOn,
         amountText,
         direction,
+        direction === "withdrawal" ? requestedSource : "income",
         ethPrincipal?.ethReferencePrice ?? null,
         ethPrincipal?.ethQuantity ?? null,
         ethPrincipal?.depositInputMode ?? "u",
@@ -3076,23 +3397,29 @@ export async function updateLedger52T0JournalPayoutLog(input: {
         LEDGER_52_T0_JOURNAL_ID,
         input.journalOwnerUserId,
         relatedUserId,
-      ],
+      ]
     );
     const [rows] = await tx.execute(
       `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
-              payout.amount, payout.direction, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
+              payout.amount, payout.direction, payout.withdrawal_source, payout.eth_reference_price, payout.eth_quantity, ${payoutDepositInputModeSelectSql()}, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
          FROM ledger52_t0_journal_payout_logs payout
          LEFT JOIN users u ON u.id = payout.related_user_id
         WHERE payout.id = ? AND payout.ledger_id = ? AND payout.user_id = ? LIMIT 1`,
-      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId],
+      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId]
     );
     const row = asRows(rows)[0];
-    if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资金流水更新后读取失败" });
+    if (!row)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "资金流水更新后读取失败",
+      });
     await tx.commit();
     return mapT0JournalPayoutLog(row);
   } catch (error) {
-    try { await tx.rollback(); } catch {}
+    try {
+      await tx.rollback();
+    } catch {}
     throw error;
   } finally {
     tx.release?.();
@@ -3106,32 +3433,84 @@ export async function deleteLedger52T0JournalPayoutLog(input: {
   payoutLogId: string;
 }) {
   const connection = await getDbTransactionConnection();
-  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  if (!connection)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "T+0速记账本数据库连接失败",
+    });
   const tx: any = connection;
   const relatedUserId = Number(input.relatedUserId);
   const payoutLogId = Number(input.payoutLogId);
-  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
-  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "请选择有效的关联用户",
+    });
+  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0)
+    throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
+    await tx.execute(`SELECT id FROM users WHERE id = ? FOR UPDATE`, [
+      relatedUserId,
+    ]);
     const [existingRows] = await tx.execute(
-      `SELECT id FROM ledger52_t0_journal_payout_logs
+      `SELECT id, direction FROM ledger52_t0_journal_payout_logs
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
-      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+      [
+        payoutLogId,
+        LEDGER_52_T0_JOURNAL_ID,
+        input.journalOwnerUserId,
+        relatedUserId,
+      ]
     );
     const existingRow = asRows(existingRows)[0];
-    if (!existingRow) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可删除的资金流水记录" });
+    if (String(existingRow?.direction) === "deposit") {
+      const [principalRows] = await tx.execute(
+        `SELECT COALESCE(SUM(CASE WHEN direction = 'withdrawal' AND withdrawal_source = 'principal' THEN amount ELSE 0 END),0) AS principal_withdrawals, COALESCE(SUM(CASE WHEN direction = 'deposit' AND id <> ? THEN amount ELSE 0 END),0) AS other_deposits FROM ledger52_t0_journal_payout_logs WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
+        [
+          payoutLogId,
+          LEDGER_52_T0_JOURNAL_ID,
+          input.journalOwnerUserId,
+          relatedUserId,
+        ]
+      );
+      const pf = asRows(principalRows)[0] || {};
+      if (
+        payoutAmountToCents(toNumber(pf.principal_withdrawals)) >
+        payoutAmountToCents(toNumber(pf.other_deposits))
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "删除投入后将低于已返还本金，未改账",
+        });
+    }
+    if (!existingRow)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "未找到可删除的资金流水记录",
+      });
     const [result] = await tx.execute(
       `DELETE FROM ledger52_t0_journal_payout_logs
         WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?`,
-      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+      [
+        payoutLogId,
+        LEDGER_52_T0_JOURNAL_ID,
+        input.journalOwnerUserId,
+        relatedUserId,
+      ]
     );
-    if (toNumber((result as any)?.affectedRows) !== 1) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可删除的资金流水记录" });
+    if (toNumber((result as any)?.affectedRows) !== 1)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "未找到可删除的资金流水记录",
+      });
     await tx.commit();
     return { id: String(payoutLogId) };
   } catch (error) {
-    try { await tx.rollback(); } catch {}
+    try {
+      await tx.rollback();
+    } catch {}
     throw error;
   } finally {
     tx.release?.();

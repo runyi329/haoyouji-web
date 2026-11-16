@@ -1,5 +1,7 @@
 // 只处理接口返回的只读日结数据；不获取报价、不改变成员盈亏方向。
 import { getUnifiedStockCloseSnapshotDate, isUnifiedStockCloseReady } from '@shared/stock-unified-close-policy';
+import { CRYPTO_PORTFOLIO_POLICY_VERSION, cryptoPortfolioCutoffAt } from '@shared/crypto-portfolio-policy';
+import { shiftStockSessionDate } from '@shared/stock-market-session';
 
 export type StockCalendarPoint = {
   date: string;
@@ -13,7 +15,15 @@ export type StockCalendarPoint = {
   fxAsOf?: string | null;
   fxSource?: string | null;
   fxLockedAt?: string | null;
+  policyVersion?: string;
+  usdtCnyRate?: number | null;
 };
+
+export function isCryptoPortfolioCalendarPoint(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const version = (row as { policyVersion?: unknown }).policyVersion;
+  return typeof version === 'string' && (version === CRYPTO_PORTFOLIO_POLICY_VERSION || version.startsWith(`${CRYPTO_PORTFOLIO_POLICY_VERSION}:`));
+}
 
 export function nullableStockNumber(value: unknown): number | null {
   if (value === null || value === undefined || typeof value === 'boolean') return null;
@@ -37,7 +47,10 @@ export function normalizeStockCalendarPoints(
 ): StockCalendarPoint[] {
   const chronological = rows.filter((row) => {
     if (!row || !stockDateKey(source === 'member' ? row.date : row.snapshotDate)) return false;
-    if (!isUnifiedStockCloseReady(source === 'member' ? row.date : row.snapshotDate, now)) return false;
+    const date = source === 'member' ? row.date : row.snapshotDate;
+    if (isCryptoPortfolioCalendarPoint(row)
+      ? now.getTime() < cryptoPortfolioCutoffAt(date).getTime()
+      : !isUnifiedStockCloseReady(date, now)) return false;
     if (row.historical === false) return false;
     // 旧接口没有 historical 标记时，剔除首次盘尾前追加的空市值占位。
     // 有明确 historical 标记的缺价历史日保留，用于展示“待更新”而非消失。
@@ -53,17 +66,20 @@ export function normalizeStockCalendarPoints(
       ? stockDateKey(row.previousDate)
       : previous ? stockDateKey(source === 'member' ? previous.date : previous.snapshotDate) : null;
     let dailyPnl = row.priced === false ? null : nullableStockNumber(row.dailyPnl);
+    const expectedPreviousDate = isCryptoPortfolioCalendarPoint(row) ? shiftStockSessionDate(date, -1) : previousTradingDate?.(date);
     // 个人点的日收益严格信任 nullable 契约；总盘旧快照无 dailyPnl 时才允许
     // 从完整、相邻交易日推算，缺价/跨日断档绝不以 0 基准伪造“当日”收益。
     if (source === 'total' && !('dailyPnl' in row) && row.priced !== false) {
       const previousPnl = previous?.priced === false ? null : nullableStockNumber(previous?.totalPnl);
       dailyPnl = totalPnl !== null && previousPnl !== null && previousDate
-        && previousTradingDate?.(date) === previousDate ? totalPnl - previousPnl : null;
+        && expectedPreviousDate === previousDate ? totalPnl - previousPnl : null;
     }
-    if (previousDate && previousTradingDate && previousDate !== previousTradingDate(date)) dailyPnl = null;
+    if (previousDate && expectedPreviousDate && previousDate !== expectedPreviousDate) dailyPnl = null;
     return {
       date, totalPnl, dailyPnl, previousDate,
       marketValue: row.priced === false ? null : nullableStockNumber(row.marketValue),
+      ...(typeof row.policyVersion === 'string' ? { policyVersion: row.policyVersion } : {}),
+      ...('usdtCnyRate' in row ? { usdtCnyRate: nullableStockNumber(row.usdtCnyRate) } : {}),
       ...('usdCnyRate' in row ? {
         usdCnyRate: nullableStockNumber(row.usdCnyRate),
         stockDailyPnl: row.priced === false ? null : nullableStockNumber(row.stockDailyPnl),

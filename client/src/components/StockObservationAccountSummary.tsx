@@ -18,6 +18,7 @@ export type StockActualDisplaySummary = {
 type Props = {
   categoryId: number;
   usdCnyRate: number;
+  usdtCnyRate?: number | null;
   combined?: boolean;
   actual?: StockActualDisplaySummary;
 };
@@ -83,7 +84,7 @@ function MoneyValue({ value, showUsd, signed = false, top = false, combined = fa
 }
 
 /** 只读取观察持仓；actual 仅作 CNY 展示合并，不触及真实配额、保证金或结算。背景由账户原 header 提供。 */
-export default function StockObservationAccountSummary({ categoryId, usdCnyRate, combined = false, actual }: Props) {
+export default function StockObservationAccountSummary({ categoryId, usdCnyRate, usdtCnyRate = null, combined = false, actual }: Props) {
   let viewAsUserId: number | undefined;
   try {
     const raw = new URLSearchParams(window.location.search).get('viewAs') || sessionStorage.getItem('view-as-user-id');
@@ -115,6 +116,7 @@ export default function StockObservationAccountSummary({ categoryId, usdCnyRate,
     const amount = finiteValue(value);
     if (amount === null) return null;
     if (currency === 'CNY') return amount;
+    if (currency === 'USDT') return usdtCnyRate === null || finiteValue(usdtCnyRate) === null || usdtCnyRate <= 0 ? null : finiteValue(amount * usdtCnyRate);
     if (finiteValue(usdCnyRate) === null || usdCnyRate <= 0) return null;
     return finiteValue(amount * usdCnyRate);
   };

@@ -7,6 +7,8 @@ import {
   millisecondsUntilNextUnifiedStockClose,
   UNIFIED_STOCK_CLOSE_RETRY_END_MINUTE,
 } from '@shared/stock-unified-close-policy';
+import { CRYPTO_PORTFOLIO_POLICY_VERSION, cryptoPortfolioCutoffAt, cryptoPortfolioBeijingDate, cryptoPortfolioPublicationVersion, latestCryptoPortfolioSnapshotDate, millisecondsUntilNextCryptoPortfolioClose } from '@shared/crypto-portfolio-policy';
+import { isCryptoPortfolioCalendarPoint } from './ledger-stock-calendar';
 
 export const STOCK_CALENDAR_RETRY_MS = 5 * 60 * 1000;
 export const STOCK_CALENDAR_GC_MS = 60 * 60 * 1000;
@@ -22,24 +24,35 @@ type CalendarPublicationPoint = { snapshotDate?: string; ready?: boolean; priced
 // same identity × category query preserves historical points during publication.
 // The unchanged array response has no publication version; a ready current-day
 // point confirms its availability, not an invented backend publication receipt.
-export function stockCalendarExpectedVersion(now = new Date()) {
-  return getUnifiedStockCloseVersion(getUnifiedStockCloseSnapshotDate(now));
+export function stockCalendarUsesCryptoPolicy(rows: unknown): boolean {
+  return Array.isArray(rows) && rows.some(isCryptoPortfolioCalendarPoint);
+}
+
+export function stockCalendarExpectedVersion(now = new Date(), usesCryptoPolicy = false) {
+  return usesCryptoPolicy ? cryptoPortfolioPublicationVersion(latestCryptoPortfolioSnapshotDate(now))
+    : getUnifiedStockCloseVersion(getUnifiedStockCloseSnapshotDate(now));
 }
 
 export function stockCalendarHasExpectedClose(rows: unknown, now = new Date()): boolean {
-  const expectedDate = getUnifiedStockCloseSnapshotDate(now);
+  const expectedDate = stockCalendarUsesCryptoPolicy(rows) ? latestCryptoPortfolioSnapshotDate(now) : getUnifiedStockCloseSnapshotDate(now);
   return Array.isArray(rows) && rows.some((row: CalendarPublicationPoint) => row?.snapshotDate === expectedDate
     && row.priced === true && row.ready !== false
     && row.totalPnl !== null && row.totalPnl !== undefined && Number.isFinite(Number(row.totalPnl)));
 }
 
+export function stockCalendarRetryWindowFor(rows: unknown, now = new Date()): boolean {
+  if (!stockCalendarUsesCryptoPolicy(rows)) return isUnifiedStockCloseRetryWindow(now);
+  const cutoff = cryptoPortfolioCutoffAt(cryptoPortfolioBeijingDate(now)).getTime();
+  return now.getTime() >= cutoff && now.getTime() <= cutoff + 3 * 60 * 60 * 1000;
+}
+
 export function stockCalendarStaleTime(ledgerId: number, updatedAt: number, rows: unknown): number {
   if (ledgerId !== 37 || !updatedAt) return STOCK_CALENDAR_RETRY_MS;
   const updated = new Date(updatedAt);
-  if (isUnifiedStockCloseRetryWindow(updated) && !stockCalendarHasExpectedClose(rows, updated)) {
+  if (stockCalendarRetryWindowFor(rows, updated) && !stockCalendarHasExpectedClose(rows, updated)) {
     return STOCK_CALENDAR_RETRY_MS;
   }
-  return millisecondsUntilNextUnifiedStockClose(updated);
+  return stockCalendarUsesCryptoPolicy(rows) ? millisecondsUntilNextCryptoPortfolioClose(updated) : millisecondsUntilNextUnifiedStockClose(updated);
 }
 
 export function stockCalendarPrefetchBlocked(error: unknown): boolean {
@@ -71,7 +84,14 @@ export function stockCalendarQueryOptions<T>(
 
 // One timeout chain for both next real A-session 15:05 and late-publication
 // reads. No polling outside the 15:05–18:05 window; no weekend/holiday timer.
-export function millisecondsUntilStockCalendarWake(now = new Date()): number {
+export function millisecondsUntilStockCalendarWake(now = new Date(), usesCryptoPolicy = false): number {
+  if (usesCryptoPolicy) {
+    const boundary = millisecondsUntilNextCryptoPortfolioClose(now);
+    if (!stockCalendarRetryWindowFor([{ policyVersion: CRYPTO_PORTFOLIO_POLICY_VERSION }], now)) return boundary;
+    const end = cryptoPortfolioCutoffAt(cryptoPortfolioBeijingDate(now)).getTime() + 3 * 60 * 60 * 1000;
+    const retry = (Math.floor(now.getTime() / STOCK_CALENDAR_RETRY_MS) + 1) * STOCK_CALENDAR_RETRY_MS;
+    return retry <= end ? Math.min(boundary, retry - now.getTime()) : boundary;
+  }
   const boundary = millisecondsUntilNextUnifiedStockClose(now);
   if (!isUnifiedStockCloseRetryWindow(now)) return boundary;
   const { date } = getBeijingStockClock(now);

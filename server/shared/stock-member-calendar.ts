@@ -19,7 +19,7 @@ export type MemberCalendarQuote = {
 export type MemberCalendarFx = { snapshotDate: string; usdCnyRate: number | null; source?: string | null; asOf?: string | null; lockedAt?: string | null };
 export type MemberCalendarSnapshot = {
   snapshotDate: string; historical: true; ready: boolean; priced: boolean;
-  sourceDates: { A: string; US: string };
+  sourceDates: { A: string; US: string; CRYPTO?: string };
   status: 'ready' | 'pending_verification';
   marketValue: number | null; costValue: number | null; floatingPnl: number | null;
   realizedPnl: number | null; totalPnl: number | null; positionCount: number;
@@ -27,7 +27,9 @@ export type MemberCalendarSnapshot = {
   previousKnownEmpty: boolean;
   previousDate: string | null; usdCnyRate: number | null; fxAsOf: string | null;
   fxSource?: string | null; fxLockedAt?: string | null;
-  nativePnl: { CNY: number | null; USD: number | null };
+  nativePnl: { CNY: number | null; USD: number | null; USDT?: number | null };
+  usdtCnyRate?: number | null;
+  policyVersion?: string;
   stockDailyPnl: number | null; fxDailyPnl: number | null;
   missingSymbols: string[];
   quoteAsOf: Array<{ symbol: string; priceDate: string; capturedAt: string; source: string; carried: boolean }>;

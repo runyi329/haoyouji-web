@@ -2,8 +2,9 @@
  * 观察账户只用于展示对赌回报，不是实际参与、分红、押金或钱包资产。
  * 禁止将这里的 holdings / summary 传入真实参与或结算函数。
  */
+import { portfolioCurrency } from './portfolio-instruments';
 export const MAX_STOCK_OBSERVATION_QUANTITY = 1_000_000_000;
-export type StockObservationCurrency = 'CNY' | 'USD';
+export type StockObservationCurrency = 'CNY' | 'USD' | 'USDT';
 export type StockObservationQuoteSource = 'intraday' | 'close' | 'reference' | 'sale' | 'unavailable';
 
 export type StockLotObservation = {
@@ -199,7 +200,7 @@ export function buildStockObservationHolding(
     lotId: observation.lotId,
     symbol: observation.symbol,
     stockName: observation.stockName,
-    currency: /^\d{6}\.(SH|SZ|BJ)$/.test(observation.symbol) ? 'CNY' : 'USD',
+    currency: portfolioCurrency(observation.symbol),
     quantity: observation.quantity,
     currentQuantity,
     closedQuantity,
@@ -236,7 +237,7 @@ export function summarizeStockObservationHoldings(holdings: readonly StockObserv
     if (rows.some((row) => nullableFinite(row[key]) === null)) return null;
     return nullableFinite(rows.reduce((total, row) => total + (row[key] ?? 0), 0));
   };
-  const currencySummaries = (['CNY', 'USD'] as const).flatMap((currency) => {
+  const currencySummaries = (['CNY', 'USD', 'USDT'] as const).flatMap((currency) => {
     const rows = effectiveHoldings.filter((row) => row.currency === currency);
     return rows.length === 0 ? [] : [{
       currency,

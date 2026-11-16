@@ -12991,6 +12991,7 @@ ${klinesSummary}
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数').optional(),
         direction: z.enum(['withdrawal', 'deposit']),
+        withdrawalSource: z.enum(['income', 'principal']).optional(),
         // 投入可按U或ETH数量录入；两种情况下均由服务端定点生成唯一U金额和固定快照。
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
@@ -13016,6 +13017,7 @@ ${klinesSummary}
           occurredOn: input.occurredOn,
           amount: input.amount,
           direction: input.direction,
+          withdrawalSource: input.withdrawalSource,
           ethReferencePrice: input.ethReferencePrice,
           ethQuantity: input.ethQuantity,
           note: input.note,
@@ -13030,6 +13032,7 @@ ${klinesSummary}
         occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数').optional(),
         direction: z.enum(['withdrawal', 'deposit']),
+        withdrawalSource: z.enum(['income', 'principal']).optional(),
         ethReferencePrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,8})?$/, 'ETH参考价最多八位小数').optional(),
         ethQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,18})?$/, 'ETH数量最多十八位小数').optional(),
         note: z.string().trim().max(300).optional(),
@@ -13054,6 +13057,7 @@ ${klinesSummary}
           occurredOn: input.occurredOn,
           amount: input.amount,
           direction: input.direction,
+          withdrawalSource: input.withdrawalSource,
           ethReferencePrice: input.ethReferencePrice,
           ethQuantity: input.ethQuantity,
           note: input.note,
@@ -14184,7 +14188,7 @@ ${klinesSummary}
         ledgerId: z.literal(37),
         categoryId: z.number(),
         eventType: z.enum(['buy', 'sell']),
-        symbol: z.string().max(16).optional(),
+        symbol: z.string().max(64).optional(),
         quantity: z.number().positive().max(1_000_000_000).optional(),
         executionPrice: z.number().positive().max(10_000_000).optional(),
         lotId: z.number().int().positive().optional(),
@@ -14241,7 +14245,7 @@ ${klinesSummary}
         categoryId: z.number(),
         eventId: z.number(),
         eventType: z.enum(['buy', 'add', 'reduce', 'sell', 'note']),
-        symbol: z.string().max(16).optional(),
+        symbol: z.string().max(64).optional(),
         quantity: z.number().positive().max(1_000_000_000).optional(),
         executionPrice: z.number().positive().max(10_000_000).optional(),
         actualTradedAt: z.string().datetime().optional(),
@@ -36765,10 +36769,14 @@ insights 数组每项包含：
       return { quotes };
     }),
 
-  // 37号股票标签的统一检索：A股可按六码/名称/拼音，美股可按代码或名称模糊核验并返回美元报价。
+  // 37号同一持仓入口：数字币只接受服务器核验的现货交易对，不依赖手机直连交易所。
   searchManualStocks: protectedProcedure
-    .input(z.object({ query: z.string().trim().min(1).max(40), market: z.enum(['A', 'US']).default('A') }))
+    .input(z.object({ query: z.string().trim().min(1).max(40), market: z.enum(['A', 'US', 'CRYPTO']).default('A') }))
     .query(async ({ input }) => {
+      if (input.market === 'CRYPTO') {
+        const { searchCryptoPortfolio } = await import('./crypto-portfolio-quotes');
+        return searchCryptoPortfolio(input.query);
+      }
       const { searchManualStocks } = await import('./price-scanner');
       const results = await searchManualStocks(input.query, input.market);
       return { results };

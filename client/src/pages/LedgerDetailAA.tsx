@@ -24,8 +24,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { expectedStockSettlementDate, normalizeStockCalendarPoints, nullableStockNumber, stockCalendarScope, sumKnownStockDailyPnl } from "@/lib/ledger-stock-calendar";
-import { millisecondsUntilStockCalendarWake, stockCalendarExpectedVersion, stockCalendarHasExpectedClose, stockCalendarPrefetchBlocked, stockCalendarQueryOptions } from "@/lib/ledger-stock-calendar-cache";
+import { expectedStockSettlementDate, isCryptoPortfolioCalendarPoint, normalizeStockCalendarPoints, nullableStockNumber, stockCalendarScope, sumKnownStockDailyPnl } from "@/lib/ledger-stock-calendar";
+import { millisecondsUntilStockCalendarWake, stockCalendarExpectedVersion, stockCalendarHasExpectedClose, stockCalendarPrefetchBlocked, stockCalendarQueryOptions, stockCalendarRetryWindowFor, stockCalendarUsesCryptoPolicy } from "@/lib/ledger-stock-calendar-cache";
+import { latestCryptoPortfolioSnapshotDate } from "@shared/crypto-portfolio-policy";
 import { isUnifiedStockCloseRetryWindow } from "@shared/stock-unified-close-policy";
 import { previousStockMarketSession } from "@shared/stock-market-session";
 import ReactECharts from "echarts-for-react";
@@ -50,6 +51,14 @@ import {
 
 // 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取。
 type MarginNote = { id: string; content: string; createdAt: string };
+export function hasCryptoCalendarPointForDate(points: readonly unknown[], date: string): boolean {
+  return points.some((point: any) => point?.date === date && isCryptoPortfolioCalendarPoint(point));
+}
+export function cryptoCalendarPointStatusForDate(points: readonly unknown[], date: string): 'ready' | 'pending' | null {
+  const matching = points.filter((point: any) => point?.date === date && isCryptoPortfolioCalendarPoint(point));
+  if (matching.some((point: any) => point.ready === true || point.priced === true)) return 'ready';
+  return matching.length > 0 ? 'pending' : null;
+}
 type WalletBalanceSnapshot = { assetCode: string; total: string; frozen: string; available: string; capturedAt?: string };
 type MarginEntry = {
   id?: string;
@@ -739,12 +748,23 @@ export default function LedgerDetailAA({
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     let version = stockCalendarExpectedVersion();
+    let cryptoVersion = stockCalendarExpectedVersion(new Date(), true);
+    const hasCryptoCalendar = () => stockCalendarPrefetchCategoryIds.some((categoryId) =>
+      stockCalendarUsesCryptoPolicy(queryClient.getQueryState(stockCalendarOptionsFor(categoryId).queryKey)?.data));
+    let watchingCrypto = hasCryptoCalendar();
     const prefetch = (categoryId: number) => {
       const options = stockCalendarOptionsFor(categoryId);
       const state = queryClient.getQueryState(options.queryKey);
       // 不反复预取无权标签；选择页/手动刷新仍可以明确发起真实请求。
       if (stockCalendarPrefetchBlocked(state?.error)) return;
-      void queryClient.prefetchQuery(options);
+      void queryClient.prefetchQuery(options).then(() => {
+        if (disposed || stockCalendarIdentityRef.current !== stockCalendarIdentityKey) return;
+        if (!watchingCrypto && hasCryptoCalendar()) {
+          watchingCrypto = true;
+          clearTimeout(timer);
+          schedule();
+        }
+      });
     };
     stockCalendarPrefetchCategoryIds.forEach(prefetch);
     const schedule = () => {
@@ -752,25 +772,32 @@ export default function LedgerDetailAA({
         if (disposed || stockCalendarIdentityRef.current !== stockCalendarIdentityKey) return;
         const now = new Date();
         const nextVersion = stockCalendarExpectedVersion(now);
+        const nextCryptoVersion = stockCalendarExpectedVersion(now, true);
         const crossedBoundary = nextVersion !== version;
+        const crossedCryptoBoundary = nextCryptoVersion !== cryptoVersion;
         version = nextVersion;
+        cryptoVersion = nextCryptoVersion;
+        let refreshCryptoOverview = false;
         for (const categoryId of stockCalendarPrefetchCategoryIds) {
           const options = stockCalendarOptionsFor(categoryId);
           const state = queryClient.getQueryState(options.queryKey);
           if (stockCalendarPrefetchBlocked(state?.error)) continue;
-          if (crossedBoundary || (isUnifiedStockCloseRetryWindow(now)
+          const isCrypto = stockCalendarUsesCryptoPolicy(state?.data);
+          if ((isCrypto ? crossedCryptoBoundary : crossedBoundary) || (stockCalendarRetryWindowFor(state?.data, now)
             && !stockCalendarHasExpectedClose(state?.data, now))) {
             // 保留历史数组，仅标记旧版本失效；预取和选中标签使用同 key/fn，自动去重。
             void queryClient.invalidateQueries({ queryKey: options.queryKey, exact: true, refetchType: 'none' });
             prefetch(categoryId);
+            if (isCrypto) refreshCryptoOverview = true;
           }
         }
+        if (refreshCryptoOverview) void stockTagOverviewQuery.refetch();
         schedule();
-      }, millisecondsUntilStockCalendarWake());
+      }, millisecondsUntilStockCalendarWake(new Date(), watchingCrypto));
     };
     schedule();
     return () => { disposed = true; clearTimeout(timer); };
-  }, [ledgerId, user?.id, marginTargetUserId, stockCalendarPrefetchCategoryIds, stockCalendarOptionsFor, stockCalendarIdentityKey, queryClient]);
+  }, [ledgerId, user?.id, marginTargetUserId, stockCalendarPrefetchCategoryIds, stockCalendarOptionsFor, stockCalendarIdentityKey, queryClient, stockTagOverviewQuery.refetch]);
 
   // 如果当前选中的标签已被隐藏，切换到全部模式
   useEffect(() => {
@@ -1426,6 +1453,7 @@ export default function LedgerDetailAA({
           name: tagName,
           color,
           isStockPortfolio: true,
+          stockUsesCryptoPolicy: (stockOverview.points || []).some(isCryptoPortfolioCalendarPoint),
           stockStartDate: stockOverview.startDate || null,
           stockSummaryPnl: nullableStockNumber(stockSummary.totalPnl),
           stockSummaryMarketValue: nullableStockNumber(stockSummary.marketValue),
@@ -1445,6 +1473,7 @@ export default function LedgerDetailAA({
               pctInitial: pnl === null ? null : initialBalance > 0 ? (pnl / initialBalance) * 100 : 0,
               pctMargin: pnl === null ? null : marginCny > 0 ? (pnl / marginCny) * 100 : 0,
               stockDailyPnl: point.dailyPnl,
+              policyVersion: point.policyVersion,
               stockPreviousDate: point.previousDate,
               // 仅用于概览的只读显示；为空代表首个盘尾前不虚构市值。
               balance: point.marketValue,
@@ -2873,7 +2902,9 @@ export default function LedgerDetailAA({
                     {week.map((day, colIdx) => {
                       if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '50px' }} />;
                       const nonTradingLabel = getNonTradingLabel(day);
-                      const isNonTrading = nonTradingLabel !== null;
+                      const dayDateStr2 = getDateStr(day);
+                      const hasCryptoPoint = isSelectedStockPortfolio && hasCryptoCalendarPointForDate(stockCalendarPoints, dayDateStr2);
+                      const isNonTrading = nonTradingLabel !== null && !hasCryptoPoint;
                       const cellValue = getCellValue(day);
                       const hasRecord = cellValue !== null;
                       const todayMark = isToday(day);
@@ -2915,7 +2946,6 @@ export default function LedgerDetailAA({
                       }
                       const pauseDateStr = selectedTagPauseDate;
                       const endDateStr = selectedTagEndDate;
-                      const dayDateStr2 = getDateStr(day);
                       const stockDayPlaceholder = isSelectedStockPortfolio && !isNonTrading && !hasRecord
                         && dayDateStr2 <= new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
                         && (ledgerId === 37 || !selectedStockOverview?.startDate || dayDateStr2 >= selectedStockOverview.startDate)
@@ -3423,8 +3453,9 @@ export default function LedgerDetailAA({
               const prevPnl = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.pnl ?? 0) : 0;
               // 股票标签已经在服务端按成员的每笔入场价与股票批次计算，绝不能再乘旧版标签比例。
               // 手工余额标签保留原有的资金流剔除公式。
+              const tagSettlementDate = (tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate;
               const todayPnl = tag.isStockPortfolio
-                ? (latestDate === stockFocusDate ? nullableStockNumber((_latestPoint as any)?.stockDailyPnl) : null)
+                ? (latestDate === tagSettlementDate ? nullableStockNumber((_latestPoint as any)?.stockDailyPnl) : null)
                 : (latestBalance !== null && prevBalance !== null)
                   ? (prevBalance + todayCapitalChange - todayWithdraw - latestBalance) * (_tagRatio / 100)
                   : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
@@ -3751,7 +3782,7 @@ export default function LedgerDetailAA({
                       const _isStale = _isTradeDay && _hourBJ >= 15 && latestDate !== _todayBJ;
                       // 是否当天已更新：该用户最新数据日期 = 全局最新日期
                       const _isTodayNonTradeDay = false; // 已废弃交易日判断
-                      const _isTagUpdatedToday = latestDate === (tag.isStockPortfolio ? stockFocusDate : _latestDataDate);
+                      const _isTagUpdatedToday = latestDate === (tag.isStockPortfolio ? ((tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate) : _latestDataDate);
                       const _showTodayPnl = todayPnl !== null;
                   const rowBorder = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                   return (
@@ -3774,7 +3805,7 @@ export default function LedgerDetailAA({
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, height: rowHeight }}>
                             <span
-                              title={tag.isStockPortfolio ? `${stockFocusDate}日结${todayPnl === null ? '待更新' : ''}` : undefined}
+                              title={tag.isStockPortfolio ? `${(tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate}日结${todayPnl === null ? '待更新' : ''}` : undefined}
                               style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowDetail ? 'pointer' : 'default',
                                 textDecoration: _canShowDetail ? 'underline' : 'none', textDecorationStyle: 'dashed',
                                 textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'normal', wordBreak: 'break-all', textAlign: 'center' }}
@@ -4282,7 +4313,11 @@ export default function LedgerDetailAA({
             // 构建每日汇总数据：按日期聚合资金流剔除后的当日回报。
             // 只计入「该日有数据 且 前一日也有数据」的标签
             const summaryDayMap = new Map<string, { total: number; tags: { name: string; val: number }[] }>();
+            const summaryCryptoDates = new Set<string>();
             allTagsChartData.filter(t => t.points.length > 0).forEach(tag => {
+              tag.points.forEach((point: any) => {
+                if (isCryptoPortfolioCalendarPoint(point)) summaryCryptoDates.add(point.date);
+              });
               // 股票直接用已发布的成员日收益，不套用普通标签比例/市值差额。
               if (tag.isStockPortfolio) {
                 tag.points.forEach((point: any) => {
@@ -4412,7 +4447,8 @@ export default function LedgerDetailAA({
                                   if (dow2 === 6) return '周六';
                                   return null;
                                 })();
-                                const isNonTrading = sNonTradingLabel !== null;
+                                const isCryptoDate = summaryCryptoDates.has(dateStr);
+                                const isNonTrading = sNonTradingLabel !== null && !isCryptoDate;
                                 const cellBg = isNonTrading ? '#F0F0F0' : isTodayCell ? '#FFF3E0' : '#F9F9F9';
                                 const cellBorder = isNonTrading ? '1px solid #E0E0E0' : isTodayCell ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                                 const dayNumColor = isNonTrading ? '#BDBDBD' : isTodayCell ? '#D32F2F' : '#222222';

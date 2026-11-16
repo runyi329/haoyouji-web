@@ -3,7 +3,8 @@ import { Eye, Loader2 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import StockQuoteUpdateIndicator from '@/components/StockQuoteUpdateIndicator';
-import type { StockObservationHolding } from '@shared/stock-observation-portfolio';
+import type { StockObservationHolding, StockObservationCurrency } from '@shared/stock-observation-portfolio';
+import { portfolioCashMultiplier } from '@shared/portfolio-instruments';
 
 type PublicStockPosition = {
   symbol: string;
@@ -17,6 +18,7 @@ type PublicStockPosition = {
 type Props = {
   categoryId: number;
   usdCnyRate: number;
+  usdtCnyRate?: number | null;
   /** 仅用于匹配公司批次的公开开仓价与日期，不参与观察或真实结算。 */
   publicPositions?: readonly PublicStockPosition[];
 };
@@ -57,7 +59,7 @@ const metricCellClass = 'flex min-w-0 flex-col items-center justify-center px-0.
 const metricLabelClass = 'order-last mt-1 whitespace-nowrap text-[9px] leading-4 text-gray-400';
 const metricValueClass = 'whitespace-nowrap text-[13px] leading-5 font-semibold tracking-tight tabular-nums';
 
-export default function StockObservationPortfolio({ categoryId, usdCnyRate, publicPositions = [] }: Props) {
+export default function StockObservationPortfolio({ categoryId, usdCnyRate, usdtCnyRate = null, publicPositions = [] }: Props) {
   const [showPnlFormula, setShowPnlFormula] = useState(false);
   let viewAsUserId: number | undefined;
   try {
@@ -77,14 +79,15 @@ export default function StockObservationPortfolio({ categoryId, usdCnyRate, publ
   if (holdings.length === 0) return null;
   const asCny = (value: number | null | undefined, currency: string) => {
     const amount = finiteValue(value);
-    return amount === null || (currency === 'USD' && (!Number.isFinite(usdCnyRate) || usdCnyRate <= 0)) ? null : finiteValue(amount * (currency === 'USD' ? usdCnyRate : 1));
+    const multiplier = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+    return amount === null || multiplier === null ? null : finiteValue(amount * multiplier);
   };
-  const MoneyValue = ({ value, currency, signed = false }: { value: number | null | undefined; currency: 'CNY' | 'USD'; signed?: boolean }) => {
+  const MoneyValue = ({ value, currency, signed = false }: { value: number | null | undefined; currency: StockObservationCurrency; signed?: boolean }) => {
     const cny = asCny(value, currency);
     const color = signed ? tone(cny) : cny === null ? 'text-gray-400' : 'text-[#222222]';
     return <>
       <div className={`${metricValueClass} ${color}`}>{smallDecimals(formatAmount(cny, signed))}</div>
-      {currency === 'USD' && <div className={`mt-0.5 whitespace-nowrap text-[9px] ${signed ? tone(value) : 'text-gray-400'}`}>{formatAmount(value, signed)}</div>}
+      {currency !== 'CNY' && <div className={`mt-0.5 whitespace-nowrap text-[9px] ${signed ? tone(value) : 'text-gray-400'}`}>{currency === 'USDT' ? 'USDT ' : ''}{formatAmount(value, signed)}</div>}
     </>;
   };
 
@@ -107,7 +110,7 @@ export default function StockObservationPortfolio({ categoryId, usdCnyRate, publ
       const paused = holding.status === 'paused';
       const pending = holding.status === 'pending';
       const statusLabel = closed ? '已结束' : paused ? '已暂停' : pending ? '待开始' : null;
-      const metricCurrencyLabel = <span className="ml-0.5 text-[8px] font-normal" title={holding.currency === 'USD' ? '上方为人民币，下方为美元' : '人民币'}>¥{holding.currency === 'USD' ? '/$' : ''}</span>;
+      const metricCurrencyLabel = <span className="ml-0.5 text-[8px] font-normal" title={holding.currency === 'USDT' ? '上方为人民币，下方为USDT；缺少独立汇率时人民币待更新' : holding.currency === 'USD' ? '上方为人民币，下方为美元' : '人民币'}>¥{holding.currency === 'USD' ? '/$' : holding.currency === 'USDT' ? '/USDT' : ''}</span>;
       return <div key={`${holding.symbol}-${holding.lotId}`} className="relative overflow-hidden rounded-[3px] border border-[#D9D9D9] bg-[#FAF6FF] text-xs">
         <div className="border-b border-[#E6E6E6] bg-[#F3EDF9] px-2.5 py-2">
           <div className="flex min-w-0 items-center gap-1.5">
@@ -132,11 +135,11 @@ export default function StockObservationPortfolio({ categoryId, usdCnyRate, publ
           </div>
           <div className="grid grid-cols-4">
             <div className={`${metricCellClass} border-r border-[#E6E6E6]`}><MoneyValue value={holding.entryPrice} currency={holding.currency} /><div className={metricLabelClass}>我的买入价{metricCurrencyLabel}</div></div>
-            <div className={`${metricCellClass} border-r border-[#E6E6E6]`}><div className={`${metricValueClass} ${quantity === null ? 'text-gray-400' : 'text-[#222222]'}`}>{quantity === null ? '—' : smallDecimals(quantity.toLocaleString('zh-CN', { maximumFractionDigits: 8 }))} <span className="text-[9px] font-normal text-gray-400">股</span></div><div className={metricLabelClass}>持仓数量</div></div>
+            <div className={`${metricCellClass} border-r border-[#E6E6E6]`}><div className={`${metricValueClass} ${quantity === null ? 'text-gray-400' : 'text-[#222222]'}`}>{quantity === null ? '—' : smallDecimals(quantity.toLocaleString('zh-CN', { maximumFractionDigits: 8 }))} <span className="text-[9px] font-normal text-gray-400">{holding.currency === 'USDT' ? '币' : '股'}</span></div><div className={metricLabelClass}>持仓数量</div></div>
             <div className={`${metricCellClass} border-r border-[#E6E6E6]`}><MoneyValue value={marketValue} currency={holding.currency} /><div className={metricLabelClass}>持仓价值{metricCurrencyLabel}</div></div>
             <div className={metricCellClass}><MoneyValue value={holding.floatingPnl} currency={holding.currency} signed /><button type="button" onClick={() => setShowPnlFormula(true)} className={`${metricLabelClass} border-b border-dashed border-gray-400 pb-px hover:border-[#8462A8] hover:text-[#8462A8]`} aria-label={`查看${holding.stockName}观察浮动盈亏计算公式`}>浮动盈亏{metricCurrencyLabel}</button></div>
           </div>
-          {finiteValue(holding.closedQuantity) !== null && holding.closedQuantity > 0 && <div className="flex flex-wrap items-center justify-end gap-x-2 border-t border-[#E6E6E6] px-2.5 py-1.5 text-[9px] leading-4 text-gray-400"><span>已结束 {holding.closedQuantity.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} 股</span><span>观察盈亏 ¥ {formatAmount(asCny(holding.closedPnl, holding.currency), true)}{holding.currency === 'USD' ? ` / $ ${formatAmount(holding.closedPnl, true)}` : ''}</span></div>}
+          {finiteValue(holding.closedQuantity) !== null && holding.closedQuantity > 0 && <div className="flex flex-wrap items-center justify-end gap-x-2 border-t border-[#E6E6E6] px-2.5 py-1.5 text-[9px] leading-4 text-gray-400"><span>已结束 {holding.closedQuantity.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} {holding.currency === 'USDT' ? '币' : '股'}</span><span>观察盈亏 ¥ {formatAmount(asCny(holding.closedPnl, holding.currency), true)}{holding.currency === 'USD' ? ` / $ ${formatAmount(holding.closedPnl, true)}` : holding.currency === 'USDT' ? ` / USDT ${formatAmount(holding.closedPnl, true)}` : ''}</span></div>}
         </div>
       </div>;
     })}
@@ -144,7 +147,7 @@ export default function StockObservationPortfolio({ categoryId, usdCnyRate, publ
     <Dialog open={showPnlFormula} onOpenChange={setShowPnlFormula}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle className="flex items-center gap-1.5 text-sm"><Eye size={16} className="text-[#8462A8]" />观察浮动盈亏</DialogTitle></DialogHeader>
-        <div className="space-y-2 text-xs leading-5 text-gray-500"><p>浮动盈亏 =（我的买入价 − 观察当前价）× 当前观察持仓数量。</p><p>暂停或结束沿用冻结估值；已结束部分单独展示，观察累计盈亏为浮动盈亏与已结束观察盈亏之和。美元金额折算人民币，原始美元值保留在下方。</p><p>仅展示观察计算结果，不产生真实配额、保证金或资金结算。</p></div>
+        <div className="space-y-2 text-xs leading-5 text-gray-500"><p>浮动盈亏 =（我的买入价 − 观察当前价）× 当前观察持仓数量。</p><p>暂停或结束沿用冻结估值；已结束部分单独展示，观察累计盈亏为浮动盈亏与已结束观察盈亏之和。外币金额用各自独立汇率折算人民币，原始美元或USDT值保留在下方；缺少汇率时人民币保持待更新。</p><p>仅展示观察计算结果，不产生真实配额、保证金或资金结算。</p></div>
       </DialogContent>
     </Dialog>
   </section>;

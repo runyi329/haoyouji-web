@@ -18,6 +18,8 @@ import StockParticipantProfitChart from "@/components/StockParticipantProfitChar
 import StockQuoteUpdateIndicator from "@/components/StockQuoteUpdateIndicator";
 import StockObservationPortfolio from "@/components/StockObservationPortfolio";
 import StockObservationAccountSummary from "@/components/StockObservationAccountSummary";
+import { beijingTradeInputTime, parseTradeInputTime } from "@/components/StockTagTradeDialog";
+import { portfolioCurrency as instrumentCurrency, portfolioMarket, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, type PortfolioCurrency, type PortfolioMarket } from "@shared/portfolio-instruments";
 
 const StockAllocationPanel = lazy(() => import("./LedgerAAInitialBalance").then((module) => ({ default: module.LedgerAAInitialBalanceContent })));
 
@@ -48,13 +50,13 @@ const eventTone: Record<EventType, string> = {
   note: "bg-gray-100 text-gray-600",
 };
 
-type StockCurrency = 'CNY' | 'USD';
+type StockCurrency = PortfolioCurrency;
 
-const normalizeCurrency = (value: unknown): StockCurrency => String(value || '').toUpperCase() === 'USD' ? 'USD' : 'CNY';
+const normalizeCurrency = (value: unknown): StockCurrency => String(value || '').toUpperCase() === 'USDT' ? 'USDT' : String(value || '').toUpperCase() === 'USD' ? 'USD' : 'CNY';
 
 const money = (value: number | null | undefined, digits = 2, currency: StockCurrency = 'CNY') => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return `${currency === 'USD' ? 'US$' : '¥'}${value.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return `${portfolioQuotePrefix(currency)}${value.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 };
 
 const signedMoney = (value: number | null | undefined, currency: StockCurrency = 'CNY') => {
@@ -134,6 +136,93 @@ function localInputTime(now = new Date()) {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }
 
+// 旧证券helper的 >1e-8 门槛会漏掉一聪现货平仓；仅适配显式数字币记录。
+const buildCryptoAwareMemberRealizedLots = (participations: any[], today: string) => [
+  ...buildStockMemberRealizedLots(participations.filter(row => portfolioMarket(row.symbol) !== 'CRYPTO'), today),
+  ...participations.filter(row => portfolioMarket(row.symbol) === 'CRYPTO' && row.startDate <= today && Number.isFinite(row.closedQuantity) && row.closedQuantity >= 1e-8).map(row => {
+    const soldQuantity = Number(row.closedQuantity);
+    const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+    const unitCost = finite(row.entryPrice);
+    const sellValue = finite(row.closedValue);
+    return { lotId: row.lotId, participationId: row.id, symbol: row.symbol, stockName: row.stockName, currency: 'USDT' as const,
+      openedAt: row.openedAt, startDate: row.startDate, soldAt: row.closedAt ?? null, initialQuantity: finite(row.allocatedQuantity), soldQuantity,
+      unitCost, buyValue: unitCost === null ? null : finite(soldQuantity * unitCost), sellValue, realizedPnl: finite(row.realizedPnl), sellPrice: sellValue === null ? null : finite(sellValue / soldQuantity) };
+  }),
+];
+
+// 旧观察组件仅认识CNY/USD；只在明确CRYPTO持仓出现时适配，股票界面保持原样。
+function useCryptoObservation(categoryId: number) {
+  let viewAsUserId: number | undefined;
+  try {
+    const raw = new URLSearchParams(window.location.search).get('viewAs') || sessionStorage.getItem('view-as-user-id');
+    const target = raw && /^\d+$/.test(raw) ? Number(raw) : 0;
+    if (Number.isSafeInteger(target) && target > 0) viewAsUserId = target;
+  } catch { /* 服务端仍校验本人/授权观察视角 */ }
+  return trpc.ledger.getMyStockTagObservationPortfolio.useQuery(
+    { ledgerId: 37, categoryId, viewAsUserId },
+    { staleTime: 10_000, refetchInterval: (query) => ((query.state.data as any)?.holdings || []).some((row: any) => portfolioMarket(row.symbol) === 'CRYPTO') ? 5_000 : 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: true },
+  );
+}
+
+function CryptoAwareObservationPortfolio({ categoryId, usdCnyRate, usdtCnyRate, publicPositions }: { categoryId: number; usdCnyRate: number; usdtCnyRate: number | null; publicPositions: any[] }) {
+  const query = useCryptoObservation(categoryId);
+  const holdings = ((query.data as any)?.holdings || []) as any[];
+  if (!holdings.some(row => portfolioMarket(row.symbol) === 'CRYPTO')) return <StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={publicPositions} />;
+  const cny = (value: number | null | undefined, symbol: string) => {
+    const rate = portfolioCashMultiplier(instrumentCurrency(symbol), usdCnyRate, usdtCnyRate);
+    return value == null || !Number.isFinite(value) || rate === null ? null : value * rate;
+  };
+  return <section aria-label="观察账户" className="space-y-2">{holdings.map(row => {
+    const currency = instrumentCurrency(row.symbol);
+    const price = row.marketPrice == null ? null : Number(row.marketPrice);
+    const currentValue = row.currentQuantity === 0 ? 0 : price === null ? null : Number(row.currentQuantity) * price;
+    return <div key={`${row.symbol}:${row.lotId}`} className="rounded-md border border-purple-100 bg-[#FAF6FF] p-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-1"><b>{row.stockName} · {portfolioDisplaySymbol(row.symbol)}</b><span className="text-[10px] text-purple-600">观察 · 不结算</span></div>
+      <div className="mt-1 text-[10px] text-gray-500">{row.status === 'pending' ? '待开始' : row.status === 'paused' ? '已暂停 · 冻结估值' : row.status === 'closed' ? '已结束 · 冻结估值' : '观察中'} · {formatDateTime(row.marketQuoteUpdatedAt)}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2">{[
+        { label: '观察买入价', value: row.entryPrice }, { label: '观察当前价', value: price },
+        { label: '当前价值', value: currentValue }, { label: '观察浮动盈亏', value: row.floatingPnl, signed: true },
+      ].map(item => <div key={item.label}><span className="text-[10px] text-gray-500">{item.label}</span><div>{item.signed ? signedMoney(cny(item.value, row.symbol)) : money(cny(item.value, row.symbol))}</div><div className="text-[10px] text-gray-400">{item.signed ? signedMoney(item.value, currency) : money(item.value, 2, currency)}</div></div>)}</div>
+      <div className="mt-2">当前 {formatQuantity(Number(row.currentQuantity || 0))} {portfolioQuantityUnit(row.symbol)} · 已结束 {formatQuantity(Number(row.closedQuantity || 0))} {portfolioQuantityUnit(row.symbol)}</div>
+      <div className="mt-1 text-[10px] text-gray-500">已结束观察盈亏 {signedMoney(cny(row.closedPnl, row.symbol))} / {signedMoney(row.closedPnl, currency)}</div>
+      {currency === 'USDT' && usdtCnyRate === null && <div className="mt-1 text-[10px] text-amber-700">USDT汇率暂不可用，参考人民币/保证金显示—</div>}
+    </div>;
+  })}<p className="text-[10px] text-gray-500">观察盈亏 =（观察买入价 − 冻结或最新观察价）× 数量；观察不产生真实资金结算。</p></section>;
+}
+
+function CryptoAwareObservationAccountSummary(props: { categoryId: number; usdCnyRate: number; usdtCnyRate: number | null; combined?: boolean; actual?: any }) {
+  const query = useCryptoObservation(props.categoryId);
+  const holdings = ((query.data as any)?.holdings || []) as any[];
+  if (!holdings.some(row => portfolioMarket(row.symbol) === 'CRYPTO')) return <StockObservationAccountSummary categoryId={props.categoryId} usdCnyRate={props.usdCnyRate} combined={props.combined} actual={props.actual} />;
+  const effective = holdings.filter(row => row.status !== 'pending');
+  const sum = (field: string, quantityField?: string) => {
+    const values = effective.map(row => {
+      const rate = portfolioCashMultiplier(instrumentCurrency(row.symbol), props.usdCnyRate, props.usdtCnyRate);
+      const quantity = quantityField ? Number(row[quantityField]) : 1;
+      const value = quantity === 0 ? 0 : row[field] == null ? null : Number(row[field]) * quantity;
+      return value === null || !Number.isFinite(value) || rate === null ? null : value * rate;
+    });
+    return values.some(value => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
+  };
+  const merged = (value: number | null, field: string) => {
+    if (!props.combined) return value;
+    const actual = props.actual === undefined ? 0 : props.actual[field];
+    return value === null || actual == null || !Number.isFinite(actual) ? null : value + actual;
+  };
+  const totalPnl = merged(sum('totalPnl'), 'totalPnl');
+  return <div aria-label="数字币观察汇总" className="mt-2 rounded-lg bg-white/95 p-3 text-xs text-[#644484]">
+    <div className="font-semibold">{props.combined ? '实际与观察展示合计' : '观察账户汇总（不结算）'}</div>
+    <div className="mt-2 grid grid-cols-2 gap-2">{[
+      { label: '当前初始市值', value: merged(sum('entryPrice', 'currentQuantity'), 'currentCost') },
+      { label: '当前价值', value: merged(sum('marketPrice', 'currentQuantity'), 'currentValue') },
+      { label: '已结束初始市值', value: merged(sum('entryPrice', 'closedQuantity'), 'closedCost') },
+      { label: '已结束价值', value: merged(sum('frozenSalePrice', 'closedQuantity'), 'closedValue') },
+    ].map(item => <div key={item.label}><span className="text-[10px] text-gray-500">{item.label}</span><div>{money(item.value)}</div></div>)}</div>
+    <div className="mt-2 font-semibold">总盈亏 {signedMoney(totalPnl)}</div>
+    {props.usdtCnyRate === null && <p className="mt-1 text-[10px] text-amber-700">USDT汇率暂不可用，人民币合计保留未知态。</p>}
+  </div>;
+}
+
 export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false }: Props) {
   const utils = trpc.useUtils();
   const { user: currentUser } = useAuth();
@@ -144,11 +233,10 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   );
   const quotedUsdCnyRate = Number(usdCnyRateData?.rate);
   const usdCnyRate = usdCnyRateData?.success && Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 0;
-  const toCny = (value: number | null | undefined, currency: StockCurrency) => (
-    value === null || value === undefined || !Number.isFinite(value) || (currency === 'USD' && usdCnyRate <= 0)
-      ? null
-      : value * (currency === "USD" ? usdCnyRate : 1)
-  );
+  const toCny = (value: number | null | undefined, currency: StockCurrency) => {
+    const rate = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+    return value === null || value === undefined || !Number.isFinite(value) || rate === null ? null : value * rate;
+  };
   /**
    * R1 的主账务口径统一用人民币；美股同时保留原始美元值，方便核对实际成交价。
    * `usdValue` 有值时优先展示原始金额，避免用四舍五入后的人民币金额反推美元。
@@ -173,28 +261,29 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     hideCurrency?: boolean;
   }) => {
     const cnyValue = value === null || value === undefined || !Number.isFinite(value) ? null : Number(value);
+    const nativeRate = portfolioCashMultiplier(nativeCurrency, usdCnyRate, usdtCnyRate);
     const hasExactUsdValue = usdValue !== null && usdValue !== undefined && Number.isFinite(usdValue);
     const displayUsdValue = hasExactUsdValue
       ? Number(usdValue)
-      : cnyValue === null || usdCnyRate <= 0
+      : cnyValue === null || nativeRate === null
         ? null
-        : cnyValue / usdCnyRate;
-    const showUsd = nativeCurrency === 'USD' && displayUsdValue !== null;
+        : cnyValue / nativeRate;
+    const showUsd = nativeCurrency !== 'CNY' && displayUsdValue !== null;
     const renderAmount = (amountValue: number | null, currency: StockCurrency, secondary = false) => {
       const formatted = signed ? signedMoney(amountValue, currency) : money(amountValue, 2, currency);
-      const unit = currency === 'USD' ? 'US$' : '¥';
+      const unit = portfolioQuotePrefix(currency);
       const displayAmount = hideCurrency ? formatted.replace(unit, '') : formatted;
       const decimalIndex = displayAmount.lastIndexOf('.');
       return <>{smallDecimals && !secondary && decimalIndex >= 0 ? <>{displayAmount.slice(0, decimalIndex)}<span className="text-[9px] font-normal opacity-80">{displayAmount.slice(decimalIndex)}</span></> : displayAmount}</>;
     };
     return <>
       <div className={mainClassName}>{renderAmount(cnyValue, 'CNY')}</div>
-      {showUsd && <div className={subClassName}>{hasExactUsdValue ? '' : '≈ '}{renderAmount(displayUsdValue, 'USD', true)}</div>}
+      {showUsd && <div className={subClassName}>{hasExactUsdValue ? '' : '≈ '}{renderAmount(displayUsdValue, nativeCurrency, true)}</div>}
     </>;
   };
   const globalPortfolioQuery = trpc.ledger.getStockTagPortfolio.useQuery(
     { ledgerId, categoryId },
-    { enabled: !participantView, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000 },
+    { enabled: !participantView, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : false, refetchIntervalInBackground: false },
   );
   const dailySnapshotsQuery = trpc.ledger.getStockTagDailySnapshots.useQuery(
     { ledgerId, categoryId },
@@ -202,15 +291,17 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   );
   const publicPortfolioQuery = trpc.ledger.getStockTagPublicPortfolio.useQuery(
     { ledgerId: 37, categoryId },
-    { enabled: participantView && ledgerId === 37, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: participantView ? 60_000 : false, refetchIntervalInBackground: false },
+    { enabled: participantView && ledgerId === 37, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
   );
   const memberPortfolioQuery = trpc.ledger.getMyStockTagParticipantPortfolio.useQuery(
     { ledgerId: 37, categoryId },
     // 管理员同时是成员时，也需要读取自己的已平仓份额。总账户接口仍只负责
     // 维护用的全量数据；个人部分严格复用成员端同一份只读口径。
-    { enabled: ledgerId === 37 && (participantView || Boolean((globalPortfolioQuery.data as any)?.canEdit)), refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: participantView ? 60_000 : false, refetchIntervalInBackground: false },
+    { enabled: ledgerId === 37 && (participantView || Boolean((globalPortfolioQuery.data as any)?.canEdit)), refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
   );
 
+  const usdtCnyRate = portfolioCashMultiplier('USDT', null, (participantView ? (publicPortfolioQuery.data as any)?.summary?.usdtCnyRate : (globalPortfolioQuery.data as any)?.summary?.usdtCnyRate) ?? (memberPortfolioQuery.data as any)?.summary?.usdtCnyRate);
+  const isLocalHotPreview = import.meta.env.DEV;
   const data = participantView ? memberPortfolioQuery.data : globalPortfolioQuery.data;
   const isLoading = participantView ? memberPortfolioQuery.isLoading : globalPortfolioQuery.isLoading;
   const error = participantView ? memberPortfolioQuery.error : globalPortfolioQuery.error;
@@ -228,7 +319,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   // 金额汇总统计每笔已售份额（含仍有余仓的历史减仓），完整订单卡仍使用 soldLots。
   const participationToday = formatDateTime(new Date().toISOString()).split(' ')[0];
   const memberRealizedLots = participantView
-    ? buildStockMemberRealizedLots((((data as any)?.participations || []) as any[]), participationToday)
+    ? buildCryptoAwareMemberRealizedLots((((data as any)?.participations || []) as any[]), participationToday)
     : [];
   const accountRealizedLots = !participantView && canEdit
     ? (((data as any)?.realizedLots ?? (data as any)?.soldLots ?? []) as any[])
@@ -248,9 +339,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   }
   const adminOwnClosedLotsSummary = !participantView && canEdit && adminOwnClosedLots.length > 0
     ? (() => {
-      const realizedPnl = adminOwnClosedLots.reduce((total: number, lot: any) => (
-        total + Number(toCny(Number(lot.realizedPnl || 0), normalizeCurrency(lot.currency)) || 0)
-      ), 0);
+      const pnlValues = adminOwnClosedLots.map((lot: any) => toCny(Number(lot.realizedPnl || 0), instrumentCurrency(lot.symbol)));
+      const realizedPnl = pnlValues.some((value: number | null) => value === null) ? null : pnlValues.reduce((total: number, value: number | null) => total + Number(value), 0);
       return { count: adminOwnClosedLots.length, realizedPnl };
     })()
     : null;
@@ -274,11 +364,12 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const tagCurrencies = Array.from(new Set<StockCurrency>(tagPositions.map((position: any) => normalizeCurrency(position?.currency))));
   const hasUsStocks = tagCurrencies.includes('USD');
   const hasMixedCurrencies = tagCurrencies.length > 1;
+  const hasCrypto = tagPositions.some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO');
   const portfolioCurrency: StockCurrency = 'CNY';
   // 仅当整个标签都为美股时，顶部汇总才可以安全换算出唯一的美元辅助金额。
-  const tagDisplayNativeCurrency: StockCurrency = hasUsStocks && !hasMixedCurrencies ? 'USD' : 'CNY';
+  const tagDisplayNativeCurrency: StockCurrency = !hasMixedCurrencies && tagCurrencies[0] === 'USDT' ? 'USDT' : hasUsStocks && !hasMixedCurrencies ? 'USD' : 'CNY';
   const snapshotDate = settledSnapshot?.snapshotDate ? String(settledSnapshot.snapshotDate) : null;
-  const snapshotStamp = snapshotDate && snapshotDate === latestQuoteDate
+  const snapshotStamp = !hasCrypto && snapshotDate && snapshotDate === latestQuoteDate
     ? `${snapshotDate} · ${hasUsStocks ? '美股盘后快照' : '15:05 盘尾快照'}`
     : null;
 
@@ -299,7 +390,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const [eventType, setEventType] = useState<EventType>("buy");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
-  const [correctionStockMarket, setCorrectionStockMarket] = useState<'A' | 'US'>('A');
+  const [correctionStockMarket, setCorrectionStockMarket] = useState<PortfolioMarket>('A');
   const [quantity, setQuantity] = useState("");
   const [executionPrice, setExecutionPrice] = useState("");
   const [actualTradedAt, setActualTradedAt] = useState(localInputTime());
@@ -325,12 +416,13 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     ]);
   };
 
-  const shouldSearchStock = showActionDialog && !!correctingEvent && eventType !== "note" && symbolQuery.trim().length >= (correctionStockMarket === 'US' ? 1 : 2) && !selectedStock;
+  const shouldSearchStock = showActionDialog && !!correctingEvent && eventType !== "note" && symbolQuery.trim().length >= (correctionStockMarket === 'A' ? 2 : 1) && !selectedStock;
   const { data: suggestionsData, isFetching: isSearchingStock } = trpc.searchManualStocks.useQuery(
     { query: symbolQuery.trim() || 'A', market: correctionStockMarket },
     { enabled: shouldSearchStock, staleTime: 3_000 },
   );
-  const suggestions = (suggestionsData as any)?.results || [];
+  const suggestions = ((suggestionsData as any)?.results || []).filter((stock: any) => correctionStockMarket !== 'CRYPTO' || (stock.market === 'CRYPTO' && stock.currency === 'USDT' && portfolioMarket(stock.symbol) === 'CRYPTO'));
+  const changeCorrectionMarket = (market: PortfolioMarket) => { setCorrectionStockMarket(market); setSelectedStock(null); setSymbolQuery(''); setExecutionPrice(''); setQuantity(''); setActualTradedAt(market === 'CRYPTO' ? beijingTradeInputTime() : localInputTime()); };
 
   const correctEventMutation = trpc.ledger.correctStockTagEvent.useMutation({
     onSuccess: () => {
@@ -371,6 +463,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const openTrade = (type: "buy" | "sell", lotId?: number) => {
+    if (!canEdit) return;
     setEditingSale(null);
     setTradeType(type);
     setPreselectedSellLotId(type === "sell" && Number(lotId) > 0 ? Number(lotId) : null);
@@ -378,6 +471,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const openSoldSaleEdit = (soldLot: any) => {
+    if (!canEdit) return;
     // 已卖出列表字段名为 sellEventId；卖出编辑接口使用 eventId。
     setEditingSale({ ...soldLot, eventId: Number(soldLot.sellEventId) });
     setTradeType('sell');
@@ -386,20 +480,22 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const openCorrection = (event: any) => {
+    if (!canEdit) return;
     setCorrectingEvent(event);
     setEventType(event.type as EventType);
     setSelectedStock(event.symbol ? { symbol: event.symbol, name: event.stockName || event.symbol } : null);
-    setCorrectionStockMarket(/^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'A' : 'US');
+    setCorrectionStockMarket(portfolioMarket(event.symbol));
     setSymbolQuery("");
     setQuantity(event.quantity === null ? "" : String(event.quantity));
     setExecutionPrice(event.executionPrice === null ? "" : String(event.executionPrice));
-    setActualTradedAt(localInputTime(event.actualTradedAt ? new Date(event.actualTradedAt) : new Date()));
+    setActualTradedAt((portfolioMarket(event.symbol) === 'CRYPTO' ? beijingTradeInputTime : localInputTime)(event.actualTradedAt ? new Date(event.actualTradedAt) : new Date()));
     setNote(event.note || "");
     setCorrectionReason("");
     setShowActionDialog(true);
   };
 
   const submitEvent = () => {
+    if (!canEdit || isLocalHotPreview) return toast.info('仅管理员可登记；热预览不可写入');
     const correctionPayload = correctingEvent ? { eventId: correctingEvent.id, reason: correctionReason.trim() } : null;
     if (!correctionPayload) return;
     if (correctionPayload && !correctionPayload.reason) return toast.error("请填写更正原因");
@@ -409,12 +505,15 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       correctEventMutation.mutate({ ...payload, ...correctionPayload });
       return;
     }
-    if (!selectedStock) return toast.error("请从检索结果中选择已核验的股票");
+    if (!selectedStock) return toast.error("请从检索结果中选择已核验的买卖标的");
     const parsedQuantity = Number(quantity);
     const parsedPrice = Number(executionPrice);
+    const isCrypto = portfolioMarket(selectedStock.symbol) === 'CRYPTO';
+    if (correctionStockMarket === 'CRYPTO' && !isCrypto) return toast.error('请选择已核验的数字币现货');
+    if (isCrypto && !isValidCryptoPortfolioQuantity(quantity)) return toast.error('币数量最小0.00000001，最多8位小数');
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return toast.error("请输入正确的成交数量");
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) return toast.error("请输入正确的成交价格");
-    const actualDate = new Date(actualTradedAt);
+    const actualDate = isCrypto ? parseTradeInputTime(actualTradedAt, 'buy', true) : new Date(actualTradedAt);
     if (Number.isNaN(actualDate.getTime())) return toast.error("请选择实际成交/接单时间");
     const payload = {
       ledgerId: 37 as const,
@@ -441,6 +540,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const saveLotNote = (lotId: number) => {
+    if (!canEdit || isLocalHotPreview) return;
     updateLotNoteMutation.mutate({ ledgerId: 37, categoryId, lotId, note: lotNoteDraft });
   };
 
@@ -520,9 +620,9 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         <main className="mx-auto max-w-2xl space-y-3 px-3 pt-3">
           {accountFilter === "actual" ? <div className="rounded-lg bg-white px-3 py-5 text-center text-sm text-gray-500">暂无实际配额</div> : <>
             {accountFilter === "all" && <div className="rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-gray-500">您当前只有观察配额。观察盈亏仅供查看，不参与真实盈利或资金结算。</div>}
-            {accountFilter === "observation" && <div className="rounded-2xl bg-[#8462A8] px-4 py-3"><StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} /></div>}
-            {accountFilter === "all" && <div className="rounded-2xl bg-[#426A8C] px-4 py-3"><StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} combined /></div>}
-            <StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} />
+            {accountFilter === "observation" && <div className="rounded-2xl bg-[#8462A8] px-4 py-3"><CryptoAwareObservationAccountSummary usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} /></div>}
+            {accountFilter === "all" && <div className="rounded-2xl bg-[#426A8C] px-4 py-3"><CryptoAwareObservationAccountSummary usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} combined /></div>}
+            <CryptoAwareObservationPortfolio usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} />
           </>}
         </main>
       </div>
@@ -564,17 +664,18 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   }
   // 成员只能查看标签有哪些当前股票和各批次成交信息；标签总市值、总股数、成本及总盈亏不对成员公开。
   const allTagHoldingLots = tagPositions.flatMap((position: any) => (position.lots || []).map((lot: any) => {
-    const nativeCurrency = normalizeCurrency(position.currency);
+    const nativeCurrency = instrumentCurrency(position.symbol);
     const myHolding = myHoldingByLotId.get(Number(lot.id));
     const nativeMarketPrice = position.marketPrice === null || position.marketPrice === undefined ? null : Number(position.marketPrice);
     const nativeUnitCost = Number(lot.unitCost || 0);
     const marketPrice = toCny(nativeMarketPrice, nativeCurrency);
-    const displayLot = { ...lot, unitCost: toCny(nativeUnitCost, nativeCurrency) ?? 0 };
+    const displayLot = { ...lot, unitCost: nativeCurrency === 'USDT' ? toCny(nativeUnitCost, nativeCurrency) : toCny(nativeUnitCost, nativeCurrency) ?? 0 };
     const myNativeCostValue = myHolding ? myHolding.costValue : null;
     const myNativeMarketValue = !myHolding || nativeMarketPrice === null ? null : myHolding.quantity * nativeMarketPrice;
     const myCostValue = toCny(myNativeCostValue, nativeCurrency);
     const myMarketValue = toCny(myNativeMarketValue, nativeCurrency);
-    const accountCostValue = toCny(Number(lot.quantity || 0) * Number(lot.unitCost || 0), nativeCurrency) ?? 0;
+    const quotedAccountCostValue = toCny(Number(lot.quantity || 0) * Number(lot.unitCost || 0), nativeCurrency);
+    const accountCostValue = nativeCurrency === 'USDT' ? quotedAccountCostValue : quotedAccountCostValue ?? 0;
     const accountMarketValue = nativeMarketPrice === null ? null : toCny(Number(lot.quantity || 0) * nativeMarketPrice, nativeCurrency);
     return {
       position,
@@ -611,7 +712,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         nativeMarketValue: nativeMarketPrice === null ? null : Number(lot.quantity || 0) * nativeMarketPrice,
         // “账户整体持仓”反映股票本身的表现：股价上涨即整体持仓浮盈。
         // 管理员本人获配部分仍在 myHolding 中按对手盘方向单独计算。
-        floatingPnl: accountMarketValue === null ? null : accountMarketValue - accountCostValue,
+        floatingPnl: accountMarketValue === null || accountCostValue === null ? null : accountMarketValue - accountCostValue,
         nativeFloatingPnl: nativeMarketPrice === null ? null : Number(lot.quantity || 0) * nativeMarketPrice - Number(lot.quantity || 0) * nativeUnitCost,
       },
     };
@@ -619,14 +720,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const tagHoldingLots = allTagHoldingLots.filter((holding: any) => !participantView || Number(holding.myHolding?.quantity || 0) > 0);
   const memberHoldingSummary = participantView ? (() => {
     const hasUnpricedHolding = tagHoldingLots.some((holding: any) => holding.myHolding?.marketValue === null || holding.myHolding?.marketValue === undefined);
-    const purchaseValue = tagHoldingLots.reduce((total: number, holding: any) => (
+    const purchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => (
       total + Number(holding.myHolding?.quantity || 0) * Number(holding.myHolding?.entryPrice || 0)
     ), 0);
-    const marketValue = hasUnpricedHolding
+    const marketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
       ? null
       : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.myHolding?.marketValue || 0), 0);
-    const floatingPnl = marketValue === null ? null : purchaseValue - marketValue;
-    const floatingPnlPercent = floatingPnl === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
+    const floatingPnl = marketValue === null || purchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : purchaseValue - marketValue;
+    const floatingPnlPercent = floatingPnl === null || purchaseValue === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
     return {
       positionNumbers: tagHoldingLots.map((holding: any) => String(holding.positionNumber).padStart(2, "0")),
       purchaseValue,
@@ -636,8 +737,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       floatingPnlPercent,
       details: tagHoldingLots.map((holding: any) => {
         const quantity = Number(holding.myHolding?.quantity || 0);
-        const entryPrice = Number(holding.myHolding?.entryPrice || 0);
-        const purchaseValue = quantity * entryPrice;
+        const entryPrice = holding.nativeCurrency === 'USDT' && holding.myHolding?.entryPrice == null ? null : Number(holding.myHolding?.entryPrice || 0);
+        const purchaseValue = entryPrice === null ? null : quantity * entryPrice;
         const currentPrice = holding.marketPrice === null || holding.marketPrice === undefined ? null : Number(holding.marketPrice);
         const currentValue = holding.myHolding?.marketValue === null || holding.myHolding?.marketValue === undefined
           ? null
@@ -653,7 +754,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           currentPrice,
           currentValue,
           requiredMargin: currentValue === null ? null : currentValue * 0.2,
-          floatingPnl: currentValue === null ? null : purchaseValue - currentValue,
+          floatingPnl: currentValue === null || purchaseValue === null ? null : purchaseValue - currentValue,
         };
       }),
     };
@@ -669,7 +770,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   // 原交易币种，避免把不同币种的成交细节混在一起。
   const memberClosedLotsSummary = participantView ? (() => {
     const sumClosedMemberValue = (field: 'realizedPnl' | 'buyValue' | 'sellValue') => {
-      const values = memberRealizedLots.map(lot => toCny(lot[field], lot.currency));
+      const values = memberRealizedLots.map(lot => toCny(lot[field], instrumentCurrency(lot.symbol)));
       return values.some(value => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
     };
     const realizedPnl = sumClosedMemberValue('realizedPnl');
@@ -682,7 +783,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const memberTotalPnlSummary = participantView && memberHoldingSummary && memberClosedLotsSummary ? (() => {
     const floatingPnl = memberHoldingSummary.floatingPnl;
     const realizedPnl = memberClosedLotsSummary.realizedPnl;
-    const totalCostValue = memberClosedLotsSummary.closedCostValue === null ? null : memberHoldingSummary.purchaseValue + memberClosedLotsSummary.closedCostValue;
+    const totalCostValue = memberClosedLotsSummary.closedCostValue === null || memberHoldingSummary.purchaseValue === null ? null : memberHoldingSummary.purchaseValue + memberClosedLotsSummary.closedCostValue;
     const totalPnl = floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl;
     return {
       floatingPnl,
@@ -697,7 +798,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     })),
     ...memberRealizedLots.map(lot => ({
       stockName: String(lot.stockName || lot.symbol),
-      pnl: toCny(lot.realizedPnl, lot.currency),
+      pnl: toCny(lot.realizedPnl, instrumentCurrency(lot.symbol)),
     })),
   ] : [];
   // 只向“全部”总览传入真实人民币汇总，不改写任何真实组合、钱包或结算数据。
@@ -716,12 +817,12 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   // 作为对手盘，仍按“成本减当前价值”计算，二者在同一份额上严格相反。
   const accountHoldingSummary = !participantView ? (() => {
     const hasUnpricedHolding = tagHoldingLots.some((holding: any) => holding.accountHolding?.marketValue === null || holding.accountHolding?.marketValue === undefined);
-    const purchaseValue = tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.costValue || 0), 0);
-    const marketValue = hasUnpricedHolding
+    const purchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.costValue || 0), 0);
+    const marketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
       ? null
       : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.marketValue || 0), 0);
-    const floatingPnl = marketValue === null ? null : marketValue - purchaseValue;
-    const floatingPnlPercent = floatingPnl === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
+    const floatingPnl = marketValue === null || purchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : marketValue - purchaseValue;
+    const floatingPnlPercent = floatingPnl === null || purchaseValue === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
     return {
       positionNumbers: tagHoldingLots.map((holding: any) => String(holding.positionNumber).padStart(2, "0")),
       purchaseValue,
@@ -731,8 +832,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       floatingPnlPercent,
       details: tagHoldingLots.map((holding: any) => {
         const quantity = Number(holding.accountHolding?.quantity || 0);
-        const entryPrice = Number(holding.lot?.unitCost || 0);
-        const purchaseValue = Number(holding.accountHolding?.costValue || 0);
+        const entryPrice = holding.nativeCurrency === 'USDT' ? holding.lot?.unitCost ?? null : Number(holding.lot?.unitCost || 0);
+        const purchaseValue = holding.nativeCurrency === 'USDT' ? holding.accountHolding?.costValue ?? null : Number(holding.accountHolding?.costValue || 0);
         const currentPrice = holding.marketPrice === null || holding.marketPrice === undefined ? null : Number(holding.marketPrice);
         const currentValue = holding.accountHolding?.marketValue === null || holding.accountHolding?.marketValue === undefined
           ? null
@@ -747,7 +848,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           purchaseValue,
           currentPrice,
           currentValue,
-          floatingPnl: currentValue === null ? null : currentValue - purchaseValue,
+          floatingPnl: currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue,
         };
       }),
     };
@@ -761,14 +862,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   // 账户平仓采用实际成交记录的净盈亏（含双边手续费），与客户对手盘收益区分。
   // 全部金额沿用本页同一 USD/CNY 汇率，避免当前浮盈与已平仓用不同换算口径。
   const accountClosedPnls = !participantView ? accountRealizedLots.map((lot: any) => (
-    toCny(lot.accountNetProfit === null || lot.accountNetProfit === undefined ? null : Number(lot.accountNetProfit), normalizeCurrency(lot.currency))
+    toCny(lot.accountNetProfit === null || lot.accountNetProfit === undefined ? null : Number(lot.accountNetProfit), instrumentCurrency(lot.symbol))
   )) : [];
   const accountRealizedPnl = accountClosedPnls.some((value) => value === null)
     ? null : accountClosedPnls.reduce<number>((total, value) => total + Number(value), 0);
   const accountTotalPnl = displayedTopPnl === null || accountRealizedPnl === null ? null : displayedTopPnl + accountRealizedPnl;
   const sumClosedValue = (field: 'buyValue' | 'sellValue') => {
     const values = accountRealizedLots.map((lot: any) => toCny(
-      lot[field] === null || lot[field] === undefined ? null : Number(lot[field]), normalizeCurrency(lot.currency),
+      lot[field] === null || lot[field] === undefined ? null : Number(lot[field]), instrumentCurrency(lot.symbol),
     ));
     return values.some((value) => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
   };
@@ -794,8 +895,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     ...accountRealizedLots.map((lot: any) => ({
       stockName: String(lot.stockName || lot.symbol), symbol: String(lot.symbol),
       lotId: Number(lot.lotId), state: 'closed' as const,
-      openingValue: toCny(lot.buyValue === null || lot.buyValue === undefined ? null : Number(lot.buyValue), normalizeCurrency(lot.currency)),
-      pnl: toCny(lot.accountNetProfit === null || lot.accountNetProfit === undefined ? null : Number(lot.accountNetProfit), normalizeCurrency(lot.currency)),
+      openingValue: toCny(lot.buyValue === null || lot.buyValue === undefined ? null : Number(lot.buyValue), instrumentCurrency(lot.symbol)),
+      pnl: toCny(lot.accountNetProfit === null || lot.accountNetProfit === undefined ? null : Number(lot.accountNetProfit), instrumentCurrency(lot.symbol)),
     })),
   ] : [];
   const allocationMembersById = new Map<number, any>(
@@ -831,18 +932,18 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     });
     if (details.length === 0) return null;
     const hasUnpricedHolding = details.some((detail: any) => detail.purchaseValue === null || detail.currentValue === null);
-    const purchaseValue = details.reduce((total: number, detail: any) => total + Number(detail.purchaseValue || 0), 0);
+    const purchaseValue = details.some((detail: any) => detail.purchaseValue === null) ? null : details.reduce((total: number, detail: any) => total + Number(detail.purchaseValue || 0), 0);
     const marketValue = hasUnpricedHolding
       ? null
       : details.reduce((total: number, detail: any) => total + Number(detail.currentValue || 0), 0);
-    const floatingPnl = marketValue === null ? null : purchaseValue - marketValue;
+    const floatingPnl = marketValue === null || purchaseValue === null ? null : purchaseValue - marketValue;
     return {
       positionNumbers: details.map((detail: any) => detail.positionNumber),
       purchaseValue,
       marketValue,
       requiredMargin: marketValue === null ? null : marketValue * 0.2,
       floatingPnl,
-      floatingPnlPercent: floatingPnl === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue,
+      floatingPnlPercent: floatingPnl === null || purchaseValue === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue,
     };
   })() : null;
   // 管理员用户视角严格复用同一份全员分配矩阵：只展示仍有剩余股数的成员—编号关联，
@@ -863,7 +964,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         const entryPrice = toCny(
           nativeEntryPrice,
           nativeCurrency,
-        ) ?? Number(holding.lot?.unitCost || 0);
+        );
         const marketPrice = holding.marketPrice === null || holding.marketPrice === undefined ? null : Number(holding.marketPrice);
         return [{
           lotId: Number(lot.id),
@@ -876,7 +977,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           quantity,
           entryPrice,
           nativeEntryPrice,
-          openingValue: entryPrice * quantity,
+          openingValue: entryPrice === null ? null : entryPrice * quantity,
           nativeOpeningValue: nativeEntryPrice * quantity,
           marketPrice,
           nativeMarketPrice,
@@ -897,7 +998,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       const realizedPnls = (((allocationMatrixQuery.data as any)?.lots || []) as any[]).flatMap((lot) => (
         (lot.participations || [])
           .filter((item: any) => Number(item.userId) === userId && Number(item.allocatedQuantity || 0) > 0)
-          .map((item: any) => toCny(Number(item.realizedPnl || 0), /^\d{6}\.(SH|SZ|BJ)$/.test(String(lot.symbol)) ? 'CNY' : 'USD'))
+          .map((item: any) => toCny(Number(item.realizedPnl || 0), instrumentCurrency(lot.symbol)))
       ));
       const customerPnl = summarizeStockCustomerPnl(
         positions.map((position: any) => position.floatingPnl),
@@ -910,8 +1011,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         userId,
         name: String(member.name || member.username || `用户${userId}`),
         positions,
-        hasActivity: hasStockCustomerActivity(positions.length, closedQuantities),
-        totalOpeningMarketValue: positions.reduce((total: number, position: any) => total + Number(position.openingValue || 0), 0),
+        hasActivity: hasStockCustomerActivity(positions.length, closedQuantities) || (((allocationMatrixQuery.data as any)?.lots || []) as any[]).some(lot => portfolioMarket(lot.symbol) === 'CRYPTO' && (lot.participations || []).some((row: any) => Number(row.userId) === userId && Number(row.closedQuantity) >= 1e-8)),
+        totalOpeningMarketValue: positions.some((position: any) => position.openingValue === null) ? null : positions.reduce((total: number, position: any) => total + Number(position.openingValue || 0), 0),
         totalFloatingPnl: customerPnl.floatingPnl,
         totalRealizedPnl: customerPnl.realizedPnl,
         totalCustomerPnl: customerPnl.totalPnl,
@@ -946,7 +1047,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           </span>
           <ChevronDown size={16} className="shrink-0 text-gray-400 transition-transform" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }} />
         </button>
-        {groupHasMixedCurrencies ? <div className="border-t border-[#E6E6E6] px-3 py-2 text-center text-[11px] text-amber-700">该成员同时持有人民币与美元股票，请展开查看各持仓的原币种金额</div> : <div className="grid grid-cols-3 border-t border-[#E6E6E6] text-center">
+        {groupHasMixedCurrencies ? <div className="border-t border-[#E6E6E6] px-3 py-2 text-center text-[11px] text-amber-700">该成员同时持有不同币种标的，请展开查看各持仓的原币种金额</div> : <div className="grid grid-cols-3 border-t border-[#E6E6E6] text-center">
           <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">开仓总市值</div><CnyUsdValue value={group.totalOpeningMarketValue} nativeCurrency={groupCurrency} mainClassName="mt-0.5 whitespace-nowrap text-xs font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[10px] text-gray-400" /></div>
           <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">总浮动盈亏</div><CnyUsdValue value={group.totalFloatingPnl} nativeCurrency={groupCurrency} signed mainClassName={`mt-0.5 whitespace-nowrap text-xs font-medium ${group.totalFloatingPnl === null ? "text-gray-400" : memberPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[10px] ${group.totalFloatingPnl === null ? "text-gray-400" : memberPnlTone}`} /></div>
           <div className="min-w-0 px-1.5 py-2"><div className="text-[11px] text-gray-400">所需保证金</div><CnyUsdValue value={group.totalRequiredMargin} nativeCurrency={groupCurrency} mainClassName="mt-0.5 whitespace-nowrap text-xs font-medium text-[#C62828]" subClassName="mt-0.5 whitespace-nowrap text-[10px] text-gray-400" /></div>
@@ -958,13 +1059,13 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           return (
             <div key={position.lotId} className="border-t border-[#EEE8E4] px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#9F1D1D]">{String(position.positionNumber).padStart(2, "0")}</span><span className="min-w-0 truncate font-semibold text-[#222222]">{position.stockName}</span><span className="shrink-0 text-[11px] text-gray-400">{position.symbol}</span>{position.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{position.exchange}</span>}</span>
+                <span className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#9F1D1D]">{String(position.positionNumber).padStart(2, "0")}</span><span className="min-w-0 truncate font-semibold text-[#222222]">{position.stockName}</span><span className="shrink-0 text-[11px] text-gray-400">{portfolioDisplaySymbol(position.symbol)}</span>{position.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{position.exchange}</span>}</span>
                 <span className="shrink-0 whitespace-nowrap text-[10px] text-gray-400">开始于 {formatMonthDay(position.startDate)} · {position.pauseDate ? `暂停于 ${formatMonthDay(position.pauseDate)}` : "进行中"}</span>
               </div>
               <div className="mt-2 overflow-hidden border border-[#E6E6E6] text-center">
                 <div className="grid grid-cols-3">
                   <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入价</div><CnyUsdValue value={position.entryPrice} nativeCurrency={positionCurrency} usdValue={position.nativeEntryPrice} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入股数</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{formatQuantity(position.quantity)} 股</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入数量</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{formatQuantity(position.quantity)} {portfolioQuantityUnit(position.symbol)}</div></div>
                   <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">买入市值</div><CnyUsdValue value={position.openingValue} nativeCurrency={positionCurrency} usdValue={position.nativeOpeningValue} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 </div>
                 <div className="grid grid-cols-3 border-t border-[#E6E6E6]">
@@ -1047,7 +1148,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       const quoteMetricCellClass = participantView ? 'flex min-w-0 flex-col items-center justify-center px-0.5 py-2.5 text-center' : 'min-w-0 px-1.5 py-2.5 text-center';
       const quoteMetricLabelClass = participantView ? 'order-last mt-1 whitespace-nowrap text-[9px] leading-4 text-gray-400' : 'whitespace-nowrap text-[11px] text-gray-400';
       const quoteMetricValueClass = participantView ? 'whitespace-nowrap text-[13px] leading-5 font-semibold tracking-tight tabular-nums' : 'mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium';
-      const metricCurrencyLabel = participantView ? <span className="ml-0.5 text-[8px] font-normal" title={holding.nativeCurrency === 'USD' ? '上方为人民币，下方为美元' : '人民币'}>¥{holding.nativeCurrency === 'USD' ? '/$' : ''}</span> : null;
+      const metricCurrencyLabel = participantView ? <span className="ml-0.5 text-[8px] font-normal" title={holding.nativeCurrency === 'USDT' ? '上方为参考人民币，下方为USDT' : holding.nativeCurrency === 'USD' ? '上方为人民币，下方为美元' : '人民币'}>¥{holding.nativeCurrency === 'USDT' ? '/USDT' : holding.nativeCurrency === 'USD' ? '/$' : ''}</span> : null;
       const toggleAdminLotExpanded = () => setExpandedAdminLotIds((previous) => {
         return previous.has(lotId) ? new Set<number>() : new Set<number>([lotId]);
       });
@@ -1055,7 +1156,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       // 个人部分直接使用该持仓编号的真实获配记录，不能按账户金额反推。
       const myHoldingQuantity = Number(myAllocation?.quantity || 0);
       const myNativeEntryPrice = Number(myAllocation?.entryPrice || 0);
-      const myHoldingEntryPrice = toCny(myNativeEntryPrice, holding.nativeCurrency) ?? 0;
+      const myHoldingEntryPrice = holding.nativeCurrency === 'USDT' ? toCny(myNativeEntryPrice, holding.nativeCurrency) : toCny(myNativeEntryPrice, holding.nativeCurrency) ?? 0;
       const myNativeMarketValue = holding.nativeMarketPrice === null || holding.nativeMarketPrice === undefined
         ? null
         : myHoldingQuantity * Number(holding.nativeMarketPrice);
@@ -1072,7 +1173,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         <div className="border-t border-[#E6E6E6] bg-[#FFF9F7]">
           <div className="flex items-center justify-between gap-2 border-b border-[#E6E6E6] px-2.5 py-1.5">
             <span className="font-semibold text-[#8F1D1D]">我的持仓</span>
-            <span className="whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(myHoldingQuantity)} 股 · 占本批 {myHoldingSharePercent.toFixed(2)}%</span>
+            <span className="whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(myHoldingQuantity)} {portfolioQuantityUnit(holding.symbol)} · 占本批 {myHoldingSharePercent.toFixed(2)}%</span>
           </div>
           <div className="flex items-center justify-between gap-3 border-b border-[#E6E6E6] px-2.5 py-1.5">
             <span className="whitespace-nowrap text-[10px] text-gray-400">{formatQuoteUpdate(holding.quoteUpdatedAt)}</span>
@@ -1094,7 +1195,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             </div>
             <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center">
               <div className="whitespace-nowrap text-[10px] text-gray-400">持仓数量</div>
-              <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(myHoldingQuantity)} 股</div>
+              <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(myHoldingQuantity)} {portfolioQuantityUnit(holding.symbol)}</div>
             </div>
             <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center">
               <div className="whitespace-nowrap text-[10px] text-gray-400">持仓价值</div>
@@ -1113,7 +1214,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span aria-label={`持仓编号 ${positionNumber}`} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] text-[9px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{positionNumber}</span>
                 <div className={participantView ? 'min-w-0 flex-1' : 'min-w-0'}>
-                  <div className={`flex min-w-0 items-baseline gap-x-1.5 ${participantView ? 'flex-nowrap' : 'flex-wrap'}`}><span className={`font-semibold leading-5 text-[#222222] ${participantView ? 'min-w-0 truncate' : ''}`} title={holding.stockName}>{holding.stockName}</span><span className="shrink-0 whitespace-nowrap font-normal text-gray-400">{participantView ? String(holding.symbol).replace(/\.(SH|SZ|BJ)$/i, '') : holding.symbol}</span>{participantView && <span className="ml-auto shrink-0 whitespace-nowrap text-[9px] leading-4 text-gray-400" title={`开仓于 ${formatDateTime(holding.lot.openedAt)}`}>{formatDateTime(holding.lot.openedAt).split(' ')[0].replace(/^\d{4}-/, '')}{positionElapsedDays === null ? '' : ` · ${positionElapsedDays}天`}</span>}{!participantView && exchangeLabel && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium leading-4 text-[#1565C0]">{exchangeLabel}</span>}</div>
+                  <div className={`flex min-w-0 items-baseline gap-x-1.5 ${participantView ? 'flex-nowrap' : 'flex-wrap'}`}><span className={`font-semibold leading-5 text-[#222222] ${participantView ? 'min-w-0 truncate' : ''}`} title={holding.stockName}>{holding.stockName}</span><span className="shrink-0 whitespace-nowrap font-normal text-gray-400">{participantView ? portfolioDisplaySymbol(holding.symbol).replace(/\.(SH|SZ|BJ)$/i, '') : portfolioDisplaySymbol(holding.symbol)}</span>{participantView && <span className="ml-auto shrink-0 whitespace-nowrap text-[9px] leading-4 text-gray-400" title={`开仓于 ${formatDateTime(holding.lot.openedAt)}`}>{formatDateTime(holding.lot.openedAt).split(' ')[0].replace(/^\d{4}-/, '')}{positionElapsedDays === null ? '' : ` · ${positionElapsedDays}天`}</span>}{!participantView && exchangeLabel && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium leading-4 text-[#1565C0]">{exchangeLabel}</span>}</div>
                   {!participantView && <div className="mt-0.5 whitespace-nowrap text-[10px] leading-4 text-gray-400">仓位开始 {formatDateTime(holding.lot.openedAt).split(" ")[0]}{positionElapsedDays === null ? "" : ` · 至今 ${positionElapsedDays} 天`}</div>}
                 </div>
               </div>
@@ -1124,14 +1225,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <>
               <div className="border-t border-[#E8EEF1] bg-[#F8FAFB] px-2.5 py-1 text-[10px] font-medium text-gray-500">账户整体持仓</div>
               <div className="grid grid-cols-3 border-t border-[#E8EEF1] bg-[#F8FAFB] text-center text-[9px] tabular-nums">
-                <div className="min-w-0 border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>持仓</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(ownerHolding.quantity)} 股</div></div>
+                <div className="min-w-0 border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>持仓</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(ownerHolding.quantity)} {portfolioQuantityUnit(holding.symbol)}</div></div>
                 <div className="min-w-0 border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>开仓价</div><CnyUsdValue value={holding.lot.unitCost} nativeCurrency={holding.nativeCurrency} usdValue={holding.nativeUnitCost} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 border-b border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>持仓成本</div><CnyUsdValue value={ownerHolding.costValue} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeCostValue} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>当前市值</div><CnyUsdValue value={ownerHolding.marketValue} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeMarketValue} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>当前价格</div><CnyUsdValue value={holding.marketPrice} nativeCurrency={holding.nativeCurrency} usdValue={holding.nativeMarketPrice} mainClassName="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 border-b border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>盈亏</div><CnyUsdValue value={ownerHolding.floatingPnl} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeFloatingPnl} signed mainClassName={`mt-0.5 whitespace-nowrap text-[10px] font-semibold ${holdingPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[9px] ${holdingPnlTone}`} /></div>
-                <div className="min-w-0 border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>已分配</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(allocatedQuantity)} 股</div></div>
-                <div className="min-w-0 border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>剩余可分配</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(remainingForAllocation)} 股</div></div>
+                <div className="min-w-0 border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>已分配</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(allocatedQuantity)} {portfolioQuantityUnit(holding.symbol)}</div></div>
+                <div className="min-w-0 border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><div>剩余可分配</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{formatQuantity(remainingForAllocation)} {portfolioQuantityUnit(holding.symbol)}</div></div>
                 <div className="min-w-0 px-1 py-1.5 text-gray-500"><div>成员</div><div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-700">{sortedAllocations.length} 人</div></div>
               </div>
               {adminPersonalHoldingBlock}
@@ -1159,20 +1260,20 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           ) : (
             <>
               <div className="grid grid-cols-4 border-t border-[#E6E6E6]">
-                <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(ownerHolding.quantity)} 股</div></div>
+                <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(ownerHolding.quantity)} {portfolioQuantityUnit(holding.symbol)}</div></div>
                 <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓成本</div><CnyUsdValue value={ownerHolding.costValue} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeCostValue} mainClassName="mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓价值</div><CnyUsdValue value={ownerHolding.marketValue} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeMarketValue} mainClassName="mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                 <div className="min-w-0 px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">浮动盈亏</div><CnyUsdValue value={ownerHolding.floatingPnl} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeFloatingPnl} signed mainClassName={`mt-0.5 whitespace-nowrap text-[11px] leading-4 font-medium ${holdingPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[9px] ${holdingPnlTone}`} /></div>
               </div>
               {canEdit && <div className="border-t border-[#D9D9D9] bg-[#FFFDFC]">
                 <div className="grid grid-cols-4 border-b border-[#E6E6E6]">
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">已分配</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(allocatedQuantity)} 股</div></div>
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">剩余可分配</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(remainingForAllocation)} 股</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">已分配</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(allocatedQuantity)} {portfolioQuantityUnit(holding.symbol)}</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">剩余可分配</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{formatQuantity(remainingForAllocation)} {portfolioQuantityUnit(holding.symbol)}</div></div>
                   <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">所需保证金</div><CnyUsdValue value={ownerHolding.marketValue === null ? null : ownerHolding.marketValue * 0.2} nativeCurrency={holding.nativeCurrency} usdValue={ownerHolding.nativeMarketValue === null ? null : ownerHolding.nativeMarketValue * 0.2} mainClassName="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#C62828]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div>
                   <div className="min-w-0 px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">分配人数</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]">{sortedAllocations.length} 人</div></div>
                 </div>
                 {allocationMatrixQuery.isLoading ? <div className="px-2.5 py-3 text-[11px] text-gray-400">正在载入成员份额…</div> : <div className="divide-y divide-[#EEE8E4]">
-                  <div className="bg-[#FFF9F7] px-2.5 py-1.5 text-[11px] text-gray-500">成员份额（按当前股数由多到少）</div>
+                  <div className="bg-[#FFF9F7] px-2.5 py-1.5 text-[11px] text-gray-500">成员份额（按当前数量由多到少）</div>
                   {sortedAllocations.map((allocation) => {
                     const isMine = allocation.userId === viewerUserId;
                     const allocationNativeCost = allocation.quantity * Number(allocation.entryPrice || 0);
@@ -1182,11 +1283,11 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                     const allocationPnlTone = Number(allocationPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
                     return <div key={allocation.id} className={`flex items-start justify-between gap-3 px-2.5 py-2 ${isMine ? "bg-[#FFF6F4]" : ""}`}>
                       <span className={`min-w-0 truncate pt-0.5 ${isMine ? "font-medium text-[#C62828]" : "text-[#333333]"}`}>{allocation.memberName}{isMine && <span className="ml-1 text-[10px]">（我）</span>}</span>
-                      <div className="shrink-0 text-right"><div className="whitespace-nowrap text-[11px]"><b className="font-medium text-[#222222]">{formatQuantity(allocation.quantity)} 股</b><span className="mx-1 text-gray-500">·</span><span className="text-gray-500">{allocationPercent(allocation.quantity).toFixed(0)}%</span></div><div className="mt-0.5 text-[10px] text-gray-500">持仓成本<CnyUsdValue value={allocationCost} nativeCurrency={holding.nativeCurrency} usdValue={allocationNativeCost} mainClassName="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div><div className="mt-1 text-[10px] text-gray-500">本批浮动盈亏<CnyUsdValue value={allocationPnl} nativeCurrency={holding.nativeCurrency} usdValue={allocationNativePnl} signed mainClassName={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${allocationPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[9px] ${allocationPnlTone}`} /></div></div>
+                      <div className="shrink-0 text-right"><div className="whitespace-nowrap text-[11px]"><b className="font-medium text-[#222222]">{formatQuantity(allocation.quantity)} {portfolioQuantityUnit(holding.symbol)}</b><span className="mx-1 text-gray-500">·</span><span className="text-gray-500">{allocationPercent(allocation.quantity).toFixed(0)}%</span></div><div className="mt-0.5 text-[10px] text-gray-500">持仓成本<CnyUsdValue value={allocationCost} nativeCurrency={holding.nativeCurrency} usdValue={allocationNativeCost} mainClassName="mt-0.5 whitespace-nowrap text-[11px] font-medium text-[#222222]" subClassName="mt-0.5 whitespace-nowrap text-[9px] text-gray-400" /></div><div className="mt-1 text-[10px] text-gray-500">本批浮动盈亏<CnyUsdValue value={allocationPnl} nativeCurrency={holding.nativeCurrency} usdValue={allocationNativePnl} signed mainClassName={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${allocationPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[9px] ${allocationPnlTone}`} /></div></div>
                     </div>;
                   })}
                   {sortedAllocations.length === 0 && <div className="px-2.5 py-2 text-[11px] text-gray-400">当前尚未给任何成员分配本批次</div>}
-                  {!myAllocation && <div className="px-2.5 py-2 text-[11px] text-gray-400">我的份额：0 股（0%）</div>}
+                  {!myAllocation && <div className="px-2.5 py-2 text-[11px] text-gray-400">我的份额：0 {portfolioQuantityUnit(holding.symbol)}（0%）</div>}
                 </div>}
               </div>}
             </>
@@ -1209,12 +1310,12 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         </button>
         {showSoldLots && <div className="divide-y divide-[#F0E3E3] border-t border-[#F3E2E2]">
           {soldLots.map((lot: any, index: number) => {
-            const currency = normalizeCurrency(lot.currency);
+            const currency = instrumentCurrency(lot.symbol);
             const realizedPnl = Number(lot.realizedPnl || 0);
             const profitTone = realizedPnl >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]';
-            const unit = currency === 'USD' ? 'US$' : '¥';
+            const unit = portfolioQuotePrefix(currency);
             return <div key={`member-sold-${lot.symbol}-${lot.soldAt || index}`} className="relative overflow-hidden bg-[#FFFDFD] text-xs">
-              <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 border-b border-[#F2E1E1] px-3 py-2"><div className="flex min-w-0 items-baseline gap-x-1.5"><span className="truncate font-semibold text-[#222222]">{lot.stockName}</span><span className="shrink-0 text-[10px] text-gray-400">{lot.symbol}</span></div><span className="shrink-0 whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(Number(lot.soldQuantity || 0))} 股 · 平仓于 {formatMonthDay(lot.soldAt)}</span></div>
+              <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 border-b border-[#F2E1E1] px-3 py-2"><div className="flex min-w-0 items-baseline gap-x-1.5"><span className="truncate font-semibold text-[#222222]">{lot.stockName}</span><span className="shrink-0 text-[10px] text-gray-400">{portfolioDisplaySymbol(lot.symbol)}</span></div><span className="shrink-0 whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(Number(lot.soldQuantity || 0))} {portfolioQuantityUnit(lot.symbol)} · 平仓于 {formatMonthDay(lot.soldAt)}</span></div>
               <div className="relative z-10 grid grid-cols-3 divide-x divide-[#F2E1E1] border-b border-[#F2E1E1] text-center">{[
                 { label: '买入价', text: money(Number(lot.unitCost || 0), 2, currency), tone: 'text-[#222222]' },
                 { label: '平仓价', text: money(lot.sellPrice === null ? null : Number(lot.sellPrice), 2, currency), tone: 'text-[#222222]' },
@@ -1235,10 +1336,10 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         <div><div className="text-sm font-semibold text-[#8F1D1D]">已卖出</div><div className="mt-0.5 text-[10px] text-[#A06B6B]">成交价格、时间和净盈亏均固定为卖出当时的记录</div></div>
         <span className="rounded-full border border-[#EDC5C5] bg-white px-2 py-0.5 text-[10px] font-medium text-[#9F1D1D]">{soldLots.length} 笔</span>
       </div>
-      {adminOwnClosedLotsSummary && <div className="flex items-center justify-between gap-2 border-b border-[#F3E2E2] bg-[#FFFDFC] px-3 py-2 text-[11px]"><span className="font-semibold text-[#8F1D1D]">我的已平仓</span><span className="min-w-0 truncate text-right text-gray-500">{adminOwnClosedLotsSummary.count} 笔 · 累计平仓收益 <b className={adminOwnClosedLotsSummary.realizedPnl >= 0 ? 'font-semibold text-[#C62828]' : 'font-semibold text-[#2E7D32]'}>{signedMoney(adminOwnClosedLotsSummary.realizedPnl, 'CNY')}</b></span></div>}
+      {adminOwnClosedLotsSummary && <div className="flex items-center justify-between gap-2 border-b border-[#F3E2E2] bg-[#FFFDFC] px-3 py-2 text-[11px]"><span className="font-semibold text-[#8F1D1D]">我的已平仓</span><span className="min-w-0 truncate text-right text-gray-500">{adminOwnClosedLotsSummary.count} 笔 · 累计平仓收益 <b className={adminOwnClosedLotsSummary.realizedPnl === null ? 'font-semibold text-gray-400' : adminOwnClosedLotsSummary.realizedPnl >= 0 ? 'font-semibold text-[#C62828]' : 'font-semibold text-[#2E7D32]'}>{signedMoney(adminOwnClosedLotsSummary.realizedPnl, 'CNY')}</b></span></div>}
       <div className="divide-y divide-[#F0E3E3]">
         {soldLots.map((lot: any) => {
-          const currency = normalizeCurrency(lot.currency);
+          const currency = instrumentCurrency(lot.symbol);
           const accountNetProfit = Number(lot.accountNetProfit || 0);
           const profitTone = accountNetProfit >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]';
           const myClosedRows = adminOwnClosedLotsByLotId.get(Number(lot.lotId)) || [];
@@ -1247,12 +1348,12 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           return <div key={`sold-${lot.lotId}-${lot.sellEventId}`} className="relative overflow-hidden bg-[#FFFDFD] text-xs">
             <div className="relative z-10 border-b border-[#F2E1E1] px-3 py-2.5">
               <div className="flex min-w-0 items-start justify-between gap-2">
-                <div className="min-w-0"><div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="font-semibold text-[#222222]">{lot.stockName}</span><span className="text-[11px] text-gray-400">{lot.symbol}</span><span className="rounded border border-[#F0C9C9] bg-[#FFF4F4] px-1 py-0.5 text-[9px] font-medium text-[#B42323]">已卖出</span></div><div className="mt-1 text-[10px] text-gray-500">卖出于 {formatDateTime(lot.soldAt)}</div></div>
+                <div className="min-w-0"><div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="font-semibold text-[#222222]">{lot.stockName}</span><span className="text-[11px] text-gray-400">{portfolioDisplaySymbol(lot.symbol)}</span><span className="rounded border border-[#F0C9C9] bg-[#FFF4F4] px-1 py-0.5 text-[9px] font-medium text-[#B42323]">已卖出</span></div><div className="mt-1 text-[10px] text-gray-500">卖出于 {formatDateTime(lot.soldAt)}</div></div>
                 {canEdit && <button type="button" onClick={() => openSoldSaleEdit(lot)} className="shrink-0 text-[11px] text-[#1565C0] underline underline-offset-2">修改</button>}
               </div>
             </div>
             <div className="relative z-10 grid grid-cols-3 border-b border-[#F2E1E1] text-center">
-              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">卖出数量</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{formatQuantity(Number(lot.soldQuantity || 0))} 股</div></div>
+              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">卖出数量</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{formatQuantity(Number(lot.soldQuantity || 0))} {portfolioQuantityUnit(lot.symbol)}</div></div>
               <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.unitCost || 0), 2, currency)}</div></div>
               <div className="min-w-0 px-1 py-2"><div className="text-[10px] text-gray-400">卖出价</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.sellPrice || 0), 2, currency)}</div></div>
             </div>
@@ -1263,7 +1364,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             </div>
             <div className="relative z-10 flex items-center justify-between gap-2 px-3 py-2"><span className="text-[11px] text-gray-500">账户净盈亏</span><b className={`text-sm ${profitTone}`}>{signedMoney(accountNetProfit, currency)}</b></div>
             {myClosedRows.length > 0 && <div className="relative z-10 border-t border-[#F2E1E1] bg-[#FFF9F7]">
-              <div className="flex items-center justify-between gap-2 border-b border-[#F2E1E1] px-3 py-1.5"><span className="font-semibold text-[#8F1D1D]">我的平仓</span><span className="whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(mySoldQuantity)} 股 · 占本笔 {mySharePercent.toFixed(2)}%</span></div>
+              <div className="flex items-center justify-between gap-2 border-b border-[#F2E1E1] px-3 py-1.5"><span className="font-semibold text-[#8F1D1D]">我的平仓</span><span className="whitespace-nowrap text-[10px] text-gray-500">{formatQuantity(mySoldQuantity)} {portfolioQuantityUnit(lot.symbol)} · 占本笔 {mySharePercent.toFixed(2)}%</span></div>
               {myClosedRows.map((myLot: any, index: number) => {
                 const myRealizedPnl = Number(myLot.realizedPnl || 0);
                 const myProfitTone = myRealizedPnl >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]';
@@ -1286,8 +1387,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <header className={`sticky top-0 z-20 px-4 py-3 shadow-sm ${participantView ? 'bg-white text-[#333333]' : 'bg-[#D32F2F] text-white'}`}>
         <div className="flex items-center gap-3">
           <button onClick={onBack} aria-label="返回" className="inline-flex h-8 w-8 items-center justify-center"><ArrowLeft className="w-5 h-5" /></button>
-          {!participantView && <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">股票账户 · 支持 A 股与美股 · {canEdit ? "管理员维护" : "只读查看"}</div></div>}
-          {canEdit && <button onClick={() => openTrade("buy")} className="rounded-full bg-white text-[#D32F2F] p-2 shadow-sm" aria-label="买入股票"><Plus className="w-5 h-5" /></button>}
+          {!participantView && <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">现货账户 · 支持 A 股、美股与数字币·USDT · {canEdit ? "管理员维护" : "只读查看"}</div></div>}
+          {canEdit && <button onClick={() => openTrade("buy")} className="rounded-full bg-white text-[#D32F2F] p-2 shadow-sm" aria-label="买入"><Plus className="w-5 h-5" /></button>}
         </div>
       </header>
 
@@ -1297,13 +1398,13 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <div className="flex items-center justify-between gap-3">
               <div className={`flex min-w-0 items-center gap-2.5 ${participantView ? 'flex-1' : ''}`}>
                 {participantView && <Avatar className="h-10 w-10 shrink-0 border-2 border-white/65 shadow-sm"><AvatarImage src={currentUser?.avatar || undefined} alt={currentUser?.name || currentUser?.username || '用户头像'} className="object-cover" /><AvatarFallback className="bg-white/20 text-sm font-semibold text-white">{(currentUser?.name || currentUser?.username || '我').slice(0, 1)}</AvatarFallback></Avatar>}
-                <div className="min-w-0"><div className={`${participantView ? 'break-words' : 'truncate'} text-sm font-semibold text-white`}>{accountName}{participantView && accountFilter === 'observation' ? ' · 观察' : <span className={participantView ? 'hidden min-[400px]:inline' : ''}>整体持仓</span>}</div>{!participantView && <div className="mt-0.5 text-[11px] text-white/75">{accountName}全部股票持仓 · 管理员维护视图</div>}</div>
+                <div className="min-w-0"><div className={`${participantView ? 'break-words' : 'truncate'} text-sm font-semibold text-white`}>{accountName}{participantView && accountFilter === 'observation' ? ' · 观察' : <span className={participantView ? 'hidden min-[400px]:inline' : ''}>整体持仓</span>}</div>{!participantView && <div className="mt-0.5 text-[11px] text-white/75">{accountName}全部标的持仓 · 管理员维护视图</div>}</div>
               </div>
               {participantView && renderAccountFilter()}
               {!participantView && <span className="shrink-0 rounded-full bg-white/15 px-2 py-1 text-[10px] text-white">账户总览</span>}
             </div>
-            {participantView && accountFilter === 'observation' && <StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} />}
-            {participantView && accountFilter === 'all' && <StockObservationAccountSummary categoryId={categoryId} usdCnyRate={usdCnyRate} combined actual={actualAccountDisplaySummary} />}
+            {participantView && accountFilter === 'observation' && <CryptoAwareObservationAccountSummary usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} />}
+            {participantView && accountFilter === 'all' && <CryptoAwareObservationAccountSummary usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} combined actual={actualAccountDisplaySummary} />}
             {showActualAccount && <>
             {(!participantView || accountFilter !== 'all') && <>
             {hasMixedViewCurrencies ? (<div className="mt-2 border-t border-white/20 pt-2">
@@ -1312,7 +1413,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 {currencySummaryRows.map((row: any) => {
                   const currency = normalizeCurrency(row.currency);
                   const pnl = row.floatingPnl === null || row.floatingPnl === undefined ? null : Number(row.floatingPnl);
-                  return <div key={currency} className="rounded-md bg-black/10 px-2 py-1.5 text-[10px] text-white"><div className="flex items-center justify-between"><span className="font-semibold">{currency === 'USD' ? '美元持仓' : '人民币持仓'}</span><span>{row.positionCount || 0} 只</span></div><div className="mt-1 flex justify-between gap-1"><span className="text-white/65">成本</span><b className="truncate">{money(Number(row.costValue || 0), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">市值</span><b className="truncate">{money(row.marketValue === null || row.marketValue === undefined ? null : Number(row.marketValue), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">浮盈</span><b className={pnl === null ? 'text-white/70' : pnl >= 0 ? 'text-[#FFD6D6]' : 'text-[#BDEDC6]'}>{pnl === null ? '待报价' : signedMoney(pnl, currency)}</b></div></div>;
+                  return <div key={currency} className="rounded-md bg-black/10 px-2 py-1.5 text-[10px] text-white"><div className="flex items-center justify-between"><span className="font-semibold">{currency === 'USDT' ? 'USDT现货持仓' : currency === 'USD' ? '美元持仓' : '人民币持仓'}</span><span>{row.positionCount || 0} 只</span></div><div className="mt-1 flex justify-between gap-1"><span className="text-white/65">成本</span><b className="truncate">{money(Number(row.costValue || 0), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">市值</span><b className="truncate">{money(row.marketValue === null || row.marketValue === undefined ? null : Number(row.marketValue), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">浮盈</span><b className={pnl === null ? 'text-white/70' : pnl >= 0 ? 'text-[#FFD6D6]' : 'text-[#BDEDC6]'}>{pnl === null ? '待报价' : signedMoney(pnl, currency)}</b></div></div>;
                 })}
               </div>
             </div>) : holdingSummary && <div className="mt-2 border-t border-white/20 pt-2">
@@ -1407,7 +1508,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <div className="px-4 py-7 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入标签整体持仓…</div>
           ) : (
             <>
-              {canEdit && <><div className="grid grid-cols-2 gap-px border-b border-[#F1E6DE] bg-[#F1E6DE]"><button type="button" onClick={() => openTrade("buy")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">买入股票</button><button type="button" onClick={() => openTrade("sell")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">卖出股票</button></div><div className="grid grid-cols-2 gap-px border-b border-[#E6E6E6] bg-[#E6E6E6] p-1"><button type="button" onClick={() => setAdminHoldingPerspective("position")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "position" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>编号视角</button><button type="button" onClick={() => setAdminHoldingPerspective("member")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "member" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>用户视角</button></div></>}
+              {canEdit && <><div className="grid grid-cols-2 gap-px border-b border-[#F1E6DE] bg-[#F1E6DE]"><button type="button" onClick={() => openTrade("buy")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">买入</button><button type="button" onClick={() => openTrade("sell")} className="bg-white px-1 py-2 text-xs font-medium text-[#C62828] hover:bg-[#FFF6F4]">卖出</button></div><div className="grid grid-cols-2 gap-px border-b border-[#E6E6E6] bg-[#E6E6E6] p-1"><button type="button" onClick={() => setAdminHoldingPerspective("position")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "position" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>编号视角</button><button type="button" onClick={() => setAdminHoldingPerspective("member")} className={`rounded px-2 py-1.5 text-xs font-medium ${adminHoldingPerspective === "member" ? "bg-[#C62828] text-white" : "bg-white text-gray-500"}`}>用户视角</button></div></>}
               <div className={participantView ? "relative px-3 py-2.5" : !canEdit ? "relative px-4 py-2.5" : "relative"}>
                 {canEdit && adminHoldingPerspective === "member" ? renderMemberTables() : <>
                   {canEdit && !participantView && <div className="px-3 py-3"><StockNameProfitSummary rows={stockNameProfitRows} /></div>}
@@ -1417,7 +1518,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             </>
           ))}
           {participantView && accountFilter === 'all' && <div className="px-3">{renderSoldLots()}</div>}
-          {showObservationAccount && ledgerId === 37 && <div className="border-t border-[#F1E6DE] px-3 py-3"><StockObservationPortfolio categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} /></div>}
+          {showObservationAccount && ledgerId === 37 && <div className="border-t border-[#F1E6DE] px-3 py-3"><CryptoAwareObservationPortfolio usdtCnyRate={usdtCnyRate} categoryId={categoryId} usdCnyRate={usdCnyRate} publicPositions={tagPositions} /></div>}
         </section>
 
         {showActualAccount && (!participantView || accountFilter !== 'all') && renderSoldLots()}
@@ -1432,7 +1533,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
         {!participantView && <section className="overflow-hidden rounded-xl border border-[#E4EAF0] bg-white shadow-sm">
           <button onClick={() => setShowHistory((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span className="flex items-center gap-1.5"><History className="w-4 h-4 text-gray-500" />{participantView ? "标签完整操作历史" : "完整操作历史"} ({historyRows.length})</span>{showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">历史撤销</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${event.symbol}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">历史撤销说明：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} 股</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}</div></> : null}</div></div></div>)}</div>}
+          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">历史撤销</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${portfolioDisplaySymbol(event.symbol)}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">历史撤销说明：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} {portfolioQuantityUnit(event.symbol)}</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice, 2, instrumentCurrency(event.symbol))}</div></> : null}</div></div></div>)}</div>}
         </section>}
         </div>
       </main>
@@ -1471,8 +1572,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               <div className="mb-1.5 text-xs font-semibold text-[#333333]">按{participantView ? "参与" : "账户"}持仓编号逐笔推导</div>
               <div className="space-y-2">
                 {holdingSummary.details.map((detail: any) => <div key={detail.positionNumber} className="rounded-xl border border-[#E8E8E8] bg-white p-3 text-[11px]">
-                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{detail.symbol}</span>{detail.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{detail.exchange}</span>}</div><span className={`shrink-0 font-semibold ${detail.floatingPnl === null ? "text-gray-400" : detail.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{detail.floatingPnl === null ? "待报价" : signedMoney(detail.floatingPnl, portfolioCurrency)}</span></div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} 股 × {money(detail.entryPrice, 2, portfolioCurrency)} = <b className="font-medium text-[#222222]">{money(detail.purchaseValue, 2, portfolioCurrency)}</b></div><div>当前：{detail.currentPrice === null ? "待更新" : `${formatQuantity(detail.quantity)} 股 × ${money(detail.currentPrice, 2, portfolioCurrency)} = ${money(detail.currentValue, 2, portfolioCurrency)}`}</div></div>
+                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{portfolioDisplaySymbol(detail.symbol)}</span>{detail.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{detail.exchange}</span>}</div><span className={`shrink-0 font-semibold ${detail.floatingPnl === null ? "text-gray-400" : detail.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{detail.floatingPnl === null ? "待报价" : signedMoney(detail.floatingPnl, portfolioCurrency)}</span></div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} {portfolioQuantityUnit(detail.symbol)} × {money(detail.entryPrice, 2, portfolioCurrency)} = <b className="font-medium text-[#222222]">{money(detail.purchaseValue, 2, portfolioCurrency)}</b></div><div>当前：{detail.currentPrice === null ? "待更新" : `${formatQuantity(detail.quantity)} ${portfolioQuantityUnit(detail.symbol)} × ${money(detail.currentPrice, 2, portfolioCurrency)} = ${money(detail.currentValue, 2, portfolioCurrency)}`}</div></div>
                   <div className="mt-1.5 text-gray-500">本批浮动盈亏 = {participantView ? <>{money(detail.purchaseValue, 2, portfolioCurrency)} − {detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)}</> : <>{detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)} − {money(detail.purchaseValue, 2, portfolioCurrency)}</>}{detail.floatingPnl === null ? "" : ` = ${signedMoney(detail.floatingPnl, portfolioCurrency)}`}</div>
                 </div>)}
               </div>
@@ -1484,12 +1585,13 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
       <Sheet open={!!selectedPosition} onOpenChange={(open) => !open && setSelectedPosition(null)}>
         <SheetContent side="bottom" className="max-h-[82vh] rounded-t-2xl overflow-y-auto px-4 pb-6">
-          <SheetHeader><SheetTitle className="text-left">{selectedPosition?.stockName} <span className="ml-1 text-sm font-normal text-gray-500">{selectedPosition?.symbol}</span></SheetTitle></SheetHeader>
-          {selectedPosition && <div className="mt-4 space-y-4"><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">当前市值</div><div className="mt-1 font-semibold">{money(selectedPosition.marketValue, 2, normalizeCurrency(selectedPosition.currency))}</div></div><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(selectedPosition.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(selectedPosition.floatingPnl, normalizeCurrency(selectedPosition.currency))}</div></div></div><div><div className="mb-2 text-sm font-semibold">持仓批次</div><div className="space-y-2">{selectedPosition.lots.map((lot: any) => <div key={lot.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between"><span>{formatQuantity(lot.quantity)} 股 · 成本 {money(lot.unitCost, 2, normalizeCurrency(selectedPosition.currency))}</span><span className="text-gray-500">{formatDateTime(lot.openedAt)}</span></div></div>)}</div></div>{!participantView && <div><div className="mb-2 text-sm font-semibold">审计证据</div><div className="space-y-2">{selectedHistory.map((event: any) => <div key={event.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between gap-3"><span>{eventLabels[event.type as EventType]} · {event.quantity === null ? "备注" : `${formatQuantity(event.quantity)} 股 @ ${money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}`}</span><span className={event.status === "voided" ? "text-[#C62828]" : "text-gray-500"}>{event.status === "voided" ? "已作废" : "有效"}</span></div><div className="mt-1 text-gray-500">实际成交/接单：{formatDateTime(event.actualTradedAt)}</div><div className="text-gray-500">服务器登记：{formatDateTime(event.serverRegisteredAt)} · 管理员：{event.adminName}</div>{event.marketReferencePrice !== null && <div className="text-gray-500">登记时参考：{money(event.marketReferencePrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')} · {formatDateTime(event.marketReferenceAt)}</div>}</div>)}</div></div>}</div>}
+          <SheetHeader><SheetTitle className="text-left">{selectedPosition?.stockName} <span className="ml-1 text-sm font-normal text-gray-500">{portfolioDisplaySymbol(selectedPosition?.symbol)}</span></SheetTitle></SheetHeader>
+          {selectedPosition && <div className="mt-4 space-y-4"><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">当前市值</div><div className="mt-1 font-semibold">{money(selectedPosition.marketValue, 2, instrumentCurrency(selectedPosition.symbol))}</div></div><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(selectedPosition.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(selectedPosition.floatingPnl, instrumentCurrency(selectedPosition.symbol))}</div></div></div><div><div className="mb-2 text-sm font-semibold">持仓批次</div><div className="space-y-2">{selectedPosition.lots.map((lot: any) => <div key={lot.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between"><span>{formatQuantity(lot.quantity)} {portfolioQuantityUnit(selectedPosition.symbol)} · 成本 {money(lot.unitCost, 2, instrumentCurrency(selectedPosition.symbol))}</span><span className="text-gray-500">{formatDateTime(lot.openedAt)}</span></div></div>)}</div></div>{!participantView && <div><div className="mb-2 text-sm font-semibold">审计证据</div><div className="space-y-2">{selectedHistory.map((event: any) => <div key={event.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between gap-3"><span>{eventLabels[event.type as EventType]} · {event.quantity === null ? "备注" : `${formatQuantity(event.quantity)} ${portfolioQuantityUnit(event.symbol)} @ ${money(event.executionPrice, 2, instrumentCurrency(event.symbol))}`}</span><span className={event.status === "voided" ? "text-[#C62828]" : "text-gray-500"}>{event.status === "voided" ? "已作废" : "有效"}</span></div><div className="mt-1 text-gray-500">实际成交/接单：{formatDateTime(event.actualTradedAt)}</div><div className="text-gray-500">服务器登记：{formatDateTime(event.serverRegisteredAt)} · 管理员：{event.adminName}</div>{event.marketReferencePrice !== null && <div className="text-gray-500">登记时参考：{money(event.marketReferencePrice, 2, instrumentCurrency(event.symbol))} · {formatDateTime(event.marketReferenceAt)}</div>}</div>)}</div></div>}</div>}
         </SheetContent>
       </Sheet>
 
       <StockTagTradeDialog
+        readOnlyPreview={isLocalHotPreview || !canEdit}
         categoryId={categoryId}
         categoryName={categoryName}
         open={showTradeDialog}
@@ -1509,8 +1611,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{correctingEvent ? "更正股票操作" : "登记股票操作"}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-1"><div className="rounded-md bg-[#FAF3ED] px-3 py-2 text-xs text-gray-600">原始记录类型：<b className="text-[#333333]">{eventLabels[eventType]}</b>。此处只用于更正既有审计记录，不能新建加仓、减仓或独立备注。</div>
-            {eventType !== "note" && <><div><Label>股票代码、名称或拼音</Label><div className="relative mt-1"><Input value={selectedStock ? `${selectedStock.name} ${selectedStock.symbol}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setSymbolQuery(event.target.value); }} placeholder="如 600519、贵州茅台或 gzm" />{isSearchingStock && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-gray-400" />}</div>{!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} onClick={() => { setSelectedStock(stock); setSymbolQuery(""); if (stock.latestPrice) setExecutionPrice(String(stock.latestPrice)); }} className="w-full px-3 py-2.5 text-left border-b last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{stock.symbol}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice)}</span> : null}</button>)}</div>}{selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {selectedStock.symbol}；登记时参考价由服务器留档。</div>}</div><div className="grid grid-cols-2 gap-3"><div><Label>实际成交价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div><div><Label>实际成交数量</Label><Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="股数" className="mt-1" /></div></div></>}
-            <div><Label>实际成交 / 接单时间</Label><Input type="datetime-local" value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="mt-1" /></div><div><Label>{eventType === "note" ? "备注内容" : "备注（可选）"}</Label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={eventType === "note" ? "记录说明、补录原因等" : "可填写成交说明或补录原因"} /></div>{correctingEvent && <div><Label>更正原因</Label><Input value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="例如：实际成交价更正" className="mt-1" /></div>}<div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] text-gray-600">服务器会自动记录登记时间与当时参考价；后续更正或作废只追加审计记录，不会覆盖原成交。</div><div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={closeActionDialog}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submitEvent} disabled={correctEventMutation.isPending}>{correctEventMutation.isPending ? "保存中…" : "确认更正"}</Button></div></div>
+            {eventType !== "note" && <><div className="grid grid-cols-3 overflow-hidden rounded-md border text-xs">{(['A', 'US', 'CRYPTO'] as const).map((market) => <button key={market} type="button" onClick={() => changeCorrectionMarket(market)} className={`px-1 py-2 ${correctionStockMarket === market ? 'bg-[#C62828] text-white' : 'text-gray-500'}`}>{market === 'A' ? 'A 股 · 人民币' : market === 'US' ? '美股 · 美元' : '数字币·USDT'}</button>)}</div><div><Label>买卖标的代码或名称</Label><div className="relative mt-1"><Input value={selectedStock ? `${selectedStock.name} ${portfolioDisplaySymbol(selectedStock.symbol)}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setExecutionPrice(''); setSymbolQuery(event.target.value); }} placeholder={correctionStockMarket === "CRYPTO" ? "如 BTC、ETH（USDT现货）" : correctionStockMarket === "US" ? "如 AAPL、ETH（美股）" : "如 600519、贵州茅台或 gzm"} />{isSearchingStock && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-gray-400" />}</div>{!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} onClick={() => { setSelectedStock(stock); setSymbolQuery(""); setExecutionPrice(stock.latestPrice == null ? '' : String(stock.latestPrice)); }} className="w-full px-3 py-2.5 text-left border-b last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{portfolioDisplaySymbol(stock.symbol)}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, 2, instrumentCurrency(stock.symbol))}</span> : null}</button>)}</div>}{selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {portfolioDisplaySymbol(selectedStock.symbol)}；登记时参考价由服务器留档。{correctionStockMarket === 'CRYPTO' && selectedStock.latestPrice == null ? '参考价暂不可用，请填写实际成交价。' : ''}</div>}</div><div className="grid grid-cols-2 gap-3"><div><Label>实际成交价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div><div><Label>实际成交数量</Label><Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} min={correctionStockMarket === "CRYPTO" ? 0.00000001 : undefined} step={correctionStockMarket === "CRYPTO" ? 0.00000001 : undefined} placeholder={correctionStockMarket === "CRYPTO" ? "币数量（最多8位小数）" : "股数"} className="mt-1" /></div></div></>}
+            <div><Label>实际成交 / 接单时间</Label><Input type="datetime-local" value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="mt-1" /></div><div><Label>{eventType === "note" ? "备注内容" : "备注（可选）"}</Label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={eventType === "note" ? "记录说明、补录原因等" : "可填写成交说明或补录原因"} /></div>{correctingEvent && <div><Label>更正原因</Label><Input value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="例如：实际成交价更正" className="mt-1" /></div>}<div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] text-gray-600">服务器会自动记录登记时间与当时参考价；后续更正或作废只追加审计记录，不会覆盖原成交。</div><div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={closeActionDialog}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submitEvent} disabled={correctEventMutation.isPending || !canEdit || isLocalHotPreview}>{correctEventMutation.isPending ? "保存中…" : "确认更正"}</Button></div></div>
         </DialogContent>
       </Dialog>
       </>}

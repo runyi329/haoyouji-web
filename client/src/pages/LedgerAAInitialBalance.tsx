@@ -39,6 +39,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
+import { parsePortfolioInstrument, portfolioCurrency, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, portfolioQuantityIsEmpty, type PortfolioCurrency } from "@shared/portfolio-instruments";
 import { readTagVisible } from "@shared/tag-visibility";
 import {
   ordinaryVisibilityScope, patchOrdinaryTagVisible, patchOrdinaryVisibilityCache, saveOrdinaryTagVisibility,
@@ -59,6 +60,22 @@ import {
 const MARGIN_COIN_OPTIONS = ['CNY', ...COIN_OPTIONS.filter((coin) => coin !== 'CNY')];
 // 37号保证金只接收人民币、USDT及全局钱包已启用的数字币；证券和商品资产不进入本账本。
 const LEDGER_37_WALLET_CRYPTO_CODES = new Set<string>(AI_WALLET_CRYPTO_MARKET_ASSETS);
+
+// 排序只认已保存的真实份额，输入草稿仍用于金额/股数联动，但不能让编辑中的行跳位。
+const getStockLotSavedMemberOrder = (members: any[], lot: any, isVisible: (userId: number) => boolean) => {
+  const observationUsers = new Set<number>((lot.observations ?? [])
+    .filter((item: any) => item.enabled === true || item.enabled === 1)
+    .map((item: any) => Number(item.userId)));
+  const quantities = new Map<number, number>((lot.participations ?? []).map((item: any) => [
+    Number(item.userId), observationUsers.has(Number(item.userId)) ? 0 : Number(item.remainingQuantity || 0),
+  ]));
+  return [...members].sort((left, right) => {
+    const leftVisible = isVisible(Number(left.userId));
+    const rightVisible = isVisible(Number(right.userId));
+    if (leftVisible !== rightVisible) return leftVisible ? -1 : 1;
+    return (quantities.get(Number(right.userId)) ?? 0) - (quantities.get(Number(left.userId)) ?? 0);
+  });
+};
 
 type MarginNote = {
   id: string;
@@ -282,7 +299,6 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   );
   const quotedUsdCnyRate = Number((usdCnyRateData as any)?.money);
   const usdCnyRate = Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 7.2;
-
   const { data: ledgerData } = trpc.ledger.getById.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
@@ -2151,20 +2167,28 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     const matrix = stockParticipationMatrix as any;
     const formatNumber = (value: number, digits = 2) => Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
     const formatCny = (value: number) => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const isUsStockSymbol = (symbol: unknown) => !/^\d{6}\.(SH|SZ|BJ)$/i.test(String(symbol || ''));
-    const renderStockValue = (value: number | null | undefined, isUsStock: boolean, digits = 2) => {
+    const isUsStockSymbol = (symbol: unknown) => /^[A-Z][A-Z0-9.\-]{0,14}$/i.test(String(symbol || ''));
+    const renderStockValue = (value: number | null | undefined, isUsStock: boolean, digits = 2, isCrypto = false) => {
       if (value === null || value === undefined || !Number.isFinite(value)) {
         return <span className="inline-flex flex-col leading-4"><span>待更新</span><span className="invisible text-[9px]">占位</span></span>;
+      }
+      if (isCrypto) {
+        const rate = portfolioCashMultiplier('USDT', null, usdtCnyRate);
+        return <span className="inline-flex flex-col leading-4"><span>{rate === null ? '—' : `¥${formatCny(value * rate)}`}</span><span className="text-[9px] font-normal text-gray-400">{portfolioQuotePrefix('USDT')}{formatNumber(value, digits)}</span></span>;
       }
       if (!isUsStock) {
         return <span className="inline-flex flex-col leading-4"><span>¥{formatCny(value)}</span><span className="invisible text-[9px]">≈ US$0.00</span></span>;
       }
       return <span className="inline-flex flex-col leading-4"><span>¥{formatCny(value * usdCnyRate)}</span><span className="text-[9px] font-normal text-gray-400">≈ US${formatNumber(value, digits)}</span></span>;
     };
-    const renderStockPnl = (value: number | null, isUsStock: boolean) => {
-      if (value === null || !Number.isFinite(value)) return renderStockValue(null, isUsStock);
+    const renderStockPnl = (value: number | null, isUsStock: boolean, isCrypto = false) => {
+      if (value === null || !Number.isFinite(value)) return renderStockValue(null, isUsStock, 2, isCrypto);
       const sign = value >= 0 ? '+' : '−';
       const absoluteValue = Math.abs(value);
+      if (isCrypto) {
+        const rate = portfolioCashMultiplier('USDT', null, usdtCnyRate);
+        return <span className="inline-flex flex-col leading-4"><span>{rate === null ? '—' : `${sign}¥${formatCny(absoluteValue * rate)}`}</span><span className="text-[9px] font-normal opacity-70">{sign}{portfolioQuotePrefix('USDT')}{formatNumber(absoluteValue, 2)}</span></span>;
+      }
       const cnyValue = absoluteValue * (isUsStock ? usdCnyRate : 1);
       return <span className="inline-flex flex-col leading-4"><span>{sign}¥{formatCny(cnyValue)}</span>{isUsStock ? <span className="text-[9px] font-normal opacity-70">≈ {sign}US${formatNumber(absoluteValue, 2)}</span> : <span className="invisible text-[9px]">≈ US$0.00</span>}</span>;
     };
@@ -2208,6 +2232,11 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
       ? matrix.lots.find((lot: any) => Number(lot.id) === stockAllocationFocus.lotId)
       : undefined;
     const renderLot = (lot: any) => {
+          const isCrypto = String(lot.symbol || '').toUpperCase().startsWith('CRYPTO:') && parsePortfolioInstrument(lot.symbol)?.market === 'CRYPTO';
+          const quantityUnit = isCrypto ? portfolioQuantityUnit(lot.symbol) : '股';
+          const quantityDigits = isCrypto ? 8 : 4;
+          const normalizeQuantity = (value: number) => isCrypto ? Math.round(value * 1e8) / 1e8 : value;
+          const hasQuantity = (value: number) => isCrypto ? !portfolioQuantityIsEmpty(lot.symbol, value) : value > 0.00000001;
           const globalClosed = lot.status === 'closed';
           const lotId = Number(lot.id);
           const lotNumber = activeLotNumbers.get(lotId) || '历史';
@@ -2232,21 +2261,33 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
             const draftPercentage = stockParticipationDrafts[draftKey]?.percentage;
             const percentageChanged = draftPercentage !== undefined && draftPercentage !== fallbackPercentage;
             const quantity = percentageChanged && Number(participation?.closedQuantity || 0) <= 0
-              ? allocationQuantityBase * Math.round(Math.max(0, Math.min(100, Number(draftPercentage) || 0))) / 100
+              ? normalizeQuantity(allocationQuantityBase * Math.round(Math.max(0, Math.min(100, Number(draftPercentage) || 0))) / 100)
               : savedQuantity;
             return { userId: Number(member.userId), quantity };
           });
-          // 同一批次的股数与比例顺序一致；沿用当前有效草稿，观察不占真实份额。
-          const allocationQuantityByUser = new Map<number, number>(effectiveRealAllocations.map((row) => [row.userId, row.quantity]));
-          const activeParticipations = effectiveRealAllocations.filter((item) => item.quantity > 0.00000001);
+          const savedOrderedMembers = getStockLotSavedMemberOrder(matrix.members, lot, isStockMemberVisible);
+          const frozenMemberOrder = isEditing ? stockLotMemberEditOrders[lotId] : undefined;
+          const memberRank = new Map<number, number>((frozenMemberOrder ?? []).map((userId, index) => [userId, index]));
+          // 编辑/保存中沿用进入编辑时的顺序；即使后台刷新或部分保存，也不能把输入行换位。
+          // 编辑中新增的成员只追加末尾，移除的成员不改变其他行的相对位置。
+          const membersInDisplayOrder = frozenMemberOrder
+            ? [...matrix.members].sort((left: any, right: any) =>
+                (memberRank.get(Number(left.userId)) ?? Number.MAX_SAFE_INTEGER) -
+                (memberRank.get(Number(right.userId)) ?? Number.MAX_SAFE_INTEGER))
+            : savedOrderedMembers;
+          const activeParticipations = effectiveRealAllocations.filter((item) => hasQuantity(item.quantity));
           const totalAllocatedQuantity = effectiveRealAllocations.reduce((total, item) => total + item.quantity, 0);
           const availableQuantity = Math.max(0, allocationQuantityBase - totalAllocatedQuantity);
           const holdingTotal = Number(lot.initialQuantity || 0) * Number(lot.unitCost || 0);
           const isUsStock = isUsStockSymbol(lot.symbol);
-          const stockInputSymbol = isUsStock ? '$' : '¥';
+          const nativeCurrency: PortfolioCurrency = isCrypto ? portfolioCurrency(lot.symbol) : isUsStock ? 'USD' : 'CNY';
+          const cashRate = isCrypto ? portfolioCashMultiplier(nativeCurrency, null, usdtCnyRate) : isUsStock ? usdCnyRate : 1;
+          // NaN 只在派生金额中保持未知；不写入、不能反推成零份额。
+          const cnyMultiplier = cashRate ?? NaN;
+          const stockInputSymbol = isCrypto ? portfolioQuotePrefix(nativeCurrency) : isUsStock ? '$' : '¥';
           const availablePercent = allocationQuantityBase > 0 ? availableQuantity / allocationQuantityBase * 100 : 0;
           const allocatedPercent = allocationQuantityBase > 0 ? totalAllocatedQuantity / allocationQuantityBase * 100 : 0;
-          const isFullyAllocated = !globalClosed && allocationQuantityBase > 0.00000001 && Math.abs(totalAllocatedQuantity - allocationQuantityBase) <= 0.00000001;
+          const isFullyAllocated = !globalClosed && hasQuantity(allocationQuantityBase) && Math.abs(totalAllocatedQuantity - allocationQuantityBase) <= 0.00000001;
           const marketValue = lot.marketPrice === null || lot.marketPrice === undefined
             ? null
             : Number(lot.currentQuantity || 0) * Number(lot.marketPrice || 0);
@@ -2254,7 +2295,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
           const marketPnl = marketValue === null
             ? null
             : marketValue - Number(lot.currentQuantity || 0) * Number(lot.unitCost || 0);
-          const marketPnlCny = marketPnl === null ? null : marketPnl * (isUsStock ? usdCnyRate : 1);
+          const marketPnlCny = marketPnl === null || cashRate === null ? null : marketPnl * cnyMultiplier;
           const marketQuoteLabel = lot.marketQuoteSource === 'intraday'
             ? '盘中最新价'
             : lot.marketQuoteSource === 'close'
@@ -2289,14 +2330,18 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
               const savedStartDate = participation?.startDate || defaultStartDate;
               const savedPauseDate = participation?.pauseDate || '';
               const totalLotValue = Number(lot.currentQuantity || 0) * savedEntryPrice;
-              const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
+              const totalLotValueCny = totalLotValue * cnyMultiplier;
               const fallbackPercentage = share ? Math.round(share) : 0;
-              const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? String(Number((totalLotValueCny * fallbackPercentage / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
+              const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage && Number.isFinite(totalLotValueCny) ? String(Number((totalLotValueCny * fallbackPercentage / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
               const draft = savedDraft ?? fallbackDraft;
               const percentage = Math.round(Math.max(0, Math.min(100, Number(draft.percentage) || 0)));
               // 历史份额可能不是整数比例。未触碰比例时保留其原始股数，日期或入场价单独修改绝不因为界面显示比例而改仓。
               const percentageChanged = savedDraft?.percentage !== undefined && savedDraft.percentage !== fallbackDraft.percentage;
-              const quantity = percentageChanged ? lot.currentQuantity * percentage / 100 : previousQuantity;
+              const quantity = percentageChanged ? normalizeQuantity(lot.currentQuantity * percentage / 100) : previousQuantity;
+              if (isCrypto && quantity > 0 && !isValidCryptoPortfolioQuantity(quantity)) {
+                toast.error(`${member.name} 的币数量最小0.00000001，最多8位小数，请调整比例`);
+                return;
+              }
               const entryPrice = Number(draft.entryPrice);
               const effectiveEntryPrice = Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : savedEntryPrice;
               const startDate = draft.startDate || defaultStartDate;
@@ -2321,7 +2366,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
               const savedObservation = getStockObservationFallback(lot, Number(member.userId));
               const observationDraft = stockObservationDrafts[`${lotId}:${member.userId}`] ?? savedObservation;
               const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
-              const hasRealConflict = observationDraft.enabled && Number(participation?.remainingQuantity || 0) > 0.00000001;
+              const hasRealConflict = observationDraft.enabled && hasQuantity(Number(participation?.remainingQuantity || 0));
               const enabledChanged = observationDraft.enabled !== savedObservation.enabled;
               const quantity = Number(observationDraft.quantity);
               const entryPrice = Number(observationDraft.entryPrice);
@@ -2333,7 +2378,11 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
               // enabled 与真实余量冲突时，即便观察参数未改也要转换释放；关闭不自动恢复任何真实份额。
               if (!hasRealConflict && !enabledChanged && (!observationDraft.enabled || (!quantityChanged && !priceChanged && !dateChanged && !pauseDateChanged))) continue;
               if (observationDraft.enabled && (!observationDraft.quantity.trim() || !Number.isFinite(quantity) || quantity < 0 || quantity > 1e9)) {
-                toast.error(`${member.name} 的观察股数必须为 0 至 10 亿之间的数字`);
+                toast.error(`${member.name} 的观察数量必须为 0 至 10 亿之间的数字`);
+                return;
+              }
+              if (isCrypto && observationDraft.enabled && quantity > 0 && !isValidCryptoPortfolioQuantity(quantity)) {
+                toast.error(`${member.name} 的观察币数量最小0.00000001，最多8位小数`);
                 return;
               }
               if (observationDraft.enabled && (!Number.isFinite(entryPrice) || entryPrice <= 0)) {
@@ -2358,7 +2407,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
               });
             }
             if (proposedRows.length > 0 && proposedTotal - Number(lot.currentQuantity || 0) > 0.00000001) {
-              toast.error(`持仓编号 ${lotNumber} 的合计参与股数不能超过当前余量 ${formatNumber(lot.currentQuantity, 4)} 股`);
+              toast.error(`持仓编号 ${lotNumber} 的合计参与数量不能超过当前余量 ${formatNumber(lot.currentQuantity, quantityDigits)} ${quantityUnit}`);
               return;
             }
             if (proposedRows.length === 0 && proposedObservationRows.length === 0) {
@@ -2377,11 +2426,11 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                 const releasedQuantity = Number(participation?.remainingQuantity || 0);
                 const member = (matrix.members as any[]).find((item: any) => Number(item.userId) === row.targetUserId);
                 return releasedQuantity > 0.00000001
-                  ? [`${member?.name || '成员'}：释放真实 ${formatNumber(releasedQuantity, 8)} 股，观察 ${formatNumber(row.quantity, 8)} 股`]
+                  ? [`${member?.name || '成员'}：释放真实 ${formatNumber(releasedQuantity, 8)} ${quantityUnit}，观察 ${formatNumber(row.quantity, 8)} ${quantityUnit}`]
                   : [];
               });
               if (releases.length > 0 && !window.confirm([
-                `${lot.stockName} ${lot.symbol}：确认切换观察？`,
+                `${lot.stockName} ${isCrypto ? portfolioDisplaySymbol(lot.symbol) : lot.symbol}：确认切换观察？`,
                 ...releases,
                 '这部分真实余量将恢复为可分配，不再计入该用户真实盈亏。',
                 '观察盈亏不结算；钱包、押金及已结算历史不变。',
@@ -2411,10 +2460,11 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                   pauseDate: row.pauseDate,
                 });
               }
+              // 先等最新保存态回包，再结束编辑并重排，防止显示旧比例后又跳动一次。
+              await refetchStockParticipationMatrix();
               toast.success(`持仓编号 ${lotNumber} 已单独保存`);
               discardStockLotDrafts(lotId);
               finishStockLotEditing(lotId);
-              await refetchStockParticipationMatrix();
               await onStockAllocationSaved?.();
             } catch {
               // mutation 的 onError 已给出明确错误提示，保留当前草稿供管理员修正。
@@ -2432,7 +2482,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                 <button type="button" onClick={() => toggleStockLotExpanded(lotId)} className="min-w-0 flex-1 text-left">
                   <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                     <span className="text-sm font-semibold leading-5 text-gray-800 break-words">{lot.stockName}</span>
-                    <span className="shrink-0 text-sm font-semibold leading-5 text-gray-800">{lot.symbol}</span>
+                    <span className="shrink-0 text-sm font-semibold leading-5 text-gray-800">{isCrypto ? portfolioDisplaySymbol(lot.symbol) : lot.symbol}</span>
                     {!globalClosed && <span className="shrink-0 text-xs font-semibold" style={{ color: accentColor }}>持仓编号 {lotNumber}</span>}
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${globalClosed ? 'bg-[#E7E1D8] text-[#7F6B53]' : 'bg-[#EAF5EF] text-[#2F7660]'}`}>{globalClosed ? '已卖出 · 只读' : Number(lot.globallySoldQuantity || 0) > 0 ? '进行中 · 部分已卖出' : '进行中'}</span>
                   </div>
@@ -2449,33 +2499,26 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                 )}
               </div>
               <div className="grid grid-cols-3 gap-px border-y text-[10px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#E8EEF1' }}>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{globalClosed ? '买入股数' : '当前持仓'}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(globalClosed ? lot.initialQuantity : lot.currentQuantity, 4)} 股</b><span className="invisible text-[9px] leading-4">占位</span></div>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓均价</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(Number(lot.unitCost || 0), isUsStock, 4)}</b></div>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(holdingTotal, isUsStock)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{globalClosed ? (isCrypto ? '买入币数量' : '买入股数') : '当前持仓'}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(globalClosed ? lot.initialQuantity : lot.currentQuantity, quantityDigits)} {quantityUnit}</b><span className="invisible text-[9px] leading-4">占位</span></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓均价</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(Number(lot.unitCost || 0), isUsStock, isCrypto ? 8 : 4, isCrypto)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(holdingTotal, isUsStock, 2, isCrypto)}</b></div>
                 {globalClosed ? <>
-                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">已卖出 <b className="font-semibold">{formatNumber(lot.globallySoldQuantity, 4)} 股</b></div>
-                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">当前余量 <b className="font-semibold">0 股</b></div>
+                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">已卖出 <b className="font-semibold">{formatNumber(lot.globallySoldQuantity, quantityDigits)} {quantityUnit}</b></div>
+                  <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">当前余量 <b className="font-semibold">0 {quantityUnit}</b></div>
                   <div className="bg-[#F4F1EC] px-1 py-2 text-center text-[#8A765F]">已结束 · 不可分配</div>
                 </> : <>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{marketQuoteLabel}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock)}</b></div>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock)}</b></div>
-                <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(availableQuantity, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
-                <div className={`whitespace-nowrap px-0.5 py-1.5 text-center ${isFullyAllocated ? 'bg-[#C62828] text-white' : 'bg-[#F8FAFB] text-gray-500'}`}>已分配 <b className={`ml-0.5 ${isFullyAllocated ? 'text-white' : 'text-gray-700'}`}>{formatNumber(totalAllocatedQuantity, 4)} 股</b> <span className={isFullyAllocated ? 'text-white/90' : 'text-gray-400'}>{formatNumber(allocatedPercent, 2)}%</span></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{marketQuoteLabel}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, isCrypto ? 8 : 4, isCrypto)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock, 2, isCrypto)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock, isCrypto)}</b></div>
+                <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(availableQuantity, quantityDigits)} {quantityUnit}</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
+                <div className={`whitespace-nowrap px-0.5 py-1.5 text-center ${isFullyAllocated ? 'bg-[#C62828] text-white' : 'bg-[#F8FAFB] text-gray-500'}`}>已分配 <b className={`ml-0.5 ${isFullyAllocated ? 'text-white' : 'text-gray-700'}`}>{formatNumber(totalAllocatedQuantity, quantityDigits)} {quantityUnit}</b> <span className={isFullyAllocated ? 'text-white/90' : 'text-gray-400'}>{formatNumber(allocatedPercent, 2)}%</span></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
                 </>}
               </div>
               {isExpanded && <div className="space-y-1.5 p-2.5">
                 <div className="space-y-1.5">
-                {[...matrix.members].sort((left: any, right: any) => {
-                  // 先可见、再隐藏；各组按分配比例从大到小，相同比例保留原始顺序。
-                  const leftVisible = isStockMemberVisible(Number(left.userId));
-                  const rightVisible = isStockMemberVisible(Number(right.userId));
-                  if (leftVisible !== rightVisible) return leftVisible ? -1 : 1;
-                  const leftQuantity = allocationQuantityByUser.get(Number(left.userId)) ?? 0;
-                  const rightQuantity = allocationQuantityByUser.get(Number(right.userId)) ?? 0;
-                  return rightQuantity - leftQuantity;
-                }).map((member: any) => {
+                {isCrypto && cashRate === null && <p className="text-[10px] text-amber-700">USDT/CNY汇率暂不可用，参考人民币金额与保证金显示—；仍可按比例和币数量编辑。</p>}
+                {membersInDisplayOrder.map((member: any) => {
                   const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
                   const hasSoldHistory = Number(participation?.closedQuantity || 0) > 0;
                   const isReadonly = globalClosed || hasSoldHistory || !matrix.canEdit || !isEditing || isSaving;
@@ -2494,7 +2537,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                   const formatDraftNumber = (value: number) => Number.isFinite(value) ? String(Number(value.toFixed(2))) : '';
                   const totalLotValue = Number(lot.currentQuantity || 0) * savedEntryPrice;
                   const fallbackPercentage = share ? Math.round(share) : 0;
-                  const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
+                  const totalLotValueCny = totalLotValue * cnyMultiplier;
                   const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? formatDraftNumber(totalLotValueCny * fallbackPercentage / 100) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
                   const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
                   const observationDraft: (typeof stockObservationDrafts)[string] = stockObservationDrafts[draftKey] ?? observationFallback;
@@ -2505,12 +2548,12 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                   const inlineEntryPrice = isObservationMode ? observationDraft.entryPrice : draft.entryPrice;
                   const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
                   // 开仓均价仍按交易所币种录入；成员分配金额统一按人民币输入并反推比例。
-                  const allocationBaseAmount = Number(lot.currentQuantity || 0) * draftEntryPrice * (isUsStock ? usdCnyRate : 1);
+                  const allocationBaseAmount = Number(lot.currentQuantity || 0) * draftEntryPrice * cnyMultiplier;
                   const allocationPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
                   const percentageChanged = stockParticipationDrafts[draftKey]?.percentage !== undefined && draft.percentage !== fallbackDraft.percentage;
-                  const allocationQuantity = percentageChanged && !hasSoldHistory ? Number(lot.currentQuantity || 0) * allocationPercentage / 100 : currentQuantity;
+                  const allocationQuantity = percentageChanged && !hasSoldHistory ? normalizeQuantity(Number(lot.currentQuantity || 0) * allocationPercentage / 100) : currentQuantity;
                   const observationQuantity = Number(observationDraft.quantity);
-                  const observationUnitAmountCny = Number(observationDraft.entryPrice) * (isUsStock ? usdCnyRate : 1);
+                  const observationUnitAmountCny = Number(observationDraft.entryPrice) * cnyMultiplier;
                   const observationAmount = observationDraft.amount ?? (observationDraft.quantity.trim() && Number.isFinite(observationQuantity) ? formatDraftNumber(observationQuantity * observationUnitAmountCny) : '');
                   // 股数维度参考，允许小数和超过 100%，不参与任何真实份额统计。
                   const observationPercentage = observationDraft.percentage ?? (observationDraft.quantity.trim() && Number.isFinite(observationQuantity) && allocationQuantityBase > 0 ? formatDraftNumber(observationQuantity / allocationQuantityBase * 100) : '');
@@ -2572,7 +2615,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                                   }
                                   const nextEntryPrice = Number(value) > 0 ? Number(value) : savedEntryPrice;
                                   const nextPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
-                                  const nextAmount = Number(lot.currentQuantity || 0) * nextEntryPrice * (isUsStock ? usdCnyRate : 1) * nextPercentage / 100;
+                                  const nextAmount = Number(lot.currentQuantity || 0) * nextEntryPrice * cnyMultiplier * nextPercentage / 100;
                                   setStockParticipationDraft(draftKey, { entryPrice: value, amount: formatDraftNumber(nextAmount) }, fallbackDraft);
                                 }
                               }}
@@ -2638,33 +2681,34 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                                 inputMode="decimal"
                                 value={observationDraft.quantity}
                                 disabled={isInlineReadonly}
-                                placeholder="股数"
-                                aria-label={`${member.name}的独立观察股数`}
+                                placeholder={isCrypto ? "币数量" : "股数"}
+                                aria-label={`${member.name}的独立观察${isCrypto ? "币数量" : "股数"}`}
                                 onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setStockObservationDraft(draftKey, { quantity: event.target.value, amount: undefined, percentage: undefined }, observationFallback)}
                                 className="h-full min-w-0 flex-1 bg-transparent px-1 text-right text-xs font-medium text-[#7C3AED] outline-none placeholder:text-gray-400 disabled:cursor-default"
                               />
-                              <span className="pr-1.5 text-[10px] text-[#7C3AED]">股</span>
+                              <span className="pr-1.5 text-[10px] text-[#7C3AED]">{quantityUnit}</span>
                             </label>
                           ) : <div className="flex h-7 w-20 shrink-0 items-center justify-end overflow-hidden rounded-[3px] border bg-white px-1 text-xs font-medium whitespace-nowrap" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: inlineFieldTextColor }}>
-                            {formatNumber(allocationQuantity, 4)} 股
+                            {formatNumber(allocationQuantity, quantityDigits)} {quantityUnit}
                           </div>}
                           <div className="flex h-7 w-20 shrink-0 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isInlineReadonly ? '#ECECEC' : '#D9E8EE' }}>
                             <span className="pl-1.5 text-[10px] text-gray-400" style={isObservationMode ? { color: inlineFieldTextColor } : undefined}>¥</span>
                             <input
                               type="text"
                               inputMode="decimal"
-                              value={inlineAmount}
-                              disabled={isInlineReadonly}
-                              placeholder="人民币"
+                              value={isCrypto && cashRate === null ? "" : inlineAmount}
+                              disabled={isInlineReadonly || (isCrypto && cashRate === null)}
+                              placeholder={isCrypto && cashRate === null ? "—" : "人民币"}
                               aria-label={isObservationMode ? `${member.name}的观察金额（人民币）` : '分配金额（人民币）'}
                               onChange={(event) => {
+                                if (isCrypto && cashRate === null) return;
                                 const value = event.target.value;
                                 if (/^(?:\d*(?:\.\d{0,2})?)?$/.test(value)) {
                                   if (isObservationMode) {
                                     if (value === '') {
                                       setStockObservationDraft(draftKey, { amount: '', quantity: '', percentage: undefined }, observationFallback);
                                     } else if (observationUnitAmountCny > 0) {
-                                      setStockObservationDraft(draftKey, { amount: value, quantity: String(Number(value) / observationUnitAmountCny), percentage: undefined }, observationFallback);
+                                      setStockObservationDraft(draftKey, { amount: value, quantity: String(normalizeQuantity(Number(value) / observationUnitAmountCny)), percentage: undefined }, observationFallback);
                                     } else {
                                       setStockObservationDraft(draftKey, { amount: value }, observationFallback);
                                     }
@@ -2682,6 +2726,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                                 }
                               }}
                               onBlur={(event) => {
+                                if (isCrypto && cashRate === null) return;
                                 const completedAmount = event.currentTarget.value;
                                 if (completedAmount === '') return;
                                 if (isObservationMode) {
@@ -2705,7 +2750,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                               onClick={() => {
                                 if (isObservationMode) {
                                   const percentage = Math.max(0, Number(observationPercentage || 0) - 1);
-                                  setStockObservationDraft(draftKey, { quantity: String(allocationQuantityBase * percentage / 100), amount: undefined, percentage: undefined }, observationFallback);
+                                  setStockObservationDraft(draftKey, { quantity: String(normalizeQuantity(allocationQuantityBase * percentage / 100)), amount: undefined, percentage: undefined }, observationFallback);
                                   return;
                                 }
                                 const percentage = Math.max(0, Math.min(maxPercentage, Math.round(Number(draft.percentage) || 0) - 1));
@@ -2717,20 +2762,20 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                             >
                               <Minus size={10} />
                             </button>
-                            <div className="flex h-full min-w-0 flex-1 items-center justify-center">
+                            <label className="relative flex h-full min-w-0 flex-1 items-center justify-center">
                               <input
                                 type="text"
                                 inputMode={isObservationMode ? 'decimal' : 'numeric'}
-                                value={inlinePercentage === '' ? '' : `${inlinePercentage}%`}
+                                value={inlinePercentage}
                                 disabled={isInlineReadonly}
-                                placeholder="0%"
+                                placeholder="0"
                                 maxLength={isObservationMode ? undefined : 4}
-                                aria-label={isObservationMode ? `${member.name}的观察比例（股数参考）` : '分配比例'}
+                                aria-label={isObservationMode ? `${member.name}的观察比例（${isCrypto ? "币数量" : "股数"}参考）` : '分配比例'}
                                 onChange={(event) => {
                                   const value = event.target.value.replace(/%/g, '');
                                   if (isObservationMode) {
                                     if (/^\d*\.?\d*$/.test(value)) {
-                                      setStockObservationDraft(draftKey, { percentage: value, quantity: value === '' ? '' : String(allocationQuantityBase * Number(value) / 100), amount: undefined }, observationFallback);
+                                      setStockObservationDraft(draftKey, { percentage: value, quantity: value === '' ? '' : String(normalizeQuantity(allocationQuantityBase * Number(value) / 100)), amount: undefined }, observationFallback);
                                     }
                                     return;
                                   }
@@ -2740,17 +2785,18 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                                     setStockParticipationDraft(draftKey, { percentage, amount }, fallbackDraft);
                                   }
                                 }}
-                                className="h-full w-full bg-transparent px-0 text-center text-xs font-medium outline-none placeholder:text-gray-400 disabled:text-gray-400"
+                                className="h-full w-full min-w-0 bg-transparent pl-0 pr-2.5 text-right text-xs font-medium outline-none placeholder:text-gray-400 disabled:text-gray-400"
                                 style={{ color: inlineFieldTextColor }}
                               />
-                            </div>
+                              <span aria-hidden="true" className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 select-none text-xs text-gray-400">%</span>
+                            </label>
                             <button
                               type="button"
                               disabled={isInlineReadonly || (!isObservationMode && Number(draft.percentage || 0) >= maxPercentage)}
                               onClick={() => {
                                 if (isObservationMode) {
                                   const percentage = Math.max(0, Number(observationPercentage || 0) + 1);
-                                  setStockObservationDraft(draftKey, { quantity: String(allocationQuantityBase * percentage / 100), amount: undefined, percentage: undefined }, observationFallback);
+                                  setStockObservationDraft(draftKey, { quantity: String(normalizeQuantity(allocationQuantityBase * percentage / 100)), amount: undefined, percentage: undefined }, observationFallback);
                                   return;
                                 }
                                 const percentage = Math.max(0, Math.min(maxPercentage, Math.round(Number(draft.percentage) || 0) + 1));
@@ -2763,16 +2809,16 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                               <Plus size={10} />
                             </button>
                           </div>
-                          {!isObservationMode && hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
+                          {!isObservationMode && hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, quantityDigits)} · 只读</span>}
                         </div>
                       </div>
                       {isObservationMode && <div className="mt-1 text-[10px] text-gray-500">
-                        {Number(participation?.remainingQuantity || 0) > 0.00000001
-                          ? `保存后释放真实 ${formatNumber(Number(participation.remainingQuantity), 4)} 股（${formatNumber(allocationQuantityBase > 0 ? Number(participation.remainingQuantity) / allocationQuantityBase * 100 : 0, 2)}%）；观察不计入实际分配`
+                        {hasQuantity(Number(participation?.remainingQuantity || 0))
+                          ? `保存后释放真实 ${formatNumber(Number(participation.remainingQuantity), quantityDigits)} ${quantityUnit}（${formatNumber(allocationQuantityBase > 0 ? Number(participation.remainingQuantity) / allocationQuantityBase * 100 : 0, 2)}%）；观察不计入实际分配`
                           : observationFallback.enabled ? '已释放真实份额；观察不计入实际分配' : '观察不计入实际分配；真实份额为 0'}
-                        {hasSoldHistory ? ` · 已结算 ${formatNumber(participation.closedQuantity, 4)} 股保留` : ''}
+                        {hasSoldHistory ? ` · 已结算 ${formatNumber(participation.closedQuantity, quantityDigits)} ${quantityUnit}保留` : ''}
                       </div>}
-                      {!isObservationMode && currentQuantity <= 0.00000001 && (lot.observations ?? []).some((item: any) => Number(item.userId) === Number(member.userId)) && (
+                      {!isObservationMode && !hasQuantity(currentQuantity) && (lot.observations ?? []).some((item: any) => Number(item.userId) === Number(member.userId)) && (
                         <p className="mt-1 text-[10px] text-gray-500">真实份额为 0；关闭观察不会自动恢复，可重新分配{hasSoldHistory ? '（已结算部分仍只读）' : ''}。</p>
                       )}
                     </div>
@@ -2939,6 +2985,12 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
       refetchOnWindowFocus: true,
     },
   );
+  const stockCashFxQuery = trpc.ledger.getStockTagPortfolio.useQuery(
+    { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId) || 0 },
+    { enabled: ledgerId === 37 && Number(activeStockParticipationCategoryId) > 0, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
+  );
+  const usdtCnyRate = portfolioCashMultiplier('USDT', null, (stockCashFxQuery.data as any)?.summary?.usdtCnyRate);
+
   const setStockParticipationMutation = trpc.ledger.setStockLotParticipation.useMutation({
     // 单一批次的多位成员在同一个「保存」动作中顺序提交；全部成功后再统一刷新，避免中途重绘覆盖草稿。
     onError: (error) => toast.error(error.message || '保存股票参与分配失败'),
@@ -2951,6 +3003,23 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   const [expandedStockLots, setExpandedStockLots] = useState<Set<number>>(new Set(stockAllocationFocus ? [stockAllocationFocus.lotId] : []));
   const [editingStockLots, setEditingStockLots] = useState<Set<number>>(new Set(stockAllocationFocus ? [stockAllocationFocus.lotId] : []));
   const [savingStockLots, setSavingStockLots] = useState<Set<number>>(new Set());
+  const [stockLotMemberEditOrders, setStockLotMemberEditOrders] = useState<Record<number, number[]>>({});
+  const captureStockLotEditOrder = useCallback((lotId: number) => {
+    const matrix = stockParticipationMatrix as any;
+    const lot = matrix?.lots?.find((item: any) => Number(item.id) === lotId);
+    if (!lot || !matrix.canEdit || !Array.isArray(matrix.members)) return;
+    const tagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
+    const orderedIds = getStockLotSavedMemberOrder(matrix.members, lot, (userId) => tagName
+      ? (editState[userId]?.[tagName]?.visible ?? getSavedTagVisible(userId, tagName))
+      : true).map((member: any) => Number(member.userId));
+    setStockLotMemberEditOrders((previous) => previous[lotId]
+      ? previous
+      : { ...previous, [lotId]: orderedIds });
+  }, [stockParticipationMatrix, categories, activeStockParticipationCategoryId, editState, getSavedTagVisible]);
+  useEffect(() => {
+    // 快捷分配默认直接进入编辑；首个真实回包到位后固定顺序，不在render里修改状态。
+    for (const lotId of Array.from(editingStockLots)) captureStockLotEditOrder(lotId);
+  }, [editingStockLots, captureStockLotEditOrder]);
   // 移动端输入保持在本地草稿中，避免每次输入都触发查询重渲染而丢失键盘焦点。
   const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; amount: string; entryPrice: string; startDate: string; pauseDate: string }>>({});
   const setStockParticipationDraft = (key: string, patch: Partial<{ percentage: string; amount: string; entryPrice: string; startDate: string; pauseDate: string }>, fallback: { percentage: string; amount: string; entryPrice: string; startDate: string; pauseDate: string }) => {
@@ -2986,6 +3055,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     });
   };
   const startStockLotEditing = (lotId: number) => {
+    captureStockLotEditOrder(lotId);
     setExpandedStockLots((previous) => new Set(previous).add(lotId));
     setEditingStockLots((previous) => new Set(previous).add(lotId));
   };
@@ -2993,6 +3063,11 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     setEditingStockLots((previous) => {
       const next = new Set(previous);
       next.delete(lotId);
+      return next;
+    });
+    setStockLotMemberEditOrders((previous) => {
+      const next = { ...previous };
+      delete next[lotId];
       return next;
     });
     if (discardDrafts) discardStockLotDrafts(lotId);
@@ -4487,6 +4562,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                         if (!isStockTag || Number(activeStockParticipationCategoryId) !== Number(cat.id) || !stockParticipationMatrix) return null;
                         let actualEquityCny = 0;
                         let hasUnpricedLot = false;
+                        let hasUnknownCrypto = false;
                         for (const lot of ((stockParticipationMatrix as any).lots ?? [])) {
                           const participation = (lot.participations ?? []).find((item: any) => Number(item.userId) === Number(userId));
                           const quantity = Number(participation?.remainingQuantity ?? 0);
@@ -4494,13 +4570,15 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                           const marketPrice = Number(lot.marketPrice);
                           if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
                             hasUnpricedLot = true;
+                            if (portfolioCurrency(lot.symbol) === 'USDT') hasUnknownCrypto = true;
                             continue;
                           }
-                          const isUsStock = String(lot.currency ?? '').toUpperCase() === 'USD'
-                            || !/^\d{6}\.(SH|SZ|BJ)$/i.test(String(lot.symbol ?? ''));
-                          actualEquityCny += quantity * marketPrice * (isUsStock ? usdCnyRate : 1);
+                          const currency = portfolioCurrency(lot.symbol);
+                          const rate = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+                          if (rate === null) { hasUnpricedLot = true; hasUnknownCrypto = true; continue; }
+                          actualEquityCny += quantity * marketPrice * rate;
                         }
-                        return { actualEquityCny, hasUnpricedLot };
+                        return { actualEquityCny: hasUnknownCrypto ? null : actualEquityCny, hasUnpricedLot };
                       })();
                       const stockActualEquity = stockMemberSummary?.actualEquityCny;
                       const stockRequiredMargin = Number.isFinite(stockActualEquity) ? (isPausedForMargin ? 0 : Math.max(0, Number(stockActualEquity) * 0.2)) : NaN;

@@ -1,11 +1,18 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
 import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
+import { normalizePortfolioSymbol, portfolioCurrency, portfolioMarket, portfolioQuantityIsEmpty, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, portfolioCashMultiplier } from '../shared/portfolio-instruments';
+import { getCryptoPortfolioEffectiveDate, getCryptoPortfolioTradeSettlementDate } from '../shared/crypto-portfolio-policy';
+import { guardCryptoPortfolioAllocationWrite } from './crypto-portfolio-allocation-write-guard';
+import { fetchCryptoPortfolioQuotes, getCachedCryptoPortfolioQuote, searchCryptoPortfolio } from './crypto-portfolio-quotes';
+import { getLiveCryptoUsdtCnyQuote } from './crypto-portfolio-fx';
 import { readTagVisible } from "../shared/tag-visibility";
 import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
 import { fetchOvernightUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
 import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, type UnifiedStockClosePublicationResult } from '../shared/stock-unified-close-policy';
+import { getCryptoPortfolioActivationDate, readCryptoPortfolioCalendar } from './crypto-portfolio-settlement';
+import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { fetchStockUsdCnyAtClose } from './stock-usd-cny-rate';
 import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
 
@@ -39,6 +46,7 @@ type StoredQuote = {
   priceDate: string;
   updatedAt: string;
   source?: 'intraday' | 'close';
+  providerSource?: string;
 };
 
 let tablesReady: Promise<void> | null = null;
@@ -92,19 +100,49 @@ function beijingDate(): string {
 }
 
 function normalizeSymbol(value: unknown): string {
-  const raw = String(value || "").trim().toUpperCase();
-  if (!/^\d{6}\.(SH|SZ|BJ)$/.test(raw) && !/^[A-Z][A-Z0-9.\-]{0,14}$/.test(raw)) {
-    throw new Error("仅支持已核验的 A 股代码或美股 ticker");
+  return normalizePortfolioSymbol(value);
+}
+
+function stockCurrency(symbol: string): 'CNY' | 'USD' | 'USDT' {
+  return portfolioCurrency(symbol);
+}
+
+function stockMarket(symbol: string): 'A' | 'US' | 'CRYPTO' {
+  return portfolioMarket(symbol);
+}
+
+function validateCryptoQuantity(symbol: string, quantity: number, allowZero = false): void {
+  if (isCryptoPortfolioSymbol(symbol) && !(allowZero && quantity === 0)
+    && (!isValidCryptoPortfolioQuantity(quantity) || Number(quantity.toFixed(8)) !== quantity)) {
+    throw new Error('数字币数量最小为0.00000001，最多8位小数');
   }
-  return raw;
 }
 
-function stockCurrency(symbol: string): 'CNY' | 'USD' {
-  return /^\d{6}\.(SH|SZ|BJ)$/.test(symbol) ? 'CNY' : 'USD';
+function portfolioQuantityExceeds(symbol: string, excess: number): boolean {
+  return isCryptoPortfolioSymbol(symbol) ? Math.round(excess * 1e8) > 0 : excess > EPSILON;
 }
 
-function stockMarket(symbol: string): 'A' | 'US' {
-  return stockCurrency(symbol) === 'CNY' ? 'A' : 'US';
+function portfolioRemainingQuantity(symbol: string, initial: number, sold: number): number {
+  const remaining = Math.max(0, initial - sold);
+  return isCryptoPortfolioSymbol(symbol) ? Number(remaining.toFixed(8)) : remaining;
+}
+
+/** 无时区的实际时间明确按北京时间解释，不依赖服务器TZ。 */
+function parsePortfolioActualTime(value: string | undefined, now: Date): Date {
+  if (!value) return new Date(now);
+  const raw = value.trim().replace(' ', 'T');
+  const date = new Date(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(raw)
+    ? `${raw.length === 10 ? `${raw}T00:00:00` : raw}+08:00` : raw);
+  if (Number.isNaN(date.getTime())) throw new Error('实际成交时间无效');
+  return date;
+}
+
+async function readLiveUsdtCnyRate(symbols: string[]): Promise<number | null> {
+  if (!symbols.some(isCryptoPortfolioSymbol)) return null;
+  try {
+    const quote = await getLiveCryptoUsdtCnyQuote();
+    return quote && !quote.stale && quote.pair === 'USDT/CNY' && Number.isFinite(quote.rate) && quote.rate > 0 ? quote.rate : null;
+  } catch { return null; }
 }
 
 function toIso(value: unknown): string {
@@ -167,7 +205,7 @@ export async function ensureLedgerStockQuoteHistoryTable(): Promise<void> {
           id BIGINT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL,
           category_id INT NOT NULL,
-          symbol VARCHAR(16) NOT NULL,
+          symbol VARCHAR(64) NOT NULL,
           price DECIMAL(20,8) NOT NULL,
           price_date DATE NOT NULL,
           captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,6 +219,24 @@ export async function ensureLedgerStockQuoteHistoryTable(): Promise<void> {
     });
   }
   await quoteHistoryTableReady;
+}
+
+/** 仅扩窄列，不缩列、不改已有内容、不回填历史时间。 */
+async function widenPortfolioIdentityColumns(conn: any, tables: string[]): Promise<void> {
+  const [rows] = await conn.execute(
+    `SELECT TABLE_NAME, COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name IN (${tables.map(() => '?').join(',')})
+       AND (column_name = 'symbol' OR (table_name = 'ledger_stock_sale_profit_allocations' AND column_name = 'currency'))`, tables);
+  for (const row of rows as any[]) {
+    const table = String(row.TABLE_NAME || row.table_name);
+    const column = String(row.COLUMN_NAME || row.column_name);
+    if (!tables.includes(table) || !['symbol', 'currency'].includes(column)) continue;
+    const width = column === 'symbol' ? 64 : 4;
+    const currentWidth = Number(row.CHARACTER_MAXIMUM_LENGTH ?? row.character_maximum_length);
+    if (!Number.isFinite(currentWidth) || currentWidth >= width) continue;
+    const nullable = String(row.IS_NULLABLE || row.is_nullable).toUpperCase() === 'YES' ? 'NULL' : 'NOT NULL';
+    await conn.execute(`ALTER TABLE ${table} MODIFY COLUMN ${column} VARCHAR(${width}) ${nullable}`);
+  }
 }
 
 /**
@@ -213,12 +269,13 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           ledger_id INT NOT NULL,
           category_id INT NOT NULL,
           event_type ENUM('buy','add','reduce','sell','note') NOT NULL,
-          symbol VARCHAR(16) NULL,
+          symbol VARCHAR(64) NULL,
           stock_name VARCHAR(80) NULL,
           quantity DECIMAL(24,8) NULL,
           execution_price DECIMAL(20,8) NULL,
           transaction_fee DECIMAL(24,8) NULL COMMENT '实际成交额按统一费率自动计算的手续费',
           actual_traded_at DATETIME NULL COMMENT '管理员确认的实际成交/接单时间',
+          settlement_effective_date DATE NULL COMMENT '数字币登记不倒改固定日结的生效日；旧股票保持NULL',
           server_registered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '服务器登记时间',
           market_reference_price DECIMAL(20,8) NULL COMMENT '登记时服务器查询的参考价',
           market_reference_at DATETIME NULL COMMENT '登记时参考价时间',
@@ -248,12 +305,20 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
         );
       }
 
+      const [settlementColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE()
+         AND table_name = 'ledger_stock_events' AND column_name = 'settlement_effective_date'`);
+      if ((settlementColumnRows as any[]).length === 0) {
+        await (conn as any).execute(`ALTER TABLE ledger_stock_events ADD COLUMN settlement_effective_date DATE NULL
+          COMMENT '数字币登记不倒改固定日结的生效日；旧股票保持NULL' AFTER actual_traded_at`);
+      }
+
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ledger_stock_lots (
           id BIGINT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL,
           category_id INT NOT NULL,
-          symbol VARCHAR(16) NOT NULL,
+          symbol VARCHAR(64) NOT NULL,
           stock_name VARCHAR(80) NOT NULL,
           opened_event_id BIGINT NOT NULL,
           opened_at DATETIME NOT NULL,
@@ -298,7 +363,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           id BIGINT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL,
           category_id INT NOT NULL,
-          symbol VARCHAR(16) NOT NULL,
+          symbol VARCHAR(64) NOT NULL,
           price DECIMAL(20,8) NOT NULL,
           price_date DATE NOT NULL,
           captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -313,7 +378,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           id BIGINT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL,
           category_id INT NOT NULL,
-          symbol VARCHAR(16) NOT NULL,
+          symbol VARCHAR(64) NOT NULL,
           price DECIMAL(20,8) NOT NULL,
           price_date DATE NOT NULL,
           captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -365,7 +430,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
         PRIMARY KEY (ledger_id, category_id, snapshot_date, policy_version)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
       await (conn as any).execute(`CREATE TABLE IF NOT EXISTS ledger_stock_unified_close_prices (
-        ledger_id INT NOT NULL, category_id INT NOT NULL, symbol VARCHAR(20) NOT NULL,
+        ledger_id INT NOT NULL, category_id INT NOT NULL, symbol VARCHAR(64) NOT NULL,
         session_date DATE NOT NULL, price DECIMAL(20,8) NOT NULL, currency VARCHAR(8) NOT NULL,
         source VARCHAR(64) NOT NULL, policy_version VARCHAR(64) NOT NULL,
         captured_at DATETIME NOT NULL, evidence_sha256 CHAR(64) NULL,
@@ -485,7 +550,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           allocation_quantity DECIMAL(24,8) NOT NULL,
           share_percent DECIMAL(12,8) NOT NULL,
           distributable_amount DECIMAL(24,8) NOT NULL,
-          currency VARCHAR(3) NOT NULL,
+          currency VARCHAR(4) NOT NULL,
           created_by INT NOT NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uk_ledger_stock_sale_profit_recipient (sell_event_id, recipient_type, participation_id),
@@ -493,6 +558,11 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_sale_profit_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      await widenPortfolioIdentityColumns(conn, [
+        'ledger_stock_events', 'ledger_stock_lots', 'ledger_stock_price_snapshots',
+        'ledger_stock_intraday_quotes', 'ledger_stock_quote_history', 'ledger_stock_unified_close_prices',
+        'ledger_stock_sale_profit_allocations',
+      ]);
     })().catch((error) => {
       tablesReady = null;
       throw error;
@@ -586,13 +656,13 @@ async function getActiveLots(categoryId: number, symbol?: string) {
     symbol: String(row.symbol),
     stockName: String(row.stock_name),
     openedEventId: Number(row.opened_event_id),
-    openedAt: toIso(row.opened_at),
+    openedAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.opened_at) : toIso(row.opened_at),
     initialQuantity: numberValue(row.initial_quantity),
     unitCost: numberValue(row.unit_cost),
     openingFee: row.opening_fee === null || row.opening_fee === undefined ? null : numberValue(row.opening_fee),
     note: String(row.note || ""),
     allocatedQuantity: numberValue(row.allocated_quantity),
-    remainingQuantity: Math.max(0, numberValue(row.initial_quantity) - numberValue(row.allocated_quantity)),
+    remainingQuantity: portfolioRemainingQuantity(String(row.symbol), numberValue(row.initial_quantity), numberValue(row.allocated_quantity)),
   }));
 }
 
@@ -602,7 +672,7 @@ async function getActiveLots(categoryId: number, symbol?: string) {
  */
 async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof getActiveLots>>, includePartial = false) {
   // 汇总包含所有已经售出的份额；原订单卡仍仅展示完整卖出的批次。
-  const selectedLots = lots.filter((lot) => includePartial ? lot.allocatedQuantity > EPSILON : lot.remainingQuantity <= EPSILON);
+  const selectedLots = lots.filter((lot) => includePartial ? !portfolioQuantityIsEmpty(lot.symbol, lot.allocatedQuantity) : portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity));
   if (selectedLots.length === 0) return [];
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -655,12 +725,12 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
     if (!lot) return [];
     const soldQuantity = saleRows.reduce((total, row) => total + numberValue(row.quantity), 0);
     // 新流程要求整笔卖出。历史减仓记录不伪装成完整的“已卖出”订单卡。
-    if (!includePartial && soldQuantity + EPSILON < lot.initialQuantity) return [];
+    if (!includePartial && portfolioQuantityExceeds(lot.symbol, lot.initialQuantity - soldQuantity)) return [];
     const sellValue = saleRows.reduce((total, row) => total + numberValue(row.quantity) * numberValue(row.execution_price), 0);
     const sellFee = saleRows.reduce((total, row) => {
       const fee = row.transaction_fee === null || row.transaction_fee === undefined ? 0 : numberValue(row.transaction_fee);
       const eventQuantity = numberValue(row.event_quantity);
-      return total + (eventQuantity > EPSILON ? fee * numberValue(row.quantity) / eventQuantity : 0);
+      return total + (!portfolioQuantityIsEmpty(lot.symbol, eventQuantity) ? fee * numberValue(row.quantity) / eventQuantity : 0);
     }, 0);
     const buyFee = saleRows.reduce((total, row) => {
       // 与 getRealizedPnl 保持一致：仅新式（已留存卖出手续费）的成交计入双边手续费。
@@ -683,11 +753,12 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
       unitCost: lot.unitCost,
       note: lot.note,
       sellEventId: Number(latestSale.sell_event_id),
-      soldAt: toIso(latestSale.actual_traded_at || latestSale.server_registered_at),
+      soldAt: isCryptoPortfolioSymbol(lot.symbol) ? toBeijingWallClockIso(latestSale.actual_traded_at || latestSale.server_registered_at)
+        : toIso(latestSale.actual_traded_at || latestSale.server_registered_at),
       sellNote: String(latestSale.sell_note || ''),
       memberShares: memberSharesBySellEvent.get(Number(latestSale.sell_event_id)) || [],
       soldQuantity: Number(soldQuantity.toFixed(8)),
-      sellPrice: soldQuantity > EPSILON ? Number((sellValue / soldQuantity).toFixed(8)) : 0,
+      sellPrice: !portfolioQuantityIsEmpty(lot.symbol, soldQuantity) ? Number((sellValue / soldQuantity).toFixed(8)) : 0,
       buyValue: Number(costValue.toFixed(8)),
       sellValue: Number(sellValue.toFixed(8)),
       buyFee: Number(buyFee.toFixed(8)),
@@ -727,6 +798,7 @@ async function getUsStockExchangeMap(symbols: string[]): Promise<Record<string, 
 }
 
 async function getLatestQuotes(categoryId: number, symbols: string[], asOfDate?: string): Promise<Record<string, StoredQuote>> {
+  symbols = symbols.filter((symbol) => !isCryptoPortfolioSymbol(symbol));
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -761,6 +833,7 @@ async function getLatestQuotes(categoryId: number, symbols: string[], asOfDate?:
 
 /** 返回各股票最后一笔盘中报价；美股按纽约交易日而非北京时间判断跨日。 */
 async function getLatestIntradayQuotes(categoryId: number, symbols: string[], asOfDate?: string): Promise<Record<string, StoredQuote>> {
+  symbols = symbols.filter((symbol) => !isCryptoPortfolioSymbol(symbol));
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -842,6 +915,57 @@ function mergeLatestQuoteMaps(...maps: Array<Record<string, StoredQuote>>): Reco
   return result;
 }
 
+const liveCryptoQuoteFlights = new Map<string, Promise<StoredQuote | null>>();
+const CRYPTO_LIVE_QUOTE_MAX_AGE_MS = 120_000;
+// 冷目录最多12秒，Gate/HTX各6秒并留4秒调度余量；不能在主源刚失败时截断备用。
+// 仅包住数字币当前批次，仍有总截止时间；失败保留未知，不影响证券原取价链。
+const CRYPTO_LIVE_QUOTE_TIMEOUT_MS = 28_000;
+function freshCryptoQuote(symbol: string, quote: any): StoredQuote | null {
+  const updatedAt = quote?.updatedAt ? toBeijingWallClockIso(quote.updatedAt) : '';
+  const age = Date.now() - Date.parse(updatedAt);
+  if (!isCryptoPortfolioSymbol(symbol) || quote?.symbol !== symbol || quote?.currency !== 'USDT'
+    || !Number.isFinite(quote?.price) || quote.price <= 0 || !Number.isFinite(age) || age < -5_000
+    || age > CRYPTO_LIVE_QUOTE_MAX_AGE_MS || !['Gate.io', 'HTX'].includes(quote?.source) || quote?.cutoffAt) return null;
+  return { symbol, price: quote.price, updatedAt, priceDate: quote.priceDate || beijingDate(),
+    source: 'intraday', providerSource: quote.source };
+}
+
+/** 只使用fresh现货quote；请求最多100个在途symbol，超时/缺价都保留未知。 */
+async function getLiveCryptoQuotes(symbols: string[]): Promise<Record<string, StoredQuote>> {
+  const unique = Array.from(new Set(symbols.filter(isCryptoPortfolioSymbol)));
+  const result: Record<string, StoredQuote> = {};
+  const missing: string[] = [];
+  for (const symbol of unique) {
+    const cached = freshCryptoQuote(symbol, getCachedCryptoPortfolioQuote(symbol));
+    if (cached) result[symbol] = cached;
+    else if (!liveCryptoQuoteFlights.has(symbol) && liveCryptoQuoteFlights.size + missing.length < 100) missing.push(symbol);
+  }
+  if (missing.length > 0) {
+    let timer: ReturnType<typeof setTimeout>;
+    const request = Promise.race([
+      Promise.resolve().then(() => fetchCryptoPortfolioQuotes(missing)),
+      new Promise<Record<string, never>>((resolve) => { timer = setTimeout(() => resolve({}), CRYPTO_LIVE_QUOTE_TIMEOUT_MS); }),
+    ]).catch(() => ({})).finally(() => clearTimeout(timer));
+    for (const symbol of missing) {
+      const flight = request.then((quotes) => freshCryptoQuote(symbol, (quotes as Record<string, unknown>)[symbol])).finally(() => {
+        if (liveCryptoQuoteFlights.get(symbol) === flight) liveCryptoQuoteFlights.delete(symbol);
+      });
+      liveCryptoQuoteFlights.set(symbol, flight);
+    }
+  }
+  await Promise.all(unique.filter((symbol) => !result[symbol]).map(async (symbol) => {
+    const quote = await liveCryptoQuoteFlights.get(symbol);
+    if (quote) result[symbol] = quote;
+  }));
+  return result;
+}
+
+function mergeLivePortfolioQuoteMaps(cryptoQuotes: Record<string, StoredQuote>, ...stockMaps: Array<Record<string, StoredQuote>>) {
+  const stocks = mergeLatestQuoteMaps(...stockMaps);
+  for (const symbol of Object.keys(stocks)) if (isCryptoPortfolioSymbol(symbol)) delete stocks[symbol];
+  return { ...stocks, ...cryptoQuotes };
+}
+
 async function getLatestReferenceQuotes(categoryId: number, asOfDate?: string): Promise<Record<string, StoredQuote>> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -861,7 +985,7 @@ async function getLatestReferenceQuotes(categoryId: number, asOfDate?: string): 
   const result: Record<string, StoredQuote> = {};
   for (const row of rows as any[]) {
     const price = numberValue(row.market_reference_price);
-    if (price > 0 && row.symbol) {
+    if (price > 0 && row.symbol && !isCryptoPortfolioSymbol(row.symbol)) {
       result[String(row.symbol)] = {
         symbol: String(row.symbol),
         price,
@@ -873,7 +997,7 @@ async function getLatestReferenceQuotes(categoryId: number, asOfDate?: string): 
   return result;
 }
 
-async function getRealizedPnl(categoryId: number, usdCnyRate: number): Promise<number | null> {
+async function getRealizedPnl(categoryId: number, usdCnyRate: number, usdtCnyRate: number | null = null): Promise<number | null> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
@@ -894,8 +1018,8 @@ async function getRealizedPnl(categoryId: number, usdCnyRate: number): Promise<n
   let total = 0;
   for (const row of rows as any[]) {
     const currency = stockCurrency(String(row.symbol || ''));
-    const multiplier = currency === 'USD' ? usdCnyRate : 1;
-    if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+    const multiplier = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+    if (multiplier === null) return null;
     const proceeds = numberValue(row.quantity) * numberValue(row.execution_price);
     // 仅对新成交写入的手续费纳入净利润，旧历史成交没有 transaction_fee 时保留原有结果。
     const sellFee = row.transaction_fee === null || row.transaction_fee === undefined ? 0 : numberValue(row.transaction_fee);
@@ -929,8 +1053,11 @@ async function getEventHistory(categoryId: number, limit = 500) {
     quantity: row.quantity === null ? null : numberValue(row.quantity),
     executionPrice: row.execution_price === null ? null : numberValue(row.execution_price),
     transactionFee: row.transaction_fee === null ? null : numberValue(row.transaction_fee),
-    actualTradedAt: toIso(row.actual_traded_at),
-    serverRegisteredAt: toIso(row.server_registered_at),
+    actualTradedAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.actual_traded_at) : toIso(row.actual_traded_at),
+    serverRegisteredAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.server_registered_at) : toIso(row.server_registered_at),
+    settlementEffectiveDate: normalizeStoredDate(row.settlement_effective_date),
+    currency: row.symbol ? stockCurrency(String(row.symbol)) : null,
+    market: row.symbol ? stockMarket(String(row.symbol)) : null,
     marketReferencePrice: row.market_reference_price === null ? null : numberValue(row.market_reference_price),
     marketReferenceAt: toIso(row.market_reference_at),
     note: row.note || "",
@@ -967,7 +1094,7 @@ async function getLatestDailySnapshots(categoryId: number) {
 }
 
 type CurrencyPortfolioSummary = {
-  currency: 'CNY' | 'USD';
+  currency: 'CNY' | 'USD' | 'USDT';
   costValue: number;
   marketValue: number | null;
   floatingPnl: number | null;
@@ -977,7 +1104,7 @@ type CurrencyPortfolioSummary = {
 
 /** 混合市场的金额只在同币种内汇总，禁止把美元直接与人民币相加。 */
 function summarizePositionsByCurrency(positions: Array<{ currency?: string; costValue: number; marketValue: number | null; floatingPnl: number | null }>): CurrencyPortfolioSummary[] {
-  return (['CNY', 'USD'] as const).flatMap((currency) => {
+  return (['CNY', 'USD', 'USDT'] as const).flatMap((currency) => {
     const rows = positions.filter((position) => (position.currency || 'CNY') === currency);
     if (rows.length === 0) return [];
     const unpricedPositionCount = rows.filter((position) => position.marketValue === null).length;
@@ -1007,6 +1134,7 @@ type CnyPortfolioSummary = {
 function summarizePositionsInCny(
   positions: Array<{ currency?: string; costValue: number; marketValue: number | null; floatingPnl: number | null }>,
   usdCnyRate: number,
+  usdtCnyRate: number | null = null,
 ): CnyPortfolioSummary {
   let costValue = 0;
   let marketValue = 0;
@@ -1016,14 +1144,14 @@ function summarizePositionsInCny(
 
   for (const position of positions) {
     const currency = String(position.currency || 'CNY').toUpperCase();
-    const multiplier = currency === 'USD' ? usdCnyRate : 1;
-    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+    if (position.marketValue === null || position.floatingPnl === null) unpricedPositionCount += 1;
+    const multiplier = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+    if (multiplier === null) {
       fxUnavailable = true;
       continue;
     }
     costValue += position.costValue * multiplier;
     if (position.marketValue === null || position.floatingPnl === null) {
-      unpricedPositionCount += 1;
       continue;
     }
     marketValue += position.marketValue * multiplier;
@@ -1042,15 +1170,17 @@ function summarizePositionsInCny(
 
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
-  const activeLots = allLots.filter((lot) => lot.remainingQuantity > EPSILON);
+  const activeLots = allLots.filter((lot) => !portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity));
   const symbols = activeLots.map((lot) => lot.symbol);
-  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges, cryptoQuotes, usdtCnyRate] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
     getUsStockExchangeMap(symbols),
+    getLiveCryptoQuotes(symbols),
+    readLiveUsdtCnyRate(allLots.map((lot) => lot.symbol)),
   ]);
-  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
+  const quoteMap = mergeLivePortfolioQuoteMaps(cryptoQuotes, referenceQuotes, storedQuotes, intradayQuotes);
   const positionMap = new Map<string, any>();
 
   // 已卖尽的批次不再混入同一股票的“当前持仓”列表，更不会占用持仓编号。
@@ -1087,24 +1217,27 @@ async function buildPortfolio(categoryId: number) {
       ...position,
       quantity: Number(position.quantity.toFixed(8)),
       costValue: Number(position.costValue.toFixed(8)),
-      averageCost: position.quantity > EPSILON ? position.costValue / position.quantity : 0,
+      averageCost: !portfolioQuantityIsEmpty(position.symbol, position.quantity) ? position.costValue / position.quantity : 0,
       marketPrice,
       marketValue,
       floatingPnl,
       quoteDate: quote?.priceDate || null,
       quoteUpdatedAt: quote?.updatedAt || null,
+      quoteSource: quote?.providerSource || quote?.source || null,
       hasPrice: marketPrice !== null,
     };
-  }).filter((position) => position.quantity > EPSILON);
+  }).filter((position) => !portfolioQuantityIsEmpty(position.symbol, position.quantity));
 
   const closedLots = allLots
-    .filter((lot) => lot.remainingQuantity <= EPSILON)
+    .filter((lot) => portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity))
     .map((lot) => ({
       symbol: lot.symbol,
       stockName: lot.stockName,
       openedAt: lot.openedAt,
       initialQuantity: lot.initialQuantity,
       unitCost: lot.unitCost,
+      currency: stockCurrency(lot.symbol),
+      market: stockMarket(lot.symbol),
     }));
   const [soldLots, realizedLots] = await Promise.all([
     getSoldLots(categoryId, allLots),
@@ -1112,22 +1245,29 @@ async function buildPortfolio(categoryId: number) {
   ]);
 
   const usdCnyRate = Number(getUsdtCnyRate() || 0);
-  const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate);
+  const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate, usdtCnyRate);
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
-  const cnySummary = summarizePositionsInCny(positions, usdCnyRate);
+  const cnySummary = summarizePositionsInCny(positions, usdCnyRate, usdtCnyRate);
   const costValue = cnySummary.costValue;
   const marketValue = cnySummary.marketValue;
   const floatingPnl = cnySummary.floatingPnl;
   const hasUnpricedPositions = cnySummary.unpricedPositionCount > 0 || cnySummary.fxUnavailable;
-  const dailySnapshots = await getLatestDailySnapshots(categoryId);
+  const legacyDailySnapshots = await getLatestDailySnapshots(categoryId);
+  // Persisted activation survives voiding the last crypto opening; do not switch back to stock history.
+  const calendarConnection = await getDbConnection();
+  if (!calendarConnection) throw new Error("数据库连接不可用");
+  const cryptoActivationDate = await getCryptoPortfolioActivationDate(categoryId, calendarConnection);
+  const dailySnapshots = cryptoActivationDate ? mergeCryptoPortfolioCalendarSnapshots(legacyDailySnapshots,
+    (await readCryptoPortfolioCalendar(categoryId, undefined, new Date(), calendarConnection)).map(row => ({ ...row, capturedAt: row.fxLockedAt || row.quoteAsOf[row.quoteAsOf.length - 1]?.capturedAt || '' })), cryptoActivationDate).reverse() : legacyDailySnapshots;
   const latestSnapshot = dailySnapshots[0] || null;
   const priorSnapshot = dailySnapshots[1] || null;
   // 当日盈亏必须比较两个盘尾的累计盈亏，不能直接比较总市值：新开仓、加仓或
   // 减仓会改变市值，但新增/收回的本金不是当天的盈亏。例如 R1 在 9 月 29 日
   // 新增约 55.6 万持仓，市值差额不应被误报为 +55 万当日盈利。
-  const dailyChange = latestSnapshot && priorSnapshot ? latestSnapshot.totalPnl - priorSnapshot.totalPnl : null;
-  const dailyChangePercent = dailyChange !== null && priorSnapshot && Math.abs(priorSnapshot.costValue) > EPSILON
+  const dailyChange = cryptoActivationDate ? (latestSnapshot && 'dailyPnl' in latestSnapshot ? latestSnapshot.dailyPnl ?? null : null)
+    : latestSnapshot?.totalPnl != null && priorSnapshot?.totalPnl != null ? latestSnapshot.totalPnl - priorSnapshot.totalPnl : null;
+  const dailyChangePercent = dailyChange !== null && priorSnapshot?.costValue != null && Math.abs(priorSnapshot.costValue) > EPSILON
     ? dailyChange / priorSnapshot.costValue
     : null;
 
@@ -1140,6 +1280,7 @@ async function buildPortfolio(categoryId: number) {
       // Never display or persist a partial portfolio aggregate as though missing prices were zero.
       reportingCurrency: 'CNY' as const,
       usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
+      usdtCnyRate,
       marketValue: hasUnpricedPositions ? null : marketValue,
       costValue,
       floatingPnl: hasUnpricedPositions ? null : floatingPnl,
@@ -1149,8 +1290,8 @@ async function buildPortfolio(categoryId: number) {
       unpricedPositionCount: cnySummary.unpricedPositionCount,
       currencySummaries,
       isMixedCurrency,
-      dailyChange: isMixedCurrency ? null : dailyChange,
-      dailyChangePercent: isMixedCurrency ? null : dailyChangePercent,
+      dailyChange: !cryptoActivationDate && isMixedCurrency ? null : dailyChange,
+      dailyChangePercent: !cryptoActivationDate && isMixedCurrency ? null : dailyChangePercent,
       latestSnapshot,
       priorSnapshot,
     },
@@ -1270,7 +1411,6 @@ async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'le
      INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
        AND opening.ledger_id=l.ledger_id AND opening.category_id=l.category_id AND opening.status='active'
      WHERE l.ledger_id=? AND l.category_id=?`, [STOCK_LEDGER_ID, access.categoryId]);
-  if (!(lotRows as any[]).length) return [];
   const [saleRows] = await (conn as any).execute(
     `SELECT a.lot_id,a.quantity,e.execution_price,e.quantity AS event_quantity,e.transaction_fee,l.symbol,
       DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
@@ -1281,7 +1421,7 @@ async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'le
      WHERE e.ledger_id=? AND e.category_id=?`, [STOCK_LEDGER_ID, access.categoryId]);
   const [tableRows] = await (conn as any).execute(
     `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE()
-     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_fx')`);
+     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_fx','ledger_crypto_portfolio_daily_snapshots')`);
   const tableNames = new Set((tableRows as any[]).map(row => String(row.TABLE_NAME || row.table_name)));
   const [legacyRows] = await (conn as any).execute(
     `SELECT symbol,DATE_FORMAT(price_date,'%Y-%m-%d') AS price_date,price,
@@ -1302,24 +1442,29 @@ async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'le
        FROM ledger_stock_unified_close_fx WHERE ledger_id=? AND category_id=? AND policy_version=? ORDER BY snapshot_date ASC`,
       [STOCK_LEDGER_ID, access.categoryId, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]) : [[]];
   const { buildStockTotalCalendar } = await import('./shared/stock-total-calendar');
-  return buildStockTotalCalendar({
-    lots: (lotRows as any[]).map(row => ({ id: Number(row.id), symbol: String(row.symbol),
+  const legacySnapshots = buildStockTotalCalendar({
+    lots: (lotRows as any[]).filter(row => !isCryptoPortfolioSymbol(row.symbol)).map(row => ({ id: Number(row.id), symbol: String(row.symbol),
       initialQuantity: calendarSourceNumber(row.initial_quantity), unitCost: calendarSourceNumber(row.unit_cost),
       openingFee: row.opening_fee == null ? null : Number(row.opening_fee),
-      openedDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol))) })),
-    sales: (saleRows as any[]).map(row => ({ lotId: Number(row.lot_id), quantity: calendarSourceNumber(row.quantity),
+      openedDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol)) as 'A' | 'US') })),
+    sales: (saleRows as any[]).filter(row => !isCryptoPortfolioSymbol(row.symbol)).map(row => ({ lotId: Number(row.lot_id), quantity: calendarSourceNumber(row.quantity),
       salePrice: calendarSourceNumber(row.execution_price), eventQuantity: calendarSourceNumber(row.event_quantity),
       transactionFee: row.transaction_fee == null ? null : Number(row.transaction_fee),
-      closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol))) })),
+      closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(String(row.symbol)) as 'A' | 'US') })),
     quotes: [...(legacyRows as any[]).filter(row => stockMarket(String(row.symbol)) === 'A')
-      .map(row => ({ ...row, source: 'price_snapshot' })), ...(quoteRows as any[])].map(row => ({
+      .map(row => ({ ...row, source: 'price_snapshot' })), ...(quoteRows as any[]).filter(row => !isCryptoPortfolioSymbol(row.symbol))].map(row => ({
         symbol: String(row.symbol), price: calendarSourceNumber(row.price), priceDate: String(row.price_date),
         capturedAt: toBeijingWallClockIso(row.captured_at), source: String(row.source) })),
     fx: (fxRows as any[]).map(row => ({ snapshotDate: String(row.snapshot_date),
       usdCnyRate: row.usd_cny_rate == null ? null : Number(row.usd_cny_rate), source: String(row.source),
       asOf: toBeijingWallClockIso(row.quote_as_of), lockedAt: toBeijingWallClockIso(row.locked_at) })),
     now,
-  }).sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate));
+  });
+  const activationDate = tableNames.has('ledger_crypto_portfolio_daily_snapshots') || (lotRows as any[]).some(row => isCryptoPortfolioSymbol(row.symbol))
+    ? await getCryptoPortfolioActivationDate(access.categoryId, conn) : null;
+  const cryptoSnapshots = activationDate ? (await readCryptoPortfolioCalendar(access.categoryId, undefined, now, conn)).map(row => ({ ...row, scope: 'tag-total' as const })) : [];
+  return mergeCryptoPortfolioCalendarSnapshots(legacySnapshots, cryptoSnapshots, activationDate, now)
+    .sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate));
 }
 
 /** Never convert unknown required historical numbers into a plausible zero. */
@@ -1435,7 +1580,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const today = beijingDate();
   const participations = (rows as any[]).map((row) => {
     const startDate = normalizeStoredDate(row.start_date) || normalizeStoredDate(row.opened_at) || today;
-    const openingSessionDate = marketSessionDateFromBeijingTradeTimestamp(row.opening_actual_traded_at, stockMarket(String(row.symbol)));
+    const openingSessionDate = isCryptoPortfolioSymbol(row.symbol)
+      ? (row.opening_actual_traded_at ? getCryptoPortfolioTradeSettlementDate(toBeijingWallClockIso(row.opening_actual_traded_at)) : null)
+      : marketSessionDateFromBeijingTradeTimestamp(row.opening_actual_traded_at, stockMarket(String(row.symbol)) as 'A' | 'US');
     const businessEffectiveDate = normalizeStoredDate(row.start_date) || openingSessionDate;
     const pauseDate = normalizeStoredDate(row.pause_date);
     const allocatedQuantity = numberValue(row.allocated_quantity);
@@ -1446,7 +1593,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       lotId: Number(row.lot_id),
       symbol: String(row.symbol),
       stockName: String(row.stock_name),
-      openedAt: toIso(row.opened_at),
+      openedAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.opened_at) : toIso(row.opened_at),
       startDate,
       pauseDate,
       // Manual start_date is an A business-effective date, not a NY physical opening session.
@@ -1457,26 +1604,30 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       remainingQuantity,
       closedQuantity: numberValue(row.closed_quantity),
       closedValue: numberValue(row.closed_value),
-      closedAt: toIso(row.closed_at),
+      closedAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.closed_at) : toIso(row.closed_at),
       entryPrice: numberValue(row.entry_price),
       lotInitialQuantity,
-      allocationRatio: lotInitialQuantity > EPSILON ? allocatedQuantity / lotInitialQuantity : 0,
+      allocationRatio: !portfolioQuantityIsEmpty(row.symbol, lotInitialQuantity) ? allocatedQuantity / lotInitialQuantity : 0,
       realizedPnl: numberValue(row.realized_pnl),
+      currency: stockCurrency(String(row.symbol)),
+      market: stockMarket(String(row.symbol)),
     };
   });
   const visibleParticipations = participations.filter((item) => item.startDate <= today);
-  const activeParticipations = visibleParticipations.filter((item) => item.remainingQuantity > EPSILON);
+  const activeParticipations = visibleParticipations.filter((item) => !portfolioQuantityIsEmpty(item.symbol, item.remainingQuantity));
   const symbols = Array.from(new Set(activeParticipations.map((item) => item.symbol)));
   // 持仓/资金API的当前浮盈可读取盘中报价；A日15:05历史和R1概览使用独立日结。
   // 买入审计已保存的参考价仅作为“没有任何已存价格”的最后回退，不能覆盖盘中或盘尾报价。
   // 盘后新登记可在实时持仓页显示参考价，但绝不能据此改变已完成日结统计。
-  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges, cryptoQuotes, usdtCnyRate] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
     getUsStockExchangeMap(symbols),
+    getLiveCryptoQuotes(symbols),
+    readLiveUsdtCnyRate(visibleParticipations.map((item) => item.symbol)),
   ]);
-  const quotes = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
+  const quotes = mergeLivePortfolioQuoteMaps(cryptoQuotes, referenceQuotes, storedQuotes, intradayQuotes);
   const grouped = new Map<string, any>();
   for (const item of activeParticipations) {
     const current = grouped.get(item.symbol) || {
@@ -1515,7 +1666,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       ...position,
       quantity: Number(position.quantity.toFixed(8)),
       costValue: Number(position.costValue.toFixed(8)),
-      averageCost: position.quantity > EPSILON ? position.costValue / position.quantity : 0,
+      averageCost: !portfolioQuantityIsEmpty(position.symbol, position.quantity) ? position.costValue / position.quantity : 0,
       marketPrice,
       marketValue,
       floatingPnl: marketValue === null ? null : position.costValue - marketValue,
@@ -1527,9 +1678,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
   const usdCnyRate = Number(getUsdtCnyRate() || 0);
-  const cnySummary = summarizePositionsInCny(positions, usdCnyRate);
+  const cnySummary = summarizePositionsInCny(positions, usdCnyRate, usdtCnyRate);
   const closedLots = visibleParticipations
-    .filter((item) => item.remainingQuantity <= EPSILON)
+    .filter((item) => portfolioQuantityIsEmpty(item.symbol, item.remainingQuantity))
     .map((item) => {
       const soldQuantity = item.closedQuantity;
       const sellValue = item.closedValue;
@@ -1547,7 +1698,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
         initialQuantity: item.allocatedQuantity,
         soldQuantity,
         unitCost: item.entryPrice,
-        sellPrice: soldQuantity > EPSILON ? sellValue / soldQuantity : null,
+        sellPrice: !portfolioQuantityIsEmpty(item.symbol, soldQuantity) ? sellValue / soldQuantity : null,
         buyValue: soldQuantity * item.entryPrice,
         sellValue,
         currency: stockCurrency(item.symbol),
@@ -1555,12 +1706,10 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       };
     });
   const costValue = cnySummary.costValue;
-  const realizedPnl = cnySummary.fxUnavailable
-    ? null
-    : visibleParticipations.reduce((total, item) => {
-      const multiplier = stockCurrency(item.symbol) === 'USD' ? usdCnyRate : 1;
-      return total + item.realizedPnl * multiplier;
-    }, 0);
+  const realizedPnl = visibleParticipations.reduce<number | null>((total, item) => {
+    const multiplier = portfolioCashMultiplier(stockCurrency(item.symbol), usdCnyRate, usdtCnyRate);
+    return total === null || multiplier === null ? null : total + item.realizedPnl * multiplier;
+  }, 0);
   const allPositionsPriced = cnySummary.unpricedPositionCount === 0 && !cnySummary.fxUnavailable;
   const marketValue = cnySummary.marketValue;
   const floatingPnl = cnySummary.floatingPnl;
@@ -1571,7 +1720,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     ? quoteDates.sort().at(-1) || null
     : null;
 
-  const historicalSymbols = Array.from(new Set(visibleParticipations.map(item => item.symbol)));
+  const legacyParticipations = visibleParticipations.filter(item => !isCryptoPortfolioSymbol(item.symbol));
+  const historicalSymbols = Array.from(new Set(legacyParticipations.map(item => item.symbol)));
   const [priceRows] = historicalSymbols.length > 0
     ? await (conn as any).execute(
       `SELECT symbol, DATE_FORMAT(price_date,'%Y-%m-%d') AS price_date, price,
@@ -1594,7 +1744,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   );
   const [newTables] = await (conn as any).execute(
     `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE()
-     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_category_publications','ledger_stock_unified_close_fx')`,
+     AND table_name IN ('ledger_stock_unified_close_prices','ledger_stock_unified_close_category_publications','ledger_stock_unified_close_fx','ledger_crypto_portfolio_daily_snapshots')`,
   );
   const tableNames = new Set((newTables as any[]).map(row => String(row.TABLE_NAME || row.table_name)));
   const [fxRows] = tableNames.has('ledger_stock_unified_close_fx')
@@ -1629,12 +1779,12 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       symbol: String(row.symbol), price: numberValue(row.price), priceDate: normalizeStoredDate(row.price_date) || '',
       capturedAt: toBeijingWallClockIso(row.captured_at), source: String(row.source),
     }));
-  const dailySnapshots = buildMemberStockCalendar({
-    participations: visibleParticipations,
-    closures: (closureRows as any[]).map(row => ({ participationId: Number(row.participation_id),
+  const legacyDailySnapshots = buildMemberStockCalendar({
+    participations: legacyParticipations,
+    closures: (closureRows as any[]).filter(row => legacyParticipations.some(item => item.id === Number(row.participation_id))).map(row => ({ participationId: Number(row.participation_id),
       quantity: numberValue(row.quantity), salePrice: numberValue(row.sale_price),
       closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at,
-        stockMarket(visibleParticipations.find(item => item.id === Number(row.participation_id))?.symbol || '')) || '' })),
+        stockMarket(visibleParticipations.find(item => item.id === Number(row.participation_id))?.symbol || '') as 'A' | 'US') || '' })),
     quotes: historicalQuotes,
     candidateDates: (priceRows as any[]).map(row => normalizeStoredDate(row.price_date) || ''),
     fx: (fxRows as any[]).map(row => ({
@@ -1645,6 +1795,10 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       lockedAt: row.locked_at == null ? null : toBeijingWallClockIso(row.locked_at),
     })),
   });
+  const cryptoActivationDate = tableNames.has('ledger_crypto_portfolio_daily_snapshots') || visibleParticipations.some(item => isCryptoPortfolioSymbol(item.symbol))
+    ? await getCryptoPortfolioActivationDate(categoryId, conn) : null;
+  const dailySnapshots = mergeCryptoPortfolioCalendarSnapshots(legacyDailySnapshots,
+    cryptoActivationDate ? await readCryptoPortfolioCalendar(categoryId, userId, new Date(), conn) : [], cryptoActivationDate);
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
   const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
   const dailyChange = latestSnapshot?.dailyPnl ?? null;
@@ -1662,6 +1816,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     summary: {
       reportingCurrency: 'CNY' as const,
       usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
+      usdtCnyRate,
       marketValue,
       costValue,
       floatingPnl,
@@ -1734,14 +1889,14 @@ async function getStockLotObservations(ledgerId: number, categoryId: number, use
   return (rows as any[]).map((row) => {
     const initialQuantity = numberValue(row.initial_quantity);
     const soldQuantity = numberValue(row.sold_quantity);
-    const lotCurrentQuantity = Math.max(0, initialQuantity - soldQuantity);
+    const lotCurrentQuantity = portfolioRemainingQuantity(String(row.symbol), initialQuantity, soldQuantity);
     return {
       lotId: Number(row.lot_id), userId: Number(row.user_id), enabled: Number(row.enabled) === 1,
       quantity: numberValue(row.quantity), entryPrice: numberValue(row.entry_price), startDate: String(row.start_date),
       pauseDate: normalizeStoredDate(row.pause_date),
       assignedBy: Number(row.assigned_by), createdAt: toIso(row.created_at), updatedAt: toIso(row.updated_at),
       symbol: String(row.symbol), stockName: String(row.stock_name), initialQuantity,
-      lotCurrentQuantity: lotCurrentQuantity <= EPSILON ? 0 : lotCurrentQuantity,
+      lotCurrentQuantity: portfolioQuantityIsEmpty(row.symbol, lotCurrentQuantity) ? 0 : lotCurrentQuantity,
       soldQuantity,
       soldValue: row.sold_value === null || row.sold_value === undefined ? null : Number(row.sold_value),
       soldAt: row.sold_at ? toIso(row.sold_at) : null, soldDate: row.sold_date || null,
@@ -1763,6 +1918,31 @@ function toStockObservationQuote(
     source: quote.source ?? (quote === intradayQuotes[symbol] ? 'intraday'
       : quote === storedQuotes[symbol] ? 'close' : quote === referenceQuotes[symbol] ? 'reference' : 'unavailable'),
   };
+}
+
+type PortfolioObservationHolding = Omit<StockObservationHolding, 'currency'> & { currency: 'CNY' | 'USD' | 'USDT'; market: 'A' | 'US' | 'CRYPTO' };
+function buildPortfolioObservationHolding(observation: StockLotObservation, quote: StockObservationQuote | null, today: string): PortfolioObservationHolding | null {
+  const holding = buildStockObservationHolding(observation, quote, today);
+  return holding ? { ...holding, currency: stockCurrency(observation.symbol), market: stockMarket(observation.symbol) } : null;
+}
+
+function summarizePortfolioObservationHoldings(holdings: PortfolioObservationHolding[]) {
+  // 股票原有空/混币/暂停/未来观察合同保持不变；USDT独立同币种汇总。
+  const summarize = (rows: PortfolioObservationHolding[]) => summarizeStockObservationHoldings(rows as StockObservationHolding[]);
+  const effective = holdings.filter((row) => row.status !== 'pending');
+  const currencySummaries = (['CNY', 'USD', 'USDT'] as const).flatMap((currency) => {
+    const rows = effective.filter((row) => row.currency === currency);
+    if (!rows.length) return [];
+    const summary = summarize(rows.map((row) => ({ ...row, currency: 'CNY' })));
+    const { reportingCurrency: _reporting, isMixedCurrency: _mixed, currencySummaries: _currencies, ...values } = summary;
+    return [{ ...values, currency }];
+  });
+  const totals = summarize(holdings.map((row) => ({ ...row, currency: 'CNY' })));
+  const mixed = currencySummaries.length > 1;
+  return { ...totals, reportingCurrency: currencySummaries.length === 1 ? currencySummaries[0].currency : null,
+    isMixedCurrency: mixed, currencySummaries,
+    costValue: mixed ? null : totals.costValue, marketValue: mixed ? null : totals.marketValue,
+    floatingPnl: mixed ? null : totals.floatingPnl, closedPnl: mixed ? null : totals.closedPnl, totalPnl: mixed ? null : totals.totalPnl };
 }
 
 export type StockObservationPauseContext = {
@@ -1801,9 +1981,9 @@ export async function getStockObservationPauseContext(lotId: number, pauseDate: 
   if (!row) return null;
   const initialQuantity = numberValue(row.initial_quantity);
   const soldQuantity = numberValue(row.sold_quantity);
-  const remaining = Math.max(0, initialQuantity - soldQuantity);
+  const remaining = portfolioRemainingQuantity(String(row.symbol), initialQuantity, soldQuantity);
   const observationValuation: StockObservationValuation = {
-    initialQuantity, lotCurrentQuantity: remaining <= EPSILON ? 0 : remaining, soldQuantity,
+    initialQuantity, lotCurrentQuantity: portfolioQuantityIsEmpty(row.symbol, remaining) ? 0 : remaining, soldQuantity,
     soldValue: row.sold_value === null || row.sold_value === undefined ? null : Number(row.sold_value),
     soldAt: row.sold_at ? toIso(row.sold_at) : null,
     soldDate: row.sold_at ? normalizeStoredDate(row.sold_at) : null,
@@ -1811,6 +1991,8 @@ export async function getStockObservationPauseContext(lotId: number, pauseDate: 
   if (observationValuation.lotCurrentQuantity === 0) return { pauseDate, observationValuation, quote: null };
   const categoryId = Number(row.category_id);
   const symbol = String(row.symbol);
+  // 数字币历史证据由独立日结策略提供；股票旧审计/收盘绝不能冒充币价。
+  if (isCryptoPortfolioSymbol(symbol)) return { pauseDate, observationValuation, quote: null };
   const archivedQuotes = await getArchivedQuotesAsOf(categoryId, [symbol], pauseDate);
   if (archivedQuotes[symbol]) {
     return { pauseDate, observationValuation, quote: toStockObservationQuote(symbol, archivedQuotes, {}, {}, {}) };
@@ -1860,18 +2042,19 @@ export async function getMyStockTagObservationPortfolio(input: {
   // 全平仓不读取实时行情，仅以实际批次卖出加权价冻结观察回报。
   const symbols = Array.from(new Set(observations.filter((item) => item.lotCurrentQuantity > 0
     && (!item.pauseDate || item.pauseDate > today)).map((item) => item.symbol)));
-  const [referenceQuotes, storedQuotes, intradayQuotes] = symbols.length === 0 ? [{}, {}, {}] : await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, cryptoQuotes] = await Promise.all([
     getLatestReferenceQuotes(access.categoryId),
     getLatestQuotes(access.categoryId, symbols),
     getLatestIntradayQuotes(access.categoryId, symbols),
+    getLiveCryptoQuotes(symbols),
   ]);
-  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
-  const holdings: StockObservationHolding[] = observations.flatMap((item) => {
+  const quoteMap = mergeLivePortfolioQuoteMaps(cryptoQuotes, referenceQuotes, storedQuotes, intradayQuotes);
+  const holdings: PortfolioObservationHolding[] = observations.flatMap((item) => {
     const context = pauseContexts.get(`${item.lotId}:${item.pauseDate}`);
     const paused = item.startDate <= today && !!item.pauseDate && item.pauseDate <= today;
     // 缺失as-of批次时不借用未来售出数据；不伪造观察已结束或零估值。
     if (paused && !context) throw new Error("观察暂停估值批次不可用，请刷新后重试");
-    const holding = buildStockObservationHolding(context ? { ...item, ...context.observationValuation } : item,
+    const holding = buildPortfolioObservationHolding(context ? { ...item, ...context.observationValuation } : item,
       paused ? context?.quote ?? null : toStockObservationQuote(item.symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes), today);
     return holding ? [holding] : [];
   });
@@ -1881,7 +2064,7 @@ export async function getMyStockTagObservationPortfolio(input: {
     accountingMode: "stock_portfolio" as const,
     observationView: true as const,
     holdings,
-    summary: summarizeStockObservationHoldings(holdings),
+    summary: summarizePortfolioObservationHoldings(holdings),
   };
 }
 
@@ -1962,7 +2145,7 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
     const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
     // R1只展示最近已过A交易日15:05的同scope日结；持仓/资金summary仍独立实时估值。
-    const points = portfolio.dailySnapshots.slice().reverse().map(snapshot => ({
+    const points = portfolio.dailySnapshots.slice().reverse().map((snapshot: (typeof portfolio.dailySnapshots)[number]) => ({
       ...snapshot,
       date: snapshot.snapshotDate,
       pnl: snapshot.totalPnl,
@@ -2009,7 +2192,7 @@ export async function getStockTagDailySnapshots(input: {
      ORDER BY snapshot_date DESC`,
     params,
   );
-  return (rows as any[]).map((row) => ({
+  const legacy = (rows as any[]).map((row) => ({
     snapshotDate: normalizeStoredDate(row.snapshot_date) || "",
     marketValue: numberValue(row.market_value),
     costValue: numberValue(row.cost_value),
@@ -2019,11 +2202,27 @@ export async function getStockTagDailySnapshots(input: {
     positionCount: Number(row.position_count || 0),
     capturedAt: toIso(row.captured_at),
   }));
+  const [tables] = await (conn as any).execute(`SELECT TABLE_NAME FROM information_schema.tables
+    WHERE table_schema=DATABASE() AND table_name='ledger_crypto_portfolio_daily_snapshots'`);
+  const activationDate = (tables as any[]).length ? await getCryptoPortfolioActivationDate(input.categoryId, conn) : null;
+  return mergeCryptoPortfolioCalendarSnapshots(legacy,
+    activationDate ? await readCryptoPortfolioCalendar(input.categoryId, undefined, new Date(), conn) : [], activationDate)
+    .filter(row => (!input.from || row.snapshotDate >= input.from) && (!input.to || row.snapshotDate <= input.to))
+    .sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate));
 }
 
 async function verifyStockForTrade(symbol: string) {
   const normalized = normalizeSymbol(symbol);
-  const results = await searchManualStocks(normalized, stockMarket(normalized));
+  if (isCryptoPortfolioSymbol(normalized)) {
+    const { results } = await searchCryptoPortfolio(normalized);
+    const matched = results.find((row) => row.symbol === normalized && row.market === 'CRYPTO' && row.currency === 'USDT');
+    if (!matched) throw new Error('暂时无法核验该数字币现货交易对，请稍后重试');
+    const quotes = await getLiveCryptoQuotes([normalized]);
+    const quote = quotes[normalized];
+    if (!quote) throw new Error('暂时无法取得数字币有效现货参考价，请稍后重试后再登记');
+    return { ...matched, latestPrice: quote.price, latestPriceUpdatedAt: quote.updatedAt };
+  }
+  const results = await searchManualStocks(normalized, stockMarket(normalized) as 'A' | 'US');
   const matched = results.find((row) => row.symbol === normalized);
   if (!matched) {
     throw new Error("暂时无法核验该股票代码或美股 ticker，请稍后重试");
@@ -2044,22 +2243,22 @@ async function allocateFifo(
 ) {
   const lots = await getActiveLots(categoryId, symbol);
   const available = lots.reduce((total, lot) => total + lot.remainingQuantity, 0);
-  if (quantity - available > EPSILON) {
+  if (portfolioQuantityExceeds(symbol, quantity - available)) {
     throw new Error(`可用持仓不足：当前最多可减仓 ${available}`);
   }
   let remaining = quantity;
   for (const lot of lots) {
-    if (remaining <= EPSILON) break;
+    if (portfolioQuantityIsEmpty(symbol, remaining)) break;
     const allocated = Math.min(remaining, lot.remainingQuantity);
-    if (allocated > EPSILON) {
+    if (!portfolioQuantityIsEmpty(symbol, allocated)) {
       await conn.execute(
         `INSERT INTO ledger_stock_event_lot_allocations (event_id, lot_id, quantity) VALUES (?, ?, ?)`,
         [eventId, lot.id, allocated],
       );
       // The same FIFO sell closes participant lots in order. Historical sold parts remain
       // in the closure ledger and cannot later be changed from initial-management settings.
-      await closeLotParticipationsFifo(conn, lot.id, eventId, salePrice, allocated);
-      remaining -= allocated;
+      await closeLotParticipationsFifo(conn, lot.id, eventId, salePrice, allocated, symbol);
+      remaining = portfolioRemainingQuantity(symbol, remaining, allocated);
     }
   }
 }
@@ -2093,9 +2292,9 @@ async function allocateWholeLot(
      WHERE a.lot_id = ? AND closing_event.status = 'active'`,
     [lotId],
   );
-  const remainingQuantity = Math.max(0, numberValue(lot.initial_quantity) - numberValue((allocationRows as any[])[0]?.allocated_quantity));
-  if (remainingQuantity <= EPSILON) throw new Error("该持仓编号已经全部卖出");
-  if (Math.abs(quantity - remainingQuantity) > EPSILON) {
+  const remainingQuantity = portfolioRemainingQuantity(symbol, numberValue(lot.initial_quantity), numberValue((allocationRows as any[])[0]?.allocated_quantity));
+  if (portfolioQuantityIsEmpty(symbol, remainingQuantity)) throw new Error("该持仓编号已经全部卖出");
+  if (portfolioQuantityExceeds(symbol, Math.abs(quantity - remainingQuantity))) {
     throw new Error(`持仓编号只能整笔卖出：请以剩余 ${remainingQuantity} 股结清`);
   }
 
@@ -2103,7 +2302,7 @@ async function allocateWholeLot(
     `INSERT INTO ledger_stock_event_lot_allocations (event_id, lot_id, quantity) VALUES (?, ?, ?)`,
     [eventId, lotId, remainingQuantity],
   );
-  await closeLotParticipationsFifo(conn, lotId, eventId, salePrice, remainingQuantity);
+  await closeLotParticipationsFifo(conn, lotId, eventId, salePrice, remainingQuantity, symbol);
 }
 
 export async function createStockTagEvent(input: {
@@ -2124,8 +2323,9 @@ export async function createStockTagEvent(input: {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const type = input.eventType;
   const note = String(input.note || "").trim().slice(0, 3000);
-  const actualTradedAt = input.actualTradedAt ? new Date(input.actualTradedAt) : new Date();
-  if (Number.isNaN(actualTradedAt.getTime())) throw new Error("实际成交时间无效");
+  const serverRegisteredAt = new Date();
+  const actualTradedAt = parsePortfolioActualTime(input.actualTradedAt, serverRegisteredAt);
+  if (actualTradedAt.getTime() > serverRegisteredAt.getTime()) throw new Error('实际成交时间不能晚于服务器登记时间');
   const isNewOperation = !input.correctsEventId;
   if (isNewOperation && type !== "buy" && type !== "sell") {
     throw new Error("股票标签仅可新登记买入或卖出；历史加仓、减仓和备注记录仍可查看");
@@ -2141,10 +2341,13 @@ export async function createStockTagEvent(input: {
       const lotId = Number(input.lotId);
       if (!Number.isInteger(lotId) || lotId <= 0) throw new Error("卖出时请选择持仓编号");
       const lots = await getActiveLots(access.categoryId);
-      const selectedLot = lots.find((lot) => lot.id === lotId && lot.remainingQuantity > EPSILON);
+      const selectedLot = lots.find((lot) => lot.id === lotId && !portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity));
       if (!selectedLot) throw new Error("所选持仓编号不存在或已全部卖出");
       if (!isStockLotSaleDateValid(actualTradedAt, selectedLot.openedAt)) {
         throw new Error("卖出日期不能早于这笔持仓的买入日期");
+      }
+      if (isCryptoPortfolioSymbol(selectedLot.symbol) && actualTradedAt.getTime() < Date.parse(selectedLot.openedAt)) {
+        throw new Error('数字币卖出时间不能早于实际买入时间');
       }
       stock = await verifyStockForTrade(selectedLot.symbol);
       quantity = selectedLot.remainingQuantity;
@@ -2153,6 +2356,7 @@ export async function createStockTagEvent(input: {
       quantity = Number(input.quantity);
       if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("成交数量必须大于0");
     }
+    validateCryptoQuantity(stock.symbol, quantity!);
   } else if (!note) {
     throw new Error("备注内容不能为空");
   }
@@ -2187,8 +2391,9 @@ export async function createStockTagEvent(input: {
     const [result] = await (tx as any).execute(
       `INSERT INTO ledger_stock_events
        (ledger_id, category_id, event_type, symbol, stock_name, quantity, execution_price,
-        transaction_fee, actual_traded_at, market_reference_price, market_reference_at, note, created_by, corrects_event_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        transaction_fee, actual_traded_at, market_reference_price, market_reference_at, note, created_by, corrects_event_id,
+        settlement_effective_date, server_registered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         access.ledgerId,
         access.categoryId,
@@ -2198,12 +2403,14 @@ export async function createStockTagEvent(input: {
         quantity,
         executionPrice,
         transactionFee,
-        actualTradedAt,
+        stock && isCryptoPortfolioSymbol(stock.symbol) ? toMysqlBeijingDateTime(actualTradedAt.toISOString()) : actualTradedAt,
         referencePrice,
-        referenceTime,
+        stock && isCryptoPortfolioSymbol(stock.symbol) && referenceTime ? toMysqlBeijingDateTime(referenceTime.toISOString()) : referenceTime,
         note || null,
         input.userId,
         input.correctsEventId || null,
+        stock && isCryptoPortfolioSymbol(stock.symbol) ? getCryptoPortfolioEffectiveDate(actualTradedAt, serverRegisteredAt) : null,
+        stock && isCryptoPortfolioSymbol(stock.symbol) ? toMysqlBeijingDateTime(serverRegisteredAt.toISOString()) : serverRegisteredAt,
       ],
     );
     const eventId = Number((result as any).insertId);
@@ -2214,7 +2421,8 @@ export async function createStockTagEvent(input: {
         `INSERT INTO ledger_stock_lots
          (ledger_id, category_id, symbol, stock_name, opened_event_id, opened_at, initial_quantity, unit_cost, note)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [access.ledgerId, access.categoryId, stock!.symbol, stock!.name, eventId, actualTradedAt, quantity, executionPrice, note || null],
+        [access.ledgerId, access.categoryId, stock!.symbol, stock!.name, eventId,
+          isCryptoPortfolioSymbol(stock!.symbol) ? toMysqlBeijingDateTime(actualTradedAt.toISOString()) : actualTradedAt, quantity, executionPrice, note || null],
       );
     }
     if (type === "reduce" || type === "sell") {
@@ -2398,7 +2606,7 @@ export async function correctStockTagEvent(input: {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
-    `SELECT event_type FROM ledger_stock_events WHERE id = ? AND category_id = ? AND status = 'active' LIMIT 1`,
+    `SELECT event_type, symbol FROM ledger_stock_events WHERE id = ? AND category_id = ? AND status = 'active' LIMIT 1`,
     [input.eventId, input.categoryId],
   );
   const original = (rows as any[])[0];
@@ -2450,7 +2658,7 @@ export async function correctStockTagEvent(input: {
     const closingQuantity = numberValue(allocations[0]?.quantity);
     const profitAllocations = (closureRows as any[]).map((row) => ({
       userId: Number(row.user_id),
-      percentage: closingQuantity > EPSILON ? Number((numberValue(row.quantity) / closingQuantity * 100).toFixed(8)) : 0,
+      percentage: !portfolioQuantityIsEmpty(original.symbol, closingQuantity) ? Number((numberValue(row.quantity) / closingQuantity * 100).toFixed(8)) : 0,
     })).filter((row) => Number.isInteger(row.userId) && row.userId > 0 && row.percentage > 0);
     sellCorrection = { lotId, profitAllocations };
   }
@@ -2513,6 +2721,9 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
       const categoryId = Number(row.id);
       let categoryCounted = false;
       try {
+      const activationDate = await getCryptoPortfolioActivationDate(categoryId, conn);
+      // Persisted activation owns this scope even when every crypto opening has been voided.
+      if (activationDate && snapshotDate >= activationDate) continue;
       // Reconstruct at each market's price date; registration time is not a trade-date substitute.
       const [lotRows] = await (conn as any).execute(
         `SELECT l.id, l.symbol, l.unit_cost, l.initial_quantity,
@@ -2537,10 +2748,10 @@ export async function refreshLedgerStockTagCloseSnapshots(options: {
          LEFT JOIN ledger_stock_events opening ON opening.id = l.opened_event_id
          WHERE e.ledger_id = ? AND e.category_id = ? AND e.status = 'active' AND e.event_type IN ('reduce','sell')
          GROUP BY e.id`, [STOCK_TRADE_FEE_RATE, STOCK_LEDGER_ID, categoryId]);
-      const lots = (lotRows as any[]).map(lot => ({ ...lot,
-        start_date: marketSessionDateFromBeijingTradeTimestamp(lot.actual_traded_at, stockMarket(String(lot.symbol))) }));
-      const sales = (saleRows as any[]).map(sale => ({ ...sale,
-        close_date: marketSessionDateFromBeijingTradeTimestamp(sale.actual_traded_at, stockMarket(String(sale.symbol))) }));
+      const lots = (lotRows as any[]).filter(lot => !isCryptoPortfolioSymbol(lot.symbol)).map(lot => ({ ...lot,
+        start_date: marketSessionDateFromBeijingTradeTimestamp(lot.actual_traded_at, stockMarket(String(lot.symbol)) as 'A' | 'US') }));
+      const sales = (saleRows as any[]).filter(sale => !isCryptoPortfolioSymbol(sale.symbol)).map(sale => ({ ...sale,
+        close_date: marketSessionDateFromBeijingTradeTimestamp(sale.actual_traded_at, stockMarket(String(sale.symbol)) as 'A' | 'US') }));
       if (lots.some(lot => !lot.start_date) || sales.some(sale => !sale.close_date)) {
         fail(categoryId, 'trade_history', 'missing_actual_trade_date');
         result.categories++; categoryCounted = true; result.skippedCategories!++; continue;
@@ -2803,7 +3014,7 @@ export async function refreshLedgerStockTagIntradaySnapshots(): Promise<{ catego
     for (const categoryId of categoryIds) {
       const lots = await getActiveLots(categoryId);
       const symbols = Array.from(new Set(
-        lots.filter((lot) => lot.remainingQuantity > EPSILON).map((lot) => lot.symbol),
+        lots.filter((lot) => !isCryptoPortfolioSymbol(lot.symbol) && lot.remainingQuantity > EPSILON).map((lot) => lot.symbol),
       ));
       symbolsByCategory.set(categoryId, symbols);
       symbols.forEach((symbol) => allSymbols.add(symbol));
@@ -2895,12 +3106,13 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   const symbols = (lotRows as any[]).map((row) => String(row.symbol));
   // 初始标签管理必须与主组合共用同一报价优先级：盘中最新价 → 盘尾价 → 登记参考价。
   // 新开仓在下一轮盘中刷新前才会暂时使用登记参考价，不能让旧盘尾或登记价长期占用当前价。
-  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, cryptoQuotes] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
+    getLiveCryptoQuotes(symbols),
   ]);
-  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
+  const quoteMap = mergeLivePortfolioQuoteMaps(cryptoQuotes, referenceQuotes, storedQuotes, intradayQuotes);
   const observationRows = await getStockLotObservations(STOCK_LEDGER_ID, categoryId);
   const today = beijingDate();
   const pauseContexts = await getStockObservationPauseContexts(observationRows, today);
@@ -2926,11 +3138,11 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   const lots = (lotRows as any[]).map((row) => {
     const initialQuantity = numberValue(row.initial_quantity);
     const globallySoldQuantity = numberValue(row.globally_sold_quantity);
-    const currentQuantity = Math.max(0, initialQuantity - globallySoldQuantity);
+    const currentQuantity = portfolioRemainingQuantity(String(row.symbol), initialQuantity, globallySoldQuantity);
     const symbol = String(row.symbol);
     const marketQuote = quoteMap[symbol];
     const marketPrice = marketQuote?.price ?? null;
-    const marketQuoteSource = marketQuote === intradayQuotes[symbol]
+    const marketQuoteSource = isCryptoPortfolioSymbol(symbol) ? (marketQuote?.providerSource || 'unavailable') : marketQuote === intradayQuotes[symbol]
       ? 'intraday'
       : marketQuote === storedQuotes[symbol]
         ? 'close'
@@ -2941,19 +3153,21 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     const activeAllocatedQuantity = participations.reduce((total, item) => total + item.remainingQuantity, 0);
     return {
       id: Number(row.id), symbol: String(row.symbol), stockName: String(row.stock_name),
+      currency: stockCurrency(symbol), market: stockMarket(symbol),
       // 使用管理员登记的实际成交/接单时间（精确到秒），不受后续日度估值影响。
-      openedAt: toIso(row.opened_at), actualTradedAt: toIso(row.actual_traded_at),
+      openedAt: isCryptoPortfolioSymbol(symbol) ? toBeijingWallClockIso(row.opened_at) : toIso(row.opened_at),
+      actualTradedAt: isCryptoPortfolioSymbol(symbol) ? toBeijingWallClockIso(row.actual_traded_at) : toIso(row.actual_traded_at),
       unitCost: numberValue(row.unit_cost), openingReferencePrice: numberValue(row.opening_reference_price) || null,
       note: String(row.note || ""),
       initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
       marketQuoteSource, marketQuoteDate: marketQuote?.priceDate || null, marketQuoteUpdatedAt: marketQuote?.updatedAt || null,
       availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
-      status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
+      status: !portfolioQuantityIsEmpty(symbol, currentQuantity) ? "active" as const : "closed" as const,
       // 仅为沙箱观察预览提供同一纯函数的估值输入；不覆盖任何真实字段。
       observationValuation: {
         initialQuantity,
-        lotCurrentQuantity: Math.max(0, initialQuantity - numberValue(row.observation_sold_quantity)) <= EPSILON
-          ? 0 : Math.max(0, initialQuantity - numberValue(row.observation_sold_quantity)),
+        lotCurrentQuantity: portfolioQuantityIsEmpty(symbol, portfolioRemainingQuantity(symbol, initialQuantity, numberValue(row.observation_sold_quantity)))
+          ? 0 : portfolioRemainingQuantity(symbol, initialQuantity, numberValue(row.observation_sold_quantity)),
         soldQuantity: numberValue(row.observation_sold_quantity),
         soldValue: row.observation_sold_value === null || row.observation_sold_value === undefined ? null : Number(row.observation_sold_value),
         soldAt: row.observation_sold_at ? toIso(row.observation_sold_at) : null,
@@ -2966,19 +3180,22 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       })) as Record<string, StockObservationPauseContext>,
       participations: participations.map((item) => ({
         ...item,
+        currency: stockCurrency(symbol), market: stockMarket(symbol),
         floatingPnl: marketPrice === null ? null : (item.entryPrice - marketPrice) * item.remainingQuantity,
-        totalPnl: marketPrice === null ? item.realizedPnl : item.realizedPnl + (item.entryPrice - marketPrice) * item.remainingQuantity,
+        totalPnl: marketPrice === null && !portfolioQuantityIsEmpty(symbol, item.remainingQuantity)
+          ? null : item.realizedPnl + (marketPrice === null ? 0 : (item.entryPrice - marketPrice) * item.remainingQuantity),
       })),
       // 观察配置只附加展示，不进入 activeAllocatedQuantity 或 availableForParticipation。
       observations: (observationsByLot.get(Number(row.id)) || []).map((observation) => {
         const context = pauseContexts.get(`${observation.lotId}:${observation.pauseDate}`);
         const paused = observation.startDate <= today && !!observation.pauseDate && observation.pauseDate <= today;
         if (paused && !context) throw new Error("观察暂停估值批次不可用，请刷新后重试");
-        const holding = buildStockObservationHolding(
+        const holding = buildPortfolioObservationHolding(
           context ? { ...observation, ...context.observationValuation } : observation,
           paused ? context?.quote ?? null : toStockObservationQuote(symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes), today);
         return {
           userId: observation.userId, enabled: observation.enabled, quantity: observation.quantity,
+          currency: stockCurrency(symbol), market: stockMarket(symbol),
           entryPrice: observation.entryPrice, startDate: observation.startDate,
           pauseDate: observation.pauseDate || null,
           assignedBy: observation.assignedBy, createdAt: observation.createdAt, updatedAt: observation.updatedAt,
@@ -3060,7 +3277,8 @@ export async function setStockLotObservation(input: {
   systemRole?: string;
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, false);
-  const quantity = Number(validateStockObservationQuantity(input.quantity).toFixed(8));
+  const rawQuantity = validateStockObservationQuantity(input.quantity);
+  const quantity = Number(rawQuantity.toFixed(8));
   if (typeof input.enabled !== 'boolean') throw new Error("观察开关必须是布尔值");
   if (!Number.isSafeInteger(input.lotId) || input.lotId <= 0) throw new Error("持仓编号无效");
   if (!Number.isSafeInteger(input.targetUserId) || input.targetUserId <= 0) throw new Error("观察成员编号无效");
@@ -3080,7 +3298,7 @@ export async function setStockLotObservation(input: {
     if ((memberRows as any[]).length === 0) throw new Error("该用户不是37号账本成员");
     // 与真实分配共用批次锁；不受全实配或历史卖出限制，再锁定目标真实参与行。
     const [lotRows] = await (tx as any).execute(
-      `SELECT l.id, l.unit_cost, l.opened_at
+      `SELECT l.id, l.symbol, l.unit_cost, l.opened_at
        FROM ledger_stock_lots l
        INNER JOIN ledger_stock_events e ON e.id = l.opened_event_id AND e.ledger_id = l.ledger_id AND e.category_id = l.category_id
        WHERE l.id = ? AND l.ledger_id = ? AND l.category_id = ? AND e.status = 'active' FOR UPDATE`,
@@ -3088,6 +3306,7 @@ export async function setStockLotObservation(input: {
     );
     const lot = (lotRows as any[])[0];
     if (!lot) throw new Error("股票批次不存在或已作废");
+    validateCryptoQuantity(String(lot.symbol), rawQuantity, true);
     const [participationRows] = await (tx as any).execute(
       `SELECT id, ledger_id, category_id, allocated_quantity, remaining_quantity
        FROM ledger_stock_lot_participations WHERE lot_id = ? AND user_id = ? FOR UPDATE`,
@@ -3112,6 +3331,10 @@ export async function setStockLotObservation(input: {
     validateStockObservationStartDate(startDate);
     const pauseDate = validateStockObservationPauseDate(input.pauseDate === undefined
       ? normalizeStoredDate(existing?.pause_date) ?? undefined : input.pauseDate, startDate);
+    const recheckCryptoHistory = await guardCryptoPortfolioAllocationWrite(tx, {
+      ledgerId: access.ledgerId, categoryId: access.categoryId, lotId: input.lotId,
+      symbol: String(lot.symbol), hasExistingConfiguration: !!existing || !!participation,
+    });
     if (input.enabled && participation) {
       const released = releaseStockParticipationForObservation({
         allocatedQuantity: Number(participation.allocated_quantity),
@@ -3136,6 +3359,7 @@ export async function setStockLotObservation(input: {
          updated_at = CURRENT_TIMESTAMP`,
       [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, input.enabled ? 1 : 0, quantity, entryPrice, startDate, pauseDate, input.userId],
     );
+    await recheckCryptoHistory();
     await (tx as any).commit();
     invalidateMemberStockReadCaches();
     return {
@@ -3191,6 +3415,8 @@ export async function setStockLotParticipation(input: {
     );
     const lot = (lotRows as any[])[0];
     if (!lot) throw new Error("股票批次不存在或已作废");
+    validateCryptoQuantity(String(lot.symbol), quantity, true);
+    let hasObservationConfiguration = false;
     if (quantity > 0 && await stockObservationTableExists(tx)) {
       // 必须在同lot锁内检查；开启观察（包括零观察股数）时不能同时获配真实股份。
       const [observationRows] = await (tx as any).execute(
@@ -3198,6 +3424,7 @@ export async function setStockLotParticipation(input: {
          WHERE ledger_id = ? AND category_id = ? AND lot_id = ? AND user_id = ? FOR UPDATE`,
         [access.ledgerId, access.categoryId, input.lotId, input.targetUserId],
       );
+      hasObservationConfiguration = (observationRows as any[]).length > 0;
       if ((observationRows as any[]).some((row) => Number(row.enabled) === 1)) {
         throw new Error("该用户已开启此批次观察，请先关闭观察后再分配真实股数");
       }
@@ -3234,11 +3461,15 @@ export async function setStockLotParticipation(input: {
       [input.lotId, existing?.id || 0],
     );
     const otherAllocated = numberValue((otherRows as any[])[0]?.allocated_quantity);
-    const remainingGlobal = Math.max(0, numberValue(lot.initial_quantity) - numberValue((soldRows as any[])[0]?.globally_sold_quantity));
-    if (quantity - (remainingGlobal - otherAllocated) > EPSILON) {
+    const remainingGlobal = portfolioRemainingQuantity(String(lot.symbol), numberValue(lot.initial_quantity), numberValue((soldRows as any[])[0]?.globally_sold_quantity));
+    if (portfolioQuantityExceeds(String(lot.symbol), quantity - (remainingGlobal - otherAllocated))) {
       throw new Error(`可分配股数不足：当前最多可分配 ${Math.max(0, remainingGlobal - otherAllocated)}`);
     }
-    if (quantity <= EPSILON) {
+    const recheckCryptoHistory = await guardCryptoPortfolioAllocationWrite(tx, {
+      ledgerId: access.ledgerId, categoryId: access.categoryId, lotId: input.lotId,
+      symbol: String(lot.symbol), hasExistingConfiguration: !!existing || hasObservationConfiguration,
+    });
+    if (portfolioQuantityIsEmpty(lot.symbol, quantity)) {
       if (existing) await (tx as any).execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [existing.id]);
     } else if (existing) {
       await (tx as any).execute(
@@ -3264,6 +3495,7 @@ export async function setStockLotParticipation(input: {
         [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, quantity, quantity, entryPrice, effectiveStartDate, effectivePauseDate, input.userId],
       );
     }
+    await recheckCryptoHistory();
     await (tx as any).commit();
     invalidateMemberStockReadCaches();
     return { success: true };
@@ -3276,7 +3508,7 @@ export async function setStockLotParticipation(input: {
 }
 
 
-async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId: number, salePrice: number, quantity: number) {
+async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId: number, salePrice: number, quantity: number, symbol: string) {
   const observationTableExists = await stockObservationTableExists(conn);
   const [rows] = await conn.execute(
     `SELECT id, remaining_quantity FROM ledger_stock_lot_participations
@@ -3291,9 +3523,9 @@ async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId:
   );
   let remaining = quantity;
   for (const row of rows as any[]) {
-    if (remaining <= EPSILON) break;
+    if (portfolioQuantityIsEmpty(symbol, remaining)) break;
     const closedQuantity = Math.min(remaining, numberValue(row.remaining_quantity));
-    if (closedQuantity <= EPSILON) continue;
+    if (portfolioQuantityIsEmpty(symbol, closedQuantity)) continue;
     await conn.execute(
       `INSERT INTO ledger_stock_participation_closures (participation_id, sell_event_id, quantity, sale_price)
        VALUES (?, ?, ?, ?)`,
@@ -3303,7 +3535,7 @@ async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId:
       `UPDATE ledger_stock_lot_participations SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
       [closedQuantity, row.id],
     );
-    remaining -= closedQuantity;
+    remaining = portfolioRemainingQuantity(symbol, remaining, closedQuantity);
   }
 }
 
@@ -3329,7 +3561,7 @@ async function syncStockLotMemberSharesForSale(
   },
 ) {
   const [lotRows] = await conn.execute(
-    `SELECT l.id, l.unit_cost, l.opened_at, opening_event.market_reference_price
+    `SELECT l.id, l.symbol, l.unit_cost, l.opened_at, opening_event.market_reference_price
      FROM ledger_stock_lots l
      INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
      WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
@@ -3389,7 +3621,7 @@ async function syncStockLotMemberSharesForSale(
   const participations = participationRows as any[];
   const existingByUser = new Map(participations.map((row) => [Number(row.user_id), row]));
   const activeNotSubmitted = participations.find((row) => (
-    numberValue(row.remaining_quantity) > EPSILON && !shareByUser.has(Number(row.user_id))
+    !portfolioQuantityIsEmpty(lot.symbol, numberValue(row.remaining_quantity)) && !shareByUser.has(Number(row.user_id))
   ));
   if (activeNotSubmitted) {
     throw new Error("成员分配资料已变化，请刷新卖出页后重新确认");
@@ -3411,11 +3643,11 @@ async function syncStockLotMemberSharesForSale(
     const percentage = shareByUser.get(userId) || 0;
     const desiredQuantity = Number((params.closingQuantity * percentage / 100).toFixed(8));
     const hasClosureHistory = existing && (closureCountByParticipation.get(Number(existing.id)) || 0) > 0;
-    if (hasClosureHistory && Math.abs(numberValue(existing.remaining_quantity) - desiredQuantity) > EPSILON) {
+    if (hasClosureHistory && portfolioQuantityExceeds(String(lot.symbol), Math.abs(numberValue(existing.remaining_quantity) - desiredQuantity))) {
       throw new Error("该成员已有历史卖出结算，不能在本次卖出前修改其原始分配比例");
     }
     if (hasClosureHistory) continue;
-    if (desiredQuantity <= EPSILON) {
+    if (portfolioQuantityIsEmpty(lot.symbol, desiredQuantity)) {
       if (existing) await conn.execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [existing.id]);
       continue;
     }
@@ -3478,9 +3710,9 @@ async function saveStockSaleProfitAllocations(
     userId: Number(row.user_id),
     name: String(row.member_name || `用户#${row.user_id}`),
     quantity: numberValue(row.closed_quantity),
-  })).filter((row) => row.quantity > EPSILON);
+  })).filter((row) => !portfolioQuantityIsEmpty(lot.symbol, row.quantity));
   const memberQuantity = memberTargets.reduce((sum, row) => sum + row.quantity, 0);
-  if (memberQuantity - params.quantity > EPSILON) {
+  if (portfolioQuantityExceeds(String(lot.symbol), memberQuantity - params.quantity)) {
     throw new Error("成员分配股数超过本次可结清数量，请刷新后重试");
   }
   if (memberTargets.length === 0) return;
@@ -3490,7 +3722,7 @@ async function saveStockSaleProfitAllocations(
     : numberValue(lot.opening_fee) * params.quantity / Math.max(EPSILON, numberValue(lot.initial_quantity));
   const accountNetProfit = params.quantity * params.salePrice - params.sellFee - params.quantity * numberValue(lot.unit_cost) - openingFee;
   for (const target of memberTargets) {
-    const percentage = params.quantity > EPSILON ? target.quantity / params.quantity * 100 : 0;
+    const percentage = !portfolioQuantityIsEmpty(lot.symbol, params.quantity) ? target.quantity / params.quantity * 100 : 0;
     // 成员是账户长仓的对手盘：账户亏损，成员盈利。
     const recipientProfit = -accountNetProfit * percentage / 100;
     await conn.execute(
@@ -3531,8 +3763,8 @@ export async function updateStockTagSale(input: {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const executionPrice = Number(input.executionPrice);
   if (!Number.isFinite(executionPrice) || executionPrice <= 0) throw new Error("实际卖出价格必须大于 0");
-  const actualTradedAt = new Date(input.actualTradedAt);
-  if (Number.isNaN(actualTradedAt.getTime())) throw new Error("实际成交时间无效");
+  const registeredAt = new Date();
+  const actualTradedAt = parsePortfolioActualTime(input.actualTradedAt, registeredAt);
   const note = String(input.note || "").trim().slice(0, 3000);
   await ensureStockCalendarResultTable();
   const tx = await getDbTransactionConnection();
@@ -3540,7 +3772,7 @@ export async function updateStockTagSale(input: {
   try {
     await (tx as any).beginTransaction();
     const [eventRows] = await (tx as any).execute(
-      `SELECT id, event_type, status, quantity
+      `SELECT id, event_type, status, quantity, symbol, settlement_effective_date, server_registered_at
        FROM ledger_stock_events
        WHERE id = ? AND ledger_id = ? AND category_id = ?
        LIMIT 1 FOR UPDATE`,
@@ -3549,6 +3781,15 @@ export async function updateStockTagSale(input: {
     const event = (eventRows as any[])[0];
     if (!event || event.status !== 'active' || event.event_type !== 'sell') {
       throw new Error("仅可修改有效的已卖出订单");
+    }
+    const symbol = String(event.symbol || '');
+    if (isCryptoPortfolioSymbol(symbol) && actualTradedAt.getTime() > registeredAt.getTime()) {
+      throw new Error('实际成交时间不能晚于服务器登记时间');
+    }
+    let settlementEffectiveDate = normalizeStoredDate(event.settlement_effective_date);
+    if (isCryptoPortfolioSymbol(symbol)) {
+      const effective = getCryptoPortfolioEffectiveDate(actualTradedAt, registeredAt);
+      settlementEffectiveDate = settlementEffectiveDate && settlementEffectiveDate > effective ? settlementEffectiveDate : effective;
     }
     const [allocationRows] = await (tx as any).execute(
       `SELECT lot_id, SUM(quantity) AS quantity
@@ -3564,8 +3805,18 @@ export async function updateStockTagSale(input: {
     }
     const lotId = Number(eventLots[0].lot_id);
     const soldQuantity = numberValue(eventLots[0].quantity);
-    if (!Number.isInteger(lotId) || lotId <= 0 || soldQuantity <= EPSILON) {
+    if (!Number.isInteger(lotId) || lotId <= 0 || portfolioQuantityIsEmpty(symbol, soldQuantity)) {
       throw new Error("该卖出订单缺少有效的持仓编号或卖出数量");
+    }
+    validateCryptoQuantity(symbol, soldQuantity);
+    if (isCryptoPortfolioSymbol(symbol)) {
+      const [openingRows] = await (tx as any).execute(
+        `SELECT DATE_FORMAT(opened_at, '%Y-%m-%d %H:%i:%s') AS opened_at FROM ledger_stock_lots
+         WHERE id = ? AND ledger_id = ? AND category_id = ? LIMIT 1 FOR UPDATE`, [lotId, access.ledgerId, access.categoryId]);
+      const opening = (openingRows as any[])[0]?.opened_at;
+      if (!opening || actualTradedAt.getTime() < Date.parse(toBeijingWallClockIso(opening))) {
+        throw new Error('数字币卖出时间不能早于实际买入时间');
+      }
     }
     const [otherClosureRows] = await (tx as any).execute(
       `SELECT COUNT(*) AS count
@@ -3621,7 +3872,7 @@ export async function updateStockTagSale(input: {
       for (const participation of participations) {
         const userId = Number(participation.user_id);
         const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
-        if (desiredQuantity <= EPSILON) {
+        if (portfolioQuantityIsEmpty(symbol, desiredQuantity)) {
           await (tx as any).execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [participation.id]);
         } else {
           await (tx as any).execute(
@@ -3645,7 +3896,7 @@ export async function updateStockTagSale(input: {
       const defaultStartDate = normalizeStoredDate(lot.opened_at) || beijingDate();
       for (const userId of submittedUserIds) {
         const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
-        if (desiredQuantity <= EPSILON || existingByUser.has(userId)) continue;
+        if (portfolioQuantityIsEmpty(symbol, desiredQuantity) || existingByUser.has(userId)) continue;
         await (tx as any).execute(
           `INSERT INTO ledger_stock_lot_participations
            (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date, assigned_by)
@@ -3661,7 +3912,7 @@ export async function updateStockTagSale(input: {
       for (const userId of submittedUserIds) {
         const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
         const participationId = updatedParticipationByUser.get(userId);
-        if (desiredQuantity <= EPSILON || !participationId) continue;
+        if (portfolioQuantityIsEmpty(symbol, desiredQuantity) || !participationId) continue;
         await (tx as any).execute(
           `INSERT INTO ledger_stock_participation_closures (participation_id, sell_event_id, quantity, sale_price)
            VALUES (?, ?, ?, ?)`,
@@ -3678,9 +3929,13 @@ export async function updateStockTagSale(input: {
     const sellFee = Number((soldQuantity * executionPrice * STOCK_TRADE_FEE_RATE).toFixed(8));
     await (tx as any).execute(
       `UPDATE ledger_stock_events
-       SET execution_price = ?, transaction_fee = ?, actual_traded_at = ?, note = ?
-       WHERE id = ?`,
-      [executionPrice, sellFee, actualTradedAt, note || null, input.eventId],
+       SET execution_price = ?, transaction_fee = ?, actual_traded_at = ?, note = ?, settlement_effective_date = ?
+       ${isCryptoPortfolioSymbol(symbol) ? ', server_registered_at = ?' : ''}
+       WHERE id = ? AND ledger_id = ? AND category_id = ?`,
+      [executionPrice, sellFee, isCryptoPortfolioSymbol(symbol) ? toMysqlBeijingDateTime(actualTradedAt.toISOString()) : actualTradedAt,
+        note || null, isCryptoPortfolioSymbol(symbol) ? settlementEffectiveDate : null,
+        ...(isCryptoPortfolioSymbol(symbol) ? [toMysqlBeijingDateTime(registeredAt.toISOString())] : []),
+        input.eventId, access.ledgerId, access.categoryId],
     );
     // 最终收益和成员比例是该事件的当前结果；保存时直接覆盖，不保留第二份更正快照。
     await saveStockSaleProfitAllocations(tx, {

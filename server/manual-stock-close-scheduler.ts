@@ -3,6 +3,7 @@ import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes } from "./pr
 import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots, refreshLedgerStockTagIntradaySnapshots, warmAllStockTagCalendarResults, repairPendingStockTagCalendarEvidence } from "./ledger-stock-portfolio";
 import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { captureStockUsdCnyBeforeClose } from './stock-usd-cny-rate';
+import { startCryptoPortfolioScheduler } from './crypto-portfolio-scheduler';
 import {
   getBeijingStockClock,
   getUnifiedStockCloseCandidateDates,
@@ -501,7 +502,7 @@ export function startManualStockCloseScheduler(): void {
   void ensureTable().catch((error) => {
     console.error("[股票盘尾] 快照表初始化失败:", error instanceof Error ? error.message : error);
   });
-  void ensureLedgerStockPortfolioTables().catch((error) => {
+  void ensureLedgerStockPortfolioTables().then(() => startCryptoPortfolioScheduler()).catch((error) => {
     console.error("[37股票盘尾] 标签数据表初始化失败:", error instanceof Error ? error.message : error);
   });
   scheduleNextManualStockClose();

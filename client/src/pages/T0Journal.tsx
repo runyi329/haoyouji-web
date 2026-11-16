@@ -41,6 +41,7 @@ import { T0TeamDepositDialog } from "@/components/T0TeamDepositDialog";
 import { T0SummaryHeader } from "@/components/T0SummaryHeader";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
+import { getT0PayoutWithdrawalLimit, getT0WithdrawalLabel, getT0WithdrawalSource, type T0WithdrawalSource } from "@/lib/t0PayoutWithdrawal";
 import { T0_SHARED_ALLOCATION_METRICS, type T0SharedIncomeAllocationPlan } from "@shared/t0-allocation-plan-contract";
 import { T0WeightedOrderRuleSummary, T0WeightedOrderRuleSettingsPage } from "@/components/T0WeightedOrderRule";
 import { SharedIncomeRuleSummaryCard } from "@/components/SharedIncomeRuleSummaryCard";
@@ -72,6 +73,7 @@ type T0JournalPayoutLog = {
   relatedUserName: string;
   occurredOn: string;
   direction: T0JournalPayoutDirection;
+  withdrawalSource?: T0WithdrawalSource;
   amount: number;
   ethReferencePrice?: string;
   ethQuantity?: string;
@@ -4414,6 +4416,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const closeTeamDepositDetail = useCallback(() => setTeamDepositMemberId(null), []);
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
   const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutWithdrawalSource, setPayoutWithdrawalSource] = useState<T0WithdrawalSource>("income");
   const [payoutDepositInputMode, setPayoutDepositInputMode] = useState<"u" | "eth">("u");
   const [payoutEthQuantity, setPayoutEthQuantity] = useState("");
   const [payoutEthReferencePrice, setPayoutEthReferencePrice] = useState("");
@@ -5398,6 +5401,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!canManage) return;
     setEditingPayoutLog(null);
     setPayoutAmount("");
+    setPayoutWithdrawalSource("income");
     setPayoutDepositInputMode("u");
     setPayoutEthQuantity("");
     setPayoutEthReferencePrice("");
@@ -5409,6 +5413,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const target = Number(relatedUserId);
     setLocation(`/ledger/${ledgerId}/t0-journal?payout=${direction}${Number.isInteger(target) && target > 0 ? `&payoutUserId=${target}` : ""}${returnToSettlement ? "&payoutReturn=settlement" : returnToTeam ? "&payoutReturn=team" : ""}`);
   };
+  useEffect(() => {
+    // 单独用户/登记方向改变时不能带上上一人的金额、编辑记录或提现来源。
+    setPayoutWithdrawalSource("income");
+    resetPayoutLogForm();
+    setIsPayoutListEditing(false);
+    setDeletePayoutLogId(null);
+  }, [payoutTargetRelatedUserId, payoutEntryDirection]);
   const openTeamDepositEntryPage = (userId: number) => {
     if (!canManage || !canViewTeamOverview || !isTotalProfitReportVisible || totalProfitDetailTab !== "team"
       || !teamOverviewMembers.some((member) => member.userId === userId)) return;
@@ -8472,7 +8483,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const timer = window.setTimeout(() => setIsTotalProfitCompositionAnimated(true), 80);
     return () => window.clearTimeout(timer);
   }, [activeTotalProfitDetailTab, isTotalProfitReportVisible, totalProfitAttribution.commissionShareRatio, totalProfitAttribution.ownTradingRatio, totalProfitAttribution.sharedIncomeRatio, totalProfitPageTab]);
-  // 资金账本只对账，不回写或扣减订单收益：投入、提现为两条独立方向；仅提现受当前正向总收益上限约束。
+  // 资金账本不回写订单收益。两种提现仍各计一次外部现金流，分别只扣其来源额度。
   const withdrawalLogs = payoutLogs.filter((log) => log.direction === "withdrawal");
   const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
   const payoutLedgerCashflowLogs = useMemo(() => {
@@ -8508,9 +8519,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const cumulativePayoutAmount = withdrawalLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
   const cumulativeDepositAmount = depositLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
   const payoutAvailability = t0PayoutAvailabilityQuery.data;
-  // 查询键切换时不复用上一位用户的额度：回包用户、可提数值均匹配才允许展示或提交。
-  const hasAuthoritativePayoutAvailability = Number(payoutAvailability?.relatedUserId || 0) === payoutTargetRelatedUserId
-    && Number.isFinite(Number(payoutAvailability?.availableAmount));
+  const payoutIncomeWithdrawalLimit = getT0PayoutWithdrawalLimit(payoutAvailability, payoutTargetRelatedUserId, "income", editingPayoutLog);
+  const payoutPrincipalWithdrawalLimit = getT0PayoutWithdrawalLimit(payoutAvailability, payoutTargetRelatedUserId, "principal", editingPayoutLog);
   const payoutXirrSummary = useMemo(() => {
     const asOfDate = getBeijingDateInputValue();
     // 收益账本的“当前总收益”不因提现回写扣减，因此期末账面净值须减去已提现收益，避免在 XIRR 中重复计入。
@@ -8540,9 +8550,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       rate: calculateT0Xirr(cashFlows),
     };
   }, [cumulativeDepositAmount, cumulativePayoutAmount, depositLogs, payoutBookTotalIncome, withdrawalLogs]);
-  const payoutFormWithdrawalLimit = hasAuthoritativePayoutAvailability
-    ? Math.max(0, Number(payoutAvailability?.availableAmount) + (editingPayoutLog?.direction === "withdrawal" ? editingPayoutLog.amount : 0))
-    : null;
+  const payoutFormWithdrawalLimit = payoutWithdrawalSource === "principal" ? payoutPrincipalWithdrawalLimit : payoutIncomeWithdrawalLimit;
   // 个人结算页面严格复用同页“总收益”的逐笔归因：订单、分佣和共享每周相加后，
   // 必须回加为该用户的总收益。先由页面已加载明细即时构造，再以后台周报补充冻结状态。
   const memberSettlementIncomeByWeek = useMemo(() => {
@@ -8734,8 +8742,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const isEthDepositInput = isDeposit && log.depositInputMode === "eth";
     return <div key={log.id} className="px-3 py-2.5 text-xs">
       <div className="flex items-start justify-between gap-2">
-        <span className="flex shrink-0 items-center gap-1.5 pt-0.5 font-medium text-slate-700"><span className="whitespace-nowrap">{log.occurredOn.replaceAll("-", "/")}</span><span className={`rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "存入" : "提取"}</span></span>
-        <span className="flex shrink-0 items-start gap-1"><span data-t0-fit className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutDepositInputMode(log.depositInputMode === "eth" ? "eth" : "u"); setPayoutEthQuantity(log.ethQuantity || ""); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
+        <span className="flex shrink-0 items-center gap-1.5 pt-0.5 font-medium text-slate-700"><span className="whitespace-nowrap">{log.occurredOn.replaceAll("-", "/")}</span><span className={`rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "存入" : getT0WithdrawalLabel(getT0WithdrawalSource(log))}</span></span>
+        <span className="flex shrink-0 items-start gap-1"><span data-t0-fit className={`whitespace-nowrap text-right font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setPayoutWithdrawalSource(getT0WithdrawalSource(log)); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutDepositInputMode(log.depositInputMode === "eth" ? "eth" : "u"); setPayoutEthQuantity(log.ethQuantity || ""); setPayoutEthReferencePrice(log.ethReferencePrice || ""); setPayoutEthReferencePriceIsManual(Boolean(log.ethReferencePrice)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span>
       </div>
       {(log.note || isDeposit) && <div className="mt-1 flex items-baseline gap-2 text-[10px] leading-4 text-slate-500"><span className="min-w-0 flex-1 break-words">{log.note ? <>备注：{log.note}</> : null}</span>{isDeposit && <span className="flex shrink-0 items-baseline gap-3 whitespace-nowrap font-medium tabular-nums"><span><span className={isEthDepositInput ? "text-sky-700" : "text-slate-400"}>币本位</span> {hasFixedEthPrincipal ? <>{formatPayoutEthQuantity(log.ethQuantity)} ETH</> : "—"}</span>{log.ethReferencePrice && <span data-t0-fit>参考价 {formatPrice(Number(log.ethReferencePrice))} U</span>}</span>}</div>}
       {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
@@ -11980,6 +11988,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const isDepositEntry = payoutEntryDirection === "deposit";
     const entryLogs = isDepositEntry ? depositLogs : withdrawalLogs;
     const entryTotal = isDepositEntry ? cumulativeDepositAmount : cumulativePayoutAmount;
+    const withdrawalLabel = getT0WithdrawalLabel(payoutWithdrawalSource);
     const entryFixedEthQuantity = isDepositEntry
       ? entryLogs.reduce((total, log) => total + (log.ethQuantity && Number.isFinite(Number(log.ethQuantity)) ? Number(log.ethQuantity) : 0), 0)
       : 0;
@@ -12038,16 +12047,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return;
       }
       if (!isDepositEntry && payoutFormWithdrawalLimit === null) {
-        reportValidationError(t0PayoutAvailabilityQuery.error ? "可提额度核算失败，请刷新后重试" : "正在按完整收益账本核算可提额度，请稍等");
+        reportValidationError(t0PayoutAvailabilityQuery.error || (payoutWithdrawalSource === "income" && payoutAvailability?.incomeUnavailableReason) ? "可提额度核算失败，请刷新后重试" : "正在核算所选类型的可提额度，请稍等");
         return;
       }
-      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { reportValidationError(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
+      if (!isDepositEntry && payoutFormWithdrawalLimit !== null && amount > payoutFormWithdrawalLimit + 0.005) { reportValidationError(`本次${withdrawalLabel}不能超过 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
       const payload = {
         ledgerId: 52 as const,
         relatedUserId: payoutTargetRelatedUserId,
         occurredOn: payoutOccurredOn,
         amount: isEthDepositInput ? undefined : amount.toFixed(2),
-        direction: payoutEntryDirection,
+        direction: payoutEntryDirection as T0JournalPayoutDirection,
+        withdrawalSource: isDepositEntry ? undefined : payoutWithdrawalSource,
         note: payoutNote.trim() || undefined,
       };
       setPayoutSubmitNotice({ tone: "pending", message: "正在提交，请勿重复点击。" });
@@ -12084,6 +12094,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
         <section className="border-y border-slate-200 bg-white px-3 py-3">
           {editingPayoutLog && <div className="mb-3 flex items-center justify-between text-xs"><span className="font-medium text-slate-600">编辑本笔{isDepositEntry ? "存入" : "提取"}</span><button type="button" onClick={resetPayoutLogForm} className="text-slate-400 active:text-slate-700">取消编辑</button></div>}
+          {!isDepositEntry && <div className="mb-3">
+            <div className="grid grid-cols-2 gap-2" aria-label="提现类型">
+              {(["income", "principal"] as const).map((source) => {
+                const selected = payoutWithdrawalSource === source;
+                const limit = source === "principal" ? payoutPrincipalWithdrawalLimit : payoutIncomeWithdrawalLimit;
+                return <button key={source} type="button" data-t0-withdrawal-source={source} aria-pressed={selected}
+                  disabled={isPayoutSaving || Boolean(editingPayoutLog)}
+                  onClick={() => { setPayoutWithdrawalSource(source); setPayoutAmount(""); setPayoutSubmitNotice(null); }}
+                  className={`rounded border px-2 py-2 text-left disabled:cursor-default ${selected ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-700"}`}>
+                  <span className="block text-xs font-semibold">{getT0WithdrawalLabel(source)}</span>
+                  <span className={`mt-1 block text-[11px] tabular-nums ${selected ? "text-slate-200" : "text-slate-500"}`}>
+                    {limit === null ? "额度核算中 / 暂不可用" : <>可提 {formatPrice(limit)} U</>}
+                  </span>
+                </button>;
+              })}
+            </div>
+            <div className="mt-1.5 text-[10px] leading-4 text-slate-500">
+              {editingPayoutLog ? "本笔提现类型保持不变，可修改日期、金额和备注。" : payoutWithdrawalSource === "principal" ? "本金按累计投入减已返还本金核算，不自动扣除持仓、挂单占用或亏损。" : "收益按完整已实现收益减已提收益核算，不扣减本金。"}
+            </div>
+          </div>}
           {isDepositEntry && <div className="mb-3 flex items-center justify-between gap-3 rounded border border-sky-100 bg-sky-50/60 px-2.5 py-2"><span className="text-[11px] font-medium text-slate-600">当前按 <span className={isEthDepositInput ? "text-sky-700" : "text-slate-500"}>{isEthDepositInput ? "ETH" : "U"}</span> 录入</span><button type="button" onClick={() => { setPayoutDepositInputMode((current) => current === "u" ? "eth" : "u"); setPayoutAmount(""); setPayoutEthQuantity(""); }} className="inline-flex h-7 items-center gap-1 rounded border border-sky-200 bg-white px-2 text-[11px] font-semibold text-sky-700 active:scale-95"><Repeat2 className="h-3.5 w-3.5" />{isEthDepositInput ? "改为 U 金额" : "改为 ETH 数量"}</button></div>}
           <div className="grid grid-cols-2 gap-2">
             <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
@@ -12115,8 +12145,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <label className="mt-3 block text-[11px] font-medium text-slate-600">备注（可选）
             <input value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={300} placeholder="" className="mt-1 block h-10 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" />
           </label>
-          {!isDepositEntry && <div className="mt-2 flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] tabular-nums"><span className="font-medium text-slate-500">当前可提余额</span>{payoutFormWithdrawalLimit === null ? <span className={t0PayoutAvailabilityQuery.error ? "font-medium text-rose-600" : "font-medium text-slate-400"}>{t0PayoutAvailabilityQuery.error ? "核算失败，请刷新" : "收益核算中…"}</span> : <span data-t0-fit className={`font-bold ${payoutFormWithdrawalLimit > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatPrice(payoutFormWithdrawalLimit)} <span className="text-[9px] font-medium">U</span></span>}</div>}
-          <button type="button" disabled={isPayoutSaving || isWithdrawalAvailabilityUnavailable} onClick={submitPayoutEntry} className={`mt-4 h-10 w-full rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${entryButtonTone}`}>{isPayoutSaving ? "保存中" : isWithdrawalAvailabilityUnavailable ? "收益核算中…" : editingPayoutLog ? "保存修改" : `保存${isDepositEntry ? "投入" : "提现"}`}</button>
+          {!isDepositEntry && <div className="mt-2 flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] tabular-nums"><span className="font-medium text-slate-500">{payoutWithdrawalSource === "principal" ? "当前可提本金（账面）" : "当前可提收益"}</span>{payoutFormWithdrawalLimit === null ? <span className="font-medium text-slate-400">额度暂不可用，请刷新</span> : <span data-t0-fit className={`font-bold ${payoutFormWithdrawalLimit > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatPrice(payoutFormWithdrawalLimit)} <span className="text-[9px] font-medium">U</span></span>}</div>}
+          <button type="button" disabled={isPayoutSaving || isWithdrawalAvailabilityUnavailable || (!isDepositEntry && payoutFormWithdrawalLimit === 0)} onClick={submitPayoutEntry} className={`mt-4 h-10 w-full rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${entryButtonTone}`}>{isPayoutSaving ? "保存中" : isWithdrawalAvailabilityUnavailable ? "额度暂不可用" : editingPayoutLog ? "保存修改" : isDepositEntry ? "保存投入" : `保存${withdrawalLabel}`}</button>
           {payoutSubmitNotice && <div role="status" aria-live="polite" className={`mt-2 rounded border px-2.5 py-2 text-[11px] leading-4 ${payoutSubmitNotice.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : payoutSubmitNotice.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>{payoutSubmitNotice.tone === "error" ? "未保存：" : payoutSubmitNotice.tone === "success" ? "保存成功：" : "提交状态："}{payoutSubmitNotice.message}</div>}
         </section>
 
