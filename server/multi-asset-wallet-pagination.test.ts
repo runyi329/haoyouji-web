@@ -559,17 +559,22 @@ describe('AfRechargeManage digital pagination: actual AST state/query/effects an
   it('requests the new query with scoped user/page/pageSize and optional coin, never limit 100 or a local history slice', () => {
     const useQuery = vi.fn((_input: Record<string, unknown>, _options: { enabled: boolean; staleTime: number }) => ({ marker: 'query' }));
     for (const coin of ['all', 'ETH']) {
-      clientExpression('adjMultiAssetHistoryQuery', {
-        mtrpc: { adminUser: { multiAssetWalletHistoryPage: { useQuery } } },
-        adjAssetFlowUserId: 28, adjAssetFlowPage: 13, adjAssetFlowCurrency: coin,
-        ADJ_PAGE_SIZE: clientExpression('ADJ_PAGE_SIZE', {}), adjSelectedUser: { id: 28 },
-      });
-      expect(useQuery).toHaveBeenLastCalledWith({ userId: 28, page: 13, pageSize: 10,
-        ...(coin === 'all' ? {} : { assetCode: coin }) }, { enabled: true, staleTime: 0 });
+      for (const mainTab of ['adjust', 'records', 'monitor']) {
+        clientExpression('adjMultiAssetHistoryQuery', {
+          mtrpc: { adminUser: { multiAssetWalletHistoryPage: { useQuery } } },
+          adjAssetFlowUserId: 28, adjAssetFlowPage: 13, adjAssetFlowCurrency: coin, mainTab,
+          ADJ_PAGE_SIZE: clientExpression('ADJ_PAGE_SIZE', {}), adjSelectedUser: { id: 28 },
+        });
+        expect(useQuery).toHaveBeenLastCalledWith({ userId: 28, page: 13, pageSize: 10,
+          ...(coin === 'all' ? {} : { assetCode: coin }) }, {
+          enabled: mainTab === 'adjust', staleTime: 0, refetchInterval: 15_000, refetchOnWindowFocus: true,
+        });
+      }
     }
     clientExpression('adjMultiAssetHistoryQuery', {
       mtrpc: { adminUser: { multiAssetWalletHistoryPage: { useQuery } } },
-      adjAssetFlowUserId: 0, adjAssetFlowPage: 1, adjAssetFlowCurrency: 'all', ADJ_PAGE_SIZE: 10, adjSelectedUser: null,
+      adjAssetFlowUserId: 0, adjAssetFlowPage: 1, adjAssetFlowCurrency: 'all', ADJ_PAGE_SIZE: 10,
+      adjSelectedUser: null, mainTab: 'adjust',
     });
     expect(useQuery.mock.calls.at(-1)?.[1].enabled).toBe(false);
     const items = Array.from({ length: 100 }, (_, index) => ({ id: index }));
@@ -699,28 +704,78 @@ function clientSuccess(name: string) {
 }
 describe('digital adjustment/revoke/note success and unchanged money mutation contracts', () => {
   it.each(['multiAssetAdjMutation', 'multiAssetRevokeMutation', 'multiAssetUpdateNoteMutation'])
-  ('%s success invalidates the new page query as well as legacy history', name => {
-    const invalidatePage = vi.fn();
-    const invalidateOld = vi.fn();
-    const setScope = vi.fn();
+  ('%s success targets the new page query before background legacy history without waiting for core reads', async name => {
+    let resolveCore!: () => void;
+    const corePending = new Promise<void>(resolve => { resolveCore = resolve; });
+    const invalidatePage = vi.fn(() => corePending);
+    const invalidateSnapshot = vi.fn(() => corePending);
+    const invalidateFunding = vi.fn(() => corePending);
+    const invalidateOld = vi.fn(() => Promise.resolve());
+    const invalidateList = vi.fn(() => Promise.resolve());
+    const invalidateGlobal = vi.fn(() => Promise.resolve());
+    const invalidateTrend = vi.fn(() => Promise.resolve());
+    const originalScope: Scope = { userId: 28, assetCode: 'ETH', page: 7 };
+    let currentScope = originalScope;
+    const setScope = vi.fn((update: Scope | ((current: Scope) => Scope)) => {
+      currentScope = typeof update === 'function' ? update(currentScope) : update;
+    });
     const refetch = vi.fn();
-    const success = evaluate<(...args: unknown[]) => void>(`(${clientSuccess(name).getText(clientAst)});`, {
-      toast: { success: vi.fn() }, adjSelectedUser: { id: 28 }, rememberRecentAdjUser: vi.fn(),
+    const setHistoryTab = vi.fn();
+    const rememberUser = vi.fn();
+    const bindings = {
+      toast: { success: vi.fn(), error: vi.fn() }, adjSelectedUser: { id: 28 }, rememberRecentAdjUser: rememberUser,
       setAdjAmount: vi.fn(), setAdjNote: vi.fn(), setShowRevokeDialog: vi.fn(), setRevokeTarget: vi.fn(),
       setShowNoteDialog: vi.fn(), setNoteTarget: vi.fn(), setNoteContent: vi.fn(),
-      adjUtils: { adminUser: { list: { invalidate: vi.fn() }, walletGlobalHistory: { invalidate: vi.fn() },
-        multiAssetWalletHistory: { invalidate: invalidateOld }, multiAssetWalletHistoryPage: { invalidate: invalidatePage } } },
+      adjUtils: { adminUser: {
+        list: { invalidate: invalidateList }, walletGlobalHistory: { invalidate: invalidateGlobal },
+        walletBalanceTrend: { invalidate: invalidateTrend }, walletSnapshot: { invalidate: invalidateSnapshot },
+        multiAssetWalletHistory: { invalidate: invalidateOld }, multiAssetWalletHistoryPage: { invalidate: invalidatePage },
+      }, ledger: { afGetMyRechargeHistory: { invalidate: invalidateFunding } } },
       setAdjAssetFlowScope: setScope, adjAssetFlowUserId: 28, adjAssetFlowCurrency: 'ETH',
+      setAdjUserHistoryTab: setHistoryTab,
       refetchAdjHistory: vi.fn(), setAdjLogPage: vi.fn(), refetchAdjGlobal: vi.fn(), refetchAdjMultiAssetHistory: refetch,
+    };
+    const realRefresh = clientExpression<(userId: number) => Promise<void>>('refreshAdjWalletAfterChange', bindings);
+    let refreshCompletion!: Promise<void>;
+    const refresh = vi.fn((userId: number) => { refreshCompletion = realRefresh(userId); return refreshCompletion; });
+    const success = evaluate<(...args: unknown[]) => unknown>(`(${clientSuccess(name).getText(clientAst)});`, {
+      ...bindings, refreshAdjWalletAfterChange: refresh,
     });
-    success({}, { mode: 'delete' });
+    // 成功结果不决定目标身份/币种，必须使用实际 mutation variables。
+    expect(success({ userId: 999, assetCode: 'SOL' }, name === 'multiAssetAdjMutation'
+      ? { userId: 28, assetCode: 'ETH' } : { mode: 'delete' })).toBeUndefined();
+    expect(refresh.mock.calls).toEqual([[28]]);
+    const forced = { cancelRefetch: true, throwOnError: true };
     expect(invalidatePage).toHaveBeenCalledOnce();
-    expect(invalidatePage).toHaveBeenCalledWith();
+    expect(invalidatePage).toHaveBeenCalledWith({ userId: 28 }, undefined, forced);
+    expect(invalidateSnapshot.mock.calls).toEqual([[{ userId: 28 }, undefined, forced]]);
+    expect(invalidateFunding.mock.calls).toEqual([[{ viewAsUserId: 28 }, undefined, forced]]);
+    for (const read of [invalidateOld, invalidateList, invalidateGlobal, invalidateTrend]) expect(read).not.toHaveBeenCalled();
+    resolveCore();
+    await refreshCompletion;
     expect(invalidateOld).toHaveBeenCalledOnce();
-    if (name === 'multiAssetAdjMutation') expect(setScope).toHaveBeenCalledWith({ userId: 28, assetCode: 'ETH', page: 1 });
+    expect(invalidateOld).toHaveBeenCalledWith({ userId: 28 });
+    for (const read of [invalidateList, invalidateGlobal, invalidateTrend]) expect(read.mock.calls).toEqual([[]]);
+    expect(invalidatePage).toHaveBeenCalledOnce();
+    expect(bindings.toast.error).not.toHaveBeenCalled();
+    expect(refetch).not.toHaveBeenCalled(); // 定向 invalidate 替代捕获旧用户的直接 refetch。
+    if (name === 'multiAssetAdjMutation') {
+      expect(setScope).toHaveBeenCalledOnce();
+      const update = setScope.mock.calls[0][0];
+      expect(update).toBeTypeOf('function');
+      expect(currentScope).toEqual({ userId: 28, assetCode: 'ETH', page: 1 });
+      expect(setHistoryTab.mock.calls).toEqual([['digital']]);
+      expect(rememberUser.mock.calls).toEqual([[28]]);
+      if (typeof update !== 'function') throw new Error('Expected guarded scope updater');
+      expect(update({ ...originalScope, assetCode: 'all' })).toEqual({ userId: 28, assetCode: 'all', page: 1 });
+      expect(update({ ...originalScope, assetCode: 'SOL' })).toEqual({ userId: 28, assetCode: 'all', page: 1 });
+      const newerScope = { userId: 29, assetCode: 'SOL', page: 9 };
+      expect(update(newerScope)).toBe(newerScope);
+    }
     else {
-      expect(refetch).toHaveBeenCalledOnce();
       expect(setScope).not.toHaveBeenCalled();
+      expect(currentScope).toBe(originalScope);
+      expect(setHistoryTab).not.toHaveBeenCalled();
     }
   });
 

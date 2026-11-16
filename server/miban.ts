@@ -1664,12 +1664,16 @@ async function getAllAgentStats() {
   return result;
 }
 
-async function getAllUsers() {
+async function getAllUsers(targetUserId?: number) {
   // 使用原生 SQL，避免 Drizzle ORM 列名映射问题（生产库用 snake_case，schema 用 camelCase）
   const conn = await getDbConnection();
-  if (!conn) return [];
+  if (!conn) {
+    if (targetUserId !== undefined) throw new Error("数据库不可用，钱包快照读取失败");
+    return [];
+  }
   try {
     // 步骤1: 查询用户基本信息（使用生产库实际列名）
+    // 单用户快照只缩小查询范围，后续余额和冻结口径与全局列表完全共用。
     const [userRows] = (await (conn as any).execute(
       `SELECT
         u.id, u.name, u.username, u.openId, u.role,
@@ -1681,7 +1685,9 @@ async function getAllUsers() {
         u.createdAt, u.lastSignedIn,
         u.balance, u.points
        FROM users u
-       ORDER BY u.createdAt DESC`
+       ${targetUserId !== undefined ? "WHERE u.id = ?" : ""}
+       ORDER BY u.createdAt DESC`,
+      targetUserId !== undefined ? [targetUserId] : []
     )) as any[];
     const userList: any[] = Array.isArray(userRows) ? userRows : [];
     if (userList.length === 0) return [];
@@ -1699,6 +1705,7 @@ async function getAllUsers() {
         orderCountMap.set(Number(r.userId), Number(r.orderCount));
       }
     } catch (e) {
+      if (targetUserId !== undefined) throw e;
       console.warn(
         "[miban] getAllUsers: miban_orders query failed:",
         (e as any)?.message
@@ -1730,6 +1737,7 @@ async function getAllUsers() {
         );
       }
     } catch (e) {
+      if (targetUserId !== undefined) throw e;
       console.warn(
         "[miban] getAllUsers: USDT balance query failed:",
         (e as any)?.message
@@ -1759,6 +1767,7 @@ async function getAllUsers() {
         );
       }
     } catch (e) {
+      if (targetUserId !== undefined) throw e;
       console.warn(
         "[miban] getAllUsers: CNY balance query failed:",
         (e as any)?.message
@@ -1798,6 +1807,7 @@ async function getAllUsers() {
         fundingFrozenMap.set(userId, current);
       }
     } catch (e) {
+      if (targetUserId !== undefined) throw e;
       // 钱包冻结台账尚未初始化或临时不可用时，不影响既有调账与余额读取。
       console.warn(
         "[miban] getAllUsers: funding freeze query failed:",
@@ -1811,6 +1821,7 @@ async function getAllUsers() {
     try {
       multiAssetMap = await getMultiAssetBalancesForUsers(ids);
     } catch (e) {
+      if (targetUserId !== undefined) throw e;
       console.warn(
         "[miban] getAllUsers: multi-asset balance query failed:",
         (e as any)?.message
@@ -1841,6 +1852,7 @@ async function getAllUsers() {
     }));
   } catch (e) {
     console.error("[miban] getAllUsers failed:", (e as any)?.message);
+    if (targetUserId !== undefined) throw e;
     return [];
   }
 }
@@ -5345,6 +5357,15 @@ export const mibanAgentRouter = router({
 
 export const mibanAdminUserRouter = router({
   list: mibanAdminProcedure.query(() => getAllUsers()),
+  // 调账后只读取目标用户，避免为刷新一张钱包卡片重新聚合全站用户。
+  walletSnapshot: mibanAdminProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const userList = await getAllUsers(input.userId);
+      const user = userList[0];
+      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "钱包用户不存在" });
+      return user;
+    }),
   setRole: mibanAdminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["parent", "baby"]) }))
     .mutation(({ input }) => updateUserMibanRole(input.userId, input.role)),

@@ -16,6 +16,7 @@ import { useNavSourceTracker } from "@/hooks/useSmartBack";
 import { SuperViewBanner } from "@/components/SuperViewBanner";
 import AutoPageTag from "@/components/AutoPageTag";
 import { InformationCollectionTracker } from "@/hooks/useInformationCollection";
+import { isAdminRechargeManagementPage } from "@/lib/adminWalletRequests";
 
 
 // HMR 热更新提示音模块
@@ -428,7 +429,8 @@ function ActiveLedgerPagePolling() {
   const isFunderManagementPage = /^\/ledger\/(?:37|52)\/(?:finance-unified|funder-management)$/.test(pathname);
   const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname)
     && !isDividendManagementPage
-    && !isFunderManagementPage;
+    && !isFunderManagementPage
+    && !isAdminRechargeManagementPage(pathname);
 
   useEffect(() => {
     if (!isRealtimeLedgerPage || typeof document === "undefined") return;

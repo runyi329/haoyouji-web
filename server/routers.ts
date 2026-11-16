@@ -20226,8 +20226,10 @@ ${klinesSummary}
               createdAt: r.created_at,
             };
           });
-        } catch (_) {
-          // 表不存在时忽略
+        } catch (error) {
+          // 仅兼容确实缺表的旧环境；网络、排队或SQL错误不能伪装成零条流水。
+          const code = (error as any)?.code ?? (error as any)?.cause?.code;
+          if (code !== 'ER_NO_SUCH_TABLE') throw error;
         }
         // 2.5 谷底征筹本金冻结：资金只从可用额转入冻结额，不能伪装成订单扣款。
         // 标签同时保存内部订单ID；接口统一补全为完整订单编号，以便用户与后台按同一号码核对。
@@ -20293,8 +20295,10 @@ ${klinesSummary}
             note: `谷底征筹本金解冻 · ${formatAfOrderNo(row.order_id, row.order_created_at)}`,
             createdAt: row.created_at,
           }));
-        } catch (_) {
+        } catch (error) {
           // 冻结基础表尚未初始化的旧环境不影响既有钱包流水。
+          const code = (error as any)?.code ?? (error as any)?.cause?.code;
+          if (code !== 'ER_NO_SUCH_TABLE') throw error;
         }
         // 3. balance_history 作为历史兼容层（处理改造前的USDT和人民币记录）。
         // 只保留 af_manual_balances 里找不到对应条目的旧记录（按时间、金额和币种去重）。
@@ -20335,7 +20339,10 @@ ${klinesSummary}
             const bhAmt = Math.abs(bh.amount);
             return bh.currency === 'CNY' || !manualTimes.some(m => m.currency === 'USDT' && Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
           });
-        } catch (_) { /* 忽略 */ }
+        } catch (error) {
+          // 当前调账也写入balance_history，读取失败必须报错，不能静默丢掉刚保存的记录。
+          throw error;
+        }
 
         // 4. 合并并按时间正序排列（从旧到新）。每笔真实事件只保留一次，并显式标注币种。
         const combinedAsc = [...rechargeList, ...manualList, ...principalHoldList, ...principalReleaseList, ...bhList].sort(

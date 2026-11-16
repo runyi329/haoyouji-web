@@ -155,6 +155,8 @@ function WalletBalanceTrendChart({
   subtitle,
   trend,
   isLoading,
+  isError = false,
+  onRetry,
   days,
   onDaysChange,
 }: {
@@ -162,6 +164,8 @@ function WalletBalanceTrendChart({
   subtitle: string;
   trend: any;
   isLoading: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   days: WalletTrendDays;
   onDaysChange: (days: WalletTrendDays) => void;
 }) {
@@ -212,14 +216,14 @@ function WalletBalanceTrendChart({
         <div className="min-w-0">
           <p className="text-[10px] text-gray-400">当前汇总余额</p>
           <p className={`mt-0.5 truncate text-[18px] font-bold tabular-nums ${current < 0 ? "text-red-500" : currency === "USDT" ? "text-blue-700" : "text-green-700"}`}>
-            {currency === "CNY" ? "¥" : ""}{formatAmount(current)}
+            {trend == null ? "—" : `${currency === "CNY" ? "¥" : ""}${formatAmount(current)}`}
             <span className="ml-1 text-[10px] font-medium">{currency}</span>
           </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-[10px] text-gray-400">较 {periodLabel} 前</p>
           <p className={`mt-0.5 text-[12px] font-bold tabular-nums ${change > 0 ? "text-green-600" : change < 0 ? "text-red-500" : "text-gray-500"}`}>
-            {change > 0 ? "+" : ""}{currency === "CNY" ? "¥" : ""}{formatAmount(change)}
+            {trend == null ? "—" : `${change > 0 ? "+" : ""}${currency === "CNY" ? "¥" : ""}${formatAmount(change)}`}
             <span className="ml-1 text-[9px] font-medium">{currency}</span>
           </p>
         </div>
@@ -236,7 +240,10 @@ function WalletBalanceTrendChart({
         ))}
       </div>
 
-      {isLoading ? (
+      {isError && <div className="mt-2 text-[11px] text-red-500">走势更新失败，暂保留已显示数据。{onRetry && <button type="button" onClick={onRetry} className="ml-2 font-semibold underline">重新加载</button>}</div>}
+      {trend == null && isError ? (
+        <div className="h-[184px]" />
+      ) : trend == null ? (
         <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">资金走势加载中...</div>
       ) : series.length === 0 ? (
         <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">暂无可用于计算走势的资金记录</div>
@@ -540,20 +547,38 @@ export default function AfRechargeManage() {
   const ADJ_PAGE_SIZE = 10;
   // ===== 数据查询 =====
   const ordersQuery = trpc.recharge.adminGetAllOrders.useQuery({ limit: 200 }, {
+    enabled: mainTab === "records",
     refetchInterval: 30000,
   });
-  const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery();
+  const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery(undefined, { enabled: mainTab === "monitor" });
   const statsQuery = trpc.recharge.adminGetSystemStats.useQuery(undefined, {
+    enabled: mainTab !== "adjust",
     refetchInterval: 30000,
   });
   const heartbeatQuery = trpc.recharge.adminGetScannerHeartbeat.useQuery(undefined, {
+    enabled: mainTab === "monitor",
     refetchInterval: 10000,
   });
-  const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery();
+  const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery(undefined, { enabled: mainTab === "monitor" });
 
   // ===== 内嵌调账 Tab 数据查询 =====
   const adjUtils = mtrpc.useUtils();
-  const { data: adjAllUsers = [], refetch: refetchAdjUsers } = mtrpc.adminUser.list.useQuery();
+  const { data: adjAllUsers = [], refetch: refetchAdjUsers } = mtrpc.adminUser.list.useQuery(undefined, {
+    enabled: mainTab === "adjust", staleTime: 30_000, refetchOnWindowFocus: false,
+  });
+  // 顶部余额/担保只读当前用户，不再等全网站成员、订单数量与全部钱包汇总。
+  const adjWalletSnapshotQuery = mtrpc.adminUser.walletSnapshot.useQuery(
+    { userId: adjAssetFlowUserId },
+    { enabled: mainTab === "adjust" && adjAssetFlowUserId > 0, staleTime: 10_000, refetchInterval: 15_000, refetchOnWindowFocus: true },
+  );
+  useEffect(() => {
+    const freshUser = adjWalletSnapshotQuery.data;
+    if (!freshUser || Number(freshUser.id) !== adjAssetFlowUserId) return;
+    // 同时更新目录缓存这一行，汇总/用户切换也能消费新的余额；不另造账目或估算余额。
+    adjUtils.adminUser.list.setData(undefined, (current: any[] | undefined) => current?.map(
+      (user: any) => Number(user.id) === Number(freshUser.id) ? freshUser : user,
+    ));
+  }, [adjWalletSnapshotQuery.data, adjAssetFlowUserId, adjUtils]);
   // 调账页复用服务端统一行情缓存，将选中用户或全部用户的 USDT、人民币和数字资产统一折算为总价值。
   const adjWalletPricesQuery = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: mainTab === "adjust" && (!!adjSelectedUser?.id || adjFlowTab === "balances"),
@@ -564,7 +589,7 @@ export default function AfRechargeManage() {
   // 与用户自己进入全局钱包看到的明细使用完全相同的合并、去重和逐笔余额口径。
   const adjHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ...(adjSelectedUser?.id ? { viewAsUserId: Number(adjSelectedUser.id) } : {}) },
-    { enabled: !!adjSelectedUser, staleTime: 0 }
+    { enabled: mainTab === "adjust" && !!adjSelectedUser, staleTime: 0, refetchInterval: 15_000, refetchOnWindowFocus: true }
   );
   const adjMultiAssetHistoryQuery = mtrpc.adminUser.multiAssetWalletHistoryPage.useQuery(
     {
@@ -573,7 +598,7 @@ export default function AfRechargeManage() {
       pageSize: ADJ_PAGE_SIZE,
       ...(adjAssetFlowCurrency !== "all" ? { assetCode: adjAssetFlowCurrency } : {}),
     },
-    { enabled: !!adjSelectedUser?.id, staleTime: 0 },
+    { enabled: mainTab === "adjust" && !!adjSelectedUser?.id, staleTime: 0, refetchInterval: 15_000, refetchOnWindowFocus: true },
   );
   // 担保事件及币种由服务端在COUNT和分页前筛选，不占页数、不截断更早的流水。
   const adjVisibleMultiAssetHistory = adjMultiAssetHistoryQuery.data?.items ?? [];
@@ -628,20 +653,21 @@ export default function AfRechargeManage() {
       ...(adjGlobalFlowKeyword.trim() ? { keyword: adjGlobalFlowKeyword.trim() } : {}),
       ...(adjGlobalDateRange.startDate ? { startDate: adjGlobalDateRange.startDate } : {}),
       ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
-    }
+    },
+    { enabled: mainTab === "adjust" && adjFlowTab === "global", staleTime: 30_000, refetchOnWindowFocus: false },
   );
   const { data: adjRecentHistory, refetch: refetchAdjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
     // 从较宽的最新流水窗口中去重，确保下拉可稳定给出最近 10 位不同用户。
     { page: 1, pageSize: 50, includeAllWalletEvents: true },
-    { staleTime: 30_000 }
+    { enabled: mainTab === "adjust", staleTime: 30_000, refetchOnWindowFocus: false }
   );
   const adjGlobalTrendQuery = mtrpc.adminUser.walletBalanceTrend.useQuery(
     { days: adjGlobalTrendDays },
-    { enabled: adjFlowTab === "balances", staleTime: 30_000, refetchOnWindowFocus: false },
+    { enabled: mainTab === "adjust" && adjFlowTab === "balances", staleTime: 30_000, refetchOnWindowFocus: false },
   );
   const adjUserTrendQuery = mtrpc.adminUser.walletBalanceTrend.useQuery(
     { days: adjUserTrendDays, ...(adjSelectedUser?.id ? { userId: Number(adjSelectedUser.id) } : {}) },
-    { enabled: adjFlowTab === "user" && !!adjSelectedUser?.id, staleTime: 30_000, refetchOnWindowFocus: false },
+    { enabled: mainTab === "adjust" && adjFlowTab === "user" && !!adjSelectedUser?.id, staleTime: 30_000, refetchOnWindowFocus: false },
   );
   // 不重载浏览器或清空表单：强制读取整页已启用查询，包含余额卡所依赖的用户目录。
   // 用户目录更新由下方同ID同步effect投影到当前用户，切人期间旧响应不会覆盖新用户。
@@ -653,16 +679,11 @@ export default function AfRechargeManage() {
     try {
       const requests: Promise<unknown>[] = [
         refetchAdjUsers(options),
-        refetchAdjGlobal(options),
         refetchAdjRecentHistory(options),
-        ordersQuery.refetch(options),
-        pendingOrdersQuery.refetch(options),
-        statsQuery.refetch(options),
-        heartbeatQuery.refetch(options),
-        unmatchedQuery.refetch(options),
       ];
+      if (adjFlowTab === "global") requests.push(refetchAdjGlobal(options));
       if (adjSelectedUser?.id) {
-        requests.push(refetchAdjHistory(options), refetchAdjMultiAssetHistory(options));
+        requests.push(adjWalletSnapshotQuery.refetch(options), refetchAdjHistory(options), refetchAdjMultiAssetHistory(options));
         if (adjFlowTab === "user") requests.push(adjUserTrendQuery.refetch(options));
       }
       if (adjSelectedUser?.id || adjFlowTab === "balances") requests.push(adjWalletPricesQuery.refetch(options));
@@ -696,35 +717,53 @@ export default function AfRechargeManage() {
   const rememberRecentAdjUser = (userId: number) => {
     persistRecentAdjUsers([userId, ...recentAdjUserIds.filter((id) => id !== userId)]);
   };
+  const refreshAdjWalletAfterChange = async (userId: number) => {
+    const options = { cancelRefetch: true, throwOnError: true };
+    const targetInput = Number.isInteger(userId) && userId > 0 ? { userId } : undefined;
+    // 保存已完成。优先同步目标用户余额/担保及流水，不等全网站统计或长周期走势。
+    const results = await Promise.allSettled([
+      adjUtils.adminUser.walletSnapshot.invalidate(targetInput, undefined, options),
+      adjUtils.ledger.afGetMyRechargeHistory.invalidate(targetInput ? { viewAsUserId: userId } : undefined, undefined, options),
+      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate(targetInput, undefined, options),
+    ]);
+    if (results.some((result) => result.status === "rejected")) {
+      toast.error("账目已保存，部分余额或流水更新失败，请点更新重试；不要重复添加");
+    }
+    // 非关键列表后台更新，失败不能变成调账失败，更不能自动重复资金提交。
+    void Promise.allSettled([
+      adjUtils.adminUser.list.invalidate(),
+      adjUtils.adminUser.walletGlobalHistory.invalidate(),
+      adjUtils.adminUser.walletBalanceTrend.invalidate(),
+      adjUtils.adminUser.multiAssetWalletHistory.invalidate(targetInput),
+    ]);
+  };
   const adjMutation = mtrpc.adminUser.walletAdjust.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result: unknown, variables: { userId: number }) => {
       toast.success("调账成功");
-      if (adjSelectedUser?.id) rememberRecentAdjUser(Number(adjSelectedUser.id));
-      setAdjAmount("");
-      setAdjNote("");
-      adjUtils.adminUser.list.invalidate();
-      adjUtils.adminUser.walletGlobalHistory.invalidate();
-      adjUtils.adminUser.walletBalanceTrend.invalidate();
-      refetchAdjHistory();
+      rememberRecentAdjUser(Number(variables.userId));
+      if (Number(adjSelectedUser?.id) === Number(variables.userId)) {
+        setAdjAmount("");
+        setAdjNote("");
+        setAdjUserHistoryTab("funding");
+      }
       setAdjLogPage(1);
-      refetchAdjGlobal();
+      void refreshAdjWalletAfterChange(Number(variables.userId));
     },
     onError: (e: any) => toast.error(e.message || "调账失败"),
   });
   const multiAssetAdjMutation = mtrpc.adminUser.multiAssetWalletAdjust.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result: unknown, variables: { userId: number; assetCode: string }) => {
       toast.success("52号市场资产调账成功");
-      if (adjSelectedUser?.id) rememberRecentAdjUser(Number(adjSelectedUser.id));
-      setAdjAmount("");
-      setAdjNote("");
-      adjUtils.adminUser.list.invalidate();
-      adjUtils.adminUser.walletGlobalHistory.invalidate();
-      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
-      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
-      setAdjAssetFlowScope({ userId: adjAssetFlowUserId, assetCode: adjAssetFlowCurrency, page: 1 });
-      refetchAdjHistory();
+      rememberRecentAdjUser(Number(variables.userId));
+      if (Number(adjSelectedUser?.id) === Number(variables.userId)) {
+        setAdjAmount("");
+        setAdjNote("");
+        setAdjUserHistoryTab("digital");
+        setAdjAssetFlowScope((current) => current.userId === Number(variables.userId)
+          ? { ...current, page: 1, assetCode: current.assetCode === "all" || current.assetCode === variables.assetCode ? current.assetCode : "all" } : current);
+      }
       setAdjLogPage(1);
-      refetchAdjGlobal();
+      void refreshAdjWalletAfterChange(Number(variables.userId));
     },
     onError: (e: any) => toast.error(e.message || "52号市场资产调账失败"),
   });
@@ -733,12 +772,7 @@ export default function AfRechargeManage() {
       toast.success(variables.mode === "reverse" ? "撤回成功，已写入反向数字资产流水" : "已删除原数字资产流水并还原余额");
       setShowRevokeDialog(false);
       setRevokeTarget(null);
-      adjUtils.adminUser.list.invalidate();
-      adjUtils.adminUser.walletGlobalHistory.invalidate();
-      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
-      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
-      refetchAdjMultiAssetHistory();
-      refetchAdjGlobal();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || "数字资产撤回失败"),
   });
@@ -748,11 +782,7 @@ export default function AfRechargeManage() {
       setShowNoteDialog(false);
       setNoteTarget(null);
       setNoteContent("");
-      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
-      adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate();
-      adjUtils.adminUser.walletGlobalHistory.invalidate();
-      refetchAdjMultiAssetHistory();
-      refetchAdjGlobal();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || "数字资产备注更新失败"),
   });
@@ -792,8 +822,10 @@ export default function AfRechargeManage() {
   };
   // 总资产按“总持有”估值，冻结仅限制操作，不从资产总价值中扣除。
   // 对暂时没有行情的币种不按 0 静默计入，明确提示管理员该总额尚未覆盖的资产。
-  const adjSelectedUsdtBalance = getFundingBalanceBreakdown(adjSelectedUser, "USDT");
-  const adjSelectedCnyBalance = getFundingBalanceBreakdown(adjSelectedUser, "CNY");
+  const adjSelectedWalletUser = Number(adjWalletSnapshotQuery.data?.id) === adjAssetFlowUserId
+    ? { ...adjSelectedUser, ...adjWalletSnapshotQuery.data } : adjSelectedUser;
+  const adjSelectedUsdtBalance = getFundingBalanceBreakdown(adjSelectedWalletUser, "USDT");
+  const adjSelectedCnyBalance = getFundingBalanceBreakdown(adjSelectedWalletUser, "CNY");
   const adjSelectedWalletValuation = (() => {
     const usdtCnyRate = Number((adjWalletPricesQuery.data as any)?.usdtCnyRate ?? 0);
     const livePrices = ((adjWalletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
@@ -803,7 +835,7 @@ export default function AfRechargeManage() {
     let frozenU = adjSelectedUsdtBalance.frozen + (hasRate ? adjSelectedCnyBalance.frozen / usdtCnyRate : 0);
     const unpricedAssets: string[] = [];
 
-    for (const asset of (adjSelectedUser?.multiAssetBalances ?? [])) {
+    for (const asset of (adjSelectedWalletUser?.multiAssetBalances ?? [])) {
       const code = String(asset?.assetCode ?? "").trim().toUpperCase();
       const breakdown = getMultiAssetBreakdown(asset);
       const quantity = breakdown.total;
@@ -1168,8 +1200,7 @@ export default function AfRechargeManage() {
       setRevokeTarget(null);
       ordersQuery.refetch();
       statsQuery.refetch();
-      refetchAdjHistory();
-      adjUtils.adminUser.list.invalidate();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
@@ -1178,9 +1209,7 @@ export default function AfRechargeManage() {
       toast.success('撤回成功，余额已还原');
       setShowRevokeDialog(false);
       setRevokeTarget(null);
-      refetchAdjHistory();
-      refetchAdjGlobal();
-      adjUtils.adminUser.list.invalidate();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
@@ -1189,9 +1218,7 @@ export default function AfRechargeManage() {
       toast.success('撤回成功，余额已还原');
       setShowRevokeDialog(false);
       setRevokeTarget(null);
-      refetchAdjHistory();
-      refetchAdjGlobal();
-      adjUtils.adminUser.list.invalidate();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
@@ -1201,8 +1228,7 @@ export default function AfRechargeManage() {
       setShowNoteDialog(false);
       setNoteTarget(null);
       setNoteContent('');
-      refetchAdjHistory();
-      refetchAdjGlobal();
+      void refreshAdjWalletAfterChange(adjAssetFlowUserId);
     },
     onError: (e: any) => toast.error(e.message || '更新失败'),
   });
@@ -1998,6 +2024,8 @@ export default function AfRechargeManage() {
                     </button>
                   </div>
                 </div>
+                {adjWalletSnapshotQuery.isFetching && <p className="mt-1 text-[10px] text-orange-600" data-card-export-hide="true">余额与担保同步中...</p>}
+                {adjWalletSnapshotQuery.isError && <p className="mt-1 text-[10px] text-red-500" data-card-export-hide="true">余额或担保更新失败，暂保留已显示数据，请点更新重试。</p>}
                 <div className="flex gap-2 mt-2.5">
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">USDT 余额</p>
@@ -2016,11 +2044,11 @@ export default function AfRechargeManage() {
                     </div>
                   </div>
                 </div>
-                {(adjSelectedUser.multiAssetBalances ?? []).length > 0 && (
+                {(adjSelectedWalletUser?.multiAssetBalances ?? []).length > 0 && (
                   <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
                     <p className="text-[10px] text-violet-500">已持有数字资产（总持有 / 可用 / 担保冻结）</p>
                     <div className="mt-1 grid grid-cols-2 gap-1.5">
-                      {(adjSelectedUser.multiAssetBalances ?? []).map((asset: any) => {
+                      {(adjSelectedWalletUser?.multiAssetBalances ?? []).map((asset: any) => {
                         const breakdown = getMultiAssetBreakdown(asset);
                         return <div key={asset.assetCode} className="rounded-md bg-white px-2 py-1.5 ring-1 ring-violet-100">
                           <div className="flex items-baseline justify-between gap-1">
@@ -2296,7 +2324,9 @@ export default function AfRechargeManage() {
                 title={`${adjSelectedUser.name || adjSelectedUser.username} 的余额走势`}
                 subtitle="查看该用户每日结束时的统一钱包余额"
                 trend={adjUserTrendQuery.data}
-                isLoading={adjUserTrendQuery.isLoading || adjUserTrendQuery.isFetching}
+                isLoading={(adjUserTrendQuery.isLoading || adjUserTrendQuery.isFetching) && adjUserTrendQuery.data == null}
+                isError={adjUserTrendQuery.isError}
+                onRetry={() => void adjUserTrendQuery.refetch()}
                 days={adjUserTrendDays}
                 onDaysChange={setAdjUserTrendDays}
               />
@@ -2433,7 +2463,7 @@ export default function AfRechargeManage() {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
                 <span className="text-[11px] text-gray-400">
-                  {adjFilteredHistory.length === adjHistory.length ? `共 ${adjHistory.length} 条` : `${adjFilteredHistory.length} / ${adjHistory.length} 条`}
+                  {adjHistoryQuery.data == null ? (adjHistoryQuery.isError ? '读取失败' : '加载中...') : adjFilteredHistory.length === adjHistory.length ? `共 ${adjHistory.length} 条` : `${adjFilteredHistory.length} / ${adjHistory.length} 条`}
                 </span>
               </div>
               <LedgerFlowFilters
@@ -2452,9 +2482,16 @@ export default function AfRechargeManage() {
                   setAdjUserFlowCustomEnd("");
                 }}
               />
-              {adjHistoryQuery.isLoading ? (
+              {adjHistoryQuery.isError && (
+                <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-500">
+                  流水更新失败，已显示的记录仍保留。
+                  <button type="button" onClick={() => void refetchAdjHistory()} className="ml-2 font-semibold underline">重新加载</button>
+                </div>
+              )}
+              {adjHistoryQuery.data == null && !adjHistoryQuery.isError ? (
                 <p className="text-center text-[12px] text-gray-300 py-6">明细加载中...</p>
-              ) : adjFilteredHistory.length === 0 ? (
+              ) : adjHistoryQuery.data == null ? null
+              : adjFilteredHistory.length === 0 ? (
                 <p className="text-center text-[12px] text-gray-300 py-6">
                   {adjHistory.length === 0 ? '暂无钱包流水' : '未找到符合条件的流水'}
                 </p>
@@ -2558,7 +2595,7 @@ export default function AfRechargeManage() {
             <>
               <WalletTotalAssetTrendChart
                 trend={adjGlobalTrendQuery.data}
-                isLoading={adjGlobalTrendQuery.isLoading || adjGlobalTrendQuery.isFetching}
+                isLoading={(adjGlobalTrendQuery.isLoading || adjGlobalTrendQuery.isFetching) && adjGlobalTrendQuery.data == null}
                 days={adjGlobalTrendDays}
                 onDaysChange={setAdjGlobalTrendDays}
                 usdtCnyRate={adjBalanceUsdtCnyRate}

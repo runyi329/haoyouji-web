@@ -11,6 +11,7 @@ import "./index.css";
 import "./styles/red-white-dual-engine.css";
 import { restoreToken } from "@/lib/tokenStorage";
 import { clearLedgerViewAsState } from "@/lib/authIdentity";
+import { isAdminWalletRequest } from "@/lib/adminWalletRequests";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -233,6 +234,7 @@ const trpcClient = trpc.createClient({
       // 52号T+0的开仓及开仓修改同样会与0.5秒行情、账本读取并发；必须独立提交，
       // 让网络异常能返回本次保存的明确错误，并由订单自身的幂等键安全重试。
       condition(op) {
+        if (isAdminWalletRequest(op.path)) return true;
         // 纵向股票列表独立读取，不等待同批钱包/总览统计；减小移动WebView请求URL。
         return op.path === "aiStockLifecycle"
           || op.path === "aiStockLatestQuotes"

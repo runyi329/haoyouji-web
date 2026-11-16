@@ -41,10 +41,12 @@ function stateInitial<T>(name: string): T {
     useState: (initial: T) => initial,
   });
 }
-const baseReads = ['refetchAdjUsers', 'refetchAdjGlobal', 'refetchAdjRecentHistory',
-  'ordersQuery', 'pendingOrdersQuery', 'statsQuery', 'heartbeatQuery', 'unmatchedQuery'] as const;
-const userReads = ['refetchAdjHistory', 'refetchAdjMultiAssetHistory'] as const;
-const allReads = [...baseReads, ...userReads, 'adjUserTrendQuery', 'adjGlobalTrendQuery', 'adjWalletPricesQuery'] as const;
+const baseReads = ['refetchAdjUsers', 'refetchAdjRecentHistory'] as const;
+const userReads = ['adjWalletSnapshotQuery', 'refetchAdjHistory', 'refetchAdjMultiAssetHistory'] as const;
+// 仍跟踪全部旧查询：更新只刷新当前调账视图，隐藏的 records/monitor 查询必须零调用。
+const hiddenReads = ['ordersQuery', 'pendingOrdersQuery', 'statsQuery', 'heartbeatQuery', 'unmatchedQuery'] as const;
+const allReads = [...baseReads, ...userReads, 'refetchAdjGlobal', ...hiddenReads,
+  'adjUserTrendQuery', 'adjGlobalTrendQuery', 'adjWalletPricesQuery'] as const;
 type ReadName = typeof allReads[number];
 type FlowTab = 'user' | 'global' | 'balances';
 const options = { cancelRefetch: true, throwOnError: true };
@@ -99,10 +101,10 @@ async function microtasks() { for (let i = 0; i < 5; i++) await Promise.resolve(
 describe('整页更新：执行真实 handler 的请求门控、锁和失败恢复', () => {
   it.each([
     { selected: false, flow: 'user' as const, extra: [] },
-    { selected: false, flow: 'global' as const, extra: [] },
+    { selected: false, flow: 'global' as const, extra: ['refetchAdjGlobal'] },
     { selected: false, flow: 'balances' as const, extra: ['adjWalletPricesQuery', 'adjGlobalTrendQuery'] },
     { selected: true, flow: 'user' as const, extra: [...userReads, 'adjUserTrendQuery', 'adjWalletPricesQuery'] },
-    { selected: true, flow: 'global' as const, extra: [...userReads, 'adjWalletPricesQuery'] },
+    { selected: true, flow: 'global' as const, extra: [...userReads, 'refetchAdjGlobal', 'adjWalletPricesQuery'] },
     { selected: true, flow: 'balances' as const, extra: [...userReads, 'adjWalletPricesQuery', 'adjGlobalTrendQuery'] },
   ])('selected=$selected / $flow：全部相关 refetch 强制取消旧请求并传播失败', async ({ selected, flow, extra }) => {
     const test = refreshHarness(selected, flow);
