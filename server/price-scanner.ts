@@ -1,7 +1,7 @@
 /**
  * 统一实时行情扫描器。
  *
- * 设计原则：原有数字币使用 Gate.io → HTX → OKX；BTY 仅使用已核验的 MEXC USDT 现货；证券与商品优先新浪财经，
+ * 设计原则：原有数字币使用 Gate.io → HTX → OKX；BTY 使用 Hotcoin → MEXC 的 USDT 现货；证券与商品优先新浪财经，
  * Yahoo Finance query1/query2 作为海外备用。所有请求并发执行，扫描任务绝不重入。
  */
 import fs from 'fs';
@@ -83,10 +83,12 @@ const T0_COMPLETED_MINUTE_RANGE_MAX_AGE_MS = 125_000;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
-// BTY（Bityuan 比特元）独立使用 MEXC BTYUSDT；Gate/HTX 未提供该交易对，不猜测其他币种别名。
+// BTY（Bityuan 比特元）独立使用 Hotcoin bty_usdt → MEXC BTYUSDT，不猜测其他币种别名。
 const CRYPTO_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'SEI', 'PLUME', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PEPE', 'B2', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK', 'BTY'];
 // MEXC 官方24hr说明为5分钟滚动统计，允许1分钟容差；只按交易所closeTime判断，不刷新旧报价时间。
 const BTY_SPOT_QUOTE_MAX_AGE_MS = 360_000;
+// 热币实时ticker只接受两分钟内的行情响应时间，不能使用单币行内的24小时窗口起点ts。
+const BTY_HOTCOIN_QUOTE_MAX_AGE_MS = 120_000;
 // ETH 现货用于钱包估值；T+0 合约账本单独使用此键对应的永续合约标记价，绝不覆盖 ETH 现货报价。
 const ETH_PERP_MARK_CACHE_KEY = 'ETH_PERP';
 // 美股/指数化合约。优先走新浪美股，缺失才走 OKX SWAP。
@@ -325,6 +327,42 @@ async function fetchPerpetualMarkJson(url: string) {
   return response.json() as Promise<any>;
 }
 
+/** 热币官方公共现货行情免签名；仅取精确的BTY/USDT，绝不调用账户、订单或合约接口。 */
+async function fetchHotcoinBtySpotQuote(): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
+  try {
+    const data = await fetchJson('https://api.hotcoinfin.com/v1/market/ticker');
+    if (data?.status !== 'ok' || !Array.isArray(data.ticker)) return null;
+    const matches = data.ticker.filter((item: any) => item?.symbol === 'bty_usdt');
+    if (matches.length !== 1) return null;
+    const row = matches[0];
+    const price = Number(row.last);
+    const timestamp = Number(data.timestamp);
+    // 官方旧例与实网分别存在秒/毫秒；必须归一化后再核验，不能用本地接收时刻伪造新鲜度。
+    const observedAt = timestamp < 1_000_000_000_000 ? timestamp * 1_000 : timestamp;
+    const age = Date.now() - observedAt;
+    if (!isValidPrice(price) || !Number.isSafeInteger(timestamp) || !Number.isSafeInteger(observedAt)
+      || timestamp <= 0 || age < 0 || age > BTY_HOTCOIN_QUOTE_MAX_AGE_MS) return null;
+    const open = Number(row.open);
+    const high = Number(row.high);
+    const low = Number(row.low);
+    const volume = Number(row.vol);
+    const quoteVolume = Number(row.amount);
+    return {
+      price,
+      source: 'Hotcoin BTY/USDT 现货',
+      patch: {
+        todayOpen: isValidPrice(open) ? open : undefined,
+        changePercent: isValidPrice(open) ? ((price - open) / open) * 100 : undefined,
+        high24h: isValidPrice(high) ? high : undefined,
+        low24h: isValidPrice(low) ? low : undefined,
+        volume24h: Number.isFinite(volume) && volume >= 0 ? volume : undefined,
+        quoteVolume24h: Number.isFinite(quoteVolume) && quoteVolume >= 0 ? quoteVolume : undefined,
+        updatedAt: new Date(observedAt).toISOString(),
+      },
+    };
+  } catch { return null; }
+}
+
 /** 仅核验过的 BTY/USDT 现货；滚动24小时接口，不把美元或BTC报价当作USDT。 */
 async function fetchMexcBtySpotQuote(): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
   try {
@@ -360,7 +398,10 @@ async function fetchMexcBtySpotQuote(): Promise<{ price: number; source: string;
 }
 
 async function fetchCryptoQuote(coin: string): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
-  if (coin === 'BTY') return fetchMexcBtySpotQuote();
+  if (coin === 'BTY') {
+    const hotcoin = await fetchHotcoinBtySpotQuote();
+    return hotcoin ?? await fetchMexcBtySpotQuote();
+  }
   const pair = `${coin}_USDT`;
   try {
     const data = await fetchCryptoJson(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${pair}`);
@@ -1045,7 +1086,7 @@ export async function refreshUsdtCnyRate(): Promise<number> {
 
 async function updateCrypto(coin: string) {
   const quote = await fetchCryptoQuote(coin);
-  if (!quote) { markFailure(coin, coin === 'BTY' ? '未取得有效MEXC BTY/USDT现货行情' : 'Gate.io、HTX、OKX均无有效报价'); return; }
+  if (!quote) { markFailure(coin, coin === 'BTY' ? '未取得有效Hotcoin或MEXC BTY/USDT现货行情' : 'Gate.io、HTX、OKX均无有效报价'); return; }
   if (coin === 'BTY') { entryFromPrice(coin, quote.price, quote.source, quote.patch); return; }
   const open = await fetchTodayOpen(coin);
   const change = open && open > 0 ? ((quote.price - open) / open) * 100 : undefined;
@@ -1065,7 +1106,7 @@ async function updateCryptoFast(coin: string) {
   ]);
   if (timeout) clearTimeout(timeout);
   if (!quote) {
-    markFailure(coin, coin === 'BTY' ? '未取得有效MEXC BTY/USDT现货行情' : 'Gate.io、HTX、OKX均无有效报价');
+    markFailure(coin, coin === 'BTY' ? '未取得有效Hotcoin或MEXC BTY/USDT现货行情' : 'Gate.io、HTX、OKX均无有效报价');
     return;
   }
   entryFromPrice(coin, quote.price, quote.source, quote.patch);
@@ -1302,12 +1343,25 @@ export function getLatestPrice(coin: string): number | null {
   if (key === 'USDT' || key === 'USDC' || key === 'BUSD' || key === 'DAI') return 1;
   if (key === 'CNY') return 1;
   const entry = latestPrices[key];
-  if (!entry) return null;
+  if (!entry || (key === 'BTY' && !isBtySpotQuoteFresh(entry))) return null;
   if (KRW_COINS.has(key) && entry.price > 10000) return Number((entry.price / 1400).toFixed(4));
   return entry.price;
 }
 
-export function getAllLatestPrices() { return { ...latestPrices }; }
+/** 只为BTY启用严格有效期；旧缓存保留，不把供应商失败后的旧值继续用于钱包估值。 */
+function isBtySpotQuoteFresh(entry: PriceEntry | undefined): boolean {
+  if (!entry) return false;
+  const observedAt = Date.parse(entry.updatedAt);
+  const age = Date.now() - observedAt;
+  const limit = priceHealth.BTY?.source === 'MEXC BTY/USDT 现货' ? BTY_SPOT_QUOTE_MAX_AGE_MS : BTY_HOTCOIN_QUOTE_MAX_AGE_MS;
+  return Number.isFinite(observedAt) && age >= 0 && age <= limit;
+}
+
+export function getAllLatestPrices() {
+  const visible = { ...latestPrices };
+  if (visible.BTY && !isBtySpotQuoteFresh(visible.BTY)) delete visible.BTY;
+  return visible;
+}
 export function getT0EthPerpetualMark(): T0EthPerpetualMarkSnapshot {
   const entry = latestPrices[ETH_PERP_MARK_CACHE_KEY];
   const health = priceHealth[ETH_PERP_MARK_CACHE_KEY];
@@ -1341,10 +1395,14 @@ export function subscribeT0EthPerpetualMark(listener: (snapshot: T0EthPerpetualM
   }
   return () => t0EthPerpetualMarkListeners.delete(listener);
 }
-export function getLatestChangePercent(coin: string): number | null { return latestPrices[coin.toUpperCase()]?.changePercent ?? null; }
+export function getLatestChangePercent(coin: string): number | null {
+  const entry = latestPrices[coin.toUpperCase()];
+  if (!entry || (coin.toUpperCase() === 'BTY' && !isBtySpotQuoteFresh(entry))) return null;
+  return entry.changePercent;
+}
 export function getLatestTickerData(coin: string): Omit<PriceEntry, 'updatedAt'> | null {
   const entry = latestPrices[coin.toUpperCase()];
-  if (!entry) return null;
+  if (!entry || (coin.toUpperCase() === 'BTY' && !isBtySpotQuoteFresh(entry))) return null;
   const { updatedAt: _updatedAt, ...ticker } = entry;
   return ticker;
 }
@@ -1357,7 +1415,7 @@ export function getMarketPriceHealth() {
     // 开盘资产120秒、休市资产30分钟后标记为需要人工核查；不删除最后有效价。
     const limit = CRYPTO_COINS.includes(coin) || coin === ETH_PERP_MARK_CACHE_KEY ? 120 : 1800;
     const stale = coin === 'BTY'
-      ? !health.lastSuccessAt || now - new Date(health.lastSuccessAt).getTime() > BTY_SPOT_QUOTE_MAX_AGE_MS
+      ? !health.lastSuccessAt || !isBtySpotQuoteFresh(latestPrices.BTY)
       : ageSeconds > limit;
     result[coin] = { ...health, ageSeconds, stale };
   }

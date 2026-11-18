@@ -79,11 +79,14 @@ function ticker(patch: Record<string, unknown> = {}) {
 }
 function scannerHarness(response: unknown = ticker(), ok = true) {
   vi.useFakeTimers(); vi.setSystemTime(NOW);
-  const network = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok, status: ok ? 200 : 503, json: async () => response }));
-  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS', 'BTY_SPOT_QUOTE_MAX_AGE_MS',
+  // 本组延续MEXC解析回归：模拟热币主源不可用，真实处理器才转入备用。
+  const network = vi.fn(async (url: string, _init?: RequestInit) => url.includes('hotcoinfin.com')
+    ? ({ ok: false, status: 503, json: async () => ({}) })
+    : ({ ok, status: ok ? 200 : 503, json: async () => response }));
+  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS', 'BTY_SPOT_QUOTE_MAX_AGE_MS', 'BTY_HOTCOIN_QUOTE_MAX_AGE_MS',
     'CRYPTO_COINS', 'ETH_PERP_MARK_CACHE_KEY', 'KRW_COINS'];
   const functions = ['nowIso', 'isValidPrice', 'setPrice', 'markFailure', 'entryFromPrice', 'fetchJson', 'fetchCryptoJson',
-    'fetchMexcBtySpotQuote', 'fetchCryptoQuote', 'updateCryptoFast', 'getLatestPrice', 'getLatestTickerData', 'getMarketPriceHealth'];
+    'fetchHotcoinBtySpotQuote', 'fetchMexcBtySpotQuote', 'fetchCryptoQuote', 'updateCryptoFast', 'isBtySpotQuoteFresh', 'getLatestPrice', 'getLatestTickerData', 'getMarketPriceHealth'];
   const runtime = evaluate<{
     fetchCryptoQuote: (coin: string) => Promise<{ price: number; source: string; patch: Record<string, unknown> } | null>;
     updateCryptoFast: (coin: string) => Promise<void>;
@@ -187,8 +190,9 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
       updatedAt: new Date(NOW).toISOString(),
     } });
     expect(quote?.patch.changePercent).toBeCloseTo(((0.02179 - 0.02286) / 0.02286) * 100, 10);
-    expect(network).toHaveBeenCalledTimes(1);
-    expect(network.mock.calls[0][0]).toBe('https://api.mexc.com/api/v3/ticker/24hr?symbol=BTYUSDT');
+    expect(network).toHaveBeenCalledTimes(2);
+    expect(network.mock.calls[0][0]).toBe('https://api.hotcoinfin.com/v1/market/ticker');
+    expect(network.mock.calls[1][0]).toBe('https://api.mexc.com/api/v3/ticker/24hr?symbol=BTYUSDT');
     expect(network.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
   it.each([
@@ -199,7 +203,7 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
     const { runtime, network } = scannerHarness(ticker(patch));
     expect(await runtime.fetchCryptoQuote('BTY')).toBeNull();
     expect(runtime.getLatestPrice('BTY')).toBeNull();
-    expect(network).toHaveBeenCalledTimes(1);
+    expect(network).toHaveBeenCalledTimes(2);
   });
   it('允许官方五分钟滚动统计closeTime加一分钟容差，仍保留旧观察时刻且边界后stale', async () => {
     const { runtime } = scannerHarness(ticker({ closeTime: NOW - 360_000 }));
@@ -230,15 +234,19 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
     await runtime.updateCryptoFast('BTY');
     expect(runtime.getLatestPrice('BTY')).toBeNull(); expect(runtime.getLatestTickerData('BTY')).toBeNull();
     expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source: 'none', stale: true,
-      consecutiveFailures: 1, lastSuccessAt: '', lastError: '未取得有效MEXC BTY/USDT现货行情' });
+      consecutiveFailures: 1, lastSuccessAt: '', lastError: '未取得有效Hotcoin或MEXC BTY/USDT现货行情' });
     network.mockResolvedValue({ ok: true, status: 200, json: async () => ticker() });
     await runtime.updateCryptoFast('BTY');
     network.mockRejectedValue(new Error('offline timeout'));
     await runtime.updateCryptoFast('BTY');
     vi.setSystemTime(NOW + 360_001);
-    expect(runtime.getLatestPrice('BTY')).toBe(0.02179);
+    expect(runtime.getLatestPrice('BTY')).toBeNull();
+    expect(runtime.getLatestTickerData('BTY')).toBeNull();
     expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ stale: true, consecutiveFailures: 1,
       lastSuccessAt: new Date(NOW).toISOString(), source: 'MEXC BTY/USDT 现货' });
+    // 只拦截过期估值，不删除最后成功缓存；回拨测试时钟可证明原记录仍在。
+    vi.setSystemTime(NOW);
+    expect(runtime.getLatestPrice('BTY')).toBe(0.02179);
     expect(vi.getTimerCount()).toBe(0); // 快周期外层timer已释放，没有scanner或新增timer启动。
   });
 });
