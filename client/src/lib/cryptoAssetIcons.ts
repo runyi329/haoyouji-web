@@ -5,6 +5,7 @@ const CRYPTO_ASSET_ICON_SOURCES: Readonly<Record<string, string>> = {
   CNY: `${COS_CRYPTO_ICON_BASE_URL}/cny-flag.png`,
   USDT: `${COS_CRYPTO_ICON_BASE_URL}/usdt.png`,
   BTC: `${COS_CRYPTO_ICON_BASE_URL}/btc.png`,
+  BTY: "/assets/crypto-icons/bty.png",
   ETH: `${COS_CRYPTO_ICON_BASE_URL}/eth.png`,
   SOL: `${COS_CRYPTO_ICON_BASE_URL}/sol.png`,
   BNB: `${COS_CRYPTO_ICON_BASE_URL}/bnb.png`,

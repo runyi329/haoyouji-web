@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
+import { getWalletFlowCategory } from '../client/src/lib/walletFlowPresentation';
 
 // 离线回归：从 AST 抽取真实函数/表达式，不 import DB 或路由模块，不执行模块顶层 DDL。
 // 假连接只接受 SELECT；夹具模拟行筛选/排序，不假装是 MySQL 引擎。
@@ -734,12 +735,16 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
       setAdjAssetFlowScope: setScope, adjAssetFlowUserId: 28, adjAssetFlowCurrency: 'ETH',
       setAdjUserHistoryTab: setHistoryTab,
       refetchAdjHistory: vi.fn(), setAdjLogPage: vi.fn(), refetchAdjGlobal: vi.fn(), refetchAdjMultiAssetHistory: refetch,
+      adjSelectedUserIdRef: { current: 28 }, AI_WALLET_SETTLEMENT_ASSETS, getWalletFlowCategory,
+      setAdjFlowTab: vi.fn(), setAdjUserFlowKeyword: vi.fn(),
+      setAdjUserFlowDatePreset: vi.fn(), setAdjUserFlowCustomStart: vi.fn(), setAdjUserFlowCustomEnd: vi.fn(),
     };
     const realRefresh = clientExpression<(userId: number) => Promise<void>>('refreshAdjWalletAfterChange', bindings);
     let refreshCompletion!: Promise<void>;
     const refresh = vi.fn((userId: number) => { refreshCompletion = realRefresh(userId); return refreshCompletion; });
     const success = evaluate<(...args: unknown[]) => unknown>(`(${clientSuccess(name).getText(clientAst)});`, {
       ...bindings, refreshAdjWalletAfterChange: refresh,
+      showAdjSubmittedCurrency: clientExpression('showAdjSubmittedCurrency', bindings),
     });
     // 成功结果不决定目标身份/币种，必须使用实际 mutation variables。
     expect(success({ userId: 999, assetCode: 'SOL' }, name === 'multiAssetAdjMutation'
@@ -766,9 +771,14 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
       expect(currentScope).toEqual({ userId: 28, assetCode: 'ETH', page: 1 });
       expect(setHistoryTab.mock.calls).toEqual([['digital']]);
       expect(rememberUser.mock.calls).toEqual([[28]]);
+      expect(bindings.setAdjFlowTab.mock.calls).toEqual([['user']]);
+      expect(bindings.setAdjUserFlowKeyword.mock.calls).toEqual([['']]);
+      expect(bindings.setAdjUserFlowDatePreset.mock.calls).toEqual([['all']]);
+      expect(bindings.setAdjUserFlowCustomStart.mock.calls).toEqual([['']]);
+      expect(bindings.setAdjUserFlowCustomEnd.mock.calls).toEqual([['']]);
       if (typeof update !== 'function') throw new Error('Expected guarded scope updater');
-      expect(update({ ...originalScope, assetCode: 'all' })).toEqual({ userId: 28, assetCode: 'all', page: 1 });
-      expect(update({ ...originalScope, assetCode: 'SOL' })).toEqual({ userId: 28, assetCode: 'all', page: 1 });
+      expect(update({ ...originalScope, assetCode: 'all' })).toEqual({ userId: 28, assetCode: 'ETH', page: 1 });
+      expect(update({ ...originalScope, assetCode: 'SOL' })).toEqual({ userId: 28, assetCode: 'ETH', page: 1 });
       const newerScope = { userId: 29, assetCode: 'SOL', page: 9 };
       expect(update(newerScope)).toBe(newerScope);
     }

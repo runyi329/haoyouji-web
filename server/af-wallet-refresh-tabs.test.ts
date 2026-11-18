@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
+import { getWalletFlowCategory, getWalletFundingCurrency } from '../client/src/lib/walletFlowPresentation';
 
 // 离线执行生产 AST 片段：不 import React 页面、路由、DB 或行情模块，不启动服务。
 // 所有 refetch / mutation / JSX factory 都是测试边界；不会连接网络或真实浏览器。
@@ -52,7 +53,7 @@ type FlowTab = 'user' | 'global' | 'balances';
 const options = { cancelRefetch: true, throwOnError: true };
 const preserved = {
   adjSearch: 'Ocean', adjCurrency: 'ETH', adjDirection: 'sub', adjAmount: '0.12345678',
-  adjNote: '保留备注', adjSelectedCommonNote: '保留备注', adjUserHistoryTab: 'funding',
+  adjNote: '保留备注', adjSelectedCommonNote: '保留备注', adjUserHistoryTab: 'cny',
   adjAssetFlowScope: { userId: 28, assetCode: 'SOL', page: 7 }, adjLogPage: 9,
   adjBalanceSearch: 'Ocean', adjHideZeroAssetUsers: false, adjHideZeroAssetTypes: false,
   adjUserFlowKeyword: '退款', adjUserFlowDatePreset: 'custom',
@@ -299,12 +300,22 @@ function historyHarness() {
     cleanAdjustmentNote: expression('cleanAdjustmentNote'),
     isReversibleMultiAssetAdjustment: expression('isReversibleMultiAssetAdjustment'),
     formatLedgerDate: expression('formatLedgerDate'),
+    getWalletFlowCategory, getWalletFundingCurrency, refetchAdjHistory: vi.fn(),
+    // 仅行情/图表/图片导出为离线边界；余额卡和真实流水 JSX 均保留。
+    OrderCardImageDownload: 'OrderCardImageDownload', adjSelectedUserExportRef: { current: null },
+    clearAdjUser: vi.fn(), adjWalletPricesQuery: {},
+    adjWalletSnapshotQuery: {},
+    adjSelectedWalletValuation: { hasRate: false, totalCny: null, unpricedAssets: [] },
+    formatWalletAmount: expression('formatWalletAmount'),
+    getFundingBalanceBreakdown: expression('getFundingBalanceBreakdown'),
+    getMultiAssetBreakdown: expression('getMultiAssetBreakdown'),
   };
   bindings.getLedgerDateRange = expression('getLedgerDateRange', bindings);
   const render = () => {
     for (const name of ['adjAssetFlowUserId', 'adjAssetFlowPage', 'adjAssetFlowCurrency',
       'adjVisibleMultiAssetHistory', 'adjAssetFlowTotal', 'adjAssetFlowTotalPages', 'adjAssetFlowDisplayedPage',
-      'adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjFilteredHistory']) bindings[name] = expression(name, bindings);
+      'adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjCategoryHistory', 'adjFilteredHistory',
+      'adjSelectedWalletUser', 'adjSelectedUsdtBalance', 'adjSelectedCnyBalance']) bindings[name] = expression(name, bindings);
     return evaluate<Element>(`(${userSection.getText(ast)});`, bindings);
   };
   return { bindings, render, tabSetter, scopeSetter };
@@ -315,10 +326,11 @@ function byText(tree: unknown, label: string) {
 function click(node: Element) { (node.props.onClick as () => void)(); }
 
 describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边界', () => {
-  it('默认数字币；每次只有对应 panel，aria 关联正确；未选人/非用户视图不展示任何 panel', () => {
+  it('默认稳定币，与USDT表单一致；三分类仅展示对应 panel，aria正确；未选人/非用户视图不展示 panel', () => {
     const test = historyHarness();
-    expect(test.bindings.adjUserHistoryTab).toBe('digital');
-    for (const [tab, label] of [['digital', '数字币'], ['funding', '人民币 / USDT']] as const) {
+    expect(test.bindings.adjUserHistoryTab).toBe('stable');
+    expect(stateInitial('adjCurrency')).toBe('USDT');
+    for (const [tab, label] of [['digital', '数字币'], ['stable', '稳定币'], ['cny', '人民币']] as const) {
       test.bindings.adjUserHistoryTab = tab;
       const tree = test.render();
       const panels = elements(tree).filter(node => node.props.role === 'tabpanel');
@@ -326,7 +338,7 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
       expect(panels[0].props.id).toBe(`adj-${tab}-history-panel`);
       expect(panels[0].props['aria-labelledby']).toBe(`adj-${tab}-history-tab`);
       const tabs = elements(tree).filter(node => node.props.role === 'tab');
-      expect(tabs).toHaveLength(2);
+      expect(tabs).toHaveLength(3);
       expect(tabs.filter(node => node.props['aria-selected'])).toEqual([byText(tree, label)]);
       expect(byText(tree, label).props['aria-controls']).toBe(panels[0].props.id);
       expect(tabs.every(node => node.props.type === 'button')).toBe(true);
@@ -342,25 +354,35 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
     expect(elements(test.render()).some(node => node.props.role === 'tabpanel')).toBe(false);
   });
 
-  it('Tab 往返不改数字币筛选/页码、调账币种及人民币/USDT原列表和关键字日期过滤', () => {
+  it('三类往返不改数字币筛选/页码或调账币种；USDT/CNY分开且保留原关键字日期过滤', () => {
     const test = historyHarness();
     const scope = test.bindings.adjAssetFlowScope;
+    test.bindings.adjUserHistoryTab = 'digital';
     const first = test.render();
     expect(text(first)).toContain('数字币保留流水');
-    click(byText(first, '人民币 / USDT'));
+    click(byText(first, '稳定币'));
+    const stable = test.render();
+    const stablePanel = required(elements(stable).find(node => node.props.role === 'tabpanel'), 'stable panel');
+    expect(elements(stablePanel).filter(node => node.props.key != null).map(node => node.props.key)).toEqual([fundingRows[0].id]);
+    expect(text(stablePanel)).toContain('USDT保留流水');
+    expect(text(stablePanel)).not.toContain('人民币保留流水');
+    expect(text(stablePanel)).toContain('共 1 条');
+    click(byText(stable, '人民币'));
     const funding = test.render();
-    const panel = required(elements(funding).find(node => node.props.role === 'tabpanel'), 'funding panel');
-    expect(elements(panel).filter(node => node.props.key != null).map(node => node.props.key)).toEqual(fundingRows.map(row => row.id));
-    expect(text(panel)).toContain('USDT保留流水');
+    const panel = required(elements(funding).find(node => node.props.role === 'tabpanel'), 'cny panel');
+    expect(elements(panel).filter(node => node.props.key != null).map(node => node.props.key)).toEqual(fundingRows.slice(1).map(row => row.id));
+    expect(text(panel)).not.toContain('USDT保留流水');
     expect(text(panel)).toContain('人民币保留流水');
     expect(text(panel)).toContain('业务冻结');
+    expect(text(panel)).toContain('共 2 条');
     expect(test.bindings.adjHistory).toBe(fundingRows);
-    expect(test.bindings.adjFilteredHistory).toEqual(fundingRows);
+    expect(test.bindings.adjCategoryHistory).toEqual(fundingRows.slice(1));
+    expect(test.bindings.adjFilteredHistory).toEqual(fundingRows.slice(1));
     test.bindings.adjUserFlowKeyword = '人民币';
     test.bindings.adjUserFlowDatePreset = 'custom';
     test.bindings.adjUserFlowCustomStart = '2026-10-13';
     test.bindings.adjUserFlowCustomEnd = '2026-10-13';
-    test.render();
+    expect(text(test.render())).toContain('1 / 2 条');
     expect(test.bindings.adjFilteredHistory).toEqual([fundingRows[1]]);
     click(byText(funding, '数字币'));
     expect(text(test.render())).toContain('7 / 13 页');
@@ -368,11 +390,106 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
     expect(test.bindings.adjCurrency).toBe('USDT');
     expect(test.bindings.adjUserFlowKeyword).toBe('人民币');
     expect(test.scopeSetter).not.toHaveBeenCalled();
-    expect(test.tabSetter.mock.calls).toEqual([['funding'], ['digital']]);
+    expect(test.tabSetter.mock.calls).toEqual([['stable'], ['cny'], ['digital']]);
+  });
+
+  it('稳定币/人民币的错误、空分类和筛选无匹配状态区分，重试执行真实refetch回调', () => {
+    const test = historyHarness();
+    for (const [tab, emptyLabel, onlyOtherRows] of [
+      ['stable', '暂无稳定币（USDT）流水', fundingRows.slice(1)],
+      ['cny', '暂无人民币流水', fundingRows.slice(0, 1)],
+    ] as const) {
+      test.bindings.adjUserHistoryTab = tab;
+      test.bindings.adjHistoryQuery = { data: onlyOtherRows };
+      expect(text(test.render())).toContain(emptyLabel);
+      expect(text(test.render())).toContain('共 0 条');
+      test.bindings.adjHistoryQuery = { data: fundingRows };
+      test.bindings.adjUserFlowKeyword = '绝对没有的备注';
+      expect(text(test.render())).toContain('未找到符合条件的流水');
+      test.bindings.adjHistoryQuery = { data: fundingRows, isError: true };
+      const failed = test.render();
+      expect(text(failed)).toContain('0 / ');
+      expect(text(failed)).toContain('流水更新失败，已显示的记录仍保留');
+      expect(text(failed)).toContain('未找到符合条件的流水');
+      expect(text(failed)).not.toContain(emptyLabel);
+      click(byText(failed, '重新加载'));
+      test.bindings.adjUserFlowKeyword = '';
+      const cached = test.render();
+      expect(text(cached)).toContain(tab === 'stable' ? 'USDT保留流水' : '人民币保留流水');
+      expect(text(cached)).toContain(tab === 'stable' ? '共 1 条' : '共 2 条');
+      test.bindings.adjHistoryQuery = { data: undefined, isError: true };
+      const absent = test.render();
+      expect(text(absent)).toContain('读取失败');
+      expect(text(absent)).toContain('流水更新失败');
+      expect(text(absent)).not.toMatch(/共 0 条|暂无.*流水/);
+    }
+    expect(test.bindings.refetchAdjHistory).toHaveBeenCalledTimes(2);
+    expect(test.scopeSetter).not.toHaveBeenCalled();
+    expect(test.tabSetter).not.toHaveBeenCalled();
+  });
+
+  it('分类/关键词/日期仅筛选原记录引用，金额余额币种及所有审计字段不改', () => {
+    const test = historyHarness();
+    const rows = Object.freeze([
+      Object.freeze({ ...fundingRows[0], amount: '0.000000000000000001', balanceAfter: '123456789.123456789123456789', extraAudit: '保留审计字段' }),
+      Object.freeze({ ...fundingRows[0], id: 'legacy_4', currency: undefined, note: '旧无币种流水' }),
+      Object.freeze({ ...fundingRows[1], id: 'alias_5', currency: 'RMB' }),
+      Object.freeze({ ...fundingRows[2], id: 'alias_6', currency: '人民币' }),
+    ]);
+    const before = JSON.stringify(rows);
+    test.bindings.adjHistoryQuery = { data: rows };
+    for (const [tab, expected] of [['stable', rows.slice(0, 2)], ['cny', rows.slice(2)]] as const) {
+      test.bindings.adjUserHistoryTab = tab;
+      test.render();
+      expect(test.bindings.adjHistory).toBe(rows);
+      expect(test.bindings.adjFilteredHistory).toEqual(expected);
+      (test.bindings.adjFilteredHistory as unknown[]).forEach((row, index) => expect(row).toBe(expected[index]));
+    }
+    test.bindings.adjUserHistoryTab = 'stable';
+    test.bindings.adjUserFlowKeyword = '保留审计字段';
+    test.render();
+    expect(test.bindings.adjFilteredHistory).toEqual([]); // 额外字段不擅自进入原关键词口径
+    test.bindings.adjUserFlowKeyword = '123456789.123456789123456789';
+    test.render();
+    expect(test.bindings.adjFilteredHistory).toEqual([rows[0]]);
+    expect(JSON.stringify(rows)).toBe(before);
+  });
+
+  it('每个真实用户panel均在原余额汇总之前，用户趋势位于汇总之后', () => {
+    const test = historyHarness();
+    for (const tab of ['digital', 'stable', 'cny']) {
+      test.bindings.adjUserHistoryTab = tab;
+      const tree = elements(test.render());
+      const panel = required(tree.find(node => node.props.role === 'tabpanel'), tab);
+      const summary = required(tree.find(node => node.props.ref === test.bindings.adjSelectedUserExportRef), 'selected user summary');
+      const trend = required(tree.find(node => node.type === 'WalletBalanceTrendChart'), 'selected user trend');
+      expect(tree.indexOf(panel)).toBeLessThan(tree.indexOf(summary));
+      expect(tree.indexOf(summary)).toBeLessThan(tree.indexOf(trend));
+      expect(text(summary)).toContain('稳定币 · USDT 余额');
+      expect(text(summary)).toContain('人民币余额');
+      expect(text(summary)).toContain('资产总价值');
+    }
+  });
+
+  it('切用户首渲染scope仍为page1/all，不采用上一用户币种或页码；真实select回调绑定新用户', () => {
+    const test = historyHarness();
+    test.bindings.adjUserHistoryTab = 'digital';
+    test.bindings.adjSelectedUser = { id: 29, name: '新用户' };
+    const tree = test.render();
+    expect(test.bindings.adjAssetFlowUserId).toBe(29);
+    expect(test.bindings.adjAssetFlowPage).toBe(1);
+    expect(test.bindings.adjAssetFlowCurrency).toBe('all');
+    const select = required(elements(tree).find(node => node.type === 'select'), 'new user digital select');
+    expect(select.props.value).toBe('all');
+    (select.props.onChange as (event: unknown) => void)({ target: { value: 'MSTR' } });
+    expect(test.scopeSetter).toHaveBeenLastCalledWith({ userId: 29, assetCode: 'MSTR', page: 1 });
+    expect(test.bindings.adjCurrency).toBe('USDT');
+    expect(test.tabSetter).not.toHaveBeenCalled();
   });
 
   it('数字币 select 与上下页执行原 scope 回调：保留当前用户、币种，改币种回到第一页', () => {
     const test = historyHarness();
+    test.bindings.adjUserHistoryTab = 'digital';
     const tree = test.render();
     const select = required(elements(tree).find(node => node.type === 'select'), 'digital select');
     expect(select.props.value).toBe('ETH');
@@ -387,7 +504,7 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
     expect(test.tabSetter).not.toHaveBeenCalled();
   });
 
-  it('菜单 digital/funding 与流水币种筛选不进入实际调账 payload（只调用离线 mutation spy）', () => {
+  it('授权三分类菜单与流水筛选不进入实际调账 payload（仅离线 spy，不调用真实资金请求）', () => {
     const test = historyHarness();
     const fundingMutation = { mutate: vi.fn() };
     const digitalMutation = { mutate: vi.fn() };
@@ -395,7 +512,7 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
       adjMutation: fundingMutation, multiAssetAdjMutation: digitalMutation,
       toast: { error: vi.fn() }, crypto: { randomUUID: () => 'offline-request-id' } });
     for (const currency of ['USDT', 'CNY', 'ETH']) {
-      for (const tab of ['digital', 'funding']) {
+      for (const tab of ['digital', 'stable', 'cny']) {
         test.bindings.adjCurrency = currency;
         test.bindings.adjUserHistoryTab = tab;
         expression<() => void>('handleAdjSubmit', test.bindings)();
@@ -405,8 +522,8 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
         else expect(fundingMutation.mutate).toHaveBeenLastCalledWith({ userId: 28, currency, amount: -2.5, note: '调账备注' });
       }
     }
-    expect(fundingMutation.mutate).toHaveBeenCalledTimes(4);
-    expect(digitalMutation.mutate).toHaveBeenCalledTimes(2);
+    expect(fundingMutation.mutate).toHaveBeenCalledTimes(6);
+    expect(digitalMutation.mutate).toHaveBeenCalledTimes(3);
   });
 });
 

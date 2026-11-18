@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
+import { getWalletFlowCategory, getWalletFundingCurrency } from '../client/src/lib/walletFlowPresentation';
 
 // 精准离线回归：只读取生产源码并执行 AST 片段，不 import 页面/router/DB/行情。
 // JSX factory、tRPC cache、资金 mutation、基础设施初始化和 SQL 连接都是离线边界。
@@ -184,15 +185,22 @@ function successHarness(name: 'adjMutation' | 'multiAssetAdjMutation', selectedI
   const query = initializer(page, name);
   if (!ts.isCallExpression(query)) throw new Error(`Expected useMutation: ${name}`);
   const bindings: Record<string, any> = { adjSelectedUser: selectedId == null ? null : { id: selectedId },
-    adjAmount: '新用户金额', adjNote: '新用户备注', adjUserHistoryTab: 'funding',
+    adjSelectedUserIdRef: { current: selectedId ?? 0 }, AI_WALLET_SETTLEMENT_ASSETS, getWalletFlowCategory,
+    adjAmount: '新用户金额', adjNote: '新用户备注', adjUserHistoryTab: 'cny', adjFlowTab: 'balances',
+    adjUserFlowKeyword: '旧关键词', adjUserFlowDatePreset: 'custom',
+    adjUserFlowCustomStart: '2026-10-01', adjUserFlowCustomEnd: '2026-10-31',
     adjAssetFlowScope: { userId: selectedId ?? 0, assetCode: 'SOL', page: 7 },
     toast: { success: vi.fn(), error: vi.fn() }, rememberRecentAdjUser: vi.fn(),
     refreshAdjWalletAfterChange: vi.fn(refresh ?? (() => Promise.resolve())), setAdjLogPage: vi.fn() };
   for (const [setter, key] of [['setAdjAmount', 'adjAmount'], ['setAdjNote', 'adjNote'],
-    ['setAdjUserHistoryTab', 'adjUserHistoryTab'], ['setAdjAssetFlowScope', 'adjAssetFlowScope']]) {
+    ['setAdjUserHistoryTab', 'adjUserHistoryTab'], ['setAdjAssetFlowScope', 'adjAssetFlowScope'],
+    ['setAdjFlowTab', 'adjFlowTab'], ['setAdjUserFlowKeyword', 'adjUserFlowKeyword'],
+    ['setAdjUserFlowDatePreset', 'adjUserFlowDatePreset'], ['setAdjUserFlowCustomStart', 'adjUserFlowCustomStart'],
+    ['setAdjUserFlowCustomEnd', 'adjUserFlowCustomEnd']]) {
     bindings[setter] = vi.fn((value: unknown) => { bindings[key] = typeof value === 'function' ? value(bindings[key]) : value; });
   }
-  const options = evaluate<{ onSuccess: (result: unknown, vars: { userId: number | string; assetCode?: string }) => unknown }>(
+  bindings.showAdjSubmittedCurrency = expression('showAdjSubmittedCurrency', bindings);
+  const options = evaluate<{ onSuccess: (result: unknown, vars: { userId: number | string; currency?: string; assetCode?: string }) => unknown }>(
     `(${query.arguments[0].getText(page)});`, bindings);
   return { bindings, onSuccess: options.onSuccess };
 }
@@ -201,7 +209,7 @@ describe('两个真实 onSuccess：variables.userId 绑定、保存 pending 与�
     const slow = deferred();
     const test = successHarness(name, 28, () => slow.promise);
     let pending = true;
-    const result = test.onSuccess({ userId: 999 }, { userId: '28', assetCode: 'ETH' });
+    const result = test.onSuccess({ userId: 999 }, { userId: '28', currency: 'USDT', assetCode: 'ETH' });
     expect(result).toBeUndefined();
     await Promise.resolve(result).then(() => { pending = false; });
     expect(pending).toBe(false);
@@ -209,35 +217,76 @@ describe('两个真实 onSuccess：variables.userId 绑定、保存 pending 与�
     expect(test.bindings.rememberRecentAdjUser.mock.calls).toEqual([[28]]);
     expect(test.bindings.adjAmount).toBe('');
     expect(test.bindings.adjNote).toBe('');
-    expect(test.bindings.adjUserHistoryTab).toBe(name === 'adjMutation' ? 'funding' : 'digital');
+    expect(test.bindings.adjUserHistoryTab).toBe(name === 'adjMutation' ? 'stable' : 'digital');
+    expect(test.bindings.adjFlowTab).toBe('user');
+    expect(test.bindings.adjUserFlowKeyword).toBe('');
+    expect(test.bindings.adjUserFlowDatePreset).toBe('all');
+    expect(test.bindings.adjUserFlowCustomStart).toBe('');
+    expect(test.bindings.adjUserFlowCustomEnd).toBe('');
+    expect(test.bindings.setAdjLogPage.mock.calls).toEqual([[1]]);
     slow.resolve(); await microtasks();
   });
   it.each(['adjMutation', 'multiAssetAdjMutation'] as const)('%s 保存旧用户后切到新用户：不清表单/Tab/scope，仍刷新旧 variables ID', name => {
-    const test = successHarness(name, 29);
-    const beforeScope = test.bindings.adjAssetFlowScope;
-    test.onSuccess({ userId: 29 }, { userId: 28, assetCode: 'ETH' });
-    expect(test.bindings.refreshAdjWalletAfterChange.mock.calls).toEqual([[28]]);
-    expect(test.bindings.rememberRecentAdjUser.mock.calls).toEqual([[28]]);
-    expect(test.bindings.adjAmount).toBe('新用户金额');
-    expect(test.bindings.adjNote).toBe('新用户备注');
-    expect(test.bindings.adjAssetFlowScope).toBe(beforeScope);
-    for (const name of ['setAdjAmount', 'setAdjNote', 'setAdjUserHistoryTab', 'setAdjAssetFlowScope'])
-      expect(test.bindings[name], name).not.toHaveBeenCalled();
+    for (const selectedId of [29, null]) {
+      const test = successHarness(name, 28);
+      // 捕获旧 selectedUser=28，仅更改 render ref，不能用闭包旧值代替真正竞态保护。
+      test.bindings.adjSelectedUserIdRef.current = selectedId ?? 0;
+      const beforeScope = test.bindings.adjAssetFlowScope;
+      test.onSuccess({ userId: 29 }, { userId: 28, currency: 'USDT', assetCode: 'ETH' });
+      expect(test.bindings.refreshAdjWalletAfterChange.mock.calls).toEqual([[28]]);
+      expect(test.bindings.rememberRecentAdjUser.mock.calls).toEqual([[28]]);
+      expect(test.bindings.adjAmount).toBe('新用户金额');
+      expect(test.bindings.adjNote).toBe('新用户备注');
+      expect(test.bindings.adjAssetFlowScope).toBe(beforeScope);
+      expect(test.bindings.adjUserHistoryTab).toBe('cny');
+      expect(test.bindings.adjFlowTab).toBe('balances');
+      for (const setter of ['setAdjAmount', 'setAdjNote', 'setAdjUserHistoryTab', 'setAdjAssetFlowScope',
+        'setAdjFlowTab', 'setAdjUserFlowKeyword', 'setAdjUserFlowDatePreset', 'setAdjUserFlowCustomStart',
+        'setAdjUserFlowCustomEnd', 'setAdjLogPage']) expect(test.bindings[setter], setter).not.toHaveBeenCalled();
+    }
   });
-  it.each(['all', 'ETH', 'SOL'])('数字币成功筛选=%s：第一页，匹配/全部保留，其他币种改 all 让新记录可见', assetCode => {
+  it.each(['all', 'SOL', 'ETH'].flatMap(previousAssetCode =>
+    ['ETH', 'MSTR', 'SLV'].map(submittedAssetCode => ({ previousAssetCode, submittedAssetCode }))))
+  ('数字币成功旧筛选=$previousAssetCode，提交=$submittedAssetCode：自动显示本笔币种第一页', ({ previousAssetCode, submittedAssetCode }) => {
     const test = successHarness('multiAssetAdjMutation', 28);
-    test.bindings.adjAssetFlowScope = { userId: 28, assetCode, page: 7 };
-    test.onSuccess(null, { userId: 28, assetCode: 'ETH' });
-    expect(test.bindings.adjAssetFlowScope).toEqual({ userId: 28, page: 1, assetCode: assetCode === 'SOL' ? 'all' : assetCode });
+    test.bindings.adjAssetFlowScope = { userId: 28, assetCode: previousAssetCode, page: 7 };
+    test.onSuccess({ userId: 29, assetCode: 'SOL' }, { userId: 28, assetCode: submittedAssetCode });
+    expect(test.bindings.adjAssetFlowScope).toEqual({ userId: 28, page: 1, assetCode: submittedAssetCode });
     expect(test.bindings.adjUserHistoryTab).toBe('digital');
+  });
+  it('人民币成功使用 variables.currency 分类，不使用响应币种或旧 cny 草稿，仍立即结束 pending', () => {
+    const test = successHarness('adjMutation', 28);
+    test.bindings.adjUserHistoryTab = 'stable';
+    expect(test.onSuccess({ currency: 'USDT' }, { userId: '28', currency: 'CNY' })).toBeUndefined();
+    expect(test.bindings.adjUserHistoryTab).toBe('cny');
+    expect(test.bindings.refreshAdjWalletAfterChange.mock.calls).toEqual([[28]]);
   });
   it('数字币 scope 函数式更新排队后切人：执行时新用户 scope 不能被清掉', () => {
     const test = successHarness('multiAssetAdjMutation', 28);
     test.bindings.setAdjAssetFlowScope.mockImplementation(() => undefined);
     test.onSuccess(null, { userId: 28, assetCode: 'ETH' });
     const update = test.bindings.setAdjAssetFlowScope.mock.calls[0][0];
+    expect(update).toBeTypeOf('function');
     const newScope = { userId: 29, assetCode: 'SOL', page: 9 };
     expect(update(newScope)).toBe(newScope);
+  });
+
+  it.each([29, 0])('数字币 scope updater 排队后 ref=%s：即使 current 仍属提交用户，也返回 current 原引用', selectedId => {
+    const test = successHarness('multiAssetAdjMutation', 28);
+    const current = Object.freeze({ userId: 28, assetCode: 'all', page: 7 });
+    test.bindings.adjAssetFlowScope = current;
+    test.bindings.setAdjAssetFlowScope.mockImplementation(() => undefined);
+    test.onSuccess(null, { userId: 28, assetCode: 'MSTR' });
+    expect(test.bindings.setAdjAssetFlowScope).toHaveBeenCalledOnce();
+    const update = test.bindings.setAdjAssetFlowScope.mock.calls[0][0];
+    expect(update).toBeTypeOf('function');
+    // 成功回调时 ref=28 已通过外层守卫；React 排队执行前才切人或取消选择。
+    test.bindings.adjSelectedUserIdRef.current = selectedId;
+    expect(update(current)).toBe(current);
+    expect(current).toEqual({ userId: 28, assetCode: 'all', page: 7 });
+    expect(test.bindings.adjAssetFlowScope).toBe(current);
+    expect(test.bindings.refreshAdjWalletAfterChange.mock.calls).toEqual([[28]]);
+    expect(test.bindings.rememberRecentAdjUser.mock.calls).toEqual([[28]]);
   });
 });
 
@@ -300,7 +349,8 @@ function text(value: unknown): string { return Array.isArray(value) ? value.map(
 function jsxPanel(id: string) {
   return required(nodes(page, ts.isJsxElement).find(node => node.openingElement.attributes.properties.some(attr =>
     ts.isJsxAttribute(attr) && attr.name.getText(page) === 'id'
-    && attr.initializer && ts.isStringLiteral(attr.initializer) && attr.initializer.text === id)), id);
+    && attr.initializer && (ts.isStringLiteral(attr.initializer) ? attr.initializer.text === id
+      : id !== 'adj-digital-history-panel' && attr.initializer.getText(page) === '{`adj-${adjUserHistoryTab}-history-panel`}'))), id);
 }
 const userTrendJsx = required(nodes(page, ts.isJsxSelfClosingElement).find(node =>
   node.tagName.getText(page) === 'WalletBalanceTrendChart'
@@ -315,9 +365,10 @@ function renderTrend(query: Record<string, unknown>) {
     adjSelectedUser: { id: 28, name: 'Ocean' }, adjUserTrendDays: 30, setAdjUserTrendDays: vi.fn() });
   return { call, tree: chart(call.props) };
 }
-function renderHistory(tab: 'funding' | 'digital', query: Record<string, unknown>) {
+function renderHistory(tab: 'stable' | 'cny' | 'digital', query: Record<string, unknown>) {
   const bindings: Record<string, unknown> = { React, AI_WALLET_SETTLEMENT_ASSETS,
     adjSelectedUser: { id: 28, name: 'Ocean' }, adjHistoryQuery: query, adjMultiAssetHistoryQuery: query,
+    adjUserHistoryTab: tab, getWalletFlowCategory, getWalletFundingCurrency, adjCommonNotes: [],
     adjAssetFlowCurrency: 'all', adjAssetFlowUserId: 28, adjAssetFlowDisplayedPage: 1, adjAssetFlowTotalPages: 1,
     adjUserFlowKeyword: '', adjUserFlowDatePreset: 'all', adjUserFlowCustomStart: '', adjUserFlowCustomEnd: '',
     PrevIcon: 'PrevIcon', NextIcon: 'NextIcon', LedgerFlowFilters: 'LedgerFlowFilters',
@@ -328,7 +379,7 @@ function renderHistory(tab: 'funding' | 'digital', query: Record<string, unknown
     'setNoteTarget', 'setNoteContent', 'setNoteSelectedCommonNote', 'setShowNoteDialog']) bindings[name] = vi.fn();
   bindings.getLedgerDateRange = expression('getLedgerDateRange', { formatLedgerDate: expression('formatLedgerDate') });
   bindings.formatLedgerDate = expression('formatLedgerDate');
-  for (const name of ['adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjFilteredHistory',
+  for (const name of ['adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjCategoryHistory', 'adjFilteredHistory',
     'adjVisibleMultiAssetHistory', 'adjAssetFlowTotal']) bindings[name] = expression(name, bindings);
   return evaluate<Element>(`(${jsxPanel(`adj-${tab}-history-panel`).getText(page)});`, bindings);
 }
@@ -357,23 +408,32 @@ describe('真实 JSX：走势缓存不隐藏、未返回或失败不展示假零
     expect(text(rendered.tree)).not.toContain('暂无可用于计算走势');
     expect(elements(rendered.tree).some(node => node.type === 'BarChart')).toBe(false);
   });
-  it.each(['funding', 'digital'] as const)('%s 未返回数据不显示“0 条/暂无流水”', tab => {
+  it.each(['stable', 'cny', 'digital'] as const)('%s 未返回数据不显示“0 条/暂无流水”', tab => {
     const tree = renderHistory(tab, { data: undefined, isLoading: true, isFetching: true, isError: false });
     expect(text(tree)).not.toMatch(/共 0 条|暂无.*流水/);
     expect(text(tree)).toContain('加载中');
   });
-  it.each(['funding', 'digital'] as const)('%s 读取失败不伪装成“0 条/暂无流水”，保留手动重读入口', tab => {
+  it.each(['stable', 'cny', 'digital'] as const)('%s 读取失败不伪装成“0 条/暂无流水”，保留手动重读入口', tab => {
     const tree = renderHistory(tab, { data: undefined, isLoading: false, isFetching: false, isError: true });
     expect(text(tree)).not.toMatch(/共 0 条|暂无.*流水/);
     expect(text(tree)).toContain('失败');
     expect(elements(tree).some(node => node.type === 'button' && text(node).includes('重新加载'))).toBe(true);
   });
-  it('人民币/USDT 旧缓存重读失败仍保留原明细，不清成空流水', () => {
-    const tree = renderHistory('funding', { data: [{ id: 'manual_8', amount: '12', currency: 'USDT',
+  it.each([['stable', 'USDT'], ['cny', 'CNY']] as const)('%s 旧缓存重读失败仍保留原明细，不清成空流水', (tab, currency) => {
+    const tree = renderHistory(tab, { data: [{ id: 'manual_8', amount: '12', currency,
       sourceType: 'manual', note: '缓存资金事实', createdAt: '2026-11-16T08:00:00Z' }], isError: true });
     expect(text(tree)).toContain('缓存资金事实');
     expect(text(tree)).toContain('流水更新失败');
-    expect(text(tree)).not.toContain('暂无钱包流水');
+    expect(text(tree)).toContain('共 1 条');
+    expect(text(tree)).not.toMatch(/暂无.*流水/);
+  });
+  it.each([['stable', 'USDT'], ['cny', 'CNY']] as const)('%s 已有缓存在后台 loading/fetching 时仍展示原明细与分类总数', (tab, currency) => {
+    const tree = renderHistory(tab, { data: [{ id: 'manual_9', amount: '12', currency,
+      sourceType: 'manual', note: '加载中保留事实', createdAt: '2026-11-16T08:00:00Z' }],
+      isLoading: true, isFetching: true, isError: false });
+    expect(text(tree)).toContain('加载中保留事实');
+    expect(text(tree)).toContain('共 1 条');
+    expect(text(tree)).not.toMatch(/明细加载中|暂无.*流水/);
   });
 });
 
