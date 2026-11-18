@@ -3,6 +3,7 @@ import { randomInt } from "crypto";
 import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
+import { hasWalletManualFreezeActions } from "./db-wallet-manual-freezes";
 import { assertGlobalWalletDebit, fundingAmountText, withGlobalWalletTransaction } from "./wallet-funding-guard";
 import { getWalletFlowCurrency, isWalletFlowCurrency } from "../shared/wallet-flow-currency";
 import { parseHistoricalPrincipalSources, type HistoricalPrincipalSource } from "../shared/wallet-historical-principal";
@@ -2689,7 +2690,7 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
   const offsetValue = Number(offset);
   const safeOffset = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number.isFinite(offsetValue) ? offsetValue : 0)));
   // 筛选只放在全历史余额回放之后；SQL片段只来自固定枚举，不接受输入拼接。
-  const flowCondition = flowFilter === 'in' ? 'WHERE e.amount > 0' : flowFilter === 'out' ? 'WHERE e.amount < 0' : '';
+  const flowCondition = flowFilter === 'in' ? "WHERE e.amount > 0 AND e.source_type <> 'manual_hold'" : flowFilter === 'out' ? "WHERE e.amount < 0 AND e.source_type <> 'manual_hold'" : '';
   // 已核对的来源仅加入最终显示层。所有正文/日期/金额都绑定，不拼接到SQL。
   const sourceBindings: unknown[] = [];
   const sourceUnion = historicalSources.map((source) => {
@@ -2699,6 +2700,17 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
       'historical_principal_source', NULL, NULL, 0, ?`;
   }).join('\n');
   await ensureLedger37WalletInfrastructure();
+  const hasManualActions = await hasWalletManualFreezeActions(conn);
+  const manualActionUnion = hasManualActions ? `UNION ALL
+       SELECT a.id AS event_id, a.user_id,
+              CASE WHEN a.direction = 'freeze' THEN -a.amount ELSE a.amount END AS amount,
+              CONVERT(CONCAT('[CNY]', CASE WHEN a.direction = 'freeze' THEN '手动冻结' ELSE '手动解冻' END,
+                CASE WHEN a.note = '' THEN '' ELSE CONCAT(' · ', a.note) END) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              a.created_at, 'manual_hold' AS source_type,
+              NULL AS recorded_balance, 0 AS has_recorded_balance,
+              0 AS legacy_delta, CASE WHEN a.direction = 'freeze' THEN a.amount ELSE -a.amount END AS frozen_delta, 23 AS source_order
+         FROM ai_wallet_manual_freeze_actions a
+        WHERE a.ledger_id = 52 AND a.user_id = ? AND a.source = 'manual' AND a.asset_code = 'CNY'` : '';
   const [rows] = await conn.execute(
     // 全部资金变动按发生时间从早到晚正向累计。担保只占用可用额，绝不从总余额扣除；
     // 旧手工流水和新统一账本可并存，统一账本快照叠加同一时点已累计的旧手工余额。
@@ -2750,6 +2762,7 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
          JOIN ai_wallet_project_holds h ON h.id = r.hold_id
         WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY'
           AND r.entry_kind = 'reversal' AND r.status = 'active'
+       ${manualActionUnion}
      ), sequenced_events AS (
        SELECT *,
               SUM(legacy_delta) OVER (
@@ -2808,7 +2821,7 @@ export async function getUserCnyHistory(userId: number, limit = 50, offset = 0, 
       ${flowCondition}
       ORDER BY e.created_at DESC, e.source_order DESC, e.event_id DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}`,
-    [userId, userId, userId, userId, userId, ...sourceBindings]
+    [userId, userId, userId, userId, userId, ...(hasManualActions ? [userId] : []), ...sourceBindings]
   ) as any;
   return Array.isArray(rows) ? rows : [];
 }

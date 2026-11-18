@@ -190,13 +190,14 @@ function successHarness(name: 'adjMutation' | 'multiAssetAdjMutation', selectedI
     adjUserFlowKeyword: '旧关键词', adjUserFlowDatePreset: 'custom',
     adjUserFlowCustomStart: '2026-10-01', adjUserFlowCustomEnd: '2026-10-31',
     adjAssetFlowScope: { userId: selectedId ?? 0, assetCode: 'SOL', page: 7 },
+    adjFundingFlowScope: { key: 'old-funding-filter-key', page: 7 },
     toast: { success: vi.fn(), error: vi.fn() }, rememberRecentAdjUser: vi.fn(),
     refreshAdjWalletAfterChange: vi.fn(refresh ?? (() => Promise.resolve())), setAdjLogPage: vi.fn() };
   for (const [setter, key] of [['setAdjAmount', 'adjAmount'], ['setAdjNote', 'adjNote'],
     ['setAdjUserHistoryTab', 'adjUserHistoryTab'], ['setAdjAssetFlowScope', 'adjAssetFlowScope'],
     ['setAdjFlowTab', 'adjFlowTab'], ['setAdjUserFlowKeyword', 'adjUserFlowKeyword'],
     ['setAdjUserFlowDatePreset', 'adjUserFlowDatePreset'], ['setAdjUserFlowCustomStart', 'adjUserFlowCustomStart'],
-    ['setAdjUserFlowCustomEnd', 'adjUserFlowCustomEnd']]) {
+    ['setAdjUserFlowCustomEnd', 'adjUserFlowCustomEnd'], ['setAdjFundingFlowScope', 'adjFundingFlowScope']]) {
     bindings[setter] = vi.fn((value: unknown) => { bindings[key] = typeof value === 'function' ? value(bindings[key]) : value; });
   }
   bindings.showAdjSubmittedCurrency = expression('showAdjSubmittedCurrency', bindings);
@@ -223,6 +224,7 @@ describe('两个真实 onSuccess：variables.userId 绑定、保存 pending 与�
     expect(test.bindings.adjUserFlowDatePreset).toBe('all');
     expect(test.bindings.adjUserFlowCustomStart).toBe('');
     expect(test.bindings.adjUserFlowCustomEnd).toBe('');
+    expect(test.bindings.adjFundingFlowScope).toEqual({ key: '', page: 1 });
     expect(test.bindings.setAdjLogPage.mock.calls).toEqual([[1]]);
     slow.resolve(); await microtasks();
   });
@@ -232,17 +234,19 @@ describe('两个真实 onSuccess：variables.userId 绑定、保存 pending 与�
       // 捕获旧 selectedUser=28，仅更改 render ref，不能用闭包旧值代替真正竞态保护。
       test.bindings.adjSelectedUserIdRef.current = selectedId ?? 0;
       const beforeScope = test.bindings.adjAssetFlowScope;
+      const beforeFundingScope = test.bindings.adjFundingFlowScope;
       test.onSuccess({ userId: 29 }, { userId: 28, currency: 'USDT', assetCode: 'ETH' });
       expect(test.bindings.refreshAdjWalletAfterChange.mock.calls).toEqual([[28]]);
       expect(test.bindings.rememberRecentAdjUser.mock.calls).toEqual([[28]]);
       expect(test.bindings.adjAmount).toBe('新用户金额');
       expect(test.bindings.adjNote).toBe('新用户备注');
       expect(test.bindings.adjAssetFlowScope).toBe(beforeScope);
+      expect(test.bindings.adjFundingFlowScope).toBe(beforeFundingScope);
       expect(test.bindings.adjUserHistoryTab).toBe('cny');
       expect(test.bindings.adjFlowTab).toBe('balances');
       for (const setter of ['setAdjAmount', 'setAdjNote', 'setAdjUserHistoryTab', 'setAdjAssetFlowScope',
         'setAdjFlowTab', 'setAdjUserFlowKeyword', 'setAdjUserFlowDatePreset', 'setAdjUserFlowCustomStart',
-        'setAdjUserFlowCustomEnd', 'setAdjLogPage']) expect(test.bindings[setter], setter).not.toHaveBeenCalled();
+        'setAdjUserFlowCustomEnd', 'setAdjLogPage', 'setAdjFundingFlowScope']) expect(test.bindings[setter], setter).not.toHaveBeenCalled();
     }
   });
   it.each(['all', 'SOL', 'ETH'].flatMap(previousAssetCode =>
@@ -371,15 +375,17 @@ function renderHistory(tab: 'stable' | 'cny' | 'digital', query: Record<string, 
     adjUserHistoryTab: tab, getWalletFlowCategory, getWalletFundingCurrency, adjCommonNotes: [],
     adjAssetFlowCurrency: 'all', adjAssetFlowUserId: 28, adjAssetFlowDisplayedPage: 1, adjAssetFlowTotalPages: 1,
     adjUserFlowKeyword: '', adjUserFlowDatePreset: 'all', adjUserFlowCustomStart: '', adjUserFlowCustomEnd: '',
+    adjFundingFlowScope: { key: '', page: 1 }, ADJ_PAGE_SIZE: 20,
     PrevIcon: 'PrevIcon', NextIcon: 'NextIcon', LedgerFlowFilters: 'LedgerFlowFilters',
     cleanAdjustmentNote: expression('cleanAdjustmentNote'), isReversibleMultiAssetAdjustment: expression('isReversibleMultiAssetAdjustment') };
   for (const name of ['setAdjUserFlowKeyword', 'setAdjUserFlowDatePreset', 'setAdjUserFlowCustomStart',
     'setAdjUserFlowCustomEnd', 'setAdjAssetFlowScope', 'refetchAdjHistory', 'refetchAdjMultiAssetHistory',
     'openMultiAssetRevoke', 'openMultiAssetNoteEditor', 'setRevokeTarget', 'setShowRevokeDialog',
-    'setNoteTarget', 'setNoteContent', 'setNoteSelectedCommonNote', 'setShowNoteDialog']) bindings[name] = vi.fn();
+    'setNoteTarget', 'setNoteContent', 'setNoteSelectedCommonNote', 'setShowNoteDialog', 'setAdjFundingFlowScope']) bindings[name] = vi.fn();
   bindings.getLedgerDateRange = expression('getLedgerDateRange', { formatLedgerDate: expression('formatLedgerDate') });
   bindings.formatLedgerDate = expression('formatLedgerDate');
   for (const name of ['adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjCategoryHistory', 'adjFilteredHistory',
+    'adjFundingFlowKey', 'adjFundingFlowTotalPages', 'adjFundingFlowPage', 'adjPagedHistory',
     'adjVisibleMultiAssetHistory', 'adjAssetFlowTotal']) bindings[name] = expression(name, bindings);
   return evaluate<Element>(`(${jsxPanel(`adj-${tab}-history-panel`).getText(page)});`, bindings);
 }

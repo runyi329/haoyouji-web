@@ -50,6 +50,8 @@ function getUsdtFlowLabel(item: { sourceType?: string; type?: string; amount?: s
   if (rawNote.includes('[站内转账]')) return isPositive ? '站内转账收款' : '站内转账汇款';
   if (item.sourceType === 'recharge') return '充值到账';
   if (item.sourceType === 'opening') return '历史期初余额';
+  if (item.sourceType === 'wallet_hold' && item.type === 'manual_freeze') return '手动冻结';
+  if (item.sourceType === 'wallet_hold' && item.type === 'manual_release') return '手动解冻';
   if (item.sourceType === 'manual') return isPositive ? (hasOrderContext(note) ? '订单入账' : '入账') : (hasOrderContext(note) ? '订单扣除' : '扣除');
   if (item.sourceType === 'balance_history') {
     if (hasOrderContext(note)) return isPositive ? '订单入账' : '订单扣除';

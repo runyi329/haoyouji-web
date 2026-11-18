@@ -149,9 +149,11 @@ function harness(rows: readonly Row[] = history, connected = true, historicalRow
   const ensure = vi.fn(async () => undefined);
   const getConnection = vi.fn(async () => connected ? { execute } : null);
   const getHistoricalSources = vi.fn(async () => historicalRows);
+  const hasManualActions = vi.fn(async () => false); // 原分页夹具对应尚未创建手动冻结表的旧库。
   const runtime = evaluate<Runtime>(runtimeSource, {
     getDbConnection: getConnection,
     ensureLedger37WalletInfrastructure: ensure,
+    hasWalletManualFreezeActions: hasManualActions,
     getUserCnyHistoricalPrincipalSources: getHistoricalSources,
     // VM 中不提供 require/import/process；无法加载生产模块或访问连接配置。
   });

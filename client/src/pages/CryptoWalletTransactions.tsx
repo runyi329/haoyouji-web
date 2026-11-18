@@ -98,6 +98,8 @@ function getUsdtEntry(item: any): HistoryEntry | null {
   const isExpense = item.type === "expense";
   const isPrincipalHold = item.sourceType === "wallet_hold" && item.type === "principal_hold";
   const isPrincipalRelease = item.sourceType === "wallet_hold" && item.type === "principal_hold_release";
+  const isManualHold = item.sourceType === "wallet_hold" && item.type === "manual_freeze";
+  const isManualRelease = item.sourceType === "wallet_hold" && item.type === "manual_release";
   const isWithdrawalRequestFreeze = /^提现申请冻结\s+#\d+\b/.test(rawNote);
   const transfer = getInternalTransferPresentation(rawNote, incoming ? "in" : "out", item.counterpartyName);
   let type: Exclude<TypeFilter, "all"> = "adjustment";
@@ -105,7 +107,12 @@ function getUsdtEntry(item: any): HistoryEntry | null {
   let secondary = note || "USDT 资金流水";
   let status = incoming ? "已入账" : "已扣除";
 
-  if (isPrincipalHold || isPrincipalRelease) {
+  if (isManualHold || isManualRelease) {
+    type = "frozen";
+    primary = isManualRelease ? "手动解冻" : "手动冻结";
+    secondary = note || "只改变可用与冻结余额，总资产不变";
+    status = isManualRelease ? "已恢复可用" : "已冻结";
+  } else if (isPrincipalHold || isPrincipalRelease) {
     type = "frozen";
     primary = isPrincipalRelease ? "谷底征筹本金解冻" : "谷底征筹本金冻结";
     secondary = note || (isPrincipalRelease ? "订单本金已回到可用余额" : "订单本金已从可用余额转入冻结");
@@ -159,8 +166,8 @@ function getUsdtEntry(item: any): HistoryEntry | null {
     secondary,
     status,
     type,
-    isFrozen: isPrincipalHold || isPrincipalRelease,
-    isRelease: isPrincipalRelease,
+    isFrozen: isPrincipalHold || isPrincipalRelease || isManualHold || isManualRelease,
+    isRelease: isPrincipalRelease || isManualRelease,
   };
 }
 

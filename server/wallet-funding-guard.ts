@@ -68,11 +68,13 @@ export async function assertGlobalWalletDebit(
   transaction: any,
   userId: number,
   assetCode: WalletFundingAsset,
-  amount: number,
+  amount: number | string,
 ): Promise<void> {
   assertAsset(assetCode);
-  if (!(amount > 0)) throw new Error("钱包扣款金额必须大于0");
-  const debit = fundingUnits(fundingAmountText(amount));
+  const amountText = typeof amount === "number" ? fundingAmountText(amount) : amount;
+  if (!/^(?:0|[1-9]\d{0,17})(?:\.\d{1,8})?$/.test(amountText)) throw new Error("钱包金额格式无效，最多支持8位小数");
+  const debit = fundingUnits(amountText);
+  if (debit <= BigInt(0)) throw new Error("钱包扣款金额必须大于0");
   const user = await lockUser(transaction, userId);
   const condition = assetCode === "CNY"
     ? "COALESCE(note, '') LIKE '[CNY]%'"

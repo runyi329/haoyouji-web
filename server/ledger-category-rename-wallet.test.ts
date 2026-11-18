@@ -8,11 +8,17 @@ const source = readFileSync(new URL('./ledger37-wallet.ts', import.meta.url), 'u
 const ast = ts.createSourceFile('wallet.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const fn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'migrateLedger37ManualMarginToWalletHold')!;
 const code = transformSync(fn.getText(ast).replace(/^export /, '') + '\nreturn migrateLedger37ManualMarginToWalletHold;', { loader: 'ts', target: 'es2022' }).code;
+const lockFn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'lockLedgerWalletUsersForUpdate')!;
+const lockCode = transformSync(lockFn.getText(ast).replace(/^export /, '') + '\nreturn lockLedgerWalletUsersForUpdate;', { loader: 'ts', target: 'es2022' }).code;
 
 function fixture(migrations: Record<string, any>[], holdExists = true) {
   const tx = {
     beginTransaction: vi.fn(async () => undefined), commit: vi.fn(async () => undefined), rollback: vi.fn(async () => undefined), release: vi.fn(),
     execute: vi.fn(async (sql: string, values: any[]) => {
+      if (sql.includes('FROM users')) {
+        expect(sql).toContain('FOR UPDATE');
+        return [[{ id: values[0] }]];
+      }
       if (sql.includes('FROM ai_wallet_project_hold_migrations')) {
         // 执行真实SQL的关键同账本/同用户/原request或新名稳定来源条件，不把任何同用户历史行当作已完成。
         expect(sql).toContain('ledger_id = ? AND user_id = ?');
@@ -29,7 +35,8 @@ function fixture(migrations: Record<string, any>[], holdExists = true) {
     ensureLedger37WalletInfrastructure: vi.fn(async () => undefined), normalizeLedger37WalletAsset: (v: string) => v,
     decimalText: (v: string) => v, LEDGER_37_ID: 37, buildManualMigrationRequestId: () => 'new-name-hash',
     getDbTransactionConnection: async () => tx, rowsOf: (r: any) => Array.isArray(r) ? r : [], holdResult: (r: any) => r,
-    randomBytes: () => { throw new Error('幂等分支不应新建迁入编号'); }, isFundingAsset: () => true,
+    randomBytes: () => { throw new Error('幂等分支不应新建迁入编号'); }, isFundingAsset: (asset: string) => asset === 'CNY' || asset === 'USDT',
+    lockLedgerWalletUsersForUpdate: new Function('rowsOf', lockCode)((r: any) => Array.isArray(r) ? r : []),
     dbMultiAssetWallet: { adjustMultiAssetBalance: forbidden }, freezeLedger37WalletHold: forbidden,
   };
   const migrate = new Function(...Object.keys(deps), code)(...Object.values(deps));
@@ -61,5 +68,13 @@ describe('今后标签改名保持历史押金迁入幂等，不回溯修复旧�
   it('沿用调用者事务时不提前提交或释放连接', async () => {
     const f = fixture([row()]); await f.migrate({ ...input, transaction: f.tx });
     expect(f.tx.beginTransaction).not.toHaveBeenCalled(); expect(f.tx.commit).not.toHaveBeenCalled(); expect(f.tx.release).not.toHaveBeenCalled();
+  });
+  it('资金型改名迁移在既有hold前执行真实用户锁，仍然复用原迁入', async () => {
+    const f = fixture([{ ...row(), asset_code: 'CNY' }]);
+    expect((await f.migrate({ ...input, assetCode: 'CNY' })).migrationNo).toBe('M-existing');
+    expect(f.tx.execute.mock.calls[0][0]).toContain('FROM users');
+    expect(f.tx.execute.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(f.tx.execute).toHaveBeenCalledTimes(3);
+    expect(f.forbidden).not.toHaveBeenCalled();
   });
 });

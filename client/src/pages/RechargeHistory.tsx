@@ -145,7 +145,11 @@ export default function RechargeHistory() {
                     consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现',
                     reward_clawback: '奖励回收',
                   };
-                  const label = isRecharge
+                  const label = item.sourceType === 'wallet_hold' && item.type === 'manual_freeze'
+                    ? '手动冻结'
+                    : item.sourceType === 'wallet_hold' && item.type === 'manual_release'
+                    ? '手动解冻'
+                    : isRecharge
                     ? (item.note || '充值')
                     : isOpening
                     ? '历史期初余额'

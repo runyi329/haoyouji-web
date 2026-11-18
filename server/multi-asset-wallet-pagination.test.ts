@@ -566,7 +566,7 @@ describe('AfRechargeManage digital pagination: actual AST state/query/effects an
           adjAssetFlowUserId: 28, adjAssetFlowPage: 13, adjAssetFlowCurrency: coin, mainTab,
           ADJ_PAGE_SIZE: clientExpression('ADJ_PAGE_SIZE', {}), adjSelectedUser: { id: 28 },
         });
-        expect(useQuery).toHaveBeenLastCalledWith({ userId: 28, page: 13, pageSize: 10,
+        expect(useQuery).toHaveBeenLastCalledWith({ userId: 28, page: 13, pageSize: 20,
           ...(coin === 'all' ? {} : { assetCode: coin }) }, {
           enabled: mainTab === 'adjust', staleTime: 0, refetchInterval: 15_000, refetchOnWindowFocus: true,
         });
@@ -574,7 +574,7 @@ describe('AfRechargeManage digital pagination: actual AST state/query/effects an
     }
     clientExpression('adjMultiAssetHistoryQuery', {
       mtrpc: { adminUser: { multiAssetWalletHistoryPage: { useQuery } } },
-      adjAssetFlowUserId: 0, adjAssetFlowPage: 1, adjAssetFlowCurrency: 'all', ADJ_PAGE_SIZE: 10,
+      adjAssetFlowUserId: 0, adjAssetFlowPage: 1, adjAssetFlowCurrency: 'all', ADJ_PAGE_SIZE: 20,
       adjSelectedUser: null, mainTab: 'adjust',
     });
     expect(useQuery.mock.calls.at(-1)?.[1].enabled).toBe(false);
@@ -738,6 +738,7 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
       adjSelectedUserIdRef: { current: 28 }, AI_WALLET_SETTLEMENT_ASSETS, getWalletFlowCategory,
       setAdjFlowTab: vi.fn(), setAdjUserFlowKeyword: vi.fn(),
       setAdjUserFlowDatePreset: vi.fn(), setAdjUserFlowCustomStart: vi.fn(), setAdjUserFlowCustomEnd: vi.fn(),
+      setAdjFundingFlowScope: vi.fn(),
     };
     const realRefresh = clientExpression<(userId: number) => Promise<void>>('refreshAdjWalletAfterChange', bindings);
     let refreshCompletion!: Promise<void>;

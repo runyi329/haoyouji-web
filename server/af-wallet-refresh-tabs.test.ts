@@ -55,6 +55,7 @@ const preserved = {
   adjSearch: 'Ocean', adjCurrency: 'ETH', adjDirection: 'sub', adjAmount: '0.12345678',
   adjNote: '保留备注', adjSelectedCommonNote: '保留备注', adjUserHistoryTab: 'cny',
   adjAssetFlowScope: { userId: 28, assetCode: 'SOL', page: 7 }, adjLogPage: 9,
+  adjFundingFlowScope: { key: 'preserved-funding-filter-key', page: 5 },
   adjBalanceSearch: 'Ocean', adjHideZeroAssetUsers: false, adjHideZeroAssetTypes: false,
   adjUserFlowKeyword: '退款', adjUserFlowDatePreset: 'custom',
   adjUserFlowCustomStart: '2026-10-01', adjUserFlowCustomEnd: '2026-10-31',
@@ -285,6 +286,8 @@ function historyHarness() {
     adjFlowTab: 'user', adjSelectedUser: { id: 28, name: 'Ocean' },
     adjUserHistoryTab: stateInitial('adjUserHistoryTab'), adjCurrency: 'USDT',
     adjAssetFlowScope: { userId: 28, assetCode: 'ETH', page: 7 },
+    ADJ_PAGE_SIZE: expression('ADJ_PAGE_SIZE'), adjFundingFlowScope: stateInitial('adjFundingFlowScope'),
+    setAdjFundingFlowScope: vi.fn(),
     adjUserTrendQuery: {}, adjUserTrendDays: 30, setAdjUserTrendDays: vi.fn(),
     adjHistoryQuery: { data: fundingRows }, adjMultiAssetHistoryQuery: { data: {
       items: [{ id: 101, assetCode: 'ETH', amount: '1.234567', eventType: 'transfer_in', note: '数字币保留流水', createdAt: '2026-10-12T08:00:00Z' }],
@@ -315,6 +318,7 @@ function historyHarness() {
     for (const name of ['adjAssetFlowUserId', 'adjAssetFlowPage', 'adjAssetFlowCurrency',
       'adjVisibleMultiAssetHistory', 'adjAssetFlowTotal', 'adjAssetFlowTotalPages', 'adjAssetFlowDisplayedPage',
       'adjHistory', 'adjUserDateRange', 'adjUserKeyword', 'adjCategoryHistory', 'adjFilteredHistory',
+      'adjFundingFlowKey', 'adjFundingFlowTotalPages', 'adjFundingFlowPage', 'adjPagedHistory',
       'adjSelectedWalletUser', 'adjSelectedUsdtBalance', 'adjSelectedCnyBalance']) bindings[name] = expression(name, bindings);
     return evaluate<Element>(`(${userSection.getText(ast)});`, bindings);
   };
@@ -455,19 +459,20 @@ describe('用户流水 Tab：执行真实 JSX、分页回调及提交币种边�
     expect(JSON.stringify(rows)).toBe(before);
   });
 
-  it('每个真实用户panel均在原余额汇总之前，用户趋势位于汇总之后', () => {
+  it('完整资产卡已前移，当前用户section不再捆绑汇总；每个真实流水panel及分页之后才显示用户趋势', () => {
     const test = historyHarness();
+    const summaryAst = required(nodes(ast, ts.isJsxElement).find(node => nodes(node.openingElement, ts.isJsxAttribute)
+      .some(attr => attr.name.getText(ast) === 'ref' && attr.initializer?.getText(ast) === '{adjSelectedUserExportRef}')), 'selected asset card');
+    expect(summaryAst.end).toBeLessThan(userSection.pos);
     for (const tab of ['digital', 'stable', 'cny']) {
       test.bindings.adjUserHistoryTab = tab;
       const tree = elements(test.render());
       const panel = required(tree.find(node => node.props.role === 'tabpanel'), tab);
-      const summary = required(tree.find(node => node.props.ref === test.bindings.adjSelectedUserExportRef), 'selected user summary');
       const trend = required(tree.find(node => node.type === 'WalletBalanceTrendChart'), 'selected user trend');
-      expect(tree.indexOf(panel)).toBeLessThan(tree.indexOf(summary));
-      expect(tree.indexOf(summary)).toBeLessThan(tree.indexOf(trend));
-      expect(text(summary)).toContain('稳定币 · USDT 余额');
-      expect(text(summary)).toContain('人民币余额');
-      expect(text(summary)).toContain('资产总价值');
+      expect(tree.some(node => node.props.ref === test.bindings.adjSelectedUserExportRef)).toBe(false);
+      expect(tree.indexOf(panel)).toBeLessThan(tree.indexOf(trend));
+      expect(text(panel)).toContain('上一页');
+      expect(text(panel)).toContain('下一页');
     }
   });
 

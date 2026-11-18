@@ -138,6 +138,10 @@ async function runAf(bh: readonly Flow[], manual: readonly Flow[]) {
   const calls: string[] = [];
   const fn = value<(arg: { ctx: { user: { id: number } }; input: Record<string, unknown> }) => Promise<Flow[]>>(afFn, {
     ...helpers,
+    listWalletManualFundingFreezeEvents: async (userId: number) => {
+      expect(userId).toBe(77);
+      return [];
+    },
     // 仅把 Drizzle 的真实 tagged template 转成只读字符串，不加载 Drizzle/连接模块。
     sql: (parts: TemplateStringsArray, ...args: unknown[]) => parts.reduce((s, part, i) => s + part + (i < args.length ? '?' : ''), ''),
     getLedgerDb: async () => ({ execute: async (sql: string) => {
@@ -257,7 +261,7 @@ describe('扩展统一接口：保留混币事实，真实 mapper 与币种独�
 // 不执行 getUserCnyHistory（包含 ensure），不连接 SQLite/MySQL，不复制一个测试自制币种判断。
 function cnySqlPredicate(): (row: Flow) => boolean {
   const execute = required(nodes(cnyFn, ts.isCallExpression).find(n => n.expression.getText() === 'conn.execute'), 'CNY SELECT');
-  const sql = value<string>(required(execute.arguments[0], 'CNY SQL'), { safeLimit: 50, safeOffset: 0, flowCondition: '', sourceUnion: '' });
+  const sql = value<string>(required(execute.arguments[0], 'CNY SQL'), { safeLimit: 50, safeOffset: 0, flowCondition: '', sourceUnion: '', manualActionUnion: '' });
   const where = required(sql.match(/FROM balance_history h\s+WHERE ([\s\S]*?)\s+UNION ALL/i)?.[1], 'CNY bh WHERE');
   expect(where).toContain("COALESCE(h.description, '') NOT LIKE '%[迁移自af_manual_balances id=%'");
   let expression = where.replace(/h\.user_id\s*=\s*\?/, 'row.userId === 77')

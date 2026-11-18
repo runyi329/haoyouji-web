@@ -14,6 +14,7 @@ import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMargin
 import { validateTagMarginStockSales } from "./tag-margin-stock-sales-validation";
 import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resolveFunderInterestEndDate } from "@shared/funder-interest-period";
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
+import { listWalletManualFundingFreezeEvents } from "./db-wallet-manual-freezes";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
@@ -112,6 +113,8 @@ import {
   getLedger52FundingCollateralHoldsForOrder,
   getLedger37FundingBalanceSummary,
   listLedger37WalletHolds,
+  lockLedgerWalletUsersForUpdate,
+  lockLedger52FundingCollateralUsersForOrder,
   releaseLedger52FundingCollateralHoldsForOrder,
   releaseLedger37WalletHold,
   syncLedger52FundingCollateralHolds,
@@ -1569,6 +1572,8 @@ async function ensureAfWalletHoldColumns(): Promise<void> {
 }
 
 async function getAf52ActivePrincipalHoldForUpdate(transaction: any, orderId: number, userId: number) {
+  // Callers have locked the order, but MUST lock its wallet owner before the joined hold read.
+  await lockLedgerWalletUsersForUpdate(transaction, [userId]);
   const [rows] = await transaction.execute(
     `SELECT h.id, h.amount, h.released_amount, h.status, h.user_id, h.asset_code, h.tag_name
        FROM ai_wallet_project_holds h
@@ -17973,6 +17978,7 @@ ${klinesSummary}
           const latestPause = pauseHistory[pauseHistory.length - 1];
           const isPaused = Boolean((latestPause?.pauseDate && !latestPause.resumeDate) || balances[`${input.tagName}__pauseDate`]);
           if (!isPaused) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '请先保存该标签的暂停状态，再执行保证金解冻' });
+          await lockLedgerWalletUsersForUpdate(transaction, [input.targetUserId]);
           const [holdRows] = await transaction.execute(
             `SELECT id FROM ai_wallet_project_holds
              WHERE ledger_id = ? AND user_id = ? AND tag_name = ? AND status = 'active'
@@ -18091,6 +18097,7 @@ ${klinesSummary}
             };
           }
 
+          await lockLedgerWalletUsersForUpdate(transaction, [input.targetUserId]);
           const [holdRows] = await transaction.execute(
             `SELECT id FROM ai_wallet_project_holds
              WHERE ledger_id = ? AND user_id = ? AND tag_name = ? AND status = 'active'
@@ -20344,8 +20351,11 @@ ${klinesSummary}
           throw error;
         }
 
+        // 管理员手动冻结是原币可用/冻结层划转，逐笔审计独立于充值、扣款和订单。
+        const manualFreezeList = await listWalletManualFundingFreezeEvents(targetUserId);
+
         // 4. 合并并按时间正序排列（从旧到新）。每笔真实事件只保留一次，并显式标注币种。
-        const combinedAsc = [...rechargeList, ...manualList, ...principalHoldList, ...principalReleaseList, ...bhList].sort(
+        const combinedAsc = [...rechargeList, ...manualList, ...principalHoldList, ...principalReleaseList, ...bhList, ...manualFreezeList].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
@@ -26438,6 +26448,7 @@ ${klinesSummary}
             .filter((asset) => asset.coin === 'CNY' || asset.coin === 'USDT')
             .map((asset) => ({ coin: asset.coin as 'CNY' | 'USDT', qty: asset.qty }));
           const marketAssets = input.assets.filter((asset) => asset.coin !== 'CNY' && asset.coin !== 'USDT');
+          await lockLedgerWalletUsersForUpdate(transaction, [input.userId]);
           const result = await dbMultiAssetWallet.syncWalletCollateralLocks({
             ledgerId: input.ledgerId,
             orderId: input.orderId,
@@ -26588,11 +26599,12 @@ ${klinesSummary}
             );
           }
           if (input.ledgerId === 52) {
+            const prelockedUserIds = await lockLedger52FundingCollateralUsersForOrder(transaction, input.id);
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction, prelockedUserIds,
             });
           }
           await transaction.commit();
@@ -28204,6 +28216,7 @@ ${klinesSummary}
           updateVals.push(input.id, input.ledgerId);
           await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
           if (input.ledgerId === 52 && input.status === 'settled') {
+            const prelockedUserIds = await lockLedger52FundingCollateralUsersForOrder(conn, input.id);
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52,
               orderId: input.id,
@@ -28216,6 +28229,7 @@ ${klinesSummary}
               actorUserId: ctx.user.id,
               reason: 'order_settled',
               transaction: conn,
+              prelockedUserIds,
             });
           }
           if (input.ledgerId === 52 && input.status === 'active') {
@@ -28653,12 +28667,14 @@ ${klinesSummary}
             delete nextSnapshot.settlement_snapshot;
           }
           // 段结清只解除自己名下的两类钱包冻结；未结清的其他段继续受担保限制。
+          const prelockedUserIds = newlySettledSegmentIds.length > 0 || everyPartSettled
+            ? await lockLedger52FundingCollateralUsersForOrder(conn, input.orderId) : [];
           for (const jointSegmentId of newlySettledSegmentIds) {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52, orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+              orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
             });
           }
           // 全部段结清时清扫可能来自历史订单级台账的遗留冻结，避免永久占用用户余额。
@@ -28667,7 +28683,7 @@ ${klinesSummary}
               ledgerId: 52, orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+              orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
             });
           }
           await conn.execute(
@@ -30502,11 +30518,12 @@ ${klinesSummary}
           );
           if (Number((result as any).affectedRows || 0) !== 1) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
           if (input.ledgerId === 52) {
+            const prelockedUserIds = await lockLedger52FundingCollateralUsersForOrder(transaction, input.id);
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction, prelockedUserIds,
             });
           }
           await transaction.commit();

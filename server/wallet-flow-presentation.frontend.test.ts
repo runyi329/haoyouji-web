@@ -43,6 +43,7 @@ function successHarness(name: MutationName) {
     adjUserFlowKeyword: '旧关键词', adjUserFlowDatePreset: 'custom',
     adjUserFlowCustomStart: '2026-10-01', adjUserFlowCustomEnd: '2026-10-31',
     adjAssetFlowScope: { userId: 28, assetCode: 'ETH', page: 7 }, adjLogPage: 5,
+    adjFundingFlowScope: { key: 'old-funding-filter-key', page: 7 },
     adjBalanceSearch: '保留搜索', adjGlobalFlowKeyword: '保留全局关键词',
   };
   const setters = Object.fromEntries(Object.keys(state).map(key => [
@@ -151,6 +152,7 @@ describe('真实调账成功回调：本笔variables币种/用户、草稿隔离
     expect(test.state.adjUserFlowDatePreset).toBe('all');
     expect(test.state.adjUserFlowCustomStart).toBe('');
     expect(test.state.adjUserFlowCustomEnd).toBe('');
+    expect(test.state.adjFundingFlowScope).toEqual({ key: '', page: 1 });
     expect(test.state.adjAmount).toBe('');
     expect(test.state.adjNote).toBe('');
     expect(test.state.adjCurrency).toBe('SOL');
@@ -252,8 +254,8 @@ function chart(root: ts.Node, name: string) {
   return required(nodes(root, ts.isJsxSelfClosingElement).find(node => node.tagName.getText(ast) === name), name);
 }
 
-describe('真实JSX布局与全局菜单：只移动汇总，不改表单/flow gate/估值口径', () => {
-  it('紧凑用户选择与提交仍在表单；唯一用户余额大卡在流水之后、用户趋势之前', () => {
+describe('真实JSX布局与全局菜单：资产前置、趋势后置，不改flow gate/估值口径', () => {
+  it('紧凑用户选择与提交仍在表单；唯一完整资产卡在币种金额前，用户趋势单独在流水之后', () => {
     const submit = smallestElement(ast, node => node.openingElement.tagName.getText(ast) === 'button'
       && nodes(node, ts.isJsxAttribute).some(attr => attr.name.getText(ast) === 'onClick'
         && attr.initializer?.getText(ast) === '{handleAdjSubmit}'), 'submit button');
@@ -264,20 +266,23 @@ describe('真实JSX布局与全局菜单：只移动汇总，不改表单/flow g
     expect(form.getText(ast)).toContain('clearAdjUser');
     expect(form.getText(ast)).toContain('adjAmount');
     expect(form.getText(ast)).toContain('adjNote');
-    expect(form.getText(ast)).not.toContain('adjSelectedUsdtBalance');
-    expect(form.getText(ast)).not.toContain('adjSelectedWalletValuation');
     const summaries = nodes(ast, ts.isJsxElement).filter(node => node.openingElement.attributes.properties.some(attr =>
       ts.isJsxAttribute(attr) && attr.name.getText(ast) === 'ref' && attr.initializer?.getText(ast) === '{adjSelectedUserExportRef}'));
     expect(summaries).toHaveLength(1);
     const summary = summaries[0];
     const user = gate('user');
-    expect(contains(user, summary)).toBe(true);
-    expect(contains(form, summary)).toBe(false);
+    expect(contains(user, summary)).toBe(false);
+    const currency = required(nodes(form, ts.isJsxElement).find(node => node.openingElement.tagName.getText(ast) === 'select'
+      && nodes(node.openingElement, ts.isJsxAttribute).some(attr => attr.name.getText(ast) === 'value'
+        && attr.initializer?.getText(ast) === '{adjCurrency}')), 'manual currency select');
+    expect(summary.end).toBeLessThan(currency.pos);
+    expect(summary.end).toBeLessThan(submit.pos);
     const panels = nodes(user, ts.isJsxElement).filter(node => node.openingElement.attributes.properties.some(attr =>
       ts.isJsxAttribute(attr) && attr.name.getText(ast) === 'role' && attr.initializer?.getText(ast) === '"tabpanel"'));
     expect(panels).toHaveLength(2); // digital静态panel + stable/cny共用的动态panel
-    for (const panel of panels) expect(panel.end).toBeLessThan(summary.pos);
-    expect(summary.end).toBeLessThan(chart(user, 'WalletBalanceTrendChart').pos);
+    const trend = chart(user, 'WalletBalanceTrendChart');
+    for (const panel of panels) expect(panel.end).toBeLessThan(trend.pos);
+    expect(contains(summary, trend)).toBe(false);
     expect(summary.getText(ast)).toContain('adjSelectedUsdtBalance');
     expect(summary.getText(ast)).toContain('adjSelectedCnyBalance');
     expect(summary.getText(ast)).toContain('adjSelectedWalletValuation');

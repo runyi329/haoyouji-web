@@ -56,10 +56,11 @@ function summarizeNote(value: unknown) {
   return note.length > 40 ? `${note.slice(0, 40).replace(/[，、；\s]+$/, "")}…` : note;
 }
 
-function getCnyFlowPresentation(noteValue: unknown, isIn: boolean) {
+function getCnyFlowPresentation(noteValue: unknown, isIn: boolean, sourceType?: string) {
   const rawNote = cleanNote(noteValue);
   const detail = summarizeNote(noteValue);
   const transfer = getInternalTransferPresentation(String(noteValue || ""), isIn ? "in" : "out");
+  if (sourceType === "manual_hold") return { primary: isIn ? "手动解冻" : "手动冻结", secondary: detail, status: isIn ? "已恢复可用" : "已冻结" };
   if (transfer) return { primary: transfer.primary, secondary: transfer.secondary || detail, status: isIn ? "已入账" : "已扣除" };
   if (/担保.*(冻结|占用)|冻结/.test(rawNote)) return { primary: "担保冻结", secondary: detail, status: "担保" };
   if (/解冻|释放/.test(rawNote)) return { primary: "担保解冻", secondary: detail, status: "已恢复" };
@@ -196,7 +197,7 @@ export default function WalletCnyTransactions() {
     const historicalSource = m.source_type === "historical_principal_source";
     const presentation = historicalSource
       ? { primary: "微信存入", secondary: summarizeNote(m.note), status: "历史补录 · 已含迁入金额" }
-      : getCnyFlowPresentation(m.note, isIn);
+      : getCnyFlowPresentation(m.note, isIn, m.source_type);
     const wcCode = extractWcTeamCode(rawNote);
     return {
       id: m.id,

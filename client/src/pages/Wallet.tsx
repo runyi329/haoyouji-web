@@ -180,6 +180,8 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
   const isAfPrincipalHold = item.sourceType === "wallet_hold" && item.type === "principal_hold";
   const isAfPrincipalRelease = item.sourceType === "wallet_hold" && item.type === "principal_hold_release";
   // 买入资产、手续费等旧手工扣款属于支出，不应误称为冻结。
+  if (item.sourceType === "wallet_hold" && item.type === "manual_freeze") return { label: "手动冻结", detail: note, status: "已冻结", isIn: false };
+  if (item.sourceType === "wallet_hold" && item.type === "manual_release") return { label: "手动解冻", detail: note, status: "已恢复可用", isIn: true };
   if (isExpense) return { label: "支出", detail: note, status: "已支出", isIn: false };
   // 谷底征筹本金与融资订单担保共用项目冻结台账；只转移可用额，不能显示为支出。
   if (isAfPrincipalHold) return { label: "谷底征筹本金冻结", detail: note, status: "本金已冻结", isIn: false };
@@ -208,6 +210,8 @@ function getCnyQuickFlowPresentation(noteValue: string | undefined, isIn: boolea
   const rawNote = cleanWalletFlowNote(noteValue);
   const note = summarizeWalletFlowNote(noteValue);
   const isInternalTransfer = String(noteValue || "").includes("[站内转账]");
+  if (/^手动冻结(?:$|\s|·)/.test(rawNote)) return { label: "手动冻结", detail: note, status: "已冻结", isIn: false };
+  if (/^手动解冻(?:$|\s|·)/.test(rawNote)) return { label: "手动解冻", detail: note, status: "已恢复可用", isIn: true };
   if (isInternalTransfer) {
     const transfer = getInternalTransferPresentation(noteValue, isIn ? "in" : "out");
     return { label: transfer?.primary || (isIn ? "站内转账收款" : "站内转账汇款"), detail: transfer?.secondary || note, isIn };
@@ -226,6 +230,10 @@ function getCnyQuickFlowPresentation(noteValue: string | undefined, isIn: boolea
 
 function getDigitalFlowPresentation(item: { eventType?: string; amount?: number; note?: string; counterpartyName?: string | null }): WalletFlowPresentation {
   const isIn = Number(item.amount ?? 0) > 0;
+  if (/^手动(?:冻结|解冻) · \[MANUAL_FREEZE:\d+\]/.test(String(item.note || ""))) {
+    if (item.eventType === "collateral_lock") return { label: "手动冻结", detail: item.note, status: "已冻结", isIn: false };
+    if (item.eventType === "collateral_release") return { label: "手动解冻", detail: item.note, status: "已恢复可用", isIn: true };
+  }
   switch (item.eventType) {
     case "collateral_lock":
       return { label: "担保冻结", status: "已参与联合担保", isIn: false };

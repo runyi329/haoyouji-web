@@ -41,7 +41,8 @@ import {
   revokeMultiAssetAdminAdjustment,
   updateMultiAssetAdminAdjustmentNote,
 } from "./db-multi-asset-wallet";
-import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import { freezeWalletManually, getWalletManualFreezeState, releaseWalletManually, hasWalletManualFreezeActions } from "./db-wallet-manual-freezes";
+import { AI_WALLET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
@@ -5366,6 +5367,41 @@ export const mibanAdminUserRouter = router({
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "钱包用户不存在" });
       return user;
     }),
+  // 手动冻结仅占用可用额，不改变总持有；只读状态绝不读取订单或创建表。
+  walletManualFreezeState: mibanAdminProcedure
+    .input(z.object({ ledgerId: z.literal(52), userId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }))
+    .query(async ({ input }) => {
+      await assertAiWalletOperationEnabled("ledger:52", "admin_adjustment");
+      return getWalletManualFreezeState(input);
+    }),
+  walletManualFreeze: mibanAdminProcedure
+    .input(z.object({
+      ledgerId: z.literal(52), userId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      assetCode: z.enum(AI_WALLET_ASSETS), amount: z.string(), note: z.string().max(500).optional(),
+      requestId: z.string().regex(/^[A-Za-z0-9_-]{16,96}$/, "资金请求无效"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertAiWalletOperationEnabled("ledger:52", "admin_adjustment");
+      try {
+        return await freezeWalletManually({ ...input, actorUserId: ctx.user.id });
+      } catch (error: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "手动冻结失败" });
+      }
+    }),
+  walletManualRelease: mibanAdminProcedure
+    .input(z.object({
+      ledgerId: z.literal(52), userId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      freezeId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), amount: z.string(),
+      note: z.string().max(500).optional(), requestId: z.string().regex(/^[A-Za-z0-9_-]{16,96}$/, "资金请求无效"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertAiWalletOperationEnabled("ledger:52", "admin_adjustment");
+      try {
+        return await releaseWalletManually({ ...input, actorUserId: ctx.user.id });
+      } catch (error: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "手动解冻失败" });
+      }
+    }),
   setRole: mibanAdminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["parent", "baby"]) }))
     .mutation(({ input }) => updateUserMibanRole(input.userId, input.role)),
@@ -5610,6 +5646,22 @@ export const mibanAdminUserRouter = router({
         // 首次查询时创建第二阶段的独立多资产账本表；该步骤不会写入任何用户余额或流水。
         await ensureMultiAssetWalletInfrastructure();
         await ensureLedger37WalletInfrastructure();
+        const hasManualActions = await hasWalletManualFreezeActions(conn);
+        const manualActionUnion = hasManualActions ? `UNION ALL
+          SELECT
+            CONVERT(CONCAT('manual_hold_', a.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
+            a.id AS source_id,
+            CONVERT('wallet_hold' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
+            a.user_id,
+            CASE WHEN a.direction = 'freeze' THEN -a.amount ELSE a.amount END AS amount,
+            CONVERT(CASE WHEN a.direction = 'freeze' THEN 'collateral_lock' ELSE 'collateral_release' END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(a.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(CONCAT(CASE WHEN a.direction = 'freeze' THEN '手动冻结' ELSE '手动解冻' END,
+              CASE WHEN a.note = '' THEN '' ELSE CONCAT(' · ', a.note) END) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            NULL AS raw_balance,
+            a.created_at
+          FROM ai_wallet_manual_freeze_actions a
+          WHERE a.ledger_id = 52 AND a.source = 'manual' AND a.asset_code IN ('CNY', 'USDT')` : '';
         const eventSourceSql = `
           SELECT
             CONVERT(CONCAT('r_', r.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
@@ -5722,6 +5774,8 @@ export const mibanAdminUserRouter = router({
               OR (h.ledger_id = 52 AND h.asset_code = 'USDT' AND h.tag_name LIKE '52号谷底征筹订单 #% 本金'))
             AND h.status = 'released'
 
+          ${manualActionUnion}
+
           UNION ALL
 
           SELECT
@@ -5780,6 +5834,7 @@ export const mibanAdminUserRouter = router({
             ON collateral_order.ledger_id = 52
            AND mae.source_ledger_id = 52
            AND mae.event_type IN ('collateral_lock', 'collateral_release')
+           AND mae.note NOT LIKE '%[MANUAL_FREEZE:%'
            AND collateral_order.id = CAST(SUBSTRING_INDEX(mae.note, '#', -1) AS UNSIGNED)
         `;
         const whereParts: string[] = [];

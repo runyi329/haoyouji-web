@@ -354,6 +354,16 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
   await infrastructureReady;
 }
 
+/** Acquire every wallet owner before any hold/manual balance lock; batches use ascending IDs. */
+export async function lockLedgerWalletUsersForUpdate(transaction: any, userIds: number[]): Promise<void> {
+  const ids = Array.from(new Set(userIds)).sort((a, b) => a - b);
+  if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("钱包用户无效");
+  for (const userId of ids) {
+    const [rows] = await transaction.execute("SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId]);
+    if (!rowsOf(rows)[0]) throw new Error("钱包用户不存在");
+  }
+}
+
 async function getFundingBalanceForUpdate(transaction: any, userId: number, assetCode: "CNY" | "USDT") {
   const [userRows] = await transaction.execute(
     "SELECT id, COALESCE(balance, 0) AS balance, COALESCE(cny_balance, 0) AS cny_balance FROM users WHERE id = ? LIMIT 1 FOR UPDATE",
@@ -542,6 +552,7 @@ export async function freezeLedger37WalletHold(params: {
   const amount = decimalText(params.amount);
   const tagName = String(params.tagName || "").trim().slice(0, 160);
   if (!tagName) throw new Error("标签名称不能为空");
+  if (tagName.startsWith("AIW_MANUAL_FREEZE:")) throw new Error("手动冻结必须使用独立手动冻结接口");
   const requestId = params.requestId || buildWalletHoldRequestId(ledgerId, "H");
   const ownConnection = !params.transaction;
   const conn = params.transaction || await getDbTransactionConnection();
@@ -549,6 +560,7 @@ export async function freezeLedger37WalletHold(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    if (isFundingAsset(assetCode)) await lockLedgerWalletUsersForUpdate(transaction, [params.userId]);
     const [existingRows] = await transaction.execute(
       "SELECT * FROM ai_wallet_project_holds WHERE request_id = ? LIMIT 1 FOR UPDATE",
       [requestId],
@@ -654,6 +666,7 @@ export async function migrateLedger37ManualMarginToWalletHold(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    if (isFundingAsset(assetCode)) await lockLedgerWalletUsersForUpdate(transaction, [params.userId]);
     const [existingRows] = await transaction.execute(
       `SELECT migration_no, hold_id, asset_code, amount FROM ai_wallet_project_hold_migrations
        WHERE ledger_id = ? AND user_id = ?
@@ -774,6 +787,7 @@ export async function deleteLedger37ManualMarginMigration(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    await lockLedgerWalletUsersForUpdate(transaction, [expectedUserId]);
     const [migrationRows] = await transaction.execute(
       `SELECT m.*, h.user_id AS hold_user_id, h.tag_name AS hold_tag_name,
               h.asset_code AS hold_asset_code, h.amount AS hold_amount,
@@ -935,6 +949,7 @@ export async function transferLedger37ManualMarginWalletHold(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    if (isFundingAsset(assetCode)) await lockLedgerWalletUsersForUpdate(transaction, [params.userId]);
     const [existingRows] = await transaction.execute(
       'SELECT * FROM ai_wallet_project_hold_transfers WHERE request_id = ? LIMIT 1 FOR UPDATE',
       [requestId],
@@ -1051,12 +1066,26 @@ export async function releaseLedger37WalletHold(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    // Discovery only: never use this snapshot for status, amounts or available balance.
+    const [ownerRows] = await transaction.execute(
+      "SELECT user_id, asset_code FROM ai_wallet_project_holds WHERE id = ? AND ledger_id = ? LIMIT 1",
+      [params.holdId, ledgerId],
+    );
+    const owner = rowsOf(ownerRows)[0];
+    if (!owner) throw new Error("保证金冻结记录不存在");
+    if (isFundingAsset(normalizeLedger37WalletAsset(owner.asset_code))) {
+      await lockLedgerWalletUsersForUpdate(transaction, [Number(owner.user_id)]);
+    }
     const [holdRows] = await transaction.execute(
       "SELECT * FROM ai_wallet_project_holds WHERE id = ? AND ledger_id = ? LIMIT 1 FOR UPDATE",
       [params.holdId, ledgerId],
     );
     const hold = rowsOf(holdRows)[0];
     if (!hold) throw new Error("保证金冻结记录不存在");
+    if (Number(hold.user_id) !== Number(owner.user_id) || String(hold.asset_code) !== String(owner.asset_code)) {
+      throw new Error("保证金冻结归属已变化，请刷新后重试");
+    }
+    if (String(hold.tag_name).startsWith("AIW_MANUAL_FREEZE:")) throw new Error("手动冻结必须使用独立手动解冻接口");
     if (String(hold.status) !== "active") throw new Error("该保证金已经解冻");
     const assetCode = normalizeLedger37WalletAsset(hold.asset_code);
     const originalAmount = Number(hold.amount || 0);
@@ -1165,6 +1194,7 @@ export async function syncLedger52FundingCollateralHolds(params: {
   const tagName = ledger52FundingCollateralTag(params.orderId, jointSegmentId);
   try {
     if (ownConnection) await transaction.beginTransaction();
+    await lockLedgerWalletUsersForUpdate(transaction, [params.userId]);
     const [existingRows] = await transaction.execute(
       `SELECT * FROM ai_wallet_project_holds
         WHERE ledger_id = ? AND tag_name = ? AND user_id = ? AND status = 'active' AND asset_code IN ('CNY', 'USDT')
@@ -1229,6 +1259,19 @@ export async function getLedger52FundingCollateralHoldsForOrder(orderId: number,
   return rowsOf(rows).map((row) => ({ ...holdResult(row), jointSegmentId: jointSegmentIdFromLedger52FundingTag(orderId, row.tag_name) }));
 }
 
+/** Call before releasing several segments in one transaction, not once per segment. */
+export async function lockLedger52FundingCollateralUsersForOrder(transaction: any, orderId: number): Promise<number[]> {
+  const tags = ledger52FundingCollateralTagsForOrder(orderId);
+  const [rows] = await transaction.execute(
+    `SELECT user_id FROM ai_wallet_project_holds
+     WHERE ledger_id = ? AND (tag_name = ? OR tag_name LIKE ?) AND status = 'active'`,
+    [LEDGER_52_ID, tags.primary, tags.segmentLike],
+  );
+  const userIds = Array.from(new Set<number>(rowsOf(rows).map((row) => Number(row.user_id))));
+  await lockLedgerWalletUsersForUpdate(transaction, userIds);
+  return userIds;
+}
+
 /** 结清或移入回收站时解除人民币与USDT钱包担保；可按联合段精确解除。 */
 export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
   orderId: number;
@@ -1236,6 +1279,8 @@ export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
   actorUserId: number;
   reason: "order_settled" | "order_deleted";
   transaction?: any;
+  /** Required when the caller has prelocked several segments before any hold/asset locks. */
+  prelockedUserIds?: number[];
 }): Promise<{ releasedCount: number }> {
   if (!Number.isInteger(params.orderId) || params.orderId <= 0) return { releasedCount: 0 };
   await ensureLedger37WalletInfrastructure();
@@ -1248,13 +1293,26 @@ export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
   const tagName = normalizedSegmentId ? ledger52FundingCollateralTag(params.orderId, normalizedSegmentId) : null;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    const values = tagName ? [LEDGER_52_ID, tagName] : [LEDGER_52_ID, tags.primary, tags.segmentLike];
+    const selection = `FROM ai_wallet_project_holds
+        WHERE ledger_id = ? AND ${tagName ? 'tag_name = ?' : '(tag_name = ? OR tag_name LIKE ?)'} AND status = 'active' AND amount > COALESCE(released_amount, 0)`;
+    // Discover all owners without hold locks, then lock ALL users before the first hold.
+    const [ownerRows] = await transaction.execute(`SELECT id, user_id, asset_code ${selection}`, values);
+    const owners = new Map<number, any>(rowsOf(ownerRows).map((row) => [Number(row.id), row]));
+    if (params.prelockedUserIds && rowsOf(ownerRows).some((row) => !params.prelockedUserIds!.includes(Number(row.user_id)))) {
+      throw new Error("钱包担保冻结归属已变化，请刷新后重试");
+    }
+    await lockLedgerWalletUsersForUpdate(transaction, rowsOf(ownerRows).map((row) => Number(row.user_id)));
     const [rows] = await transaction.execute(
-      `SELECT id FROM ai_wallet_project_holds
-        WHERE ledger_id = ? AND ${tagName ? 'tag_name = ?' : '(tag_name = ? OR tag_name LIKE ?)'} AND status = 'active' AND amount > COALESCE(released_amount, 0)
-        ORDER BY user_id ASC, asset_code ASC, id ASC FOR UPDATE`,
-      tagName ? [LEDGER_52_ID, tagName] : [LEDGER_52_ID, tags.primary, tags.segmentLike],
+      `SELECT id, user_id, asset_code ${selection} ORDER BY user_id ASC, asset_code ASC, id ASC FOR UPDATE`,
+      values,
     );
     const holds = rowsOf(rows);
+    // Current read can see inserts/owner changes absent from discovery; fail before any release.
+    if (holds.some((row) => {
+      const owner = owners.get(Number(row.id));
+      return !owner || Number(owner.user_id) !== Number(row.user_id) || String(owner.asset_code) !== String(row.asset_code);
+    })) throw new Error("钱包担保冻结归属已变化，请刷新后重试");
     for (const row of holds) {
       await releaseLedger37WalletHold({ ledgerId: LEDGER_52_ID, holdId: Number(row.id), actorUserId: params.actorUserId, reason: `ledger52_funding_collateral_${params.reason}`, transaction });
     }
@@ -1659,6 +1717,17 @@ export async function revokeLedger37WalletHoldRelease(params: {
   const transaction = conn as any;
   try {
     if (ownConnection) await transaction.beginTransaction();
+    const [ownerRows] = await transaction.execute(
+      `SELECT h.user_id, h.asset_code FROM ai_wallet_project_hold_releases r
+       INNER JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+       WHERE r.release_no = ? AND h.ledger_id = ? LIMIT 1`,
+      [params.releaseNo, LEDGER_37_ID],
+    );
+    const owner = rowsOf(ownerRows)[0];
+    if (!owner) throw new Error('保证金回退记录不存在或已被直接撤回');
+    if (isFundingAsset(normalizeLedger37WalletAsset(owner.asset_code))) {
+      await lockLedgerWalletUsersForUpdate(transaction, [Number(owner.user_id)]);
+    }
     const [releaseRows] = await transaction.execute(
       `SELECT r.*, h.ledger_id, h.user_id, h.tag_name, h.asset_code, h.amount AS hold_amount,
               h.released_amount, h.status AS hold_status
@@ -1670,6 +1739,9 @@ export async function revokeLedger37WalletHoldRelease(params: {
     );
     const release = rowsOf(releaseRows)[0];
     if (!release) throw new Error('保证金回退记录不存在或已被直接撤回');
+    if (Number(release.user_id) !== Number(owner.user_id) || String(release.asset_code) !== String(owner.asset_code)) {
+      throw new Error('保证金冻结归属已变化，请刷新后重试');
+    }
     if (String(release.entry_kind || 'release') !== 'release' || String(release.status || 'active') !== 'active') {
       throw new Error('该保证金回退已经撤回或冲正，请刷新后核对');
     }
