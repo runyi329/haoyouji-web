@@ -2155,9 +2155,9 @@ export async function getLedger52T0Journal(
   const isAdminScope = scope.mode === "admin";
   // 常规报价页保留原有限流；周结算等后台只读归集显式请求全量历史，避免 FIFO 上下文被截断。
   const entryLimitClause = options.fullRead ? "" : "LIMIT 2000";
-  // 共享转账必须与订单使用同一历史窗口；管理员端若只取最近200笔，
-  // 按某位用户筛选时会漏掉较早共享收入，而成员端却会看到完整记录。
-  const sharedIncomeTransferLimitClause = options.fullRead ? "" : "LIMIT 2000";
+  // 累计共享和它的明细读取全部有效历史，不使用全体用户共用的条数窗口。
+  // 权限仍由下方 owner / recipient 条件限定，来源有效性由已成交平仓 INNER JOIN 保证；
+  // 报价页的有限订单窗口不能决定某位用户已到账共享收入的累计范围。
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
   // 普通成员只可读取本人作为订单所属人、本人被明确写入收益分配快照的订单，
@@ -2359,7 +2359,48 @@ export async function getLedger52T0Journal(
             transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at,
             COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', transfer.source_user_id)) AS source_user_name,
             COALESCE(NULLIF(recipient_user.name, ''), NULLIF(recipient_user.username, ''), CONCAT('用户#', transfer.recipient_user_id)) AS recipient_user_name,
-            recipient_user.username AS recipient_username
+            recipient_user.username AS recipient_username,
+            source_closing.id AS history_source_id,
+            source_closing.account_id AS history_source_account_id,
+            CASE WHEN history_account.is_active = 1 THEN history_account.name ELSE NULL END AS history_source_account_name,
+            CASE WHEN history_account.is_active = 1 THEN 0 ELSE 1 END AS history_source_account_hidden,
+            source_closing.related_user_id AS history_source_related_user_id,
+            source_closing.related_fund_id AS history_source_related_fund_id,
+            CASE WHEN history_fund.is_active = 1 THEN history_fund.name ELSE NULL END AS history_source_related_fund_name,
+            CASE WHEN history_fund.is_active = 1 THEN 0 ELSE 1 END AS history_source_related_fund_hidden,
+            CASE WHEN history_deleted_user.id IS NULL THEN COALESCE(NULLIF(history_user.name, ''), NULLIF(history_user.username, ''), CONCAT('用户#', source_closing.related_user_id)) ELSE NULL END AS history_source_related_user_name,
+            CASE WHEN history_deleted_user.id IS NULL THEN history_user.username ELSE NULL END AS history_source_related_username,
+            CASE WHEN history_deleted_user.id IS NULL THEN history_user.avatar ELSE NULL END AS history_source_related_user_avatar,
+            CASE WHEN history_deleted_user.id IS NULL THEN 0 ELSE 1 END AS history_source_related_user_hidden,
+            source_closing.action AS history_source_action,
+            source_closing.symbol AS history_source_symbol,
+            source_closing.instrument_type AS history_source_instrument_type,
+            source_closing.option_direction AS history_source_option_direction,
+            source_closing.option_expiry_date AS history_source_option_expiry_date,
+            source_closing.option_premium AS history_source_option_premium,
+            source_closing.option_premium_currency AS history_source_option_premium_currency,
+            source_closing.option_settlement_price AS history_source_option_settlement_price,
+            source_closing.option_delivery_price AS history_source_option_delivery_price,
+            source_closing.option_settled_at AS history_source_option_settled_at,
+            source_closing.option_settlement_source AS history_source_option_settlement_source,
+            source_closing.grid_direction AS history_source_grid_direction,
+            source_closing.grid_range_min AS history_source_grid_range_min,
+            source_closing.grid_range_max AS history_source_grid_range_max,
+            source_closing.grid_leverage AS history_source_grid_leverage,
+            source_closing.grid_count AS history_source_grid_count,
+            source_closing.execution_status AS history_source_execution_status,
+            source_closing.is_locked AS history_source_is_locked,
+            source_closing.is_counterparty AS history_source_is_counterparty,
+            source_closing.filled_at AS history_source_filled_at,
+            source_closing.filled_price AS history_source_filled_price,
+            source_closing.quantity AS history_source_quantity,
+            source_closing.price AS history_source_price,
+            source_closing.fee_usdt AS history_source_fee_usdt,
+            source_closing.target_price AS history_source_target_price,
+            source_closing.target_opening_entry_id AS history_source_target_opening_entry_id,
+            source_closing.note AS history_source_note,
+            source_closing.trade_time AS history_source_trade_time,
+            source_closing.created_at AS history_source_created_at
        FROM ledger52_t0_journal_shared_income_transfers transfer
        INNER JOIN ledger52_t0_journal_entries source_closing
          ON source_closing.id = transfer.closing_entry_id
@@ -2369,9 +2410,15 @@ export async function getLedger52T0Journal(
         AND source_closing.execution_status = 'filled'
        LEFT JOIN users source_user ON source_user.id = transfer.source_user_id
        LEFT JOIN users recipient_user ON recipient_user.id = transfer.recipient_user_id
+       LEFT JOIN ledger52_t0_journal_accounts history_account ON history_account.id = source_closing.account_id
+       LEFT JOIN users history_user ON history_user.id = source_closing.related_user_id
+       LEFT JOIN ledger52_t0_journal_related_funds history_fund
+         ON history_fund.id = source_closing.related_fund_id AND history_fund.ledger_id = source_closing.ledger_id AND history_fund.user_id = source_closing.user_id
+       LEFT JOIN ledger52_t0_journal_deleted_dimensions history_deleted_user
+         ON history_deleted_user.ledger_id = source_closing.ledger_id AND history_deleted_user.user_id = source_closing.user_id
+        AND history_deleted_user.dimension = 'related_user' AND history_deleted_user.dimension_id = source_closing.related_user_id
       WHERE transfer.ledger_id = ?${isAdminScope ? ' AND transfer.user_id = ?' : ' AND transfer.recipient_user_id = ?'}
-      ORDER BY transfer.created_at DESC, transfer.id DESC
-      ${sharedIncomeTransferLimitClause}`,
+      ORDER BY transfer.created_at DESC, transfer.id DESC`,
     isAdminScope
       ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
       : [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
@@ -2452,6 +2499,20 @@ export async function getLedger52T0Journal(
     )
     : [[]];
 
+  // 仅补共享历史来源，不加载行情、不补分佣快照，也不并入真实仓位或 FIFO 的 entries。
+  // 同一次 JOIN 回包去重，保持日期使用原数据库字段类型并复用 mapEntry 的脱敏和精度规则。
+  const sharedIncomeSourceRowsById = new Map<string, Record<string, unknown>>();
+  for (const transfer of asRows(sharedIncomeTransferResult)) {
+    const closingId = String(transfer.closing_entry_id);
+    if (sharedIncomeSourceRowsById.has(closingId)) continue;
+    const prefix = "history_source_";
+    sharedIncomeSourceRowsById.set(closingId, Object.fromEntries(
+      Object.entries(transfer)
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, value]) => [key.slice(prefix.length), value]),
+    ));
+  }
+
   return {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
@@ -2470,6 +2531,10 @@ export async function getLedger52T0Journal(
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),
     profitShareRules: asRows(profitShareRuleResult).map(mapProfitShareRule),
+    // 来自同一次有效共享查询的来源 ID 集合；即使该来源超出报价页订单窗口，
+    // 已到账共享仍然有效。空集合也是明确结果，不可用旧订单缓存补造共享收入。
+    sharedIncomeSourceClosingEntryIds: Array.from(sharedIncomeSourceRowsById.keys()),
+    sharedIncomeSourceClosings: Array.from(sharedIncomeSourceRowsById.values()).map(mapEntry),
     sharedIncomeTransfers: asRows(sharedIncomeTransferResult).map((transfer) => ({
       id: String(transfer.id),
       closingEntryId: String(transfer.closing_entry_id),

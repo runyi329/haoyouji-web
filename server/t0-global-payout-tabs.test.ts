@@ -580,36 +580,36 @@ describe("T+0 操作页 URL 与目标用户优先级", () => {
   });
 
   const setters = [
-    "setEditingPayoutLog", "setPayoutAmount", "setPayoutDepositInputMode", "setPayoutEthQuantity",
+    "setEditingPayoutLog", "setPayoutAmount", "setPayoutWithdrawalSource", "setPayoutDepositInputMode", "setPayoutEthQuantity",
     "setPayoutEthReferencePrice", "setPayoutEthReferencePriceIsManual", "setPayoutNote",
     "setPayoutSubmitNotice", "setPayoutOccurredOn", "setShowPayoutLog",
   ];
   const open = compileExpression<(direction: PayoutDirection, userId?: unknown) => void>(
     required(variable("openPayoutEntryPage").initializer, "open payout entry callback"),
-    ["payoutTargetRelatedUserId", "ledgerId", "getBeijingDateInputValue", "setLocation", ...setters],
+    ["payoutTargetRelatedUserId", "ledgerId", "getBeijingDateInputValue", "setLocation", "canManage", ...setters],
   );
   it.each(["deposit", "withdrawal"] as const)("openPayoutEntryPage %s 显式ID和默认ID都直接绑定URL，且重置表单不触发业务写操作", (direction) => {
     const location = vi.fn();
     const reset = setters.map(() => vi.fn());
-    const click = open(29, 52, () => "2026-11-02", location, ...reset);
+    const click = open(29, 52, () => "2026-11-02", location, true, ...reset);
     click(direction, 28);
     expect(location).toHaveBeenLastCalledWith(`/ledger/52/t0-journal?payout=${direction}&payoutUserId=28`);
     click(direction);
     expect(location).toHaveBeenLastCalledWith(`/ledger/52/t0-journal?payout=${direction}&payoutUserId=29`);
     click(direction, "30");
     expect(location).toHaveBeenLastCalledWith(`/ledger/52/t0-journal?payout=${direction}&payoutUserId=30`);
-    const expectedReset = [null, "", "u", "", "", false, "", null, "2026-11-02", false];
+    const expectedReset = [null, "", "income", "u", "", "", false, "", null, "2026-11-02", false];
     reset.forEach((setter, index) => expect(setter).toHaveBeenLastCalledWith(expectedReset[index]));
   });
 
   it.each([0, -1, 28.5, "abc", Infinity, null])("openPayoutEntryPage 不将非法目标 %s 写入URL", (target) => {
     const location = vi.fn();
-    open(0, 52, () => "2026-11-02", location, ...setters.map(() => vi.fn()))("deposit", target);
+    open(0, 52, () => "2026-11-02", location, true, ...setters.map(() => vi.fn()))("deposit", target);
     expect(location).toHaveBeenCalledWith("/ledger/52/t0-journal?payout=deposit");
   });
   it("openPayoutEntryPage 无合法默认用户时也不产生非法参数", () => {
     const location = vi.fn();
-    open(0, 52, () => "2026-11-02", location, ...setters.map(() => vi.fn()))("withdrawal");
+    open(0, 52, () => "2026-11-02", location, true, ...setters.map(() => vi.fn()))("withdrawal");
     expect(location).toHaveBeenCalledWith("/ledger/52/t0-journal?payout=withdrawal");
   });
 });
@@ -728,7 +728,17 @@ describe("T+0 操作页缓存、流水读取与展示隔离", () => {
     const reader = required(findNodes(backendAst, ts.isFunctionDeclaration).find((node) => node.name?.text === "getLedger52T0JournalPayoutLogs"), "payout SQL reader");
     const declaration = (name: string) => required(findNodes(reader, ts.isVariableDeclaration).find((node) => node.name.getText(backendAst) === name), name);
     expect(declaration("readAllUsers").initializer?.getText(backendAst)).toBe("Boolean(adminScope && input.allUsers)");
-    expect(declaration("relatedUserId").initializer?.getText(backendAst)).toBe("readAllUsers ? 0 : (adminScope ? requestedRelatedUserId : memberScope?.relatedUserId || 0)");
+    const relatedUserId = required(declaration("relatedUserId").initializer, "related user scope");
+    const evaluateRelatedUserId = (readAllUsers: boolean, adminScope: unknown, requestedRelatedUserId: number, memberScope: unknown) => {
+      const compiled = ts.transpileModule(`const isolated = (${relatedUserId.getText(backendAst)});`, {
+        compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+      }).outputText;
+      return new Function("readAllUsers", "adminScope", "requestedRelatedUserId", "memberScope", `${compiled}\nreturn isolated;`)(readAllUsers, adminScope, requestedRelatedUserId, memberScope) as number;
+    };
+    expect(evaluateRelatedUserId(true, { mode: "admin" }, 77, { mode: "member", relatedUserId: 88 })).toBe(0);
+    expect(evaluateRelatedUserId(false, { mode: "admin" }, 77, { mode: "member", relatedUserId: 88 })).toBe(77);
+    expect(evaluateRelatedUserId(false, null, 77, { mode: "member", relatedUserId: 88 })).toBe(88);
+    expect(relatedUserId.getText(backendAst)).toContain("readAllUsers");
     const sql = required(declaration("sql").initializer, "payout SQL expression");
     if (!ts.isConditionalExpression(sql) || !ts.isConditionalExpression(sql.whenFalse)) throw new Error("Expected global/admin/member SQL branches");
     const globalSql = sql.whenTrue.getText(backendAst);
@@ -744,7 +754,7 @@ describe("T+0 操作页缓存、流水读取与展示隔离", () => {
     }
     expect(declaration("params").initializer?.getText(backendAst)).toMatch(/readAllUsers\s*\?\s*\[LEDGER_52_T0_JOURNAL_ID, adminScope!\.journalOwnerUserId\]\s*:\s*adminScope\s*\?\s*\[LEDGER_52_T0_JOURNAL_ID, adminScope\.journalOwnerUserId, relatedUserId\]\s*:\s*\[LEDGER_52_T0_JOURNAL_ID, relatedUserId\]/);
     const body = reader.getText(backendAst);
-    expect(body).toContain("!readAllUsers && (!Number.isInteger(relatedUserId) || relatedUserId <= 0)");
+    expect(body.replace(/\s+/g, "")).toContain("!readAllUsers&&(!Number.isInteger(relatedUserId)||relatedUserId<=0)");
     expect(body).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\s/i);
   });
 });
@@ -759,15 +769,25 @@ describe("T+0 资金读取独立请求契约", () => {
     const condition = required(options.properties.find((node): node is ts.MethodDeclaration =>
       ts.isMethodDeclaration(node) && node.name.getText(mainAst) === "condition",
     ), "independent request condition");
-    const returnExpression = required(findNodes(condition, ts.isReturnStatement)[0]?.expression, "splitLink return expression");
     const opName = condition.parameters[0].name.getText(mainAst);
-    const compiled = ts.transpileModule(`const isolated = (${opName}) => (${returnExpression.getText(mainAst)});`, {
+    const helperSource = readFileSync(new URL("../client/src/lib/adminWalletRequests.ts", import.meta.url), "utf8");
+    const helperAst = ts.createSourceFile("adminWalletRequests.ts", helperSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const helper = required(findNodes(helperAst, ts.isFunctionDeclaration).find((node) => node.name?.getText(helperAst) === "isAdminWalletRequest"), "isAdminWalletRequest");
+    const helperCompiled = ts.transpileModule(helper.getText(helperAst).replace(/^export\s+/, ""), {
       compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
     }).outputText;
-    const selectIndependent = new Function(`${compiled}\nreturn isolated;`)() as (op: { path: string }) => boolean;
+    const helperFn = new Function(`${helperCompiled}\nreturn isAdminWalletRequest;`)() as (path: string) => boolean;
+    expect(helperFn("definitelyNotAProductionProcedure")).toBe(false);
+    // 必须执行完整条件，包括钱包提前返回与末尾白名单，不能只抽第一个 return true。
+    const conditionCompiled = ts.transpileModule(`const isolated = (${opName}: { path: string }) => ${required(condition.body, "splitLink condition body").getText(mainAst)};`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+    }).outputText;
+    const selectIndependent = new Function("isAdminWalletRequest", `${conditionCompiled}\nreturn isolated;`)(helperFn) as (op: { path: string }) => boolean;
     expect(selectIndependent({ path: "ledger.t0GetPayoutLogs" })).toBe(true);
     expect(selectIndependent({ path: "ledger.t0GetPayoutAvailability" })).toBe(true);
+    expect(selectIndependent({ path: "adminUser.walletBalanceSnapshot" })).toBe(true);
     expect(selectIndependent({ path: "ledger.unrelatedRead" })).toBe(false);
+    expect(selectIndependent({ path: "definitelyNotAProductionProcedure" })).toBe(false);
     for (const [branch, link] of [["true", "httpLink"], ["false", "httpBatchLink"]]) {
       const property = required(options.properties.find((node): node is ts.PropertyAssignment =>
         ts.isPropertyAssignment(node) && node.name.getText(mainAst) === branch,

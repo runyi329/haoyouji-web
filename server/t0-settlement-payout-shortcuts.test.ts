@@ -86,7 +86,7 @@ function render(expandedMemberId: number | null, onPayoutEntry?: PayoutCallback,
 function action(tree: unknown, label: string) {
   return required(elements(tree).find(node => node.type === "button" && node.props["aria-label"] === label), label);
 }
-const resetSetterNames = ["setEditingPayoutLog", "setPayoutAmount", "setPayoutDepositInputMode", "setPayoutEthQuantity", "setPayoutEthReferencePrice", "setPayoutEthReferencePriceIsManual", "setPayoutNote", "setPayoutSubmitNotice", "setPayoutOccurredOn"];
+const resetSetterNames = ["setEditingPayoutLog", "setPayoutAmount", "setPayoutWithdrawalSource", "setPayoutDepositInputMode", "setPayoutEthQuantity", "setPayoutEthReferencePrice", "setPayoutEthReferencePriceIsManual", "setPayoutNote", "setPayoutSubmitNotice", "setPayoutOccurredOn"];
 function navigationHarness(canManage = true, returns = { payoutReturnToSettlement: false, payoutReturnToTeam: false }) {
   const events: Array<[string, unknown]> = [];
   const state: Record<string, unknown> = Object.fromEntries(resetSetterNames.map(name => [name, "previous-user-dirty-value"]));

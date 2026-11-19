@@ -17,6 +17,7 @@ function source(file: string) {
 }
 const app = source("../client/src/App.tsx");
 const journal = source("../client/src/pages/T0Journal.tsx");
+const adminWalletRequests = source("../client/src/lib/adminWalletRequests.ts");
 function nodes<T extends ts.Node>(
   root: ts.Node,
   predicate: (node: ts.Node) => node is T
@@ -292,11 +293,21 @@ function pollingHarness(
     ),
     "ActiveLedgerPagePolling"
   );
+  const adminRechargePageDeclaration = required(
+    nodes(adminWalletRequests, ts.isFunctionDeclaration).find(
+      node => node.name?.text === "isAdminRechargeManagementPage"
+    ),
+    "isAdminRechargeManagementPage"
+  );
   const sandbox = context({
     useLocation: () => [location],
     trpc: { useUtils: () => ({ ledger: { invalidate } }) },
     document,
     window,
+    isAdminRechargeManagementPage: new Function(
+      "return function isAdminRechargeManagementPage(pathname) " +
+      (adminRechargePageDeclaration.body?.getText(adminWalletRequests) ?? "{}")
+    )(),
     useEffect: (callback: () => (() => void) | undefined) => {
       cleanup = callback();
     },
