@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-20
+// 生成时间：2026-11-21
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9991,5 +9991,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-11-19": [
     { date: "2026-11-18T23:37:38Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-11-19T01:32:42Z", type: "fix", cleanMessage: "load complete T0 shared income and show saved annualized targets" },
+  ],
+  "2026-11-20": [
+    { date: "2026-11-19T23:55:34Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-20T03:00:19Z", type: "feat", cleanMessage: "unify AI client views and refine holdings presentation" },
+    { date: "2026-11-20T10:36:13Z", type: "fix", cleanMessage: "restrict delegated admins to calendar-number recording" },
+    { date: "2026-11-20T14:56:55Z", type: "feat", cleanMessage: "add scoped profit summaries and safe buy-order editing" },
+  ],
+  "2026-11-21": [
+    { date: "2026-11-20T16:21:53Z", type: "fix", cleanMessage: "show member allocation changes and market-value share counts" },
   ],
 };
