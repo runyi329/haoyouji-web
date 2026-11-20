@@ -36,6 +36,7 @@ import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDo
 import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
+import Ledger37AiHome from "@/components/Ledger37AiHome";
 import Ledger37MarginWalletActions from "@/components/Ledger37MarginWalletActions";
 import OrdinaryTagObservationPanel from "@/components/OrdinaryTagObservationPanel";
 import {
@@ -666,6 +667,12 @@ export default function LedgerDetailAA({
     && userRole === 'owner'
     && !viewAsUserId;
   const stockParticipantView = ledgerId === 37 && !canViewLedger37StockTotal;
+  const r1PresentationScope = ledgerId === 37;
+  const r1PresentationQuery = trpc.ledger.getLedger37PresentationContext.useQuery(
+    { ledgerId: 37, viewAsUserId: marginTargetUserId > 0 ? marginTargetUserId : undefined },
+    { enabled: r1PresentationScope && marginTargetUserId > 0, placeholderData: undefined, staleTime: 0, refetchInterval: 15_000, refetchOnWindowFocus: true, retry: 1 },
+  );
+  const r1ShowsAi = r1PresentationScope && Boolean(r1PresentationQuery.data?.aiEnabled) && !r1PresentationQuery.data?.canManage;
   // 此接口依赖 x-view-as-user-id 而非 input。独立身份键仅用于前端缓存，
   // 请求仍调用原有只读接口，不需要后端接受额外字段。
   const stockTagOverviewQuery = useQuery({
@@ -722,11 +729,11 @@ export default function LedgerDetailAA({
   // 首页最早预加载位置：只等分类 + 当前成员 visible，不等个人收益概览遍历，
   // 也不等选中 R1/打开日历。服务端继续核验 eligible；无权预取静默失败不重试。
   const stockCalendarPrefetchCategoryIds = useMemo(() => {
-    if (ledgerId !== 37 || !initialBalancesData) return [];
+    if (ledgerId !== 37 || !initialBalancesData || r1ShowsAi || !r1PresentationQuery.data || r1PresentationQuery.isError) return [];
     return allCategories.filter((category: any) => category.accountingMode === 'stock_portfolio'
       && readTagVisible(initialBalancesData.balances ?? {}, category.name))
       .map((category: any) => Number(category.id));
-  }, [ledgerId, allCategories, initialBalancesData]);
+  }, [ledgerId, allCategories, initialBalancesData, r1ShowsAi, r1PresentationQuery.data, r1PresentationQuery.isError]);
   const stockCalendarIdentityKey = JSON.stringify([ledgerId, Number(user?.id ?? 0), marginTargetUserId, viewAsUserId]);
   const stockCalendarIdentityRef = useRef(stockCalendarIdentityKey);
   stockCalendarIdentityRef.current = stockCalendarIdentityKey;
@@ -845,7 +852,8 @@ export default function LedgerDetailAA({
     Boolean(selectedStockOverview), !stockParticipantView, true);
   const stockCalendarSnapshotsQuery = useQuery({
     ...stockCalendarOptionsFor(selectedTagId || 0),
-    enabled: Boolean(isSelectedStockPortfolio && selectedStockCalendarScope === 'total' && selectedTagId),
+    enabled: Boolean(isSelectedStockPortfolio && selectedStockCalendarScope === 'total' && selectedTagId
+      && (!r1PresentationScope || (r1PresentationQuery.data && !r1ShowsAi && !r1PresentationQuery.isError))),
   });
   const stockCalendarPoints = useMemo(() => {
     if (!isSelectedStockPortfolio || !selectedTagId) return [];
@@ -2384,12 +2392,21 @@ export default function LedgerDetailAA({
   };
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
+  // 37号账本全局模式未确认时不展示旧总盘/价格；不依赖选择哪个标签。
+  if (r1PresentationScope && (r1PresentationQuery.isPending || r1PresentationQuery.isError)) {
+    return <div className="space-y-4 p-4"><button type="button" onClick={() => { setShowStockPortfolio(false); setSelectedTagId(null); }} className="text-sm text-gray-500">返回</button><p className="text-sm text-gray-500">{r1PresentationQuery.isError ? '展示设置读取失败，请重试' : '正在读取展示设置…'}</p>{r1PresentationQuery.isError && <button type="button" onClick={() => { void r1PresentationQuery.refetch(); }} className="text-sm text-[#D32F2F]">重试</button>}</div>;
+  }
+  if (r1ShowsAi) {
+    return <Ledger37AiHome key={`ledger37-ai-${marginTargetUserId}`} viewerUserId={marginTargetUserId} onBack={onBack} />;
+  }
   if (showStockPortfolio && selectedStockObservationTag && canShowStockObservationAccount) {
     return (
       <StockTagPortfolio
+        key={`stock-observation-${selectedStockObservationTag.categoryId}-${marginTargetUserId}`}
         ledgerId={ledgerId}
         categoryId={selectedStockObservationTag.categoryId}
         categoryName={selectedStockObservationTag.categoryName}
+        effectiveUserId={marginTargetUserId}
         participantView={true}
         onBack={() => {
           setShowStockPortfolio(false);
@@ -2403,9 +2420,11 @@ export default function LedgerDetailAA({
   if (showStockPortfolio && selectedTagId && selectedTag?.accountingMode === 'stock_portfolio') {
     return (
       <StockTagPortfolio
+        key={`stock-portfolio-${selectedTagId}-${marginTargetUserId}`}
         ledgerId={ledgerId}
         categoryId={selectedTagId}
         categoryName={selectedTag.name}
+        effectiveUserId={marginTargetUserId}
         participantView={stockParticipantView}
         onBack={() => {
           setShowStockPortfolio(false);

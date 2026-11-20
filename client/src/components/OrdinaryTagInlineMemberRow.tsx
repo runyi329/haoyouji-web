@@ -1,4 +1,4 @@
-import { Pause, Play, Settings2 } from "lucide-react";
+import { Pause, Play, Settings2, Bot } from "lucide-react";
 import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +13,7 @@ export type OrdinaryTagInlineMemberRowProps = {
   ledgerId: number;
   categoryId: number;
   member: { userId: number; username?: string; nickname?: string; avatar?: string | null };
+  aiEnabled?: boolean;
   observation: OrdinaryInlineObservationDraft;
   actual: OrdinaryActualAllocation;
   actualStartDate: string;
@@ -51,7 +52,7 @@ export default function OrdinaryTagInlineMemberRow(props: OrdinaryTagInlineMembe
 
 /** 纯UI。三处编辑共用同一观察/真实草稿；无mutation和第二套弹窗比例表单。 */
 export function OrdinaryTagInlineMemberFields({
-  member, observation, actual, actualStartDate, actualPauseDate = "", pauseStatus = "none", pauseLocked = false,
+  ledgerId, member, aiEnabled = false, observation, actual, actualStartDate, actualPauseDate = "", pauseStatus = "none", pauseLocked = false,
   batchSelectMode = false, showAvatar = true, visible, saving, readError,
   onToggle, onObservationEdit, onActualEdit, onActualStartDateEdit, onActualPauseDateEdit, onDateDetails, onDetails,
   onToggleVisibility, visibilitySaving = false,
@@ -78,6 +79,7 @@ export function OrdinaryTagInlineMemberFields({
         </span>}
       </button>}
       <span className="min-w-0 truncate text-xs text-gray-600">{name}</span>
+      {ledgerId === 37 && aiEnabled && <Bot size={12} role="img" aria-label="AI视角" className="shrink-0 text-[#7C3AED]" />}
       <label className="flex shrink-0 items-center gap-1 text-[10px] text-[#7C3AED]">
         <span>观察</span>
         <Switch checked={observing} disabled={saving} onCheckedChange={onToggle} aria-label={`${name}的普通标签观察`} title="保存后仅释放真实配置份额，历史、押金、钱包不动" className="h-[1.15rem] w-8 data-[state=checked]:bg-[#8B5CF6]" />

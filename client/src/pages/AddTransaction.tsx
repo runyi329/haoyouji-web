@@ -43,6 +43,7 @@ import { setSmartAccountingLastPage } from "@/lib/smartAccountingNavigation";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
 import { formatLedgerRecordDate, getLedgerRecordInitialDate } from "@/lib/ledgerRecordDate";
+import { Ledger37PresentationGate, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
 
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -2782,4 +2783,16 @@ const AddTransaction = () => {
   );
 };
 
-export default AddTransaction;
+function Ledger37AddTransactionEntry() {
+  const { user } = useAuth();
+  const search = useSearch();
+  const presentation = useLedger37PresentationContext({ ledgerId: 37, search, authUserId: user?.id });
+  return <Ledger37PresentationGate ledgerId={37} presentation={presentation} onBack={() => window.history.back()}><AddTransaction /></Ledger37PresentationGate>;
+}
+
+function AddTransactionPresentationEntry() {
+  const { id } = useParams<{ id: string }>();
+  return Number(id) === 37 ? <Ledger37AddTransactionEntry /> : <AddTransaction />;
+}
+
+export default AddTransactionPresentationEntry;

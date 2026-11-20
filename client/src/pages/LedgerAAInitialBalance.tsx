@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Bot, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -37,6 +37,8 @@ import {
 import { readOrdinaryTagObservationConfig, type OrdinaryTagObservationConfig } from "@shared/ordinary-tag-observation";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import { LEDGER37_AI_DISPLAY_KEY } from "@shared/ledger37-ai-presentation";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 import { parsePortfolioInstrument, portfolioCurrency, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, portfolioQuantityIsEmpty, type PortfolioCurrency } from "@shared/portfolio-instruments";
@@ -303,7 +305,8 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     { ledgerId },
     { enabled: !!ledgerId }
   );
-  const canAccess = ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin";
+  const canAccess = ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin"
+    || (ledgerId === 37 && (String(user?.role) === 'admin' || String(user?.role) === 'super_admin'));
 
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null, includeHiddenForManagement: true },
@@ -527,6 +530,161 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   dirtyMemberDraftsRef.current = dirtyUsers;
   const visibilityMutation = trpc.ledger.adminSetMemberInitialBalances.useMutation();
   const queryUtils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  // 全37视角共用每成员唯一开关，不依赖标签、lot或R1分配数据。
+  const ledger37AiDisplayMutation = trpc.ledger.setLedger37AiDisplay.useMutation();
+  type Ledger37AiDisplayOverride = { enabled: boolean; requestId: number; status: 'pending' | 'saved'; afterReadVersion: number; viewScope: string };
+  const [ledger37AiDisplayOverrides, setLedger37AiDisplayOverrides] = useState<Record<string, Ledger37AiDisplayOverride>>({});
+  const [ledger37AiPreviewDrafts, setLedger37AiPreviewDrafts] = useState<Record<string, { enabled: boolean; viewScope: string }>>({});
+  const ledger37AiDisplayOverridesRef = useRef<Record<string, Ledger37AiDisplayOverride>>({});
+  const ledger37AiSavingRef = useRef(new Set<string>());
+  const [ledger37AiSavingScopes, setLedger37AiSavingScopes] = useState<Set<string>>(new Set());
+  const ledger37AiRequestIdRef = useRef(0);
+  const ledger37AiCachePatchRef = useRef<unknown>(null);
+  const ledger37AiServerReadVersionsRef = useRef<Record<number, number>>({});
+  // 与共享fetch的URL/sessionStorage代看来源一致；不能借代看管理员角色写入。
+  const isLedger37AiReadonlyView = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlViewAs = params.get('viewAs');
+      const viewAs = urlViewAs && /^\d+$/.test(urlViewAs) ? urlViewAs : window.sessionStorage.getItem('view-as-user-id');
+      return (!!viewAs && /^\d+$/.test(viewAs) && Number(viewAs) > 0)
+        || params.get('readonly') === 'true' || params.get('readonly') === '1';
+    } catch { return true; } // 无法确认视角时不开放写入。
+  };
+  const canManageLedger37Ai = ledgerId === 37 && canAccess && !!user?.id && !isLocalHotPreview && !isLedger37AiReadonlyView();
+  const canPreviewLedger37Ai = ledgerId === 37 && canAccess && !!user?.id && isLocalHotPreview && !isLedger37AiReadonlyView();
+  const ledger37AiViewScopeRef = useRef('');
+  ledger37AiViewScopeRef.current = `${ledgerId}:${Number(user?.id)}:${isLedger37AiReadonlyView() ? 'readonly' : 'self'}`;
+  const ledger37AiDisplayScope = (scopeLedgerId: number, targetUserId: number) => `${scopeLedgerId}:${targetUserId}`;
+  const updateLedger37AiDisplayOverrides = (update: (previous: Record<string, Ledger37AiDisplayOverride>) => Record<string, Ledger37AiDisplayOverride>) => {
+    const next = update(ledger37AiDisplayOverridesRef.current);
+    ledger37AiDisplayOverridesRef.current = next;
+    setLedger37AiDisplayOverrides(next);
+  };
+  const getLedger37AiDisplayEnabled = (targetUserId: number) => {
+    const preview = ledger37AiPreviewDrafts[ledger37AiDisplayScope(ledgerId, targetUserId)];
+    if (canPreviewLedger37Ai && !isLedger37AiReadonlyView() && preview?.viewScope === ledger37AiViewScopeRef.current) return preview.enabled;
+    const override = ledger37AiDisplayOverrides[ledger37AiDisplayScope(ledgerId, targetUserId)];
+    return override?.viewScope === ledger37AiViewScopeRef.current ? override.enabled
+      : ((allBalancesData as any)?.balancesMap?.[targetUserId]?.[LEDGER37_AI_DISPLAY_KEY] === 1);
+  };
+  useEffect(() => queryClient.getQueryCache().subscribe(event => {
+    const path = event.query.queryKey[0] as string[];
+    const input = (event.query.queryKey[1] as { input?: { ledgerId?: number } } | undefined)?.input;
+    if (!Array.isArray(path) || path.join('.') !== 'ledger.adminGetAllInitialBalances' || event.type !== 'updated') return;
+    const readLedgerId = Number(input?.ledgerId);
+    if (event.action.type === 'fetch') {
+      ledger37AiServerReadVersionsRef.current[readLedgerId] = (ledger37AiServerReadVersionsRef.current[readLedgerId] ?? 0) + 1;
+      return;
+    }
+    // setData是manual成功，不是服务端确认；失败和保存前已经发出的旧读取也不能撤掉成功覆盖层。
+    if (event.action.type !== 'success' || event.action.manual) return;
+    const readVersion = ledger37AiServerReadVersionsRef.current[readLedgerId] ?? 0;
+    updateLedger37AiDisplayOverrides(previous => {
+      let next = previous;
+      for (const [scope, saved] of Object.entries(previous)) {
+        const [scopeLedgerId] = scope.split(':').map(Number);
+        if (scopeLedgerId !== readLedgerId || saved.status !== 'saved' || readVersion <= saved.afterReadVersion
+          || saved.viewScope !== ledger37AiViewScopeRef.current) continue;
+        // 后续权威读取无论同值或他管理员改值均撤层；旧inflight读取不能撤层。
+        if (next === previous) next = { ...previous };
+        delete next[scope];
+      }
+      return next;
+    });
+  }), [queryClient]);
+  const saveLedger37AiDisplay = async (targetUserId: number, enabled: boolean): Promise<boolean> => {
+    if (!canManageLedger37Ai || isLedger37AiReadonlyView() || !allBalancesData
+      || !(allBalancesData as any)?.members?.some((member: any) => Number(member.userId) === targetUserId)) return false;
+    const viewScope = `${ledgerId}:${Number(user?.id)}:self`;
+    if (ledger37AiViewScopeRef.current !== viewScope) return false;
+    const scope = ledger37AiDisplayScope(ledgerId, targetUserId);
+    if (ledger37AiSavingRef.current.has(scope)) return false;
+    ledger37AiSavingRef.current.add(scope); // 同tick双击只发送一次；其他成员仍可独立保存。
+    setLedger37AiSavingScopes(previous => new Set(previous).add(scope));
+    const requestId = ++ledger37AiRequestIdRef.current;
+    const existingOverride = ledger37AiDisplayOverridesRef.current[scope];
+    const previousOverride = existingOverride?.viewScope === viewScope ? existingOverride : undefined;
+    updateLedger37AiDisplayOverrides(previous => ({ ...previous, [scope]: { enabled, requestId, status: 'pending', afterReadVersion: 0, viewScope } }));
+    try {
+      await ledger37AiDisplayMutation.mutateAsync({ ledgerId: 37, targetUserId, enabled });
+      if (ledger37AiViewScopeRef.current !== viewScope || isLedger37AiReadonlyView()
+        || ledger37AiDisplayOverridesRef.current[scope]?.requestId !== requestId) return false;
+      updateLedger37AiDisplayOverrides(previous => ({ ...previous, [scope]: { enabled, requestId, status: 'saved', afterReadVersion: ledger37AiServerReadVersionsRef.current[37] ?? 0, viewScope } }));
+      queryUtils.ledger.adminGetAllInitialBalances.setData({ ledgerId: 37 }, previous => {
+        if (!previous) return previous;
+        const data = previous as any;
+        return { ...data, balancesMap: { ...data.balancesMap, [targetUserId]: { ...data.balancesMap?.[targetUserId], [LEDGER37_AI_DISPLAY_KEY]: enabled ? 1 : 0 } } };
+      });
+      ledger37AiCachePatchRef.current = queryUtils.ledger.adminGetAllInitialBalances.getData({ ledgerId: 37 });
+      // 全员读取只标记失效，避免立即refetch重建金额/押金草稿；全37展示读取精确失效。
+      void queryUtils.ledger.adminGetAllInitialBalances.invalidate({ ledgerId: 37 }, { refetchType: 'none' });
+      void queryClient.invalidateQueries({ predicate: query => {
+        const path = query.queryKey[0] as string[];
+        const input = (query.queryKey[1] as { input?: { ledgerId?: number } } | undefined)?.input;
+        return Array.isArray(path) && path[0] === 'ledger'
+          && ['getLedger37PresentationContext', 'getMyLedger37AiOverview', 'getR1StockPresentationContext', 'getMyR1AiParticipationPortfolio'].includes(path[1])
+          && input?.ledgerId === 37;
+      } });
+      toast.success('AI视角已保存；全37视角同步，真实份额与收益不变');
+      return true;
+    } catch (error) {
+      if (ledger37AiViewScopeRef.current === viewScope && ledger37AiDisplayOverridesRef.current[scope]?.requestId === requestId) {
+        updateLedger37AiDisplayOverrides(previous => {
+          const next = { ...previous };
+          if (previousOverride) next[scope] = previousOverride;
+          else delete next[scope];
+          return next;
+        });
+        toast.error((error as any)?.message || 'AI视角保存失败，已恢复原设置；其他草稿保留');
+      }
+      return false;
+    } finally {
+      if ((ledger37AiViewScopeRef.current !== viewScope || isLedger37AiReadonlyView()) && ledger37AiDisplayOverridesRef.current[scope]?.requestId === requestId) {
+        updateLedger37AiDisplayOverrides(previous => { const next = { ...previous }; delete next[scope]; return next; });
+      }
+      ledger37AiSavingRef.current.delete(scope);
+      setLedger37AiSavingScopes(previous => { const next = new Set(previous); next.delete(scope); return next; });
+    }
+  };
+  // 通用余额保存不能回传专用AI保留键（包括历史逐标签键），避免覆盖独立设置。
+  const stripLedger37AiDisplayKeys = (balances: Record<string, number | string>) => Object.fromEntries(
+    Object.entries(balances).filter(([key]) => key !== LEDGER37_AI_DISPLAY_KEY && !key.startsWith('__stockAiDisplay_category_')),
+  );
+  const renderLedger37AiBadge = (userId: number) => ledgerId === 37 && getLedger37AiDisplayEnabled(Number(userId))
+    ? <Bot size={12} role="img" aria-label="AI视角" className="shrink-0 text-[#7C3AED]" /> : null;
+  // 热预览仅修改本页显示草稿；绝不调用正式保存或把预览值写进权威查询缓存。
+  const previewLedger37AiDisplay = (targetUserId: number, enabled: boolean): boolean => {
+    if (!canPreviewLedger37Ai || isLedger37AiReadonlyView() || !allBalancesData || typeof enabled !== 'boolean'
+      || !Number.isSafeInteger(targetUserId) || targetUserId <= 0
+      || !(allBalancesData as any)?.members?.some((member: any) => Number(member.userId) === targetUserId)) return false;
+    const scope = ledger37AiDisplayScope(ledgerId, targetUserId);
+    if (ledger37AiSavingScopes.has(scope)) return false;
+    const viewScope = `${ledgerId}:${Number(user?.id)}:self`;
+    if (ledger37AiViewScopeRef.current !== viewScope) return false;
+    setLedger37AiPreviewDrafts(previous => ({ ...previous, [scope]: { enabled, viewScope } }));
+    toast.info('仅预览，AI设置未保存');
+    return true;
+  };
+  const renderLedger37AiToggle = (member: any) => {
+    if (ledgerId !== 37) return null;
+    const targetUserId = Number(member.userId);
+    const enabled = getLedger37AiDisplayEnabled(targetUserId);
+    const busy = ledger37AiSavingScopes.has(ledger37AiDisplayScope(ledgerId, targetUserId));
+    const preview = ledger37AiPreviewDrafts[ledger37AiDisplayScope(ledgerId, targetUserId)];
+    const name = member.nickname || member.name || member.username || '未知用户';
+    return <label data-ledger37-ai-toggle={targetUserId} className="inline-flex shrink-0 cursor-pointer items-center gap-1"
+      onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
+      <Switch thumbLabel="AI" checked={enabled} disabled={(!canManageLedger37Ai && !canPreviewLedger37Ai) || !allBalancesData || busy} aria-busy={busy}
+        aria-label={`${name}的全局AI视角`} title="适用于37号账本全部视角"
+        onCheckedChange={nextEnabled => canPreviewLedger37Ai ? previewLedger37AiDisplay(targetUserId, nextEnabled) : void saveLedger37AiDisplay(targetUserId, nextEnabled)}
+        className="h-[1.15rem] w-8 data-[state=checked]:bg-[#8B5CF6]" />
+      {canPreviewLedger37Ai && preview?.viewScope === ledger37AiViewScopeRef.current
+        && <span data-ledger37-ai-preview={targetUserId} className="text-[10px] font-normal text-amber-700">未保存</span>}
+    </label>;
+  };
   const [visibilitySavingScopes, setVisibilitySavingScopes] = useState<Set<string>>(new Set());
   const visibilitySavingRef = useRef(new Set<string>());
   const visibilityCachePatchRef = useRef<unknown>(null);
@@ -594,6 +752,8 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
 
   useEffect(() => {
     if (!allBalancesData) return;
+    // AI-only cache补丁不得重建真实比例、押金或日期草稿，也不清dirty。
+    if (ledger37AiCachePatchRef.current === allBalancesData) return;
     // 独立可见性保存已精确更新editState；本次缓存变更不能重建金额、日期、押金等草稿。
     if (visibilityCachePatchRef.current === allBalancesData) return;
     // 清空成功只精确更新目标四字段；不能因本次query cache补丁重建其他人的未保存修改。
@@ -658,6 +818,12 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     setEditState(previous => {
       for (const member of (allBalancesData as any).members) {
         for (const cat of categories) {
+          // 全37后续必要服务器读取仍保留成员未保存的股票金额/押金草稿。
+          if (ledgerId === 37 && isStockPortfolioTag(cat)
+            && dirtyMemberDraftsRef.current.has(member.userId) && previous[member.userId]?.[cat.name]) {
+            initial[member.userId][cat.name] = previous[member.userId][cat.name];
+            continue;
+          }
           if (ledgerId !== 37 || isStockPortfolioTag(cat)) continue;
           const scope = ordinaryInlineScope(ledgerId, member.userId, Number(cat.id));
           if ((ordinaryDirtyRef.current[scope] || dirtyMemberDraftsRef.current.has(member.userId)) && previous[member.userId]?.[cat.name]) initial[member.userId][cat.name] = previous[member.userId][cat.name];
@@ -1318,7 +1484,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
       await setMutation.mutateAsync({
         ledgerId,
         targetUserId: userId,
-        balances: balances as Record<string, number>,
+        balances: stripLedger37AiDisplayKeys(balances) as Record<string, number>,
         migratedMarginNoteIds,
         hideAcknowledgements: memberHideAcknowledgements,
       });
@@ -1594,6 +1760,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
     return <section data-ordinary-detail-editor={category.id} className="min-w-0 rounded-md pt-2">
       <OrdinaryTagInlineMemberRow key={ordinaryInlineScope(ledgerId, userId, Number(category.id))}
         ledgerId={ledgerId} categoryId={Number(category.id)} member={member || { userId }} showAvatar={false}
+        aiEnabled={ledgerId === 37 && getLedger37AiDisplayEnabled(Number(userId))}
         observation={ordinaryEffectiveObservation(userId, category)} actual={ordinaryEffectiveActual(userId, category)}
         actualStartDate={entry.startDate} actualPauseDate={displayedPauseDate} pauseStatus={pauseStatus} pauseLocked={latestIsGlobalPause}
         visible={entry.visible} saving={ordinaryDetailSavingScopes.has(ordinaryInlineScope(ledgerId, userId, Number(category.id))) || ordinarySavingTags.has(Number(category.id)) || savingUsers.has(userId) || isOrdinaryClearBusy(userId, Number(category.id))} accentColor={category.color || '#2F6F85'}
@@ -2572,6 +2739,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <div className="flex min-w-0 basis-full items-center gap-1.5">
                           <span className="min-w-0 truncate text-xs" style={{ color: Number(member.userId) === Number(selectedUserId) ? accentColor : '#4B5563' }}>{member.name}{Number(member.userId) === Number(selectedUserId) ? '（当前）' : ''}</span>
+                          {renderLedger37AiBadge(Number(member.userId))}
                           <label className="flex shrink-0 items-center gap-1 text-[10px] text-[#7C3AED]">
                             <span>观察</span>
                             <Switch
@@ -2875,7 +3043,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   };
 
   // 视角切换："user"=用户视角（原有），"tag"=标签视角
-  const [viewMode, setViewMode] = useState<"user" | "tag">("tag");
+  const [viewMode, setViewMode] = useState<"user" | "tag">(() => ledgerId === 37 && new URLSearchParams(window.location.search).get('view') === 'user' ? 'user' : 'tag');
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
   // 用户视图：每个用户下展开的标签，key = `${userId}__${catName}`
@@ -3637,6 +3805,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                     if (ledgerId === 37 && cat) {
                       return <OrdinaryTagInlineMemberRow key={ordinaryInlineScope(ledgerId, member.userId, Number(cat.id))}
                         ledgerId={ledgerId} categoryId={Number(cat.id)} member={member}
+                        aiEnabled={getLedger37AiDisplayEnabled(Number(member.userId))}
                         observation={ordinaryEffectiveObservation(member.userId, cat)} actual={ordinaryEffectiveActual(member.userId, cat)}
                         actualStartDate={editState[member.userId]?.[cat.name]?.startDate || ''}
                         actualPauseDate={editState[member.userId]?.[cat.name]?.pauseHistory?.slice(-1)[0]?.pauseDate || editState[member.userId]?.[cat.name]?.pauseDate || ''}
@@ -4468,9 +4637,10 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
                           size="sm"
                         />
                       )}
-                      <div>
-                        <div className="text-sm font-semibold text-gray-800">
-                          {member.nickname || member.username || "未知用户"}
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-800">
+                          <span className="min-w-0 truncate">{member.nickname || member.username || "未知用户"}</span>
+                          {renderLedger37AiToggle(member)}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">{userTagStatusSummary}</div>
                       </div>

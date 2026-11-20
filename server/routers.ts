@@ -54,6 +54,7 @@ import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import * as dbCrypto from "./db-crypto";
 import { callDataApi } from "./_core/dataApi";
+import { R1_STOCK_CATEGORY_ID } from "@shared/r1-stock-presentation";
 import { macroRouter } from "./routers/macro-router";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, ledgerMembers, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
@@ -137,6 +138,13 @@ function requireLedger37MarginActor(ctx: Ledger37MarginActorContext) {
     throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本钱包保证金仅胡大叔可操作' });
   }
   return actor;
+}
+
+async function assertLedger37RawPresentationRead(ctx: { user: { id: number; role?: string }; isViewingAs?: boolean }, ledgerId: number) {
+  if (ledgerId !== 37) return;
+  const { getLedger37PresentationContext } = await import('./ledger37-ai-presentation');
+  const presentation = await getLedger37PresentationContext({ ledgerId: 37, userId: ctx.user.id, systemRole: ctx.user.role, isViewingAs: Boolean(ctx.isViewingAs) });
+  if (presentation.aiEnabled && !presentation.canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本AI视角请使用参与收益页面' });
 }
 
 function asRows(result: any): any[] {
@@ -14012,6 +14020,7 @@ ${klinesSummary}
         includeHiddenForManagement: z.boolean().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         if (input.includeHiddenForManagement) {
           await requireLedger52Creator(ctx.user.id, input.ledgerId);
           const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
@@ -14027,6 +14036,7 @@ ${klinesSummary}
     getPublicCategories: publicProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ input }) => {
+        if (input.ledgerId === 37) throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分类须在认证后的成员视角查看' });
         const dbConn = await getDbConnection();
         if (!dbConn) return [];
         const [rows] = await dbConn.execute(
@@ -14076,57 +14086,133 @@ ${klinesSummary}
         });
       }),
     // 37号账本股票标签：独立的批次、事件和盘尾快照，不读取或修改52号订单数据。
-    getStockTagPortfolio: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), categoryId: z.number() }))
+    getR1StockPresentationContext: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
       .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        }
+        await assertLedger37RawPresentationRead(ctx, 37);
+        const { getR1StockPresentationContext } = await import('./ledger-stock-portfolio');
+        return getR1StockPresentationContext({ ledgerId: input.ledgerId, categoryId: input.categoryId, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyR1AiParticipationPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        }
+        await assertLedger37RawPresentationRead(ctx, 37);
+        const { getMyR1AiParticipationPortfolio } = await import('./ledger-stock-portfolio');
+        return getMyR1AiParticipationPortfolio({ ledgerId: input.ledgerId, categoryId: input.categoryId, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    setR1StockAiDisplay: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive().refine(value => value === R1_STOCK_CATEGORY_ID, '仅适用于R1标签'), targetUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '请返回管理员视角再设置AI展示' });
+        throw new TRPCError({ code: 'FORBIDDEN', message: '标签级AI设置已停用，请在37号账本成员区域统一设置' });
+      }),
+    getLedger37PresentationContext: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        const { getLedger37PresentationContext } = await import('./ledger37-ai-presentation');
+        return getLedger37PresentationContext({ ledgerId: 37, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyLedger37AiOverview: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        await assertLedger37RawPresentationRead(ctx, 37);
+        const { getMyLedger37AiOverview } = await import('./ledger37-ai-presentation');
+        return getMyLedger37AiOverview({ ledgerId: 37, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyLedger37AiStockPool: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        const { getMyLedger37AiStockPool } = await import('./ledger-stock-portfolio');
+        return getMyLedger37AiStockPool({ ledgerId: 37, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyLedger37AiWalletValue: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        const { getMyLedger37AiWalletValue } = await import('./ledger37-ai-wallet-value');
+        return getMyLedger37AiWalletValue({ ledgerId: 37, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyLedger37HoldingSources: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict())
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
+        const { getMyLedger37HoldingSources } = await import('./ledger37-holding-sources');
+        return getMyLedger37HoldingSources({ ledgerId: 37, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    setLedger37AiDisplay: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), targetUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), enabled: z.boolean() }).strict())
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.isViewingAs) throw new TRPCError({ code: 'FORBIDDEN', message: '请返回管理员视角再设置AI展示' });
+        const { setLedger37AiDisplay } = await import('./ledger37-ai-presentation');
+        return setLedger37AiDisplay({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: false });
+      }),
+    getStockTagPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), categoryId: z.number(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
+      .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
         const { getStockTagPortfolio } = await import('./ledger-stock-portfolio');
-        return getStockTagPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getStockTagPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     // 成员已获得该标签份额后，可只读查看标签整体 A 股持仓；不能获得任何写权限。
     getStockTagPublicPortfolio: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
       .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
         const { getStockTagPublicPortfolio } = await import('./ledger-stock-portfolio');
-        return getStockTagPublicPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getStockTagPublicPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     // 日历显示整个标签的真实总盘；个人份额仅用于概览，不改变资金或管理权限。
     getStockTagCalendar: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive() }))
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
       .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
         const { getStockTagCalendar } = await import('./ledger-stock-portfolio');
-        return getStockTagCalendar({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getStockTagCalendar({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     // 普通成员及观察视角只读取本人按批次分配的份额；盈亏基准是该份额的入场参考价，
     // 不回退到股票标签的总市值或旧版初始金额。
     getMyStockTagParticipantPortfolio: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number(), viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }))
       .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
         const { getMyStockTagParticipantPortfolio } = await import('./ledger-stock-portfolio');
-        return getMyStockTagParticipantPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getMyStockTagParticipantPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     // 37 号账本概览用：仅返回已对当前有效成员开启、已到开始日期且至少分配一笔股票的标签。
     getMyStockTagOverview: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
-        return getMyStockTagOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getMyStockTagOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     getStockTagDailySnapshots: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
         categoryId: z.number(),
+        viewAsUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       }))
       .query(async ({ ctx, input }) => {
+        if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角' });
         const { getStockTagDailySnapshots } = await import('./ledger-stock-portfolio');
-        return getStockTagDailySnapshots({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getStockTagDailySnapshots({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     getStockLotParticipationMatrix: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
       .query(async ({ ctx, input }) => {
         const { getStockLotParticipationMatrix } = await import('./ledger-stock-portfolio');
-        return getStockLotParticipationMatrix({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getStockLotParticipationMatrix({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     getMyStockTagObservationPortfolio: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), viewAsUserId: z.number().int().positive().optional() }))
@@ -14135,17 +14221,18 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角，再查看其观察账户' });
         }
         const { getMyStockTagObservationPortfolio } = await import('./ledger-stock-portfolio');
-        return getMyStockTagObservationPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getMyStockTagObservationPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     getMyStockTagObservationOverview: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), viewAsUserId: z.number().int().positive().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         // 目标用户须与经过既有管理员代看权限校验的有效身份一致，不能靠参数绕过身份门禁。
         if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '请先切换到对应用户视角，再查看其观察账户' });
         }
         const { getMyStockTagObservationOverview } = await import('./ledger-stock-portfolio');
-        return getMyStockTagObservationOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+        return getMyStockTagObservationOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     setStockLotObservation: protectedProcedure
       .input(z.object({
@@ -14697,6 +14784,7 @@ ${klinesSummary}
         offset: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const { ledgerId, ...options } = input;
         return await dbLedger.getTransactionsList(ledgerId, ctx.user.id, options);
       }),
@@ -17098,6 +17186,7 @@ ${klinesSummary}
         viewAsUserId: z.number().optional(), // 管理员可查指定成员的初始金额
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           await requireLedger52Creator(ctx.user.id, input.ledgerId);
@@ -18236,6 +18325,7 @@ ${klinesSummary}
         tagName: z.string(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const db = await getLedgerDb();
         const rows = await db.execute(
           sql`SELECT * FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
@@ -18253,6 +18343,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const db = await getLedgerDb();
         if (!db) return [];
         try {
@@ -18398,6 +18489,7 @@ ${klinesSummary}
     getAllTagsConfigByLedger: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const db = await getLedgerDb();
         const rows = await db.execute(
           sql`SELECT * FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
@@ -18646,6 +18738,7 @@ ${klinesSummary}
         tagName: z.string(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const db = await getLedgerDb();
         // 37号标签暂停后，手工余额只读取“最后结算日”及以前的数据；
         // 其余账本仍仅由保证金暂停控制，保持原有利息/保证金分层语义。
@@ -18713,6 +18806,11 @@ ${klinesSummary}
         );
         const categoryList = (categoryRows as any)[0] as any[];
         const category = categoryList.length > 0 ? categoryList[0] : null;
+        if (input.ledgerId === 37 && Number(category?.id) === R1_STOCK_CATEGORY_ID) {
+          const { getR1StockPresentationContext, assertR1RawReadAllowed } = await import('./r1-stock-presentation');
+          const presentation = await getR1StockPresentationContext({ ledgerId: 37, categoryId: R1_STOCK_CATEGORY_ID, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+          assertR1RawReadAllowed(presentation);
+        }
         // 手工余额标签只认同一标签内「业务日期、登记时间、ID」均最新的一条余额。
         // 不能仅按日期排序，否则同日补录会让52订单读到旧市值。
         // 37号已误录的未来记录保留供管理员纠正，但不能作为今日真实余额。
@@ -18849,6 +18947,7 @@ ${klinesSummary}
     getAllTagsMarginSummary: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
@@ -36825,6 +36924,7 @@ insights 数组每项包含：
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      await assertLedger37RawPresentationRead(ctx, input.ledgerId);
       const db = await getLedgerDb();
       if (!db) return { byTag: {} };
       let targetUserId = ctx.user.id;
@@ -36851,6 +36951,7 @@ insights 数组每项包含：
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      await assertLedger37RawPresentationRead(ctx, input.ledgerId);
       if (input.ledgerId === LEDGER_37_ID) await ensureLedger37WalletInfrastructure();
       const db = await getLedgerDb();
       if (!db) return { records: [] };

@@ -5,6 +5,7 @@ import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterest
 import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
+import { Ledger37PresentationGate, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
 import { matchesUserSearch } from "@/lib/userIdentity";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import Lottie from "lottie-react";
@@ -1870,6 +1871,7 @@ import {
   Eye,
   EyeOff,
   NotebookPen,
+  Users2,
 } from "lucide-react";
 import { AJOwnerPanel, FunderViewPanel } from "@/components/AJOwnerPanel";
 
@@ -2423,9 +2425,19 @@ export default function LedgerDetail() {
     }
     setLocation('/ledger');
   }, [setLocation]);
+  // 提前确认37号账本展示配置，避免AA入口以前的通用hook预取原始记录。
+  const { data: user } = trpc.auth.me.useQuery();
+  const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
+  const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
+  if (viewAsUserIdFromUrl) {
+    sessionStorage.setItem('view-as-user-id', String(viewAsUserIdFromUrl));
+  }
+  const ledger37Presentation = useLedger37PresentationContext({ ledgerId, search: searchString, effectiveUserId: viewAsUserId, authUserId: user?.id });
+  const canReadLedger37Raw = ledger37Presentation.canReadRaw;
   const filters: any = {
     ledgerId: Number(ledgerId),
     limit: 2000, // 加大limit确保加载全部历史记录（原100会截断早期数据）
+    ...(ledgerId === 37 ? { viewAsUserId: ledger37Presentation.viewerUserId } : {}),
   };
   
   // 从 URL 参数中读取筛选条件
@@ -2467,7 +2479,7 @@ export default function LedgerDetail() {
   // 获取记账记录列表（应用筛选条件）
   const { data: transactionsData, refetch: refetchTransactions } = trpc.ledger.getTransactions.useQuery(filters, {
     // 52号账本使用独立的钱包、谷底增筹和融资付息数据链路，首屏不需要加载2000条普通记账记录。
-    enabled: ledgerId !== 52,
+    enabled: ledgerId !== 52 && canReadLedger37Raw,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -2489,12 +2501,7 @@ export default function LedgerDetail() {
   const [beneficiaryRatioInput, setBeneficiaryRatioInput] = useState<string>('');
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
-  const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
-  const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
-  // 页面初始化时，如果 URL 有 viewAs 参数，同步写入 sessionStorage 实现身份代入
-  if (viewAsUserIdFromUrl) {
-    sessionStorage.setItem('view-as-user-id', String(viewAsUserIdFromUrl));
-  }
+  // 身份state已提前至37号展示配置查询之前；不借用realUser来决定AI或管理权限。
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   // 查询当前是否处于身份代入模式（用于黄色返回条，用真实用户的账本角色判断）
   const { data: viewAsStatusData } = trpc.auth.viewAsStatus.useQuery(
@@ -2508,7 +2515,7 @@ export default function LedgerDetail() {
   // 获取待审批记账数量（后端通过身份代入自动判断权限）
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: ledgerId !== 52 }
+    { enabled: ledgerId !== 52 && canReadLedger37Raw }
   );
   const [viewAsSearch, setViewAsSearch] = useState('');
   const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
@@ -2590,7 +2597,7 @@ export default function LedgerDetail() {
   // 抽奖活动列表（全量，前端按子Tab过滤）
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: ledgerId !== 52 }
+    { enabled: ledgerId !== 52 && canReadLedger37Raw }
   );
   // ============================================================
   // ⚠️  账本类型隔离保护区 ⚠️
@@ -2683,7 +2690,7 @@ export default function LedgerDetail() {
   const canOpenSettings = Number(ledgerId) === 52 ? effectiveIsOwner : effectiveIsManager;
   const isDietCoach = isDiet && (isOwner || isAdmin);
   const isDietStudent = isDiet && !isDietCoach;
-  const { data: user } = trpc.auth.me.useQuery();
+  // auth.me已提前读取，用于37全局展示身份隔离。
   // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
   const isShortcutLedger = ledgerId === 52 || ledgerId === 37 || ledgerId === 59;
   const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
@@ -3354,6 +3361,23 @@ export default function LedgerDetail() {
         <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} isAdmin={isOwner || isAdmin} onBack={handleLedgerBack} />
       </Suspense>
     );
+  }
+
+  // 37号入口不要求先选R1，初次未确认/错误不挂旧AA hook树。
+  if (!isLoading && !error && ledgerId === 37 && ledgerData) {
+    return <Ledger37PresentationGate ledgerId={ledgerId} presentation={ledger37Presentation} onBack={handleLedgerBack}>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}><div style={{ color: '#222222' }}>加载中...</div></div>}>
+        <LedgerDetailAA
+          ledgerId={ledgerId}
+          ledgerData={ledgerData}
+          membersData={membersData || []}
+          transactionsData={canReadLedger37Raw ? transactionsData || [] : []}
+          refetchTransactions={refetchTransactions}
+          user={user}
+          onBack={handleLedgerBack}
+        />
+      </Suspense>
+    </Ledger37PresentationGate>;
   }
 
   // 定制账本(AA)：使用专用UI

@@ -13,8 +13,14 @@ import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock
 import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, type UnifiedStockClosePublicationResult } from '../shared/stock-unified-close-policy';
 import { getCryptoPortfolioActivationDate, readCryptoPortfolioCalendar } from './crypto-portfolio-settlement';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
-import { fetchStockUsdCnyAtClose } from './stock-usd-cny-rate';
+import { fetchStockUsdCnyAtClose, getLiveStockUsdCnyQuote } from './stock-usd-cny-rate';
 import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
+
+import { type R1AiParticipationPortfolio, type R1AiParticipationRow } from '../shared/r1-stock-presentation';
+import type { Ledger37AiProject, Ledger37AiStockPool, StockPoolRow } from '../shared/ledger37-ai-presentation';
+import { getLedger37PresentationContext, readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
+import { readR1StockPresentationState, assertR1RawReadAllowed, projectR1AiPortfolio, readR1RecordedMargins, r1PnlSummary, type R1StockPresentationInput } from './r1-stock-presentation';
+export { getR1StockPresentationContext, setR1StockAiDisplay } from './r1-stock-presentation';
 
 import {
   buildStockObservationHolding,
@@ -67,6 +73,9 @@ const MEMBER_STOCK_READ_CACHE_TTL_MS = 20_000;
 type ShortLivedReadCacheEntry<T> = { expiresAt: number; promise: Promise<T> };
 const memberPortfolioReadCache = new Map<string, ShortLivedReadCacheEntry<any>>();
 const memberOverviewReadCache = new Map<string, ShortLivedReadCacheEntry<any[]>>();
+// 私有白名单已算行，避免改变关闭AI时的旧组合返回形状或资金核算口径。
+const r1MemberPresentationRows = new WeakMap<object, R1AiParticipationRow[]>();
+const r1ObservationPresentationRows = new WeakMap<object, R1AiParticipationRow[]>();
 
 function readShortLivedCache<T>(
   cache: Map<string, ShortLivedReadCacheEntry<T>>,
@@ -577,7 +586,7 @@ async function assertStockTagAccess(
   userId: number,
   systemRole?: string,
   write = false,
-  initializeTables = true,
+  initializeTables = write,
 ): Promise<Access> {
   if (initializeTables) await ensureLedgerStockPortfolioTables();
   if (ledgerId !== STOCK_LEDGER_ID) {
@@ -619,6 +628,18 @@ async function assertStockTagAccess(
   const canEdit = isSystemAdmin || member?.role === "owner" || member?.role === "admin";
   if (write && !canEdit) throw new Error("仅37号账本管理员可以维护股票持仓");
   return { categoryId, ledgerId, categoryName: String(category.name), canEdit };
+}
+
+async function assertStockPresentationReadAccess(input: {
+  ledgerId: number; categoryId: number; userId: number; systemRole?: string; isViewingAs?: boolean;
+}, _initializeTables = false): Promise<Access> {
+  if (input.ledgerId !== STOCK_LEDGER_ID) {
+    return assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.isViewingAs ? undefined : input.systemRole, false, false);
+  }
+  const state = await readR1StockPresentationState(input as R1StockPresentationInput);
+  assertR1RawReadAllowed(state.context);
+  // 所有读仅SELECT；不存在的基础设施由显式写入/迁移处理，不做lazy DDL。
+  return { ledgerId: input.ledgerId, categoryId: input.categoryId, categoryName: state.categoryName, canEdit: state.context.canManage };
 }
 
 export async function getStockTagMode(input: {
@@ -1303,8 +1324,9 @@ export async function getStockTagPortfolio(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const access = await assertStockPresentationReadAccess(input);
   const [portfolio, history] = await Promise.all([
     buildPortfolio(access.categoryId),
     getEventHistory(access.categoryId),
@@ -1362,8 +1384,9 @@ export async function getStockTagPublicPortfolio(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const access = await assertStockPresentationReadAccess(input);
   const memberPortfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
   const { soldLots: _soldLots, realizedLots: _realizedLots, ...portfolio } = await buildPortfolio(access.categoryId);
@@ -1377,9 +1400,9 @@ export async function getStockTagPublicPortfolio(input: {
 
 /** Tag-wide calendar only. Keeps the personal overview and all funds APIs untouched. */
 export async function getStockTagCalendar(input: {
-  ledgerId: number; categoryId: number; userId: number; systemRole?: string;
+  ledgerId: number; categoryId: number; userId: number; systemRole?: string; isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
+  const access = await assertStockPresentationReadAccess(input, false);
   if (!access.canEdit && !await isStockCalendarMemberEligible(access, input.userId)) {
     throw new Error("该股票标签尚未对您开放");
   }
@@ -1658,10 +1681,16 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     });
     grouped.set(item.symbol, current);
   }
+  const r1FloatingByParticipation = new Map<number, number | null>();
   const positions = Array.from(grouped.values()).map((position) => {
     const quote = quotes[position.symbol];
     const marketPrice = quote?.price ?? null;
     const marketValue = marketPrice === null ? null : position.quantity * marketPrice;
+    {
+      // 与本成员原组合在同一次估值中计算个人批次行；不读取总盘/矩阵或反推账户份额。
+      for (const lot of position.lots) r1FloatingByParticipation.set(lot.participationId,
+        marketPrice === null ? null : lot.quantity * (lot.entryPrice - marketPrice));
+    }
     return {
       ...position,
       quantity: Number(position.quantity.toFixed(8)),
@@ -1805,7 +1834,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.costValue !== null && Math.abs(priorSnapshot.costValue) > EPSILON
     ? dailyChange / priorSnapshot.costValue
     : null;
-  return {
+  const result = {
     positions,
     closedLots,
     participations,
@@ -1837,6 +1866,18 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       awaitingFirstClose: positions.length > 0 && !dailySnapshots.some(snapshot => snapshot.ready),
     },
   };
+  {
+    r1MemberPresentationRows.set(result, participations.map(item => {
+      const pending = item.startDate > today;
+      const closed = portfolioQuantityIsEmpty(item.symbol, item.remainingQuantity);
+      return { id: item.id, symbol: item.symbol, stockName: item.stockName, currency: item.currency,
+        quantity: pending ? 0 : item.remainingQuantity, allocatedQuantity: item.allocatedQuantity,
+        allocationRatio: item.allocationRatio, startDate: item.startDate,
+        status: pending ? 'pending' : closed ? 'closed' : item.pauseDate && item.pauseDate <= today ? 'paused' : 'active',
+        ...r1PnlSummary(pending || closed ? 0 : r1FloatingByParticipation.get(item.id), pending ? 0 : item.realizedPnl) };
+    }));
+  }
+  return result;
 }
 
 function getCachedMemberStockPortfolio(categoryId: number, userId: number) {
@@ -2034,9 +2075,14 @@ export async function getMyStockTagObservationPortfolio(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
-  const observations = await getStockLotObservations(access.ledgerId, access.categoryId, input.userId);
+  const access = await assertStockPresentationReadAccess(input, false);
+  return buildMyStockTagObservationPortfolio(access, input.userId);
+}
+
+async function buildMyStockTagObservationPortfolio(access: Access, userId: number) {
+  const observations = await getStockLotObservations(access.ledgerId, access.categoryId, userId);
   const today = beijingDate();
   const pauseContexts = await getStockObservationPauseContexts(observations, today);
   // 全平仓不读取实时行情，仅以实际批次卖出加权价冻结观察回报。
@@ -2058,18 +2104,669 @@ export async function getMyStockTagObservationPortfolio(input: {
       paused ? context?.quote ?? null : toStockObservationQuote(item.symbol, quoteMap, referenceQuotes, storedQuotes, intradayQuotes), today);
     return holding ? [holding] : [];
   });
-  return {
+  const result = {
     ...access,
-    viewerUserId: input.userId,
+    viewerUserId: userId,
     accountingMode: "stock_portfolio" as const,
     observationView: true as const,
     holdings,
     summary: summarizePortfolioObservationHoldings(holdings),
   };
+  {
+    r1ObservationPresentationRows.set(result, holdings.map(holding => {
+      const source = observations.find(row => row.lotId === holding.lotId)!;
+      return { id: holding.lotId, symbol: holding.symbol, stockName: holding.stockName, currency: holding.currency,
+        quantity: holding.currentQuantity, allocatedQuantity: holding.quantity,
+        allocationRatio: source.initialQuantity > 0 ? holding.quantity / source.initialQuantity : 0,
+        startDate: holding.startDate, status: holding.status === 'partial_closed' ? 'active' : holding.status,
+        ...r1PnlSummary(holding.floatingPnl, holding.closedPnl) };
+    }));
+  }
+  return result;
+}
+
+/** R1安全展示读：授权每次直读，只有已算缓存可复用；不经被封堵的raw导出。 */
+export async function getMyR1AiParticipationPortfolio(input: R1StockPresentationInput): Promise<R1AiParticipationPortfolio> {
+  const state = await readR1StockPresentationState(input);
+  if (!state.isMember) throw new Error('您不是此账本的成员');
+  if (!state.context.aiEnabled && !state.context.canManage) throw new Error('R1 AI展示尚未开启');
+  const access = { ledgerId: 37, categoryId: input.categoryId, categoryName: state.categoryName, canEdit: state.context.canManage };
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const [portfolio, observation, recordedMargins] = await Promise.all([
+    getCachedMemberStockPortfolio(input.categoryId, input.userId),
+    buildMyStockTagObservationPortfolio(access, input.userId),
+    readR1RecordedMargins(conn, state.balances, state.categoryName, input.userId),
+  ]);
+  if (!portfolio.isEligible && !observation.holdings.length && !state.context.canManage) throw new Error('该股票标签尚未对您开放');
+  const participations = r1MemberPresentationRows.get(portfolio);
+  if (!participations) throw new Error('R1参与展示计算不可用');
+  return projectR1AiPortfolio({ context: state.context, portfolio, participations, recordedMargins,
+    observation: observation.holdings.length ? { summary: observation.summary,
+      participations: r1ObservationPresentationRows.get(observation) ?? [] } : null });
+}
+
+/** 内部安全目录：授权每次直读，不返回缓存原组合、项目原名、价格或他人字段。 */
+export async function getMyLedger37SafeStockDirectory(input: Ledger37PresentationInput): Promise<Ledger37AiProject[]> {
+  const viewer = await readLedger37PresentationState(input);
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.aiEnabled && !viewer.context.canManage) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const [categories] = await conn.execute(
+    `SELECT c.id FROM ledger_categories c
+     INNER JOIN ledger_members m ON m.ledgerId=c.ledgerId AND m.userId=?
+     WHERE c.ledgerId=? AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
+     ORDER BY c.id`, [input.userId, 37]);
+  const projects: Ledger37AiProject[] = [];
+  for (const category of categories as any[]) {
+    const categoryId = Number(category.id);
+    let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
+    try { state = await readR1StockPresentationState({ ...input, categoryId }); }
+    catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+    const portfolio = await getCachedMemberStockPortfolio(categoryId, input.userId);
+    const access = { ledgerId: 37, categoryId, categoryName: state.categoryName, canEdit: state.context.canManage };
+    // 真实eligibility不受观察配置影响；只有合法本人观察才能补充进入安全目录。
+    const observation = portfolio.isEligible ? null : await buildMyStockTagObservationPortfolio(access, input.userId);
+    if (!portfolio.isEligible && !observation?.holdings.length) continue;
+    const recordedMargins = await readR1RecordedMargins(conn, state.balances, state.categoryName, input.userId);
+    projects.push({ categoryId, displayName: `股票项目${categoryId}`, kind: 'stock',
+      summary: r1PnlSummary(portfolio.summary.floatingPnl, portfolio.summary.realizedPnl),
+      receivedDividends: null, recordedMargins, startDate: portfolio.startDate ?? observation?.holdings[0]?.startDate ?? null });
+  }
+  return projects;
+}
+
+type Ledger37StockPoolPart = {
+  lots: Array<{ symbol: string; stockName: string; currency: StockPoolRow['currency']; currentQuantity: number }>;
+  participations: R1AiParticipationRow[];
+  usdCnyRate: number | null;
+  usdtCnyRate: number | null;
+};
+
+/** 与AI页面live USD/CNY一致；不能使用price-scanner中的默认6.7或陈旧quote。 */
+async function readLedger37StockPoolUsdCnyRate(): Promise<number | null> {
+  try {
+    const quote = await getLiveStockUsdCnyQuote();
+    return quote?.pair === 'USD/CNY' && quote.stale === false
+      && typeof quote.rate === 'number' && Number.isFinite(quote.rate) && quote.rate > 0 ? quote.rate : null;
+  } catch { return null; }
+}
+
+/** 先同币种合计native已算收益，再按该组合FX换算。未知具有传播性；绝不反转收益符号。 */
+function mergeLedger37AiStockPool(parts: Ledger37StockPoolPart[]): StockPoolRow[] {
+  const stocks = new Map<string, StockPoolRow>();
+  const keyOf = (symbol: string, currency: StockPoolRow['currency']) => JSON.stringify([symbol, currency]);
+  const sumFinite = (a: number | null, b: number | null): number | null => {
+    if (a === null || b === null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+    const sum = a + b;
+    return Number.isFinite(sum) ? sum : null;
+  };
+  for (const part of parts) {
+    const visibleKeys = new Set(part.lots.map(lot => keyOf(lot.symbol, lot.currency)));
+    for (const lot of part.lots) {
+      const key = keyOf(lot.symbol, lot.currency);
+      const current = stocks.get(key);
+      if (current) {
+        if (lot.currentQuantity > 0) current.status = 'holding';
+      } else {
+        stocks.set(key, { symbol: lot.symbol, stockName: lot.stockName, currency: lot.currency,
+          status: lot.currentQuantity > 0 ? 'holding' : 'closed', pnlCny: null, hasParticipation: false });
+      }
+    }
+    const native = new Map<string, number | null>();
+    for (const row of part.participations) {
+      const key = keyOf(row.symbol, row.currency);
+      // 只认真实获配记录；历史已平仓仍保留。paused实时估值与pending合成零不是可靠真实收益。
+      if (!(row.allocatedQuantity > 0) || !visibleKeys.has(key)) continue;
+      const pnl = (row.status === 'active' || row.status === 'closed')
+        && typeof row.totalPnl === 'number' && Number.isFinite(row.totalPnl) ? row.totalPnl : null;
+      native.set(key, sumFinite(native.has(key) ? native.get(key)! : 0, pnl));
+    }
+    for (const [key, nativePnl] of Array.from(native.entries())) {
+      const stock = stocks.get(key)!;
+      const multiplier = portfolioCashMultiplier(stock.currency, part.usdCnyRate, part.usdtCnyRate);
+      const converted = nativePnl === null || multiplier === null ? null : nativePnl * multiplier;
+      stock.pnlCny = sumFinite(stock.hasParticipation ? stock.pnlCny : 0, converted);
+      stock.hasParticipation = true;
+    }
+  }
+  return Array.from(stocks.values()).sort((a, b) => a.symbol.localeCompare(b.symbol) || a.currency.localeCompare(b.currency));
+}
+
+/** AI选股池：每次重验全局/逐标签权限，元数据仅SELECT；私有缓存绝不作为raw DTO导出。 */
+export async function getMyLedger37AiStockPool(input: Ledger37PresentationInput): Promise<Ledger37AiStockPool> {
+  const viewer = await readLedger37PresentationState(input);
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.aiEnabled && !viewer.context.canManage) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const [categories] = await conn.execute(
+    `SELECT c.id FROM ledger_categories c
+     INNER JOIN ledger_members m ON m.ledgerId=c.ledgerId AND m.userId=?
+     WHERE c.ledgerId=? AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
+     ORDER BY c.id`, [input.userId, 37]);
+  const parts: Ledger37StockPoolPart[] = [];
+  for (const category of categories as any[]) {
+    const categoryId = Number(category.id);
+    let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
+    try { state = await readR1StockPresentationState({ ...input, categoryId }, conn); }
+    catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+    if (!state.isMember) throw new Error('您不是此账本的成员');
+    if (!state.context.aiEnabled && !state.context.canManage) throw new Error('账本AI展示尚未开启');
+    let lots: any[];
+    try {
+      // schema无currency/current_quantity列；仅有效开仓及有效卖出分配决定全批次状态（含平仓历史）。
+      const [lotRows] = await conn.execute(
+        `SELECT l.symbol, l.stock_name,
+          GREATEST(0, l.initial_quantity - COALESCE((
+            SELECT SUM(a.quantity) FROM ledger_stock_event_lot_allocations a
+            INNER JOIN ledger_stock_events sale ON sale.id=a.event_id
+              AND sale.ledger_id=l.ledger_id AND sale.category_id=l.category_id
+              AND sale.status='active' AND sale.event_type IN ('reduce','sell')
+            WHERE a.lot_id=l.id
+          ), 0)) AS current_quantity
+         FROM ledger_stock_lots l
+         INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+           AND opening.ledger_id=l.ledger_id AND opening.category_id=l.category_id AND opening.status='active'
+         WHERE l.ledger_id=? AND l.category_id=? ORDER BY l.id`, [37, categoryId]);
+      lots = lotRows as any[];
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'ER_NO_SUCH_TABLE') throw new Error('AI选股池不可用：股票批次数据表尚未就绪');
+      throw error;
+    }
+    const metadata = lots.map(row => {
+      const symbol = normalizeSymbol(row.symbol);
+      if (typeof row.stock_name !== 'string' || !row.stock_name.trim()) throw new Error('AI选股池股票名称无效');
+      const currentQuantity = calendarSourceNumber(row.current_quantity);
+      if (!Number.isFinite(currentQuantity) || currentQuantity < 0) throw new Error('AI选股池持仓状态不可用');
+      return { symbol, stockName: row.stock_name, currency: stockCurrency(symbol), currentQuantity };
+    });
+    const portfolio = await getCachedMemberStockPortfolio(categoryId, input.userId);
+    const participations = r1MemberPresentationRows.get(portfolio);
+    if (!participations) throw new Error('R1参与展示计算不可用');
+    parts.push({ lots: metadata, participations, usdCnyRate: null, usdtCnyRate: null });
+  }
+  const symbols = parts.flatMap(part => part.lots.map(lot => lot.symbol));
+  const [usdCnyRate, usdtCnyRate] = await Promise.all([
+    symbols.some(symbol => stockCurrency(symbol) === 'USD') ? readLedger37StockPoolUsdCnyRate() : Promise.resolve(null),
+    readLiveUsdtCnyRate(symbols),
+  ]);
+  for (const part of parts) {
+    part.usdCnyRate = usdCnyRate;
+    part.usdtCnyRate = usdtCnyRate;
+  }
+  return { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, stocks: mergeLedger37AiStockPool(parts) };
+}
+
+/**
+ * R1 source-wide current holdings, NOT member allocations or participation.
+ * Revalidates strict global member/AI identity before aggregate SELECTs.
+ * Quantities stay exact decimal strings; latest due unified close's archived
+ * proofs value the current quantities. No scan, lazy DDL or cache write.
+ * No category/lot/order/member identifier, price or cost leaves this function.
+ */
+export async function getMyLedger37R1HoldingSnapshot(input: Ledger37PresentationInput): Promise<{
+  viewerUserId: number; aiEnabled: boolean;
+  holdings: import('../shared/ledger37-ai-holdings').Ledger37HoldingPosition[];
+  valuationAsOf: string | null; reportingCurrency: 'CNY' | 'USD' | 'USDT' | null;
+}> {
+  const viewer = await readLedger37PresentationState(input);
+  if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
+  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
+  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  // CAST prevents mysql2 decimalNumbers/Number precision loss. Category remains
+  // an internal evidence key only. Global authorization grants source-level
+  // holdings, independent of personal project visibility or allocations.
+  const [rows] = await conn.execute(
+    `SELECT current_lots.category_id, current_lots.symbol, MAX(current_lots.stock_name) AS stock_name,
+       CAST(SUM(current_lots.remaining_quantity) AS CHAR) AS shares
+     FROM (
+       SELECT l.category_id, l.symbol, l.stock_name,
+         GREATEST(0, l.initial_quantity - COALESCE((
+           SELECT SUM(a.quantity) FROM ledger_stock_event_lot_allocations a
+           INNER JOIN ledger_stock_events sale ON sale.id=a.event_id
+             AND sale.ledger_id=l.ledger_id AND sale.category_id=l.category_id
+             AND sale.status='active' AND sale.event_type IN ('reduce','sell')
+           WHERE a.lot_id=l.id
+         ), 0)) AS remaining_quantity
+       FROM ledger_stock_lots l
+       INNER JOIN ledger_categories c ON c.id=l.category_id AND c.ledgerId=l.ledger_id
+         AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
+       INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+         AND opening.ledger_id=l.ledger_id AND opening.category_id=l.category_id AND opening.status='active'
+       WHERE l.ledger_id=?
+     ) current_lots GROUP BY current_lots.category_id, current_lots.symbol
+     ORDER BY current_lots.symbol, current_lots.category_id`, [37]);
+  const scale = BigInt('100000000'), zero = BigInt('0');
+  const exactDecimal = (value: unknown): bigint | null => {
+    if (typeof value !== 'string' || !/^\d{1,65}(?:\.\d{1,8})?$/.test(value)) return null;
+    const parts = value.split('.');
+    return BigInt(parts[0]) * scale + BigInt((parts[1] || '').padEnd(8, '0'));
+  };
+  const decimalString = (value: bigint): string => {
+    const fraction = String(value % scale).padStart(8, '0').replace(/0+$/, '');
+    return String(value / scale) + (fraction ? `.${fraction}` : '');
+  };
+  const merged = new Map<string, { symbol: string; stockName: string; currency: 'CNY' | 'USD' | 'USDT'; shares: bigint }>();
+  const current: Array<{ categoryId: number; symbol: string; currency: 'CNY' | 'USD' | 'USDT'; shares: bigint }> = [];
+  for (const row of rows as any[]) {
+    const symbol = normalizeSymbol(row.symbol), currency = stockCurrency(symbol);
+    const shares = exactDecimal(row.shares), categoryId = Number(row.category_id);
+    if (shares === null || !Number.isSafeInteger(categoryId) || categoryId <= 0) throw new Error('R1合并持仓数量不可用');
+    if (shares === zero) continue;
+    if (typeof row.stock_name !== 'string' || !row.stock_name.trim()) throw new Error('R1合并持仓股票名称无效');
+    const key = JSON.stringify([symbol, currency]), previous = merged.get(key);
+    if (previous) previous.shares += shares;
+    else merged.set(key, { symbol, stockName: row.stock_name, currency, shares });
+    current.push({ categoryId, symbol, currency, shares });
+  }
+  const holdings = Array.from(merged.values()).map(row => ({ symbol: row.symbol, stockName: row.stockName,
+    currency: row.currency, shares: decimalString(row.shares), weightPct: null as number | null }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.currency.localeCompare(b.currency));
+  const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, holdings,
+    valuationAsOf: null as string | null, reportingCurrency: null as 'CNY' | 'USD' | 'USDT' | null };
+  // This securities archive has no unified crypto proof/FX: never borrow USD.
+  if (!current.length || current.some(row => row.currency === 'USDT')) return result;
+  const snapshotDate = getUnifiedStockCloseSnapshotDate(), usSession = getOvernightUsSessionDate(snapshotDate);
+  if (!usSession) return result;
+  const categories = Array.from(new Set(current.map(row => row.categoryId)));
+  const currencies = Array.from(new Set(current.map(row => row.currency)));
+  const reportingCurrency = currencies.length === 1 ? currencies[0] : 'CNY';
+  const missingEvidenceTable = (error: unknown): boolean =>
+    ['ER_NO_SUCH_TABLE', 'ER_TABLEACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR'].includes((error as { code?: string })?.code || '');
+  let quoteRows: any[], fxRows: any[] = [];
+  try {
+    const [quotes] = await conn.execute(
+      `SELECT category_id, symbol, CAST(price AS CHAR) AS price, currency, source,
+         DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date,
+         DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+       FROM ledger_stock_unified_close_prices WHERE ledger_id=?
+         AND category_id IN (${categories.map(() => '?').join(',')}) AND session_date IN (?,?)`,
+      [37, ...categories, snapshotDate, usSession]);
+    quoteRows = quotes as any[];
+    if (currencies.length > 1) {
+      const [fx] = await conn.execute(
+        `SELECT category_id, CAST(usd_cny_rate AS CHAR) AS usd_cny_rate, source,
+           DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+           DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
+         FROM ledger_stock_unified_close_fx WHERE ledger_id=?
+           AND category_id IN (${categories.map(() => '?').join(',')}) AND snapshot_date=? AND policy_version=?`,
+        [37, ...categories, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]);
+      fxRows = fx as any[];
+    }
+  } catch (error) {
+    if (missingEvidenceTable(error)) return result;
+    throw error;
+  }
+  let commonFx: bigint | null = null;
+  if (currencies.length > 1) {
+    const cutoff = Date.parse(`${snapshotDate}T15:05:00+08:00`);
+    for (const categoryId of Array.from(new Set(current.filter(row => row.currency === 'USD').map(row => row.categoryId)))) {
+      const proofs = fxRows.filter(row => Number(row.category_id) === categoryId);
+      if (proofs.length !== 1) return result;
+      const fx = proofs[0], rate = exactDecimal(fx.usd_cny_rate);
+      const quoteAt = Date.parse(toBeijingWallClockIso(fx.quote_as_of)), lockedAt = Date.parse(toBeijingWallClockIso(fx.locked_at));
+      if (rate === null || rate <= zero || !['yahoo_usdcny_5m', 'sina_usdcny'].includes(fx.source)
+        || !Number.isFinite(quoteAt) || quoteAt > cutoff || cutoff - quoteAt > 30 * 60_000 || lockedAt !== cutoff
+        || (commonFx !== null && commonFx !== rate)) return result;
+      commonFx = rate;
+    }
+  }
+  const values = new Map<string, bigint>(), prices = new Map<string, bigint>();
+  let total = zero;
+  for (const row of current) {
+    const expectedDate = row.currency === 'USD' ? usSession : snapshotDate;
+    const proofs = quoteRows.filter(quote => Number(quote.category_id) === row.categoryId
+      && quote.symbol === row.symbol && quote.session_date === expectedDate);
+    if (!proofs.length) return result;
+    let price: bigint | null = null;
+    for (const quote of proofs) {
+      const candidate = exactDecimal(quote.price), capturedAt = toBeijingWallClockIso(quote.captured_at);
+      if (candidate === null || candidate <= zero || quote.currency !== row.currency
+        || !['unified_close_yahoo', 'unified_close_tushare', 'unified_close_sina'].includes(quote.source)
+        || !isTrustedMemberCalendarClose({ symbol: row.symbol, price: Number(quote.price), priceDate: expectedDate, capturedAt, source: quote.source })
+        || Date.parse(capturedAt) > Date.now()
+        || (price !== null && price !== candidate)) return result;
+      price = candidate;
+    }
+    const key = JSON.stringify([row.symbol, row.currency]);
+    // Never combine conflicting project quotes for the same instrument.
+    if (prices.has(key) && prices.get(key) !== price) return result;
+    prices.set(key, price!);
+    const multiplier = row.currency === 'USD' && currencies.length > 1 ? commonFx : scale;
+    if (multiplier === null) return result;
+    const value = row.shares * price! * multiplier;
+    values.set(key, (values.get(key) || zero) + value);
+    total += value;
+  }
+  if (total <= zero) return result;
+  for (const holding of holdings) {
+    const value = values.get(JSON.stringify([holding.symbol, holding.currency]));
+    const weight = value === undefined ? NaN : Number(value) / Number(total) * 100;
+    if (!Number.isFinite(weight) || weight < 0 || weight > 100) return result;
+  }
+  // Assign only after the whole denominator is verified; no partial weights.
+  for (const holding of holdings) holding.weightPct = Number(values.get(JSON.stringify([holding.symbol, holding.currency]))!) / Number(total) * 100;
+  result.valuationAsOf = snapshotDate;
+  result.reportingCurrency = reportingCurrency;
+  return result;
+}
+
+/**
+ * Effective member's proven, per-sale closures. Independent of current remaining
+ * allocations and valuation: fully ended / zero-allocated history is not lost.
+ * Reuses the member snapshot's global identity, category visibility and effective
+ * start checks; enabled observation accounts never supply real trading history.
+ * Only SELECT; no prices, quantities or private evidence identifiers leave here.
+ */
+export async function getMyLedger37MemberClosedTrades(input: Ledger37PresentationInput): Promise<{
+  viewerUserId: number; aiEnabled: boolean;
+  closedTrades: import('../shared/ledger37-ai-holdings').Ledger37HoldingClosedTrade[];
+}> {
+  const viewer = await readLedger37PresentationState(input);
+  if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
+  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
+  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const today = beijingDate();
+  const observationTableExists = await stockObservationTableExists(conn);
+  const observationGuard = observationTableExists ? `
+       AND NOT EXISTS (SELECT 1 FROM ledger_stock_lot_observations o
+         WHERE o.ledger_id=p.ledger_id AND o.category_id=p.category_id
+           AND o.lot_id=p.lot_id AND o.user_id=p.user_id AND o.enabled=1)` : '';
+  // The closure and matching sale-to-lot allocation are both required. Never
+  // infer this member's closure from a source-wide sale or an absent association.
+  const scopeJoins = `
+     FROM ledger_stock_participation_closures c
+     INNER JOIN ledger_stock_lot_participations p ON p.id=c.participation_id
+     INNER JOIN ledger_categories category ON category.id=p.category_id AND category.ledgerId=p.ledger_id
+       AND category.parentId IS NULL AND category.accounting_mode='stock_portfolio'
+     INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+       AND opening.ledger_id=p.ledger_id AND opening.category_id=p.category_id
+       AND opening.symbol=l.symbol AND opening.status='active' AND opening.event_type IN ('buy','add')
+     INNER JOIN ledger_stock_events sale ON sale.id=c.sell_event_id
+       AND sale.ledger_id=p.ledger_id AND sale.category_id=p.category_id
+       AND sale.symbol=l.symbol AND sale.status='active' AND sale.event_type IN ('reduce','sell') AND sale.quantity>0
+     INNER JOIN ledger_stock_event_lot_allocations a ON a.event_id=c.sell_event_id AND a.lot_id=l.id AND a.quantity>0
+     WHERE p.ledger_id=? AND p.user_id=? AND c.quantity>0
+       AND COALESCE(p.start_date, DATE(l.opened_at), ?) <= ?${observationGuard}`;
+  const [categoryRows] = await conn.execute(
+    `SELECT DISTINCT p.category_id AS id${scopeJoins} ORDER BY p.category_id`, [37, input.userId, today, today]);
+  const allowedCategories: number[] = [];
+  for (const category of categoryRows as any[]) {
+    const categoryId = Number(category.id);
+    if (!Number.isSafeInteger(categoryId) || categoryId <= 0) throw new Error('个人交易类别不可用');
+    let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
+    try { state = await readR1StockPresentationState({ ...input, categoryId }, conn); }
+    catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+    if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId || state.context.categoryId !== categoryId) throw new Error('持仓展示身份不匹配');
+    if (!state.isMember) throw new Error('您不是此账本的成员');
+    if (state.context.aiEnabled !== viewer.context.aiEnabled) throw new Error('持仓展示AI状态已变化，请重试');
+    if (!state.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+    if (!allowedCategories.includes(categoryId)) allowedCategories.push(categoryId);
+  }
+  const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled,
+    closedTrades: [] as import('../shared/ledger37-ai-holdings').Ledger37HoldingClosedTrade[] };
+  if (!allowedCategories.length) return result;
+  const [rows] = await conn.execute(
+    `SELECT p.category_id, p.ledger_id, p.user_id, l.symbol, l.stock_name,
+       CAST(c.quantity AS CHAR) AS closed_quantity,
+       DATE_FORMAT(opening.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS opening_actual_traded_at,
+       DATE_FORMAT(l.opened_at,'%Y-%m-%d %H:%i:%s') AS opened_at,
+       DATE_FORMAT(sale.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS closing_actual_traded_at
+     ${scopeJoins}
+       AND p.category_id IN (${allowedCategories.map(() => '?').join(',')})
+     ORDER BY sale.actual_traded_at DESC, sale.id DESC, c.id DESC`, [37, input.userId, today, today, ...allowedCategories]);
+  const validDay = (day: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(day)
+    && Number.isFinite(Date.parse(`${day}T00:00:00Z`))
+    && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+  const tradeDate = (value: unknown): string | null => {
+    if (value instanceof Date) {
+      if (!Number.isFinite(value.getTime())) return null;
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value);
+      const day = `${parts.find(part => part.type === 'year')?.value}-${parts.find(part => part.type === 'month')?.value}-${parts.find(part => part.type === 'day')?.value}`;
+      return validDay(day) ? day : null;
+    }
+    if (typeof value !== 'string') return null;
+    const raw = value.trim();
+    // DATE_FORMAT above returns Beijing DATETIME wall clock, not UTC. Explicit
+    // offsets (e.g. offline fixtures) are converted to the Beijing calendar day.
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+      if (!validDay(raw.slice(0, 10))) return null;
+      const ms = Date.parse(raw);
+      if (!Number.isFinite(ms)) return null;
+      const day = new Date(ms + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      return validDay(day) ? day : null;
+    }
+    const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/.exec(raw);
+    if (!match || !validDay(match[1]) || (match[2] !== undefined
+      && (Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4] || 0) > 59))) return null;
+    return match[1];
+  };
+  for (const row of rows as any[]) {
+    if (Number(row.ledger_id) !== 37 || Number(row.user_id) !== input.userId
+      || !allowedCategories.includes(Number(row.category_id))) throw new Error('个人交易类别越权');
+    // Exact positivity check through 18dp; never floating-point conversion.
+    if (typeof row.closed_quantity !== 'string' || !/^-?\d{1,65}(?:\.\d{1,18})?$/.test(row.closed_quantity)) throw new Error('个人交易数量不可用');
+    if (row.closed_quantity.startsWith('-') || !/[1-9]/.test(row.closed_quantity)) continue;
+    const symbol = normalizeSymbol(row.symbol);
+    if (typeof row.stock_name !== 'string' || !row.stock_name.trim()) throw new Error('个人交易股票名称无效');
+    // opened_at is saved from the lot's actual buy time. The existing event schema
+    // has no business_date; closures.closed_at defaults to registration time and
+    // is NOT trade evidence. Unknown sale actual_traded_at must remain null.
+    result.closedTrades.push({ symbol, stockName: row.stock_name,
+      openedDate: tradeDate(row.opening_actual_traded_at) || tradeDate(row.opened_at),
+      closedDate: tradeDate(row.closing_actual_traded_at) });
+  }
+  return result;
+}
+
+/**
+ * Effective member's real remaining allocations only, never source-wide lots.
+ * Global and each category's pure read authorization precede the holdings read.
+ * Uses the source snapshot's exact decimal / strict archived close + FX rules;
+ * all values and weights stay unknown unless the whole personal denominator is
+ * trustworthy. No observation, cache, scanner, migration or funds calculation.
+ */
+export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37PresentationInput): Promise<{
+  viewerUserId: number; aiEnabled: boolean;
+  holdings: import('../shared/ledger37-ai-holdings').Ledger37HoldingPosition[];
+  valuationAsOf: string | null; reportingCurrency: 'CNY' | 'USD' | 'USDT' | null;
+}> {
+  const viewer = await readLedger37PresentationState(input);
+  if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
+  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
+  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const today = beijingDate();
+  const [categoryRows] = await conn.execute(
+    `SELECT DISTINCT p.category_id AS id FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_categories c ON c.id=p.category_id AND c.ledgerId=p.ledger_id
+       AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
+     INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+       AND opening.ledger_id=p.ledger_id AND opening.category_id=p.category_id AND opening.status='active'
+     WHERE p.ledger_id=? AND p.user_id=? AND p.allocated_quantity>0 AND p.remaining_quantity>0
+       AND COALESCE(p.start_date, DATE(l.opened_at), ?) <= ? ORDER BY p.category_id`, [37, input.userId, today, today]);
+  const allowedCategories: number[] = [];
+  for (const category of categoryRows as any[]) {
+    const categoryId = Number(category.id);
+    if (!Number.isSafeInteger(categoryId) || categoryId <= 0) throw new Error('个人持仓类别不可用');
+    let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
+    try { state = await readR1StockPresentationState({ ...input, categoryId }, conn); }
+    catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+    if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId || state.context.categoryId !== categoryId) throw new Error('持仓展示身份不匹配');
+    if (!state.isMember) throw new Error('您不是此账本的成员');
+    if (state.context.aiEnabled !== viewer.context.aiEnabled) throw new Error('持仓展示AI状态已变化，请重试');
+    if (!state.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+    if (!allowedCategories.includes(categoryId)) allowedCategories.push(categoryId);
+  }
+  const holdings: Array<import('../shared/ledger37-ai-holdings').Ledger37HoldingPosition & {
+    marketValue: { amount: string; currency: 'CNY' | 'USD' | 'USDT'; asOf: string } | null;
+  }> = [];
+  const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, holdings,
+    valuationAsOf: null as string | null, reportingCurrency: null as 'CNY' | 'USD' | 'USDT' | null };
+  if (!allowedCategories.length) return result;
+  // Paused real participations still own their remaining shares in the existing
+  // member portfolio. Do not interpret pause_date as a sale or frozen price.
+  const [rows] = await conn.execute(
+    `SELECT p.category_id, l.symbol, MAX(l.stock_name) AS stock_name,
+       CAST(SUM(p.remaining_quantity) AS CHAR) AS shares
+     FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_categories c ON c.id=p.category_id AND c.ledgerId=p.ledger_id
+       AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
+     INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+       AND opening.ledger_id=p.ledger_id AND opening.category_id=p.category_id AND opening.status='active'
+     WHERE p.ledger_id=? AND p.user_id=? AND p.allocated_quantity>0 AND p.remaining_quantity>0
+       AND COALESCE(p.start_date, DATE(l.opened_at), ?) <= ?
+       AND p.category_id IN (${allowedCategories.map(() => '?').join(',')})
+     GROUP BY p.category_id, l.symbol ORDER BY l.symbol, p.category_id`, [37, input.userId, today, today, ...allowedCategories]);
+  const scale = BigInt('100000000'), zero = BigInt('0');
+  const exactDecimal = (value: unknown): bigint | null => {
+    if (typeof value !== 'string' || !/^\d{1,65}(?:\.\d{1,8})?$/.test(value)) return null;
+    const parts = value.split('.');
+    return BigInt(parts[0]) * scale + BigInt((parts[1] || '').padEnd(8, '0'));
+  };
+  const decimalString = (value: bigint, unit = scale, digits = 8): string => {
+    const fraction = String(value % unit).padStart(digits, '0').replace(/0+$/, '');
+    return String(value / unit) + (fraction ? `.${fraction}` : '');
+  };
+  const merged = new Map<string, { symbol: string; stockName: string; currency: 'CNY' | 'USD' | 'USDT'; shares: bigint }>();
+  const current: Array<{ categoryId: number; symbol: string; currency: 'CNY' | 'USD' | 'USDT'; shares: bigint }> = [];
+  for (const row of rows as any[]) {
+    const categoryId = Number(row.category_id);
+    if (!allowedCategories.includes(categoryId)) throw new Error('个人持仓类别越权');
+    const symbol = normalizeSymbol(row.symbol), currency = stockCurrency(symbol), shares = exactDecimal(row.shares);
+    if (shares === null) throw new Error('个人持仓数量不可用');
+    if (shares === zero) continue;
+    if (typeof row.stock_name !== 'string' || !row.stock_name.trim()) throw new Error('个人持仓股票名称无效');
+    const key = JSON.stringify([symbol, currency]), previous = merged.get(key);
+    if (previous) previous.shares += shares;
+    else merged.set(key, { symbol, stockName: row.stock_name, currency, shares });
+    current.push({ categoryId, symbol, currency, shares });
+  }
+  holdings.push(...Array.from(merged.values()).map(row => ({ symbol: row.symbol, stockName: row.stockName,
+    currency: row.currency, shares: decimalString(row.shares), weightPct: null, marketValue: null }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.currency.localeCompare(b.currency)));
+  // The stock archive has no unified USDT proof/FX. Never substitute USD.
+  if (!current.length || current.some(row => row.currency === 'USDT')) return result;
+  const snapshotDate = getUnifiedStockCloseSnapshotDate(), usSession = getOvernightUsSessionDate(snapshotDate);
+  if (!usSession) return result;
+  const categories = Array.from(new Set(current.map(row => row.categoryId)));
+  const currencies = Array.from(new Set(current.map(row => row.currency)));
+  const reportingCurrency = currencies.length === 1 ? currencies[0] : 'CNY';
+  const missingEvidenceTable = (error: unknown): boolean =>
+    ['ER_NO_SUCH_TABLE', 'ER_TABLEACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR'].includes((error as { code?: string })?.code || '');
+  let quoteRows: any[], fxRows: any[] = [];
+  try {
+    const [quotes] = await conn.execute(
+      `SELECT category_id, symbol, CAST(price AS CHAR) AS price, currency, source,
+         DATE_FORMAT(session_date,'%Y-%m-%d') AS session_date,
+         DATE_FORMAT(captured_at,'%Y-%m-%d %H:%i:%s') AS captured_at
+       FROM ledger_stock_unified_close_prices WHERE ledger_id=?
+         AND category_id IN (${categories.map(() => '?').join(',')}) AND session_date IN (?,?)`,
+      [37, ...categories, snapshotDate, usSession]);
+    quoteRows = quotes as any[];
+    if (currencies.length > 1) {
+      const [fx] = await conn.execute(
+        `SELECT category_id, CAST(usd_cny_rate AS CHAR) AS usd_cny_rate, source,
+           DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,
+           DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
+         FROM ledger_stock_unified_close_fx WHERE ledger_id=?
+           AND category_id IN (${categories.map(() => '?').join(',')}) AND snapshot_date=? AND policy_version=?`,
+        [37, ...categories, snapshotDate, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]);
+      fxRows = fx as any[];
+    }
+  } catch (error) {
+    if (missingEvidenceTable(error)) return result;
+    throw error;
+  }
+  let commonFx: bigint | null = null;
+  if (currencies.length > 1) {
+    const cutoff = Date.parse(`${snapshotDate}T15:05:00+08:00`);
+    for (const categoryId of Array.from(new Set(current.filter(row => row.currency === 'USD').map(row => row.categoryId)))) {
+      const proofs = fxRows.filter(row => Number(row.category_id) === categoryId);
+      if (proofs.length !== 1) return result;
+      const fx = proofs[0], rate = exactDecimal(fx.usd_cny_rate);
+      const quoteAt = Date.parse(toBeijingWallClockIso(fx.quote_as_of)), lockedAt = Date.parse(toBeijingWallClockIso(fx.locked_at));
+      if (rate === null || rate <= zero || !['yahoo_usdcny_5m', 'sina_usdcny'].includes(fx.source)
+        || !Number.isFinite(quoteAt) || quoteAt > cutoff || cutoff - quoteAt > 30 * 60_000 || lockedAt !== cutoff
+        || (commonFx !== null && commonFx !== rate)) return result;
+      commonFx = rate;
+    }
+  }
+  const values = new Map<string, bigint>(), prices = new Map<string, bigint>();
+  let total = zero;
+  for (const row of current) {
+    const expectedDate = row.currency === 'USD' ? usSession : snapshotDate;
+    const proofs = quoteRows.filter(quote => Number(quote.category_id) === row.categoryId
+      && quote.symbol === row.symbol && quote.session_date === expectedDate);
+    if (!proofs.length) return result;
+    let price: bigint | null = null;
+    for (const quote of proofs) {
+      const candidate = exactDecimal(quote.price), capturedAt = toBeijingWallClockIso(quote.captured_at);
+      if (candidate === null || candidate <= zero || quote.currency !== row.currency
+        || !['unified_close_yahoo', 'unified_close_tushare', 'unified_close_sina'].includes(quote.source)
+        || !isTrustedMemberCalendarClose({ symbol: row.symbol, price: Number(quote.price), priceDate: expectedDate, capturedAt, source: quote.source })
+        || Date.parse(capturedAt) > Date.now()
+        || (price !== null && price !== candidate)) return result;
+      price = candidate;
+    }
+    const key = JSON.stringify([row.symbol, row.currency]);
+    if (prices.has(key) && prices.get(key) !== price) return result;
+    prices.set(key, price!);
+    const multiplier = row.currency === 'USD' && currencies.length > 1 ? commonFx : scale;
+    if (multiplier === null) return result;
+    const value = row.shares * price! * multiplier;
+    values.set(key, (values.get(key) || zero) + value);
+    total += value;
+  }
+  if (total <= zero) return result;
+  // Bounded fixed-point ratios avoid converting either exact amount to Number.
+  // Positive amounts round half up from 24 to at most 18 decimal places.
+  const weightUnit = BigInt('1000000000000');
+  const amountUnit = BigInt('1000000000000000000'), amountDivisor = BigInt('1000000');
+  for (const holding of holdings) {
+    const value = values.get(JSON.stringify([holding.symbol, holding.currency]));
+    if (value === undefined || value <= zero) return result;
+  }
+  for (const holding of holdings) {
+    const value = values.get(JSON.stringify([holding.symbol, holding.currency]))!;
+    holding.weightPct = Number(value * BigInt('100') * weightUnit / total) / Number(weightUnit);
+    holding.marketValue = { amount: decimalString((value + amountDivisor / BigInt('2')) / amountDivisor, amountUnit, 18), currency: reportingCurrency, asOf: snapshotDate };
+  }
+  result.valuationAsOf = snapshotDate;
+  result.reportingCurrency = reportingCurrency;
+  return result;
 }
 
 /** 观察专属入口目录，不改变真实 getMyStockTagOverview / isEligible。 */
-export async function getMyStockTagObservationOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+export async function getMyStockTagObservationOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
   const categories: Array<{ categoryId: number; categoryName: string; holdingCount: number }> = [];
   if (input.ledgerId !== STOCK_LEDGER_ID) return { categories };
   const conn = await getDbConnection();
@@ -2088,8 +2785,10 @@ export async function getMyStockTagObservationOverview(input: { ledgerId: number
   );
   for (const row of rows as any[]) {
     try {
-      const access = await assertStockTagAccess(input.ledgerId, Number(row.id), input.userId, input.systemRole, false, false);
-      categories.push({ categoryId: access.categoryId, categoryName: access.categoryName, holdingCount: Number(row.holding_count) });
+      const categoryId = Number(row.id);
+      const state = await readR1StockPresentationState({ ...input, categoryId, ledgerId: 37 });
+      const categoryName = state.context.aiEnabled && !state.context.canManage ? `股票项目${categoryId}` : state.categoryName;
+      categories.push({ categoryId, categoryName, holdingCount: Number(row.holding_count) });
     } catch (error) {
       if (error instanceof Error && (error.message === "您无权查看此标签" || error.message === "该标签不是股票持仓模式")) continue;
       throw error;
@@ -2103,8 +2802,9 @@ export async function getMyStockTagParticipantPortfolio(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const access = await assertStockPresentationReadAccess(input);
   // 普通成员只读取自己获配批次的估值，不能取得标签完整操作历史。
   const portfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!portfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
@@ -2118,9 +2818,8 @@ export async function getMyStockTagParticipantPortfolio(input: {
 }
 
 /** All immediately-visible stock tags for the effective member, used by 37's overview table. */
-async function buildMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+async function buildMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
-  await ensureLedgerStockPortfolioTables();
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [categoryRows] = await (conn as any).execute(
@@ -2137,7 +2836,8 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
   for (const category of categoryRows as any[]) {
     let access: Access;
     try {
-      access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
+      const state = await readR1StockPresentationState({ ...input, ledgerId: 37, categoryId: Number(category.id) });
+      access = { ledgerId: 37, categoryId: Number(category.id), categoryName: state.categoryName, canEdit: state.context.canManage };
     } catch (error) {
       if (error instanceof Error && error.message === "您无权查看此标签") continue;
       throw error;
@@ -2161,13 +2861,37 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
   return result;
 }
 
-export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
-  return readShortLivedCache(
+  const context = await getLedger37PresentationContext({ ...input, ledgerId: 37 });
+  const result = await readShortLivedCache(
     memberOverviewReadCache,
-    `${input.ledgerId}:${input.userId}:${input.systemRole || ''}`,
+    `${input.ledgerId}:${input.userId}:${input.systemRole || ''}:${input.isViewingAs ? 'viewing' : ''}`,
     () => buildMyStockTagOverview(input),
   );
+  // 缓存不保存权限；每次重新校验成员可见性，不能从旧缓存恢复已隐藏项目。
+  const visible: any[] = [];
+  for (const row of result) {
+    try {
+      await readR1StockPresentationState({ ...input, ledgerId: 37, categoryId: row.categoryId });
+      visible.push(row);
+    } catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+  }
+  if (!context.aiEnabled || context.canManage) return visible;
+  return visible.map(row => ({
+    categoryId: row.categoryId, name: `股票项目${row.categoryId}`, startDate: row.startDate,
+    summary: { floatingPnl: row.summary.floatingPnl, realizedPnl: row.summary.realizedPnl,
+      totalPnl: row.summary.totalPnl, dailyChange: row.summary.dailyChange,
+      dailyChangePercent: row.summary.dailyChangePercent, dailyChangeReady: row.summary.dailyChangeReady,
+      dailyChangeDate: row.summary.dailyChangeDate, previousDate: row.summary.previousDate,
+      valuationDate: row.summary.valuationDate, awaitingFirstClose: row.summary.awaitingFirstClose },
+    points: row.points.map((point: any) => ({ date: point.date, snapshotDate: point.snapshotDate,
+      pnl: point.pnl, totalPnl: point.totalPnl, floatingPnl: point.floatingPnl, realizedPnl: point.realizedPnl,
+      dailyPnl: point.dailyPnl, dailyPnlReady: point.dailyPnlReady, ready: point.ready, status: point.status })),
+  }));
 }
 
 export async function getStockTagDailySnapshots(input: {
@@ -2175,10 +2899,11 @@ export async function getStockTagDailySnapshots(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
   from?: string;
   to?: string;
 }) {
-  await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  await assertStockPresentationReadAccess(input);
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const params: any[] = [input.categoryId];
@@ -3216,8 +3941,8 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   };
 }
 
-export async function getStockLotParticipationMatrix(input: { ledgerId: number; categoryId: number; userId: number; systemRole?: string }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, false, false);
+export async function getStockLotParticipationMatrix(input: { ledgerId: number; categoryId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
+  const access = await assertStockPresentationReadAccess(input, false);
   // The matrix names every participant and their allocated quantities.  It is an
   // administrator maintenance view only; ordinary members keep the separate
   // read-only endpoint that returns only their own allocations.

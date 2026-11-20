@@ -1,0 +1,65 @@
+{
+  "asOf": "2026-09-30",
+  "publishedAt": "2026-11-16",
+  "checkedAt": "2026-11-19T02:37:18.488Z",
+  "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000084/information_table.xml",
+  "holdings": [
+    {
+      "symbol": "CUSIP:19247G107",
+      "stockName": "COHERENT CORP",
+      "currency": "USD",
+      "shares": "7788161",
+      "weightPct": 4.637859218119988
+    },
+    {
+      "symbol": "CUSIP:21873S108",
+      "stockName": "COREWEAVE INC",
+      "currency": "USD",
+      "shares": "47213353",
+      "weightPct": 8.510586148974712
+    },
+    {
+      "symbol": "CUSIP:370920100",
+      "stockName": "GENERATE BIOMEDICINES INC",
+      "currency": "USD",
+      "shares": "833325",
+      "weightPct": 0.02589769562250795
+    },
+    {
+      "symbol": "CUSIP:458140100",
+      "displaySymbol": "INTC",
+      "stockName": "INTEL CORP",
+      "currency": "USD",
+      "shares": "161082488",
+      "weightPct": 40.07171568000311
+    },
+    {
+      "symbol": "CUSIP:N97284108",
+      "stockName": "NEBIUS GROUP N.V.",
+      "currency": "USD",
+      "shares": "1190476",
+      "weightPct": 0.5810165791044394
+    },
+    {
+      "symbol": "CUSIP:654902204",
+      "stockName": "NOKIA CORP",
+      "currency": "USD",
+      "shares": "72859751",
+      "weightPct": 1.5286300715729373
+    },
+    {
+      "symbol": "CUSIP:84615Q103",
+      "stockName": "SPACE EXPLORATION TECHN CORP",
+      "currency": "USD",
+      "shares": "130472925",
+      "weightPct": 40.72595371565208
+    },
+    {
+      "symbol": "CUSIP:871607107",
+      "stockName": "SYNOPSYS INC",
+      "currency": "USD",
+      "shares": "4354077",
+      "weightPct": 3.9183408909502164
+    }
+  ]
+}

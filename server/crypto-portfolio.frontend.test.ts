@@ -140,6 +140,7 @@ function allocationHarness() {
     setStockParticipationMutation: { mutateAsync: vi.fn() }, setStockObservationMutation: { mutateAsync: vi.fn() },
     setSavingStockLots: vi.fn(), discardStockLotDrafts: vi.fn(), finishStockLotEditing: vi.fn(), startStockLotEditing: vi.fn(), toggleStockLotExpanded: vi.fn(), saveStockTagVisibility: vi.fn(),
     refetchStockParticipationMatrix: vi.fn(), onStockAllocationSaved: vi.fn(),
+    renderLedger37AiBadge: () => null, // 原数字币回归保持全局AI关闭，不改变报价、币数量或份额行为。
   };
   for (const key of ['Switch', 'Eye', 'EyeOff', 'Minus', 'Plus', 'X', 'ChevronDown', 'Save']) scope[key] = key;
   scope.setStockParticipationDraft = vi.fn((key, patch, fallback) => { scope.stockParticipationDrafts[key] = { ...(scope.stockParticipationDrafts[key] ?? fallback), ...patch }; });
@@ -413,7 +414,7 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
     for (const name of ['normalizeCurrency', 'money', 'formatQuantity', 'formatDateTime', 'daysSinceBeijingDate', 'formatMonthDay', 'formatQuoteUpdate', 'formatCompactQuoteUpdate']) scope[name] = execute(pageSource, name, scope);
     scope.signedMoney = execute(pageSource, 'signedMoney', scope);
     for (const name of ['ArrowLeft', 'BadgeCheck', 'ChevronDown', 'ChevronUp', 'History', 'Loader2', 'Plus', 'X', 'Button', 'Dialog', 'DialogContent', 'DialogHeader', 'DialogTitle', 'Avatar', 'AvatarImage', 'AvatarFallback', 'Input', 'Label', 'Sheet', 'SheetContent', 'SheetHeader', 'SheetTitle', 'StockTagTradeDialog', 'StockNameProfitSummary', 'StockQuoteUpdateIndicator', 'StockParticipantProfitChart', 'CryptoAwareObservationAccountSummary', 'CryptoAwareObservationPortfolio']) scope[name] = name;
-    const tree = execute(pageSource, 'StockTagPortfolio', scope)({ ledgerId: 37, categoryId: 222, categoryName: '测试现货', onBack: vi.fn() });
+    const tree = execute(pageSource, 'LegacyStockTagPortfolio', scope)({ ledgerId: 37, categoryId: 222, categoryName: '测试现货', onBack: vi.fn() });
     expect(text(tree)).toContain('BTC/USDT'); expect(text(tree)).toContain('0.12345678 币'); expect(text(tree)).not.toContain('0.12345678 股');
   });
 });

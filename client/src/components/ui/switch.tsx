@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 function Switch({
   className,
   children,
+  thumbLabel,
   ...props
-}: React.ComponentProps<typeof SwitchPrimitive.Root> & { children?: React.ReactNode }) {
+}: React.ComponentProps<typeof SwitchPrimitive.Root> & { children?: React.ReactNode; thumbLabel?: React.ReactNode }) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
@@ -20,9 +21,12 @@ function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          "bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0 absolute left-0"
+          "bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0 absolute left-0",
+          thumbLabel != null && "flex items-center justify-center"
         )}
-      />
+      >
+        {thumbLabel != null && <span aria-hidden="true" className="text-[8px] font-bold leading-none text-[#7C3AED]">{thumbLabel}</span>}
+      </SwitchPrimitive.Thumb>
       {children && (
         <span className="text-[10px] font-medium text-white z-10 pointer-events-none">
           {children}

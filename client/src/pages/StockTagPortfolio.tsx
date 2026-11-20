@@ -20,6 +20,10 @@ import StockObservationPortfolio from "@/components/StockObservationPortfolio";
 import StockObservationAccountSummary from "@/components/StockObservationAccountSummary";
 import { beijingTradeInputTime, parseTradeInputTime } from "@/components/StockTagTradeDialog";
 import { portfolioCurrency as instrumentCurrency, portfolioMarket, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, type PortfolioCurrency, type PortfolioMarket } from "@shared/portfolio-instruments";
+import { useSearch } from "wouter";
+import { isR1StockPresentationScope, type R1StockView } from "@shared/r1-stock-presentation";
+import type { Ledger37PresentationContext } from "@shared/ledger37-ai-presentation";
+import Ledger37AiHome, { Ledger37AiStockParticipationView, Ledger37PresentationPending, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
 
 const StockAllocationPanel = lazy(() => import("./LedgerAAInitialBalance").then((module) => ({ default: module.LedgerAAInitialBalanceContent })));
 
@@ -32,6 +36,10 @@ type Props = {
   onBack: () => void;
   /** Member/observed view: only show this member's allocated lots and P&L baseline. */
   participantView?: boolean;
+  /** 当前展示目标，不是实际操作者；R1 权限由独立 context 校验。 */
+  effectiveUserId?: number;
+  /** 仅37全局门控确认后传入，隔离旧组合查询的目标身份缓存。 */
+  identityScoped?: boolean;
 };
 
 const eventLabels: Record<EventType, string> = {
@@ -223,9 +231,45 @@ function CryptoAwareObservationAccountSummary(props: { categoryId: number; usdCn
   </div>;
 }
 
-export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false }: Props) {
+export default function StockTagPortfolio(props: Props) {
+  if (props.ledgerId !== 37) return <LegacyStockTagPortfolio {...props} />;
+  return <R1StockPresentation {...props} />;
+}
+
+function R1StockPresentation(props: Props) {
+  const { user } = useAuth();
+  const search = useSearch();
+  const presentation = useLedger37PresentationContext({ ledgerId: props.ledgerId, search, effectiveUserId: props.effectiveUserId, authUserId: user?.id });
+  const { context, viewerUserId, knownSelfAIgate } = presentation;
+  if (!context || viewerUserId === undefined) return <Ledger37PresentationPending presentation={presentation} onBack={props.onBack} />;
+  const modeKey = `${props.ledgerId}:${props.categoryId}:${viewerUserId}:${context.canManage}:${context.aiEnabled}`;
+  // 所有37股票标签的普通AI身份只挂安全hook树；不能先查询行情再隐藏。
+  if (knownSelfAIgate) return <Ledger37AiStockParticipationView key={modeKey} ledgerId={37} categoryId={props.categoryId} viewerUserId={viewerUserId} onBack={props.onBack} />;
+  if (isR1StockPresentationScope(props.ledgerId, props.categoryId)) return <R1StockPresentationTabs key={modeKey} props={props} context={context} />;
+  // 非R1的管理员/AI关闭成员保持原participant props及管理页，不扩大UI改动。
+  return <LegacyStockTagPortfolio key={modeKey} {...props} effectiveUserId={viewerUserId} identityScoped />;
+}
+
+function R1StockPresentationTabs({ props, context }: { props: Props; context: Ledger37PresentationContext }) {
+  // 仅实际可管理 context 获得三视图。父页面 participantView 不决定真实权限。
+  const [selectedView, setSelectedView] = useState<R1StockView>(context.canManage ? "admin" : context.aiEnabled ? "ai" : "user");
+  const view = context.canManage ? selectedView : context.aiEnabled ? "ai" : "user";
+  return <div className={`min-h-screen ${view === "ai" ? "bg-[#F2F6FA]" : "bg-[#FAF3ED]"}`}>
+    {context.canManage && <div role="tablist" aria-label="展示视图" className={`grid grid-cols-3 gap-1 border-b p-2 ${view === "ai" ? "border-[#DCE7F0] bg-white" : "border-[#E8DFEF] bg-white"}`}>{([
+      { id: "user", label: "用户" }, { id: "admin", label: "管理员" }, { id: "ai", label: "AI" },
+    ] as const).map(tab => <button key={tab.id} type="button" role="tab" aria-selected={view === tab.id} onClick={() => setSelectedView(tab.id)} className={`rounded-md py-2 text-sm font-medium ${view === tab.id ? tab.id === "ai" ? "bg-[#087987] text-white shadow-sm" : "bg-[#644484] text-white" : view === "ai" ? "text-[#61758A]" : "text-gray-500"}`}>{tab.label}</button>)}</div>}
+    <div key={`${props.ledgerId}:${props.categoryId}:${context.viewerUserId}:${view}`}>
+      {view === "ai" ? <Ledger37AiHome viewerUserId={context.viewerUserId} adminPreview={context.canManage} onBack={props.onBack} /> : <LegacyStockTagPortfolio {...props} effectiveUserId={context.viewerUserId} participantView={view === "user"} presentationMode={view} />}
+    </div>
+  </div>;
+}
+
+export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false, effectiveUserId, identityScoped = false, presentationMode = "legacy" }: Props & { presentationMode?: "legacy" | "user" | "admin" }) {
   const utils = trpc.useUtils();
   const { user: currentUser } = useAuth();
+  const isR1Presentation = presentationMode !== "legacy";
+  const hideAdminPersonal = presentationMode === "admin";
+  const identityInput = isR1Presentation || (ledgerId === 37 && identityScoped) ? { viewAsUserId: effectiveUserId } : {};
   // 股票原始成交与行情仍按交易所币种保存；账户与成员展示统一折算为人民币。
   const { data: usdCnyRateData } = trpc.stock.getUsdCnyRate.useQuery(
     undefined,
@@ -282,22 +326,22 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     </>;
   };
   const globalPortfolioQuery = trpc.ledger.getStockTagPortfolio.useQuery(
-    { ledgerId, categoryId },
-    { enabled: !participantView, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : false, refetchIntervalInBackground: false },
+    { ledgerId, categoryId, ...identityInput },
+    { enabled: !participantView, placeholderData: undefined, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : false, refetchIntervalInBackground: false },
   );
   const dailySnapshotsQuery = trpc.ledger.getStockTagDailySnapshots.useQuery(
-    { ledgerId, categoryId },
-    { enabled: !participantView && Boolean(categoryId), refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000 },
+    { ledgerId, categoryId, ...identityInput },
+    { enabled: !participantView && Boolean(categoryId), placeholderData: undefined, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000 },
   );
   const publicPortfolioQuery = trpc.ledger.getStockTagPublicPortfolio.useQuery(
-    { ledgerId: 37, categoryId },
-    { enabled: participantView && ledgerId === 37, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
+    { ledgerId: 37, categoryId, ...identityInput },
+    { enabled: participantView && ledgerId === 37, placeholderData: undefined, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
   );
   const memberPortfolioQuery = trpc.ledger.getMyStockTagParticipantPortfolio.useQuery(
-    { ledgerId: 37, categoryId },
+    { ledgerId: 37, categoryId, ...identityInput },
     // 管理员同时是成员时，也需要读取自己的已平仓份额。总账户接口仍只负责
     // 维护用的全量数据；个人部分严格复用成员端同一份只读口径。
-    { enabled: ledgerId === 37 && (participantView || Boolean((globalPortfolioQuery.data as any)?.canEdit)), refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
+    { enabled: ledgerId === 37 && (participantView || (!hideAdminPersonal && Boolean((globalPortfolioQuery.data as any)?.canEdit))), placeholderData: undefined, refetchOnWindowFocus: false, refetchOnMount: false, staleTime: 60_000, refetchInterval: (query) => ((query.state.data as any)?.positions || []).some((position: any) => portfolioMarket(position.symbol) === 'CRYPTO') ? 5_000 : participantView ? 60_000 : false, refetchIntervalInBackground: false },
   );
 
   const usdtCnyRate = portfolioCashMultiplier('USDT', null, (participantView ? (publicPortfolioQuery.data as any)?.summary?.usdtCnyRate : (globalPortfolioQuery.data as any)?.summary?.usdtCnyRate) ?? (memberPortfolioQuery.data as any)?.summary?.usdtCnyRate);
@@ -326,7 +370,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     : [];
   // 管理员维护全账户的同时，也可能是获配成员。已平仓个人数据必须沿用成员端
   // 的入场价、平仓价和冻结收益，不能用总账户盈亏按比例反推。
-  const adminOwnClosedLots = !participantView && canEdit
+  const adminOwnClosedLots = !participantView && canEdit && !hideAdminPersonal
     ? (((memberPortfolioQuery.data as any)?.closedLots || []) as any[])
     : [];
   const adminOwnClosedLotsByLotId = new Map<number, any[]>();
@@ -910,7 +954,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const viewerUserId = Number((data as any)?.viewerUserId || currentUser?.id || 0);
   // 管理员也是成员时，顶部汇总必须按本人每笔真实获配数量和入场价计算，
   // 不能从账户总额按比例倒推；美股同样沿用页面的实时 USD/CNY 换算口径。
-  const adminOwnHoldingSummary = !participantView && canEdit ? (() => {
+  const adminOwnHoldingSummary = !participantView && canEdit && !hideAdminPersonal ? (() => {
     const details = tagHoldingLots.flatMap((holding: any) => {
       const participation = ((allocationLotById.get(Number(holding.lot.id))?.participations || []) as any[])
         .find((item: any) => Number(item.userId) === viewerUserId && Number(item.remainingQuantity || 0) > 0);
@@ -1169,7 +1213,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       const myHoldingFloatingPnl = toCny(myNativeFloatingPnl, holding.nativeCurrency);
       const myHoldingPnlTone = Number(myHoldingFloatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
       const myHoldingSharePercent = allocationPercent(myHoldingQuantity);
-      const adminPersonalHoldingBlock = !participantView && canEdit && myAllocation ? (
+      const adminPersonalHoldingBlock = !participantView && canEdit && !hideAdminPersonal && myAllocation ? (
         <div className="border-t border-[#E6E6E6] bg-[#FFF9F7]">
           <div className="flex items-center justify-between gap-2 border-b border-[#E6E6E6] px-2.5 py-1.5">
             <span className="font-semibold text-[#8F1D1D]">我的持仓</span>
@@ -1275,7 +1319,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 {allocationMatrixQuery.isLoading ? <div className="px-2.5 py-3 text-[11px] text-gray-400">正在载入成员份额…</div> : <div className="divide-y divide-[#EEE8E4]">
                   <div className="bg-[#FFF9F7] px-2.5 py-1.5 text-[11px] text-gray-500">成员份额（按当前数量由多到少）</div>
                   {sortedAllocations.map((allocation) => {
-                    const isMine = allocation.userId === viewerUserId;
+                    const isMine = !hideAdminPersonal && allocation.userId === viewerUserId;
                     const allocationNativeCost = allocation.quantity * Number(allocation.entryPrice || 0);
                     const allocationCost = toCny(allocationNativeCost, holding.nativeCurrency);
                     const allocationNativePnl = allocation.floatingPnl === null || allocation.floatingPnl === undefined ? null : Number(allocation.floatingPnl);
@@ -1287,7 +1331,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                     </div>;
                   })}
                   {sortedAllocations.length === 0 && <div className="px-2.5 py-2 text-[11px] text-gray-400">当前尚未给任何成员分配本批次</div>}
-                  {!myAllocation && <div className="px-2.5 py-2 text-[11px] text-gray-400">我的份额：0 {portfolioQuantityUnit(holding.symbol)}（0%）</div>}
+                  {!hideAdminPersonal && !myAllocation && <div className="px-2.5 py-2 text-[11px] text-gray-400">我的份额：0 {portfolioQuantityUnit(holding.symbol)}（0%）</div>}
                 </div>}
               </div>}
             </>

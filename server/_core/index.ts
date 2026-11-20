@@ -13,6 +13,7 @@ import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner, subscribeT0EthPerpetualMark } from "../price-scanner";
+import { startHoldingSourceRefresh } from "../holding-source-cache";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
 import { startLedger52T0ExpiredOptionScanner, startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
@@ -828,6 +829,9 @@ async function startServer() {
     // 必须紧跟行情扫描启动：不能等待商城等无关生命周期任务完成，
     // 否则其网络或数据库延迟会让已存在的 T+0 挂单错过整段行情。
     startLedger52T0PendingOrderScanner();
+
+    // 公开持股披露每日检查：只更新独立行情展示缓存，不操作任何钱包或订单。
+    startHoldingSourceRefresh();
 
     // 紫鼎商城：每 10 分钟释放超时未传凭证订单的预占库存，并自动确认到期已发货订单。
     const runZidingLifecycle = async () => {

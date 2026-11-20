@@ -3,6 +3,8 @@ import {
   ORDINARY_TAG_OBSERVATION_SUFFIX,
   assertOrdinaryObservationAllocationChange,
 } from '../shared/ordinary-tag-observation';
+import { R1_AI_DISPLAY_KEY_PREFIX } from '../shared/r1-stock-presentation';
+import { LEDGER37_AI_DISPLAY_KEY } from '../shared/ledger37-ai-presentation';
 
 function balancesOf(raw: unknown): Record<string, unknown> {
   // SQL NULL / 未配置空字符串合法；JSON null、数组、损坏文本不能被清空覆盖。
@@ -36,6 +38,9 @@ export async function updateLedger37InitialBalances(
   const entries = Object.entries(balances);
   for (const [key, value] of entries) {
     // 即使值完全相同也禁止：观察配置仅由专用管理员原子JSON_SET入口保存。
+    if (key === LEDGER37_AI_DISPLAY_KEY || key.startsWith(R1_AI_DISPLAY_KEY_PREFIX)) {
+      throw new Error('AI展示专用配置不能通过初始金额入口修改');
+    }
     if (key.endsWith(ORDINARY_TAG_OBSERVATION_SUFFIX)) {
       throw new Error('观察专用配置不能通过初始金额入口修改');
     }

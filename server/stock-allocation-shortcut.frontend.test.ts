@@ -69,6 +69,7 @@ function renderer(focusLotId: number | null = 22) {
     setStockParticipationMutation: { mutateAsync: vi.fn().mockResolvedValue({}) }, setStockObservationMutation: { mutateAsync: vi.fn().mockResolvedValue({}) },
     setSavingStockLots: vi.fn(), discardStockLotDrafts: vi.fn(), finishStockLotEditing: vi.fn(), startStockLotEditing: vi.fn(), toggleStockLotExpanded: vi.fn(), saveStockTagVisibility: vi.fn(),
     Fragment: React.Fragment,
+    renderLedger37AiBadge: () => null, // 原股票回归场景全局AI关闭；开启图标由独立真实渲染回归覆盖。
     useCallback: (fn: any) => fn,
   };
   for (const name of ["Switch", "Eye", "EyeOff", "Minus", "Plus", "X", "ChevronDown", "Save"]) scope[name] = () => null;
