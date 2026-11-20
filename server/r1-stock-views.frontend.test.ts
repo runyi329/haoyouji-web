@@ -101,6 +101,7 @@ function legacy(participantView = false, presentationMode = "admin") {
   for (const name of ["correctStockTagEvent", "updateStockTagLotNote"]) scope.trpc.ledger[name] = { useMutation: () => ({}) };
   for (const name of ["normalizeCurrency", "money", "signedMoney", "formatQuantity", "formatDateTime", "daysSinceBeijingDate", "formatMonthDay", "formatQuoteUpdate", "formatCompactQuoteUpdate", "localInputTime", "buildCryptoAwareMemberRealizedLots"]) scope[name] = actual(source, name, scope);
   for (const name of ["ArrowLeft", "BadgeCheck", "ChevronDown", "ChevronUp", "History", "Loader2", "Plus", "X", "Button", "Avatar", "AvatarImage", "AvatarFallback", "Input", "Label", "StockNameProfitSummary", "StockCustomerProfitSummary", "StockQuoteUpdateIndicator", "CryptoAwareObservationAccountSummary", "CryptoAwareObservationPortfolio", "StockParticipantProfitChart"]) scope[name] = "span";
+  scope.StockTagBuyEditDialog = (p: any) => p.order && p.canEdit ? React.createElement("div", { "data-buy-edit-lot": p.order.lotId }) : null;
   for (const name of ["Dialog", "DialogContent", "DialogHeader", "DialogTitle", "Sheet", "SheetContent", "SheetHeader", "SheetTitle", "StockTagTradeDialog"]) scope[name] = (p: any) => p.open ? React.createElement("div", null, p.children) : null;
   const component = actual(source, "LegacyStockTagPortfolio", scope);
   const render = () => { hooks.reset(); return expand(component({ ...props, participantView, presentationMode, effectiveUserId: 901 })); };

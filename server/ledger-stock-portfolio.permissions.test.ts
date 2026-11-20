@@ -10,7 +10,7 @@ import { getLedger37PresentationContext, setLedger37AiDisplay } from './ledger37
 import { getR1StockPresentationContext, assertR1RawReadAllowed } from './r1-stock-presentation';
 import { getStockTagMode, getStockLotParticipationMatrix, getMyStockTagOverview, getMyStockTagObservationOverview,
   createStockTagEvent, voidStockTagEvent, correctStockTagEvent, updateStockTagLotNote,
-  setStockLotObservation, setStockLotParticipation, updateStockTagSale } from './ledger-stock-portfolio';
+  setStockLotObservation, setStockLotParticipation, updateStockTagSale, updateStockTagBuy } from './ledger-stock-portfolio';
 
 const ownerId = 870413;
 const personas = [
@@ -48,6 +48,7 @@ const writes = [
   { name: 'observation configuration', fn: setStockLotObservation, fields: { lotId: 1, targetUserId: 202, enabled: true, quantity: 1 } },
   { name: 'participation and price/date', fn: setStockLotParticipation, fields: { lotId: 1, targetUserId: 202, quantity: 1, entryPrice: 10, startDate: '2026-11-01' } },
   { name: 'sale price and profit ratios', fn: updateStockTagSale, fields: { eventId: 1, executionPrice: 10, actualTradedAt: '2026-11-01', profitAllocations: [] } },
+  { name: 'opening order safe edit', fn: updateStockTagBuy, fields: { lotId: 1, eventId: 1, quantity: 1, executionPrice: 10, actualTradedAt: '2026-11-01T02:00:00.000Z', note: 'offline', reason: 'offline', expected: { quantity: 1, executionPrice: 10, actualTradedAt: '2026-11-01T02:00:00.000Z', note: '' } } },
 ];
 beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('DEV_BYPASS_AUTH', 'false'); vi.stubEnv('PREVIEW_READONLY', 'false'); vi.stubGlobal('fetch', vi.fn(() => { throw new Error('离线禁止网络'); })); });
 afterEach(() => { expect(fetch).not.toHaveBeenCalled(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });

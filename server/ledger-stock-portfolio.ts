@@ -2,7 +2,7 @@ import { getDbConnection, getDbTransactionConnection } from "./db";
 import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 import { normalizePortfolioSymbol, portfolioCurrency, portfolioMarket, portfolioQuantityIsEmpty, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, portfolioCashMultiplier } from '../shared/portfolio-instruments';
-import { getCryptoPortfolioEffectiveDate, getCryptoPortfolioTradeSettlementDate } from '../shared/crypto-portfolio-policy';
+import { getCryptoPortfolioEffectiveDate, getCryptoPortfolioTradeSettlementDate, latestCryptoPortfolioSnapshotDate, CRYPTO_PORTFOLIO_POLICY_VERSION } from '../shared/crypto-portfolio-policy';
 import { guardCryptoPortfolioAllocationWrite } from './crypto-portfolio-allocation-write-guard';
 import { fetchCryptoPortfolioQuotes, getCachedCryptoPortfolioQuote, searchCryptoPortfolio } from './crypto-portfolio-quotes';
 import { getLiveCryptoUsdtCnyQuote } from './crypto-portfolio-fx';
@@ -1226,6 +1226,7 @@ async function buildPortfolio(categoryId: number) {
     current.lots.push({
       id: lot.id,
       openedEventId: lot.openedEventId,
+      initialQuantity: lot.initialQuantity,
       openedAt: lot.openedAt,
       quantity: lot.remainingQuantity,
       unitCost: lot.unitCost,
@@ -3313,6 +3314,201 @@ export async function voidStockTagEvent(input: {
     throw error;
   } finally {
     if (typeof (conn as any).release === "function") (conn as any).release();
+  }
+}
+
+/**
+ * Maintain an opening order in place. Numbered lots, independent participant entry prices,
+ * quantities and dates survive unchanged; before/after evidence is appended as an audit note.
+ * Sold/settled economics are deliberately locked rather than silently rewriting history.
+ */
+export async function updateStockTagBuy(input: {
+  ledgerId: number;
+  categoryId: number;
+  lotId: number;
+  eventId: number;
+  quantity: number;
+  executionPrice: number;
+  actualTradedAt: string;
+  note: string;
+  reason: string;
+  expected: { quantity: number; executionPrice: number; actualTradedAt: string; note: string };
+  userId: number;
+  systemRole?: string;
+  isViewingAs?: boolean;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
+  if (!Number.isSafeInteger(input.lotId) || input.lotId <= 0 || !Number.isSafeInteger(input.eventId) || input.eventId <= 0) throw new Error("买入订单编号无效");
+  const quantity = Number(input.quantity);
+  const executionPrice = Number(input.executionPrice);
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1_000_000_000) throw new Error("买入数量必须大于0且不超过允许范围");
+  if (!Number.isFinite(executionPrice) || executionPrice <= 0 || executionPrice > 10_000_000) throw new Error("买入价格必须大于0且不超过允许范围");
+  const registeredAt = new Date();
+  const actualTradedAt = parsePortfolioActualTime(input.actualTradedAt, registeredAt);
+  if (actualTradedAt.getTime() > registeredAt.getTime()) throw new Error("买入时间不能晚于当前时间");
+  const note = String(input.note ?? "");
+  const reason = String(input.reason || "").trim();
+  if (note.length > 3000 || !reason || reason.length > 300) throw new Error("请填写有效的修改原因，开仓备注最多3000字");
+  if (!input.expected || !Number.isFinite(Number(input.expected.quantity)) || !Number.isFinite(Number(input.expected.executionPrice))
+    || !Number.isFinite(Date.parse(input.expected.actualTradedAt))) throw new Error("缺少原买入信息，请刷新后重新修改");
+  await ensureStockCalendarResultTable();
+  const tx = await getDbTransactionConnection();
+  if (!tx) throw new Error("数据库连接不可用");
+  try {
+    await (tx as any).beginTransaction();
+    // Same lot-first main lock as participation/observation changes and numbered sales.
+    const [lotRows] = await (tx as any).execute(
+      `SELECT id, symbol, stock_name, opened_event_id, opened_at, initial_quantity, unit_cost, note
+       FROM ledger_stock_lots WHERE id = ? AND ledger_id = ? AND category_id = ? LIMIT 1 FOR UPDATE`,
+      [input.lotId, access.ledgerId, access.categoryId],
+    );
+    const lot = (lotRows as any[])[0];
+    if (!lot || Number(lot.opened_event_id) !== input.eventId) throw new Error("买入订单与持仓编号不匹配，请刷新后重试");
+    const [eventRows] = await (tx as any).execute(
+      `SELECT id, event_type, status, symbol, quantity, execution_price, transaction_fee, actual_traded_at,
+              server_registered_at, settlement_effective_date, note, created_by, market_reference_price, market_reference_at
+       FROM ledger_stock_events WHERE id = ? AND ledger_id = ? AND category_id = ? LIMIT 1 FOR UPDATE`,
+      [input.eventId, access.ledgerId, access.categoryId],
+    );
+    const event = (eventRows as any[])[0];
+    if (!event || event.status !== 'active' || !['buy', 'add'].includes(event.event_type) || event.symbol !== lot.symbol) throw new Error("仅可修改有效的原买入订单");
+    const symbol = String(lot.symbol);
+    const isCrypto = isCryptoPortfolioSymbol(symbol);
+    validateCryptoQuantity(symbol, quantity);
+    const originalTime = isCrypto ? toBeijingWallClockIso(event.actual_traded_at) : toIso(event.actual_traded_at);
+    const originalNote = String(lot.note ?? event.note ?? "");
+    if (Number(input.expected.quantity) !== numberValue(event.quantity) || Number(input.expected.executionPrice) !== numberValue(event.execution_price)
+      || Date.parse(input.expected.actualTradedAt) !== Date.parse(originalTime) || input.expected.note !== originalNote) {
+      throw new Error("订单或备注已被修改，请刷新后重新编辑，避免覆盖他人的修改");
+    }
+    if (numberValue(lot.initial_quantity) !== numberValue(event.quantity) || numberValue(lot.unit_cost) !== numberValue(event.execution_price)) throw new Error("原买入订单与批次数据不一致，请先核查，不能直接覆盖");
+    const economicChange = quantity !== numberValue(event.quantity) || executionPrice !== numberValue(event.execution_price)
+      || actualTradedAt.getTime() !== Date.parse(originalTime);
+    if (!economicChange && note === originalNote) {
+      await (tx as any).commit();
+      return { success: true, changed: false };
+    }
+    let recheckCryptoCutoff = () => {};
+    if (economicChange) {
+      const [salesRows] = await (tx as any).execute(
+        `SELECT COUNT(*) AS count FROM ledger_stock_event_lot_allocations a
+         INNER JOIN ledger_stock_events e ON e.id = a.event_id
+         WHERE a.lot_id = ? AND e.ledger_id = ? AND e.category_id = ? AND e.status = 'active' AND e.event_type IN ('reduce','sell')`,
+        [input.lotId, access.ledgerId, access.categoryId],
+      );
+      const [closureRows] = await (tx as any).execute(
+        `SELECT COUNT(*) AS count FROM ledger_stock_participation_closures c
+         INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+         WHERE p.lot_id = ? AND p.ledger_id = ? AND p.category_id = ?`, [input.lotId, access.ledgerId, access.categoryId],
+      );
+      if (numberValue((salesRows as any[])[0]?.count) > 0 || numberValue((closureRows as any[])[0]?.count) > 0) throw new Error("该批次已有卖出或成员结算，只能修改开仓备注，不能改动历史成交金额或日期");
+      const [participationRows] = await (tx as any).execute(
+        `SELECT id, allocated_quantity, remaining_quantity, start_date FROM ledger_stock_lot_participations
+         WHERE lot_id = ? AND ledger_id = ? AND category_id = ? FOR UPDATE`, [input.lotId, access.ledgerId, access.categoryId],
+      );
+      const participations = participationRows as any[];
+      if (participations.some(row => !Number.isFinite(Number(row.allocated_quantity)) || !Number.isFinite(Number(row.remaining_quantity))
+        || Number(row.allocated_quantity) < 0 || Number(row.remaining_quantity) < 0 || Number(row.allocated_quantity) !== Number(row.remaining_quantity))) {
+        throw new Error("该批次成员股数存在历史不一致，请先核查，不能直接修改原买入");
+      }
+      const allocated = participations.reduce((sum, row) => sum + Number(row.allocated_quantity), 0);
+      if (portfolioQuantityExceeds(symbol, allocated - quantity)) throw new Error("买入数量不能小于已分配的成员股数，请先调整分配");
+      let observations: any[] = [];
+      if (await stockObservationTableExists(tx)) {
+        const [observationRows] = await (tx as any).execute(
+          `SELECT quantity, start_date FROM ledger_stock_lot_observations
+           WHERE lot_id = ? AND ledger_id = ? AND category_id = ? AND enabled = 1 FOR UPDATE`, [input.lotId, access.ledgerId, access.categoryId],
+        );
+        observations = observationRows as any[];
+        if (quantity !== numberValue(event.quantity) && observations.some(row => portfolioQuantityExceeds(symbol, numberValue(row.quantity) - quantity))) throw new Error("买入数量不能小于已有观察股数，请先调整观察配置");
+      }
+      const openedDate = new Date(actualTradedAt.getTime() + 8 * 60 * 60_000).toISOString().slice(0, 10);
+      const timeChange = actualTradedAt.getTime() !== Date.parse(originalTime);
+      if (timeChange && participations.some(row => !normalizeStoredDate(row.start_date))) throw new Error("旧成员尚未单独设置开始日期，请先核对成员日期，再修改买入时间");
+      if (timeChange && [...participations, ...observations].some(row => {
+        const start = normalizeStoredDate(row.start_date);
+        return start && start < openedDate;
+      })) throw new Error("买入日期不能晚于已有成员的参与开始日期，请先核对分配日期");
+      if (isCrypto) {
+        const effectiveDate = normalizeStoredDate(event.settlement_effective_date);
+        const registeredTime = toBeijingWallClockIso(event.server_registered_at);
+        recheckCryptoCutoff = () => {
+          // Freeze even if a due snapshot is missing. Never make missing evidence a license to rewrite it.
+          if (!effectiveDate || !Number.isFinite(Date.parse(registeredTime))
+            || effectiveDate !== getCryptoPortfolioEffectiveDate(originalTime, registeredTime)
+            || effectiveDate !== getCryptoPortfolioEffectiveDate(actualTradedAt, registeredTime)
+            || effectiveDate <= latestCryptoPortfolioSnapshotDate(new Date())) {
+            throw new Error("该数字币买入已进入15:05固定日结或会改变生效日，只能修改备注，不能倒改原成交");
+          }
+        };
+        recheckCryptoCutoff();
+      } else {
+        // Crypto daily payloads also seal stock amounts in mixed tags. A stock target is not a bypass.
+        const [cryptoSourceRows] = await (tx as any).execute(
+          `SELECT e.settlement_effective_date AS crypto_activation_date FROM ledger_stock_lots l
+           INNER JOIN ledger_stock_events e ON e.id = l.opened_event_id AND e.ledger_id = l.ledger_id AND e.category_id = l.category_id AND e.status = 'active'
+           WHERE l.ledger_id = ? AND l.category_id = ? AND l.symbol LIKE 'CRYPTO:%-USDT'`, [access.ledgerId, access.categoryId],
+        );
+        const activationDates = (cryptoSourceRows as any[]).map(row => normalizeStoredDate(row.crypto_activation_date));
+        const [cryptoTableRows] = await (tx as any).execute(`SELECT TABLE_NAME FROM information_schema.tables
+          WHERE table_schema = DATABASE() AND table_name = 'ledger_crypto_portfolio_daily_snapshots' LIMIT 1`);
+        if ((cryptoTableRows as any[]).length) {
+          const [publishedRows] = await (tx as any).execute(`SELECT MIN(activation_date) AS crypto_activation_date
+            FROM ledger_crypto_portfolio_daily_snapshots WHERE ledger_id = ? AND category_id = ? AND policy_version = ?`,
+          [access.ledgerId, access.categoryId, CRYPTO_PORTFOLIO_POLICY_VERSION]);
+          for (const row of publishedRows as any[]) if (row.crypto_activation_date !== null && row.crypto_activation_date !== undefined) activationDates.push(normalizeStoredDate(row.crypto_activation_date));
+        }
+        recheckCryptoCutoff = () => {
+          if (activationDates.some(date => !date || date <= latestCryptoPortfolioSnapshotDate(new Date()))) throw new Error("该混合标签已进入数字币固定日结，只能修改备注，不能倒改股票原成交");
+        };
+        recheckCryptoCutoff();
+      }
+    }
+    const fee = event.transaction_fee === null || event.transaction_fee === undefined ? null
+      : economicChange ? Number((quantity * executionPrice * STOCK_TRADE_FEE_RATE).toFixed(8)) : numberValue(event.transaction_fee);
+    const before = { quantity: numberValue(event.quantity), executionPrice: numberValue(event.execution_price), actualTradedAt: originalTime,
+      note: originalNote, transactionFee: event.transaction_fee === null || event.transaction_fee === undefined ? null : numberValue(event.transaction_fee),
+      serverRegisteredAt: isCrypto ? toBeijingWallClockIso(event.server_registered_at) : toIso(event.server_registered_at), createdBy: Number(event.created_by),
+      marketReferencePrice: event.market_reference_price, marketReferenceAt: toIso(event.market_reference_at),
+      raw: { eventQuantity: String(event.quantity), eventPrice: String(event.execution_price), initialQuantity: String(lot.initial_quantity), unitCost: String(lot.unit_cost),
+        eventNote: event.note ?? null, lotNote: lot.note ?? null, transactionFee: event.transaction_fee === null || event.transaction_fee === undefined ? null : String(event.transaction_fee),
+        actualTradedAt: String(event.actual_traded_at), openedAt: String(lot.opened_at), serverRegisteredAt: String(event.server_registered_at), settlementEffectiveDate: normalizeStoredDate(event.settlement_effective_date) } };
+    const after = { quantity, executionPrice, actualTradedAt: actualTradedAt.toISOString(), note, transactionFee: fee };
+    const auditNote = `[买入订单修改] 持仓ID ${input.lotId} · 原订单ID ${input.eventId}\n修改原因：${reason}\n原信息：${JSON.stringify(before)}\n修改后：${JSON.stringify(after)}\n审计：${JSON.stringify({ version: 1, kind: 'buy_edit_audit', ledgerId: access.ledgerId, categoryId: access.categoryId, lotId: input.lotId, eventId: input.eventId, operator: input.userId })}`;
+    if (Buffer.byteLength(auditNote, 'utf8') > 65_535) throw new Error("原备注过长，无法完整保存修改审计，请先核查历史记录");
+    recheckCryptoCutoff();
+    if (economicChange) {
+      await (tx as any).execute(
+        `UPDATE ledger_stock_events SET quantity = ?, execution_price = ?, transaction_fee = ?, actual_traded_at = ?
+         WHERE id = ? AND ledger_id = ? AND category_id = ? AND status = 'active'`,
+        [quantity, executionPrice, fee, isCrypto ? toMysqlBeijingDateTime(actualTradedAt.toISOString()) : actualTradedAt, input.eventId, access.ledgerId, access.categoryId],
+      );
+      await (tx as any).execute(
+        `UPDATE ledger_stock_lots SET initial_quantity = ?, unit_cost = ?, opened_at = ?, note = ?
+         WHERE id = ? AND ledger_id = ? AND category_id = ?`,
+        [quantity, executionPrice, isCrypto ? toMysqlBeijingDateTime(actualTradedAt.toISOString()) : actualTradedAt, note, input.lotId, access.ledgerId, access.categoryId],
+      );
+    } else {
+      await (tx as any).execute(`UPDATE ledger_stock_lots SET note = ? WHERE id = ? AND ledger_id = ? AND category_id = ?`, [note, input.lotId, access.ledgerId, access.categoryId]);
+    }
+    // Audit-only note: no quantities/allocations and no replacement-event link (which would duplicate history joins).
+    await (tx as any).execute(
+      `INSERT INTO ledger_stock_events (ledger_id, category_id, event_type, symbol, stock_name, actual_traded_at, note, created_by)
+       VALUES (?, ?, 'note', ?, ?, ?, ?, ?)`,
+      [access.ledgerId, access.categoryId, symbol, lot.stock_name, isCrypto ? toMysqlBeijingDateTime(registeredAt.toISOString()) : registeredAt,
+        auditNote, input.userId],
+    );
+    if (economicChange) await markStockCalendarResultDirty(tx, access.categoryId);
+    recheckCryptoCutoff();
+    await (tx as any).commit();
+    invalidateMemberStockReadCaches();
+    if (economicChange) queueStockCalendarResultRebuild(access.categoryId);
+    return { success: true, changed: true };
+  } catch (error) {
+    await (tx as any).rollback();
+    throw error;
+  } finally {
+    if (typeof (tx as any).release === "function") (tx as any).release();
   }
 }
 

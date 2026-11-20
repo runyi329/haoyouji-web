@@ -14338,6 +14338,29 @@ ${klinesSummary}
         const { createStockTagEvent } = await import('./ledger-stock-portfolio');
         return createStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    updateStockTagBuy: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive(),
+        eventId: z.number().int().positive(),
+        quantity: z.number().finite().positive().max(1_000_000_000),
+        executionPrice: z.number().finite().positive().max(10_000_000),
+        actualTradedAt: z.string().datetime(),
+        note: z.string().max(3000),
+        reason: z.string().trim().min(1).max(300),
+        expected: z.object({
+          quantity: z.number().finite().positive(),
+          executionPrice: z.number().finite().positive(),
+          actualTradedAt: z.string().datetime(),
+          note: z.string().max(3000),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { updateStockTagBuy } = await import('./ledger-stock-portfolio');
+        return updateStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
     updateStockTagSale: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),

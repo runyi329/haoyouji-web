@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
+import { StockTagBuyEditDialog, type EditableStockBuyOrder } from "@/components/StockTagBuyEditDialog";
 import { summarizeStockCustomerPnl } from "@shared/stock-customer-pnl";
 import { buildStockMemberRealizedLots, hasStockCustomerActivity } from "@shared/stock-realized-portfolio";
 import StockCustomerProfitSummary from "@/components/StockCustomerProfitSummary";
@@ -431,6 +432,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
   const [preselectedSellLotId, setPreselectedSellLotId] = useState<number | null>(null);
   const [editingSale, setEditingSale] = useState<any | null>(null);
+  const [editingBuy, setEditingBuy] = useState<EditableStockBuyOrder | null>(null);
   const [eventType, setEventType] = useState<EventType>("buy");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
@@ -481,7 +483,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
 
   const updateLotNoteMutation = trpc.ledger.updateStockTagLotNote.useMutation({
     onSuccess: () => {
-      toast.success("持仓编号备注已保存");
+      toast.success("开仓备注已保存");
       setEditingLotNoteId(null);
       setLotNoteDraft("");
       void utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId });
@@ -491,6 +493,32 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   });
 
   const historyRows = ((data as any)?.history || []) as any[];
+
+  const openBuyEdit = (holding: any) => {
+    if (!canEdit || participantView || ledgerId !== 37) return;
+    const lotId = Number(holding?.lot?.id);
+    if (!Number.isInteger(lotId) || lotId <= 0) return;
+    const matrixLot = ((allocationMatrixQuery.data as any)?.lots || []).find((lot: any) => Number(lot.id) === lotId);
+    const eventId = Number(holding.lot.openedEventId || matrixLot?.openedEventId);
+    const original = historyRows.find(event => Number(event.id) === eventId && event.status === "active"
+      && (event.type === "buy" || event.type === "add") && event.symbol === holding.symbol);
+    // The displayed lot quantity is remaining shares and its cost may have been converted to CNY.
+    // Never silently use either one as the original trade; old histories may exceed the history limit.
+    const originalQuantity = Number(original?.quantity ?? holding.lot.initialQuantity ?? matrixLot?.initialQuantity);
+    const originalPrice = Number(original?.executionPrice ?? holding.nativeUnitCost);
+    const originalTime = String(original?.actualTradedAt || holding.lot.openedAt || "");
+    if (!Number.isInteger(eventId) || eventId <= 0 || !Number.isFinite(originalQuantity) || originalQuantity <= 0
+      || !Number.isFinite(originalPrice) || originalPrice <= 0 || !Number.isFinite(Date.parse(originalTime))) {
+      return toast.error("原买入信息尚未加载完整，请刷新后再修改");
+    }
+    const participations = (matrixLot?.participations || []) as any[];
+    const minimumQuantity = participations.reduce((sum, row) => sum + Number(row.remainingQuantity || 0), 0);
+    const hasSales = originalQuantity - Number(holding.lot.quantity || 0) > 0.000000001
+      || (((data as any)?.realizedLots || (data as any)?.soldLots || []) as any[]).some(row => Number(row.lotId) === lotId);
+    setEditingBuy({ lotId, eventId, stockName: holding.stockName, symbol: holding.symbol,
+      quantity: originalQuantity, executionPrice: originalPrice, actualTradedAt: originalTime,
+      note: resolveLotNote(holding.lot, holding.symbol, holding.nativeUnitCost), minimumQuantity, hasSales });
+  };
 
   const closeActionDialog = () => {
     setShowActionDialog(false);
@@ -573,6 +601,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   };
 
   const beginLotNoteEdit = (lotId: number, currentNote: string) => {
+    if (!canEdit || participantView || updateLotNoteMutation.isPending || !Number.isInteger(lotId) || lotId <= 0) return;
     setEditingLotNoteId(lotId);
     setLotNoteDraft(currentNote);
   };
@@ -584,8 +613,44 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   };
 
   const saveLotNote = (lotId: number) => {
-    if (!canEdit || isLocalHotPreview) return;
+    if (!canEdit || participantView || updateLotNoteMutation.isPending || editingLotNoteId !== lotId || !Number.isInteger(lotId) || lotId <= 0) return;
+    if (isLocalHotPreview) return toast.info("热预览仅展示备注编辑，不会保存到正式账目");
     updateLotNoteMutation.mutate({ ledgerId: 37, categoryId, lotId, note: lotNoteDraft });
+  };
+
+  const resolveLotNote = (lot: any, symbol: string, nativeUnitCost?: number) => {
+    // An explicit empty display note stays cleared; immutable opening/audit notes are not edited.
+    if (Object.prototype.hasOwnProperty.call(lot, "note")) return String(lot.note ?? "");
+    const openingEventId = Number(lot.openedEventId || 0);
+    return String(historyRows.find((event: any) => (
+      (event.type === "buy" || event.type === "add") && event.status === "active" && event.symbol === symbol
+      && (openingEventId > 0 ? Number(event.id) === openingEventId : (
+        Math.abs(Number(event.executionPrice || 0) - Number(nativeUnitCost ?? lot.unitCost ?? 0)) < 0.00000001
+        && new Date(event.actualTradedAt || 0).getTime() === new Date(lot.openedAt || 0).getTime()
+      ))
+    ))?.note ?? "");
+  };
+
+  const renderAdminLotNote = (lotId: number, currentNote: string) => {
+    if (!canEdit || participantView || !Number.isInteger(lotId) || lotId <= 0) return null;
+    const isEditing = editingLotNoteId === lotId;
+    return <div data-stock-lot-note-id={lotId} className="relative z-10 border-t border-[#E6E6E6] bg-[#FFFDFC] px-2.5 py-2">
+      {isEditing ? <div className="space-y-1.5">
+        <label htmlFor={`stock-lot-note-${lotId}`} className="text-[11px] font-medium text-gray-600">开仓备注</label>
+        <textarea id={`stock-lot-note-${lotId}`} value={lotNoteDraft}
+          onChange={event => setLotNoteDraft(event.target.value.slice(0, 3000))}
+          maxLength={3000} rows={3} placeholder="填写本批次的开仓备注" disabled={updateLotNoteMutation.isPending}
+          className="w-full resize-y rounded-md border border-[#E4D8D0] bg-white px-2 py-1.5 text-xs text-[#333333] outline-none placeholder:text-gray-400 focus:border-[#C62828] disabled:opacity-60" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={cancelLotNoteEdit} disabled={updateLotNoteMutation.isPending} className="min-h-9 rounded-md px-3 text-[11px] text-gray-500 disabled:opacity-50">取消</button>
+          <button type="button" onClick={() => saveLotNote(lotId)} disabled={updateLotNoteMutation.isPending} className="min-h-9 rounded-md bg-[#C62828] px-3 text-[11px] font-medium text-white disabled:opacity-60">{updateLotNoteMutation.isPending ? "保存中" : "保存备注"}</button>
+        </div>
+      </div> : <div className="flex items-start gap-2">
+        <span className="shrink-0 pt-1 text-[11px] text-gray-400">开仓备注</span>
+        <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words pt-1 text-xs leading-5 ${currentNote ? "text-[#333333]" : "text-gray-400"}`}>{currentNote || "未填写"}</span>
+        <button type="button" aria-label={`编辑批次 ${lotId} 开仓备注`} onClick={() => beginLotNoteEdit(lotId, currentNote)} disabled={updateLotNoteMutation.isPending} className="min-h-8 shrink-0 px-1 text-[11px] text-[#C62828] underline underline-offset-2 disabled:opacity-50">编辑</button>
+      </div>}
+    </div>;
   };
 
   const summary = (data as any)?.summary;
@@ -1016,6 +1081,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           stockName: String(holding.stockName || lot.stockName || "股票"),
           symbol: String(holding.symbol || lot.symbol || ""),
           exchange: holding.exchange || null,
+          note: resolveLotNote(holding.lot, holding.symbol, holding.nativeUnitCost),
           currency: 'CNY' as StockCurrency,
           nativeCurrency,
           quantity,
@@ -1118,6 +1184,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
                   <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">浮动盈亏</div><CnyUsdValue value={position.floatingPnl} nativeCurrency={positionCurrency} usdValue={position.nativeFloatingPnl} signed mainClassName={`mt-0.5 whitespace-nowrap text-[10px] font-medium ${position.floatingPnl === null ? "text-gray-400" : positionPnlTone}`} subClassName={`mt-0.5 whitespace-nowrap text-[9px] ${position.floatingPnl === null ? "text-gray-400" : positionPnlTone}`} /></div>
                 </div>
               </div>
+              {renderAdminLotNote(Number(position.lotId), String(position.note ?? ""))}
             </div>
           );
         })}</div>}
@@ -1168,20 +1235,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       const positionElapsedDays = daysSinceBeijingDate(holding.lot.openedAt);
       const hasRemainingLotQuantity = Number(holding.lot.quantity || 0) > 0;
       const exchangeLabel = holding.nativeCurrency === 'USD' ? holding.exchange : null;
-      // The local hot preview proxies reads to the currently deployed API. Until the new
-      // lot-note field is deployed, show the existing opening-event note as a read-only
-      // compatibility fallback. Once the backend returns `lot.note`, even an intentional
-      // empty note remains empty and never falls back to historical audit text.
-      const hasLotNoteField = Object.prototype.hasOwnProperty.call(holding.lot, "note");
-      const openingAuditNote = !hasLotNoteField ? String(historyRows.find((event: any) => (
-        (event.type === "buy" || event.type === "add")
-        && event.status === "active"
-        && event.symbol === holding.symbol
-        && Math.abs(Number(event.executionPrice || 0) - Number(holding.lot.unitCost || 0)) < 0.00000001
-        && new Date(event.actualTradedAt || 0).getTime() === new Date(holding.lot.openedAt || 0).getTime()
-      ))?.note || "") : "";
-      const lotNote = hasLotNoteField ? String(holding.lot.note ?? "") : openingAuditNote;
-      const isEditingLotNote = canEdit && editingLotNoteId === lotId;
+      const lotNote = resolveLotNote(holding.lot, holding.symbol, holding.nativeUnitCost);
       // 管理员默认只看每个持仓编号的核心行情；成员保持原有完整只读页。
       const isAdminLotExpanded = !canEdit || expandedAdminLotIds.has(lotId);
       // 普通成员的行情与“我的持仓”均固定四列一行；管理员仍保留小屏两列的响应式排列。
@@ -1262,7 +1316,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
                   {!participantView && <div className="mt-0.5 whitespace-nowrap text-[10px] leading-4 text-gray-400">仓位开始 {formatDateTime(holding.lot.openedAt).split(" ")[0]}{positionElapsedDays === null ? "" : ` · 至今 ${positionElapsedDays} 天`}</div>}
                 </div>
               </div>
-              {canEdit && <div className="flex shrink-0 items-center gap-2">{ledgerId === 37 && hasRemainingLotQuantity && <button type="button" onClick={() => openStockAllocation(lotId)} aria-label={`分配持仓编号 ${positionNumber} ${holding.stockName}`} className="rounded border border-[#C62828] px-1.5 py-0.5 font-medium text-[#C62828]">分配</button>}<button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{hasRemainingLotQuantity && <button type="button" onClick={() => openTrade("sell", lotId)} className="text-[#C62828]">卖出</button>}{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
+              {canEdit && !participantView && <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">{ledgerId === 37 && <button type="button" onClick={() => openBuyEdit(holding)} aria-label={`修改买入持仓编号 ${positionNumber} ${holding.stockName}`} className="min-h-7 text-[#C62828]">修改</button>}{ledgerId === 37 && hasRemainingLotQuantity && <button type="button" onClick={() => openStockAllocation(lotId)} aria-label={`分配持仓编号 ${positionNumber} ${holding.stockName}`} className="rounded border border-[#C62828] px-1.5 py-0.5 font-medium text-[#C62828]">分配</button>}<button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{hasRemainingLotQuantity && <button type="button" onClick={() => openTrade("sell", lotId)} className="text-[#C62828]">卖出</button>}{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
             </div>
           </div>
           {!participantView && canEdit && !isAdminLotExpanded && (
@@ -1338,8 +1392,11 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           )}
 
           </>}
-          {!participantView && canEdit && <div className="border-t border-[#E6E6E6] bg-white">{isAdminLotExpanded && <div className="bg-[#FFFDFC] px-2.5 py-2">{isEditingLotNote ? <div className="space-y-1.5"><div className="text-[11px] font-medium text-gray-600">持仓编号 {positionNumber} 备注</div><textarea value={lotNoteDraft} onChange={(event) => setLotNoteDraft(event.target.value.slice(0, 3000))} maxLength={3000} rows={2} placeholder="填写本持仓编号的备注" disabled={updateLotNoteMutation.isPending} className="w-full resize-none rounded-md border border-[#E4D8D0] bg-white px-2 py-1.5 text-xs text-[#333333] outline-none placeholder:text-gray-400 focus:border-[#C62828] disabled:opacity-60" /><div className="flex justify-end gap-2"><button type="button" onClick={cancelLotNoteEdit} disabled={updateLotNoteMutation.isPending} className="h-7 rounded-md px-2.5 text-[11px] text-gray-500 disabled:opacity-50">取消</button><button type="button" onClick={() => saveLotNote(lotId)} disabled={updateLotNoteMutation.isPending} className="h-7 rounded-md bg-[#C62828] px-2.5 text-[11px] font-medium text-white disabled:opacity-60">{updateLotNoteMutation.isPending ? "保存中" : "保存备注"}</button></div></div> : <div className="flex items-start gap-2"><span className="shrink-0 text-[11px] text-gray-400">批次备注</span><span className={lotNote ? "min-w-0 flex-1 break-words text-xs text-[#333333]" : "min-w-0 flex-1 text-xs text-gray-400"}>{lotNote || "未填写"}</span><button type="button" onClick={() => beginLotNoteEdit(lotId, lotNote)} className="shrink-0 text-[11px] text-[#C62828] underline underline-offset-2">编辑</button></div>}</div>}<div className="flex items-center justify-between gap-3 border-t border-[#E6E6E6] px-2.5 py-1.5"><div className="min-w-0 text-[11px] leading-4 text-gray-400"><span>买入</span><span className="ml-1 font-medium text-[#555555]">{formatDateTime(holding.lot.openedAt)}</span></div><button type="button" aria-label={isAdminLotExpanded ? `收起持仓编号 ${positionNumber}` : `展开持仓编号 ${positionNumber}`} title={isAdminLotExpanded ? '收起详情' : '展开详情'} onClick={toggleAdminLotExpanded} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronDown size={15} className="transition-transform" style={{ transform: isAdminLotExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} /></button></div></div>}
-          {snapshotStamp && <div aria-label={snapshotStamp} className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><div className="flex -rotate-12 flex-col items-center rounded-xl border-2 border-[#2586B8]/20 bg-[#E8F6FC]/5 px-4 py-2 text-center text-[#2378A7]/20 opacity-[0.55]"><BadgeCheck className="h-6 w-6" strokeWidth={1.8} /><span className="mt-0.5 text-xs font-bold tracking-[0.14em]">盘尾已结算</span><span className="mt-0.5 text-[9px] font-medium tracking-wide">{snapshotStamp}</span></div></div>}
+          {!participantView && canEdit && <div className="border-t border-[#E6E6E6] bg-white">
+            {renderAdminLotNote(lotId, lotNote)}
+            <div className="flex items-center justify-between gap-3 border-t border-[#E6E6E6] px-2.5 py-1.5"><div className="min-w-0 text-[11px] leading-4 text-gray-400"><span>买入</span><span className="ml-1 font-medium text-[#555555]">{formatDateTime(holding.lot.openedAt)}</span></div><button type="button" aria-label={isAdminLotExpanded ? `收起持仓编号 ${positionNumber}` : `展开持仓编号 ${positionNumber}`} title={isAdminLotExpanded ? '收起详情' : '展开详情'} onClick={toggleAdminLotExpanded} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronDown size={15} className="transition-transform" style={{ transform: isAdminLotExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} /></button></div>
+          </div>}
+          {snapshotStamp && <div aria-label={snapshotStamp} className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><div className="flex -rotate-12 flex-col items-center justify-center rounded-xl border-2 border-[#2586B8]/20 bg-[#E8F6FC]/5 px-4 py-2 text-center text-[#2378A7]/20 opacity-[0.55]"><BadgeCheck className="h-6 w-6" strokeWidth={1.8} /><span className="mt-0.5 text-xs font-bold tracking-[0.14em]">盘尾已结算</span><span className="mt-0.5 text-[9px] font-medium tracking-wide">{snapshotStamp}</span></div></div>}
       </div>;
     })}</div>;
   };
@@ -1418,6 +1475,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
                 </div>;
               })}
             </div>}
+            {renderAdminLotNote(Number(lot.lotId), resolveLotNote(lot, lot.symbol))}
             {lot.sellNote && <div className="relative z-10 border-t border-[#F2E1E1] px-3 py-2 text-[11px] text-gray-500">卖出备注：{lot.sellNote}</div>}
             <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><span className="-rotate-12 rounded-lg border-2 border-[#C62828]/15 px-3 py-1 text-xl font-bold tracking-[0.22em] text-[#C62828]/10">已卖出</span></div>
           </div>;
@@ -1631,6 +1689,13 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         <SheetContent side="bottom" className="max-h-[82vh] rounded-t-2xl overflow-y-auto px-4 pb-6">
           <SheetHeader><SheetTitle className="text-left">{selectedPosition?.stockName} <span className="ml-1 text-sm font-normal text-gray-500">{portfolioDisplaySymbol(selectedPosition?.symbol)}</span></SheetTitle></SheetHeader>
           {selectedPosition && <div className="mt-4 space-y-4"><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">当前市值</div><div className="mt-1 font-semibold">{money(selectedPosition.marketValue, 2, instrumentCurrency(selectedPosition.symbol))}</div></div><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(selectedPosition.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(selectedPosition.floatingPnl, instrumentCurrency(selectedPosition.symbol))}</div></div></div><div><div className="mb-2 text-sm font-semibold">持仓批次</div><div className="space-y-2">{selectedPosition.lots.map((lot: any) => <div key={lot.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between"><span>{formatQuantity(lot.quantity)} {portfolioQuantityUnit(selectedPosition.symbol)} · 成本 {money(lot.unitCost, 2, instrumentCurrency(selectedPosition.symbol))}</span><span className="text-gray-500">{formatDateTime(lot.openedAt)}</span></div></div>)}</div></div>{!participantView && <div><div className="mb-2 text-sm font-semibold">审计证据</div><div className="space-y-2">{selectedHistory.map((event: any) => <div key={event.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between gap-3"><span>{eventLabels[event.type as EventType]} · {event.quantity === null ? "备注" : `${formatQuantity(event.quantity)} ${portfolioQuantityUnit(event.symbol)} @ ${money(event.executionPrice, 2, instrumentCurrency(event.symbol))}`}</span><span className={event.status === "voided" ? "text-[#C62828]" : "text-gray-500"}>{event.status === "voided" ? "已作废" : "有效"}</span></div><div className="mt-1 text-gray-500">实际成交/接单：{formatDateTime(event.actualTradedAt)}</div><div className="text-gray-500">服务器登记：{formatDateTime(event.serverRegisteredAt)} · 管理员：{event.adminName}</div>{event.marketReferencePrice !== null && <div className="text-gray-500">登记时参考：{money(event.marketReferencePrice, 2, instrumentCurrency(event.symbol))} · {formatDateTime(event.marketReferenceAt)}</div>}</div>)}</div></div>}</div>}
+          {selectedPosition && !participantView && selectedHistory.some((event: any) => String(event.note || "").startsWith("[买入订单修改]")) && <div className="mt-4 space-y-2">
+            <div className="text-sm font-semibold">买入修改记录</div>
+            {selectedHistory.filter((event: any) => String(event.note || "").startsWith("[买入订单修改]")).map((event: any) => <div key={`buy-audit-${event.id}`} className="rounded-lg border border-gray-100 px-3 py-2 text-[10px]">
+              <div className="mb-1 text-gray-500">{formatDateTime(event.serverRegisteredAt)} · {event.adminName}</div>
+              <div className="whitespace-pre-wrap break-all leading-5 text-gray-600">{event.note}</div>
+            </div>)}
+          </div>}
         </SheetContent>
       </Sheet>
 
@@ -1651,9 +1716,14 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         }}
       />
 
+      {canEdit && !participantView && ledgerId === 37 && <StockTagBuyEditDialog
+        categoryId={categoryId} order={editingBuy} canEdit={canEdit}
+        readOnlyPreview={isLocalHotPreview} onClose={() => setEditingBuy(null)}
+      />}
+
       <Dialog open={showActionDialog && !!correctingEvent} onOpenChange={(open) => !open && closeActionDialog()}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{correctingEvent ? "更正股票操作" : "登记股票操作"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{correctingEvent ? "更正股票操作" : "登记股票操作"}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-1"><div className="rounded-md bg-[#FAF3ED] px-3 py-2 text-xs text-gray-600">原始记录类型：<b className="text-[#333333]">{eventLabels[eventType]}</b>。此处只用于更正既有审计记录，不能新建加仓、减仓或独立备注。</div>
             {eventType !== "note" && <><div className="grid grid-cols-3 overflow-hidden rounded-md border text-xs">{(['A', 'US', 'CRYPTO'] as const).map((market) => <button key={market} type="button" onClick={() => changeCorrectionMarket(market)} className={`px-1 py-2 ${correctionStockMarket === market ? 'bg-[#C62828] text-white' : 'text-gray-500'}`}>{market === 'A' ? 'A 股 · 人民币' : market === 'US' ? '美股 · 美元' : '数字币·USDT'}</button>)}</div><div><Label>买卖标的代码或名称</Label><div className="relative mt-1"><Input value={selectedStock ? `${selectedStock.name} ${portfolioDisplaySymbol(selectedStock.symbol)}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setExecutionPrice(''); setSymbolQuery(event.target.value); }} placeholder={correctionStockMarket === "CRYPTO" ? "如 BTC、ETH（USDT现货）" : correctionStockMarket === "US" ? "如 AAPL、ETH（美股）" : "如 600519、贵州茅台或 gzm"} />{isSearchingStock && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-gray-400" />}</div>{!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} onClick={() => { setSelectedStock(stock); setSymbolQuery(""); setExecutionPrice(stock.latestPrice == null ? '' : String(stock.latestPrice)); }} className="w-full px-3 py-2.5 text-left border-b last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{portfolioDisplaySymbol(stock.symbol)}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, 2, instrumentCurrency(stock.symbol))}</span> : null}</button>)}</div>}{selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {portfolioDisplaySymbol(selectedStock.symbol)}；登记时参考价由服务器留档。{correctionStockMarket === 'CRYPTO' && selectedStock.latestPrice == null ? '参考价暂不可用，请填写实际成交价。' : ''}</div>}</div><div className="grid grid-cols-2 gap-3"><div><Label>实际成交价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div><div><Label>实际成交数量</Label><Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} min={correctionStockMarket === "CRYPTO" ? 0.00000001 : undefined} step={correctionStockMarket === "CRYPTO" ? 0.00000001 : undefined} placeholder={correctionStockMarket === "CRYPTO" ? "币数量（最多8位小数）" : "股数"} className="mt-1" /></div></div></>}
             <div><Label>实际成交 / 接单时间</Label><Input type="datetime-local" value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="mt-1" /></div><div><Label>{eventType === "note" ? "备注内容" : "备注（可选）"}</Label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={eventType === "note" ? "记录说明、补录原因等" : "可填写成交说明或补录原因"} /></div>{correctingEvent && <div><Label>更正原因</Label><Input value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="例如：实际成交价更正" className="mt-1" /></div>}<div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] text-gray-600">服务器会自动记录登记时间与当时参考价；后续更正或作废只追加审计记录，不会覆盖原成交。</div><div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={closeActionDialog}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submitEvent} disabled={correctEventMutation.isPending || !canEdit || isLocalHotPreview}>{correctEventMutation.isPending ? "保存中…" : "确认更正"}</Button></div></div>
