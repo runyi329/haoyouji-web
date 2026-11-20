@@ -41,7 +41,7 @@ function memoryStore() {
   function contextRows(values: any[]) {
     expect(values[1]).toBe(37);
     const row = rows.get(values[0]);
-    return [[{ ledger_id: 37, member_user_id: row?.userId ?? null, member_role: row?.role, initialBalances: row?.initial_balances }]];
+    return [[{ ledger_id: 37, ledger_owner_id: 100, member_user_id: row?.userId ?? null, member_role: row?.role, initialBalances: row?.initial_balances }]];
   }
   deps.read.mockResolvedValue({ execute: vi.fn(async (sql: string, values: any[]) => {
     expect(sql).toMatch(/FROM ledgers l LEFT JOIN ledger_members/);
@@ -56,10 +56,10 @@ function memoryStore() {
       beginTransaction: vi.fn(async () => undefined),
       execute: vi.fn(async (sql: string, values: any[]) => {
         logs.push({ connection, sql, values });
-        if (/SELECT id FROM ledgers/.test(sql)) {
+        if (/SELECT id, ownerId AS ledger_owner_id FROM ledgers/.test(sql)) {
           expect(values).toEqual([37]); expect(sql).toContain('FOR UPDATE');
           releaseLock = await lock();
-          return [[{ id: 37 }]];
+          return [[{ id: 37, ledger_owner_id: 100 }]];
         }
         expect(releaseLock).toBeDefined();
         if (/SELECT id, userId, role, initial_balances/.test(sql)) {
@@ -187,17 +187,17 @@ describe('independent isolated persistence: actual ledger37 set/get over committ
     gate.resolve(); await saving;
     expect((await getLedger37PresentationContext(member(201))).aiEnabled).toBe(true);
   });
-  it.each(['owner', 'admin'])('ledger %s may save, ordinary member may not', async role => {
+  it.each(['member', 'owner', 'admin'])('actual ledger owner with role %s may save, nonowner may not', async role => {
     const s = memoryStore(); s.rows.get(100)!.role = role;
     await setLedger37AiDisplay(toggle(201, true));
     s.rows.get(100)!.role = 'member';
-    await expect(setLedger37AiDisplay(toggle(201, false))).rejects.toThrow('管理员');
+    await expect(setLedger37AiDisplay({ ...toggle(201, false), userId: 201 })).rejects.toThrow('所有者');
     expect((await getLedger37PresentationContext(member(201))).aiEnabled).toBe(true);
   });
-  it.each(['admin', 'super_admin', 'systemadmin'])('system %s may save without ledger membership', async systemRole => {
+  it.each(['admin', 'super_admin', 'systemadmin'])('nonowner system %s cannot save without ledger membership', async systemRole => {
     const s = memoryStore(); s.rows.delete(100);
-    await setLedger37AiDisplay({ ...toggle(201, true), systemRole });
-    expect((await getLedger37PresentationContext(member(201))).aiEnabled).toBe(true);
+    await expect(setLedger37AiDisplay({ ...toggle(201, true), userId: 999, systemRole })).rejects.toThrow('所有者');
+    expect((await getLedger37PresentationContext(member(201))).aiEnabled).toBe(false); expect(s.writes()).toHaveLength(0);
     await expect(setLedger37AiDisplay({ ...toggle(201, false), systemRole, isViewingAs: true })).rejects.toThrow('代看');
   });
   it.each(['PREVIEW_READONLY', 'DEV_BYPASS_AUTH'])('%s blocks before transaction acquisition; target membership required', async name => {

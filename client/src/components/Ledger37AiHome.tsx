@@ -6,6 +6,7 @@ import { resolveR1EffectiveUserId, r1ParticipationMoney, r1RecordedMarginAmount 
 import { R1AiParticipationRenderer } from "@/components/R1AiParticipationView";
 import Ledger37AiIdentityHeader from "@/components/Ledger37AiIdentityHeader";
 import { Ledger37HoldingSourcesRenderer } from "@/components/Ledger37HoldingSources";
+import Ledger37CalendarRecorder from "@/components/Ledger37CalendarRecorder";
 import type { Ledger37HoldingSourceId, Ledger37HoldingSources } from "@shared/ledger37-ai-holdings";
 /** 全账本37共用同一身份级query key，不包含category或旧标签开关。 */
 export function useLedger37PresentationContext({ ledgerId, search, effectiveUserId, authUserId }: { ledgerId: number; search: string; effectiveUserId?: number | null; authUserId?: number }) {
@@ -37,7 +38,7 @@ export function Ledger37PresentationGate({ ledgerId, presentation, onBack, child
   const { context, viewerUserId, knownSelfAIgate } = presentation;
   if (!context || viewerUserId === undefined) return <Ledger37PresentationPending presentation={presentation} onBack={onBack} />;
   const modeKey = `37:${viewerUserId}:${context.canManage}:${context.aiEnabled}`;
-  if (knownSelfAIgate) return <Ledger37AiHome key={modeKey} viewerUserId={viewerUserId} onBack={onBack} />;
+  if (knownSelfAIgate) return <Ledger37AiHome key={modeKey} viewerUserId={viewerUserId} onBack={onBack} canRecordCalendar={context.canRecordCalendar === true} />;
   return <div key={modeKey}>{children}</div>;
 }
 
@@ -85,7 +86,7 @@ export function Ledger37AiHomeRenderer({ overview, updating = false, onOpenStock
   </main>;
 }
 
-export default function Ledger37AiHome({ viewerUserId, onBack, adminPreview = false }: { viewerUserId: number; onBack: () => void; /** 仅父级已确认context.canManage传入，不改变或保存实际开关。 */ adminPreview?: boolean }) {
+export default function Ledger37AiHome({ viewerUserId, onBack, adminPreview = false, canRecordCalendar = false }: { viewerUserId: number; onBack: () => void; /** 仅父级已确认context.canManage传入，不改变或保存实际开关。 */ adminPreview?: boolean; canRecordCalendar?: boolean }) {
   const [selectedSourceId, setSelectedSourceId] = useState<Ledger37HoldingSourceId | null>(null);
   const validViewer = Number.isSafeInteger(viewerUserId) && viewerUserId > 0;
   const query = trpc.ledger.getMyLedger37HoldingSources.useQuery(
@@ -97,6 +98,7 @@ export default function Ledger37AiHome({ viewerUserId, onBack, adminPreview = fa
   const backToSources = () => { setSelectedSourceId(null); if (typeof window !== "undefined") window.scrollTo(0, 0); };
   return <div className="min-h-screen bg-[#F2F6FA] pb-8 [color-scheme:light]"><Ledger37AiIdentityHeader key={viewerUserId} viewerUserId={viewerUserId} onBack={selectedSourceId ? backToSources : onBack} />
     {!validViewer || query.error ? <div role="alert" className="mx-auto max-w-[480px] p-8 text-center text-sm leading-6 text-[#61758A]">持仓来源暂不可用，请稍后重试</div> : !data ? <div role="status" className="mx-auto flex max-w-[480px] justify-center gap-2 p-10 text-sm text-[#61758A]"><Loader2 size={18} className="animate-spin" />正在确认持仓来源…</div> : <Ledger37HoldingSourcesRenderer key={viewerUserId} data={data} selectedSourceId={selectedSourceId} updating={query.isFetching} onOpen={id => { if (id !== "berkshire" && id !== "nvidia" && data.sources.some(source => source.id === id && source.status === "available" && (source.holdings.length > 0 || source.id === "r1" && (source.memberPortfolio?.closedTrades?.length || 0) > 0))) { setSelectedSourceId(id); if (typeof window !== "undefined") window.scrollTo(0, 0); } }} />}
+    {validViewer && !query.error && data && canRecordCalendar && <Ledger37CalendarRecorder key={`calendar-recorder-${viewerUserId}`} viewerUserId={viewerUserId} />}
   </div>;
 }
 

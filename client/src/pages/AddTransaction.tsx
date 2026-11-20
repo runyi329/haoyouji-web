@@ -2787,7 +2787,12 @@ function Ledger37AddTransactionEntry() {
   const { user } = useAuth();
   const search = useSearch();
   const presentation = useLedger37PresentationContext({ ledgerId: 37, search, authUserId: user?.id });
-  return <Ledger37PresentationGate ledgerId={37} presentation={presentation} onBack={() => window.history.back()}><AddTransaction /></Ledger37PresentationGate>;
+  return <Ledger37PresentationGate ledgerId={37} presentation={presentation} onBack={() => window.history.back()}>
+    {presentation.context?.canManage === true ? <AddTransaction /> : <div className="min-h-screen bg-[#FAF3ED] p-5">
+      <p role="alert" className="mt-10 text-center text-sm text-[#757575]">此页面仅账本所有者可用{presentation.context?.canRecordCalendar ? '，请返回日历双击日期登记数字' : ''}</p>
+      <button type="button" onClick={() => window.history.back()} className="mt-4 w-full text-sm text-[#D32F2F]">返回</button>
+    </div>}
+  </Ledger37PresentationGate>;
 }
 
 function AddTransactionPresentationEntry() {

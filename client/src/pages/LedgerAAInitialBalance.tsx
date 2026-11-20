@@ -1,7 +1,7 @@
 /**
  * LedgerAAInitialBalance.tsx
  * 定制账本(AA) 初始金额管理页
- * 仅账本创建人(owner)和管理员(admin)可访问
+ * 37号仅真实账本owner本人可访问；其他账本维持owner/admin权限
  *
  * 每个成员 × 每个标签 可设置：
  *  - 显示开关（visible）：是否在该用户界面显示该标签
@@ -20,7 +20,7 @@
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users, Bot, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { LEDGER37_AI_DISPLAY_KEY } from "@shared/ledger37-ai-presentation";
+import { isLedger37FullManager } from "@shared/ledger37-permissions";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 import { parsePortfolioInstrument, portfolioCurrency, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, portfolioQuantityIsEmpty, type PortfolioCurrency } from "@shared/portfolio-instruments";
@@ -288,29 +289,56 @@ type InitialBalanceContentProps = {
 };
 
 // 股票维护快捷入口与设置页共享同一个编辑器，不能复制另一套分配或保存规则。
-export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocationFocus, onCloseStockAllocation, onStockAllocationSaved }: InitialBalanceContentProps = {}) {
+export function LedgerAAInitialBalanceContent(props: InitialBalanceContentProps = {}) {
+  const params = useParams();
+  const { user } = useAuth();
+  const search = useSearch();
+  const ledgerId = props.ledgerIdOverride ?? (params?.id ? parseInt(params.id) : 0);
+  let storedViewAs = 'unavailable';
+  try { storedViewAs = window.sessionStorage.getItem('view-as-user-id') ?? ''; } catch { /* 不可确认时内部权限门控关闭。 */ }
+  // getById旧query key不含actor；身份/URL/session代看切换必须重新挂载并完成真实owner确认。
+  const permissionScope = ledgerId === 37 ? `${ledgerId}:${user?.id ?? 'pending'}:${search}:${storedViewAs}` : String(ledgerId);
+  return <LedgerAAInitialBalanceEditor key={permissionScope} {...props} />;
+}
+
+function LedgerAAInitialBalanceEditor({ ledgerIdOverride, stockAllocationFocus, onCloseStockAllocation, onStockAllocationSaved }: InitialBalanceContentProps = {}) {
   // 本地热预览复用生产只读数据，不能把试填比例、价格或可见性写回正式账本。
   const isLocalHotPreview = import.meta.env.DEV;
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = ledgerIdOverride ?? (params?.id ? parseInt(params.id) : 0);
-  const { user } = useAuth();
+  const { user, loading: authLoading, error: authError } = useAuth();
+  // 必须覆盖共享fetch的URL/sessionStorage来源；无效代看值、代看本人、存储异常同样fail-closed。
+  const isLedger37AiReadonlyView = () => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.has('viewAs') || window.sessionStorage.getItem('view-as-user-id') !== null
+        || params.get('readonly') === 'true' || params.get('readonly') === '1';
+    } catch { return true; }
+  };
+  const ledgerQuery = trpc.ledger.getById.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && (ledgerId !== 37 || (!authLoading && !authError && !!user?.id)),
+      ...(ledgerId === 37 ? { placeholderData: undefined, staleTime: 0, refetchOnMount: 'always' as const, retry: false } : {}) },
+  );
+  const ledgerData = ledgerId !== 37 || (!ledgerQuery.error && ledgerQuery.isFetchedAfterMount && Number(ledgerQuery.data?.id) === ledgerId)
+    ? ledgerQuery.data : undefined;
+  const canAccess = ledgerId === 37
+    ? !authLoading && !authError && isLedger37FullManager({ ledgerId, userId: user?.id ?? 0, ownerId: ledgerData?.ownerId, isViewingAs: isLedger37AiReadonlyView() })
+    : ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin";
+  // 直URL在权威owner确认之前不请求任何管理数据；其他账本的query启用行为保持不变。
+  const managementQueriesEnabled = !!ledgerId && (ledgerId !== 37 || canAccess);
   const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { enabled: ledgerId === 37, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
+    { enabled: ledgerId === 37 && managementQueriesEnabled, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
   );
   const quotedUsdCnyRate = Number((usdCnyRateData as any)?.money);
   const usdCnyRate = Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 7.2;
-  const { data: ledgerData } = trpc.ledger.getById.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId }
-  );
-  const canAccess = ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin"
-    || (ledgerId === 37 && (String(user?.role) === 'admin' || String(user?.role) === 'super_admin'));
 
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null, includeHiddenForManagement: true },
-    { enabled: !!ledgerId }
+    { enabled: managementQueriesEnabled }
   );
   const categories = useMemo(() => {
     if (!rawCategories) return [];
@@ -323,7 +351,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   const { data: allBalancesData, refetch } =
     trpc.ledger.adminGetAllInitialBalances.useQuery(
       { ledgerId },
-      { enabled: !!ledgerId }
+      { enabled: managementQueriesEnabled }
     );
   // 草稿尚未同步时也按目标成员的已保存配置回退，避免新成员标签短暂显示为开启。
   const getSavedTagVisible = (userId: number, tagName: string): boolean =>
@@ -331,7 +359,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
 
   // 37号初始金额管理的「用户」视图：胡大叔可从成员头像读取同款只读钱包快照。
   const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
-  const canViewLedger37WalletSnapshot = ledgerId === 37 && Number(user?.id) === 870413;
+  const canViewLedger37WalletSnapshot = ledgerId === 37 && canAccess && Number(user?.id) === 870413;
   const walletSnapshotQuery = trpc.adminGetLedger37MemberWalletSnapshot.useQuery(
     { ledgerId: 37, targetUserId: walletSnapshotUser?.id || 0 },
     {
@@ -351,7 +379,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   const walletMarginContext = trpc.ledger.getLedger37WalletMarginContext.useQuery(
     walletMarginContextTargetUserId ? { targetUserId: walletMarginContextTargetUserId } : undefined,
     // 热预览可只读查看真实可用余额；冻结/解冻 mutation 仍由服务端明确拒绝，绝不写入资金。
-    { enabled: ledgerId === 37 && !!walletMarginContextTargetUserId, staleTime: 10_000 },
+    { enabled: ledgerId === 37 && managementQueriesEnabled && !!walletMarginContextTargetUserId, staleTime: 10_000 },
   );
   const walletMarginAvailableAssets = useMemo(() => {
     const context = walletMarginContext.data as any;
@@ -542,17 +570,6 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   const ledger37AiRequestIdRef = useRef(0);
   const ledger37AiCachePatchRef = useRef<unknown>(null);
   const ledger37AiServerReadVersionsRef = useRef<Record<number, number>>({});
-  // 与共享fetch的URL/sessionStorage代看来源一致；不能借代看管理员角色写入。
-  const isLedger37AiReadonlyView = () => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const urlViewAs = params.get('viewAs');
-      const viewAs = urlViewAs && /^\d+$/.test(urlViewAs) ? urlViewAs : window.sessionStorage.getItem('view-as-user-id');
-      return (!!viewAs && /^\d+$/.test(viewAs) && Number(viewAs) > 0)
-        || params.get('readonly') === 'true' || params.get('readonly') === '1';
-    } catch { return true; } // 无法确认视角时不开放写入。
-  };
   const canManageLedger37Ai = ledgerId === 37 && canAccess && !!user?.id && !isLocalHotPreview && !isLedger37AiReadonlyView();
   const canPreviewLedger37Ai = ledgerId === 37 && canAccess && !!user?.id && isLocalHotPreview && !isLedger37AiReadonlyView();
   const ledger37AiViewScopeRef = useRef('');
@@ -730,7 +747,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
       tagName: hideConfirmation?.tagName || '__pending__',
     },
     {
-      enabled: !!hideConfirmation && !!ledgerId,
+      enabled: managementQueriesEnabled && !!hideConfirmation,
       staleTime: 0,
       refetchOnMount: 'always',
       retry: false,
@@ -738,7 +755,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   );
 
   // 数字币价格（走服务器tRPC，price-scanner缓存，3秒刷新）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { enabled: ledgerId !== 37 || managementQueriesEnabled, refetchInterval: 3000, staleTime: 2000 });
   // 使用接口返回的实时 USDT/CNY 汇率，居底用 CNY_RATE_FALLBACK
   const cryptoPrices: Record<string, number> = {};
   if (cryptoPricesRaw) {
@@ -3146,7 +3163,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   const { data: stockParticipationMatrix, error: stockParticipationError, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId || 0) },
     {
-      enabled: ledgerId === 37 && !!activeStockParticipationCategoryId,
+      enabled: ledgerId === 37 && managementQueriesEnabled && !!activeStockParticipationCategoryId,
       // 盘中报价由服务端每五分钟落库；管理页同步按此节拍读取，不直接请求第三方行情。
       refetchInterval: 300_000,
       refetchIntervalInBackground: false,
@@ -3155,7 +3172,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   );
   const stockCashFxQuery = trpc.ledger.getStockTagPortfolio.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId) || 0 },
-    { enabled: ledgerId === 37 && Number(activeStockParticipationCategoryId) > 0, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
+    { enabled: ledgerId === 37 && managementQueriesEnabled && Number(activeStockParticipationCategoryId) > 0, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
   );
   const usdtCnyRate = portfolioCashMultiplier('USDT', null, (stockCashFxQuery.data as any)?.summary?.usdtCnyRate);
 
@@ -3315,13 +3332,13 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   // 获取标签配置
   const { data: tagConfigData, refetch: refetchTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !stockAllocationFocus && !!ledgerId && !!selectedTagName }
+    { enabled: !stockAllocationFocus && managementQueriesEnabled && !!selectedTagName }
   );
 
   // 获取标签押金汇总和最新市值
   const { data: tagSummaryData } = trpc.ledger.getTagSummary.useQuery(
     { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !stockAllocationFocus && !!ledgerId && !!selectedTagName }
+    { enabled: !stockAllocationFocus && managementQueriesEnabled && !!selectedTagName }
   );
 
   // categories 加载完成后自动初始化 selectedTagName（防止标签页默认为空）
@@ -3501,7 +3518,7 @@ export function LedgerAAInitialBalanceContent({ ledgerIdOverride, stockAllocatio
   };
 
 
-  if (!ledgerData) {
+  if (!ledgerData && !(ledgerId === 37 && (ledgerQuery.error || authError || (!authLoading && !user)))) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"

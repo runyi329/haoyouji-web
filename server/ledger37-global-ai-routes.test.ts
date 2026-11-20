@@ -4,6 +4,13 @@ import ts from 'typescript';
 import { z } from 'zod';
 import { describe, it, expect, vi } from 'vitest';
 import { R1_STOCK_CATEGORY_ID } from '../shared/r1-stock-presentation';
+vi.mock('./db', () => ({
+  getDbConnection: vi.fn(async () => ({ execute: vi.fn(async (_sql: string, values: number[]) => [[{
+    ownerId: 100, memberRole: 'admin', memberUserId: values[0], initialBalances: '{}',
+  }]]) })),
+  withDatabaseLock: vi.fn(),
+}));
+import { assertLedger37SelfRead } from './ledger37-calendar-recorder';
 const source = readFileSync(new URL('./routers.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('routers.ts', source, ts.ScriptTarget.Latest, true);
 function find<T extends ts.Node>(root: ts.Node, guard: (node: ts.Node) => node is T, predicate: (node: T) => boolean): T {
@@ -27,7 +34,7 @@ const ctx = (overrides = {}): any => ({ user: { id: 28, role: 'member' }, realUs
 function invoke(name: string, backend: Record<string, any> = {}, extra: Record<string, any> = {}) {
   const method = name.startsWith('set') ? 'mutation' : 'query';
   const code = arg(name, method).replaceAll("await import('./ledger37-ai-presentation')", '__global').replaceAll("await import('./ledger-stock-portfolio')", '__stock').replaceAll("await import('./ledger37-ai-wallet-value')", '__global').replaceAll("await import('./ledger37-holding-sources')", '__global');
-  return compile<(args: { ctx: any; input: any }) => Promise<any>>(code, { __global: backend, __stock: backend, assertLedger37RawPresentationRead: async () => {}, ...extra });
+  return compile<(args: { ctx: any; input: any }) => Promise<any>>(code, { __global: backend, __stock: backend, assertLedger37SelfRead, assertLedger37RawPresentationRead: async () => {}, ...extra });
 }
 
 describe('37号每成员全局AI：真实路由与schema，无DB/网络/写入', () => {
@@ -83,6 +90,14 @@ describe('37号每成员全局AI：真实路由与schema，无DB/网络/写入',
     const call = invoke(name, {}, { assertLedger37RawPresentationRead: guard });
     await expect(call({ ctx: ctx(), input: { ledgerId: 37, tagName: 'any tag' } })).rejects.toThrow('AI raw blocked');
     expect(guard).toHaveBeenCalledWith(expect.objectContaining({ user: { id: 28, role: 'member' } }), 37);
+  });
+  it.each(['getMyInitialBalances', 'getDividendSummary', 'getDividendRecords'])('%s真实self守卫拒绝普通系统admin跨用户，原始AI守卫仍保留', async name => {
+    const raw = vi.fn(async () => { throw new OfflineError({ code: 'FORBIDDEN', message: 'AI raw blocked' }); });
+    const call = invoke(name, {}, { assertLedger37RawPresentationRead: raw });
+    await expect(call({ ctx: ctx({ user: { id: 28, role: 'super_admin' }, realUser: { id: 28 } }), input: { ledgerId: 37, viewAsUserId: 100 } })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(raw).not.toHaveBeenCalled();
+    await expect(call({ ctx: ctx({ realUser: { id: 28 } }), input: { ledgerId: 37, viewAsUserId: 28 } })).rejects.toThrow('AI raw blocked');
+    expect(raw).toHaveBeenCalledOnce();
   });
   it('未登录公共分类不能旁路37号真实标签名，拒绝发生在DB之前', async () => {
     const query = compile<(args: { input: any }) => Promise<any>>(arg('getPublicCategories', 'query'));

@@ -12,6 +12,8 @@ export type Ledger37PresentationContext = {
   ledgerId: 37;
   viewerUserId: number;
   canManage: boolean;
+  /** 仅日历数字登记，不授予股票或原始AI数据读取权限。 */
+  canRecordCalendar?: boolean;
   aiEnabled: boolean;
   viewer?: Ledger37AiViewer | null;
   isViewingAs?: boolean;

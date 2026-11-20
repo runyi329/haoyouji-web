@@ -7,6 +7,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { LEDGER37_AI_DISPLAY_KEY } from '../shared/ledger37-ai-presentation';
 import * as instruments from '../shared/portfolio-instruments';
+import { isLedger37FullManager } from '../shared/ledger37-permissions';
 
 // Execute actual frontend AST and React elements with inert spies. Never import routers/DB or perform HTTP.
 const source = readFileSync(new URL('../client/src/pages/LedgerAAInitialBalance.tsx', import.meta.url), 'utf8');
@@ -65,7 +66,8 @@ function harness() {
   const storage = new Map<string, string>();
   const scope: Record<string, any> = {
     ...instruments, LEDGER37_AI_DISPLAY_KEY, Fragment: React.Fragment,
-    ledgerId: 37, user: { id: 1, role: 'parent' }, ledgerData: { userRole: 'owner' }, canAccess: true, canManageLedger37Ai: true, canPreviewLedger37Ai: false, isLocalHotPreview: false, queryClient,
+    ledgerId: 37, user: { id: 1, role: 'parent' }, ledgerData: { id: 37, ownerId: 1, userRole: 'owner' },
+    authLoading: false, authError: null, isLedger37FullManager, canAccess: true, canManageLedger37Ai: true, canPreviewLedger37Ai: false, isLocalHotPreview: false, queryClient,
     window: { location: { search: '' }, sessionStorage: { getItem: (name: string) => storage.get(name) ?? null, setItem: vi.fn(), removeItem: vi.fn() } },
     categories: [{ id: 90250, name: 'R1', accountingMode: 'stock_portfolio' }, { id: 90251, name: 'R2', accountingMode: 'stock_portfolio' }],
     activeStockParticipationCategoryId: 90250, stockAllocationFocus: undefined,
@@ -211,11 +213,17 @@ describe('ledger37每用户唯一全局AI：实际前端AST/React renderer/spy�
     h.scope.ledgerId = 38; expect(h.render()).toBeNull(); expect(await h.save()).toBe(false);
     expect(h.scope.ledger37AiDisplayMutation.mutateAsync).toHaveBeenCalledTimes(1); h.unsubscribe();
   });
-  it('仅实际owner/admin或系统admin/super_admin可写，普通成员不能利用matrix权限', async () => {
+  it('仅真实ownerId本人可写，普通admin/伪owner/系统admin不能利用matrix权限', async () => {
     const h = harness();
-    for (const role of ['member', 'viewer', 'funder']) {
+    h.scope.user.id = 2; h.scope.ledger37AiViewScopeRef.current = '37:2:self';
+    for (const role of ['member', 'viewer', 'funder', 'admin', 'owner']) {
       h.scope.ledgerData.userRole = role; expect(h.ai().props.disabled).toBe(true); expect(await h.save()).toBe(false);
     }
+    for (const role of ['admin', 'super_admin']) {
+      h.scope.user.role = role; expect(h.ai().props.disabled).toBe(true); expect(await h.save()).toBe(false);
+    }
+    expect(h.scope.ledger37AiDisplayMutation.mutateAsync).not.toHaveBeenCalled();
+    h.scope.user.id = 1; h.scope.ledger37AiViewScopeRef.current = '37:1:self';
     for (const [ledgerRole, systemRole] of [['owner', 'parent'], ['admin', 'parent'], ['member', 'admin'], ['viewer', 'super_admin']]) {
       h.scope.ledgerData.userRole = ledgerRole; h.scope.user.role = systemRole;
       expect(h.ai().props.disabled).toBe(false); expect(await h.save(901, false)).toBe(true);
@@ -310,8 +318,8 @@ describe('ledger37每用户唯一全局AI：实际前端AST/React renderer/spy�
     }
     h.scope.window.location.search = ''; h.storage.set('view-as-user-id', '901'); hidden(); expect(h.ai().props.disabled).toBe(true); expect(h.preview()).toBe(false);
     h.storage.clear(); h.scope.isLocalHotPreview = false; hidden(); expect(h.preview()).toBe(false);
-    h.scope.isLocalHotPreview = true; h.scope.canAccess = false; h.scope.ledgerData.userRole = 'member'; hidden(); expect(h.ai().props.disabled).toBe(true); expect(h.preview()).toBe(false);
-    h.scope.ledgerData.userRole = 'owner'; h.scope.user = undefined; hidden(); expect(h.ai().props.disabled).toBe(true); expect(h.preview()).toBe(false);
+    h.scope.isLocalHotPreview = true; h.scope.ledgerData.ownerId = 2; h.scope.ledgerData.userRole = 'member'; hidden(); expect(h.ai().props.disabled).toBe(true); expect(h.preview()).toBe(false);
+    h.scope.ledgerData.ownerId = 1; h.scope.ledgerData.userRole = 'owner'; h.scope.user = undefined; hidden(); expect(h.ai().props.disabled).toBe(true); expect(h.preview()).toBe(false);
     expect(h.scope.setLedger37AiPreviewDrafts).toHaveBeenCalledTimes(1); expect(h.scope.saveLedger37AiDisplay).not.toHaveBeenCalled();
     expect(h.scope.ledger37AiDisplayMutation.mutateAsync).not.toHaveBeenCalled(); h.noFinancialWrites(); h.unsubscribe();
   });
@@ -334,6 +342,7 @@ describe('ledger37每用户唯一全局AI：实际前端AST/React renderer/spy�
     const oldPreview = expression('previewLedger37AiDisplay', h.scope);
     h.scope.user = { id: 2, role: 'parent' }; h.scope.ledger37AiViewScopeRef.current = '37:2:self';
     expect(oldPreview(901, true)).toBe(false); expect(h.scope.setLedger37AiPreviewDrafts).not.toHaveBeenCalled();
+    h.scope.ledgerData.ownerId = 2; // 新callback只有新身份已被权威确认成真实owner才可预览。
     expect(h.preview()).toBe(true); expect(h.scope.ledger37AiPreviewDrafts['37:901'].viewScope).toBe('37:2:self');
     h.scope.ledgerId = 38; h.scope.ledger37AiViewScopeRef.current = '38:2:self';
     expect(oldPreview(901, false)).toBe(false); expect(h.scope.setLedger37AiPreviewDrafts).toHaveBeenCalledTimes(1);

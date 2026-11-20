@@ -17,6 +17,7 @@ import { SuperViewBanner } from "@/components/SuperViewBanner";
 import AutoPageTag from "@/components/AutoPageTag";
 import { InformationCollectionTracker } from "@/hooks/useInformationCollection";
 import { isAdminRechargeManagementPage } from "@/lib/adminWalletRequests";
+import Ledger37ManagementRouteGate from "@/components/Ledger37ManagementRouteGate";
 
 
 // HMR 热更新提示音模块
@@ -482,6 +483,7 @@ function Router() {
       <ActiveLedgerPagePolling />
       <InformationCollectionTracker user={currentUser} />
       <Suspense fallback={<LoadingFallback />}>
+        <Ledger37ManagementRouteGate>
         <Switch>
         {/* 首页 - / 路由永远是人脉页面 */}
         <Route path="/" component={lazy(() => import("./pages/HomeEntry"))} />
@@ -955,6 +957,7 @@ function Router() {
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
         </Switch>
+        </Ledger37ManagementRouteGate>
       </Suspense>
     </>
   );

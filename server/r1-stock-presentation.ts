@@ -7,6 +7,7 @@ import {
 } from '../shared/r1-stock-presentation';
 import { portfolioCashMultiplier } from '../shared/portfolio-instruments';
 import { readLedger37Balances, readLedger37AiEnabled, isLedger37AiSystemAdmin } from './ledger37-ai-presentation';
+import { isLedger37FullManager } from '../shared/ledger37-permissions';
 
 export type R1StockPresentationInput = {
   ledgerId: 37; categoryId: number; userId: number; systemRole?: string; isViewingAs?: boolean;
@@ -27,18 +28,20 @@ export async function readR1StockPresentationState(input: R1StockPresentationInp
   if (!conn) throw new Error('数据库连接不可用');
   const [rows] = await conn.execute(
     `SELECT c.id, c.ledgerId, c.name, c.parentId, c.accounting_mode,
+            l.ownerId AS ledger_owner_id,
             m.userId AS member_user_id, m.role AS member_role, m.initial_balances AS initialBalances
      FROM ledger_categories c
      LEFT JOIN ledger_members m ON m.ledgerId=c.ledgerId AND m.userId=?
+     INNER JOIN ledgers l ON l.id=c.ledgerId
      WHERE c.id = ? AND c.ledgerId = ? LIMIT 1`, [input.userId, input.categoryId, input.ledgerId]);
   const row = rows[0];
   if (!row || Number(row.id) !== input.categoryId || Number(row.ledgerId) !== R1_STOCK_LEDGER_ID
     || row.parentId !== null || row.accounting_mode !== 'stock_portfolio') throw new Error('该标签不是股票持仓模式');
   const isMember = row.member_user_id != null;
-  if (!isMember && !systemAdmin(input)) throw new Error('您不是此账本的成员');
+  const canManage = isLedger37FullManager({ ...input, ownerId: row.ledger_owner_id });
+  if (!isMember && !canManage) throw new Error('您不是此账本的成员');
   const balances = isMember ? readR1Balances(row.initialBalances) : {};
-  if (isMember && row.member_role !== 'owner' && !readTagVisible(balances, String(row.name))) throw new Error('您无权查看此标签');
-  const canManage = !input.isViewingAs && (systemAdmin(input) || row.member_role === 'owner' || row.member_role === 'admin');
+  if (isMember && !canManage && !readTagVisible(balances, String(row.name))) throw new Error('您无权查看此标签');
   const context: R1StockPresentationContext = {
     ledgerId: 37, categoryId: input.categoryId, viewerUserId: input.userId,
     canManage, aiEnabled: readR1AiEnabled(balances),

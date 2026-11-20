@@ -72,7 +72,8 @@ function installReadMock({ exists = true, role = 'admin', observations = [dbObse
   mocks.execute.mockImplementation(async (sql: string) => {
     if (sql.includes('information_schema.tables') && sql.includes("'ledger_stock_quote_history'")) return [[]];
     if (sql.includes('information_schema.tables')) return [exists ? [{ TABLE_NAME: 'ledger_stock_lot_observations' }] : []];
-    if (sql.includes('FROM ledger_categories') && !sql.includes('COUNT')) return [[categoryRow]];
+    if (sql.includes('FROM ledgers l')) return [[{ ledger_id: 37, ledger_owner_id: role === 'member' ? 999 : 201, member_user_id: 201, member_role: role, initialBalances: '{}' }]];
+    if (sql.includes('FROM ledger_categories') && !sql.includes('COUNT')) return [[{ ...categoryRow, ledger_owner_id: role === 'member' ? 999 : 201, member_user_id: 201, member_role: role, initialBalances: '{}' }]];
     if (sql.includes('FROM ledger_members') && sql.includes('initial_balances')) return [[{ role, initialBalances: '{}' }]];
     if (sql.includes('FROM ledger_stock_lot_observations o') && sql.includes('COUNT(DISTINCT')) return [[{ id: 301, holding_count: observations.length }]];
     if (sql.includes('FROM ledger_stock_lot_observations o')) return [observations];
@@ -382,7 +383,7 @@ describe('观察接口（纯mock，无生产DB或ensure）', () => {
     installReadMock({ role: 'member' });
     const base = mocks.execute.getMockImplementation()!;
     mocks.execute.mockImplementation(async (sql, ...args) => {
-      if (sql.includes('initial_balances')) return [[{ role: 'member', initialBalances: JSON.stringify({ '阿一__visible': 0 }) }]];
+      if (sql.includes('initial_balances')) return [[{ ...categoryRow, ledger_owner_id: 999, ledger_id: 37, member_user_id: 201, member_role: 'member', role: 'member', initialBalances: JSON.stringify({ '阿一__visible': 0 }) }]];
       return base(sql, ...args);
     });
     await expect(getMyStockTagObservationPortfolio(accessInput)).rejects.toThrow('您无权查看此标签');
@@ -398,7 +399,7 @@ describe('观察接口（纯mock，无生产DB或ensure）', () => {
 
   it('成员不允许观察写入', async () => {
     installReadMock({ role: 'member' });
-    await expect(setStockLotObservation({ ...accessInput, lotId: 101, targetUserId: 201, enabled: true, quantity: 1000 })).rejects.toThrow('仅37号账本管理员');
+    await expect(setStockLotObservation({ ...accessInput, lotId: 101, targetUserId: 201, enabled: true, quantity: 1000 })).rejects.toThrow('仅37号账本所有者');
     expect(mocks.txExecute).not.toHaveBeenCalled();
   });
 

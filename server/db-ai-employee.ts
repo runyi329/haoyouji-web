@@ -584,10 +584,25 @@ export async function updateTaskStatus(
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
 
+  // Verify ownership before either the UPDATE or any in-memory timer side effect.
+  const [ownedRows] = await conn.execute(
+    'SELECT id FROM ai_employee_tasks WHERE id = ? AND user_id = ? LIMIT 1',
+    [taskId, userId]
+  ) as any;
+  if (!ownedRows?.[0]) throw new TRPCError({ code: 'NOT_FOUND', message: '任务不存在或不属于当前用户' });
+
   await conn.execute(
     `UPDATE ai_employee_tasks SET status = ? WHERE id = ? AND user_id = ?`,
     [status, taskId, userId]
   );
+
+  // Recheck after the UPDATE (also covers deletion/reassignment races and unchanged status).
+  const [taskRows] = await conn.execute(
+    'SELECT ledger_id, user_id, parsed_plan, schedule_type FROM ai_employee_tasks WHERE id = ? AND user_id = ? LIMIT 1',
+    [taskId, userId]
+  ) as any;
+  const task = taskRows?.[0];
+  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: '任务不存在或不属于当前用户' });
 
   // 暂停或停止时清除定时器
   if (status === 'paused' || status === 'stopped') {
@@ -596,11 +611,6 @@ export async function updateTaskStatus(
 
   // 恢复运行时重启定时器
   if (status === 'running') {
-    const [taskRows] = await conn.execute(
-      'SELECT ledger_id, user_id, parsed_plan, schedule_type FROM ai_employee_tasks WHERE id = ?',
-      [taskId]
-    ) as any;
-    const task = taskRows?.[0];
     if (task) {
       const parsedPlan = typeof task.parsed_plan === 'string' ? JSON.parse(task.parsed_plan) : task.parsed_plan;
       const intervalMs = getIntervalMs(task.schedule_type);

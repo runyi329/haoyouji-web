@@ -1,6 +1,6 @@
 import { getDbConnection } from './db';
 import {
-  isLedger37AiSystemAdmin, readLedger37PresentationState,
+  readLedger37PresentationState,
   type Ledger37PresentationInput,
 } from './ledger37-ai-presentation';
 import { calculateMibanWalletValue, type MibanWalletValueInput } from '../shared/miban-wallet-value';
@@ -108,9 +108,8 @@ async function readMarketAssets(conn: ReadConnection, userId: number): Promise<M
 export async function getMyLedger37AiWalletValue(input: Ledger37PresentationInput): Promise<{ viewerUserId: number; availableCny: number | null }> {
   const state = await readLedger37PresentationState(input);
   if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId) throw new Error('钱包展示身份不匹配');
-  const adminSelf = isLedger37AiSystemAdmin(input);
   if (!state.isMember) throw new Error('您不是此账本的成员');
-  if (!state.context.aiEnabled && !adminSelf) throw new Error('账本AI展示尚未开启');
+  if (!state.context.aiEnabled && !state.context.canManage) throw new Error('账本AI展示尚未开启');
   // Authorization is complete before acquiring a wallet connection or reading market cache.
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接不可用');

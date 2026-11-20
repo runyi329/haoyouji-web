@@ -1,3 +1,5 @@
+import { readR1StockPresentationState, r1PnlSummary, assertR1RawReadAllowed } from './r1-stock-presentation';
+import { isLedger37FullManager } from '../shared/ledger37-permissions';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
@@ -8,11 +10,12 @@ import * as ordering from '../shared/stock-trade-ordering';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { guardCryptoPortfolioAllocationWrite } from './crypto-portfolio-allocation-write-guard';
 
+vi.mock('./db', () => ({ getDbConnection: () => { throw new Error('禁止真实DB'); }, getDbTransactionConnection: () => { throw new Error('禁止真实DB事务'); } }));
 // 执行真实核心完整函数体；仅移除imports，以注入全部mock依赖。
 // 不import数据库/扫描器入口，不建立真实连接，不执行真实DDL或启动服务。
 const source = readFileSync(new URL('./ledger-stock-portfolio.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('core.ts', source, ts.ScriptTarget.Latest, true);
-const text = ast.statements.filter((node) => !ts.isImportDeclaration(node)).map((node) => node.getFullText(ast)).join('\n');
+const text = ast.statements.filter((node) => !ts.isImportDeclaration(node) && !ts.isExportDeclaration(node)).map((node) => node.getFullText(ast)).join('\n');
 const javascript = ts.transpileModule(text.replace(/\bexport\s+/g, ''), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
@@ -41,7 +44,7 @@ function setup(options: { symbol?: string; quantity?: number; fx?: number | null
       { COLUMN_NAME: 'note' }, { COLUMN_NAME: 'pause_date' }, { COLUMN_NAME: 'start_date' }, { COLUMN_NAME: 'settlement_effective_date' }]];
     if (sql.includes('information_schema.tables')) return [[]];
     if (sql.includes('FROM ledger_categories c')) return [[{ id: 301, ledgerId: 37, name: '组合', parentId: null,
-      accounting_mode: 'stock_portfolio', member_user_id: 201, member_role: options.memberRole || 'admin',
+      accounting_mode: 'stock_portfolio', ledger_owner_id: options.memberRole === 'member' ? 999 : 201, member_user_id: 201, member_role: options.memberRole || 'admin',
       initialBalances: options.hidden ? JSON.stringify({ '组合': { tagVisible: false } }) : '{}' }]];
     if (sql.includes('FROM ledger_stock_lots l') && sql.includes('allocated_quantity')) return [[selected]];
     if (sql.includes('allocated_cost')) return [realized];
@@ -74,7 +77,7 @@ function setup(options: { symbol?: string; quantity?: number; fx?: number | null
     asOf: '2026-11-13T07:05:00Z', pair: 'USDT/CNY', stale: false, carried: true });
   const activation = vi.fn(async () => null as string | null);
   const cryptoCalendar = vi.fn(async () => [] as any[]);
-  const deps = { ...instruments, ...policy, ...observations, ...ordering,
+  const deps = { ...instruments, ...policy, ...observations, ...ordering, isLedger37FullManager, r1PnlSummary, assertR1RawReadAllowed,
     getDbConnection: vi.fn(async () => ({ execute })), getDbTransactionConnection: vi.fn(async () => tx),
     fetchCryptoPortfolioQuotes: fetchQuotes, getCachedCryptoPortfolioQuote: cached, searchCryptoPortfolio: searchCrypto,
     searchManualStocks: searchStocks, getLiveCryptoUsdtCnyQuote: fx, getUsdtCnyRate: () => 7,
@@ -85,6 +88,7 @@ function setup(options: { symbol?: string; quantity?: number; fx?: number | null
     buildMemberStockCalendar: () => [], memberCalendarSettlementSummary: () => ({}),
     mergeCryptoPortfolioCalendarSnapshots, getCryptoPortfolioActivationDate: activation, readCryptoPortfolioCalendar: cryptoCalendar,
     guardCryptoPortfolioAllocationWrite,
+    readR1StockPresentationState: (request: any) => readR1StockPresentationState(request, { execute }),
   };
   const core = new Function(...Object.keys(deps), `${javascript}\nreturn { ${exposed.join(',')} };`)(...Object.values(deps));
   return { core, execute, txExecute, tx, fetchQuotes, cached, searchCrypto, searchStocks, fx, selected, realized, activation, cryptoCalendar };
@@ -198,8 +202,8 @@ describe('37数字币现货核心：真实函数、离线DB/quotes', () => {
     await core.setStockLotParticipation({ ledgerId: 37, categoryId: 301, userId: 201, lotId: 101, targetUserId: 201, quantity: 1e-8 });
     expect(txExecute.mock.calls.some(([sql]) => sql.includes('INSERT INTO ledger_stock_lot_participations'))).toBe(true);
     const member = setup({ memberRole: 'member' });
-    await expect(member.core.createStockTagEvent(input)).rejects.toThrow('管理员');
-    await expect(member.core.getStockLotParticipationMatrix({ ledgerId: 37, categoryId: 301, userId: 201 })).rejects.toThrow('管理员');
+    await expect(member.core.createStockTagEvent(input)).rejects.toThrow('所有者');
+    await expect(member.core.getStockLotParticipationMatrix({ ledgerId: 37, categoryId: 301, userId: 201 })).rejects.toThrow('所有者');
     await expect(core.createStockTagEvent({ ...input, ledgerId: 52 })).rejects.toThrow('37号');
     const hidden = setup({ memberRole: 'member', hidden: true }); await expect(hidden.core.createStockTagEvent(input)).rejects.toThrow('无权');
   });

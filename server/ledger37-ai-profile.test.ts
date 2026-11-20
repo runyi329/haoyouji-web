@@ -11,7 +11,7 @@ const target = { ledgerId: 37 as const, userId: 201 };
 const targetViewer = { userId: 201, username: 'customer201', nickname: '客户201', avatar: '/avatars/customer201.png' };
 function row(overrides: Record<string, unknown> = {}) {
   return {
-    ledger_id: 37, member_user_id: 201, member_role: 'member',
+    ledger_id: 37, ledger_owner_id: 100, member_user_id: 201, member_role: 'member',
     initialBalances: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }),
     viewer_user_id: 201, viewer_username: targetViewer.username,
     viewer_nickname: targetViewer.nickname, viewer_avatar: targetViewer.avatar,
@@ -77,7 +77,7 @@ describe('37 AI viewer：真实只读服务、安全逐字段投影', () => {
       viewer: { userId: 28, nickname: '系统管理员' }, auth: { me: { id: 28 } },
     }));
     const context = await getLedger37PresentationContext(target);
-    expect(context).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, aiEnabled: true, viewer: targetViewer, isViewingAs: false });
+    expect(context).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: false, aiEnabled: true, viewer: targetViewer, isViewingAs: false });
     expect(Object.keys(context.viewer!).sort()).toEqual(['avatar', 'nickname', 'userId', 'username']);
     expect(JSON.stringify(context)).not.toMatch(/SECRET|password|email|balance|frozen|allUser|role|系统管理员/);
     expect(f.log).toHaveLength(1);
@@ -104,11 +104,11 @@ describe('37 AI viewer：真实只读服务、安全逐字段投影', () => {
   });
   it.each([undefined, null])('资料ID缺失%j时返回null，不改原AI开关及权限', async id => {
     offline(row({ viewer_user_id: id, viewer_username: 'admin', viewer_nickname: '系统管理员', viewer_avatar: '/admin.png' }));
-    expect(await getLedger37PresentationContext(target)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, aiEnabled: true, viewer: null, isViewingAs: false });
+    expect(await getLedger37PresentationContext(target)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: false, aiEnabled: true, viewer: null, isViewingAs: false });
   });
   it('旧rows fixture完全没有viewer字段仍有null且保留原成员权限/关闭配置', async () => {
-    offline({ ledger_id: 37, member_user_id: 201, member_role: 'admin', initialBalances: '{}' });
-    expect(await getLedger37PresentationContext(target)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: true, aiEnabled: false, viewer: null, isViewingAs: false });
+    offline({ ledger_id: 37, ledger_owner_id: 100, member_user_id: 201, member_role: 'admin', initialBalances: '{}' });
+    expect(await getLedger37PresentationContext(target)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: true, aiEnabled: false, viewer: null, isViewingAs: false });
   });
   it.each([undefined, null, 123, { url: '/admin.png' }])('头像缺失或类型不符%j不伪装admin', async avatar => {
     offline(row({ viewer_avatar: avatar }));
@@ -125,23 +125,23 @@ describe('37 AI viewer：真实只读服务、安全逐字段投影', () => {
     expect(output).not.toHaveBeenCalled();
     expect(f.log).toHaveLength(1);
   });
-  it('sysadmin非member缺档允许null，仍不伪造profile或AI开关', async () => {
+  it('sysadmin非member不再绕过成员检查', async () => {
     offline(row({ member_user_id: null, member_role: null, initialBalances: null, viewer_user_id: null }));
-    expect(await getLedger37PresentationContext({ ...target, systemRole: 'systemadmin' })).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: true, aiEnabled: false, viewer: null, isViewingAs: false });
+    await expect(getLedger37PresentationContext({ ...target, systemRole: 'systemadmin' })).rejects.toThrow('成员');
   });
   it('普通非member保持原拒绝，sysadmin代看非member同样不绕过', async () => {
     offline(row({ member_user_id: null, viewer_user_id: null }));
     await expect(getLedger37PresentationContext(target)).rejects.toThrow('成员');
     await expect(getLedger37PresentationContext({ ...target, systemRole: 'systemadmin', isViewingAs: true })).rejects.toThrow('成员');
   });
-  it('sysadmin非member也拒绝意外出现的foreign profile', async () => {
-    offline(row({ member_user_id: null, member_role: null, viewer_user_id: 28 }));
+  it('真实owner非member也拒绝意外出现的foreign profile', async () => {
+    offline(row({ member_user_id: null, member_role: null, ledger_owner_id: 201, viewer_user_id: 28 }));
     await expect(getLedger37PresentationContext({ ...target, systemRole: 'systemadmin' })).rejects.toThrow('身份不匹配');
   });
-  it.each([undefined, false, true])('owner返回准确代看状态%j，canManage仍来自原成员权限', async isViewingAs => {
-    offline(row({ member_role: 'owner', isViewingAs: !isViewingAs }));
+  it.each([undefined, false, true])('真实owner返回准确代看状态%j，role不作为权限来源', async isViewingAs => {
+    offline(row({ member_role: 'member', ledger_owner_id: 201, isViewingAs: !isViewingAs }));
     expect(await getLedger37PresentationContext({ ...target, isViewingAs })).toEqual({
-      ledgerId: 37, viewerUserId: 201, canManage: !isViewingAs, aiEnabled: true,
+      ledgerId: 37, viewerUserId: 201, canManage: !isViewingAs, canRecordCalendar: !isViewingAs, aiEnabled: true,
       viewer: targetViewer, isViewingAs: isViewingAs === true,
     });
   });
@@ -166,7 +166,7 @@ describe('现有protected context路由真实AST：代看与目标身份闭环',
       ctx: { user: { id: 201, role: 'systemadmin', nickname: '不应使用ctx资料', avatar: '/wrong.png' }, realUser: { id: 28, role: 'admin', nickname: '真实管理员' }, isViewingAs: true },
       input: { ledgerId: 37, viewAsUserId: 201 },
     });
-    expect(result).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, aiEnabled: true, viewer: targetViewer, isViewingAs: true });
+    expect(result).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: false, aiEnabled: true, viewer: targetViewer, isViewingAs: true });
   });
   it('目标缺资料或头像时不能回退ctx/realUser管理员', async () => {
     offline(row({ viewer_user_id: null }));
@@ -174,7 +174,7 @@ describe('现有protected context路由真实AST：代看与目标身份闭环',
       ctx: { user: { id: 201, role: 'member', nickname: 'ctx昵称', avatar: '/ctx.png' }, realUser: { id: 28, role: 'admin', nickname: '真实管理员', avatar: '/admin.png' }, isViewingAs: true },
       input: { ledgerId: 37, viewAsUserId: 201 },
     });
-    expect(result).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, aiEnabled: true, viewer: null, isViewingAs: true });
+    expect(result).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: false, aiEnabled: true, viewer: null, isViewingAs: true });
   });
   it('客户端伪造viewAs第三人被真实路由在DB前拒绝', async () => {
     await expect(actualContextRoute()({ ctx: { user: { id: 201, role: 'systemadmin' }, isViewingAs: true }, input: { ledgerId: 37, viewAsUserId: 28 } })).rejects.toMatchObject({ code: 'FORBIDDEN' });

@@ -1,3 +1,4 @@
+import { isLedger37FullManager } from '../shared/ledger37-permissions';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
@@ -45,7 +46,7 @@ function setup(options: { symbol?: string; activation?: string; existing?: boole
   const execute = (tx: boolean) => vi.fn(async (sql: string, params: any[] = []) => {
     sqls.push({ sql, params, tx });
     if (sql.includes('FROM ledger_categories c')) return [[{ id: 81, ledgerId: 37, name: '组合', parentId: null,
-      accounting_mode: 'stock_portfolio', member_user_id: 28, member_role: options.role ?? 'admin',
+      accounting_mode: 'stock_portfolio', ledger_owner_id: options.role === 'member' || options.hidden ? 999 : 28, member_user_id: 28, member_role: options.role ?? 'admin',
       initialBalances: options.hidden ? '{"组合__visible":0}' : '{}' }]];
     if (sql.includes('information_schema.tables')) return [[{ TABLE_NAME: 'ledger_stock_lot_observations' }]];
     if (!tx) throw new Error(`unexpected read SQL ${sql}`);
@@ -88,7 +89,7 @@ function setup(options: { symbol?: string; activation?: string; existing?: boole
     commit: vi.fn(async () => { if (options.failAt === 'commit') throw new Error('commit failed'); active = false; }),
     rollback: vi.fn(async () => { Object.assign(state, snapshot); active = false; }), release: vi.fn() };
   const invalidate = vi.fn();
-  const handlers = actualHandlers({ ...instruments, ...observations, guardCryptoPortfolioAllocationWrite, readTagVisible,
+  const handlers = actualHandlers({ ...instruments, ...observations, guardCryptoPortfolioAllocationWrite, readTagVisible, isLedger37FullManager,
     STOCK_LEDGER_ID: 37, EPSILON: 1e-8, ensureLedgerStockPortfolioTables: vi.fn(),
     getDbConnection: vi.fn(async () => { if (active) throw new Error('extra connection under lock'); return read; }),
     getDbTransactionConnection: vi.fn(async () => tx), invalidateMemberStockReadCaches: invalidate });

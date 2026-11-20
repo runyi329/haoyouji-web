@@ -1,5 +1,5 @@
 import type { Ledger37HoldingClosedTrade, Ledger37HoldingPosition, Ledger37HoldingSources } from '../shared/ledger37-ai-holdings';
-import { isLedger37AiSystemAdmin, readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
+import { readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
 import { getMyLedger37MemberClosedTrades, getMyLedger37MemberHoldingSnapshot, getMyLedger37R1HoldingSnapshot } from './ledger-stock-portfolio';
 import { getExternalHoldingSources } from './holding-source-cache';
 
@@ -9,7 +9,7 @@ export async function getMyLedger37HoldingSources(input: Ledger37PresentationInp
   if (input.ledgerId !== 37 || state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
   if (!state.isMember) throw new Error('您不是此账本的成员');
   if (!state.context.viewer || state.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
-  if (!state.context.aiEnabled && !isLedger37AiSystemAdmin(input)) throw new Error('账本AI展示尚未开启');
+  if (!state.context.aiEnabled && !state.context.canManage) throw new Error('账本AI展示尚未开启');
   // Complete strict global authorization BEFORE the source-wide read. The reader
   // repeats this check and never uses personal allocations or project visibility.
   const snapshot = await getMyLedger37R1HoldingSnapshot(input);

@@ -21,6 +21,7 @@ import { calculateMibanWalletValue, type MibanWalletValueInput } from '../shared
 
 const input: Ledger37PresentationInput = { ledgerId: 37, userId: 201 };
 const identity = (overrides: Record<string, unknown> = {}) => ({ ledger_id: 37,
+  ledger_owner_id: 870413,
   member_user_id: 201, member_role: 'member', viewer_user_id: 201,
   initialBalances: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }), ...overrides });
 // Real global users base + all adjustment entries; active holds from projects/orders/manual.
@@ -89,9 +90,20 @@ describe('37AI钱包：权限先于钱包DB和行情缓存读取', () => {
     expect(f.calls).toHaveLength(1);
     expect(deps.prices).not.toHaveBeenCalled();
   });
-  it.each(['admin', 'super_admin', 'systemadmin'])('真实系统管理员本人%s且是37成员，AI关闭仍可读自己', async systemRole => {
-    offline({ identity: identity({ initialBalances: '{}' }) });
-    expect((await getMyLedger37AiWalletValue({ ...input, systemRole })).viewerUserId).toBe(201);
+  it.each(['admin', 'super_admin', 'systemadmin'])('非owner系统管理员%s即使是37成员，AI关闭不能预览', async systemRole => {
+    const f = offline({ identity: identity({ initialBalances: '{}' }) });
+    await expect(getMyLedger37AiWalletValue({ ...input, systemRole })).rejects.toThrow('尚未开启');
+    expect(f.calls).toHaveLength(1);
+    expect(deps.prices).not.toHaveBeenCalled();
+  });
+  it('唯一真实owner可预览AI关闭的钱包，不依赖系统角色', async () => {
+    offline({ identity: identity({ ledger_owner_id: 201, member_role: 'owner', initialBalances: '{}' }) });
+    expect((await getMyLedger37AiWalletValue({ ...input, systemRole: 'parent' })).viewerUserId).toBe(201);
+  });
+  it('唯一owner代看也不能取得关闭状态AI预览', async () => {
+    const f = offline({ identity: identity({ ledger_owner_id: 201, member_role: 'owner', initialBalances: '{}' }) });
+    await expect(getMyLedger37AiWalletValue({ ...input, isViewingAs: true })).rejects.toThrow('尚未开启');
+    expect(f.calls).toHaveLength(1);
   });
   it('普通非会员在唯一身份SELECT后拒绝', async () => {
     const f = offline({ identity: identity({ member_user_id: null, viewer_user_id: null }) });

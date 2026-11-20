@@ -1,3 +1,4 @@
+import type { RowDataPacket } from 'mysql2';
 import { getDbConnection, getDbTransactionConnection } from './db';
 import { readTagVisible } from '../shared/tag-visibility';
 import {
@@ -8,6 +9,7 @@ import {
 } from '../shared/ledger37-ai-presentation';
 import { replaceTopLevelJsonValue } from './r1-lossless-json';
 import { readR1RecordedMargins } from './r1-stock-presentation';
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 
 export type Ledger37PresentationInput = {
   ledgerId: 37; userId: number; systemRole?: string; isViewingAs?: boolean;
@@ -52,7 +54,7 @@ export async function readLedger37PresentationState(input: Ledger37PresentationI
   const conn = connection ?? await getDbConnection();
   if (!conn) throw new Error('数据库连接不可用');
   const [rows] = await conn.execute(
-    `SELECT l.id AS ledger_id, m.userId AS member_user_id, m.role AS member_role,
+    `SELECT l.id AS ledger_id, l.ownerId AS ledger_owner_id, m.userId AS member_user_id, m.role AS member_role,
             m.initial_balances AS initialBalances, u.id AS viewer_user_id,
             u.username AS viewer_username, u.name AS viewer_nickname, u.avatar AS viewer_avatar
      FROM ledgers l LEFT JOIN ledger_members m ON m.ledgerId=l.id AND m.userId=?
@@ -60,12 +62,14 @@ export async function readLedger37PresentationState(input: Ledger37PresentationI
      WHERE l.id=? LIMIT 1`, [input.userId, 37]);
   if (rows.length !== 1 || Number(rows[0].ledger_id) !== 37) throw new Error('账本不存在');
   const row = rows[0], isMember = row.member_user_id != null;
-  if (!isMember && !isLedger37AiSystemAdmin(input)) throw new Error('您不是此账本的成员');
+  const canManage = isLedger37FullManager({ ...input, ownerId: row.ledger_owner_id });
+  if (!isMember && !canManage) throw new Error('您不是此账本的成员');
   const viewer = readLedger37AiViewer(row, input.userId);
   const balances = isMember ? readLedger37Balances(row.initialBalances) : {};
   const context: Ledger37PresentationContext = {
     ledgerId: 37, viewerUserId: input.userId,
-    canManage: !input.isViewingAs && (isLedger37AiSystemAdmin(input) || row.member_role === 'owner' || row.member_role === 'admin'),
+    canManage,
+    canRecordCalendar: canRecordLedger37Calendar({ ...input, ownerId: row.ledger_owner_id, memberRole: isMember ? row.member_role : undefined }),
     aiEnabled: readLedger37AiEnabled(balances),
     viewer: isMember ? viewer : null,
     isViewingAs: input.isViewingAs === true,
@@ -85,8 +89,9 @@ export async function setLedger37AiDisplay(input: Ledger37PresentationInput & { 
   if (!conn) throw new Error('数据库连接不可用');
   try {
     await conn.beginTransaction();
-    const [ledgers] = await conn.execute('SELECT id FROM ledgers WHERE id = ? FOR UPDATE', [37]);
-    if ((ledgers as any[]).length !== 1) throw new Error('账本不存在');
+    const [ledgers] = await conn.execute<Array<RowDataPacket & { id: number; ledger_owner_id: number }>>('SELECT id, ownerId AS ledger_owner_id FROM ledgers WHERE id = ? FOR UPDATE', [37]);
+    if (ledgers.length !== 1) throw new Error('账本不存在');
+    if (!isLedger37FullManager({ ...input, ownerId: ledgers[0].ledger_owner_id })) throw new Error('仅37号账本所有者可以修改AI展示开关');
     const [members] = await conn.execute(
       `SELECT id, userId, role, initial_balances FROM ledger_members
        WHERE ledgerId = ? AND userId IN (?, ?) ORDER BY userId FOR UPDATE`, [37, input.userId, input.targetUserId]);
@@ -94,7 +99,6 @@ export async function setLedger37AiDisplay(input: Ledger37PresentationInput & { 
     const targets = (members as any[]).filter(row => Number(row.userId) === input.targetUserId);
     if (actors.length > 1 || targets.length > 1) throw new Error('成员记录重复');
     const actor = actors[0], target = targets[0];
-    if (!isLedger37AiSystemAdmin(input) && actor?.role !== 'owner' && actor?.role !== 'admin') throw new Error('仅37号账本管理员可以修改AI展示开关');
     if (!target) throw new Error('目标用户不是此账本成员');
     if (actor) readLedger37AiEnabled(readLedger37Balances(actor.initial_balances));
     const balances = readLedger37Balances(target.initial_balances);
@@ -142,7 +146,7 @@ async function getMyOrdinaryProjects(input: Ledger37PresentationInput, state: Aw
   for (const category of categories as any[]) {
     const categoryId = Number(category.id), name = String(category.name);
     if (!Number.isSafeInteger(categoryId) || categoryId <= 0) throw new Error('标签无效');
-    if (state.memberRole !== 'owner' && !readTagVisible(state.balances, name)) continue;
+    if (!state.context.canManage && !readTagVisible(state.balances, name)) continue;
     const margins = await readR1RecordedMargins(conn, state.balances, name, input.userId);
     projects.push({ categoryId, displayName: `参与项目${categoryId}`, kind: 'ordinary',
       summary: null, receivedDividends: totals.has(name) ? totals.get(name)! : 0,

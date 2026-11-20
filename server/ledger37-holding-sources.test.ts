@@ -3,13 +3,12 @@ const mocks = vi.hoisted(() => ({ state: vi.fn(), snapshot: vi.fn(), member: vi.
 vi.mock('./db', () => ({ getDbConnection: mocks.db, getDbTransactionConnection: mocks.db }));
 vi.mock('./ledger37-ai-presentation', () => ({
   readLedger37PresentationState: mocks.state,
-  isLedger37AiSystemAdmin: (input: any) => !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole),
 }));
 vi.mock('./ledger-stock-portfolio', () => ({ getMyLedger37R1HoldingSnapshot: mocks.snapshot, getMyLedger37MemberHoldingSnapshot: mocks.member, getMyLedger37MemberClosedTrades: mocks.closed }));
 vi.mock('./holding-source-cache', () => ({ getExternalHoldingSources: mocks.external }));
 import { getMyLedger37HoldingSources } from './ledger37-holding-sources';
 const input = { ledgerId: 37 as const, userId: 17 };
-function state(aiEnabled = true) { return { isMember: true, context: { ledgerId: 37, viewerUserId: 17, aiEnabled, canManage: true, viewer: { userId: 17 } } }; }
+function state(aiEnabled = true, canManage = false) { return { isMember: true, context: { ledgerId: 37, viewerUserId: 17, aiEnabled, canManage, viewer: { userId: 17 } } }; }
 function snapshot(holdings: any[] = [], extra: Record<string, unknown> = {}) {
   return { viewerUserId: 17, aiEnabled: true, holdings, valuationAsOf: null, reportingCurrency: null, ...extra };
 }
@@ -33,17 +32,17 @@ describe('37 holding sources read-only safety', () => {
     await expect(getMyLedger37HoldingSources({ ...input, systemRole: 'admin' })).rejects.toThrow();
     expect(mocks.snapshot).not.toHaveBeenCalled();
   });
-  it.each([{ systemRole: 'user' }, { systemRole: 'admin', isViewingAs: true }, { systemRole: 'super_admin', isViewingAs: true }, {}])('AI-off not inherited from canManage or viewing-as %j', async role => {
+  it.each([{ systemRole: 'user' }, { systemRole: 'admin' }, { systemRole: 'super_admin' }, { systemRole: 'systemadmin' }, { systemRole: 'admin', isViewingAs: true }, { systemRole: 'super_admin', isViewingAs: true }, {}])('AI-off cannot be bypassed by non-owner system role or viewing-as %j', async role => {
     mocks.state.mockResolvedValue(state(false));
     await expect(getMyLedger37HoldingSources({ ...input, ...role })).rejects.toThrow('尚未开启');
     expect(mocks.snapshot).not.toHaveBeenCalled();
   });
-  it('permits AI-off only for a real system administrator reading own valid member identity', async () => {
-    mocks.state.mockResolvedValue(state(false));
+  it('permits AI-off only for an authoritative real owner context, without system-role exemption', async () => {
+    mocks.state.mockResolvedValue(state(false, true));
     mocks.snapshot.mockResolvedValue(snapshot([], { aiEnabled: false }));
     mocks.member.mockResolvedValue(snapshot([], { aiEnabled: false }));
     mocks.closed.mockResolvedValue({ viewerUserId: 17, aiEnabled: false, closedTrades: [] });
-    expect((await getMyLedger37HoldingSources({ ...input, systemRole: 'admin' })).aiEnabled).toBe(false);
+    expect((await getMyLedger37HoldingSources({ ...input, systemRole: 'parent' })).aiEnabled).toBe(false);
   });
   it('whitelists source-wide exact shares, never personal participation or prices', async () => {
     mocks.snapshot.mockResolvedValue(snapshot([{ ...stock, hasParticipation: true, pnlCny: 99999, categoryId: 123, tag: 'private', orders: [{ price: 9 }], allocatedQuantity: '1', costValue: 90 }]));

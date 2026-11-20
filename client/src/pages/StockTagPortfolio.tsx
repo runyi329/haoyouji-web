@@ -246,8 +246,8 @@ function R1StockPresentation(props: Props) {
   // 所有37股票标签的普通AI身份只挂安全hook树；不能先查询行情再隐藏。
   if (knownSelfAIgate) return <Ledger37AiStockParticipationView key={modeKey} ledgerId={37} categoryId={props.categoryId} viewerUserId={viewerUserId} onBack={props.onBack} />;
   if (isR1StockPresentationScope(props.ledgerId, props.categoryId)) return <R1StockPresentationTabs key={modeKey} props={props} context={context} />;
-  // 非R1的管理员/AI关闭成员保持原participant props及管理页，不扩大UI改动。
-  return <LegacyStockTagPortfolio key={modeKey} {...props} effectiveUserId={viewerUserId} identityScoped />;
+  // 非R1也只接受服务端真实owner的canManage；委派admin不能借父级props进入全账户或分配查询。
+  return <LegacyStockTagPortfolio key={modeKey} {...props} effectiveUserId={viewerUserId} participantView={context.canManage ? props.participantView : true} identityScoped />;
 }
 
 function R1StockPresentationTabs({ props, context }: { props: Props; context: Ledger37PresentationContext }) {

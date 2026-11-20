@@ -46,6 +46,9 @@ import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
+import { assertLedger37Owner, assertLedger37ResourceOwner, assertLedger37SelfRead,
+  getLedger37Access, calendarNumberCategoriesSchema, calendarNumberSchema, saveCalendarNumberSchema,
+  getCalendarNumberCategories, getCalendarNumber, saveCalendarNumber, prepareLedger37PersonalConfigPatch } from './ledger37-calendar-recorder';
 import { smsService } from "./sms-service";
 import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
@@ -138,6 +141,31 @@ function requireLedger37MarginActor(ctx: Ledger37MarginActorContext) {
     throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本钱包保证金仅胡大叔可操作' });
   }
   return actor;
+}
+
+async function isLedger37CategoryOwner(ctx: any, categoryId: number) {
+  const conn = await getDbConnection();
+  if (!conn) return false;
+  const [rows] = await conn.execute('SELECT ledgerId FROM ledger_categories WHERE id = ? LIMIT 1', [categoryId]) as any;
+  return Number(rows?.[0]?.ledgerId) === 37 && (await getLedger37Access(ctx)).canManage;
+}
+
+async function assertLedger37AIEmployeeTaskOwner(ctx: Parameters<typeof assertLedger37Owner>[0], taskId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+  const [rows] = await conn.execute<import('mysql2').RowDataPacket[]>('SELECT ledger_id, user_id FROM ai_employee_tasks WHERE id = ? LIMIT 1', [taskId]);
+  const task = rows?.[0];
+  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: '任务不存在' });
+  await assertLedger37Owner(ctx, Number(task.ledger_id));
+  if (Number(task.user_id) !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能操作自己的任务' });
+}
+
+async function assertLedger37AjResourceOwner(ctx: Parameters<typeof assertLedger37Owner>[0], kind: 'company' | 'request', resourceId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+  const table = kind === 'company' ? 'aj_companies' : 'aj_company_requests';
+  const [rows] = await conn.execute<import('mysql2').RowDataPacket[]>(`SELECT ledger_id FROM ${table} WHERE id = ? LIMIT 1`, [resourceId]);
+  if (rows?.[0]) await assertLedger37Owner(ctx, Number(rows[0].ledger_id));
 }
 
 async function assertLedger37RawPresentationRead(ctx: { user: { id: number; role?: string }; isViewingAs?: boolean }, ledgerId: number) {
@@ -12167,8 +12195,8 @@ ${klinesSummary}
     stats: protectedProcedure
       .query(async ({ ctx }) => {
         // 获取未封存和已封存的账本，统一统计
-        const activeLedgers = await dbLedger.getUserLedgers(ctx.user.id, false);
-        const archivedLedgers = await dbLedger.getUserLedgers(ctx.user.id, true);
+        const activeLedgers = await dbLedger.getUserLedgers(ctx.user.id, false, Boolean(ctx.isViewingAs));
+        const archivedLedgers = await dbLedger.getUserLedgers(ctx.user.id, true, Boolean(ctx.isViewingAs));
         const allLedgers = [...activeLedgers, ...archivedLedgers];
         const totalLedgers = allLedgers.length;
         
@@ -12193,7 +12221,7 @@ ${klinesSummary}
           console.error('[52号账本自动准入] 检查失败:', error);
         }
         // opinion_book类型账本已在ledgers表中，getUserLedgers会自然包含，无需手动合并
-        return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
+        return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived, Boolean(ctx.isViewingAs));
       }),
 
 
@@ -12255,7 +12283,7 @@ ${klinesSummary}
             console.error('[56号账本自动准入] 错误:', e);
           }
         }
-        return await dbLedger.getLedgerById(input.ledgerId, ctx.user.id);
+        return await dbLedger.getLedgerById(input.ledgerId, ctx.user.id, Boolean(ctx.isViewingAs));
       }),
 
     // 获取账本信息（别名，与getById相同）
@@ -12264,7 +12292,7 @@ ${klinesSummary}
         id: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getLedgerById(input.id, ctx.user.id);
+        return await dbLedger.getLedgerById(input.id, ctx.user.id, Boolean(ctx.isViewingAs));
       }),
 
     // 52号账本OKX交易所佣金：管理员读取完整登记目录；成员只读取本人已登记的交易量历史。
@@ -13771,6 +13799,7 @@ ${klinesSummary}
         requireImage: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.updateLedgerFeatures(input.ledgerId, ctx.user.id, {
           enableReimbursement: input.enableReimbursement,
           enablePending: input.enablePending,
@@ -13785,7 +13814,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id, ctx.user.role);
+        return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id, ctx.user.role, Boolean(ctx.isViewingAs));
       }),
 
     // 52号账本成员管理：管理员搜索待加入的用户，并展示昵称、用户名与统一钱包余额。
@@ -13893,6 +13922,7 @@ ${klinesSummary}
         description: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         await dbLedger.updateLedger(input.ledgerId, ctx.user.id, {
           name: input.name,
           description: input.description,
@@ -13918,6 +13948,7 @@ ${klinesSummary}
         isArchived: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         await dbLedger.archiveLedger(input.ledgerId, ctx.user.id, input.isArchived);
         return { success: true };
       }),
@@ -13928,6 +13959,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         await dbLedger.deleteLedger(input.ledgerId, ctx.user.id);
         return { success: true };
       }),
@@ -13938,6 +13970,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const newLedger = await dbLedger.copyLedger(input.ledgerId, ctx.user.id);
         return newLedger;
       }),
@@ -13948,6 +13981,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const token = await dbLedger.generateInviteToken(input.ledgerId, ctx.user.id);
         return { token };
       }),
@@ -13969,6 +14003,7 @@ ${klinesSummary}
         username: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
       }),
 
@@ -13979,6 +14014,7 @@ ${klinesSummary}
         userId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         await dbLedger.removeLedgerMember(input.ledgerId, ctx.user.id, input.userId);
         return { success: true };
       }),
@@ -13990,6 +14026,7 @@ ${klinesSummary}
         newOwnerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.transferOwnership(input.ledgerId, ctx.user.id, input.newOwnerId);
       }),
 
@@ -13999,6 +14036,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getLedgerSecretKey(input.ledgerId, ctx.user.id);
       }),
 
@@ -14022,6 +14060,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         if (input.includeHiddenForManagement) {
+          await assertLedger37Owner(ctx, input.ledgerId);
           await requireLedger52Creator(ctx.user.id, input.ledgerId);
           const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
           if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -14061,22 +14100,13 @@ ${klinesSummary}
         sortOrder: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (input.accountingMode === 'stock_portfolio') {
           if (input.ledgerId !== 37 || input.parentId) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: '股票持仓模式仅可创建为37号账本的一级标签' });
           }
           const conn = await getDbConnection();
           if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-          const [members] = await (conn as any).execute(
-            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
-            [input.ledgerId, ctx.user.id],
-          );
-          const role = (members as any[])[0]?.role;
-          const systemRole = (ctx.user as any).role as string | undefined;
-          const isSystemAdmin = systemRole === 'admin' || systemRole === 'super_admin';
-          if (!isSystemAdmin && role !== 'owner' && role !== 'admin') {
-            throw new TRPCError({ code: 'FORBIDDEN', message: '仅37号账本管理员可以创建股票持仓标签' });
-          }
           const { ensureLedgerStockPortfolioTables } = await import('./ledger-stock-portfolio');
           await ensureLedgerStockPortfolioTables();
         }
@@ -14247,6 +14277,7 @@ ${klinesSummary}
         pauseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { setStockLotObservation } = await import('./ledger-stock-portfolio');
         return setStockLotObservation({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14258,6 +14289,7 @@ ${klinesSummary}
         note: z.string().max(3000),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { updateStockTagLotNote } = await import('./ledger-stock-portfolio');
         return updateStockTagLotNote({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14273,6 +14305,7 @@ ${klinesSummary}
         pauseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { setStockLotParticipation } = await import('./ledger-stock-portfolio');
         return setStockLotParticipation({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14301,6 +14334,7 @@ ${klinesSummary}
         }
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { createStockTagEvent } = await import('./ledger-stock-portfolio');
         return createStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14318,6 +14352,7 @@ ${klinesSummary}
         })).max(200).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { updateStockTagSale } = await import('./ledger-stock-portfolio');
         return updateStockTagSale({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14329,6 +14364,7 @@ ${klinesSummary}
         reason: z.string().trim().min(1).max(300),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { voidStockTagEvent } = await import('./ledger-stock-portfolio');
         return voidStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14346,6 +14382,7 @@ ${klinesSummary}
         reason: z.string().trim().min(1).max(300),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { correctStockTagEvent } = await import('./ledger-stock-portfolio');
         return correctStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
@@ -14358,8 +14395,9 @@ ${klinesSummary}
         force: z.boolean().optional().default(false),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'category', input.categoryId);
         // force强制删除只允许管理员使用
-        if (input.force && ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        if (input.force && ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin' && !(await isLedger37CategoryOwner(ctx, input.categoryId))) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '只有管理员才能强制删除分类' });
         }
         return await dbLedger.deleteLedgerCategory(
@@ -14377,6 +14415,7 @@ ${klinesSummary}
         name: z.string().min(1).max(50),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'category', input.categoryId);
         return await dbLedger.updateLedgerCategory(input.categoryId, { name: input.name.trim() }, ctx.user.id);
       }),
 
@@ -14388,6 +14427,9 @@ ${klinesSummary}
         targetCategoryId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'category', input.sourceCategoryId);
+        await assertLedger37ResourceOwner(ctx, 'category', input.targetCategoryId);
         return await dbLedger.replaceLedgerCategory(
           input.ledgerId,
           input.sourceCategoryId,
@@ -14403,6 +14445,7 @@ ${klinesSummary}
         categoryId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getCategoryUsageCount(
           input.ledgerId,
           input.categoryId,
@@ -14416,6 +14459,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const result = await dbLedger.getMemberPermissions(input.ledgerId, ctx.user.id);
         
         // 从主数据库获取用户信息
@@ -14447,6 +14491,7 @@ ${klinesSummary}
         permissionValue: z.enum(['all', 'own', 'none', 'allow']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.updateMemberPermission(
           input.ledgerId,
           input.memberId,
@@ -14464,6 +14509,7 @@ ${klinesSummary}
         permissionValue: z.enum(['all', 'own', 'none', 'allow']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.updateDefaultPermission(
           input.ledgerId,
           input.permissionType,
@@ -14478,6 +14524,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getAIEmployees(input.ledgerId, ctx.user.id);
       }),
 
@@ -14488,6 +14535,7 @@ ${klinesSummary}
         enabled: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.toggleAIEmployee(
           input.ledgerId,
           input.enabled,
@@ -14503,6 +14551,7 @@ ${klinesSummary}
         nickname: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.addAIEmployee(
           input.ledgerId,
           input.avatarType,
@@ -14518,6 +14567,7 @@ ${klinesSummary}
         employeeId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.removeAIEmployee(
           input.ledgerId,
           input.employeeId,
@@ -14532,6 +14582,7 @@ ${klinesSummary}
         taskDescription: z.string().min(1).max(500),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.parseTaskWithAI(
           input.ledgerId,
           ctx.user.id,
@@ -14547,6 +14598,7 @@ ${klinesSummary}
         parsedPlan: z.any(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.createAIEmployeeTask(
           input.ledgerId,
           ctx.user.id,
@@ -14561,6 +14613,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.getAIEmployeeTasks(
           input.ledgerId,
           ctx.user.id
@@ -14574,6 +14627,7 @@ ${klinesSummary}
         status: z.enum(['running', 'paused', 'stopped']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37AIEmployeeTaskOwner(ctx, input.taskId);
         return await dbAIEmployee.updateTaskStatus(
           input.taskId,
           ctx.user.id,
@@ -14587,6 +14641,7 @@ ${klinesSummary}
         taskId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37AIEmployeeTaskOwner(ctx, input.taskId);
         return await dbAIEmployee.getTaskLogs(
           input.taskId,
           ctx.user.id
@@ -14600,6 +14655,7 @@ ${klinesSummary}
         message: z.string().min(1).max(1000),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.chatWithAIEmployee(
           input.ledgerId,
           ctx.user.id,
@@ -14612,6 +14668,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.getAIConversationHistory(
           input.ledgerId,
           ctx.user.id
@@ -14623,6 +14680,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbAIEmployee.clearAIConversationHistory(
           input.ledgerId,
           ctx.user.id
@@ -14637,6 +14695,7 @@ ${klinesSummary}
         endDate: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         return await dbLedger.getLedgerReport(
           input.ledgerId, 
           ctx.user.id, 
@@ -14655,6 +14714,7 @@ ${klinesSummary}
         memberIds: z.array(z.number()).optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         return await dbLedger.getCalendarData(input.ledgerId, ctx.user.id, input.year, input.month, input.memberIds);
       }),
 
@@ -14666,6 +14726,7 @@ ${klinesSummary}
         memberIds: z.array(z.number()).optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date, input.memberIds);
       }),
 
@@ -14680,6 +14741,7 @@ ${klinesSummary}
         excludeId: z.number().optional(), // 编辑模式排除自身
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         // 金额和类目都没有时不检测
         if (!input.amount && !input.categoryId) return { duplicates: [] };
         const db = await getLedgerDb();
@@ -14722,6 +14784,16 @@ ${klinesSummary}
         return { duplicates };
       }),
 
+    getCalendarNumberCategories: protectedProcedure
+      .input(calendarNumberCategoriesSchema)
+      .query(({ ctx, input }) => getCalendarNumberCategories(ctx, input)),
+    getCalendarNumber: protectedProcedure
+      .input(calendarNumberSchema)
+      .query(({ ctx, input }) => getCalendarNumber(ctx, input)),
+    saveCalendarNumber: protectedProcedure
+      .input(saveCalendarNumberSchema)
+      .mutation(({ ctx, input }) => saveCalendarNumber(ctx, input)),
+
     // 添加记账记录
     addTransaction: protectedProcedure
       .input(z.object({
@@ -14746,6 +14818,8 @@ ${klinesSummary}
         overwriteExisting: z.boolean().optional(), // 37号账本：用户确认后覆盖同日同标签记录
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.ledgerId === 37 && input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '37号通用交易不允许代录身份参数' });
         const { viewAsUserId, ...rest } = input;
         // 如果是管理员以业务员视角提交，验证权限后用viewAsUserId作为createdBy
         let effectiveUserId = ctx.user.id;
@@ -14795,6 +14869,7 @@ ${klinesSummary}
         recordId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         return await dbLedger.deleteTransaction(input.recordId, ctx.user.id);
       }),
 
@@ -14843,6 +14918,7 @@ ${klinesSummary}
         newData: z.record(z.any()).optional(), // 修改申请时传入新字段值
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 获取账目信息
@@ -14888,6 +14964,7 @@ ${klinesSummary}
         requestId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'request', input.requestId);
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [rows] = await conn.execute(
@@ -14914,6 +14991,7 @@ ${klinesSummary}
         comment: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'request', input.requestId);
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 获取申请详情
@@ -15006,6 +15084,7 @@ ${klinesSummary}
         status: z.enum(['pending', 'approved', 'rejected', 'withdrawn', 'all']).default('pending'),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 验证是账本成员
@@ -15056,6 +15135,7 @@ ${klinesSummary}
         recordId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await getDbConnection();
         if (!conn) return null;
         const [rows] = await conn.execute(
@@ -15073,6 +15153,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getDeletedTransactions(input.ledgerId, ctx.user.id);
       }),
 
@@ -15082,13 +15163,17 @@ ${klinesSummary}
         recordId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         return await dbLedger.restoreTransaction(input.recordId, ctx.user.id);
       }),
 
     // 清理超过30天的已删除记录
     purgeExpiredDeletedRecords: protectedProcedure
-      .mutation(async () => {
-        return await dbLedger.purgeExpiredDeletedRecords();
+      .mutation(async ({ ctx }) => {
+        let includeLedger37 = false;
+        try { await assertLedger37Owner(ctx, 37); includeLedger37 = true; }
+        catch (error) { if (!(error instanceof TRPCError) || error.code !== 'FORBIDDEN') throw error; }
+        return await dbLedger.purgeExpiredDeletedRecords(includeLedger37);
       }),
 
     // 获取账目修改记录日志
@@ -15098,6 +15183,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getRecordLogs(input.recordId, input.ledgerId, ctx.user.id);
       }),
     // 获取账目修改记录条数
@@ -15107,6 +15193,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const count = await dbLedger.getRecordLogCount(input.recordId, input.ledgerId, ctx.user.id);
         return { count };
       }),
@@ -15130,6 +15217,7 @@ ${klinesSummary}
         overwriteExisting: z.boolean().optional(), // 37号账本：编辑冲突时用户确认覆盖
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const { recordId, ...data } = input;
         try {
           return await dbLedger.updateTransaction(recordId, ctx.user.id, data);
@@ -15184,6 +15272,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getApprovalRules(input.ledgerId, ctx.user.id);
       }),
 
@@ -15198,6 +15287,7 @@ ${klinesSummary}
         })),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.saveApprovalRules(input.ledgerId, ctx.user.id, input.rules);
       }),
 
@@ -15207,6 +15297,7 @@ ${klinesSummary}
         ruleId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'rule', input.ruleId);
         return await dbLedger.deleteApprovalRule(input.ruleId, ctx.user.id);
       }),
 
@@ -15218,6 +15309,7 @@ ${klinesSummary}
         comment: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.transactionId);
         return await dbLedger.approveTransaction(
           input.transactionId,
           ctx.user.id,
@@ -15233,6 +15325,7 @@ ${klinesSummary}
         status: z.enum(['pending', 'approved', 'support_needed']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.transactionId);
         console.log(`[ajSetStatus] ===== 接口被调用 =====`);
         console.log(`[ajSetStatus] 操作人: ctx.user.id=${ctx.user.id}, openId=${ctx.user.openId}`);
         console.log(`[ajSetStatus] 参数: transactionId=${input.transactionId}, status=${input.status}`);
@@ -15351,6 +15444,7 @@ ${klinesSummary}
         transactionId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         return await dbLedger.getTransactionDetail(
           input.ledgerId,
           input.transactionId,
@@ -15365,6 +15459,7 @@ ${klinesSummary}
         viewAsUserId: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         // 如果传入了viewAsUserId（管理员切换视角），用被切换用户的userId来判断权限
         const effectiveUserId = input.viewAsUserId ?? ctx.user.id;
         return await dbLedger.getPendingApprovals(input.ledgerId, effectiveUserId);
@@ -15379,6 +15474,7 @@ ${klinesSummary}
         viewAsUserId: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const effectiveUserId = input.viewAsUserId ?? ctx.user.id;
         return await dbLedger.getApprovalHistory(input.ledgerId, effectiveUserId, input.page, input.pageSize);
       }),
@@ -15391,6 +15487,7 @@ ${klinesSummary}
         endDate: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         try {
           console.log('[exportToExcel] 开始导出:', { ledgerId: input.ledgerId, userId: ctx.user.id });
           
@@ -15471,6 +15568,7 @@ ${klinesSummary}
         role: z.enum(['admin', 'member', 'funder']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.setMemberRole(input.ledgerId, ctx.user.id, input.targetUserId, input.role);
       }),
 
@@ -15483,6 +15581,7 @@ ${klinesSummary}
         voucherImage: z.string().optional(), // base64
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         return await dbLedger.manageReimbursement(input.recordId, ctx.user.id, input.status, input.notes, input.voucherImage);
       }),
 
@@ -15492,6 +15591,7 @@ ${klinesSummary}
         recordId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         return await dbLedger.getReimbursementHistory(input.recordId, ctx.user.id);
       }),
 
@@ -15501,6 +15601,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getReimbursementStats(input.ledgerId, ctx.user.id);
       }),
 
@@ -15510,6 +15611,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getLedgerImages(input.ledgerId, ctx.user.id);
       }),
 
@@ -15519,6 +15621,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         return await dbLedger.getLedgerExportStats(input.ledgerId, ctx.user.id);
       }),
 
@@ -15528,6 +15631,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db_instance = await getDb();
         if (!db_instance) throw new Error("Database not available");
         
@@ -15556,6 +15660,7 @@ ${klinesSummary}
         enabled: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db_instance = await getDb();
         if (!db_instance) throw new Error("Database not available");
         
@@ -15622,6 +15727,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         // 检查备份权限
         const hasBackupPermission = await dbLedger.checkBackupPermission(input.ledgerId, ctx.user.id);
         if (!hasBackupPermission) {
@@ -16097,6 +16203,7 @@ ${klinesSummary}
         })),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         // 整批预检先于分类创建和账目写入，不能先导入前几笔再发现未来误填。
         const importNow = new Date();
         for (let index = 0; index < input.records.length; index++) {
@@ -17186,6 +17293,7 @@ ${klinesSummary}
         viewAsUserId: z.number().optional(), // 管理员可查指定成员的初始金额
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.viewAsUserId);
         await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
@@ -17211,7 +17319,9 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        const canReadSharedMemos = membership?.role === 'owner' || membership?.role === 'admin';
+        const canReadSharedMemos = input.ledgerId === 37
+          ? (await getLedger37Access(ctx)).canManage
+          : membership?.role === 'owner' || membership?.role === 'admin';
         const rows = asRows(await memoDb.execute(canReadSharedMemos ? sql`
           SELECT memo.id, memo.user_id, memo.memo_visibility, memo.content, memo.created_at, memo.updated_at,
                  COALESCE(author.name, author.username, CONCAT('用户', memo.user_id)) AS author_name
@@ -17246,7 +17356,9 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        const canReadSharedMemos = membership?.role === 'owner' || membership?.role === 'admin';
+        const canReadSharedMemos = input.ledgerId === 37
+          ? (await getLedger37Access(ctx)).canManage
+          : membership?.role === 'owner' || membership?.role === 'admin';
         const rows = asRows(await memoDb.execute(canReadSharedMemos ? sql`
           SELECT memo_visibility, COUNT(*) AS total
           FROM ledger_personal_memos
@@ -17304,7 +17416,8 @@ ${klinesSummary}
         balances: z.record(z.string(), z.union([z.number(), z.string()])),
       }))
       .mutation(async ({ ctx, input }) => {
-        await dbLedger.updateMyInitialBalances(input.ledgerId, ctx.user.id, input.balances);
+        const balances = await prepareLedger37PersonalConfigPatch(ctx, input.ledgerId, input.balances);
+        await dbLedger.updateMyInitialBalances(input.ledgerId, ctx.user.id, balances);
         return { success: true };
       }),
     // 管理员：获取所有成员的初始金额配置（定制账本AA）
@@ -17313,6 +17426,7 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         // 52 的全员保证金、备注与配置仅账本创建人可读取。
         await requireLedger52Creator(ctx.user.id, input.ledgerId);
         // 其他账本沿用 owner/admin 规则。
@@ -17355,6 +17469,7 @@ ${klinesSummary}
         tagName: z.string().trim().min(1).max(160),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         await requireLedger52Creator(ctx.user.id, input.ledgerId);
         const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
@@ -17384,6 +17499,7 @@ ${klinesSummary}
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (input.scopedOrdinaryCategoryId !== undefined) {
           if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
           if ((input.migratedMarginNoteIds?.length ?? 0) > 0 || (input.hideAcknowledgements?.length ?? 0) > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: '详情限域保存不迁移历史备注或处理标签隐藏' });
@@ -17440,6 +17556,7 @@ ${klinesSummary}
     adminGetOrdinaryTagObservationConfig: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
         const observation = await import('./ordinary-tag-observation');
         return observation.adminGetOrdinaryTagObservationConfig({ ...input, actorUserId: ctx.realUser.id });
@@ -17450,6 +17567,7 @@ ${klinesSummary}
         config: z.object({ enabled: z.boolean(), initialAmount: z.number().finite().nonnegative(), ratio: z.number().finite().min(0), startDate: z.string(), pauseDate: z.string().nullable() }).strict(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
         const observation = await import('./ordinary-tag-observation');
         return observation.adminSetOrdinaryTagObservationConfig({ ...input, actorUserId: ctx.realUser.id });
@@ -17457,6 +17575,7 @@ ${klinesSummary}
     adminGetOrdinaryTagClearImpact: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive() }).strict())
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
         const connection = await getDbTransactionConnection();
         if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
@@ -17468,6 +17587,7 @@ ${klinesSummary}
     adminClearOrdinaryTagMemberConfig: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(), targetUserId: z.number().int().positive(), impactHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict())
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         if (!ctx.realUser) throw new TRPCError({ code: 'UNAUTHORIZED', message: '无法确认真实操作者' });
         if (process.env.DEV_BYPASS_AUTH === 'true' || process.env.PREVIEW_READONLY === 'true') throw new TRPCError({ code: 'FORBIDDEN', message: '只读预览不能清空正式配置' });
         const connection = await getDbTransactionConnection();
@@ -17500,6 +17620,7 @@ ${klinesSummary}
         reason: z.string().trim().min(3).max(240),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '热预览禁止删除真实钱包或保证金记录' });
         }
@@ -17581,6 +17702,7 @@ ${klinesSummary}
     getLedger37WalletMarginContext: protectedProcedure
       .input(z.object({ targetUserId: z.number().int().positive().optional() }).optional())
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         requireLedger37MarginActor(ctx);
         const userId = input?.targetUserId;
         const [cny, usdt, holds] = await Promise.all([
@@ -17596,6 +17718,7 @@ ${klinesSummary}
     getLedger37ManualMarginMigrationPlan: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }))
       .query(async ({ ctx }) => {
+        await assertLedger37Owner(ctx, 37);
         if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本历史保证金仅胡大叔可查看' });
         }
@@ -17625,6 +17748,7 @@ ${klinesSummary}
     getLedger37MarginMigrationReconciliationPreview: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }))
       .query(async ({ ctx }) => {
+        await assertLedger37Owner(ctx, 37);
         if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本历史保证金仅胡大叔可查看' });
         }
@@ -17638,6 +17762,7 @@ ${klinesSummary}
     migrateAllLedger37ManualMarginsToWalletHolds: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37), manifestHash: z.string().length(64) }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示批量迁移方案，不会写入真实钱包资金' });
         }
@@ -17809,6 +17934,7 @@ ${klinesSummary}
         marginEntryId: z.string().trim().min(1).max(160),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示历史保证金迁移，不会写入真实钱包资金' });
         }
@@ -17895,6 +18021,7 @@ ${klinesSummary}
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会冻结真实钱包资金' });
         }
@@ -17934,6 +18061,7 @@ ${klinesSummary}
         amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会解冻真实钱包资金' });
         }
@@ -17966,6 +18094,7 @@ ${klinesSummary}
         mode: z.enum(['reverse', 'delete']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示撤回与冲正界面，不会修改真实保证金或钱包资金' });
         }
@@ -18008,6 +18137,7 @@ ${klinesSummary}
     repairLedger37MarginReleasePresentation: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示历史回退修复方案，不会修改真实标签明细' });
         }
@@ -18037,6 +18167,7 @@ ${klinesSummary}
         tagName: z.string().trim().min(1).max(160),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示暂停后解冻流程，不会操作真实钱包资金' });
         }
@@ -18105,6 +18236,7 @@ ${klinesSummary}
         requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,64}$/),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示暂停自动结算流程，不会操作真实钱包资金' });
         }
@@ -18390,6 +18522,7 @@ ${klinesSummary}
         pauseDate: z.string().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedgerMod = await import('./db-ledger');
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
@@ -18446,6 +18579,7 @@ ${klinesSummary}
         marginPauseDate: z.string().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedgerMod = await import('./db-ledger');
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
@@ -18530,6 +18664,7 @@ ${klinesSummary}
         targetTotal: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         console.log('[DEBUG saveTagConfig] targetTotal=', input.targetTotal, 'ledgerId=', input.ledgerId, 'tagName=', input.tagName);
         const dbLedgerMod = await import('./db-ledger');
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
@@ -18651,6 +18786,7 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -18694,6 +18830,7 @@ ${klinesSummary}
         remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -18716,6 +18853,7 @@ ${klinesSummary}
         logId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -18880,7 +19018,8 @@ ${klinesSummary}
         ledgerId: z.number(),
         tagName: z.string(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const db = await getLedgerDb();
         const configRows = await db.execute(
           sql`SELECT margin_by_coin FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
@@ -19047,6 +19186,7 @@ ${klinesSummary}
     getTagInterestSettings: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19070,6 +19210,7 @@ ${klinesSummary}
         startDate: z.string().optional(),      // 起息日期 YYYY-MM-DD
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19105,6 +19246,7 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db = await getLedgerDb();
         let rows;
         if (input.tagName) {
@@ -19136,6 +19278,7 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19189,6 +19332,7 @@ ${klinesSummary}
         remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19220,6 +19364,7 @@ ${klinesSummary}
         logId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19253,6 +19398,7 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db = await getLedgerDb();
         let rows;
         if (input.tagName) {
@@ -19284,6 +19430,7 @@ ${klinesSummary}
         sortOrder: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19328,6 +19475,7 @@ ${klinesSummary}
         remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19375,6 +19523,7 @@ ${klinesSummary}
         periodId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19417,6 +19566,7 @@ ${klinesSummary}
     afGetManualBalances: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19441,6 +19591,7 @@ ${klinesSummary}
         createdAt: z.string().optional(), // 自定义时间，格式 'YYYY-MM-DD HH:mm:ss'
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19532,6 +19683,7 @@ ${klinesSummary}
     afDeleteManualBalance: protectedProcedure
       .input(z.object({ ledgerId: z.number(), id: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
@@ -19583,6 +19735,7 @@ ${klinesSummary}
     afGetMyTotalAsset: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input?.ledgerId ?? 0, input?.viewAsUserId);
         
         const db = await getLedgerDb();
         // 视角切换：管理员可以查看任意成员数据
@@ -19726,6 +19879,7 @@ ${klinesSummary}
     afGetInviteTree: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input?.ledgerId ?? 0, input?.viewAsUserId);
         const db = await getLedgerDb();
         const YJH_USER_ID = 4957151;
         const currentUserId = Number(ctx.user.id);
@@ -20218,6 +20372,7 @@ ${klinesSummary}
         afGetMyRechargeHistory: protectedProcedure
       .input(z.object({ ledgerId: z.number().optional(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input?.ledgerId ?? 0, input?.viewAsUserId);
         const db = await getLedgerDb();
         // 视角切换（ledgerId 为可选，不传时走全局口径）
         let targetUserId = ctx.user.id;
@@ -21112,6 +21267,7 @@ ${klinesSummary}
     afGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input?.ledgerId ?? 0, input?.viewAsUserId);
         
         const db = await getLedgerDb();
         await ensureAfSimulationColumns();
@@ -31122,6 +31278,7 @@ ${klinesSummary}
         remark: z.string().max(300).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31157,6 +31314,8 @@ ${klinesSummary}
         remark: z.string().max(300).optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31190,6 +31349,8 @@ ${klinesSummary}
     ajDeleteCompany: protectedProcedure
       .input(z.object({ companyId: z.number(), ledgerId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31210,6 +31371,8 @@ ${klinesSummary}
     ajGetCompanyAccess: protectedProcedure
       .input(z.object({ companyId: z.number(), ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31263,6 +31426,8 @@ ${klinesSummary}
         accessType: z.enum(['funder', 'worker']).optional().default('worker'),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31324,6 +31489,8 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31348,6 +31515,8 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31383,6 +31552,7 @@ ${klinesSummary}
         role: z.enum(['owner', 'admin', 'member', 'funder', 'client', 'employee']),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 权限校验：仅 owner/admin 或系统管理员可操作
@@ -31523,6 +31693,8 @@ ${klinesSummary}
         })),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31559,6 +31731,7 @@ ${klinesSummary}
     ajOwnerGetMyCompanies: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         await (conn as any).execute(`
@@ -31623,6 +31796,7 @@ ${klinesSummary}
     ajOwnerGetMyRequests: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         await (conn as any).execute(`
@@ -31681,6 +31855,8 @@ ${klinesSummary}
         remark: z.string().max(300).optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         await (conn as any).execute(`
@@ -31737,6 +31913,7 @@ ${klinesSummary}
     ajAdminGetPendingRequests: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         await (conn as any).execute(`
@@ -31792,6 +31969,8 @@ ${klinesSummary}
         requestId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37AjResourceOwner(ctx, 'request', input.requestId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 查询申请单，确认属于当前用户且状态为 pending
@@ -31818,6 +31997,8 @@ ${klinesSummary}
         reviewComment: z.string().max(300).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37AjResourceOwner(ctx, 'request', input.requestId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31881,6 +32062,8 @@ ${klinesSummary}
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -31944,6 +32127,8 @@ ${klinesSummary}
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -32041,6 +32226,8 @@ ${klinesSummary}
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -32121,6 +32308,8 @@ ${klinesSummary}
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 权限校验
@@ -32168,6 +32357,9 @@ ${klinesSummary}
           [input.ledgerId, ...dateParams, ...companyParams, ...employeeParams]
         );
         const records = pendingRows as any[];
+        // Preflight the entire real result set before network calls, status writes or wallet rewards.
+        // A caller-supplied non-37 ledgerId must never authorize a real 37 record.
+        for (const rec of records) await assertLedger37Owner(ctx, Number(rec.ledgerId));
         if (records.length === 0) return { approved: 0, totalAmount: 0, totalBonus: 0 };
         // 获取汇率
         let usdCnyRate = 7.2;
@@ -32221,6 +32413,8 @@ ${klinesSummary}
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -32284,6 +32478,8 @@ ${klinesSummary}
         categoryName: z.string().max(100),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 验证当前用户是该账本的成员
@@ -32323,6 +32519,8 @@ ${klinesSummary}
         taxCategory: z.string().max(200),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -32345,6 +32543,8 @@ ${klinesSummary}
         accountingCode: z.string().max(100),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -32367,6 +32567,8 @@ ${klinesSummary}
         expenseReason: z.string().max(200),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
@@ -33472,7 +33674,8 @@ ${klinesSummary}
     // ===== 快捷按钮管理（重构版，使用 drizzle ORM） =====
     getShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db_instance = await getDb();
         if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         const rows = await db_instance
@@ -33513,6 +33716,7 @@ ${klinesSummary}
         }),
       }))
       .mutation(async ({ input, ctx }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const db_instance = await getDb();
         if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         // 检查当前用户是否是 owner
@@ -33539,6 +33743,7 @@ ${klinesSummary}
     getMyShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.viewAsUserId);
         const db_instance = await getDb();
         if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         // 如果传了 viewAsUserId，查目标用户的权限（用于Owner视角切换）
@@ -33870,6 +34075,7 @@ ${klinesSummary}
     assignLedger: protectedProcedure
       .input(z.object({ ledgerId: z.number(), groupId: z.number().nullable() }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
         const { assignLedgerToGroup } = await import('./db-ledger');
         return assignLedgerToGroup(ctx.user.id, input.ledgerId, input.groupId);
       }),
@@ -34147,6 +34353,8 @@ ${klinesSummary}
     getBranches: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 允许：平台管理员 或 该账本的 owner/admin
@@ -34186,6 +34394,7 @@ ${klinesSummary}
     deleteBranch: protectedProcedure
       .input(z.object({ categoryId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        await assertLedger37ResourceOwner(ctx, 'category', input.categoryId);
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
@@ -36924,6 +37133,7 @@ insights 数组每项包含：
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.viewAsUserId);
       await assertLedger37RawPresentationRead(ctx, input.ledgerId);
       const db = await getLedgerDb();
       if (!db) return { byTag: {} };
@@ -36951,6 +37161,7 @@ insights 数组每项包含：
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.viewAsUserId);
       await assertLedger37RawPresentationRead(ctx, input.ledgerId);
       if (input.ledgerId === LEDGER_37_ID) await ensureLedger37WalletInfrastructure();
       const db = await getLedgerDb();
@@ -36979,9 +37190,10 @@ insights 数组每项包含：
       note: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       const canManageDividend = input.ledgerId === 37
-        ? ctx.user.id === 870413
+        ? (await getLedger37Access(ctx)).canManage
         : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
@@ -37018,6 +37230,7 @@ insights 数组每项包含：
       assetCode: z.string().trim().min(3).max(16),
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
       if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可查看成员钱包余额' });
       }
@@ -37063,6 +37276,7 @@ insights 数组每项包含：
       requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,96}$/),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
       if (process.env.DEV_BYPASS_AUTH === 'true') {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示回填扣回界面，不会修改真实分红或钱包资金' });
       }
@@ -37093,6 +37307,7 @@ insights 数组每项包含：
       requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,48}$/),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
       if (process.env.DEV_BYPASS_AUTH === 'true') {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示批量分红与补差界面，不会修改真实分红或钱包资金' });
       }
@@ -37261,6 +37476,7 @@ insights 数组每项包含：
       mode: z.enum(['reverse', 'delete']),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
       if (process.env.DEV_BYPASS_AUTH === 'true') {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示撤回与冲正界面，不会修改真实分红或钱包资金' });
       }
@@ -37294,9 +37510,10 @@ insights 数组每项包含：
       recordId: z.number(),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       const canManageDividend = input.ledgerId === 37
-        ? ctx.user.id === 870413
+        ? (await getLedger37Access(ctx)).canManage
         : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
@@ -37324,9 +37541,10 @@ insights 数组每项包含：
       note: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       const canManageDividend = input.ledgerId === 37
-        ? ctx.user.id === 870413
+        ? (await getLedger37Access(ctx)).canManage
         : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
@@ -37363,10 +37581,11 @@ insights 数组每项包含：
   adminGetAllDividends: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       if (input.ledgerId === LEDGER_37_ID) await ensureLedger37WalletInfrastructure();
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       const canManageDividend = input.ledgerId === 37
-        ? ctx.user.id === 870413
+        ? (await getLedger37Access(ctx)).canManage
         : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可查看' : '仅账本创建人或管理员可查看' });
@@ -37382,6 +37601,7 @@ insights 数组每项包含：
   adminGetLedger37DividendAvailability: protectedProcedure
     .input(z.object({ ledgerId: z.literal(37) }))
     .query(async ({ ctx }) => {
+        await assertLedger37Owner(ctx, 37);
       if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可查看' });
       }
@@ -37399,6 +37619,7 @@ insights 数组每项包含：
       targetUserId: z.number().int().positive(),
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, 37);
       if (Number(ctx.user.id) !== LEDGER_37_WALLET_OPERATOR_ID) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅胡大叔可查看37号成员钱包快照' });
       }
@@ -37497,6 +37718,7 @@ insights 数组每项包含：
       content: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
@@ -37514,6 +37736,7 @@ insights 数组每项包含：
       noteId: z.number(),
     }))
     .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
@@ -37534,10 +37757,11 @@ insights 数组每项包含：
       tagName: z.string().optional(), // 按标签筛选（分红场景）
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.userId ?? input.viewAsUserId);
       const db = await getLedgerDb();
       if (!db) return { notes: [] };
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      const isAdmin = myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      const isAdmin = input.ledgerId === 37 ? (await getLedger37Access(ctx)).canManage : myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       let targetUserId = ctx.user.id;
       if (isAdmin && input.userId !== undefined) {
         targetUserId = input.userId;
@@ -37563,10 +37787,11 @@ insights 数组每项包含：
       allMembers: z.boolean().optional(), // 管理员一次性获取全部成员的计数，key 为 `${userId}|${tagName}`
     }))
     .query(async ({ ctx, input }) => {
+        await assertLedger37SelfRead(ctx, input.ledgerId, input.userId ?? input.viewAsUserId, Boolean(input.allMembers));
       const db = await getLedgerDb();
       if (!db) return { counts: {} as Record<string, number> };
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      const isAdmin = myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      const isAdmin = input.ledgerId === 37 ? (await getLedger37Access(ctx)).canManage : myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       // 管理员请求全部成员计数：返回 key 为 `${user_id}|${tag_name}`
       if (isAdmin && input.allMembers) {
         const result = await db.execute(sql`SELECT user_id, tag_name, COUNT(*) as cnt FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} GROUP BY user_id, tag_name`);

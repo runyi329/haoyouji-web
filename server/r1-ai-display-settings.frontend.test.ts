@@ -7,6 +7,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { LEDGER37_AI_DISPLAY_KEY } from '../shared/ledger37-ai-presentation';
 import * as instruments from '../shared/portfolio-instruments';
+import { isLedger37FullManager } from '../shared/ledger37-permissions';
 
 // Only execute the actual frontend AST with inert mutation spies: no router, DB, HTTP or business startup.
 const source = readFileSync(new URL('../client/src/pages/LedgerAAInitialBalance.tsx', import.meta.url), 'utf8');
@@ -60,7 +61,8 @@ function harness() {
   queryClient.setQueryData(queryKey, data);
   const scope: Record<string, any> = {
     ...instruments, LEDGER37_AI_DISPLAY_KEY, Fragment: React.Fragment,
-    ledgerId: 37, user: { id: 1 }, canAccess: true, canManageLedger37Ai: true, canPreviewLedger37Ai: false, isLocalHotPreview: false, queryClient,
+    ledgerId: 37, user: { id: 1, role: 'parent' }, ledgerData: { id: 37, ownerId: 1, userRole: 'owner' },
+    authLoading: false, authError: null, isLedger37FullManager, canAccess: true, canManageLedger37Ai: true, canPreviewLedger37Ai: false, isLocalHotPreview: false, queryClient,
     window: { location: { search: '' }, sessionStorage: { getItem: () => null } },
     categories: [{ id: 90250, name: 'R1', accountingMode: 'stock_portfolio' }],
     activeStockParticipationCategoryId: 90250, stockAllocationFocus: undefined,
@@ -103,6 +105,7 @@ function harness() {
   scope.saveLedger37AiDisplay = (...args: any[]) => expression('saveLedger37AiDisplay', scope)(...args);
   const unsubscribe = runEffect('queryClient.getQueryCache().subscribe', scope);
   const refreshPermissions = () => {
+    scope.canAccess = expression('canAccess', scope);
     scope.canManageLedger37Ai = expression('canManageLedger37Ai', scope);
     scope.canPreviewLedger37Ai = expression('canPreviewLedger37Ai', scope);
   };
@@ -241,13 +244,24 @@ describe('原R1保存保护迁移为ledger37全局AI：保留18项AST/渲染器�
   });
   it('权限/只读预览/无成员拒绝，不发送mutation', async () => {
     const h = harness();
-    h.scope.canAccess = false; expect(h.ai().props.disabled).toBe(true); expect(await h.save()).toBe(false);
-    h.scope.canAccess = true; h.scope.window.location.search = '?viewAs=901'; expect(await h.save()).toBe(false);
+    h.scope.authLoading = true; expect(h.ai().props.disabled).toBe(true); expect(await h.save()).toBe(false);
+    h.scope.authLoading = false; h.scope.window.location.search = '?viewAs=901'; expect(await h.save()).toBe(false);
     h.scope.window.location.search = ''; h.scope.stockParticipationMatrix.canEdit = false; expect(h.ai().props.disabled).toBe(false);
     h.scope.stockParticipationMatrix.canEdit = true; h.scope.isLocalHotPreview = true; expect(h.ai().props.disabled).toBe(false); expect(await h.save()).toBe(false);
     expect(h.scope.canManageLedger37Ai).toBe(false); expect(h.scope.canPreviewLedger37Ai).toBe(true);
     h.scope.isLocalHotPreview = false; expect(await h.save(999)).toBe(false);
     expect(h.scope.ledger37AiDisplayMutation.mutateAsync).not.toHaveBeenCalled(); h.noFinancialWrites(); h.unsubscribe();
+  });
+  it('普通admin与系统admin都无法借真实matrix写全局AI或本地预览，财务/dirty/草稿不变', async () => {
+    const h = harness(); h.scope.user.id = 2; h.scope.ledger37AiViewScopeRef.current = '37:2:self';
+    h.scope.ledgerData.userRole = 'admin';
+    for (const role of ['parent', 'admin', 'super_admin']) {
+      h.scope.user.role = role; expect(h.ai().props.disabled).toBe(true); expect(await h.save()).toBe(false);
+      h.scope.isLocalHotPreview = true; expect(h.ai().props.disabled).toBe(true);
+      expect(h.scope.previewLedger37AiDisplay(901, true)).toBe(false); h.scope.isLocalHotPreview = false;
+    }
+    expect(h.scope.ledger37AiDisplayMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(h.scope.setLedger37AiPreviewDrafts).not.toHaveBeenCalled(); h.noFinancialWrites(); h.unsubscribe();
   });
   it('失败只回退该成员AI，另一个成员成功状态与所有真实草稿不被覆盖', async () => {
     const h = harness(), failure = deferred();

@@ -1,3 +1,4 @@
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -48,7 +49,7 @@ function fx(category_id = 2, patch: Record<string, unknown> = {}) {
   return { category_id, usd_cny_rate: '7', source: 'yahoo_usdcny_5m', quote_as_of: `${snapshotDate} 15:05:00`, locked_at: `${snapshotDate} 15:05:00`, ...patch };
 }
 function fixture(realPermissions = false) {
-  const state = { member: true, aiEnabled: true, viewerUserId: 201, viewer: { userId: 201 } as any,
+  const state = { ownerId: 100, canManage: false, member: true, aiEnabled: true, viewerUserId: 201, viewer: { userId: 201 } as any,
     ledgerId: 37, authError: null as any, categoryError: null as any, lotError: null as any,
     quoteError: null as any, fxError: null as any, noConnection: false,
     denied: new Set<number>(), memberRole: 'member',
@@ -65,13 +66,13 @@ function fixture(realPermissions = false) {
     log.push({ sql, values });
     if (!/^\s*SELECT\b/.test(sql) || /FOR UPDATE|GET_LOCK/i.test(sql)) throw new Error('只允许SELECT');
     if (/FROM ledgers l LEFT JOIN ledger_members/.test(sql)) {
-      return [[{ ledger_id: state.ledgerId, member_user_id: state.member ? values[0] : null,
+      return [[{ ledger_id: state.ledgerId, ledger_owner_id: state.ownerId, member_user_id: state.member ? values[0] : null,
         member_role: state.memberRole, initialBalances: state.balances,
         viewer_user_id: state.viewer ? state.viewer.userId : null,
         viewer_username: '姓名不导出', viewer_nickname: '隐私', viewer_avatar: 'secret-avatar' }]];
     }
     if (/FROM ledger_categories c\s+LEFT JOIN ledger_members/.test(sql)) {
-      return [[{ id: values[1], ledgerId: 37, name: `隐私类别${values[1]}`, parentId: null,
+      return [[{ id: values[1], ledgerId: 37, ledger_owner_id: state.ownerId, name: `隐私类别${values[1]}`, parentId: null,
         accounting_mode: 'stock_portfolio', member_user_id: state.member ? values[0] : null,
         member_role: state.memberRole, initialBalances: state.balances, ...state.categoryPatch }]];
     }
@@ -100,14 +101,14 @@ function fixture(realPermissions = false) {
   const auth = vi.fn(async () => {
     if (state.authError) throw state.authError;
     return { isMember: state.member, context: { ledgerId: state.ledgerId, aiEnabled: state.aiEnabled,
-      viewerUserId: state.viewerUserId, viewer: state.viewer, canManage: true } };
+      viewerUserId: state.viewerUserId, viewer: state.viewer, canManage: state.canManage } };
   });
   const categoryAuth = vi.fn(async (request: any, connection: any) => {
     expect(connection).toBe(conn);
     if (state.categoryError) throw state.categoryError;
     if (state.denied.has(request.categoryId)) throw new Error('您无权查看此标签');
     return { isMember: state.member, context: { ledgerId: 37, categoryId: request.categoryId,
-      viewerUserId: request.userId, aiEnabled: state.aiEnabled, canManage: true, ...state.categoryIdentityPatch } };
+      viewerUserId: request.userId, aiEnabled: state.aiEnabled, canManage: state.canManage, ...state.categoryIdentityPatch } };
   });
   const db = vi.fn(async () => state.noConnection ? null : conn);
   const text = (realPermissions ? permissionBody + '\n' : '') + body + '\ngetMyLedger37MemberHoldingSnapshot;';
@@ -117,7 +118,7 @@ function fixture(realPermissions = false) {
     beijingDate: () => today, getUnifiedStockCloseSnapshotDate: () => snapshotDate, getOvernightUsSessionDate,
     toBeijingWallClockIso: (value: unknown) => typeof value === 'string' ? value.replace(' ', 'T') + '+08:00' : '',
     isTrustedMemberCalendarClose, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION: 'cn-day-us-overnight-1505-v1',
-    readTagVisible, LEDGER37_AI_DISPLAY_KEY, replaceTopLevelJsonValue, R1_STOCK_LEDGER_ID: 37,
+    readTagVisible, isLedger37FullManager, canRecordLedger37Calendar, LEDGER37_AI_DISPLAY_KEY, replaceTopLevelJsonValue, R1_STOCK_LEDGER_ID: 37,
   }, { timeout: 1000 }) as (request: any) => Promise<any>;
   return { state, data, log, conn, auth, categoryAuth, db, read };
 }
@@ -229,9 +230,9 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     await expect(f.read({ ...input, systemRole: patch.aiEnabled === false ? 'user' : 'admin' })).rejects.toThrow();
     expect(f.db).not.toHaveBeenCalled(); expect(f.log).toHaveLength(0);
   });
-  it('system admin AI-off own member access remains allowed but viewing-as cannot inherit this privilege', async () => {
+  it('AI-off nonowner system admin rejected; real owner preview allowed without viewing-as', async () => {
     const f = fixture(); f.state.aiEnabled = false;
-    expect((await f.read({ ...input, systemRole: 'admin' })).aiEnabled).toBe(false); f.log.length = 0;
+    await expect(f.read({ ...input, systemRole: 'admin' })).rejects.toThrow('尚未开启'); expect(f.db).not.toHaveBeenCalled(); f.state.canManage = true; expect((await f.read(input)).aiEnabled).toBe(false); f.log.length = 0;
     await expect(f.read({ ...input, systemRole: 'admin', isViewingAs: true })).rejects.toThrow('尚未开启'); expect(f.log).toHaveLength(0);
   });
   it('denied category is excluded before shares/evidence SELECT; never counted in personal denominator', async () => {
@@ -245,8 +246,8 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     const f = fixture(); f.state.categoryIdentityPatch = patch;
     await expect(f.read(input)).rejects.toThrow('身份不匹配'); expect(f.log).toHaveLength(1);
   });
-  it.each([true, false])('category/global AI changes fail before shares even for system admin (global %s)', async enabled => {
-    const f = fixture(); f.state.aiEnabled = enabled; f.state.categoryIdentityPatch = { aiEnabled: !enabled };
+  it.each([true, false])('category/global AI changes fail before shares even for owner (global %s)', async enabled => {
+    const f = fixture(); f.state.canManage = true; f.state.aiEnabled = enabled; f.state.categoryIdentityPatch = { aiEnabled: !enabled };
     await expect(f.read({ ...input, systemRole: 'admin' })).rejects.toThrow('AI状态已变化');
     expect(f.log).toHaveLength(1);
   });
@@ -325,7 +326,7 @@ describe('personal holding snapshot with actual global + category pure SELECT pe
     expect((await f.read(input)).holdings[0].shares).toBe('100');
   });
   it('actual owner visibility exemption stays old behavior, not a new bypass', async () => {
-    const f = fixture(true); f.state.memberRole = 'owner';
+    const f = fixture(true); f.state.memberRole = 'member'; f.state.ownerId = input.userId;
     f.state.balances = JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1, '隐私类别1__visible': 0 });
     expect((await f.read(input)).holdings[0].shares).toBe('100');
   });

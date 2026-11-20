@@ -35,6 +35,8 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
+import { canRecordLedger37Calendar, isLedger37FullManager } from "@shared/ledger37-permissions";
+import Ledger37CalendarNumberDialog from "@/components/Ledger37CalendarNumberDialog";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import Ledger37AiHome from "@/components/Ledger37AiHome";
 import Ledger37MarginWalletActions from "@/components/Ledger37MarginWalletActions";
@@ -407,19 +409,29 @@ export default function LedgerDetailAA({
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
-  // 日历视图模  // 权限判断：owner 或 admin 才能操作
+  // 37号委派管理员只可登记日历数字；所有展示/设置/资金维护使用独立全权判断。
   const userRole = (ledgerData as any)?.userRole;
-  const canEdit = userRole === 'owner' || userRole === 'admin';
+  let storedViewAsUserId: string | null = null;
+  try { storedViewAsUserId = sessionStorage.getItem('view-as-user-id'); } catch { /* 服务端仍核验代看 */ }
+  const ledger37Permission = {
+    ledgerId: Number(ledgerId), userId: Number(user?.id), ownerId: (ledgerData as any)?.ownerId,
+    memberRole: userRole, isViewingAs: Boolean(viewAsUserIdFromUrl || storedViewAsUserId),
+  };
+  const canManageLedger37 = isLedger37FullManager(ledger37Permission);
+  const canRecordCalendarNumber = canRecordLedger37Calendar(ledger37Permission);
+  const canEdit = ledgerId === 37 ? canManageLedger37 : userRole === 'owner' || userRole === 'admin';
   // 37号账本的分红记录属于胡大叔专属管理功能；其他管理员和成员仅可查看概览金额。
-  const canManageDividends = ledgerId === 37 ? Number(user?.id) === 870413 : canEdit;
+  const canManageDividends = ledgerId === 37 ? canManageLedger37 : canEdit;
   // 视角切换仅账本创建者（owner）可用，管理员不可切换他人视角
-  const canSwitchView = userRole === 'owner';
+  const canSwitchView = ledgerId === 37 ? canManageLedger37 : userRole === 'owner';
   // 隐藏悬浮+按钮：账本 ID=37（"2026 AA"私人定制账本）对所有人隐藏，仅保留点击日历格子添加记录
   const hideFloatingAddButton = ledgerId === 37;
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
   // 点击日历日期后先展示只读快览；管理员可从快览底部继续编辑或新增当日记录。
   const [calendarDateDetail, setCalendarDateDetail] = useState<CalendarDateDetail | null>(null);
+  const [calendarNumberEditor, setCalendarNumberEditor] = useState<{ categoryId: number; date: string } | null>(null);
+  const calendarNumberTapRef = useRef<{ categoryId: number; date: string; at: number } | null>(null);
   // 汇总日历（全部模式，概览下方）独立月份状态
   const [summaryCalendarDate, setSummaryCalendarDate] = useState(() => {
     const d = new Date();
@@ -484,14 +496,14 @@ export default function LedgerDetailAA({
   const canManageMargins = ledgerId === 37 && marginActorPermission.isFetchedAfterMount
     && !marginActorPermission.error
     && marginActorPermission.data?.canManageMargins === true
-    && marginActorPermission.data.operator?.id === 870413;
+    && marginActorPermission.data.operator?.id === 870413 && canManageLedger37;
   // 管理员维护端仍需完整看到暂停后的后续录入，以便更正或重启；普通成员及管理员代看
   // 普通成员时，只能看到暂停日（最后结算日）及以前的数据。
   const isMemberFacingLedgerView = !canEdit || Boolean(viewAsMember && viewAsMember.role === 'member');
   // 普通成员及管理员代入普通成员时，日历不应暴露单日资金/维护快览；仅管理员自身或代入管理角色时保留它。
   const canOpenCalendarDayDetail = canEdit && (!viewAsMember || viewAsMember.role === 'owner' || viewAsMember.role === 'admin');
   // 胡大叔（JiamG）超级管理员专属：仅本人在37号账本首页可见利息与保证金快捷入口。
-  const isJiamGSuperAdmin = ledgerId === 37 && Number(user?.id) === 870413 && !viewAsUserId;
+  const isJiamGSuperAdmin = canManageLedger37 && !viewAsUserId;
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   const [viewAsSearch, setViewAsSearch] = useState('');
   const trpcUtils = trpc.useUtils();
@@ -662,10 +674,7 @@ export default function LedgerDetailAA({
   // 仅在至少获得一笔股票份额且到达该份额开始日期后，才会在首页和标签下拉中看到它。
   // 以下权限仅控制个人概览/份额：除胡大叔本人外，均按获配批次核算，代看亦同。
   // 标签日历和下方走势单独查询标签总盘，不使用此权限决定收益口径。
-  const canViewLedger37StockTotal = ledgerId === 37
-    && Number(user?.id) === 870413
-    && userRole === 'owner'
-    && !viewAsUserId;
+  const canViewLedger37StockTotal = canManageLedger37 && !viewAsUserId;
   const stockParticipantView = ledgerId === 37 && !canViewLedger37StockTotal;
   const r1PresentationScope = ledgerId === 37;
   const r1PresentationQuery = trpc.ledger.getLedger37PresentationContext.useQuery(
@@ -823,13 +832,13 @@ export default function LedgerDetailAA({
     void refetchTransactions();
   }, [selectedTagId, refetchTransactions]);
 
-  // admin 进入账本时默认选中 YH 标签（仅首次加载，未手动选过时生效）
+  // 非37账本沿用管理员默认标签；37委派管理员与普通成员保持相同首页。
   useEffect(() => {
-    if (userRole === 'admin' && categories.length > 0 && selectedTagId === null) {
+    if (ledgerId !== 37 && userRole === 'admin' && categories.length > 0 && selectedTagId === null) {
       const yhTag = categories.find((c: any) => c.name === 'YH');
       if (yhTag) setSelectedTagId(yhTag.id);
     }
-  }, [userRole, categories]);
+  }, [ledgerId, userRole, categories]);
 
   // 当前选中的标签名
   const selectedTag = useMemo(() => {
@@ -2340,7 +2349,17 @@ export default function LedgerDetailAA({
     });
   };
 
+  const openCalendarNumberEditor = (day: number) => {
+    const date = getDateStr(day);
+    if (!canRecordCalendarNumber || !selectedTagId || isSelectedStockPortfolio
+      || date > new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)) return;
+    calendarNumberTapRef.current = null;
+    setCalendarDateDetail(null);
+    setCalendarNumberEditor({ categoryId: selectedTagId, date });
+  };
+
   const openCalendarRecordEditor = (dateStr: string) => {
+    if (ledgerId === 37 && !canManageLedger37) return;
     setCalendarDateDetail(null);
     // 股票标签维持原有的统一持仓维护入口。
     if (isSelectedStockPortfolio && selectedTagId) {
@@ -2397,7 +2416,7 @@ export default function LedgerDetailAA({
     return <div className="space-y-4 p-4"><button type="button" onClick={() => { setShowStockPortfolio(false); setSelectedTagId(null); }} className="text-sm text-gray-500">返回</button><p className="text-sm text-gray-500">{r1PresentationQuery.isError ? '展示设置读取失败，请重试' : '正在读取展示设置…'}</p>{r1PresentationQuery.isError && <button type="button" onClick={() => { void r1PresentationQuery.refetch(); }} className="text-sm text-[#D32F2F]">重试</button>}</div>;
   }
   if (r1ShowsAi) {
-    return <Ledger37AiHome key={`ledger37-ai-${marginTargetUserId}`} viewerUserId={marginTargetUserId} onBack={onBack} />;
+    return <Ledger37AiHome key={`ledger37-ai-${marginTargetUserId}`} viewerUserId={marginTargetUserId} onBack={onBack} canRecordCalendar={r1PresentationQuery.data?.canRecordCalendar === true} />;
   }
   if (showStockPortfolio && selectedStockObservationTag && canShowStockObservationAccount) {
     return (
@@ -2994,11 +3013,25 @@ export default function LedgerDetailAA({
                       });
                       const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
                       const canOpenCalendarCell = !isNonTrading && (canOpenCalendarDayDetail || Boolean(hasImages) || (isSelectedStockPortfolio && Boolean(selectedTagId)));
+                      const canRecordCalendarCell = canRecordCalendarNumber && !isNonTrading
+                        && !isSelectedStockPortfolio && Boolean(selectedTagId)
+                        && dayDateStr <= new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                       return (
                         <button
                           key={day}
                           onClick={() => { if (canOpenCalendarCell) handleDayClick(day); }}
-                          disabled={!canOpenCalendarCell}
+                          onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}
+                          onPointerUp={(event) => {
+                            if (!canRecordCalendarCell || event.pointerType !== 'touch' || !selectedTagId) return;
+                            const previous = calendarNumberTapRef.current;
+                            const now = Date.now();
+                            if (previous?.categoryId === selectedTagId && previous.date === dayDateStr && now - previous.at < 350) {
+                              openCalendarNumberEditor(day);
+                            } else {
+                              calendarNumberTapRef.current = { categoryId: selectedTagId, date: dayDateStr, at: now };
+                            }
+                          }}
+                          disabled={!canOpenCalendarCell && !canRecordCalendarCell}
                           className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
                             height: '50px',
@@ -3006,7 +3039,8 @@ export default function LedgerDetailAA({
                             border: cellBorder,
                             borderRadius: 8,
                             padding: '3px 2px',
-                            cursor: canOpenCalendarCell ? 'pointer' : 'default',
+                            cursor: canOpenCalendarCell || canRecordCalendarCell ? 'pointer' : 'default',
+                            touchAction: canRecordCalendarCell ? 'manipulation' : undefined,
                             position: 'relative',
                           }}
                         >
@@ -6001,7 +6035,15 @@ export default function LedgerDetailAA({
         );
       })()}
 
-      {/* ── 日历单日明细快览 ── */}
+      {canRecordCalendarNumber && calendarNumberEditor && <Ledger37CalendarNumberDialog
+        key={`${marginTargetUserId}:${calendarNumberEditor.categoryId}:${calendarNumberEditor.date}`}
+        categoryId={calendarNumberEditor.categoryId}
+        date={calendarNumberEditor.date}
+        onClose={() => setCalendarNumberEditor(null)}
+        onSaved={() => { void refetchTransactions(); }}
+      />}
+
+      {/* ── 日历单日明细快览：普通管理员不开放资金/管理详情 ── */}
       {calendarDateDetail && (() => {
         const detail = calendarDateDetail;
         const dateLabel = new Date(`${detail.date}T12:00:00+08:00`).toLocaleDateString('zh-CN', {

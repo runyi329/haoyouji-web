@@ -28,7 +28,7 @@ function fx(category_id = 2, patch: Record<string, unknown> = {}) {
   return { category_id, usd_cny_rate: '7', source: 'yahoo_usdcny_5m', quote_as_of: `${snapshotDate} 15:05:00`, locked_at: `${snapshotDate} 15:05:00`, ...patch };
 }
 function fixture() {
-  const state = { member: true, aiEnabled: true, viewerUserId: 201, viewer: { userId: 201 } as any,
+  const state = { canManage: false, member: true, aiEnabled: true, viewerUserId: 201, viewer: { userId: 201 } as any,
     ledgerId: 37, authError: null as any, lotError: null as any, quoteError: null as any, fxError: null as any, noConnection: false };
   const data = { lots: [lot()] as any[], quotes: [proof()] as any[], fx: [] as any[] };
   const log: Array<{ sql: string; values: any[] }> = [];
@@ -52,7 +52,7 @@ function fixture() {
   const auth = vi.fn(async () => {
     if (state.authError) throw state.authError;
     return { isMember: state.member, context: { ledgerId: state.ledgerId, aiEnabled: state.aiEnabled,
-      viewerUserId: state.viewerUserId, viewer: state.viewer, canManage: true } };
+      viewerUserId: state.viewerUserId, viewer: state.viewer, canManage: state.canManage } };
   });
   const db = vi.fn(async () => state.noConnection ? null : conn);
   const read = runInNewContext(compiled, { Error, Map, Set, BigInt, Number, JSON, Array, Date,
@@ -131,9 +131,9 @@ describe('R1 source-wide holdings: exact shares, read-only and fail closed', () 
     await expect(f.read({ ...input, systemRole: patch.aiEnabled === false ? 'user' : 'admin' })).rejects.toThrow();
     expect(f.db).not.toHaveBeenCalled(); expect(f.log).toHaveLength(0);
   });
-  it('real system admin may read own member with AI off, but viewing-as does not inherit privilege', async () => {
+  it('nonowner system admin AI-off denied, owner preview allowed but never in viewing-as', async () => {
     const f = fixture(); f.state.aiEnabled = false;
-    expect((await f.read({ ...input, systemRole: 'admin' })).aiEnabled).toBe(false);
+    await expect(f.read({ ...input, systemRole: 'admin' })).rejects.toThrow('尚未开启'); expect(f.db).not.toHaveBeenCalled(); f.state.canManage = true; expect((await f.read(input)).aiEnabled).toBe(false);
     f.log.length = 0;
     await expect(f.read({ ...input, systemRole: 'admin', isViewingAs: true })).rejects.toThrow('尚未开启');
     expect(f.log).toHaveLength(0);

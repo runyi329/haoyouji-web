@@ -21,7 +21,7 @@ const categories = [
   { id: 90301, ledgerId: 37, name: '绝密普通乙', parentId: null, accounting_mode: 'manual_balance', isDefault: 0 },
 ];
 function fixture(raw = JSON.stringify({ [key]: 1, '绝密普通甲__margin': '123.123456789123456789', '绝密普通甲__marginCoin': 'CNY', '绝密普通甲__startDate': '2024-01-02' })) {
-  const state = { raw: raw as string | null, actorRole: 'admin', viewerRole: 'member', targetExists: true, ledgerExists: true, affectedRows: 1, failCommit: false, failRead: false, noParticipations: false, observer: false };
+  const state = { raw: raw as string | null, ownerId: 100, actorRole: 'admin', viewerRole: 'member', targetExists: true, ledgerExists: true, affectedRows: 1, failCommit: false, failRead: false, noParticipations: false, observer: false };
   const log: Array<{ sql: string; values: any[] }> = [];
   let snapshot: string | null = null;
   const conn = {
@@ -31,8 +31,8 @@ function fixture(raw = JSON.stringify({ [key]: 1, '绝密普通甲__margin': '12
     execute: vi.fn(async (sql: string, values: any[] = []) => {
       log.push({ sql, values });
       if (state.failRead && /^\s*SELECT/.test(sql)) throw new Error('read failed');
-      if (/FROM ledgers l/.test(sql)) return [state.ledgerExists ? [{ ledger_id: 37, member_user_id: state.targetExists ? values[0] : null, member_role: values[0] === 100 ? state.actorRole : state.viewerRole, initialBalances: values[0] === 100 ? '{}' : state.raw }] : []];
-      if (/SELECT id FROM ledgers/.test(sql)) return [state.ledgerExists ? [{ id: 37 }] : []];
+      if (/FROM ledgers l/.test(sql)) return [state.ledgerExists ? [{ ledger_id: 37, ledger_owner_id: state.ownerId, member_user_id: state.targetExists ? values[0] : null, member_role: values[0] === 100 ? state.actorRole : state.viewerRole, initialBalances: values[0] === 100 ? '{}' : state.raw }] : []];
+      if (/SELECT id, ownerId AS ledger_owner_id FROM ledgers/.test(sql)) return [state.ledgerExists ? [{ id: 37, ledger_owner_id: state.ownerId }] : []];
       if (/FROM ledger_members/.test(sql)) return [[{ id: 10, userId: 100, role: state.actorRole, initial_balances: '{}' }, ...(state.targetExists ? [{ id: 20, userId: 201, role: state.viewerRole, initial_balances: state.raw }] : [])]];
       if (/UPDATE ledger_members/.test(sql)) {
         expect(sql).toContain('updatedAt = updatedAt'); expect(sql).toContain('BINARY initial_balances <=> BINARY ?');
@@ -44,7 +44,7 @@ function fixture(raw = JSON.stringify({ [key]: 1, '绝密普通甲__margin': '12
       if (/FROM ledger_categories c/.test(sql)) {
         if (/LEFT JOIN ledger_members/.test(sql)) {
           const category = categories.find(c => c.id === values[1]);
-          return [category ? [{ ...category, member_user_id: state.targetExists ? values[0] : null, member_role: values[0] === 100 ? state.actorRole : state.viewerRole, initialBalances: values[0] === 100 ? '{}' : state.raw }] : []];
+          return [category ? [{ ...category, ledger_owner_id: state.ownerId, member_user_id: state.targetExists ? values[0] : null, member_role: values[0] === 100 ? state.actorRole : state.viewerRole, initialBalances: values[0] === 100 ? '{}' : state.raw }] : []];
         }
         return [categories.filter(c => /manual_balance/.test(sql) ? c.accounting_mode === 'manual_balance' : c.accounting_mode === 'stock_portfolio')];
       }
@@ -79,7 +79,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe('ledger37唯一全局AI设置', () => {
   it('旧fixture缺少资料字段返回viewer:null，原配置和权限来源不变', async () => {
     const f = fixture();
-    expect(await getLedger37PresentationContext(self)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, aiEnabled: true, viewer: null, isViewingAs: false });
+    expect(await getLedger37PresentationContext(self)).toEqual({ ledgerId: 37, viewerUserId: 201, canManage: false, canRecordCalendar: false, aiEnabled: true, viewer: null, isViewingAs: false });
     expect(f.log).toHaveLength(1); expect(f.writes()).toHaveLength(0);
   });
   it.each([null, '', '{}', `{"${legacy}":1}`, `{"${key}":0,"${legacy}":1}`])('缺失/0覆盖遗留tagtrue %s', async raw => { fixture(raw as any); expect((await getLedger37PresentationContext(self)).aiEnabled).toBe(false); expect((await getR1StockPresentationContext({ ...self, categoryId: 90250 })).aiEnabled).toBe(false); });
@@ -87,8 +87,8 @@ describe('ledger37唯一全局AI设置', () => {
   it.each([`{"${key}":1,"${key}":0}`, `{"${key}":1,"__ledger37AiDispl\\u0061y":0}`])('重复全局键failclosed %s', async raw => { const f = fixture(raw); await expect(getLedger37PresentationContext(self)).rejects.toThrow('重复'); await expect(setLedger37AiDisplay(setter)).rejects.toThrow('重复'); expect(f.writes()).toHaveLength(0); });
   it.each(['broken', 'null', '[]', '42', ' ', '"x"'])('损坏JSON读写拒绝%s', async raw => { const f = fixture(raw); await expect(getLedger37PresentationContext(self)).rejects.toThrow(); await expect(setLedger37AiDisplay(setter)).rejects.toThrow(); expect(f.writes()).toHaveLength(0); });
   it('只接受own数字0/1，不继承原型且legacy任意值不作权限来源', () => { expect(readLedger37AiEnabled(Object.create({ [key]: 1 }))).toBe(false); expect(readLedger37AiEnabled(readLedger37Balances(`{"${legacy}":true,"${legacy}":"bad"}`))).toBe(false); });
-  it.each(['owner', 'admin'])('真实%s可写，不依赖tag/eligibility', async role => { const f = fixture('{}'); f.state.actorRole = role; await expect(setLedger37AiDisplay(setter)).resolves.toEqual({ success: true, aiEnabled: true }); expect(f.log.some(r => /categories|participations|matrix/.test(r.sql))).toBe(false); });
-  it('普通actor禁写、系统管理员可写，代看另一admin仍无管理权限', async () => { const f = fixture('{}'); f.state.actorRole = 'member'; await expect(setLedger37AiDisplay(setter)).rejects.toThrow('管理员'); await setLedger37AiDisplay({ ...setter, systemRole: 'systemadmin' }); f.state.viewerRole = 'admin'; expect((await getLedger37PresentationContext({ ...self, systemRole: 'admin', isViewingAs: true })).canManage).toBe(false); await expect(setLedger37AiDisplay({ ...setter, systemRole: 'admin', isViewingAs: true })).rejects.toThrow('代看'); });
+  it.each(['member', 'owner', 'admin'])('真实owner的成员role=%s可写，不依赖tag/eligibility', async role => { const f = fixture('{}'); f.state.actorRole = role; await expect(setLedger37AiDisplay(setter)).resolves.toEqual({ success: true, aiEnabled: true }); expect(f.log.some(r => /categories|participations|matrix/.test(r.sql))).toBe(false); });
+  it('非owner普通actor和系统管理员均禁写，代看另一admin仍无管理权限', async () => { const f = fixture('{}'); f.state.ownerId = 999; f.state.actorRole = 'member'; await expect(setLedger37AiDisplay(setter)).rejects.toThrow('所有者'); await expect(setLedger37AiDisplay({ ...setter, systemRole: 'systemadmin' })).rejects.toThrow('所有者'); f.state.viewerRole = 'admin'; expect((await getLedger37PresentationContext({ ...self, systemRole: 'admin', isViewingAs: true })).canManage).toBe(false); await expect(setLedger37AiDisplay({ ...setter, systemRole: 'admin', isViewingAs: true })).rejects.toThrow('代看'); });
   it('target非member拒绝、读取非member拒绝，不误封其他账本stockoverview', async () => { const f = fixture('{}'); f.state.targetExists = false; await expect(setLedger37AiDisplay(setter)).rejects.toThrow('目标用户'); await expect(getLedger37PresentationContext(self)).rejects.toThrow('成员'); expect(await getMyStockTagOverview({ ledgerId: 52, userId: 201 })).toEqual([]); expect(f.writes()).toHaveLength(0); });
   it.each(['DEV_BYPASS_AUTH', 'PREVIEW_READONLY'])('%s禁止setter且不连DB', async name => { fixture('{}'); vi.stubEnv(name, 'true'); await expect(setLedger37AiDisplay(setter)).rejects.toThrow('只读预览'); expect(deps.tx).not.toHaveBeenCalled(); });
   it('锁序ledger→members，precision/旧flag/全部兄弟字节无损，仅单key，重复幂等', async () => {
@@ -113,7 +113,7 @@ describe('全账本安全目录与全stockguard', () => {
   it('两个stock详情仍原R1 DTO，safe行和收益方向不改', async () => { fixture(); for (const categoryId of [90250, 90251]) { const result = await getMyR1AiParticipationPortfolio({ ...self, categoryId }); safe(result); expect(result.summary.totalPnl).toBe(160); expect(result.participations[0]).toMatchObject({ quantity: 60, allocatedQuantity: 100, floatingPnl: 120, realizedPnl: 40 }); } });
   it('hidden股票与ordinary不从缓存恢复，项目编号不受标签重排影响', async () => { const f = fixture(); await getMyLedger37AiOverview(self); f.state.raw = JSON.stringify({ [key]: 1, '绝密R1__visible': 0, '绝密普通甲__visible': 0 }); const result = await getMyLedger37AiOverview(self); expect(result.projects.map(p => p.categoryId)).toEqual([90251, 90301]); safe(result); });
   it.each([getStockTagPortfolio, getStockTagPublicPortfolio, getMyStockTagParticipantPortfolio, getStockTagDailySnapshots, getStockTagCalendar, getMyStockTagObservationPortfolio, getStockLotParticipationMatrix])('%s对两个stock均先globalguard拒绝', async reader => { const f = fixture(); for (const categoryId of [90250, 90251]) await expect(reader({ ...self, categoryId })).rejects.toThrow('安全参与收益接口'); expect(f.log).toHaveLength(2); expect(f.log.every(r => /LEFT JOIN ledger_members/.test(r.sql))).toBe(true); });
-  it('globalfalse即使遗留tagtrue可走旧calendar，实际管理员raw，代看另一admin不提权', async () => { const f = fixture(`{"${key}":0,"${legacy}":1}`); expect(await getStockTagCalendar({ ...self, categoryId: 90251 })).toEqual([]); f.state.raw = `{"${key}":1}`; expect(await getStockTagCalendar({ ...self, categoryId: 90251, systemRole: 'admin' })).toEqual([]); f.state.viewerRole = 'admin'; await expect(getStockTagCalendar({ ...self, categoryId: 90251, isViewingAs: true, systemRole: 'admin' })).rejects.toThrow('安全参与收益接口'); });
+  it('globalfalse即使遗留tagtrue可走旧calendar，真实owner可raw而系统admin不可绕过，代看另一admin不提权', async () => { const f = fixture(`{"${key}":0,"${legacy}":1}`); expect(await getStockTagCalendar({ ...self, categoryId: 90251 })).toEqual([]); f.state.raw = `{"${key}":1}`; await expect(getStockTagCalendar({ ...self, categoryId: 90251, systemRole: 'admin' })).rejects.toThrow('安全参与收益接口'); f.state.ownerId = self.userId; expect(await getStockTagCalendar({ ...self, categoryId: 90251 })).toEqual([]); f.state.viewerRole = 'admin'; await expect(getStockTagCalendar({ ...self, categoryId: 90251, isViewingAs: true, systemRole: 'admin' })).rejects.toThrow('安全参与收益接口'); });
   it('safe目录与详情仍eligibility guard，无真实参与仅合法observer可进', async () => { const f = fixture(); f.state.noParticipations = true; expect(await getMyLedger37SafeStockDirectory(self)).toEqual([]); await expect(getMyR1AiParticipationPortfolio({ ...self, categoryId: 90251 })).rejects.toThrow('尚未对您开放'); f.state.observer = true; const result = await getMyLedger37SafeStockDirectory(self); expect(result).toHaveLength(2); safe(result); expect(f.log.every(r => /^\s*SELECT/.test(r.sql))).toBe(true); });
   it('stockoverview与观察目录全stock匿名，无硬编码R1投影范围', async () => { const f = fixture(); const result = await getMyStockTagOverview(self); expect(result).toHaveLength(2); safe(result); expect(result.map(r => r.name)).toEqual(['股票项目90250', '股票项目90251']); f.state.observer = true; const observation = await getMyStockTagObservationOverview(self); expect(observation.categories[0].categoryName).toBe('股票项目90251'); });
   it('读取失败不能fallback，globalfalse无admin不能读取AI安全目录', async () => { const f = fixture('{}'); await expect(getMyLedger37AiOverview(self)).rejects.toThrow('尚未开启'); f.state.failRead = true; await expect(getLedger37PresentationContext(self)).rejects.toThrow('read failed'); });

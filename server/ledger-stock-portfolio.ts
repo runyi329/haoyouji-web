@@ -7,6 +7,7 @@ import { guardCryptoPortfolioAllocationWrite } from './crypto-portfolio-allocati
 import { fetchCryptoPortfolioQuotes, getCachedCryptoPortfolioQuote, searchCryptoPortfolio } from './crypto-portfolio-quotes';
 import { getLiveCryptoUsdtCnyQuote } from './crypto-portfolio-fx';
 import { readTagVisible } from "../shared/tag-visibility";
+import { isLedger37FullManager } from "../shared/ledger37-permissions";
 import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
 import { fetchOvernightUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
@@ -587,19 +588,21 @@ async function assertStockTagAccess(
   systemRole?: string,
   write = false,
   initializeTables = write,
+  isViewingAs = false,
 ): Promise<Access> {
-  if (initializeTables) await ensureLedgerStockPortfolioTables();
   if (ledgerId !== STOCK_LEDGER_ID) {
     throw new Error("股票持仓标签仅适用于37号账本");
   }
+  if (write && isViewingAs) throw new Error("代看模式禁止维护股票持仓");
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
 
   const [categoryRows] = await (conn as any).execute(
     `SELECT c.id, c.ledgerId, c.name, c.parentId, c.accounting_mode,
-            m.userId AS member_user_id, m.role AS member_role, m.initial_balances AS initialBalances
+            l.ownerId AS ledger_owner_id, m.userId AS member_user_id, m.role AS member_role, m.initial_balances AS initialBalances
      FROM ledger_categories c
      LEFT JOIN ledger_members m ON m.ledgerId=c.ledgerId AND m.userId=?
+     INNER JOIN ledgers l ON l.id=c.ledgerId
      WHERE c.id = ? AND c.ledgerId = ? LIMIT 1`,
     [userId, categoryId, ledgerId],
   );
@@ -610,11 +613,11 @@ async function assertStockTagAccess(
 
   const member = category.member_user_id == null ? null
     : { role: category.member_role, initialBalances: category.initialBalances };
-  const isSystemAdmin = systemRole === "admin" || systemRole === "super_admin";
-  if (!member && !isSystemAdmin) throw new Error("您不是此账本的成员");
+  const canEdit = isLedger37FullManager({ ledgerId, userId, ownerId: category.ledger_owner_id, isViewingAs });
+  if (!member && !canEdit) throw new Error("您不是此账本的成员");
 
   // Keep the existing 37 tag visibility policy intact; a hidden tag cannot be accessed by guessing its ID.
-  if (member && member.role !== "owner") {
+  if (member && !canEdit) {
     try {
       const balances = member.initialBalances ? JSON.parse(member.initialBalances) : {};
       if (!readTagVisible(balances, String(category.name))) {
@@ -625,8 +628,9 @@ async function assertStockTagAccess(
     }
   }
 
-  const canEdit = isSystemAdmin || member?.role === "owner" || member?.role === "admin";
-  if (write && !canEdit) throw new Error("仅37号账本管理员可以维护股票持仓");
+  if (write && !canEdit) throw new Error("仅37号账本所有者可以维护股票持仓");
+  // 拒绝请求不初始化基础设施或写任何股票/资金数据。
+  if (initializeTables) await ensureLedgerStockPortfolioTables();
   return { categoryId, ledgerId, categoryName: String(category.name), canEdit };
 }
 
@@ -647,8 +651,9 @@ export async function getStockTagMode(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const access = await assertStockPresentationReadAccess(input);
   return { accountingMode: "stock_portfolio" as const, categoryName: access.categoryName, canEdit: access.canEdit };
 }
 
@@ -2321,8 +2326,8 @@ export async function getMyLedger37R1HoldingSnapshot(input: Ledger37Presentation
   if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
   if (!viewer.isMember) throw new Error('您不是此账本的成员');
   if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
-  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
-  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const canPreview = !input.isViewingAs && viewer.context.canManage;
+  if (!viewer.context.aiEnabled && !canPreview) throw new Error('账本AI展示尚未开启');
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接不可用');
   // CAST prevents mysql2 decimalNumbers/Number precision loss. Category remains
@@ -2478,8 +2483,8 @@ export async function getMyLedger37MemberClosedTrades(input: Ledger37Presentatio
   if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
   if (!viewer.isMember) throw new Error('您不是此账本的成员');
   if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
-  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
-  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const canPreview = !input.isViewingAs && viewer.context.canManage;
+  if (!viewer.context.aiEnabled && !canPreview) throw new Error('账本AI展示尚未开启');
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接不可用');
   const today = beijingDate();
@@ -2520,7 +2525,7 @@ export async function getMyLedger37MemberClosedTrades(input: Ledger37Presentatio
     if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId || state.context.categoryId !== categoryId) throw new Error('持仓展示身份不匹配');
     if (!state.isMember) throw new Error('您不是此账本的成员');
     if (state.context.aiEnabled !== viewer.context.aiEnabled) throw new Error('持仓展示AI状态已变化，请重试');
-    if (!state.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+    if (!state.context.aiEnabled && (!canPreview || !state.context.canManage)) throw new Error('账本AI展示尚未开启');
     if (!allowedCategories.includes(categoryId)) allowedCategories.push(categoryId);
   }
   const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled,
@@ -2595,8 +2600,8 @@ export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37Presenta
   if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
   if (!viewer.isMember) throw new Error('您不是此账本的成员');
   if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
-  const systemAdmin = !input.isViewingAs && ['admin', 'super_admin', 'systemadmin'].includes(input.systemRole || '');
-  if (!viewer.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+  const canPreview = !input.isViewingAs && viewer.context.canManage;
+  if (!viewer.context.aiEnabled && !canPreview) throw new Error('账本AI展示尚未开启');
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接不可用');
   const today = beijingDate();
@@ -2622,7 +2627,7 @@ export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37Presenta
     if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId || state.context.categoryId !== categoryId) throw new Error('持仓展示身份不匹配');
     if (!state.isMember) throw new Error('您不是此账本的成员');
     if (state.context.aiEnabled !== viewer.context.aiEnabled) throw new Error('持仓展示AI状态已变化，请重试');
-    if (!state.context.aiEnabled && !systemAdmin) throw new Error('账本AI展示尚未开启');
+    if (!state.context.aiEnabled && (!canPreview || !state.context.canManage)) throw new Error('账本AI展示尚未开启');
     if (!allowedCategories.includes(categoryId)) allowedCategories.push(categoryId);
   }
   const holdings: Array<import('../shared/ledger37-ai-holdings').Ledger37HoldingPosition & {
@@ -3035,6 +3040,7 @@ export async function createStockTagEvent(input: {
   categoryId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
   eventType: StockEventType;
   symbol?: string;
   quantity?: number;
@@ -3045,7 +3051,7 @@ export async function createStockTagEvent(input: {
   correctsEventId?: number;
   profitAllocations?: StockSaleProfitAllocationInput[];
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const type = input.eventType;
   const note = String(input.note || "").trim().slice(0, 3000);
   const serverRegisteredAt = new Date();
@@ -3195,9 +3201,10 @@ export async function voidStockTagEvent(input: {
   eventId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
   reason: string;
 }) {
-  await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const reason = String(input.reason || "").trim().slice(0, 300);
   if (!reason) throw new Error("请填写作废原因");
   await ensureStockCalendarResultTable();
@@ -3319,6 +3326,7 @@ export async function correctStockTagEvent(input: {
   eventId: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
   eventType: StockEventType;
   symbol?: string;
   quantity?: number;
@@ -3327,7 +3335,7 @@ export async function correctStockTagEvent(input: {
   note?: string;
   reason: string;
 }) {
-  await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
@@ -3946,7 +3954,7 @@ export async function getStockLotParticipationMatrix(input: { ledgerId: number; 
   // The matrix names every participant and their allocated quantities.  It is an
   // administrator maintenance view only; ordinary members keep the separate
   // read-only endpoint that returns only their own allocations.
-  if (!access.canEdit) throw new Error("仅37号账本管理员可查看全员股票份额");
+  if (!access.canEdit) throw new Error("仅37号账本所有者可查看全员股票份额");
   return { ...await getStockLotParticipationMatrixInternal(access.categoryId), canEdit: access.canEdit };
 }
 
@@ -3961,8 +3969,9 @@ export async function updateStockTagLotNote(input: {
   note: string;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const lotId = Number(input.lotId);
   if (!Number.isInteger(lotId) || lotId <= 0) throw new Error("持仓编号无效");
   const note = String(input.note ?? "").trim().slice(0, 3000);
@@ -4000,8 +4009,9 @@ export async function setStockLotObservation(input: {
   pauseDate?: string;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, false);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, false, input.isViewingAs);
   const rawQuantity = validateStockObservationQuantity(input.quantity);
   const quantity = Number(rawQuantity.toFixed(8));
   if (typeof input.enabled !== 'boolean') throw new Error("观察开关必须是布尔值");
@@ -4107,11 +4117,12 @@ export async function setStockLotParticipation(input: {
   quantity: number;
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
   entryPrice?: number;
   startDate?: string;
   pauseDate?: string;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const quantity = Number(input.quantity);
   if (!Number.isFinite(quantity) || quantity < 0) throw new Error("参与股数必须为不小于 0 的数字");
   const specifiedEntryPrice = input.entryPrice === undefined ? undefined : Number(input.entryPrice);
@@ -4484,8 +4495,9 @@ export async function updateStockTagSale(input: {
   profitAllocations?: StockSaleProfitAllocationInput[];
   userId: number;
   systemRole?: string;
+  isViewingAs?: boolean;
 }) {
-  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, true, input.isViewingAs);
   const executionPrice = Number(input.executionPrice);
   if (!Number.isFinite(executionPrice) || executionPrice <= 0) throw new Error("实际卖出价格必须大于 0");
   const registeredAt = new Date();

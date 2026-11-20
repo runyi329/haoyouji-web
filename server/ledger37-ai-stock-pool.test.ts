@@ -1,3 +1,4 @@
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -44,7 +45,7 @@ function part(lots: any[], participations: any[] = [], usdCnyRate: number | null
   return { lots, participations, usdCnyRate, usdtCnyRate };
 }
 function fixture() {
-  const state = { member: true, role: 'member', raw: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }),
+  const state = { ownerId: 100, canManage: false, member: true, role: 'member', raw: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }),
     viewerUserId: 201, ledgerId: 37, ledgerExists: true, categoryError: '', noConnection: false,
     lotError: null as any, missingRows: false, fxError: false,
     usdQuote: { rate: 7, pair: 'USD/CNY', stale: false } as any,
@@ -62,14 +63,14 @@ function fixture() {
   const conn = { execute: vi.fn(async (sql: string, values: any[] = []) => {
     log.push({ sql, values });
     if (!/^\s*SELECT\b/.test(sql) || /FOR UPDATE/i.test(sql)) throw new Error('只允许SELECT');
-    if (/FROM ledgers l/.test(sql)) return [state.ledgerExists ? [{ ledger_id: state.ledgerId,
+    if (/FROM ledgers l/.test(sql)) return [state.ledgerExists ? [{ ledger_id: state.ledgerId, ledger_owner_id: state.ownerId,
       member_user_id: state.member ? values[0] : null, member_role: state.role, initialBalances: state.raw,
       viewer_user_id: state.member ? state.viewerUserId : null }] : []];
     if (/FROM ledger_categories c/.test(sql)) {
       if (/LEFT JOIN ledger_members/.test(sql)) {
         if (state.categoryError) throw new Error(state.categoryError);
         const category = catalog.find(item => item.id === values[1]);
-        return [category ? [{ ...category, member_user_id: state.member ? values[0] : null,
+        return [category ? [{ ...category, ledger_owner_id: state.ownerId, member_user_id: state.member ? values[0] : null,
           member_role: state.role, initialBalances: state.raw }] : []];
       }
       expect(values).toEqual([201, 37]);
@@ -95,7 +96,7 @@ function fixture() {
   const db = vi.fn(async () => state.noConnection ? null : conn);
   const runtime = runInNewContext(compiled, {
     Error, Map, Set, WeakMap, Number, JSON, Array, getDbConnection: db,
-    normalizePortfolioSymbol, portfolioCurrency, portfolioCashMultiplier, readTagVisible,
+    normalizePortfolioSymbol, portfolioCurrency, portfolioCashMultiplier, readTagVisible, isLedger37FullManager, canRecordLedger37Calendar,
     replaceTopLevelJsonValue, LEDGER37_AI_DISPLAY_KEY, R1_STOCK_LEDGER_ID: 37,
     getCachedMemberStockPortfolio: cache, r1MemberPresentationRows: privateRows,
     isCryptoPortfolioSymbol,
@@ -181,11 +182,11 @@ describe('AI选股池权限与SQL隔离', () => {
     }
     expect(f.log.every(item => /^\s*SELECT/.test(item.sql))).toBe(true);
   });
-  it('AIoff普通成员拒绝；adminself/owner/admin允许；系统管理员非会员仍拒绝', async () => {
+  it('AIoff非owner普通/admin/伪owner/systemadmin拒绝，唯一真实owner可预览', async () => {
     const f = fixture(); f.state.raw = '{}';
     await expect(f.read(self)).rejects.toThrow('尚未开启'); expect(f.cache).not.toHaveBeenCalled();
-    for (const role of ['owner', 'admin']) { f.state.role = role; expect((await f.read(self)).aiEnabled).toBe(false); }
-    f.state.role = 'member'; expect((await f.read({ ...self, systemRole: 'admin' })).aiEnabled).toBe(false);
+    for (const role of ['owner', 'admin']) { f.state.role = role; await expect(f.read(self)).rejects.toThrow('尚未开启'); }
+    f.state.role = 'member'; await expect(f.read({ ...self, systemRole: 'admin' })).rejects.toThrow('尚未开启'); f.state.ownerId = self.userId; expect((await f.read(self)).aiEnabled).toBe(false); f.state.ownerId = 100;
     f.state.member = false; await expect(f.read({ ...self, systemRole: 'admin' })).rejects.toThrow('成员');
   });
   it('admin代看不继承任何管理权限；开启后仍只展示目标会员股票', async () => {

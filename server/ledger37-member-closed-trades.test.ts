@@ -1,3 +1,4 @@
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -38,7 +39,7 @@ function closure(patch: Record<string, unknown> = {}) {
     participation_id: 44, projectName: 'SECRET', ...patch };
 }
 function fixture(realPermissions = false) {
-  const state = { member: true, aiEnabled: true, viewer: { userId: 201 } as any, viewerUserId: 201, ledgerId: 37,
+  const state = { ownerId: 100, canManage: false, member: true, aiEnabled: true, viewer: { userId: 201 } as any, viewerUserId: 201, ledgerId: 37,
     denied: new Set<number>(), categoryPatch: {} as any, identityPatch: {} as any,
     memberRole: 'member', balances: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }),
     observationTableExists: true, readError: null as any, categoryError: null as any, noConnection: false };
@@ -57,12 +58,12 @@ function fixture(realPermissions = false) {
     log.push({ sql, values });
     if (!/^\s*SELECT\b/.test(sql) || /FOR UPDATE|GET_LOCK/i.test(sql)) throw new Error('Offline fixture permits SELECT only');
     if (/FROM ledgers l LEFT JOIN ledger_members/.test(sql)) return [[{
-      ledger_id: state.ledgerId, member_user_id: state.member ? values[0] : null,
+      ledger_id: state.ledgerId, ledger_owner_id: state.ownerId, member_user_id: state.member ? values[0] : null,
       member_role: state.memberRole, initialBalances: state.balances,
       viewer_user_id: state.viewer ? state.viewer.userId : null, viewer_username: 'SECRET',
     }]];
     if (/FROM ledger_categories c\s+LEFT JOIN ledger_members/.test(sql)) return [[{
-      id: values[1], ledgerId: 37, name: `隐私类别${values[1]}`, parentId: null, accounting_mode: 'stock_portfolio',
+      id: values[1], ledgerId: 37, ledger_owner_id: state.ownerId, name: `隐私类别${values[1]}`, parentId: null, accounting_mode: 'stock_portfolio',
       member_user_id: state.member ? values[0] : null, member_role: state.memberRole,
       initialBalances: state.balances, ...state.categoryPatch,
     }]];
@@ -79,14 +80,14 @@ function fixture(realPermissions = false) {
   }) };
   const auth = vi.fn(async () => ({ isMember: state.member, context: {
     ledgerId: state.ledgerId, viewerUserId: state.viewerUserId, viewer: state.viewer,
-    aiEnabled: state.aiEnabled, canManage: true,
+    aiEnabled: state.aiEnabled, canManage: state.canManage,
   } }));
   const categoryAuth = vi.fn(async (request: any, connection: any) => {
     expect(connection).toBe(conn);
     if (state.categoryError) throw state.categoryError;
     if (state.denied.has(request.categoryId)) throw new Error('您无权查看此标签');
     return { isMember: state.member, context: { ledgerId: 37, categoryId: request.categoryId,
-      viewerUserId: request.userId, aiEnabled: state.aiEnabled, ...state.identityPatch } };
+      viewerUserId: request.userId, aiEnabled: state.aiEnabled, canManage: state.canManage, ...state.identityPatch } };
   });
   const db = vi.fn(async () => state.noConnection ? null : conn);
   const code = ts.transpileModule((realPermissions ? permissionBody + '\n' : '') + body + '\ngetMyLedger37MemberClosedTrades;', {
@@ -95,7 +96,7 @@ function fixture(realPermissions = false) {
   const read = runInNewContext(code, { Error, Number, JSON, Array, Date, Intl, Map, Set,
     readLedger37PresentationState: auth, readR1StockPresentationState: categoryAuth, getDbConnection: db,
     normalizeSymbol: normalizePortfolioSymbol, beijingDate: () => today,
-    readTagVisible, LEDGER37_AI_DISPLAY_KEY, replaceTopLevelJsonValue, R1_STOCK_LEDGER_ID: 37,
+    readTagVisible, isLedger37FullManager, canRecordLedger37Calendar, LEDGER37_AI_DISPLAY_KEY, replaceTopLevelJsonValue, R1_STOCK_LEDGER_ID: 37,
   }, { timeout: 1000 }) as (request: any) => Promise<any>;
   return { state, data, log, conn, db, auth, categoryAuth, read };
 }
@@ -187,9 +188,9 @@ describe('ledger37 actual member closure history: offline VM pure SELECT', () =>
     const f = fixture(); Object.assign(f.state, patch);
     await expect(f.read(input)).rejects.toThrow(); expect(f.db).not.toHaveBeenCalled(); expect(f.log).toEqual([]);
   });
-  it('system administrator AI-off is self-only and viewing-as loses that privilege', async () => {
+  it('AI-off nonowner system administrator rejected; real owner preview allowed without viewing-as', async () => {
     const f = fixture(); f.state.aiEnabled = false;
-    expect((await f.read({ ...input, systemRole: 'admin' })).aiEnabled).toBe(false); f.log.length = 0;
+    await expect(f.read({ ...input, systemRole: 'admin' })).rejects.toThrow('尚未开启'); expect(f.db).not.toHaveBeenCalled(); f.state.canManage = true; expect((await f.read(input)).aiEnabled).toBe(false); f.log.length = 0;
     await expect(f.read({ ...input, systemRole: 'admin', isViewingAs: true })).rejects.toThrow('尚未开启'); expect(f.log).toEqual([]);
   });
   it('viewing-as reads effective member alone and reauthorizes on every call', async () => {
@@ -236,7 +237,7 @@ describe('member closure history with actual pure global/category permissions in
     expect((await f.read(input)).closedTrades).toEqual([]);
     f.state.balances = JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1, __tagVisibilityDefault: 0, '隐私类别1__visible': 1 });
     expect((await f.read(input)).closedTrades).toHaveLength(1);
-    f.state.memberRole = 'owner'; f.state.balances = JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1, '隐私类别1__visible': 0 });
+    f.state.memberRole = 'member'; f.state.ownerId = input.userId; f.state.balances = JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1, '隐私类别1__visible': 0 });
     expect((await f.read(input)).closedTrades).toHaveLength(1);
   });
   it('actual category nonmember/invalid stock category/malformed settings fail rather than become empty', async () => {

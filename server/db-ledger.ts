@@ -3,6 +3,8 @@ import { pinyin } from 'pinyin-pro';
 import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
 import { TRPCError } from '@trpc/server';
 import { getLedgerRecordDateError } from '../shared/ledger-record-date';
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
+import { assertLedger37Owner, assertLedger37ResourceOwner, getLedger37Access } from './ledger37-calendar-recorder';
 
 /**
  * 从公司名提取拼音首字母缩写
@@ -387,7 +389,7 @@ ensureOpinionBookColumns().catch(console.error);
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
-export async function getUserLedgers(userId: number, isArchived: boolean = false) {
+export async function getUserLedgers(userId: number, isArchived: boolean = false, isViewingAs = false) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -480,10 +482,13 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         }
       }
       
-      const members = sortedMembersForLedger.slice(0, 4); // 最多显示4个成员头像
+      const permission37 = { ledgerId: ledger.id, userId, ownerId: ledger.ownerId, isViewingAs,
+        memberRole: memberRecords.find((m: any) => m.ledgerId === ledger.id)?.role };
+      const limited37 = ledger.id === 37 && !isLedger37FullManager(permission37);
+      const members = (limited37 ? sortedMembersForLedger.filter((m: any) => m.userId === userId) : sortedMembersForLedger).slice(0, 4); // 最多显示4个成员头像
 
       // memberCount 排除AI分身，只计算真实成员数量
-      const memberCount = membersRaw.filter((m: any) => m.memberType !== 'ai').length;
+      const memberCount = (limited37 ? membersRaw.filter((m: any) => m.userId === userId) : membersRaw).filter((m: any) => m.memberType !== 'ai').length;
 
       // 获取账目数量
       const recordCount = await db
@@ -532,6 +537,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         activeLotteryCount,
         userRole,
         lastActivityAt: lastActivityAt.toISOString(),
+        ...(ledger.id === 37 ? { canManage: !limited37, canRecordCalendar: canRecordLedger37Calendar(permission37) } : {}),
       };
     })
   );
@@ -700,7 +706,8 @@ export async function copyLedger(sourceLedgerId: number, userId: number) {
 /**
  * 获取单个账本详情
  */
-export async function getLedgerById(ledgerId: number, userId: number) {
+export async function getLedgerById(ledgerId: number, userId: number, isViewingAs = false) {
+  const scope37 = ledgerId === 37 ? await getLedger37Access({ user: { id: userId }, isViewingAs }) : null;
   try {
     const db = await getLedgerDb();
     if (!db) {
@@ -732,7 +739,9 @@ export async function getLedgerById(ledgerId: number, userId: number) {
     if (member.length > 0) {
       // 用户是账本成员，使用实际角色
       memberRole = member[0].role;
-    } else if (userRole === 'super_admin' || userRole === 'admin') {
+    } else if (scope37?.canManage) {
+      memberRole = 'owner';
+    } else if (ledgerId !== 37 && (userRole === 'super_admin' || userRole === 'admin')) {
       // 系统管理员但不是账本成员，给予 admin 角色（可查看但无 owner 豁免）
       memberRole = 'admin';
     } else {
@@ -766,8 +775,9 @@ export async function getLedgerById(ledgerId: number, userId: number) {
 
     const result = {
       ...ledger[0],
-      members,
+      members: scope37 && !scope37.canManage ? members.filter(m => m.userId === userId) : members,
       userRole: memberRole,
+      ...(scope37 ? { canManage: scope37.canManage, canRecordCalendar: scope37.canRecordCalendar } : {}),
     };
     return result;
   } catch (error) {
@@ -780,6 +790,7 @@ export async function getLedgerById(ledgerId: number, userId: number) {
  * 存档/取消存档账本
  */
 export async function archiveLedger(ledgerId: number, userId: number, isArchived: boolean) {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -811,6 +822,7 @@ export async function archiveLedger(ledgerId: number, userId: number, isArchived
  * 删除账本
  */
 export async function deleteLedger(ledgerId: number, userId: number) {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -845,6 +857,7 @@ export async function deleteLedger(ledgerId: number, userId: number) {
  * 邀请用户加入账本（通过用户名）
  */
 export async function inviteMemberByUsername(ledgerId: number, inviterUserId: number, inviteeUsername: string) {
+  await assertLedger37Owner({ user: { id: inviterUserId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1096,6 +1109,8 @@ export async function getLedgerCategories(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
+  const scope37 = ledgerId === 37 && userId ? await getLedger37Access({ user: { id: userId } }) : null;
+
   // 预设分类（ledgerId=0）对所有用户可见，不需要验证成员身份
   // 用户自定义分类由后续逻辑处理
   
@@ -1149,7 +1164,7 @@ export async function getLedgerCategories(
       if (memberRows.length > 0) {
         const memberRole = memberRows[0].role;
         // owner 看到全部标签，不过滤
-        if (memberRole !== 'owner') {
+        if (scope37 ? !scope37.canManage : memberRole !== 'owner') {
           const raw = memberRows[0].initialBalances;
           if (raw) {
             const balances = JSON.parse(raw) as Record<string, unknown>;
@@ -1184,6 +1199,7 @@ export async function getLedgerCategories(
       }
     } catch (e) {
       // 过滤失败时降级处理，返回全量
+      if (ledgerId === 37) throw e;
       console.error('[getLedgerCategories] 标签可见性过滤失败:', e);
     }
   }
@@ -1205,6 +1221,7 @@ export async function addLedgerCategory(data: {
   sortOrder?: number;
   createdBy: number;
 }) {
+  await assertLedger37Owner({ user: { id: data.createdBy } }, data.ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   // 权限验证：确认 createdBy 是该账本的成员，防止跨账本越权操作
@@ -1352,6 +1369,7 @@ async function getAllChildCategoryIds(db: any, parentId: number, ledgerId?: numb
  * 删除分类(支持级联删除)
  */
 export async function deleteLedgerCategory(categoryId: number, userId: number, cascade: boolean = false, force: boolean = false) {
+  await assertLedger37ResourceOwner({ user: { id: userId } }, 'category', categoryId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1491,6 +1509,7 @@ export async function replaceLedgerCategory(
   targetCategoryId: number,
   userId: number
 ) {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1574,6 +1593,7 @@ export async function updateLedgerCategory(
   },
   userId?: number
 ) {
+  await assertLedger37ResourceOwner({ user: { id: userId ?? 0 } }, 'category', categoryId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   // 获取分类信息（用于权限验证）
@@ -1628,7 +1648,8 @@ export async function updateLedgerCategory(
 /**
  * 获取账本成员列表
  */
-export async function getLedgerMembers(ledgerId: number, userId: number, userRole?: string) {
+export async function getLedgerMembers(ledgerId: number, userId: number, userRole?: string, isViewingAs = false) {
+  const scope37 = ledgerId === 37 ? await getLedger37Access({ user: { id: userId }, isViewingAs }) : null;
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1647,8 +1668,8 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
     .limit(1);
   
   // 系统级 admin/super_admin 直接跳过成员检查（与 getLedgerById 逻辑一致）
-  const isSysAdmin = userRole === 'admin' || userRole === 'super_admin';
-  if (membership.length === 0 && !isSysAdmin) {
+  const isSysAdmin = ledgerId !== 37 && (userRole === 'admin' || userRole === 'super_admin');
+  if (membership.length === 0 && !isSysAdmin && !scope37?.canManage) {
     throw new Error("您不是此账本的成员");
   }
 
@@ -1779,7 +1800,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
     }
   }
 
-  return deduped.map((member) => ({
+  return (scope37 && !scope37.canManage ? deduped.filter(m => m.userId === userId) : deduped).map((member) => ({
     ...member,
     walletBalance: canViewWalletBalance && member.memberType !== 'ai'
       ? (walletBalanceByUserId.get(Number(member.userId)) ?? 0)
@@ -1791,6 +1812,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
  * 生成邀请token
  */
 export async function generateInviteToken(ledgerId: number, userId: number) {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
@@ -1900,6 +1922,7 @@ export async function joinLedgerByToken(token: string, userId: number) {
  * 移除账本成员
  */
 export async function removeLedgerMember(ledgerId: number, operatorId: number, targetUserId: number) {
+  await assertLedger37Owner({ user: { id: operatorId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
@@ -2386,6 +2409,7 @@ export async function updateLedger(
     description?: string;
   }
 ) {
+  await assertLedger37Owner({ user: { id: requestUserId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -3090,6 +3114,7 @@ export async function addTransaction(data: {
   overwriteExisting?: boolean; // 37号账本重复日期+标签时，仅在用户明确确认后覆盖
   aaLockHeld?: boolean; // 内部标记：同日同标签命名锁已持有
 }): Promise<{ id: number; success: boolean; needApproval: boolean; approverIds: number[]; overwritten: boolean }> {
+  await assertLedger37Owner({ user: { id: data.userId } }, data.ledgerId);
   // 仅限制37号实际账目；必须在加锁、覆盖旧记录及其他写入前拒绝未来日期。
   const dateError = getLedgerRecordDateError(data.ledgerId, data.transactionDate);
   if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
@@ -3818,6 +3843,7 @@ export async function deleteTransaction(
   recordId: number,
   userId: number
 ) {
+  await assertLedger37ResourceOwner({ user: { id: userId } }, 'record', recordId);
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
   
@@ -4038,6 +4064,7 @@ export async function restoreTransaction(
   recordId: number,
   userId: number
 ) {
+  await assertLedger37ResourceOwner({ user: { id: userId } }, 'record', recordId);
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
   
@@ -4101,12 +4128,12 @@ export async function restoreTransaction(
 /**
  * 清理超过60天的已删除记录（永久删除）
  */
-export async function purgeExpiredDeletedRecords() {
+export async function purgeExpiredDeletedRecords(includeLedger37 = false) {
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
   
   await conn.execute(
-    'DELETE FROM ledger_records WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 60 DAY)'
+    `DELETE FROM ledger_records WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 60 DAY) ${includeLedger37 ? '' : 'AND ledgerId <> 37'}`
   );
   
   return { success: true };
@@ -4136,6 +4163,7 @@ export async function updateTransaction(
     aaLockHeld?: boolean; // 内部标记：同日同标签命名锁已持有
   }
 ): Promise<{ success: boolean; overwritten: boolean }> {
+  await assertLedger37ResourceOwner({ user: { id: userId } }, 'record', recordId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -5406,6 +5434,7 @@ export async function transferOwnership(
   currentOwnerId: number,
   newOwnerId: number
 ) {
+  await assertLedger37Owner({ user: { id: currentOwnerId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
@@ -5483,6 +5512,7 @@ export async function transferOwnership(
  * 密钥存储在数据库中，如果不存在则自动生成
  */
 export async function getLedgerSecretKey(ledgerId: number, userId: number) {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
@@ -5679,6 +5709,7 @@ export async function updateLedgerFeatures(
     requireImage?: boolean;
   }
 ): Promise<void> {
+  await assertLedger37Owner({ user: { id: userId } }, ledgerId);
   const db = await getLedgerDb();
   if (!db) throw new Error("数据库连接失败");
 
