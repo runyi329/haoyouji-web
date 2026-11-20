@@ -2586,6 +2586,141 @@ export async function getMyLedger37MemberClosedTrades(input: Ledger37Presentatio
 }
 
 /**
+ * Proven member allocation and per-sale changes, not source-wide buy/sell events.
+ * A participation proves one allocation (new), even after remaining reaches zero.
+ * Mutable allocated_quantity / updated_at cannot reconstruct interim deltas: do
+ * not invent increase events. Internal evidence dates/IDs only order the events;
+ * the public projection contains exactly symbol, stockName and action. Pure SELECT.
+ */
+export async function getMyLedger37MemberPositionChanges(input: Ledger37PresentationInput): Promise<{
+  viewerUserId: number; aiEnabled: boolean;
+  positionChanges: import('../shared/ledger37-ai-holdings').Ledger37HoldingPositionChange[];
+}> {
+  const viewer = await readLedger37PresentationState(input);
+  if (input.ledgerId !== 37 || viewer.context.ledgerId !== 37 || viewer.context.viewerUserId !== input.userId) throw new Error('持仓展示身份不匹配');
+  if (!viewer.isMember) throw new Error('您不是此账本的成员');
+  if (!viewer.context.viewer || viewer.context.viewer.userId !== input.userId) throw new Error('持仓展示用户档案无效');
+  const canPreview = !input.isViewingAs && viewer.context.canManage;
+  if (!viewer.context.aiEnabled && !canPreview) throw new Error('账本AI展示尚未开启');
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接不可用');
+  const today = beijingDate();
+  const observationTableExists = await stockObservationTableExists(conn);
+  const observationGuard = observationTableExists ? `
+       AND NOT EXISTS (SELECT 1 FROM ledger_stock_lot_observations o
+         WHERE o.ledger_id=p.ledger_id AND o.category_id=p.category_id
+           AND o.lot_id=p.lot_id AND o.user_id=p.user_id AND o.enabled=1)` : '';
+  const scopeJoins = `
+     FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_categories category ON category.id=p.category_id AND category.ledgerId=p.ledger_id
+       AND category.parentId IS NULL AND category.accounting_mode='stock_portfolio'
+     INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id
+       AND opening.ledger_id=p.ledger_id AND opening.category_id=p.category_id
+       AND opening.symbol=l.symbol AND opening.status='active' AND opening.event_type IN ('buy','add')`;
+  // Missing start evidence is not replaced with today. Remaining/pause dates do
+  // not establish a new allocation or a sale and therefore are not predicates.
+  const scopeWhere = `
+     WHERE p.ledger_id=? AND p.user_id=? AND p.allocated_quantity>0
+       AND COALESCE(p.start_date, DATE(l.opened_at)) <= ?${observationGuard}`;
+  const [categoryRows] = await conn.execute(
+    `SELECT DISTINCT p.category_id AS id${scopeJoins}${scopeWhere} ORDER BY p.category_id`, [37, input.userId, today]);
+  const allowedCategories: number[] = [];
+  for (const category of categoryRows as any[]) {
+    const categoryId = Number(category.id);
+    if (!Number.isSafeInteger(categoryId) || categoryId <= 0) throw new Error('个人交易类别不可用');
+    if (allowedCategories.includes(categoryId)) continue;
+    let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
+    try { state = await readR1StockPresentationState({ ...input, categoryId }, conn); }
+    catch (error) {
+      if (error instanceof Error && error.message === '您无权查看此标签') continue;
+      throw error;
+    }
+    if (state.context.ledgerId !== 37 || state.context.viewerUserId !== input.userId || state.context.categoryId !== categoryId) throw new Error('持仓展示身份不匹配');
+    if (!state.isMember) throw new Error('您不是此账本的成员');
+    if (state.context.aiEnabled !== viewer.context.aiEnabled) throw new Error('持仓展示AI状态已变化，请重试');
+    if (!state.context.aiEnabled && (!canPreview || !state.context.canManage)) throw new Error('账本AI展示尚未开启');
+    allowedCategories.push(categoryId);
+  }
+  const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled,
+    positionChanges: [] as import('../shared/ledger37-ai-holdings').Ledger37HoldingPositionChange[] };
+  if (!allowedCategories.length) return result;
+  const categoryGuard = ` AND p.category_id IN (${allowedCategories.map(() => '?').join(',')})`;
+  const projection = `p.category_id, p.ledger_id, p.user_id, l.symbol, l.stock_name,
+       DATE_FORMAT(p.start_date,'%Y-%m-%d') AS start_date,
+       DATE_FORMAT(l.opened_at,'%Y-%m-%d %H:%i:%s') AS opened_at,
+       CAST(p.id AS CHAR) AS participation_id`;
+  const parameters = [37, input.userId, today, ...allowedCategories];
+  const [rows] = await conn.execute(
+    `SELECT ${projection}, 'new' AS action, CAST(p.allocated_quantity AS CHAR) AS event_quantity,
+       DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS event_at,
+       CAST(p.id AS CHAR) AS event_order_id, CAST(p.id AS CHAR) AS event_id
+     ${scopeJoins}${scopeWhere}${categoryGuard}
+     UNION ALL
+     SELECT ${projection}, 'decrease' AS action, CAST(c.quantity AS CHAR) AS event_quantity,
+       DATE_FORMAT(sale.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS event_at,
+       CAST(sale.id AS CHAR) AS event_order_id, CAST(c.id AS CHAR) AS event_id
+     ${scopeJoins}
+     INNER JOIN ledger_stock_participation_closures c ON c.participation_id=p.id AND c.quantity>0
+     INNER JOIN ledger_stock_events sale ON sale.id=c.sell_event_id
+       AND sale.ledger_id=p.ledger_id AND sale.category_id=p.category_id
+       AND sale.symbol=l.symbol AND sale.status='active' AND sale.event_type IN ('reduce','sell') AND sale.quantity>0
+     INNER JOIN ledger_stock_event_lot_allocations a ON a.event_id=c.sell_event_id AND a.lot_id=l.id AND a.quantity>0
+     ${scopeWhere}${categoryGuard}`, [...parameters, ...parameters]);
+  const validDay = (day: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(day)
+    && Number.isFinite(Date.parse(`${day}T00:00:00Z`))
+    && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+  const evidenceTime = (value: unknown): number | null => {
+    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+    if (typeof value !== 'string') return null;
+    const raw = value.trim();
+    const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(Z|[+-]\d{2}:\d{2})?$/.exec(raw);
+    if (!match || !validDay(match[1]) || (match[2] !== undefined
+      && (Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4] || 0) > 59))
+      || (match[5] && match[2] === undefined)) return null;
+    const wallClock = raw.replace(' ', 'T');
+    const ms = Date.parse(match[5] ? wallClock : `${wallClock.length === 10 ? `${wallClock}T00:00:00` : wallClock}+08:00`);
+    return Number.isFinite(ms) ? ms : null;
+  };
+  const evidenceId = (value: unknown): string => {
+    if (typeof value !== 'string' || !/^\d{1,65}$/.test(value) || !/[1-9]/.test(value)) throw new Error('个人交易证据不可用');
+    return value.replace(/^0+/, '');
+  };
+  const compareId = (a: string, b: string): number => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+  const events: Array<{ change: import('../shared/ledger37-ai-holdings').Ledger37HoldingPositionChange;
+    time: number | null; categoryId: number; participationId: string; orderId: string; eventId: string }> = [];
+  for (const row of rows as any[]) {
+    const categoryId = Number(row.category_id);
+    if (Number(row.ledger_id) !== 37 || Number(row.user_id) !== input.userId || !allowedCategories.includes(categoryId)) throw new Error('个人交易类别越权');
+    if (row.action !== 'new' && row.action !== 'decrease') throw new Error('个人交易动作不可用');
+    // CAST decimal strings checked exactly, with no floating point/epsilon loss.
+    if (typeof row.event_quantity !== 'string' || !/^-?\d{1,65}(?:\.\d{1,18})?$/.test(row.event_quantity)) throw new Error('个人交易数量不可用');
+    if (row.event_quantity.startsWith('-') || !/[1-9]/.test(row.event_quantity)) continue;
+    const openedAt = evidenceTime(row.opened_at), startAt = evidenceTime(row.start_date);
+    // The SQL DATE scope is repeated defensively for malformed offline/driver data.
+    if (row.start_date != null && startAt === null) continue;
+    const effectiveStart = startAt ?? openedAt;
+    if (effectiveStart === null || new Date(effectiveStart + 8 * 60 * 60 * 1000).toISOString().slice(0, 10) > today) continue;
+    const symbol = normalizeSymbol(row.symbol);
+    if (typeof row.stock_name !== 'string' || !row.stock_name.trim()) throw new Error('个人交易股票名称无效');
+    const actualTime = evidenceTime(row.event_at);
+    events.push({ change: { symbol, stockName: row.stock_name, action: row.action },
+      time: row.action === 'new' ? actualTime ?? startAt ?? openedAt : actualTime,
+      categoryId, participationId: evidenceId(row.participation_id),
+      orderId: evidenceId(row.event_order_id), eventId: evidenceId(row.event_id) });
+  }
+  // Newest proven time first; unknown times last with stable exact-ID ordering.
+  // UNION ALL retains every sale and every lot allocation, including same-symbol
+  // duplicates. Nothing is grouped, truncated, or given a made-up snapshot date.
+  events.sort((a, b) => (a.time === null ? (b.time === null ? 0 : 1) : b.time === null ? -1 : b.time - a.time)
+    || (a.change.action === b.change.action ? 0 : a.change.action === 'decrease' ? -1 : 1)
+    || a.categoryId - b.categoryId || compareId(b.orderId, a.orderId)
+    || compareId(b.eventId, a.eventId) || compareId(b.participationId, a.participationId));
+  result.positionChanges = events.map(event => event.change);
+  return result;
+}
+
+/**
  * Effective member's real remaining allocations only, never source-wide lots.
  * Global and each category's pure read authorization precede the holdings read.
  * Uses the source snapshot's exact decimal / strict archived close + FX rules;

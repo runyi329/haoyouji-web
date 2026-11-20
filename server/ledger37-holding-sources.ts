@@ -1,6 +1,6 @@
-import type { Ledger37HoldingClosedTrade, Ledger37HoldingPosition, Ledger37HoldingSources } from '../shared/ledger37-ai-holdings';
+import type { Ledger37HoldingClosedTrade, Ledger37HoldingPosition, Ledger37HoldingPositionChange, Ledger37HoldingSources } from '../shared/ledger37-ai-holdings';
 import { readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
-import { getMyLedger37MemberClosedTrades, getMyLedger37MemberHoldingSnapshot, getMyLedger37R1HoldingSnapshot } from './ledger-stock-portfolio';
+import { getMyLedger37MemberClosedTrades, getMyLedger37MemberHoldingSnapshot, getMyLedger37MemberPositionChanges, getMyLedger37R1HoldingSnapshot } from './ledger-stock-portfolio';
 import { getExternalHoldingSources } from './holding-source-cache';
 
 /** Read-only adapter. Never exports private participation, category, lot, order or JSON data. */
@@ -72,6 +72,16 @@ export async function getMyLedger37HoldingSources(input: Ledger37PresentationInp
     // Each proven partial sale is its own row, even with identical display fields.
     closedTrades.push({ symbol: row.symbol, stockName: row.stockName, openedDate: row.openedDate, closedDate: row.closedDate });
   }
+  const changes = await getMyLedger37MemberPositionChanges(input);
+  if (changes.viewerUserId !== input.userId || changes.aiEnabled !== state.context.aiEnabled) throw new Error('个人仓位变动展示状态已变化，请重试');
+  if (!Array.isArray(changes.positionChanges)) throw new Error('个人仓位变动不可用');
+  const positionChanges: Ledger37HoldingPositionChange[] = [];
+  for (const row of changes.positionChanges) {
+    if (!row || typeof row.symbol !== 'string' || !row.symbol.trim() || typeof row.stockName !== 'string' || !row.stockName.trim()
+      || !['new', 'increase', 'decrease'].includes(row.action)) throw new Error('个人仓位变动无效');
+    // No spreading raw participations or audit data; preserve every proven event.
+    positionChanges.push({ symbol: row.symbol, stockName: row.stockName, action: row.action });
+  }
   const checkedAt = new Date().toISOString();
   return {
     viewerUserId: state.context.viewerUserId,
@@ -84,7 +94,7 @@ export async function getMyLedger37HoldingSources(input: Ledger37PresentationInp
         ? `仅含当前未结束持仓，按股票代码及币种合并。比例为当前股数按${snapshot.valuationAsOf}统一日结行情估值，占全部当前持仓市值的比例（报告币种${snapshot.reportingCurrency}）；A股使用当日收盘，美股使用此前最近纽约交易日收盘。`
         : '仅含当前未结束持仓，按股票代码及币种合并。股数来自有效开仓减有效卖出；缺少完整同日结行情或可靠同报告币种汇率时，持仓比例留空，不能按股数估算。',
       holdings,
-      memberPortfolio: { holdings: memberHoldings, valuationAsOf: member.valuationAsOf, reportingCurrency: member.reportingCurrency, closedTrades },
+      memberPortfolio: { holdings: memberHoldings, valuationAsOf: member.valuationAsOf, reportingCurrency: member.reportingCurrency, closedTrades, positionChanges },
     }, ...getExternalHoldingSources()],
   };
 }

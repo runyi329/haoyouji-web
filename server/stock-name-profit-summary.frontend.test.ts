@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
+import { parsePortfolioInstrument, portfolioDisplaySymbol, portfolioQuantityUnit } from '../shared/portfolio-instruments';
 
 type Scope = 'holding' | 'closed' | 'all';
 type Dimension = 'value' | 'pnl' | 'ratio';
@@ -14,6 +15,7 @@ type Row = {
   state: 'holding' | 'closed';
   openingValue: number | null;
   pnl: number | null;
+  quantity?: number | null;
   [extra: string]: unknown;
 };
 
@@ -71,9 +73,16 @@ function panel(tree: any) {
 }
 function metricRows(tree: any): Record<string, string> {
   return Object.fromEntries(children(panel(tree)).filter(row => React.isValidElement(row) && row.key != null).map(row => {
-    const heading = children(children(row)[0]);
-    return [text(heading[0]), text(heading[1])];
+    const name = find(row, node => node.props['data-summary-stock-name'] !== undefined, 'stock name');
+    const metric = find(row, node => node.props['data-summary-stock-metric'] !== undefined, 'stock metric');
+    return [text(name), text(metric)];
   }));
+}
+function quantityRows(tree: any): Record<string, string> {
+  return Object.fromEntries(children(panel(tree)).filter(row => React.isValidElement(row) && row.key != null).map(row => [
+    text(find(row, node => node.props['data-summary-stock-name'] !== undefined, 'stock name')),
+    text(find(row, node => node.props['data-summary-stock-quantity'] !== undefined, 'stock quantity')),
+  ]));
 }
 function topPnl(tree: any) {
   const summary = find(tree, node => node.type === 'summary', 'details title');
@@ -141,6 +150,7 @@ function harness(input: Row[] = fixture()) {
       if (name === 'lucide-react') return { ChevronDown: Icon };
       if (name === './StockSummaryImageDownload') return { StockSummaryImageDownload: Download };
       if (name === './ui/dropdown-menu') return dropdownMenu;
+      if (name === '@shared/portfolio-instruments') return { parsePortfolioInstrument, portfolioDisplaySymbol, portfolioQuantityUnit };
       throw new Error(`Unexpected dependency in offline frontend test: ${name}`);
     },
   });
@@ -168,8 +178,8 @@ function fixture(): Row[] {
   return [
     { stockName: ' 苹果 ', symbol: 'AAPL', lotId: 11, state: 'holding', openingValue: 600, pnl: 60, unitCost: 100, quantity: 6, marketPrice: 900, marketValue: 5400 },
     { stockName: '苹果', symbol: 'AAPL', lotId: 12, state: 'holding', openingValue: 400, pnl: 40, unitCost: 100, quantity: 4, marketPrice: 900, marketValue: 3600 },
-    { stockName: '苹果', symbol: 'AAPL', lotId: 11, state: 'closed', openingValue: 500, pnl: -60, soldQuantity: 5, sellValue: 440 },
-    { stockName: '贵州茅台', symbol: '600519.SH', lotId: 13, state: 'holding', openingValue: 2000, pnl: -50 },
+    { stockName: '苹果', symbol: 'AAPL', lotId: 11, state: 'closed', openingValue: 500, pnl: -60, quantity: 5, soldQuantity: 5, sellValue: 440 },
+    { stockName: '贵州茅台', symbol: '600519.SH', lotId: 13, state: 'holding', openingValue: 2000, pnl: -50, quantity: 2 },
     { stockName: '微软', symbol: 'MSFT', lotId: 14, state: 'closed', openingValue: 800, pnl: 160 },
   ];
 }
@@ -182,7 +192,7 @@ const expected: Record<Scope, {
   holding: {
     pnl: '+¥50.00', totals: { value: '¥3,000.00', pnl: '+¥50.00', ratio: '+1.67%' },
     rows: {
-      value: { 苹果: '¥1,000.00', 贵州茅台: '¥2,000.00' },
+      value: { AAPL: '¥1,000.00', 贵州茅台: '¥2,000.00' },
       pnl: { 苹果: '+¥100.00', 贵州茅台: '−¥50.00' },
       ratio: { 苹果: '+10.00%', 贵州茅台: '-2.50%' },
     }, shares: { 苹果: '+66.7%', 贵州茅台: '−33.3%' },
@@ -190,7 +200,7 @@ const expected: Record<Scope, {
   closed: {
     pnl: '+¥100.00', totals: { value: '¥1,300.00', pnl: '+¥100.00', ratio: '+7.69%' },
     rows: {
-      value: { 苹果: '¥500.00', 微软: '¥800.00' },
+      value: { AAPL: '¥500.00', MSFT: '¥800.00' },
       pnl: { 苹果: '−¥60.00', 微软: '+¥160.00' },
       ratio: { 苹果: '-12.00%', 微软: '+20.00%' },
     }, shares: { 苹果: '−27.3%', 微软: '+72.7%' },
@@ -198,7 +208,7 @@ const expected: Record<Scope, {
   all: {
     pnl: '+¥150.00', totals: { value: '¥4,300.00', pnl: '+¥150.00', ratio: '+3.49%' },
     rows: {
-      value: { 苹果: '¥1,500.00', 贵州茅台: '¥2,000.00', 微软: '¥800.00' },
+      value: { AAPL: '¥1,500.00', 贵州茅台: '¥2,000.00', MSFT: '¥800.00' },
       pnl: { 苹果: '+¥40.00', 贵州茅台: '−¥50.00', 微软: '+¥160.00' },
       ratio: { 苹果: '+2.67%', 贵州茅台: '-2.50%', 微软: '+20.00%' },
     }, shares: { 苹果: '+16.0%', 贵州茅台: '−20.0%', 微软: '+64.0%' },
@@ -295,7 +305,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
       expect(nodes(tree).filter(node => node.props.role === 'tab' && node.props['aria-selected']).map(text)).toEqual(['盈亏']);
     }
     h.choose('all');
-    expect(metricRows(h.tab('value')).苹果).toBe('¥1,500.00');
+    expect(metricRows(h.tab('value')).AAPL).toBe('¥1,500.00');
     expect(metricRows(h.tab('ratio')).苹果).toBe('+2.67%');
     expect(JSON.stringify(h.rows)).toBe(untouched);
   });
@@ -356,7 +366,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
   });
 
   it('只有已平仓数据时默认持仓为空，数量/图/总金额不偷用历史；切换及返回空态正常', () => {
-    const h = harness([{ stockName: '历史专属', symbol: 'CLOSED', lotId: 21, state: 'closed', openingValue: 700, pnl: 77 }]);
+    const h = harness([{ stockName: '历史专属', symbol: 'UNVERIFIED:CLOSED', lotId: 21, state: 'closed', openingValue: 700, pnl: 77 }]);
     const empty = h.render();
     expect(text(panel(empty))).toBe('暂无持仓中股票');
     expect(metricRows(empty)).toEqual({});
@@ -397,7 +407,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
     const h = harness([
       { stockName: '苹果', symbol: 'AAPL', lotId: 31, state: knownScope, openingValue: 1000, pnl: 100 },
       { stockName: '苹果', symbol: 'AAPL', lotId: 31, state: unknownScope, openingValue: null, pnl: null },
-      { stockName: '缺价证券', symbol: 'UNKNOWN', lotId: 32, state: unknownScope, openingValue: null, pnl: null },
+      { stockName: '缺价证券', symbol: 'UNVERIFIED:UNKNOWN', lotId: 32, state: unknownScope, openingValue: null, pnl: null },
     ]);
     const assertKnown = () => {
       h.choose(knownScope);
@@ -406,7 +416,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
         expect(topPnl(tree)).toBe('+¥100.00');
         const value = dimension === 'value' ? '¥1,000.00' : dimension === 'pnl' ? '+¥100.00' : '+10.00%';
         expect(totalMetric(tree, knownScope, dimension)).toBe(value);
-        expect(metricRows(tree)).toEqual({ 苹果: value });
+        expect(metricRows(tree)).toEqual({ [dimension === 'value' ? 'AAPL' : '苹果']: value });
         expectCount(tree, knownScope, 1);
         assertPie(tree, { 苹果: '+100.0%' });
         expect(text(tree)).not.toContain('缺价证券');
@@ -419,7 +429,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
         const tree = h.tab(dimension);
         expect(topPnl(tree)).toBe('暂未估值');
         expect(totalMetric(tree, scope, dimension)).toBe(dimension === 'ratio' ? '—' : '暂未估值');
-        expect(metricRows(tree)).toEqual({ 苹果: dimension === 'ratio' ? '—' : '暂未估值', 缺价证券: dimension === 'ratio' ? '—' : '暂未估值' });
+        expect(metricRows(tree)).toEqual({ [dimension === 'value' ? 'AAPL' : '苹果']: dimension === 'ratio' ? '—' : '暂未估值', 缺价证券: dimension === 'ratio' ? '—' : '暂未估值' });
         expectCount(tree, scope, 2);
         assertPie(tree, { 苹果: '—', 缺价证券: '—' });
         expect(text(tree)).not.toMatch(/¥0\.00|NaN|Infinity/);
@@ -434,7 +444,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
     { name: '开仓金额未知但盈亏已知', openingValue: null, pnl: 100, value: '暂未估值', profit: '+¥100.00', shares: '+100.0%' },
     { name: '盈亏未知但开仓金额已知', openingValue: 1000, pnl: null, value: '¥1,000.00', profit: '暂未估值', shares: '—' },
   ])('$name：未知金额不伪装0，已知维度独立可用，比例不冒充可计算', example => {
-    const h = harness([{ stockName: '独立维度', symbol: 'ONE', lotId: 41, state: 'holding', openingValue: example.openingValue, pnl: example.pnl }]);
+    const h = harness([{ stockName: '独立维度', symbol: 'UNVERIFIED:ONE', lotId: 41, state: 'holding', openingValue: example.openingValue, pnl: example.pnl }]);
     const valueTree = h.render();
     expect(topPnl(valueTree)).toBe(example.profit);
     expect(metricRows(valueTree)).toEqual({ 独立维度: example.value });
@@ -448,7 +458,7 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
   });
 
   it('已知零与未知null不同：零盈亏保留股票数但无扇区，零开仓金额盈亏比保持—', () => {
-    const h = harness([{ stockName: '零值证券', symbol: 'ZERO', lotId: 51, state: 'holding', openingValue: 0, pnl: 0 }]);
+    const h = harness([{ stockName: '零值证券', symbol: 'UNVERIFIED:ZERO', lotId: 51, state: 'holding', openingValue: 0, pnl: 0 }]);
     expect(topPnl(h.render())).toBe('+¥0.00');
     expect(metricRows(h.render())).toEqual({ 零值证券: '¥0.00' });
     expectCount(h.render(), 'holding', 1);
@@ -457,5 +467,111 @@ describe('股票名称盈亏汇总：真实 TSX 离线交互', () => {
     expect(totalMetric(tree, 'holding', 'ratio')).toBe('—');
     expect(metricRows(tree)).toEqual({ 零值证券: '—' });
     expect(renderToStaticMarkup(tree)).not.toMatch(/NaN|Infinity|暂未估值/);
+  });
+});
+
+const quantityFixture = (patch: Partial<Row> = {}): Row => ({ stockName: '苹果', symbol: 'AAPL', lotId: 61,
+  state: 'holding', openingValue: 100, pnl: 10, quantity: 1, ...patch });
+
+describe('市值股数与真实美股代码：真实组件回归', () => {
+  it.each([
+    ['holding', { AAPL: '10 股', 贵州茅台: '2 股' }],
+    ['closed', { AAPL: '5 股', MSFT: '股数待更新' }],
+    ['all', { AAPL: '15 股', 贵州茅台: '2 股', MSFT: '股数待更新' }],
+  ] as [Scope, Record<string, string>][])('%s按真实剩余或卖出份额汇总，部分卖出同lot总15而不重复', (scope, quantities) => {
+    const h = harness(); const tree = h.choose(scope);
+    expect(quantityRows(tree)).toEqual(quantities);
+    expect(metricRows(tree)).toEqual(expected[scope].rows.value);
+    expect(topPnl(tree)).toBe(expected[scope].pnl);
+  });
+  it.each([null, undefined, NaN, Infinity, -Infinity, -1])('缺失或非法quantity=%s不能冒充0且不影响原金额', quantity => {
+    const tree = harness([quantityFixture({ quantity })]).render();
+    expect(quantityRows(tree)).toEqual({ AAPL: '股数待更新' });
+    expect(metricRows(tree)).toEqual({ AAPL: '¥100.00' });
+    expect(renderToStaticMarkup(tree)).not.toMatch(/NaN|Infinity/);
+  });
+  it('合法0股保持0，缺数同symbol组不拿已知子量伪装合计', () => {
+    expect(quantityRows(harness([quantityFixture({ quantity: 0 })]).render())).toEqual({ AAPL: '0 股' });
+    const h = harness([quantityFixture({ quantity: 8 }), quantityFixture({ lotId: 62, quantity: null })]);
+    expect(quantityRows(h.render())).toEqual({ AAPL: '股数待更新' });
+    expect(metricRows(h.render())).toEqual({ AAPL: '¥200.00' });
+  });
+  it('同名多lots合计数量仅最终8dp格式化，不泄露IEEE浮点尾数', () => {
+    const tree = harness([quantityFixture({ quantity: 0.1 }), quantityFixture({ lotId: 62, quantity: 0.2 })]).render();
+    expect(quantityRows(tree)).toEqual({ AAPL: '0.3 股' });
+    expect(text(tree)).not.toContain('0.30000000000000004');
+    const precise = harness([quantityFixture({ quantity: 1234.123456789 })]).render();
+    expect(quantityRows(precise)).toEqual({ AAPL: '1,234.12345679 股' });
+  });
+  it('最小数字币1e-8保留币单位和原全名，不套用股票零阈值', () => {
+    const tree = harness([quantityFixture({ stockName: '比特币', symbol: 'CRYPTO:BTC-USDT', quantity: 1e-8 })]).render();
+    expect(quantityRows(tree)).toEqual({ 比特币: '0.00000001 币' });
+    expect(metricRows(tree)).toEqual({ 比特币: '¥100.00' });
+  });
+  it('同原全名多USsymbol保留一金额组，但名称列并列真实symbol、股数按instrument分段', () => {
+    const tree = harness([quantityFixture({ stockName: '共同全名', quantity: 2 }),
+      quantityFixture({ stockName: '共同全名', symbol: 'MSFT', lotId: 62, quantity: 3 })]).render();
+    expect(metricRows(tree)).toEqual({ 'AAPL / MSFT': '¥200.00' });
+    const quantities = quantityRows(tree)['AAPL / MSFT'];
+    expect(quantities).toContain('AAPL'); expect(quantities).toContain('2 股');
+    expect(quantities).toContain('MSFT'); expect(quantities).toContain('3 股');
+    expect(quantities).not.toBe('5 股');
+    expectCount(tree, 'holding', 1); assertPie(tree, { 共同全名: '+100.0%' });
+  });
+  it.each([['AAPL', '600519.SH'], ['600519.SH', 'AAPL'], ['AAPL', 'CRYPTO:BTC-USDT']])(
+    '同名混市场%s/%s不得first归错简称，股币不混加', (first, second) => {
+      const tree = harness([quantityFixture({ stockName: '混合原全名', symbol: first, quantity: 2 }),
+        quantityFixture({ stockName: '混合原全名', symbol: second, lotId: 62, quantity: 3 })]).render();
+      expect(metricRows(tree)).toEqual({ 混合原全名: '¥200.00' });
+      const quantities = quantityRows(tree).混合原全名;
+      expect(quantities).toContain(portfolioDisplaySymbol(first)); expect(quantities).toContain(portfolioDisplaySymbol(second));
+      expect(quantities).toContain(`2 ${portfolioQuantityUnit(first)}`); expect(quantities).toContain(`3 ${portfolioQuantityUnit(second)}`);
+      expect(quantities).not.toBe('5 股'); expect(quantities).not.toBe('5 币');
+    });
+  it.each([
+    ['ROBINHOOD MARKETS INC', 'HOOD'], ['COINBASE GLOBAL INC', 'COIN'],
+    ['APPLIED OPTOELECTRONICS INC', 'AAOI'], ['CIRCLE INTERNET GROUP INC', 'CRCL'],
+  ])('%s只在市值使用已有ticker %s，盈亏/比率/饼图/图例保持原全称', (stockName, symbol) => {
+    const h = harness([quantityFixture({ stockName, symbol: ` ${symbol.toLowerCase()} ` })]);
+    expect(metricRows(h.render())).toEqual({ [symbol]: '¥100.00' });
+    assertPie(h.render(), { [stockName]: '+100.0%' });
+    for (const dimension of ['pnl', 'ratio'] as Dimension[]) {
+      const tree = h.tab(dimension);
+      expect(metricRows(tree)).toEqual({ [stockName]: dimension === 'pnl' ? '+¥10.00' : '+10.00%' });
+      expect(nodes(tree).filter(node => node.props['data-summary-stock-quantity'] !== undefined)).toHaveLength(0);
+      assertPie(tree, { [stockName]: '+100.0%' });
+    }
+  });
+  it('没有真实可解析USsymbol时不靠公司全名猜HOOD或映射股票代码', () => {
+    const tree = harness([quantityFixture({ stockName: 'ROBINHOOD MARKETS INC', symbol: '' })]).render();
+    expect(metricRows(tree)).toEqual({ 'ROBINHOOD MARKETS INC': '¥100.00' });
+  });
+  it('反复范围/维度切换没有qty副作用，金额和源rows保持不变', () => {
+    const h = harness(); const untouched = JSON.stringify(h.rows);
+    for (const scope of ['holding', 'closed', 'all', 'holding'] as Scope[]) {
+      h.choose(scope);
+      for (const dimension of dimensions) {
+        const tree = h.tab(dimension);
+        expect(metricRows(tree)).toEqual(expected[scope].rows[dimension]);
+        expect(h.radioGroup().props.value).toBe(scope);
+        expect(nodes(tree).filter(node => node.props['data-summary-stock-quantity'] !== undefined)).toHaveLength(dimension === 'value' ? Object.keys(expected[scope].rows.value).length : 0);
+      }
+    }
+    expect(JSON.stringify(h.rows)).toBe(untouched);
+  });
+  it('移动端行名称金额独立，股数可换行而不挤金额或截断隐藏内容', () => {
+    const tree = harness([quantityFixture({ stockName: '移动端很长全名', symbol: '600519.SH', quantity: 1234.12345678 })]).render();
+    const row = children(panel(tree)).find(node => node.key != null);
+    const name = find(row, node => node.props['data-summary-stock-name'] !== undefined, 'name');
+    const metric = find(row, node => node.props['data-summary-stock-metric'] !== undefined, 'metric');
+    const quantity = find(row, node => node.props['data-summary-stock-quantity'] !== undefined, 'quantity');
+    expect(text(name)).toBe('移动端很长全名'); expect(text(metric)).toBe('¥100.00');
+    expect(metric.props.className).toContain('shrink-0');
+    const line = find(row, node => children(node).includes(name) && children(node).includes(quantity) && children(node).includes(metric), 'name/quantity/amount line');
+    expect(line.props.className).toContain('flex-wrap');
+    expect(name.props.className).toContain('min-w-0');
+    expect(name.props.className).toMatch(/break-words|break-all/);
+    expect(quantity.props.className).not.toMatch(/truncate|line-clamp/);
+    expect(renderToStaticMarkup(row)).toContain('1,234.12345678 股');
   });
 });

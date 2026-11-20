@@ -29,7 +29,7 @@ function hooks() {
 function home(query: any = { data: payload(), isFetchedAfterMount: true, isFetching: false }) {
   const h = hooks(), spy = vi.fn((_input: any, _options: any) => query), onBack = vi.fn();
   const rawGuard = new Proxy({ getMyLedger37HoldingSources: { useQuery: spy } }, { get(target, key) { if (!(key in target)) throw new Error(`Forbidden hook: ${String(key)}`); return (target as any)[key]; } });
-  const component = actual(homeSource, ["Ledger37AiHome"], { useState: h.useState, trpc: { ledger: rawGuard }, Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "sources" }).Ledger37AiHome;
+  const component = actual(homeSource, ["Ledger37AiHome"], { useState: h.useState, trpc: { ledger: rawGuard }, Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "sources", ledger37HoldingSourceHasDetails: actual(source, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails }).Ledger37AiHome;
   return { spy, query, onBack, render: (viewerUserId = 901, adminPreview = false) => { h.reset(); return component({ viewerUserId, adminPreview, onBack }); } };
 }
 function list(data = payload()) { const component = actual(source, ["Ledger37HoldingSourceList"]).Ledger37HoldingSourceList; return renderToStaticMarkup(React.createElement(component, { data, onOpen: vi.fn() })); }
@@ -540,18 +540,18 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     const button = nodes(card).find(node => node.type === "button")!; button.props.onClick();
     expect(onOpen).toHaveBeenCalledOnce(); expect(onOpen).toHaveBeenCalledWith("r1");
   });
-  it("R1名单与个人详情SSR均无四周卫星，详情保留持股行、百分比、20条分页、日期与简介", () => {
+  it("R1名单与个人详情SSR均无四周卫星，持股估值日保留，交易变动20条分页且不显示成交日期", () => {
     const trades = Array.from({ length: 21 }, (_, index) => ({ symbol: `C${index}`, stockName: `历史${index}`, openedDate: "2026-01-01", closedDate: "2026-11-18" }));
     const rows = [position({ symbol: "OWN", stockName: "本人证券", weightPct: 12.123456789 })];
     const r1 = item({ id: "r1", displayName: "R1 持仓", entityName: "R1", kind: "internal", holdings: rows, memberPortfolio: { holdings: rows, valuationAsOf: "2026-09-30", reportingCurrency: "CNY", closedTrades: trades } });
-    const api = actual(source, ["Ledger37HoldingSourceDetail", "HoldingClosedTradeList"]);
+    const api = actual(source, ["Ledger37HoldingSourceDetail", "HoldingPositionChangeList"]);
     const html = renderToStaticMarkup(React.createElement(api.Ledger37HoldingSourceDetail, { source: r1 }));
     expect(html).not.toContain("data-holding-satellite="); expect(html).not.toContain("h-[124px]");
     expect(html).toContain("本人证券"); expect(html).toContain("width:12.123456789%"); expect(html).toContain("12.12%");
     expect(html).toContain("资料截至 2026-09-30");
-    const pagedHtml = renderToStaticMarkup(React.createElement(api.HoldingClosedTradeList, { trades }));
-    expect((pagedHtml.match(/data-holding-closed-trade=/g) || [])).toHaveLength(20);
-    expect(pagedHtml).toContain("新增 2026-01-01"); expect(pagedHtml).toContain("减少 2026-11-18"); expect(pagedHtml).toContain("下一页");
+    const pagedHtml = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { trades }));
+    expect((pagedHtml.match(/data-holding-position-change=/g) || [])).toHaveLength(20);
+    expect(pagedHtml).toContain("减持"); expect(pagedHtml).not.toMatch(/2026-01-01|2026-11-18|新增 未记录|减少/); expect(pagedHtml).toContain("下一页");
     const h = hooks(), detailApi = actual(source, ["Ledger37HoldingSourceDetail"], { useState: h.useState });
     const render = () => { h.reset(); return detailApi.Ledger37HoldingSourceDetail({ source: r1 }); };
     let tree = render(); nodes(tree).find(node => node.props?.role === "tab" && text(node) === "交易变动").props.onClick();
@@ -745,7 +745,7 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
       expect(panelHtml).toContain(label === "持股列表" || label === "交易变动" && id === "r1" ? "text-[#142A3F]" : "text-[#142A3F]"); expect(panelHtml).toContain("text-[#61758A]");
       if (label === "持股列表") { expect(panelHtml).toContain('data-holding-row="true"'); expect(panelHtml).toContain(id === "r1" ? "width:12.123456789%" : "width:25%"); }
       if (label === "交易变动") {
-        if (id === "r1") { expect(panelHtml).toContain("新增 2026-01-01"); expect(panelHtml).toContain("减少 2026-11-18"); expect(panelHtml).toContain('data-holding-closed-trade="true"'); expect(panelHtml).not.toMatch(/开仓 |平仓 |已平仓记录/); }
+        if (id === "r1") { expect(panelHtml).toContain("减持"); expect(panelHtml).not.toMatch(/2026-01-01|2026-11-18|未记录|减少/); expect(panelHtml).toContain('data-holding-position-change="decrease"'); expect(panelHtml).not.toMatch(/开仓 |平仓 |已平仓记录/); }
         else { expect(panelHtml).toContain("暂无已接入交易数据"); expect(panelHtml).toContain("持仓快照不等于成交记录"); }
       }
       if (label === "简介") {
@@ -805,7 +805,7 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
 });
 
 
-describe("R1客户持仓简化与真实平仓日期", () => {
+describe("R1客户持仓简化与真实仓位变动", () => {
   const ownSource = (patch: Partial<Ledger37HoldingSource> = {}) => item({ id: "r1", displayName: "R1持股", entityName: "R1", kind: "internal", holdings: [position()], memberPortfolio: { holdings: [position()], valuationAsOf: "2026-11-19", reportingCurrency: "CNY", closedTrades: [] }, ...patch });
   it("数量仅显示数字，客户不出现已披露或已接入证券数量文案、搜索框和市值，仅保留持股百分比", () => {
     const data = ownSource(), snapshot = JSON.stringify(data);
@@ -824,39 +824,39 @@ describe("R1客户持仓简化与真实平仓日期", () => {
     const api = actual(source, ["ledger37HoldingTradeDate"]);
     for (const date of ["2024-02-29", "2026-11-19", "2026-01-01"]) expect(api.ledger37HoldingTradeDate(date)).toBe(date);
   });
-  it("已平仓分笔按平仓日期降序，开平仓日期成对展示，不显示价格或其他人字段", () => {
-    const h = hooks(), api = actual(source, ["HoldingClosedTradeList"], { useState: h.useState });
+  it("兼容旧个人卖出缓存并按真实顺序展示减持，不显示日期价格或其他人字段", () => {
+    const h = hooks(), api = actual(source, ["HoldingPositionChangeList"], { useState: h.useState });
     const trades = [{ symbol: "OLD", stockName: "先平仓股票", openedDate: "2026-01-02", closedDate: "2026-04-01", buyPrice: "SECRET_PRICE", projectName: "SECRET_PROJECT" }, { symbol: "NEW", stockName: "最近平仓股票", openedDate: "2026-02-03", closedDate: "2026-11-18", userName: "SECRET_OTHER_USER" }, { symbol: "UNKNOWN", stockName: "日期待核对", openedDate: null, closedDate: "invalid" }];
-    const snapshot = JSON.stringify(trades); h.reset(); const tree = api.HoldingClosedTradeList({ trades });
-    const rows = nodes(tree).filter(node => node.props?.["data-holding-closed-trade"] === "true");
+    const snapshot = JSON.stringify(trades); h.reset(); const tree = api.HoldingPositionChangeList({ trades });
+    const rows = nodes(tree).filter(node => node.props?.["data-holding-position-change"] === "decrease");
     expect(rows.map(row => nodes(row).find(node => typeof node.props?.title === "string")?.props.title)).toEqual(["最近平仓股票", "先平仓股票", "日期待核对"]);
     const html = renderToStaticMarkup(tree);
-    expect(html).toContain("新增 2026-02-03"); expect(html).toContain("减少 2026-11-18"); expect(html).toContain("新增 未记录"); expect(html).toContain("减少 未记录");
+    expect(html.match(/data-holding-position-change="decrease"/g)).toHaveLength(3); expect(html).toContain("减持"); expect(html).not.toMatch(/2026-02-03|2026-11-18|2026-04-01|未记录|减少/);
     expect(html).not.toMatch(/开仓 |平仓 |已平仓记录|aria-label="已平仓交易"/);
     expect(html).not.toMatch(/SECRET|买入价|卖出价|当前价|市值|invalid/); expect(JSON.stringify(trades)).toBe(snapshot);
   });
   it("交易变动20条分页，多次平仓不去重丢失；缩短后页码有效", () => {
-    const h = hooks(), api = actual(source, ["HoldingClosedTradeList"], { useState: h.useState });
+    const h = hooks(), api = actual(source, ["HoldingPositionChangeList"], { useState: h.useState });
     const trades = Array.from({ length: 24 }, (_, index) => ({ symbol: "SAME", stockName: `同票分笔${index}`, openedDate: "2026-01-01", closedDate: "2026-11-18" }));
-    const render = (rows = trades) => { h.reset(); return api.HoldingClosedTradeList({ trades: rows }); };
-    let tree = render(); expect(nodes(tree).filter(node => node.props?.["data-holding-closed-trade"])).toHaveLength(20);
+    const render = (rows = trades) => { h.reset(); return api.HoldingPositionChangeList({ trades: rows }); };
+    let tree = render(); expect(nodes(tree).filter(node => node.props?.["data-holding-position-change"])).toHaveLength(20);
     expect(nodes(tree).find(node => node.type === "button" && text(node) === "上一页").props.disabled).toBe(true);
     nodes(tree).find(node => node.type === "button" && text(node) === "下一页").props.onClick();
-    tree = render(); expect(nodes(tree).filter(node => node.props?.["data-holding-closed-trade"])).toHaveLength(4); expect(text(tree)).toContain("2 / 2");
-    tree = render(trades.slice(0, 1)); expect(nodes(tree).filter(node => node.props?.["data-holding-closed-trade"])).toHaveLength(1); expect(nodes(tree).some(node => node.type === "nav")).toBe(false);
+    tree = render(); expect(nodes(tree).filter(node => node.props?.["data-holding-position-change"])).toHaveLength(4); expect(text(tree)).toContain("2 / 2");
+    tree = render(trades.slice(0, 1)); expect(nodes(tree).filter(node => node.props?.["data-holding-position-change"])).toHaveLength(1); expect(nodes(tree).some(node => node.type === "nav")).toBe(false);
   });
   it("无平仓和未读到历史分开显示，不由剩余持仓或总仓位推断交易", () => {
-    const api = actual(source, ["HoldingClosedTradeList"]);
-    expect(renderToStaticMarkup(React.createElement(api.HoldingClosedTradeList, { trades: [] }))).toContain("暂无仓位变动记录");
-    expect(renderToStaticMarkup(React.createElement(api.HoldingClosedTradeList, {}))).toContain("交易记录待更新");
+    const api = actual(source, ["HoldingPositionChangeList"]);
+    expect(renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { trades: [] }))).toContain("暂无仓位变动记录");
+    expect(renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, {}))).toContain("交易记录待更新");
   });
-  it("R1交易页只传本人closedTrades，简介为通俗辅助能力而非收益承诺", () => {
-    const h = hooks(), api = actual(source, ["Ledger37HoldingSourceDetail", "HoldingClosedTradeList", "R1HoldingIntroduction"], { useState: h.useState });
-    const data = ownSource(); data.memberPortfolio!.closedTrades = [{ symbol: "CLOSED", stockName: "已结束股票", openedDate: "2026-01-01", closedDate: "2026-02-01" }];
+  it("R1交易页只传本人positionChanges，旧closedTrades仅兼容，简介为通俗辅助能力而非收益承诺", () => {
+    const h = hooks(), api = actual(source, ["Ledger37HoldingSourceDetail", "HoldingPositionChangeList", "R1HoldingIntroduction"], { useState: h.useState });
+    const data = ownSource(); data.memberPortfolio!.closedTrades = [{ symbol: "CLOSED", stockName: "已结束股票", openedDate: "2026-01-01", closedDate: "2026-02-01" }]; data.memberPortfolio!.positionChanges = [{ symbol: "GOOGL", stockName: "谷歌", action: "new" }];
     const render = () => { h.reset(); return api.Ledger37HoldingSourceDetail({ source: data }); };
     let tree = render(); expect(compactRows(tree).map(compactRowName)).not.toContain("已结束股票");
     nodes(tree).find(node => node.props?.role === "tab" && text(node) === "交易变动").props.onClick(); tree = render();
-    expect(nodes(tree).find(node => node.type === api.HoldingClosedTradeList).props.trades).toBe(data.memberPortfolio!.closedTrades);
+    expect(nodes(tree).find(node => node.type === api.HoldingPositionChangeList).props.changes).toBe(data.memberPortfolio!.positionChanges); expect(nodes(tree).find(node => node.type === api.HoldingPositionChangeList).props.trades).toBe(data.memberPortfolio!.closedTrades);
     nodes(tree).find(node => node.props?.role === "tab" && text(node) === "简介").props.onClick(); tree = render();
     const intro = nodes(tree).find(node => node.type === api.R1HoldingIntroduction);
     const html = renderToStaticMarkup(intro.type(intro.props));
@@ -875,5 +875,78 @@ describe("R1客户持仓简化与真实平仓日期", () => {
     const h = home({ data: payloadData, isFetchedAfterMount: true, isFetching: false });
     const first = nodes(h.render()).find(node => node.type === "sources"); first.props.onOpen("r1");
     expect(nodes(h.render()).find(node => node.type === "sources").props.selectedSourceId).toBe("r1");
+  });
+});
+
+
+describe("个人获配交易变动：简洁动作、分页与入口", () => {
+  const changes = [
+    { symbol: "GOOGL", stockName: "谷歌", action: "new" as const },
+    { symbol: "AAPL", stockName: "苹果", action: "increase" as const },
+    { symbol: "AAPL", stockName: "苹果", action: "decrease" as const },
+    { symbol: "AAPL", stockName: "苹果", action: "decrease" as const },
+  ];
+  it("只显示股票名与新增增持减持，按服务端记录顺序，多次减持不合并", () => {
+    const rows = changes.map(row => ({ ...row, openedDate: "2026-01-01", closedDate: "2026-11-18", assignedAt: "2026-11-19T08:00:00Z", quantity: "9007199254740993", categoryId: 99887766, lotId: 55555555, price: "77777777", projectName: "PRIVATE_PROJECT", note: "SECRET_NOTE" }));
+    const before = JSON.stringify(rows), api = actual(source, ["HoldingPositionChangeList"]);
+    const html = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { changes: rows }));
+    expect(html.match(/data-holding-position-change=/g)).toHaveLength(4);
+    expect([...html.matchAll(/data-holding-position-change="([^"]+)"/g)].map(match => match[1])).toEqual(["new", "increase", "decrease", "decrease"]);
+    for (const label of ["谷歌", "苹果", "新增", "增持", "减持"]) expect(html).toContain(label);
+    expect(html).not.toMatch(/2026-|T08:|9007199254740993|99887766|55555555|77777777|PRIVATE|SECRET|开仓|平仓|买入价|卖出价|股数|市值|减少|未记录/);
+    expect(JSON.stringify(rows)).toBe(before);
+  });
+  it("新数组为空是权威空态，不用旧缓存或总持股补造新增", () => {
+    const api = actual(source, ["HoldingPositionChangeList"]);
+    const trades = [{ symbol: "SECRET", stockName: "旧缓存卖出", openedDate: null, closedDate: null }];
+    const html = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { changes: [], trades }));
+    expect(html).toContain("暂无仓位变动记录"); expect(html).not.toContain("旧缓存卖出");
+    const invalid = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { changes: null, trades }));
+    expect(invalid).toContain("交易记录待更新"); expect(invalid).not.toContain("旧缓存卖出");
+  });
+  it("新获配记录20条分页且保留原顺序，上一页下一页可用，数据缩短页码有效", () => {
+    const rows = Array.from({ length: 41 }, (_, index) => ({ symbol: "SAME", stockName: `真实获配${index}`, action: "new" }));
+    const h = hooks(), api = actual(source, ["HoldingPositionChangeList"], { useState: h.useState });
+    const render = (changes = rows) => { h.reset(); return api.HoldingPositionChangeList({ changes }); };
+    let tree = render();
+    const visible = () => nodes(tree).filter(node => node.props?.["data-holding-position-change"]);
+    expect(visible()).toHaveLength(20); expect(text(visible()[0])).toBe("真实获配0新增"); expect(text(tree)).toContain("1 / 3");
+    expect(nodes(tree).find(node => node.type === "button" && text(node) === "上一页").props.disabled).toBe(true);
+    nodes(tree).find(node => node.type === "button" && text(node) === "下一页").props.onClick(); tree = render();
+    expect(visible()).toHaveLength(20); expect(text(visible()[0])).toBe("真实获配20新增"); expect(text(tree)).toContain("2 / 3");
+    nodes(tree).find(node => node.type === "button" && text(node) === "下一页").props.onClick(); tree = render();
+    expect(visible()).toHaveLength(1); expect(text(tree)).toContain("3 / 3");
+    expect(nodes(tree).find(node => node.type === "button" && text(node) === "下一页").props.disabled).toBe(true);
+    nodes(tree).find(node => node.type === "button" && text(node) === "上一页").props.onClick(); tree = render(); expect(text(tree)).toContain("2 / 3");
+    tree = render(rows.slice(0, 1)); expect(visible()).toHaveLength(1); expect(nodes(tree).some(node => node.type === "nav")).toBe(false);
+  });
+  it.each(["new", "increase", "decrease"] as const)("只有个人%s变动而总仓位及个人持仓均为空，列表、详情和主页入口都可用", action => {
+    const r1 = item({ id: "r1", displayName: "R1持股", holdings: [], memberPortfolio: { holdings: [], valuationAsOf: null, reportingCurrency: null, closedTrades: [], positionChanges: [{ ...changes[0], action }] } });
+    const data = { ...payload(), sources: [r1, item({ holdings: [] })] };
+    const api = actual(source, ["Ledger37HoldingSourcesRenderer", "Ledger37HoldingSourceDetail"]);
+    const tree = api.Ledger37HoldingSourcesRenderer({ data, selectedSourceId: "r1", onOpen: vi.fn() });
+    expect(nodes(tree).some(node => node.type === api.Ledger37HoldingSourceDetail)).toBe(true);
+    expect(list(data)).toContain("查看R1持股详情"); expect(list(data)).not.toContain("巴菲特持仓");
+    const h = home({ data, isFetchedAfterMount: true, isFetching: false });
+    nodes(h.render()).find(node => node.type === "sources").props.onOpen("r1");
+    expect(nodes(h.render()).find(node => node.type === "sources").props.selectedSourceId).toBe("r1");
+    r1.status = "unavailable";
+    expect(nodes(api.Ledger37HoldingSourcesRenderer({ data, selectedSourceId: "r1", onOpen: vi.fn() })).some(node => node.type === api.Ledger37HoldingSourceDetail)).toBe(false);
+    expect(list(data)).not.toContain("查看R1持股详情");
+  });
+  it("本人有持股但没有任何新增来源时，不能用当前持股猜交易变动", () => {
+    const r1 = item({ id: "r1", holdings: [position({ stockName: "来源总组合" })], memberPortfolio: { holdings: [position({ stockName: "当前个人持股" })], valuationAsOf: null, reportingCurrency: null } });
+    const h = hooks(), api = actual(source, ["Ledger37HoldingSourceDetail"], { useState: h.useState });
+    const render = () => { h.reset(); return api.Ledger37HoldingSourceDetail({ source: r1 }); };
+    nodes(render()).find(node => node.props?.role === "tab" && text(node) === "交易变动").props.onClick();
+    const tree = render(), panel = nodes(tree).find(node => node.props?.role === "tabpanel"), html = renderToStaticMarkup(panel);
+    expect(html).toContain("交易记录待更新"); expect(html).not.toMatch(/来源总组合|当前个人持股|data-holding-position-change=/);
+  });
+  it("非法动作不被误认成减持，股票名超长在小屏单行截断", () => {
+    const api = actual(source, ["HoldingPositionChangeList"]), longName = "LongUnbrokenSecurityName".repeat(10);
+    const rows = [{ ...changes[0], stockName: longName }, { ...changes[0], stockName: "BAD_ACTION_SECRET", action: "buy" }, null, { ...changes[0], symbol: "" }];
+    const html = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { changes: rows }));
+    expect(html.match(/data-holding-position-change=/g)).toHaveLength(1);
+    expect(html).toContain(`title="${longName}"`); expect(html).toContain("truncate"); expect(html).toContain("min-w-0"); expect(html).not.toMatch(/BAD_ACTION_SECRET|<table|減持/);
   });
 });

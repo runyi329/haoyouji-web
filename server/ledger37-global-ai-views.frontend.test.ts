@@ -9,6 +9,7 @@ import type { Ledger37AiOverview, Ledger37PresentationContext } from "../shared/
 
 // Execute actual AST-selected TSX functions with inert hooks. No backend imports, HTTP, DB or writes.
 const homeSource = readFileSync(new URL("../client/src/components/Ledger37AiHome.tsx", import.meta.url), "utf8");
+const holdingsSource = readFileSync(new URL("../client/src/components/Ledger37HoldingSources.tsx", import.meta.url), "utf8");
 const stockSource = readFileSync(new URL("../client/src/pages/StockTagPortfolio.tsx", import.meta.url), "utf8");
 const ledgerSource = readFileSync(new URL("../client/src/pages/LedgerDetail.tsx", import.meta.url), "utf8");
 function actual(source: string, name: string, scope: Record<string, any> = {}) {
@@ -80,7 +81,7 @@ function home(query: any = { data: overview(), isFetching: false, isFetchedAfter
   query.data = { viewerUserId: query.data.viewerUserId, aiEnabled: query.data.aiEnabled, sources: [{ id: "r1", status: "available", holdings: [{}] }, { id: "berkshire", status: "available", holdings: [{}] }] };
   query.isFetchedAfterMount ??= true;
   const h = hooks(), spy = vi.fn(() => query);
-  const component = actual(homeSource, "Ledger37AiHome", { useState: h.useState, trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: spy } } }, ArrowLeft: "span", Loader2: "span", Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "renderer", Ledger37AiStockParticipationView: "safe" });
+  const component = actual(homeSource, "Ledger37AiHome", { useState: h.useState, trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: spy } } }, ArrowLeft: "span", Loader2: "span", Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "renderer", ledger37HoldingSourceHasDetails: actual(holdingsSource, "ledger37HoldingSourceHasDetails"), Ledger37AiStockParticipationView: "safe" });
   return { query, spy, render: (viewerUserId = 901, adminPreview = false) => { h.reset(); return component({ viewerUserId, adminPreview, onBack: vi.fn() }); } };
 }
 

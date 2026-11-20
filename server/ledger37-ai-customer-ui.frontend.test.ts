@@ -9,6 +9,7 @@ import { isR1StockPresentationScope, type R1AiParticipationPortfolio } from "../
 import type { Ledger37AiOverview } from "../shared/ledger37-ai-presentation";
 
 const homeSource = readFileSync(new URL("../client/src/components/Ledger37AiHome.tsx", import.meta.url), "utf8");
+const holdingsSource = readFileSync(new URL("../client/src/components/Ledger37HoldingSources.tsx", import.meta.url), "utf8");
 const aiSource = readFileSync(new URL("../client/src/components/R1AiParticipationView.tsx", import.meta.url), "utf8");
 
 // Execute actual module-local TSX declarations (including any new local presentation helpers).
@@ -237,6 +238,7 @@ describe("37号AI主客户UI：真实AST与SSR安全设计契约", () => {
       useState: (initial: any) => { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], (value: any) => { state[i] = value; }]; },
       Ledger37AiIdentityHeader: () => React.createElement("div", { "data-identity-header": true }),
       Ledger37HoldingSourcesRenderer: "sources-renderer",
+      ledger37HoldingSourceHasDetails: actualModule(holdingsSource, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails,
       trpc: { ledger: rawGuard, stock: { getUsdCnyRate: { useQuery: () => ({ data: { success: true, rate: 7 } }) } } }, R1AiParticipationRenderer: () => React.createElement("div", { "data-safe-detail": true }),
     });
     const render = () => { cursor = 0; return Ledger37AiHome({ viewerUserId: 901, onBack: vi.fn() }); };
@@ -267,6 +269,7 @@ describe("37号AI主客户UI：真实AST与SSR安全设计契约", () => {
         useState: (initial: any) => { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], (value: any) => { state[i] = value; }]; },
         Ledger37AiIdentityHeader: "identity-header",
         Ledger37HoldingSourcesRenderer: "sources-renderer",
+        ledger37HoldingSourceHasDetails: actualModule(holdingsSource, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails,
         trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: () => ({ data, isFetching: false, isFetchedAfterMount: true }) } } },
       });
       const render = () => { cursor = 0; return Ledger37AiHome({ viewerUserId: 901, onBack: vi.fn() }); };

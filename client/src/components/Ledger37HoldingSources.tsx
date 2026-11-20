@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowDownWideNarrow, ChevronRight, ExternalLink, FileText, Search, X } from "lucide-react";
-import type { Ledger37HoldingClosedTrade, Ledger37HoldingMarketValue, Ledger37HoldingPosition, Ledger37HoldingSource, Ledger37HoldingSourceId, Ledger37HoldingSources } from "@shared/ledger37-ai-holdings";
+import type { Ledger37HoldingClosedTrade, Ledger37HoldingMarketValue, Ledger37HoldingPosition, Ledger37HoldingPositionChange, Ledger37HoldingSource, Ledger37HoldingSourceId, Ledger37HoldingSources } from "@shared/ledger37-ai-holdings";
 
 const SOURCE_ORDER: Ledger37HoldingSourceId[] = ["r1", "berkshire", "pelosi", "ark", "nvidia"];
 const RING_COLORS = ["#087987", "#459CAF", "#73AFC0", "#86BED1", "#ADCEDC", "#729BAC", "#A5B9CA", "#D2E3EC"];
@@ -200,8 +200,14 @@ function SourceInlineHoldings({ source }: { source: Ledger37HoldingSource }) {
   </div>;
 }
 
+export function ledger37HoldingSourceHasDetails(source: Ledger37HoldingSource): boolean {
+  return source.status === "available" && (source.holdings.length > 0 || source.id === "r1" && (
+    (source.memberPortfolio?.holdings.length || 0) > 0 || (source.memberPortfolio?.positionChanges?.length || 0) > 0
+    || (source.memberPortfolio?.closedTrades?.length || 0) > 0));
+}
+
 export function Ledger37HoldingSourceList({ data, onOpen }: { data: Ledger37HoldingSources; onOpen: (id: Ledger37HoldingSourceId) => void }) {
-  const ordered = data.sources.filter(source => source.status === "available" && (source.holdings.length > 0 || source.id === "r1" && (source.memberPortfolio?.closedTrades?.length || 0) > 0)).sort((a, b) => SOURCE_ORDER.indexOf(a.id) - SOURCE_ORDER.indexOf(b.id));
+  const ordered = data.sources.filter(ledger37HoldingSourceHasDetails).sort((a, b) => SOURCE_ORDER.indexOf(a.id) - SOURCE_ORDER.indexOf(b.id));
   return <main data-holding-layout="mobile" data-holding-theme="home" className="mx-auto w-full min-w-0 max-w-[480px] bg-[#F2F6FA] px-3 pb-8 pt-3">
     <section aria-label="持仓来源列表" className="space-y-3">
       {ordered.map(source => {
@@ -247,17 +253,26 @@ export function ledger37HoldingTradeDate(value: string | null | undefined): stri
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
 }
 
-function HoldingClosedTradeList({ trades }: { trades?: Ledger37HoldingClosedTrade[] }) {
+function HoldingPositionChangeList({ changes, trades }: { changes?: Ledger37HoldingPositionChange[]; trades?: Ledger37HoldingClosedTrade[] }) {
   const [page, setPage] = useState(0);
-  const rows = (Array.isArray(trades) ? trades : []).filter(row => row && typeof row === "object" && typeof row.symbol === "string" && row.symbol.trim() && typeof row.stockName === "string").slice().sort((a, b) => (ledger37HoldingTradeDate(b.closedDate) || "").localeCompare(ledger37HoldingTradeDate(a.closedDate) || ""));
+  // New safe records are authoritative, including an empty array. Legacy cached
+  // closures remain compatible, but never infer additions from current holdings.
+  const known = changes === undefined ? Array.isArray(trades) : Array.isArray(changes);
+  const records: Ledger37HoldingPositionChange[] = changes === undefined
+    ? (Array.isArray(trades) ? trades : []).filter(row => row && typeof row.symbol === "string" && typeof row.stockName === "string")
+      .slice().sort((a, b) => (ledger37HoldingTradeDate(b.closedDate) || "").localeCompare(ledger37HoldingTradeDate(a.closedDate) || ""))
+      .map(row => ({ symbol: row.symbol, stockName: row.stockName, action: "decrease" }))
+    : Array.isArray(changes) ? changes : [];
+  const rows = records.filter(row => row && typeof row.symbol === "string" && row.symbol.trim() && typeof row.stockName === "string"
+    && ["new", "increase", "decrease"].includes(row.action));
   const pages = Math.max(1, Math.ceil(rows.length / 20));
   const currentPage = Math.min(page, pages - 1);
   return <div className="overflow-hidden rounded-[18px] border border-[#DCE7F0] bg-[#FFFFFF]">
     <p className="border-b border-[#EAF2F7] px-3 py-3 text-[11px] text-[#61758A]">我的仓位变动</p>
-    {rows.length ? <ul aria-label="仓位变动记录" className="divide-y divide-[#EAF2F7] px-3">{rows.slice(currentPage * 20, (currentPage + 1) * 20).map((row, index) => <li key={`${row.symbol}:${currentPage}:${index}`} data-holding-closed-trade="true" className="min-w-0 py-3">
-      <div className="flex items-center justify-between gap-3"><span title={row.stockName || row.symbol} className="min-w-0 truncate text-[12px] font-medium text-[#142A3F]">{row.stockName || row.symbol}</span><span className="shrink-0 rounded bg-[#EAF5EF] px-2 py-0.5 text-[10px] text-[#2E7D32]">减少</span></div>
-      <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[10px] tabular-nums text-[#61758A]"><span>新增 {ledger37HoldingTradeDate(row.openedDate) || "未记录"}</span><span>减少 {ledger37HoldingTradeDate(row.closedDate) || "未记录"}</span></div>
-    </li>)}</ul> : <p className="px-4 py-6 text-center text-xs text-[#61758A]">{Array.isArray(trades) ? "暂无仓位变动记录" : "交易记录待更新"}</p>}
+    {rows.length ? <ul aria-label="仓位变动记录" className="divide-y divide-[#EAF2F7] px-3">{rows.slice(currentPage * 20, (currentPage + 1) * 20).map((row, index) => <li key={`${row.symbol}:${row.action}:${currentPage}:${index}`} data-holding-position-change={row.action} className="flex min-w-0 items-center justify-between gap-3 py-3">
+      <span title={row.stockName || row.symbol} className="min-w-0 truncate text-[12px] font-medium text-[#142A3F]">{row.stockName || row.symbol}</span>
+      <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] ${row.action === "decrease" ? "bg-[#EAF5EF] text-[#2E7D32]" : "bg-[#E4F4F6] text-[#087987]"}`}>{row.action === "new" ? "新增" : row.action === "increase" ? "增持" : "减持"}</span>
+    </li>)}</ul> : <p className="px-4 py-6 text-center text-xs text-[#61758A]">{known ? "暂无仓位变动记录" : "交易记录待更新"}</p>}
     {pages > 1 && <nav aria-label="交易变动分页" className="flex items-center justify-between border-t border-[#EAF2F7] px-3 text-[11px] text-[#61758A]"><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} className="min-h-[44px] px-2 disabled:opacity-40">上一页</button><span>{currentPage + 1} / {pages}</span><button type="button" disabled={currentPage === pages - 1} onClick={() => setPage(currentPage + 1)} className="min-h-[44px] px-2 disabled:opacity-40">下一页</button></nav>}
   </div>;
 }
@@ -306,7 +321,7 @@ export function Ledger37HoldingSourceDetail({ source }: { source: Ledger37Holdin
           {holdings.length ? <ul className="divide-y divide-[#EAF2F7] px-3">{holdings.map((row, index) => <HoldingCompactRow key={`${row.symbol}:${row.currency}:${index}`} row={row} detail />)}</ul> : <div className="flex items-start gap-3 px-4 py-5"><FileText size={22} strokeWidth={1.5} className="mt-0.5 shrink-0 text-[#61758A]" /><div><h3 className="text-xs font-medium text-[#142A3F]">{source.status === "unavailable" ? "持仓资料暂不可用" : search.trim() ? "没有匹配的股票" : personal ? source.memberPortfolio ? "暂无已分配持仓" : "我的份额待更新" : "暂无已接入股票记录"}</h3><p className="mt-1 text-[10px] leading-5 text-[#61758A]">{source.status === "unavailable" ? "未知不表示零持仓，请以原始披露为准。" : search.trim() ? "尝试其它名称或证券代码。" : "有可靠资料后再展示比例，不以缺数据填零。"}</p></div></div>}
         </div>
         <p className="mt-3 px-1 text-[10px] leading-5 text-[#61758A]">{personal ? "百分比仅表示我的持仓构成，不代表可提现余额或收益。" : "未披露比例不表示零持仓。"}</p>
-      </> : tab === "changes" ? personal ? <HoldingClosedTradeList key={source.id} trades={source.status === "available" ? source.memberPortfolio?.closedTrades : undefined} /> : <div className="rounded-[18px] border border-[#DCE7F0] bg-[#FFFFFF] px-4 py-5"><div className="flex items-start gap-3"><FileText size={23} strokeWidth={1.5} className="shrink-0 text-[#61758A]" /><div><h3 className="text-sm font-medium text-[#142A3F]">暂无已接入交易数据</h3><p className="mt-2 text-xs leading-6 text-[#61758A]">持仓快照不等于成交记录。当前接口未提供正式交易披露，不据此推断买卖、成交日期或价格。</p></div></div><OfficialSourceLink source={source} /></div> : personal ? <R1HoldingIntroduction /> : <div className="rounded-[18px] border border-[#DCE7F0] bg-[#FFFFFF] px-4 py-4"><h3 className="text-sm font-semibold text-[#142A3F]">主体与资料范围</h3><p className="mt-2 whitespace-pre-line break-words text-xs leading-6 text-[#61758A]">{source.description || "主体简介暂未提供"}</p></div>}
+      </> : tab === "changes" ? personal ? <HoldingPositionChangeList key={source.id} changes={source.status === "available" ? source.memberPortfolio?.positionChanges : undefined} trades={source.status === "available" ? source.memberPortfolio?.closedTrades : undefined} /> : <div className="rounded-[18px] border border-[#DCE7F0] bg-[#FFFFFF] px-4 py-5"><div className="flex items-start gap-3"><FileText size={23} strokeWidth={1.5} className="shrink-0 text-[#61758A]" /><div><h3 className="text-sm font-medium text-[#142A3F]">暂无已接入交易数据</h3><p className="mt-2 text-xs leading-6 text-[#61758A]">持仓快照不等于成交记录。当前接口未提供正式交易披露，不据此推断买卖、成交日期或价格。</p></div></div><OfficialSourceLink source={source} /></div> : personal ? <R1HoldingIntroduction /> : <div className="rounded-[18px] border border-[#DCE7F0] bg-[#FFFFFF] px-4 py-4"><h3 className="text-sm font-semibold text-[#142A3F]">主体与资料范围</h3><p className="mt-2 whitespace-pre-line break-words text-xs leading-6 text-[#61758A]">{source.description || "主体简介暂未提供"}</p></div>}
     </section>
     <aside aria-label="资料范围说明" className="mt-5 border-t border-[#DCE7F0] px-1 pt-2 text-[10px] leading-5 text-[#61758A]">
       <details><summary className="min-h-[44px] cursor-pointer py-3 font-medium text-[#142A3F]">资料范围与披露说明</summary><p className="whitespace-pre-line break-words">{personal ? personalBasis : source.coverageNote || "来源范围暂未提供，请以原始资料为准。"}</p>{source.kind === "13f" && <p className="mt-2">13F 为滞后披露的特定证券快照，不代表完整资产或实时持仓。</p>}{source.id === "ark" && <p className="mt-2">本来源仅对应 ARKK 特定基金，不代表 ARK 全部基金。</p>}{source.id === "pelosi" && <p className="mt-2">家族交易披露并非完整持仓清单，不能据此声称精确全面的个人组合。</p>}<p className="mt-2">{personal ? "环图为个人持股百分比；灰环表示资料不完整，不代表零持仓。" : "环图使用绝对披露比例；灰色为未展示或未披露部分。徽章只代表此来源已接入证券，不表示等比例或实时持仓。"}</p><dl className="mt-3 space-y-1 border-t border-[#DCE7F0] pt-3">{(personal ? [{ label: "行情截至", value: displaySource.asOf }] : [{ label: "资料截至", value: source.asOf }, { label: "披露日期", value: source.publishedAt }, { label: "核验日期", value: source.checkedAt }]).map(item => <div key={item.label} className="flex justify-between gap-3"><dt>{item.label}</dt><dd className="break-words text-right tabular-nums text-[#142A3F]">{sourceDate(item.value)}</dd></div>)}</dl><OfficialSourceLink source={source} /></details>
@@ -316,6 +331,6 @@ export function Ledger37HoldingSourceDetail({ source }: { source: Ledger37Holdin
 }
 
 export function Ledger37HoldingSourcesRenderer({ data, selectedSourceId, onOpen, updating = false }: { data: Ledger37HoldingSources; selectedSourceId: Ledger37HoldingSourceId | null; onOpen: (id: Ledger37HoldingSourceId) => void; updating?: boolean }) {
-  const selected = data.sources.find(source => source.id === selectedSourceId && source.id !== "berkshire" && source.id !== "nvidia" && source.status === "available" && (source.holdings.length > 0 || source.id === "r1" && (source.memberPortfolio?.closedTrades?.length || 0) > 0));
+  const selected = data.sources.find(source => source.id === selectedSourceId && source.id !== "berkshire" && source.id !== "nvidia" && ledger37HoldingSourceHasDetails(source));
   return <><p role="status" aria-live="polite" className="sr-only">{updating ? "后台更新中，保留当前来源资料" : "持仓来源资料已确认"}</p>{selected ? <Ledger37HoldingSourceDetail key={`${data.viewerUserId}:${selected.id}`} source={selected} /> : <Ledger37HoldingSourceList data={data} onOpen={onOpen} />}</>;
 }

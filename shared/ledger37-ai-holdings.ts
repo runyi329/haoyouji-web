@@ -23,6 +23,12 @@ export type Ledger37HoldingClosedTrade = {
   openedDate: string | null;
   closedDate: string | null;
 };
+/** Proven member allocations/sales only; no dates, quantities or project/order identifiers. */
+export type Ledger37HoldingPositionChange = {
+  symbol: string;
+  stockName: string;
+  action: 'new' | 'increase' | 'decrease';
+};
 export type Ledger37HoldingSource = {
   id: Ledger37HoldingSourceId;
   displayName: string;
@@ -42,6 +48,8 @@ export type Ledger37HoldingSource = {
     valuationAsOf: string | null;
     reportingCurrency: 'CNY' | 'USD' | 'USDT' | null;
     closedTrades?: Ledger37HoldingClosedTrade[];
+    /** Ordered by verified records on the server, never inferred from holding snapshots. */
+    positionChanges?: Ledger37HoldingPositionChange[];
   };
 };
 export type Ledger37HoldingSources = {

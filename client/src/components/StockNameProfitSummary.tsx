@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { StockSummaryImageDownload } from './StockSummaryImageDownload';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from './ui/dropdown-menu';
+import { parsePortfolioInstrument, portfolioDisplaySymbol, portfolioQuantityUnit } from '@shared/portfolio-instruments';
 
 type StockProfitRow = {
   stockName: string;
@@ -10,12 +11,39 @@ type StockProfitRow = {
   state: 'holding' | 'closed';
   openingValue: number | null;
   pnl: number | null;
+  /** The quantity belonging to this portion: remaining for holding, sold for closed. */
+  quantity?: number | null;
 };
 
 const money = (value: number | null, signed = false) => value === null ? '暂未估值' : `${signed ? value < 0 ? '−' : '+' : ''}¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tone = (value: number | null) => value === null ? 'text-gray-400' : value >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]';
 const sum = (values: (number | null)[]) => values.some(value => value === null || !Number.isFinite(value)) ? null : values.reduce<number>((total, value) => total + value!, 0);
 const chartColors = ['#426AB3', '#D89446', '#50A58F', '#A277B7', '#DC7D87', '#65A9C0', '#A3A85B', '#AF795D', '#788AAF', '#89B39C'];
+
+/** Display only. Preserve security IDs and the original full-name grouping. */
+const valueStockName = (name: string, symbols: string[]) => {
+  const instruments = symbols.map(parsePortfolioInstrument);
+  return instruments.length && instruments.every(instrument => instrument?.market === 'US')
+    ? Array.from(new Set(instruments.map(instrument => instrument!.symbol))).join(' / ') : name;
+};
+
+const stockQuantityText = (orders: StockProfitRow[]) => {
+  const bySymbol = new Map<string, { symbol: string; quantities: (number | null)[] }>();
+  for (const order of orders) {
+    const symbol = parsePortfolioInstrument(order.symbol)?.symbol ?? order.symbol;
+    const group = bySymbol.get(symbol) ?? { symbol, quantities: [] };
+    group.quantities.push(typeof order.quantity === 'number' && Number.isFinite(order.quantity) && order.quantity >= 0 ? order.quantity : null);
+    bySymbol.set(symbol, group);
+  }
+  return Array.from(bySymbol.values(), group => {
+    const quantity = sum(group.quantities);
+    const unit = portfolioQuantityUnit(group.symbol);
+    const label = quantity === null || !Number.isFinite(quantity) ? `${unit === '股' ? '股数' : '数量'}待更新`
+      : `${quantity.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${unit}`;
+    // Never add unrelated instrument quantities, especially shares and coins.
+    return bySymbol.size > 1 ? `${portfolioDisplaySymbol(group.symbol)} ${label}` : label;
+  }).join(' / ');
+};
 
 /** Group by the displayed stock name exactly as the administrator requests. */
 export default function StockNameProfitSummary({ rows }: { rows: StockProfitRow[] }) {
@@ -40,8 +68,9 @@ export default function StockNameProfitSummary({ rows }: { rows: StockProfitRow[
     const realizedPnl = sum(closed.map(order => order.pnl));
     const totalPnl = floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl;
     const openingValue = sum(orders.map(order => order.openingValue));
+    const symbols = Array.from(new Set(orders.map(order => order.symbol)));
     return {
-      name, symbols: Array.from(new Set(orders.map(order => order.symbol))),
+      name, symbols, valueName: valueStockName(name, symbols), quantityText: stockQuantityText(orders),
       orderCount: new Set(orders.map(order => order.lotId)).size,
       holdingCount: new Set(holding.map(order => order.lotId)).size,
       closedCount: new Set(closed.map(order => order.lotId)).size,
@@ -145,9 +174,10 @@ export default function StockNameProfitSummary({ rows }: { rows: StockProfitRow[
     {dimensionGroups.length === 0 && <div className="px-3.5 py-6 text-center text-xs text-[#A39288]">{scope === 'all' ? '暂无股票记录' : `暂无${scopeLabel}股票`}</div>}
     {dimensionGroups.map(group => {
       const value = metricValue(group);
+      const name = dimension === 'value' ? group.valueName : group.name;
       return <div key={group.name} className="px-3.5 py-2.5">
-        <div className="flex items-baseline justify-between gap-3"><span className="min-w-0 text-xs font-medium text-[#58483F]">{group.name}</span><span className={`shrink-0 text-xs font-semibold tabular-nums ${dimension === 'value' ? 'text-[#44342C]' : tone(value)}`}>{metricText(value)}</span></div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#F1EAE4]" role="img" aria-label={`${group.name}${dimension === 'value' ? '合计开仓市值' : dimension === 'ratio' ? '盈亏比' : '总盈亏'} ${metricText(value)}`}><div className={`h-full rounded-full transition-[width] duration-300 ${dimension !== 'value' ? value !== null && value < 0 ? 'bg-gradient-to-r from-[#B7D7BA] to-[#3E8B53]' : 'bg-gradient-to-r from-[#F0B0A7] to-[#CB4542]' : ''}`} style={{ width: `${maxDimensionValue > 0 && value !== null ? Math.abs(value) / maxDimensionValue * 100 : 0}%`, backgroundColor: dimension === 'value' ? group.color : undefined }} /></div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><span data-summary-stock-name="true" className="min-w-0 flex-1 break-words text-xs font-medium text-[#58483F]">{name}</span>{dimension === 'value' && <span data-summary-stock-quantity="true" className="text-right text-[10px] tabular-nums text-[#A39288]">{group.quantityText}</span>}<span data-summary-stock-metric="true" className={`shrink-0 text-xs font-semibold tabular-nums ${dimension === 'value' ? 'text-[#44342C]' : tone(value)}`}>{metricText(value)}</span></div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#F1EAE4]" role="img" aria-label={`${name}${dimension === 'value' ? '合计开仓市值' : dimension === 'ratio' ? '盈亏比' : '总盈亏'} ${metricText(value)}`}><div className={`h-full rounded-full transition-[width] duration-300 ${dimension !== 'value' ? value !== null && value < 0 ? 'bg-gradient-to-r from-[#B7D7BA] to-[#3E8B53]' : 'bg-gradient-to-r from-[#F0B0A7] to-[#CB4542]' : ''}`} style={{ width: `${maxDimensionValue > 0 && value !== null ? Math.abs(value) / maxDimensionValue * 100 : 0}%`, backgroundColor: dimension === 'value' ? group.color : undefined }} /></div>
       </div>;
     })}</div>
     <div className="border-t border-[#F2ECE7] bg-[#FFFCFA] px-3.5 py-2 text-[9px] leading-4 text-[#A39288]">{dimension === 'value' ? valueExplanation : dimension === 'ratio' ? `盈亏比 = 所选范围总盈亏 ÷ 对应合计开仓市值 × 100%，当前统计${scopeLabel}，正红负绿。整体按合计金额计算，不直接平均各股百分比。` : pnlExplanation} {dimension === 'ratio' ? '条长按盈亏比绝对值比较。' : '各页独立比例尺，同页条长与人民币金额成正比。'}</div>

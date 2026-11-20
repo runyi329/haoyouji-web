@@ -999,12 +999,14 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       stockName: String(holding.stockName || holding.symbol), symbol: String(holding.symbol),
       lotId: Number(holding.lot.id), state: 'holding' as const,
       openingValue: holding.accountHolding.costValue as number | null,
+      quantity: typeof holding.accountHolding.quantity === 'number' ? holding.accountHolding.quantity : null,
       pnl: holding.accountHolding.floatingPnl as number | null,
     })),
     ...accountRealizedLots.map((lot: any) => ({
       stockName: String(lot.stockName || lot.symbol), symbol: String(lot.symbol),
       lotId: Number(lot.lotId), state: 'closed' as const,
       openingValue: toCny(lot.buyValue === null || lot.buyValue === undefined ? null : Number(lot.buyValue), instrumentCurrency(lot.symbol)),
+      quantity: typeof lot.soldQuantity === 'number' ? lot.soldQuantity : null,
       pnl: toCny(lot.accountNetProfit === null || lot.accountNetProfit === undefined ? null : Number(lot.accountNetProfit), instrumentCurrency(lot.symbol)),
     })),
   ] : [];

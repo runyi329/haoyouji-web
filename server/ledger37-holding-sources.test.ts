@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ state: vi.fn(), snapshot: vi.fn(), member: vi.fn(), closed: vi.fn(), external: vi.fn(), db: vi.fn(() => { throw new Error('No real DB in tests'); }) }));
+const mocks = vi.hoisted(() => ({ state: vi.fn(), snapshot: vi.fn(), member: vi.fn(), closed: vi.fn(), changes: vi.fn(), external: vi.fn(), db: vi.fn(() => { throw new Error('No real DB in tests'); }) }));
 vi.mock('./db', () => ({ getDbConnection: mocks.db, getDbTransactionConnection: mocks.db }));
 vi.mock('./ledger37-ai-presentation', () => ({
   readLedger37PresentationState: mocks.state,
 }));
-vi.mock('./ledger-stock-portfolio', () => ({ getMyLedger37R1HoldingSnapshot: mocks.snapshot, getMyLedger37MemberHoldingSnapshot: mocks.member, getMyLedger37MemberClosedTrades: mocks.closed }));
+vi.mock('./ledger-stock-portfolio', () => ({ getMyLedger37R1HoldingSnapshot: mocks.snapshot, getMyLedger37MemberHoldingSnapshot: mocks.member, getMyLedger37MemberClosedTrades: mocks.closed, getMyLedger37MemberPositionChanges: mocks.changes }));
 vi.mock('./holding-source-cache', () => ({ getExternalHoldingSources: mocks.external }));
 import { getMyLedger37HoldingSources } from './ledger37-holding-sources';
 const input = { ledgerId: 37 as const, userId: 17 };
@@ -19,6 +19,7 @@ beforeEach(() => {
   mocks.snapshot.mockResolvedValue(snapshot());
   mocks.member.mockResolvedValue(snapshot());
   mocks.closed.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, closedTrades: [] });
+  mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: [] });
   mocks.external.mockReturnValue([]);
 });
 describe('37 holding sources read-only safety', () => {
@@ -42,6 +43,7 @@ describe('37 holding sources read-only safety', () => {
     mocks.snapshot.mockResolvedValue(snapshot([], { aiEnabled: false }));
     mocks.member.mockResolvedValue(snapshot([], { aiEnabled: false }));
     mocks.closed.mockResolvedValue({ viewerUserId: 17, aiEnabled: false, closedTrades: [] });
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: false, positionChanges: [] });
     expect((await getMyLedger37HoldingSources({ ...input, systemRole: 'parent' })).aiEnabled).toBe(false);
   });
   it('whitelists source-wide exact shares, never personal participation or prices', async () => {
@@ -103,7 +105,7 @@ describe('37 holding sources member values: strict isolated projection', () => {
     mocks.member.mockResolvedValue(ownSnapshot({ ...ownStock(), categoryId: 90250, entryPrice: 111, price: 222, pnl: 333, otherUser: 999, projectName: 'PRIVATE_PROJECT', marketValue: { ...ownStock().marketValue, privateField: 'SECRET' } }));
     const result = await getMyLedger37HoldingSources(input);
     expect(result.sources[0].holdings).toEqual([stock]);
-    expect(result.sources[0].memberPortfolio).toEqual({ holdings: [ownStock()], valuationAsOf: valueDate, reportingCurrency: 'USD', closedTrades: [] });
+    expect(result.sources[0].memberPortfolio).toEqual({ holdings: [ownStock()], valuationAsOf: valueDate, reportingCurrency: 'USD', closedTrades: [], positionChanges: [] });
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE_PROJECT|SECRET|categoryId|entryPrice|otherUser|projectName|privateField|"pnl"|"price"/);
     expect(mocks.member).toHaveBeenCalledWith(input); expect(mocks.db).not.toHaveBeenCalled();
   });
@@ -153,7 +155,7 @@ describe('37 member closed-trade adapter: isolated whitelist', () => {
     const result = await getMyLedger37HoldingSources(input);
     expect(result.sources[0].holdings).toEqual([stock]);
     expect(result.sources[0].memberPortfolio).toEqual({ holdings: [], valuationAsOf: null, reportingCurrency: null,
-      closedTrades: [trade, trade, { ...trade, closedDate: null }] });
+      closedTrades: [trade, trade, { ...trade, closedDate: null }], positionChanges: [] });
     expect(JSON.stringify(result)).not.toMatch(/categoryId|lotId|sellEventId|participationId|"userId"|"price"|remaining|pnl|quantity|SECRET/);
     expect(mocks.closed).toHaveBeenCalledWith(input); expect(mocks.db).not.toHaveBeenCalled();
     expect(mocks.member.mock.invocationCallOrder[0]).toBeLessThan(mocks.closed.mock.invocationCallOrder[0]);
@@ -179,5 +181,56 @@ describe('37 member closed-trade adapter: isolated whitelist', () => {
     mocks.member.mockRejectedValue(new Error('personal unavailable'));
     await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('personal unavailable');
     expect(mocks.closed).not.toHaveBeenCalled();
+  });
+});
+
+describe('37 member position changes: proven safe allocations and reductions', () => {
+  const addition = { symbol: 'GOOGL', stockName: '谷歌', action: 'new' };
+  it('adds real allocation even without closed trades, quote or full-source holdings', async () => {
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: [addition] });
+    const result = await getMyLedger37HoldingSources(input);
+    expect(result.sources[0].holdings).toEqual([]);
+    expect(result.sources[0].memberPortfolio?.holdings).toEqual([]);
+    expect(result.sources[0].memberPortfolio?.closedTrades).toEqual([]);
+    expect(result.sources[0].memberPortfolio?.positionChanges).toEqual([addition]);
+    expect(mocks.changes).toHaveBeenCalledWith(input);
+    expect(mocks.db).not.toHaveBeenCalled();
+  });
+  it('strictly projects symbols, names and actions; no dates, monetary or project/audit identifiers', async () => {
+    const rows = [{ ...addition, categoryId: 90250, lotId: 92, orderId: 123, participationId: 77,
+      userId: 998, allocatedQuantity: '100', quantity: '9007199254740993', price: '444', pnl: '555',
+      openedDate: '2026-01-01', assignedAt: '2026-11-19', note: 'PRIVATE_NOTE', rawAudit: { secret: 'SECRET' } },
+      { ...addition, action: 'increase' }, { ...addition, action: 'decrease' }, { ...addition, action: 'decrease' }];
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: rows });
+    const changes = (await getMyLedger37HoldingSources(input)).sources[0].memberPortfolio?.positionChanges;
+    expect(changes).toEqual([addition, { ...addition, action: 'increase' }, { ...addition, action: 'decrease' }, { ...addition, action: 'decrease' }]);
+    expect(JSON.stringify(changes)).not.toMatch(/categoryId|lotId|orderId|participationId|userId|quantity|Quantity|price|pnl|Date|assignedAt|PRIVATE|SECRET|rawAudit/);
+  });
+  it.each([{ viewerUserId: 999 }, { aiEnabled: false }])('rejects changed member identity/AI rather than leaking another user %j', async patch => {
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: [addition], ...patch });
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('个人仓位变动展示状态已变化');
+    expect(mocks.external).not.toHaveBeenCalled();
+  });
+  it.each(['', 'buy', 'sell', 'reduce', 'NEW', null, undefined, 1])('rejects unrecognized or missing action %j', async action => {
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: [{ ...addition, action }] });
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('个人仓位变动无效');
+  });
+  it.each([null, { ...addition, symbol: '' }, { ...addition, symbol: 123 }, { ...addition, stockName: '' }, { ...addition, stockName: null }])('rejects bad stock record %j', async row => {
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges: [row] });
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('个人仓位变动无效');
+  });
+  it.each([null, undefined, {}])('missing history infrastructure never falls back to holdings-derived additions %j', async positionChanges => {
+    mocks.member.mockResolvedValue(snapshot([stock]));
+    mocks.changes.mockResolvedValue({ viewerUserId: 17, aiEnabled: true, positionChanges });
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('个人仓位变动不可用');
+    expect(mocks.external).not.toHaveBeenCalled();
+  });
+  it('SQL errors are surfaced and prior valuation failure prevents the read', async () => {
+    mocks.changes.mockRejectedValue(new Error('allocation read unavailable'));
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('allocation read unavailable');
+    mocks.changes.mockClear();
+    mocks.member.mockRejectedValue(new Error('member valuation unavailable'));
+    await expect(getMyLedger37HoldingSources(input)).rejects.toThrow('member valuation unavailable');
+    expect(mocks.changes).not.toHaveBeenCalled();
   });
 });
