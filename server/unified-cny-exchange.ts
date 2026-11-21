@@ -20,6 +20,14 @@ export async function readUnifiedCnyExchangeRate(fromcoin: 'USD' | 'USDT', money
     observedAt: quote && 'observedAt' in quote ? quote.observedAt : null,
     stale: !usable,
     carried: quote && 'carried' in quote ? quote.carried : false,
+    // USDT 的 1:1 是用户授权会计政策，不是交易所市场价格。
+    conversionPolicy: quote && 'conversionPolicy' in quote ? quote.conversionPolicy : null,
+    usdtUsdRate: quote && 'usdtUsdRate' in quote ? quote.usdtUsdRate : null,
+    usdtUsdAsOf: quote && 'usdtUsdAsOf' in quote ? quote.usdtUsdAsOf : null,
+    usdtUsdSource: quote && 'usdtUsdSource' in quote ? quote.usdtUsdSource : null,
+    usdCnyRate: quote && 'usdCnyRate' in quote ? quote.usdCnyRate : null,
+    usdCnyAsOf: quote && 'usdCnyAsOf' in quote ? quote.usdCnyAsOf : null,
+    usdCnySource: quote && 'usdCnySource' in quote ? quote.usdCnySource : null,
   };
 }
 

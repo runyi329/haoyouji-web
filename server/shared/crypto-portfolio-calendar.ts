@@ -8,6 +8,7 @@ import {
 import { getOvernightUsSessionDate, isStockMarketSession, isStockSessionDate, previousStockMarketSession, shiftStockSessionDate } from '../../shared/stock-market-session';
 import { isTrustedMemberCalendarClose, type MemberCalendarSnapshot } from './stock-member-calendar';
 import { cryptoDecimal, type CryptoPortfolioDecimal } from './crypto-portfolio-decimal';
+import { USDT_USD_PARITY_POLICY, USDT_USD_PARITY_SOURCE, USDT_USD_PARITY_RATE } from '../../shared/usdt-usd-parity-policy';
 
 export type CryptoCalendarLot = {
   id: number; symbol: string; initialQuantity: number; unitCost: number; openingFee: number | null;
@@ -35,6 +36,8 @@ export type CryptoCalendarQuote = {
 export type CryptoCalendarFx = {
   snapshotDate: string; usdtCnyRate: number; asOf: string; source: string; pair: 'USDT/CNY'; lockedAt: string;
   carried?: boolean; forexSnapshotDate?: string;
+  /** Absent only for immutable legacy market-bridge evidence; policy legs are not market quotes. */
+  conversionPolicy?: string;
   usdCnyRate?: number; usdCnyAsOf?: string; usdCnySource?: string;
   usdtUsdRate?: number; usdtUsdAsOf?: string; usdtUsdSource?: string; observedAt?: string;
 };
@@ -81,26 +84,33 @@ export function isCryptoCalendarCloseQuote(quote: CryptoCalendarQuote, expectedD
   return ['crypto_close_gate_1505', 'crypto_close_htx_1505'].includes(quote.source) && captured >= cutoff
     && (!quote.cutoffAt || Date.parse(quote.cutoffAt) === cutoff);
 }
-export function isCryptoCalendarFxValid(fx: CryptoCalendarFx | CryptoCalendarUsdFx | null, date: string, pair: 'USDT/CNY' | 'USD/CNY'): boolean {
+export function isCryptoCalendarFxValid(fx: CryptoCalendarFx | CryptoCalendarUsdFx | null, date: string, pair: 'USDT/CNY' | 'USD/CNY', now = Date.now()): boolean {
   if (!fx || fx.pair !== pair || fx.snapshotDate !== date || !fx.source) return false;
   const rate = pair === 'USDT/CNY' ? (fx as CryptoCalendarFx).usdtCnyRate : (fx as CryptoCalendarUsdFx).usdCnyRate;
   const cutoff = cryptoPortfolioCutoffAt(date).getTime(), asOf = Date.parse(fx.asOf);
-  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(asOf) || asOf > cutoff || Date.parse(fx.lockedAt) !== cutoff) return false;
+  if (!Number.isFinite(now) || cutoff > now || !Number.isFinite(rate) || rate <= 0
+    || !Number.isFinite(asOf) || asOf > cutoff || Date.parse(fx.lockedAt) !== cutoff) return false;
   if (pair === 'USD/CNY') return cutoff - asOf <= 30 * 60_000 && ['sina_usdcny', 'yahoo_usdcny_5m'].includes(fx.source);
   const bridge = fx as CryptoCalendarFx;
   const anchor = cryptoPortfolioStockAnchor(date)?.A;
-  // A weekend's composite asOf is correctly the older Forex leg, not today's USDT leg.
-  // Verify both independent prices and timestamps; never relabel Friday Forex as Saturday.
+  // The weekend composite asOf remains the real older USD evidence, never today's policy time.
   if (!anchor || bridge.forexSnapshotDate !== anchor || bridge.carried !== (anchor !== date)
     || !Number.isFinite(bridge.usdtUsdRate) || bridge.usdtUsdRate! <= 0
-    || !Number.isFinite(bridge.usdCnyRate) || bridge.usdCnyRate! <= 0
-    || bridge.usdtUsdSource !== 'coinbase_usdt_usd_spot_close_1505'
+    || !Number.isFinite(bridge.usdCnyRate) || bridge.usdCnyRate! <= 0 || bridge.usdCnyRate! >= 100
     || !['sina_usdcny', 'yahoo_usdcny_5m'].includes(bridge.usdCnySource ?? '')) return false;
   const forexCutoff = cryptoPortfolioCutoffAt(anchor).getTime(), forexAsOf = Date.parse(bridge.usdCnyAsOf ?? '');
   const usdtAsOf = Date.parse(bridge.usdtUsdAsOf ?? ''), observedAt = Date.parse(bridge.observedAt ?? '');
+  const policyEvidence = bridge.conversionPolicy === USDT_USD_PARITY_POLICY
+    && bridge.usdtUsdSource === USDT_USD_PARITY_SOURCE && bridge.usdtUsdRate === USDT_USD_PARITY_RATE
+    && bridge.source === `${USDT_USD_PARITY_SOURCE}_x_${bridge.usdCnySource}${bridge.carried ? `_carried_A_anchor_${anchor}` : ''}`
+    && usdtAsOf === cutoff; // Accounting applicability time, not a market quote timestamp.
+  const legacyEvidence = bridge.conversionPolicy === undefined
+    && bridge.usdtUsdSource === 'coinbase_usdt_usd_spot_close_1505'
+    && Number.isFinite(usdtAsOf) && usdtAsOf <= cutoff && cutoff - usdtAsOf <= 60_000;
+  if (!policyEvidence && !legacyEvidence) return false;
   return Number.isFinite(forexAsOf) && forexAsOf <= forexCutoff && forexCutoff - forexAsOf <= 30 * 60_000
-    && Number.isFinite(usdtAsOf) && usdtAsOf <= cutoff && cutoff - usdtAsOf <= 60_000
-    && Number.isFinite(observedAt) && observedAt >= cutoff && observedAt >= usdtAsOf
+    && Number.isFinite(observedAt) && observedAt >= cutoff && observedAt <= now
+    && observedAt >= usdtAsOf && observedAt >= forexAsOf
     && asOf === Math.min(usdtAsOf, forexAsOf)
     && Math.abs(rate - bridge.usdtUsdRate! * bridge.usdCnyRate!) <= Math.max(1e-10, rate * 1e-10);
 }
@@ -185,8 +195,8 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
         capturedAt: quote.updatedAt, source: quote.source, carried: quote.priceDate !== date });
     }
     const hasUsd = required.has('USD'), hasUsdt = required.has('USDT');
-    const usd = hasUsd && isCryptoCalendarFxValid(input.usdFx, dates.A, 'USD/CNY') ? input.usdFx!.usdCnyRate : null;
-    const usdt = hasUsdt && isCryptoCalendarFxValid(input.usdtFx, date, 'USDT/CNY') ? input.usdtFx!.usdtCnyRate : null;
+    const usd = hasUsd && isCryptoCalendarFxValid(input.usdFx, dates.A, 'USD/CNY', now.getTime()) ? input.usdFx!.usdCnyRate : null;
+    const usdt = hasUsdt && isCryptoCalendarFxValid(input.usdtFx, date, 'USDT/CNY', now.getTime()) ? input.usdtFx!.usdtCnyRate : null;
     const ready = !missing.size && (!hasUsd || usd !== null) && (!hasUsdt || usdt !== null);
     const convert = (values: ReturnType<typeof decimalBucket>) => values.CNY.plus(values.USD.times(usd ?? 0)).plus(values.USDT.times(usdt ?? 0));
     const nativeExact = { CNY: floating.CNY.plus(realized.CNY), USD: floating.USD.plus(realized.USD), USDT: floating.USDT.plus(realized.USDT) };

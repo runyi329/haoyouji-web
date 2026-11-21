@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cryptoPortfolioCutoffAt, getCryptoPortfolioEffectiveDate, getCryptoPortfolioTradeSettlementDate, CRYPTO_PORTFOLIO_POLICY_VERSION } from '../shared/crypto-portfolio-policy';
 import { buildCryptoPortfolioDailyPayload, cryptoPortfolioStockAnchor, isCryptoCalendarCloseQuote, type CryptoCalendarInput } from './shared/crypto-portfolio-calendar';
+import { USDT_USD_PARITY_POLICY, USDT_USD_PARITY_SOURCE, USDT_USD_PARITY_RATE } from '../shared/usdt-usd-parity-policy';
 
 const mocks = vi.hoisted(() => ({ conn: null as any, crypto: vi.fn(), live: vi.fn(), fx: vi.fn(), stock: vi.fn(), usd: vi.fn(), dirty: vi.fn() }));
 vi.mock('./db', () => ({ getDbConnection: vi.fn(async () => mocks.conn), getDbTransactionConnection: vi.fn(async () => mocks.conn) }));
@@ -20,6 +21,12 @@ const fx = (d = date, rate = 7.19) => {
     usdCnyRate: rate / 0.999355, usdCnyAsOf: `${anchor}T15:04:00+08:00`, usdCnySource: 'yahoo_usdcny_5m',
     usdtUsdRate: 0.999355, usdtUsdAsOf: `${d}T15:05:00+08:00`, usdtUsdSource: 'coinbase_usdt_usd_spot_close_1505',
     observedAt: `${d}T15:05:04+08:00` };
+};
+const policyFx = (d = date, rate = 7.19) => {
+  const point = fx(d, rate);
+  return { ...point, conversionPolicy: USDT_USD_PARITY_POLICY,
+    source: `${USDT_USD_PARITY_SOURCE}_x_${point.usdCnySource}${point.carried ? `_carried_A_anchor_${point.forexSnapshotDate}` : ''}`,
+    usdCnyRate: rate, usdtUsdRate: USDT_USD_PARITY_RATE, usdtUsdSource: USDT_USD_PARITY_SOURCE };
 };
 const cryptoQuote = (d = date, price = 110, source = 'crypto_close_gate_1505') => ({ symbol, price, currency: 'USDT' as const,
   priceDate: d, source, updatedAt: `${d}T15:05:03+08:00`, cutoffAt: `${d}T15:05:00+08:00` });
@@ -141,6 +148,80 @@ describe('crypto natural-day pure reconstruction', () => {
     expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: falseFx }).total.ready).toBe(false);
     expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...fx(), usdtUsdRate: undefined } }).total.ready).toBe(false);
     expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...fx(), usdtCnyRate: 7.2 } }).total.ready).toBe(false);
+  });
+  it('complete authorized parity evidence makes total/member/observation ready; policy version and native units stay unchanged', () => {
+    const data = input(); data.usdtFx = policyFx();
+    data.observations = [{ lotId: 1, userId: 99, quantity: 3, entryPrice: 100, startDate: date,
+      pauseDate: null, assignedAt: `${date}T15:00:00+08:00`, updatedAt: `${date}T15:00:00+08:00` }];
+    const before = JSON.stringify(data.usdtFx), payload = buildCryptoPortfolioDailyPayload(data);
+    expect(payload.policyVersion).toBe(CRYPTO_PORTFOLIO_POLICY_VERSION);
+    for (const row of [payload.total, payload.members['28'], payload.observations['99']]) {
+      expect(row).toMatchObject({ ready: true, usdtCnyRate: 7.19, fxAsOf: '2026-11-13T15:04:00+08:00' });
+    }
+    expect(payload.total.totalPnl).toBeCloseTo(20 * 7.19);
+    expect(payload.members['28'].totalPnl).toBeCloseTo(-10 * 7.19);
+    expect(payload.observations['99'].totalPnl).toBeCloseTo(-30 * 7.19);
+    expect(payload.fx.usdt).toMatchObject({ conversionPolicy: USDT_USD_PARITY_POLICY, usdtUsdRate: 1,
+      usdtUsdSource: USDT_USD_PARITY_SOURCE, usdtUsdAsOf: `${date}T15:05:00+08:00`,
+      usdCnySource: 'yahoo_usdcny_5m', forexSnapshotDate: '2026-11-13', carried: true });
+    expect(JSON.stringify(data.usdtFx)).toBe(before);
+  });
+  it.each([
+    ['missing policy', { conversionPolicy: undefined }], ['wrong policy', { conversionPolicy: 'unapproved' }],
+    ['missing policy source', { usdtUsdSource: undefined }], ['market source with policy', { usdtUsdSource: 'coinbase_usdt_usd_spot_close_1505' }],
+    ['wrong policy rate', { usdtUsdRate: 0.999355 }], ['missing policy rate', { usdtUsdRate: undefined }],
+    ['wrong composite source', { source: 'bridge_coinbase_usdt_usd_spot_close_1505_x_yahoo_usdcny_5m' }],
+    ['missing composite source', { source: '' }], ['policy time is not cutoff', { usdtUsdAsOf: `${date}T15:04:59+08:00` }],
+    ['future policy time', { usdtUsdAsOf: `${date}T15:05:01+08:00` }], ['missing policy time', { usdtUsdAsOf: undefined }],
+    ['missing USD rate', { usdCnyRate: undefined }], ['invalid USD rate', { usdCnyRate: 0 }],
+    ['missing USD source', { usdCnySource: undefined }], ['invalid USD source', { usdCnySource: 'invented' }],
+    ['missing USD time', { usdCnyAsOf: undefined }], ['future USD time', { usdCnyAsOf: '2026-11-15T15:04:00+08:00' }],
+    ['after anchor USD time', { usdCnyAsOf: '2026-11-13T15:05:01+08:00' }], ['old USD time', { usdCnyAsOf: '2026-11-13T14:34:59+08:00' }],
+    ['false weekend anchor', { forexSnapshotDate: date }], ['missing anchor', { forexSnapshotDate: undefined }],
+    ['false carried', { carried: false }], ['missing carried', { carried: undefined }],
+    ['wrong product', { usdtCnyRate: 7.2 }], ['false newer asOf', { asOf: `${date}T15:05:00+08:00` }],
+    ['future observation', { observedAt: `${date}T15:06:01+08:00` }], ['pre-cutoff observation', { observedAt: `${date}T15:04:59+08:00` }],
+    ['missing observation', { observedAt: undefined }], ['wrong lock', { lockedAt: `${date}T15:05:01+08:00` }],
+  ])('policy %s cannot be ready merely because one rate is 1', (_name, patch) => {
+    const payload = buildCryptoPortfolioDailyPayload({ ...input(), usdtFx: { ...policyFx(), ...patch } });
+    for (const row of [payload.total, payload.members['28']]) expect(row).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'missing_historical_fx' });
+  });
+  it('bare 1 and incomplete legacy-looking policy claims are not evidence; authentic legacy market legs remain readable', () => {
+    const data = input(), legacy = fx();
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: legacy }).total.ready).toBe(true);
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...legacy, usdtUsdRate: 1 } }).total.ready).toBe(false);
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...legacy, conversionPolicy: 'unapproved' } }).total.ready).toBe(false);
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...policyFx(), usdCnyRate: undefined, usdtUsdRate: 1 } }).total.ready).toBe(false);
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: null }).total.ready).toBe(false);
+  });
+  it('A-day policy requires today USD anchor; Friday carry cannot masquerade as Monday close', () => {
+    const monday = '2026-11-16', data = { ...input(), snapshotDate: monday, now: new Date(`${monday}T15:06:00+08:00`),
+      quotes: [cryptoQuote(monday)], usdtFx: policyFx(monday) };
+    expect(buildCryptoPortfolioDailyPayload(data).total.ready).toBe(true);
+    expect(buildCryptoPortfolioDailyPayload({ ...data, usdtFx: { ...policyFx(monday), carried: true, forexSnapshotDate: '2026-11-13',
+      usdCnyAsOf: '2026-11-13T15:04:00+08:00', asOf: '2026-11-13T15:04:00+08:00',
+      source: `${USDT_USD_PARITY_SOURCE}_x_yahoo_usdcny_5m_carried_A_anchor_2026-11-13` } }).total.ready).toBe(false);
+  });
+  it('policy transition uses the frozen legacy previous PnL, does not revalue/rewrite it', () => {
+    const data = input(), legacy = buildCryptoPortfolioDailyPayload(data), frozen = JSON.stringify(legacy);
+    const nextDate = '2026-11-15';
+    const next = buildCryptoPortfolioDailyPayload({ ...data, snapshotDate: nextDate, now: new Date(`${nextDate}T15:06:00+08:00`),
+      quotes: [cryptoQuote(nextDate, 115)], usdtFx: policyFx(nextDate, 7.2), previous: legacy });
+    expect(next.total).toMatchObject({ ready: true, dailyPnlReady: true });
+    expect(next.total.dailyPnl).toBeCloseTo(30 * 7.2 - legacy.total.totalPnl!);
+    expect(next.members['28'].dailyPnl).toBeCloseTo(-15 * 7.2 - legacy.members['28'].totalPnl!);
+    expect(JSON.stringify(legacy)).toBe(frozen);
+  });
+  it('approved FX policy does not waive post-cutoff allocation/quantity guards or missing UNI close', () => {
+    const data = input(); data.usdtFx = policyFx();
+    expect(() => buildCryptoPortfolioDailyPayload({ ...data, participations: data.participations.map(p => ({ ...p, updatedAt: `${date}T15:05:00+08:00` })) })).toThrow('unverifiable_allocation_history');
+    expect(() => buildCryptoPortfolioDailyPayload({ ...data, lots: data.lots.map(l => ({ ...l, initialQuantity: 1e-9 })) })).toThrow('invalid_trade_history');
+    const uni = 'CRYPTO:UNI-USDT', today = '2026-11-21';
+    const uniInput = { ...data, snapshotDate: today, activationDate: today, now: new Date(`${today}T17:00:00+08:00`),
+      lots: [{ ...data.lots[0], symbol: uni, openedDate: today, actualTradedAt: `${today}T12:08:00+08:00`, registeredAt: `${today}T12:09:00+08:00` }],
+      participations: [], quotes: [], usdtFx: policyFx(today, 6.6704) };
+    expect(buildCryptoPortfolioDailyPayload(uniInput).total).toMatchObject({ ready: false, totalPnl: null, missingSymbols: [uni] });
+    expect(buildCryptoPortfolioDailyPayload({ ...uniInput, quotes: [{ ...cryptoQuote(today, 4.3), symbol: uni }] }).total).toMatchObject({ ready: true, usdtCnyRate: 6.6704 });
   });
   it('restores quantities from original lot and effective closures, not current remaining', () => {
     const data = input(); data.sales = [{ lotId: 1, quantity: 1, salePrice: 120, transactionFee: 0.12, eventQuantity: 1, closeDate: '2026-11-15' }];
@@ -287,6 +368,30 @@ describe('real settlement exports with mock SQL/network', () => {
     expect(db.saved.get(`81:${date}`)).toBe(before); expect(mocks.crypto).toHaveBeenCalledTimes(1); expect(mocks.dirty).toHaveBeenCalledTimes(1);
     expect(db.sqls.some(q => q.sql.startsWith('INSERT IGNORE INTO ledger_crypto'))).toBe(true);
     expect(db.sqls.some(q => q.sql.includes('UPDATE ledger_stock_') || q.sql.includes('INSERT INTO ledger_stock_daily'))).toBe(false);
+  });
+  it('mock publisher does not overwrite legacy frozen snapshot after enabling policy; reads remain legacy SELECT-only', async () => {
+    const db = fakeDb(); mocks.conn = db.conn;
+    expect(await publishCryptoPortfolioSnapshots({ snapshotDate: date })).toMatchObject({ published: 1 });
+    const frozen = db.saved.get(`81:${date}`)!;
+    expect(JSON.parse(frozen).fx.usdt.usdtUsdSource).toBe('coinbase_usdt_usd_spot_close_1505');
+    mocks.fx.mockImplementation(async d => policyFx(d)); db.alter();
+    expect(await publishCryptoPortfolioSnapshots({ snapshotDate: date })).toMatchObject({ alreadyPublished: 1, published: 0 });
+    expect(db.saved.get(`81:${date}`)).toBe(frozen); expect(mocks.fx).toHaveBeenCalledTimes(1);
+    const start = db.sqls.length;
+    const read = await readCryptoPortfolioCalendar(81, undefined, new Date(`${date}T15:06:00+08:00`));
+    expect(read.find(row => row.snapshotDate === date)?.totalPnl).toBe(JSON.parse(frozen).total.totalPnl);
+    expect(db.sqls.slice(start).every(q => q.sql.startsWith('SELECT'))).toBe(true);
+  });
+  it('mock publisher can freeze a new unpublished day with complete policy evidence, but cannot overwrite it later', async () => {
+    const db = fakeDb(); mocks.conn = db.conn; mocks.fx.mockImplementation(async d => policyFx(d));
+    expect(await publishCryptoPortfolioSnapshots({ snapshotDate: date })).toMatchObject({ published: 1 });
+    const frozen = db.saved.get(`81:${date}`)!;
+    expect(JSON.parse(frozen)).toMatchObject({ policyVersion: CRYPTO_PORTFOLIO_POLICY_VERSION,
+      total: { ready: true, usdtCnyRate: 7.19 }, fx: { usdt: { conversionPolicy: USDT_USD_PARITY_POLICY,
+        usdtUsdSource: USDT_USD_PARITY_SOURCE, usdtUsdRate: 1 } } });
+    mocks.fx.mockResolvedValue(policyFx(date, 99));
+    expect(await publishCryptoPortfolioSnapshots({ snapshotDate: date })).toMatchObject({ alreadyPublished: 1, published: 0 });
+    expect(db.saved.get(`81:${date}`)).toBe(frozen); expect(mocks.fx).toHaveBeenCalledTimes(1);
   });
   it('before weekend cutoff does no DB/price publication and future date is bounded out', async () => {
     const db = fakeDb(); mocks.conn = db.conn; vi.setSystemTime(new Date(`${date}T15:04:59+08:00`));

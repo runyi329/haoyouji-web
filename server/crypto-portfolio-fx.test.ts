@@ -1,160 +1,178 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { USDT_USD_PARITY_POLICY, USDT_USD_PARITY_SOURCE, USDT_USD_PARITY_RATE } from '../shared/usdt-usd-parity-policy';
+import type { StockUsdCnyClosePoint } from './stock-usd-cny-rate';
 const forex = vi.hoisted(() => ({ live: vi.fn(), close: vi.fn() }));
+const unified = vi.hoisted(() => ({ live: vi.fn() }));
 vi.mock('./stock-usd-cny-rate', () => ({ getLiveStockUsdCnyQuote: forex.live, fetchStockUsdCnyAtClose: forex.close }));
+vi.mock('./usdt-cny-rate', () => ({ getLiveUsdtCnyQuote: unified.live }));
 vi.mock('./db', () => ({ getDbConnection: () => { throw new Error('DB forbidden'); } }));
 const NOW = Date.parse('2026-11-16T08:00:00Z'); // 周一16:00北京
-const OPEN = Date.parse('2026-11-16T15:04:00+08:00') / 1000;
-const response = (data: unknown) => ({ ok: true, json: async () => data });
 let api: typeof import('./crypto-portfolio-fx');
 let network: ReturnType<typeof vi.fn>;
 
-function closePoint(date: string, patch = {}) {
-  return { snapshotDate: date, usdCnyRate: 7, asOf: `${date}T07:05:00.000Z`, source: 'yahoo_usdcny_5m', pair: 'USD/CNY', lockedAt: `${date}T15:05:00+08:00`, ...patch };
+function closePoint(date: string, patch = {}): StockUsdCnyClosePoint {
+  return { snapshotDate: date, usdCnyRate: 7, asOf: `${date}T07:05:00.000Z`, source: 'yahoo_usdcny_5m', pair: 'USD/CNY' as const, lockedAt: `${date}T15:05:00+08:00`, ...patch };
+}
+function livePoint(patch = {}) {
+  const asOf = new Date(Date.now() - 1000).toISOString(), observedAt = new Date().toISOString();
+  return { rate: 7, pair: 'USDT/CNY' as const, stale: false, carried: false,
+    conversionPolicy: USDT_USD_PARITY_POLICY, usdtUsdRate: USDT_USD_PARITY_RATE,
+    usdtUsdSource: USDT_USD_PARITY_SOURCE, usdtUsdAsOf: observedAt,
+    usdCnyRate: 7, usdCnySource: 'sina_usdcny', usdCnyAsOf: asOf,
+    source: `${USDT_USD_PARITY_SOURCE}_x_sina_usdcny`, asOf, observedAt, ...patch };
 }
 beforeEach(async () => {
   vi.resetModules(); vi.useFakeTimers(); vi.setSystemTime(NOW);
-  forex.live.mockReset().mockResolvedValue({ rate: 7, asOf: new Date(NOW - 1000).toISOString(), source: 'sina_usdcny', pair: 'USD/CNY', stale: false });
-  forex.close.mockReset().mockImplementation(async (date: string) => closePoint(date));
-  network = vi.fn(async (input: string) => {
-    const url = new URL(input);
-    if (url.hostname === 'api.coinbase.com') return response({ data: { base: 'USDT', currency: 'USD', amount: '0.99' } });
-    return response([[OPEN, 0.98, 1.01, 1, 0.99, 20]]);
-  });
+  forex.live.mockReset(); forex.close.mockReset().mockImplementation(async (date: string) => closePoint(date));
+  unified.live.mockReset().mockImplementation(async () => livePoint());
+  network = vi.fn(async () => { throw new Error('unexpected network: no Coinbase/market USDT leg allowed'); });
   vi.stubGlobal('fetch', network);
   api = await import('./crypto-portfolio-fx');
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-describe('USDT/CNY明确真实双腿桥接', () => {
-  it('两腿分别留来源与采样时刻，不把USDT默作USD；live single-flight缓存和拷贝隔离', async () => {
-    const all = await Promise.all(Array.from({ length: 8 }, () => api.getLiveCryptoUsdtCnyQuote()));
-    expect(all[0]).toMatchObject({ rate: 6.93, pair: 'USDT/CNY', stale: false, carried: false,
-      usdtUsdRate: 0.99, usdtUsdSource: 'coinbase_usdt_usd_spot_reference_sampled', usdCnyRate: 7,
-      usdCnySource: 'sina_usdcny', asOf: new Date(NOW - 1000).toISOString(), observedAt: new Date(NOW).toISOString() });
-    expect(all[0]!.source).toContain('coinbase'); expect(all[0]!.source).toContain('sina');
-    expect(forex.live).toHaveBeenCalledTimes(1); expect(network).toHaveBeenCalledTimes(1);
-    all[0]!.rate = 999;
-    expect((await api.getLiveCryptoUsdtCnyQuote())!.rate).toBe(6.93);
-  });
-
-  it.each(['USD', 'ETH'])('Coinbase返回base=%s不匹配不得桥接', async (base) => {
-    network.mockResolvedValue(response({ data: { base, currency: 'USD', amount: '1' } }));
-    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull();
-  });
-
-  it.each([0, -1, null, true, 'NaN', 'Infinity'])('USDT/USD非正有效价格%s不固定1兜底', async (amount) => {
-    network.mockResolvedValue(response({ data: { base: 'USDT', currency: 'USD', amount } }));
-    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull();
-  });
-
-  it('任何一腿缺证据都返回null，失败不退到7.2/USDT_CNY/OKX', async () => {
-    forex.live.mockResolvedValue(null);
-    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull();
-    expect(network.mock.calls.every(([url]) => !/okx|USDT_CNY|gateio/i.test(String(url)))).toBe(true);
-    vi.setSystemTime(NOW + 30_001);
-    forex.live.mockResolvedValue({ rate: 7, asOf: new Date(Date.now()).toISOString(), source: 'sina_usdcny', pair: 'USD/CNY', stale: false });
-    network.mockRejectedValue(new Error('offline'));
-    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull();
-  });
-
-  it('证券模块上游stale或采样超过30分钟必须标stale，不能伪装实时', async () => {
-    forex.live.mockResolvedValue({ rate: 7, asOf: new Date(NOW - 31 * 60_000).toISOString(), source: 'sina_usdcny', pair: 'USD/CNY', stale: false });
-    expect((await api.getLiveCryptoUsdtCnyQuote())!.stale).toBe(true);
-    vi.setSystemTime(NOW + 30_001);
-    forex.live.mockResolvedValue({ rate: 7, asOf: new Date(NOW).toISOString(), source: 'sina_usdcny', pair: 'USD/CNY', stale: true });
-    expect((await api.getLiveCryptoUsdtCnyQuote())!.stale).toBe(true);
-  });
-
-  it('周末live读取最近A日真实15:05 forex anchor，carried而不是周末新外汇', async () => {
-    vi.setSystemTime(Date.parse('2026-11-15T08:00:00Z'));
+describe('USDT/USD记账政策实时统一入口', () => {
+  it('直接返回统一入口的真实USD值/来源/时刻，不建立第二个缓存或请求Coinbase', async () => {
+    const original = livePoint({ rate: 6.6704, usdCnyRate: 6.6704 });
+    unified.live.mockResolvedValue(original);
     const quote = await api.getLiveCryptoUsdtCnyQuote();
-    expect(forex.live).not.toHaveBeenCalled(); expect(forex.close).toHaveBeenCalledWith('2026-11-13');
-    expect(quote).toMatchObject({ carried: true, forexSnapshotDate: '2026-11-13', stale: false,
-      usdCnyAsOf: '2026-11-13T07:05:00.000Z', usdtUsdAsOf: '2026-11-15T08:00:00.000Z', asOf: '2026-11-13T07:05:00.000Z' });
-    expect(quote!.source).toContain('carried_A_anchor_2026-11-13');
+    expect(quote).toEqual(original); expect(quote).not.toBe(original);
+    quote!.rate = 999;
+    expect((await api.getLiveCryptoUsdtCnyQuote())!.rate).toBe(6.6704);
+    unified.live.mockResolvedValue(livePoint({ rate: 6.8, usdCnyRate: 6.8 }));
+    expect((await api.getLiveCryptoUsdtCnyQuote())!.rate).toBe(6.8);
+    expect(unified.live).toHaveBeenCalledTimes(3);
+    expect(forex.live).not.toHaveBeenCalled(); expect(forex.close).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
   });
 
-  it('北京周一00:10纽约仍是周日11:10，延用周五已完成anchor且两腿时刻各自保留', async () => {
-    vi.setSystemTime(new Date('2026-11-16T00:10:00+08:00'));
-    const quote = await api.getLiveCryptoUsdtCnyQuote();
-    expect(forex.live).not.toHaveBeenCalled(); expect(forex.close).toHaveBeenCalledWith('2026-11-13');
-    expect(quote).toMatchObject({ carried: true, forexSnapshotDate: '2026-11-13', stale: false, rate: 6.93,
-      usdCnyAsOf: '2026-11-13T07:05:00.000Z', usdtUsdAsOf: '2026-11-15T16:10:00.000Z' });
+  it.each(['2026-11-15T08:00:00Z', '2026-11-16T00:10:00+08:00', '2026-11-21T17:00:00+08:00'])('周末/闭市%s不擅自用旧A收盘替换统一实时USD值', async time => {
+    vi.setSystemTime(new Date(time));
+    const quote = livePoint({ rate: 6.71, usdCnyRate: 6.71 });
+    unified.live.mockResolvedValue(quote);
+    expect(await api.getLiveCryptoUsdtCnyQuote()).toEqual(quote);
+    expect(forex.close).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
+  });
+
+  it('统一入口未知时原样返回null，无Coinbase/收盘/fixed CNY降级', async () => {
+    unified.live.mockResolvedValue(null);
+    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull();
+    expect(forex.close).not.toHaveBeenCalled(); expect(forex.live).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
   });
 
   it.each([
     ['2026-11-16T05:59:59+08:00', true], ['2026-11-16T06:00:00+08:00', false],
     ['2026-07-13T04:59:59+08:00', true], ['2026-07-13T05:00:00+08:00', false],
     ['2026-11-14T05:59:59+08:00', false], ['2026-11-14T06:00:00+08:00', true],
-  ])('纽约17点边界含夏令时：%s休市=%s', (time, closed) => {
+  ])('保留旧纽约17点边界兼容export：%s休市=%s', (time, closed) => {
     expect(api.isCryptoFxWeekendClosed(new Date(time))).toBe(closed);
   });
-
-  it('外汇正常开市后陈旧或断网不延用周五，仍返回未知而不伪装实时', async () => {
-    vi.setSystemTime(new Date('2026-11-16T06:00:01+08:00')); forex.live.mockResolvedValue(null);
-    expect(await api.getLiveCryptoUsdtCnyQuote()).toBeNull(); expect(forex.close).not.toHaveBeenCalled();
-  });
+  it('无效周末时间不误判休市', () => expect(api.isCryptoFxWeekendClosed(new Date(NaN))).toBe(false));
 });
 
-describe('15:05真实USDT/USD历史分钟 × 真实USD/CNY close', () => {
-  it('Coinbase精确USDT-USD请求start/end/60；仅取15:04 row[4] close，保留取数真实时刻', async () => {
-    network.mockImplementation(async (input) => {
-      const url = new URL(input);
-      expect(url.pathname).toBe('/products/USDT-USD/candles');
-      expect(Object.fromEntries(url.searchParams)).toEqual({ granularity: '60', start: '2026-11-16T07:04:00.000Z', end: '2026-11-16T07:05:00.000Z' });
-      return response([[OPEN + 60, 1, 1, 1, 9], [OPEN, 0.98, 1.01, 1.005, 0.99, 10], [OPEN - 60, 1, 1, 1, 2]]);
-    });
+describe('15:05 USDT/USD政策=1 × 真实USD/CNY anchor', () => {
+  it('只请求当日真实USD close；政策适用时点为本日15:05，不再请求任何USDT/USD market quote', async () => {
     const quote = await api.fetchCryptoUsdtCnyAtClose('2026-11-16');
-    expect(quote).toMatchObject({ snapshotDate: '2026-11-16', usdtCnyRate: 6.93, pair: 'USDT/CNY',
+    expect(quote).toMatchObject({ snapshotDate: '2026-11-16', usdtCnyRate: 7, pair: 'USDT/CNY',
+      conversionPolicy: USDT_USD_PARITY_POLICY, usdtUsdRate: 1, usdtUsdSource: USDT_USD_PARITY_SOURCE,
+      usdtUsdAsOf: '2026-11-16T07:05:00.000Z', usdCnyRate: 7, usdCnySource: 'yahoo_usdcny_5m', usdCnyAsOf: '2026-11-16T07:05:00.000Z',
       asOf: '2026-11-16T07:05:00.000Z', lockedAt: '2026-11-16T15:05:00+08:00', carried: false,
-      observedAt: new Date(NOW).toISOString(), usdtUsdRate: 0.99, forexSnapshotDate: '2026-11-16' });
+      observedAt: new Date(NOW).toISOString(), forexSnapshotDate: '2026-11-16', source: `${USDT_USD_PARITY_SOURCE}_x_yahoo_usdcny_5m` });
+    expect(forex.close).toHaveBeenCalledTimes(1); expect(forex.close).toHaveBeenCalledWith('2026-11-16');
+    expect(forex.live).not.toHaveBeenCalled(); expect(unified.live).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
+    expect(quote!.source).not.toMatch(/coinbase|market|spot|bridge/);
+  });
+
+  it.each([
+    ['wrong-pair', { pair: 'USDT/CNY' }], ['wrong-date', { snapshotDate: '2026-11-13' }],
+    ['after-cutoff', { asOf: '2026-11-16T07:05:01Z' }], ['future', { asOf: '2026-11-17T07:04:00Z' }],
+    ['too-old', { asOf: '2026-11-16T06:34:59Z' }], ['wrong-source', { source: 'invented' }],
+    ['missing-asOf', { asOf: undefined }], ['invalid-asOf', { asOf: 'bad' }], ['wrong-lock', { lockedAt: '2026-11-16T15:06:00+08:00' }],
+    ['missing-lock', { lockedAt: undefined }], ['future-lock', { lockedAt: '2026-11-17T15:05:00+08:00' }],
+    ['zero', { usdCnyRate: 0 }], ['negative', { usdCnyRate: -1 }], ['infinity', { usdCnyRate: Infinity }],
+    ['missing-rate', { usdCnyRate: undefined }], ['boolean-rate', { usdCnyRate: true }],
+  ])('USD/CNY %s证据拒绝，政策1不是无USD证据的兜底', async (_reason, patch) => {
+    forex.close.mockImplementation(async (date) => closePoint(date, patch));
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16')).toBeNull();
+    expect(forex.close).toHaveBeenCalledTimes(1); expect(forex.close).toHaveBeenCalledWith('2026-11-16');
+    expect(forex.live).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
+  });
+
+  it('A交易日必须本日anchor，缺当日USD不能回退周五', async () => {
+    const supplied = closePoint('2026-11-13'); forex.close.mockResolvedValue(null);
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16', { usdCnyClose: supplied })).toBeNull();
+    expect(forex.close).toHaveBeenCalledTimes(1); expect(forex.close).toHaveBeenCalledWith('2026-11-16');
+  });
+
+  it.each(['sina_usdcny', 'yahoo_usdcny_5m'])('复用合法归档%s，原USD来源/实际时间不改写成政策时间，无额外网络', async source => {
+    const point = closePoint('2026-11-16', { source, usdCnyRate: 6.6704, asOf: '2026-11-16T07:04:01.000Z' });
+    const quote = await api.fetchCryptoUsdtCnyAtClose('2026-11-16', { usdCnyClose: point as any });
+    expect(quote).toMatchObject({ usdtCnyRate: 6.6704, usdCnyRate: 6.6704, usdCnySource: source,
+      usdCnyAsOf: point.asOf, asOf: point.asOf, usdtUsdAsOf: '2026-11-16T07:05:00.000Z', forexSnapshotDate: '2026-11-16' });
+    expect(forex.close).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
+  });
+
+  it('历史近cutoff边界30分钟仍保留真实older asOf，不用当前USD倒填', async () => {
+    forex.close.mockResolvedValue(closePoint('2026-11-16', { asOf: '2026-11-16T06:35:00.000Z' }));
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16')).toMatchObject({ asOf: '2026-11-16T06:35:00.000Z', usdCnyAsOf: '2026-11-16T06:35:00.000Z' });
     expect(forex.live).not.toHaveBeenCalled();
   });
 
-  it.each(['future', 'past', 'millisecond', 'missing', 'duplicate', 'zero'])('Coinbase历史%s缺确证返回null，不用live补过去', async (reason) => {
-    const row = [reason === 'future' ? OPEN + 60 : reason === 'past' ? OPEN - 60 : reason === 'millisecond' ? OPEN * 1000 : OPEN, 1, 1, 1, reason === 'zero' ? 0 : 1, 1];
-    network.mockResolvedValue(response(reason === 'missing' ? [] : reason === 'duplicate' ? [row, row] : [row]));
-    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16')).toBeNull();
-    expect(forex.live).not.toHaveBeenCalled();
-    expect(network.mock.calls.every(([url]) => !String(url).includes('/spot'))).toBe(true);
-  });
-
-  it.each(['wrong-pair', 'wrong-date', 'after-cutoff', 'too-old', 'wrong-source'])('USD/CNY %s证据拒绝', async (reason) => {
-    forex.close.mockImplementation(async (date) => closePoint(date, reason === 'wrong-pair' ? { pair: 'USDT/CNY' }
-      : reason === 'wrong-date' ? { snapshotDate: '2026-11-13' }
-      : reason === 'after-cutoff' ? { asOf: '2026-11-16T07:06:00Z' }
-      : reason === 'too-old' ? { asOf: '2026-11-16T06:34:59Z' } : { source: 'invented' }));
-    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16')).toBeNull();
-  });
-
-  it('周末结算保留当日USDT历史腿，USD腿沿用周五15:05并标carried', async () => {
-    const date = '2026-11-15';
-    vi.setSystemTime(Date.parse('2026-11-15T08:00:00Z'));
-    const openedAt = Date.parse(`${date}T15:04:00+08:00`) / 1000;
-    network.mockResolvedValue(response([[openedAt, 0.98, 1.01, 1, 0.99, 1]]));
+  it.each(['2026-11-14', '2026-11-15', '2026-11-21'])('周末%s沿用最近A日真实USD anchor并标carried；本日15:05仅政策适用时点', async date => {
+    vi.setSystemTime(new Date(`${date}T16:00:00+08:00`));
+    const anchor = date === '2026-11-21' ? '2026-11-20' : '2026-11-13';
     const quote = await api.fetchCryptoUsdtCnyAtClose(date);
-    expect(forex.close).toHaveBeenCalledWith('2026-11-13');
-    expect(quote).toMatchObject({ snapshotDate: date, carried: true, forexSnapshotDate: '2026-11-13',
-      usdtUsdAsOf: '2026-11-15T07:05:00.000Z', usdCnyAsOf: '2026-11-13T07:05:00.000Z',
-      lockedAt: '2026-11-15T15:05:00+08:00', asOf: '2026-11-13T07:05:00.000Z' });
+    expect(forex.close).toHaveBeenCalledTimes(1); expect(forex.close).toHaveBeenCalledWith(anchor);
+    expect(quote).toMatchObject({ snapshotDate: date, usdtCnyRate: 7, conversionPolicy: USDT_USD_PARITY_POLICY,
+      carried: true, forexSnapshotDate: anchor, usdtUsdRate: 1, usdtUsdAsOf: `${date}T07:05:00.000Z`,
+      usdCnyAsOf: `${anchor}T07:05:00.000Z`, lockedAt: `${date}T15:05:00+08:00`, asOf: `${anchor}T07:05:00.000Z`,
+      source: `${USDT_USD_PARITY_SOURCE}_x_yahoo_usdcny_5m_carried_A_anchor_${anchor}` });
+    expect(network).not.toHaveBeenCalled(); expect(forex.live).not.toHaveBeenCalled();
   });
 
-  it('周末anchor无真实价则返回null；不能一路回查猜选一个供应商价格', async () => {
-    vi.setSystemTime(Date.parse('2026-11-15T08:00:00Z'));
-    forex.close.mockResolvedValue(null);
+  it('周末anchor无真实价或断网返回null，不回查更旧供应商/实时USD', async () => {
+    vi.setSystemTime(new Date('2026-11-15T16:00:00+08:00')); forex.close.mockResolvedValue(null);
     expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-15')).toBeNull();
-    expect(forex.close).toHaveBeenCalledTimes(1);
-    expect(forex.live).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + 30_001); forex.close.mockRejectedValue(new Error('offline'));
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-15')).toBeNull();
+    expect(forex.close).toHaveBeenCalledTimes(2); expect(forex.close.mock.calls.every(([date]) => date === '2026-11-13')).toBe(true);
+    expect(forex.live).not.toHaveBeenCalled(); expect(unified.live).not.toHaveBeenCalled();
   });
 
-  it('无效/未来日期不发请求；single-flight和历史缓存隔离于实时行情', async () => {
+  it('合法归档可越过先前null缓存，不同USD来源独立缓存，不能被旧上游结果遮蔽', async () => {
+    forex.close.mockResolvedValue(null);
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16')).toBeNull();
+    const first = await api.fetchCryptoUsdtCnyAtClose('2026-11-16', { usdCnyClose: closePoint('2026-11-16', { source: 'sina_usdcny', usdCnyRate: 6.6704 }) as any });
+    const second = await api.fetchCryptoUsdtCnyAtClose('2026-11-16', { usdCnyClose: closePoint('2026-11-16', { usdCnyRate: 6.8 }) });
+    expect(first).toMatchObject({ usdCnyRate: 6.6704, usdCnySource: 'sina_usdcny', usdtCnyRate: 6.6704 });
+    expect(second).toMatchObject({ usdCnyRate: 6.8, usdCnySource: 'yahoo_usdcny_5m', usdtCnyRate: 6.8 });
+    expect(forex.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('transaction-owned USD fallback只按合法anchor请求一次，不额外请求默认close', async () => {
+    const fallback = vi.fn(async date => closePoint(date));
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-16', { fetchUsdCnyAtClose: fallback })).toMatchObject({ usdtCnyRate: 7 });
+    expect(fallback).toHaveBeenCalledTimes(1); expect(fallback).toHaveBeenCalledWith('2026-11-16');
+    expect(forex.close).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
+  });
+
+  it('无效/未来日期不发请求；single-flight/历史缓存/拷贝隔离保留，不建立schedule', async () => {
     expect(await api.fetchCryptoUsdtCnyAtClose('2026-02-30')).toBeNull();
     expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-17')).toBeNull();
-    expect(network).not.toHaveBeenCalled();
+    expect(forex.close).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
     const all = await Promise.all(Array.from({ length: 8 }, () => api.fetchCryptoUsdtCnyAtClose('2026-11-16')));
-    expect(network).toHaveBeenCalledTimes(1); expect(forex.close).toHaveBeenCalledTimes(1);
+    expect(forex.close).toHaveBeenCalledTimes(1); expect(network).not.toHaveBeenCalled();
     all[0]!.usdtCnyRate = 999;
-    expect((await api.fetchCryptoUsdtCnyAtClose('2026-11-16'))!.usdtCnyRate).toBe(6.93);
+    expect((await api.fetchCryptoUsdtCnyAtClose('2026-11-16'))!.usdtCnyRate).toBe(7);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('最多4日期并发保留原范围边界，第5个不扩展请求', async () => {
+    const resolve: Array<() => void> = [];
+    forex.close.mockImplementation(date => new Promise(done => resolve.push(() => done(closePoint(date)))));
+    const dates = ['2026-11-16', '2026-11-15', '2026-11-14', '2026-11-13'];
+    const pending = dates.map(date => api.fetchCryptoUsdtCnyAtClose(date));
+    expect(await api.fetchCryptoUsdtCnyAtClose('2026-11-12')).toBeNull();
+    expect(forex.close).toHaveBeenCalledTimes(4); resolve.forEach(done => done());
+    expect((await Promise.all(pending)).every(Boolean)).toBe(true);
   });
 });

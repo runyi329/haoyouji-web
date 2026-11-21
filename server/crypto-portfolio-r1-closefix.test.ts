@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { USDT_USD_PARITY_POLICY, USDT_USD_PARITY_SOURCE, USDT_USD_PARITY_RATE } from '../shared/usdt-usd-parity-policy';
 const mocks = vi.hoisted(() => ({ conn: null as any, tx: null as any, usd: vi.fn(), crypto: vi.fn(), stock: vi.fn(), dirty: vi.fn() }));
 vi.mock('./db', () => ({ getDbConnection: async () => mocks.conn, getDbTransactionConnection: async () => mocks.tx }));
 vi.mock('./stock-usd-cny-rate', () => ({ fetchStockUsdCnyAtClose: mocks.usd, getLiveStockUsdCnyQuote: vi.fn() }));
@@ -62,31 +63,28 @@ beforeEach(async () => {
   mocks.usd.mockReset().mockResolvedValue(null); mocks.stock.mockReset().mockResolvedValue({}); mocks.dirty.mockReset().mockResolvedValue(undefined);
   mocks.crypto.mockReset().mockImplementation(async (symbols: string[], d: string) => Object.fromEntries(symbols.map(s => [s, { symbol: s, price: 4.3, currency: 'USDT', priceDate: d,
     source: 'crypto_close_gate_1505', updatedAt: `${d}T15:05:03+08:00`, cutoffAt: `${d}T15:05:00+08:00` }])));
-  network = vi.fn(async (input: string) => {
-    const url = new URL(input);
-    expect(url.pathname).toBe('/products/USDT-USD/candles');
-    expect(Object.fromEntries(url.searchParams)).toEqual({ granularity: '60', start: `${date}T07:04:00.000Z`, end: `${date}T07:05:00.000Z` });
-    return { ok: true, json: async () => [[Date.parse(`${date}T15:04:00+08:00`) / 1000, 0.998, 1.001, 1, 0.999, 100]] };
-  });
+  network = vi.fn(async () => { throw new Error('unexpected FX network; USD archived/mocked, Coinbase forbidden'); });
   vi.stubGlobal('fetch', network);
   api = await import('./crypto-portfolio-settlement'); fxApi = await import('./crypto-portfolio-fx');
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-describe('R1 persisted USD anchor via real SELECT → pure bridge', () => {
-  it('Saturday UNI lot29 uses Friday6.6704, real Saturday USDT minute, excludes Friday-night GOOGL and keeps trustworthy daily baseline', async () => {
+describe('R1 persisted USD anchor via mock SELECT → authorized parity policy', () => {
+  it('Saturday UNI lot29 uses Friday6.6704 and Saturday policy time, excludes Friday-night GOOGL and keeps trustworthy daily baseline', async () => {
     const state = db();
     expect(await api.publishCryptoPortfolioSnapshots({ snapshotDate: date, categoryId })).toMatchObject({ published: 1, skipped: 0 });
     const payload = JSON.parse(state.saved.get(date)!);
     expect(payload.fx.usdt).toMatchObject({ carried: true, forexSnapshotDate: anchor, usdCnyRate: 6.6704, usdCnySource: 'sina_usdcny',
-      usdCnyAsOf: `${anchor}T07:04:01.000Z`, usdtUsdRate: 0.999, usdtUsdAsOf: `${date}T07:05:00.000Z`,
-      usdtUsdSource: 'coinbase_usdt_usd_spot_close_1505', asOf: `${anchor}T07:04:01.000Z`, observedAt: `${date}T09:00:00.000Z` });
-    expect(payload.fx.usdt.usdtCnyRate).toBeCloseTo(6.6704 * 0.999, 12);
+      usdCnyAsOf: `${anchor}T07:04:01.000Z`, usdtUsdRate: USDT_USD_PARITY_RATE, usdtUsdAsOf: `${date}T07:05:00.000Z`,
+      conversionPolicy: USDT_USD_PARITY_POLICY, usdtUsdSource: USDT_USD_PARITY_SOURCE,
+      source: `${USDT_USD_PARITY_SOURCE}_x_sina_usdcny_carried_A_anchor_${anchor}`,
+      asOf: `${anchor}T07:04:01.000Z`, observedAt: `${date}T09:00:00.000Z` });
+    expect(payload.fx.usdt.usdtCnyRate).toBe(6.6704);
     expect(payload.total.sourceDates).toEqual({ A: anchor, US: '2026-11-19', CRYPTO: date });
     expect(payload.total.positionCount).toBe(2); expect(payload.members['28'].positionCount).toBe(1);
     expect(payload.total.dailyPnlReady).toBe(true); expect(payload.members['28'].dailyPnlReady).toBe(true);
     expect(payload.members['28'].dailyPnl).toBeCloseTo(0, 10);
-    expect(mocks.usd).not.toHaveBeenCalled(); expect(network).toHaveBeenCalledTimes(1); expect(mocks.stock).not.toHaveBeenCalled();
+    expect(mocks.usd).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled(); expect(mocks.stock).not.toHaveBeenCalled();
     const reads = state.sqls.filter(q => q.sql.includes('FROM ledger_stock_unified_close_fx'));
     expect(reads.every(q => q.transaction && JSON.stringify(q.params) === JSON.stringify([37, categoryId, anchor, policy]))).toBe(true);
     expect(reads[0].sql).toContain("'USD/CNY' AS pair"); expect(reads[0].sql).toContain('SELECT ledger_id,category_id,policy_version');
@@ -95,7 +93,7 @@ describe('R1 persisted USD anchor via real SELECT → pure bridge', () => {
     const frozen = state.saved.get(date); state.sqls.length = 0;
     expect(await api.publishCryptoPortfolioSnapshots({ snapshotDate: date, categoryId })).toMatchObject({ alreadyPublished: 1, published: 0 });
     expect(state.saved.get(date)).toBe(frozen); expect(state.sqls.some(q => q.sql.includes('unified_close_fx'))).toBe(false);
-    expect(network).toHaveBeenCalledTimes(1); expect(mocks.dirty).toHaveBeenCalledTimes(1);
+    expect(network).not.toHaveBeenCalled(); expect(mocks.dirty).toHaveBeenCalledTimes(1);
   });
   it('crypto-only scope also reads same-scope persistent USD leg without any USD history network', async () => {
     const state = db({ cryptoOnly: true });
@@ -124,10 +122,12 @@ describe('R1 persisted USD anchor via real SELECT → pure bridge', () => {
     expect(await api.publishCryptoPortfolioSnapshots({ snapshotDate: date, categoryId })).toMatchObject({ published: 0, failures: [{ reason: 'missing_historical_fx' }] });
     expect(state.saved.size).toBe(0); expect(state.tx.rollback).toHaveBeenCalled(); expect(mocks.dirty).not.toHaveBeenCalled(); expect(mocks.usd).toHaveBeenCalledTimes(1);
   });
-  it('valid archive never substitutes USD for failed/timeout real USDT history leg', async () => {
+  it('valid real USD archive plus explicit policy is sufficient even when Coinbase is offline, with no USDT network request', async () => {
     const state = db(); network.mockRejectedValue(new Error('Coinbase timeout'));
-    expect(await api.publishCryptoPortfolioSnapshots({ snapshotDate: date, categoryId })).toMatchObject({ published: 0, failures: [{ reason: 'missing_historical_fx' }] });
-    expect(state.saved.size).toBe(0); expect(mocks.usd).not.toHaveBeenCalled();
+    expect(await api.publishCryptoPortfolioSnapshots({ snapshotDate: date, categoryId })).toMatchObject({ published: 1, skipped: 0 });
+    expect(JSON.parse(state.saved.get(date)!).fx.usdt).toMatchObject({ conversionPolicy: USDT_USD_PARITY_POLICY,
+      usdtUsdRate: 1, usdtUsdSource: USDT_USD_PARITY_SOURCE, usdCnyRate: 6.6704, usdtCnyRate: 6.6704 });
+    expect(mocks.usd).not.toHaveBeenCalled(); expect(network).not.toHaveBeenCalled();
   });
   it('old physically active lot edited to future start still loses baseline; guard is not waived', async () => {
     const state = db({ oldEdited: true });
