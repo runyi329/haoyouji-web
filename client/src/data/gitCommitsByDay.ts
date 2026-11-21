@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-21
+// 生成时间：2026-11-22
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -10000,5 +10000,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-11-21": [
     { date: "2026-11-20T16:21:53Z", type: "fix", cleanMessage: "show member allocation changes and market-value share counts" },
+    { date: "2026-11-20T23:25:03Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-21T05:41:46Z", type: "fix", cleanMessage: "show native crypto prices when CNY conversion is unavailable" },
+    { date: "2026-11-21T07:19:45Z", type: "fix", cleanMessage: "unify live CNY conversion across R1 and ledger 52" },
+    { date: "2026-11-21T09:14:40Z", type: "fix", cleanMessage: "preserve native margin and financing values without cross-currency quotes" },
+    { date: "2026-11-21T10:02:21Z", type: "fix", cleanMessage: "isolate member settlement policy and reuse archived close FX evidence" },
+    { date: "2026-11-21T10:52:21Z", type: "fix", cleanMessage: "use explicit USDT USD parity accounting policy across live and daily valuation" },
   ],
 };
