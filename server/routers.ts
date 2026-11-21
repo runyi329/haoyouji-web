@@ -2092,12 +2092,14 @@ async function captureFunderExternal37SettlementSnapshot(
         }
       }
       const marginRecords = parseTagMarginRecords(config?.margin_by_coin);
-      let fullyValued = frozenUsdtCnyRate > 0;
+      // 人民币与股票净现金/市值不依赖 USDT；只有真正换汇的分项要求汇率。
+      let fullyValued = true;
       let totalCny = 0;
       const itemValuesCny = marginRecords.map((record) => {
         if (record.assetType === 'stock') {
           const value = getTagMarginStockMarketValue(record, stockQuotes);
-          if (value === null) fullyValued = false; else totalCny += value;
+          if (value === null || !Number.isFinite(value)) { fullyValued = false; return null; }
+          totalCny += value;
           return value;
         }
         const coin = String(record.coin || 'CNY').trim().toUpperCase();
@@ -2105,8 +2107,9 @@ async function captureFunderExternal37SettlementSnapshot(
         if (!Number.isFinite(amount)) { fullyValued = false; return null; }
         if (['CNY', 'RMB', '人民币', '元'].includes(coin)) { totalCny += amount; return amount; }
         const priceU = Number(getLatestPrice(coin) || 0);
-        if (!Number.isFinite(priceU) || priceU <= 0 || frozenUsdtCnyRate <= 0) { fullyValued = false; return null; }
+        if (!Number.isFinite(priceU) || priceU <= 0 || !Number.isFinite(frozenUsdtCnyRate) || frozenUsdtCnyRate <= 0) { fullyValued = false; return null; }
         const value = amount * priceU * frozenUsdtCnyRate;
+        if (!Number.isFinite(value)) { fullyValued = false; return null; }
         totalCny += value;
         return value;
       });
@@ -2129,7 +2132,7 @@ async function captureFunderExternal37SettlementSnapshot(
           latestBalance: holdingValue === null ? null : { balance: holdingValue, recordDate: holdingDate },
           marginByCoin: config?.margin_by_coin ?? null,
         },
-        marginValuation: { totalCny: fullyValued ? totalCny : null, itemValuesCny, usdtCnyRate: frozenUsdtCnyRate || null, valuationUpdatedAt },
+        marginValuation: { totalCny: fullyValued && Number.isFinite(totalCny) ? totalCny : null, itemValuesCny, usdtCnyRate: Number.isFinite(frozenUsdtCnyRate) && frozenUsdtCnyRate > 0 ? frozenUsdtCnyRate : null, valuationUpdatedAt },
         interestPeriods: periodsByName.get(name) || [],
       };
     }
@@ -19071,13 +19074,14 @@ ${klinesSummary}
         const { getAllLatestPrices, getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
         const usdtCnyRate = Number(getUsdtCnyRate() || 0);
         const allPrices = getAllLatestPrices();
-        let fullyValued = usdtCnyRate > 0;
+        // 人民币与股票净现金/市值不依赖 USDT；只有真正换汇的分项要求汇率。
+        let fullyValued = true;
         let totalCny = 0;
         const itemValuesCny = records.map((record) => {
           if (record.assetType === 'stock') {
             const value = getTagMarginStockMarketValue(record, stockQuotes);
-            if (value === null) fullyValued = false;
-            else totalCny += value;
+            if (value === null || !Number.isFinite(value)) { fullyValued = false; return null; }
+            totalCny += value;
             return value;
           }
           const coin = String(record.coin || 'CNY').trim().toUpperCase();
@@ -19091,11 +19095,12 @@ ${klinesSummary}
             return amount;
           }
           const priceU = Number(getLatestPrice(coin) || 0);
-          if (!Number.isFinite(priceU) || priceU <= 0 || usdtCnyRate <= 0) {
+          if (!Number.isFinite(priceU) || priceU <= 0 || !Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) {
             fullyValued = false;
             return null;
           }
           const value = amount * priceU * usdtCnyRate;
+          if (!Number.isFinite(value)) { fullyValued = false; return null; }
           totalCny += value;
           return value;
         });
@@ -19106,9 +19111,9 @@ ${klinesSummary}
           .sort()
           .at(-1) ?? null;
         return {
-          totalCny: fullyValued ? totalCny : null,
+          totalCny: fullyValued && Number.isFinite(totalCny) ? totalCny : null,
           itemValuesCny,
-          usdtCnyRate: usdtCnyRate > 0 ? usdtCnyRate : null,
+          usdtCnyRate: Number.isFinite(usdtCnyRate) && usdtCnyRate > 0 ? usdtCnyRate : null,
           valuationUpdatedAt,
         };
       }),

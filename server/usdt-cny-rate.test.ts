@@ -96,6 +96,31 @@ describe('备用 OKX C2C 买价 sampled_reference', () => {
     expect(mocks.bridge).not.toHaveBeenCalled();
   });
 
+  it('兼容官方小写usdt/cny字段，保留明确的USDT/CNY身份与采样元数据', async () => {
+    network.mockImplementation(async (input: string) => input.includes('coingecko') ? response({})
+      : response({ code: 0, data: { buy: [{ baseCurrency: 'usdt', quoteCurrency: 'cny', side: 'buy', price: '6.73' }] } }));
+    expect(await api.getLiveUsdtCnyQuote()).toEqual({ rate: 6.73, pair: 'USDT/CNY',
+      source: 'okx_c2c_usdt_cny_buy_sampled_reference', asOf: iso(NOW), observedAt: iso(NOW), stale: false, carried: false });
+    expect(mocks.bridge).not.toHaveBeenCalled();
+  });
+
+  it('大小写规范也适用于顶层/嵌套身份和方向，但绝不把usd别名为usdt', async () => {
+    network.mockImplementation(async (input: string) => input.includes('coingecko') ? response({})
+      : response({ code: '0', baseCurrency: 'uSdT', quoteCurrency: 'cNy', side: 'BUY', pair: 'usdt/cny',
+        data: { baseCurrency: 'usdt', quoteCurrency: 'CNY', buy: [{ baseCurrency: 'USDT', quoteCurrency: 'cny', side: 'Buy', price: '6.73' }] } }));
+    expect(await api.getLiveUsdtCnyQuote()).toMatchObject({ rate: 6.73, pair: 'USDT/CNY' });
+    api.__usdtCnyTest.reset();
+    network.mockImplementation(async (input: string) => input.includes('coingecko') ? response({})
+      : response({ code: 0, data: { buy: [{ baseCurrency: 'usd', quoteCurrency: 'cny', side: 'buy', price: '6.73' }] } }));
+    expect(await api.getLiveUsdtCnyQuote()).toBeNull();
+  });
+
+  it.each([null, 1, true, ['usdt'], 'USDT-USD'])('规范大小写仍拒绝非法币种字段 %j', async (baseCurrency) => {
+    network.mockImplementation(async (input: string) => input.includes('coingecko') ? response({})
+      : response({ code: 0, data: { buy: [{ baseCurrency, quoteCurrency: 'cny', price: '6.73' }] } }));
+    expect(await api.getLiveUsdtCnyQuote()).toBeNull();
+  });
+
   it('采样时间在读取完成时取得；供应商其他时间字段不伪称交易时间', async () => {
     network.mockImplementation(async (input: string) => {
       if (input.includes('coingecko')) return response({});

@@ -6,6 +6,68 @@ import { trpc } from "@/lib/trpc";
 import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
+
+// 展示计算独立于资金提交。未知跨币值必须保留未知，同币值不依赖 FX。
+export function financeCardCurrency(value: unknown): string {
+  const currency = String(value || 'USDT').toUpperCase();
+  return currency === 'U' ? 'USDT' : currency;
+}
+
+export function financeCardFxRate(order: any, liveRate: unknown): number | null {
+  if (order.status !== 'settled' && order.status !== 'completed') return finitePositive(liveRate);
+  let snapshot: any = order.settlement_snapshot;
+  try { if (typeof snapshot === 'string') snapshot = JSON.parse(snapshot); } catch { snapshot = null; }
+  return finitePositive(snapshot?.usdtCnyRate);
+}
+
+export function financeCardConvert(amount: number | null, from: string, to: string, rate: unknown): number | null {
+  if (amount === null || !Number.isFinite(amount)) return null;
+  const source = financeCardCurrency(from), target = financeCardCurrency(to);
+  if (source === target) return amount;
+  const fx = finitePositive(rate);
+  if (fx === null) return null;
+  const converted = source === 'CNY' && target === 'USDT' ? amount / fx
+    : source === 'USDT' && target === 'CNY' ? amount * fx : Number.NaN;
+  return Number.isFinite(converted) ? converted : null;
+}
+
+export function financeCardPaid(summary: any, orderId: number, target: string): number | null {
+  // 兼容旧数字映射（U）和新原币分组；登记记录只使用其自身历史汇率。
+  if (!Array.isArray(summary)) { const amount = Number(summary?.[orderId] ?? 0); return amount === 0 ? 0 : financeCardConvert(amount, 'USDT', target, null); }
+  let total = 0;
+  for (const payment of summary.filter((row: any) => Number(row.orderId) === orderId)) {
+    const value = financeCardConvert(Number(payment.total), payment.currency, target, payment.exchangeRate);
+    if (value === null) return null;
+    total += value;
+  }
+  return total;
+}
+
+export function financeCardPaidNative(summary: any, orderId: number): string {
+  if (!Array.isArray(summary)) return `${formatFxEstimate(Number(summary?.[orderId] ?? 0), 'toFixed', 2)} U`;
+  const totals = new Map<string, number>();
+  for (const payment of summary.filter((row: any) => Number(row.orderId) === orderId)) {
+    const currency = financeCardCurrency(payment.currency);
+    totals.set(currency, (totals.get(currency) ?? 0) + Number(payment.total));
+  }
+  return Array.from(totals.entries()).map(([currency, amount]) => `${formatFxEstimate(amount, 'toFixed', 2)} ${currency === 'CNY' ? '元' : currency === 'USDT' ? 'U' : currency}`).join(' + ') || '0.00';
+}
+
+export function financeCardAssetValue(asset: { coin: string; qty: string }, prices: Record<string, number>, rate: unknown): number | null {
+  const qty = Number(asset.qty);
+  if (!Number.isFinite(qty) || !asset.coin) return null;
+  if (qty === 0) return 0;
+  const coin = financeCardCurrency(asset.coin);
+  if (coin === 'USDT' || coin === 'CNY') return financeCardConvert(qty, coin, 'USDT', rate);
+  const price = finitePositive(prices[coin]);
+  return price === null ? null : qty * price;
+}
+
+export function financeCardExposure(values: { collateral: number | null; floatPnl: number | null; accrued: number | null; paid: number | null; lentOut: number | null; principal: number | null }): number | null {
+  if (Object.values(values).some((value) => value === null || !Number.isFinite(value))) return null;
+  return values.collateral! + values.floatPnl! - values.accrued! + values.paid! - values.lentOut! - values.principal!;
+}
+
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK', 'DOGE'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 // 整数型币种（单价较低，通常以整数计量）
@@ -194,6 +256,7 @@ interface FinanceOrderCardProps {
   livePrices: Record<string, number>;
   cnyRate: number;
   totalPaid: number;
+  nativePaidLabel?: string;
   openedPaymentList: any[];
   currentUser: any;
   isAdmin: boolean;
@@ -237,8 +300,9 @@ interface FinanceOrderCardProps {
 function FinanceOrderCard({
   order,
   livePrices,
-  cnyRate,
+  cnyRate: liveCnyRate,
   totalPaid,
+  nativePaidLabel,
   openedPaymentList,
   currentUser,
   isAdmin,
@@ -276,6 +340,7 @@ function FinanceOrderCard({
   showMarginInfo,
   setShowMarginInfo,
 }: FinanceOrderCardProps) {
+  const orderCnyRate = financeCardFxRate(order, liveCnyRate) ?? Number.NaN;
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const paymentHistoryQuery = trpc.ledger.financeGetInterestPayments.useQuery(
@@ -330,19 +395,14 @@ function FinanceOrderCard({
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
   const isGreenOrder = !!(order._fromFunder || order._isParticipant);
-  const baseCur = order.interest_base_currency || 'USDT';
+  const baseCur = financeCardCurrency(order.interest_base_currency);
   // 绿色订单使用 interest_rate_currency（与 FunderManagement 一致）
-  const rateCur = isGreenOrder ? (order.interest_rate_currency || 'USDT') : baseCur;
+  const rateCur = isGreenOrder ? financeCardCurrency(order.interest_rate_currency) : baseCur;
   const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
   // 折算逻辑：绿色订单支持跨货币折算
-  const convertAccrued = (val: number): number => {
-    if (baseCur === rateCur) return val;
-    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate;
-    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate;
-    return val;
-  };
-  const convertAlt = (val: number): number => rateCur === 'CNY' ? val / cnyRate : val * cnyRate;
+  const convertAccrued = (val: number): number => financeCardConvert(val, baseCur, rateCur, orderCnyRate) ?? Number.NaN;
+  const convertAlt = (val: number): number => financeCardConvert(val, rateCur, rateCur === 'CNY' ? 'USDT' : 'CNY', orderCnyRate) ?? Number.NaN;
   const displayAccrued = convertAccrued(accrued);
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
@@ -367,15 +427,10 @@ function FinanceOrderCard({
   let collateralValueKnown = true;
   const collateralItemValues: (number | null)[] = [];
   for (const item of collateralAssets) {
-    const iq = parseFloat(item.qty);
-    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralValueKnown = false; continue; }
-    if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); }
-    else if (item.coin === 'CNY') { const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); }
-    else {
-      const p = livePrices[item.coin];
-      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); }
-      else { collateralItemValues.push(null); collateralValueKnown = false; }
-    }
+    const value = financeCardAssetValue(item, livePrices, orderCnyRate);
+    collateralItemValues.push(value);
+    if (value === null) collateralValueKnown = false;
+    else collateralValue += value;
   }
 
   // 解析外借资金
@@ -391,33 +446,29 @@ function FinanceOrderCard({
   // 计算外借资金折算U值
   let lentOutValueU = 0;
   for (const la of lentOutAssets) {
-    const lq = parseFloat(la.qty);
-    if (!la.coin || isNaN(lq) || lq <= 0) continue;
-    if (la.coin === 'USDT') { lentOutValueU += lq; }
-    else if (la.coin === 'CNY') { lentOutValueU += lq / cnyRate; }
-    else {
-      const lp = livePrices[la.coin];
-      if (lp) { lentOutValueU += lq * lp; }
-    }
+    const value = financeCardAssetValue(la, livePrices, orderCnyRate);
+    lentOutValueU += value ?? Number.NaN;
   }
 
   // 风险敞口计算（计息基数统一折算为U）
   const interestBaseRaw = order.interest_base ? Number(order.interest_base) : totalU;
-  const interestBaseNum = baseCur === 'CNY' ? interestBaseRaw / cnyRate : interestBaseRaw;
+  const interestBaseNum = financeCardConvert(interestBaseRaw, baseCur, 'USDT', orderCnyRate) ?? Number.NaN;
   const liveP = livePrices[order.coin] ?? null;
-  const currentValue = liveP !== null ? (order.coin === 'CNY' ? qty / cnyRate : liveP * qty) : null;
+  const currentValue = financeCardAssetValue({ coin: order.coin, qty: String(qty) }, livePrices, orderCnyRate);
   const isShort = (order as any).trade_direction === 'short';
   // 浮动盈亏 = 当前持仓市値(U) - 计息基数(U)；做空时取反（跌了是盈，涨了是亏）
   const floatPnl = currentValue !== null
     ? (isShort ? interestBaseNum - currentValue : currentValue - interestBaseNum)
     : null;
   // 将利息统一折算为U（accrued单位跟interest_base一致，totalPaid单位也interest_base一致）
-  const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
-  const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;
+  const accruedInU = financeCardConvert(accrued, baseCur, 'USDT', orderCnyRate) ?? Number.NaN;
+  const totalPaidInU = financeCardConvert(totalPaid, baseCur, 'USDT', orderCnyRate) ?? Number.NaN;
   const principalLentOut = isPrincipalLentOutForDisplay(order);
-  const exposure = finitePositive(cnyRate) === null ? Number.NaN : floatPnl !== null
-    ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0)
-    : collateralValue - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0);
+  const exposure = financeCardExposure({
+    collateral: collateralValueKnown ? collateralValue : null, floatPnl,
+    accrued: accruedInU, paid: totalPaidInU, lentOut: lentOutValueU,
+    principal: principalLentOut ? interestBaseNum : 0,
+  }) ?? Number.NaN;
   const isSufficient = exposure >= 0;
 
   return (
@@ -427,7 +478,7 @@ function FinanceOrderCard({
         ? { border: '1px solid #86EFAC', boxShadow: '0 1px 6px rgba(34,197,94,0.08)' }
         : { border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
     >
-      {finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">人民币估值/汇率待更新；原币数量和金额保留，换汇风险合计暂不确定。</p>}
+      {!Number.isFinite(exposure) && <p className="px-4 py-2 text-xs text-amber-700">报价/换汇估值待更新；原币数量和金额保留，风险合计暂不确定。</p>}
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
           <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>
@@ -593,11 +644,11 @@ function FinanceOrderCard({
             </div>
             {isGreenOrder && order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((totalU / cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} U</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((totalU / orderCnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} U</div>
               )
             ) : (
               liveP && qty > 0 && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)), 'toLocaleString', undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((order.coin === 'CNY' ? (qty / orderCnyRate) : (qty * liveP)), 'toLocaleString', undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
               )
             )}
           </div>
@@ -613,14 +664,14 @@ function FinanceOrderCard({
             {orderDc.buyValue !== false && totalU > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入价值</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} {order.coin === 'CNY' ? '元' : 'U'}</span>
               </div>
             )}
             {orderDc.interestBase !== false && order.interest_base && parseFloat(order.interest_base) > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">计息基数</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
+                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCur === 'CNY' ? '元' : 'U'}
                 </span>
               </div>
             )}
@@ -683,17 +734,18 @@ function FinanceOrderCard({
                 <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isGreenOrder ? '待结利息' : '待付利息'}</span>
                 {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
               </div>
+              {!Number.isFinite(displayAccrued) && <div className="text-[10px] text-gray-500">原币利息 {formatFxEstimate(accrued, 'toFixed', 2)} {baseCur === 'CNY' ? '元' : 'U'}；换汇待更新</div>}
               {/* 待结利息大数字 */}
               <div className="min-h-9 flex flex-col justify-center">
                 <div className="flex items-baseline gap-0.5">
                   <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                     {isGreenOrder
                       ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))
-                      : (displayAccrued > 0 ? '-' : '')}{formatFunderPendingInterest(displayAccrued, usesContractInterestPrepayment)}
+                      : (displayAccrued > 0 ? '-' : '')}{Number.isFinite(displayAccrued) ? formatFunderPendingInterest(displayAccrued, usesContractInterestPrepayment) : formatFxEstimate(displayAccrued, 'toFixed', 2)}
                   </span>
                   <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
                 </div>
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{isGreenOrder ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')) : (altAccrued > 0 ? '-' : '')}{formatFunderPendingInterest(altAccrued, usesContractInterestPrepayment)} {altUnit}</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{isGreenOrder ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')) : (altAccrued > 0 ? '-' : '')}{Number.isFinite(altAccrued) ? formatFunderPendingInterest(altAccrued, usesContractInterestPrepayment) : formatFxEstimate(altAccrued, 'toFixed', 2)} {altUnit}</div>
               </div>
             </>
           ) : <div style={{ height: '16px' }} />}
@@ -704,7 +756,7 @@ function FinanceOrderCard({
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-gray-400 whitespace-nowrap">
                     {isGreenOrder ? '已结利息' : '已付利息'}
-                    {displayPaid > 0 && (
+                    {(totalPaid > 0 || !Number.isFinite(totalPaid)) && (
                       <button
                         type="button"
                         onClick={e => { e.stopPropagation(); setShowPaymentHistory(true); }}
@@ -714,7 +766,7 @@ function FinanceOrderCard({
                     )}
                   </span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>
-                    {formatFxEstimate(displayPaid, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                    {Number.isFinite(displayPaid) ? <>{formatFxEstimate(displayPaid, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</> : <>{Number.isFinite(totalPaid) ? `${totalPaid.toFixed(2)} ${baseCur === 'CNY' ? '元' : 'U'}` : nativePaidLabel || '原币记录可查看'}（换汇待更新）</>}
                   </span>
                 </div>
                 {/* 已付利息只读弹窗 */}
@@ -734,7 +786,7 @@ function FinanceOrderCard({
                           {(paymentHistoryQuery.data as any[]).map((p: any) => (
                             <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 shadow-sm">
                               <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
+                                <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {financeCardCurrency(p.currency) === 'CNY' ? '元' : 'U'}</span>
                                 {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                               </div>
                               <span className="text-gray-400 ml-2 flex-shrink-0">{(p.pay_date || p.payment_date || '').slice(0, 10)}</span>
@@ -743,7 +795,7 @@ function FinanceOrderCard({
                           <div className="pt-2 flex items-center justify-between border-t border-gray-100">
                             <span className="text-xs text-gray-400">共 {(paymentHistoryQuery.data as any[]).length} 笔</span>
                             <span className="text-xs font-bold" style={{ color: '#16A34A' }}>
-                              合计 {(paymentHistoryQuery.data as any[]).reduce((s: number, r: any) => s + parseFloat(r.amount || '0'), 0).toFixed(2)} {interestUnit}
+                              原币合计 {financeCardPaidNative((paymentHistoryQuery.data as any[]).map((payment: any) => ({ orderId: order.id, currency: payment.currency, total: payment.amount })), Number(order.id))}
                             </span>
                           </div>
                         </div>
@@ -751,7 +803,7 @@ function FinanceOrderCard({
                     </div>
                   </div>
                 )}
-                {displayPaid > 0 && (
+                {(totalPaid > 0 || !Number.isFinite(totalPaid)) && (
                   <div className="flex justify-end">
                     <span className="text-gray-400">≈{formatFxEstimate(altPaid, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
                   </div>
@@ -821,12 +873,12 @@ function FinanceOrderCard({
                     </button>
                   </div>
                   <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#EF4444' }}>
-                    {isSufficient ? '超过100%' : `${formatFxEstimate(exposure, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} U`}
+                    {!Number.isFinite(exposure) ? '估值待更新' : isSufficient ? '超过100%' : `${formatFxEstimate(exposure, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} U`}
                   </span>
                 </div>
                 {/* 担保缺口计算弹窗（与资方担保缺口弹窗居中弹窗风格一致） */}
                 {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
-                {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
+                {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && Number.isFinite(exposure) && (() => {
                    // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息 - 外借资金) ÷ 计息基数（全部折算为U）
                    const effectiveCollateral = floatPnl !== null
                      ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU
@@ -865,7 +917,7 @@ function FinanceOrderCard({
                               <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
                                 <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息{lentOutValueU > 0 ? ' - 外借资金' : ''}) ÷ 计息基数 × 100%</div>
                                 <div className="mt-1 font-mono text-[10px]">
-                                   <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${formatFxEstimate(floatPnl, 'toFixed', 2)})` : ''} − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}) ÷ {formatFxEstimate(interestBaseNum, 'toFixed', 2)} × 100% = </span>
+                                   <span style={{ color: '#3B82F6' }}>= ({formatFxEstimate(collateralValueKnown ? collateralValue : Number.NaN, 'toFixed', 2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${formatFxEstimate(floatPnl, 'toFixed', 2)})` : ''} − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}) ÷ {formatFxEstimate(interestBaseNum, 'toFixed', 2)} × 100% = </span>
                                    <strong style={{ color: marginColor }}>{formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%</strong>
                                 </div>
                               </div>
@@ -886,7 +938,7 @@ function FinanceOrderCard({
                                 })}
                                 {collateralAssets.length > 1 && (
                                   <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                    合计 {collateralValue.toFixed(2)} U
+                                    合计 {formatFxEstimate(collateralValueKnown ? collateralValue : Number.NaN, 'toFixed', 2)} U
                                   </div>
                                 )}
                               </div>
@@ -957,7 +1009,7 @@ function FinanceOrderCard({
                                 })}
                                 {collateralAssets.length > 1 && (
                                   <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                    合计 {collateralValue.toFixed(2)} U
+                                    合计 {formatFxEstimate(collateralValueKnown ? collateralValue : Number.NaN, 'toFixed', 2)} U
                                   </div>
                                 )}
                               </>
@@ -969,20 +1021,17 @@ function FinanceOrderCard({
                             <div className="font-semibold mb-1" style={{ color: '#EA580C' }}>③ 外借资金</div>
                             {lentOutAssets.map((la, idx) => {
                               const lq = parseFloat(la.qty);
-                              let laVal = 0;
-                              if (la.coin === 'USDT') laVal = lq;
-                              else if (la.coin === 'CNY') laVal = lq / cnyRate;
-                              else { const lp = livePrices[la.coin]; if (lp) laVal = lq * lp; }
+                              const laVal = financeCardAssetValue(la, livePrices, orderCnyRate);
                               return (
                                 <div key={idx} className="mt-1 flex justify-between">
                                   <span className="font-mono" style={{ color: '#6B7280' }}>{la.qty} {la.coin}</span>
-                                  <span className="font-mono font-semibold" style={{ color: '#EA580C' }}>{laVal.toFixed(2)} U</span>
+                                  <span className="font-mono font-semibold" style={{ color: '#EA580C' }}>{formatFxEstimate(laVal, 'toFixed', 2)} U</span>
                                 </div>
                               );
                             })}
                             {lentOutAssets.length > 1 && (
                               <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #FED7AA', color: '#EA580C' }}>
-                                合计 {lentOutValueU.toFixed(2)} U
+                                合计 {formatFxEstimate(lentOutValueU, 'toFixed', 2)} U
                               </div>
                             )}
                           </div>
@@ -993,12 +1042,12 @@ function FinanceOrderCard({
                           <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息{lentOutValueU > 0 ? ' − 外借资金' : ''}{principalLentOut ? ' − 本金（已借出）' : ''}（正数充足，负数缺口）</div>
                           <div className="mt-1 font-mono">
                             {floatPnl !== null
-                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)}) − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${formatFxEstimate(interestBaseNum, 'toFixed', 2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
-                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${formatFxEstimate(interestBaseNum, 'toFixed', 2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
+                              ? <span style={{ color: '#3B82F6' }}>= {formatFxEstimate(collateralValueKnown ? collateralValue : Number.NaN, 'toFixed', 2)} + ({floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)}) − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${formatFxEstimate(interestBaseNum, 'toFixed', 2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
+                              : <span style={{ color: '#3B82F6' }}>= {formatFxEstimate(collateralValueKnown ? collateralValue : Number.NaN, 'toFixed', 2)} + ---（暂无实时价） − {formatFxEstimate(accruedInU, 'toFixed', 2)} + {formatFxEstimate(totalPaidInU, 'toFixed', 2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${formatFxEstimate(interestBaseNum, 'toFixed', 2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
                             }
                           </div>
                           <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                            {!Number.isFinite(exposure) ? '人民币估值/汇率待更新，担保风险暂不确定' : isSufficient
+                            {!Number.isFinite(exposure) ? '报价/换汇估值待更新，担保风险暂不确定' : isSufficient
                               ? `担保物充足，还有 ${formatFxEstimate(exposure, 'toFixed', 2)} U 的余量空间`
                               : `担保物不足，还需补充 ${formatFxEstimate(Math.abs(exposure), 'toFixed', 2)} U 才能覆盖风险`
                             }
@@ -1117,7 +1166,7 @@ function FinanceOrderCard({
             {openedPaymentList.map((p: any) => (
               <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
+                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {financeCardCurrency(p.currency) === 'CNY' ? '元' : 'U'}</span>
                   {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                 </div>
                 <div className="flex items-center gap-2 ml-2 flex-shrink-0">
@@ -2226,7 +2275,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
           ) : (
             <div className="space-y-3">
               {directionFilteredOrders.map((order: any) => {
-                const totalPaid = (interestPaymentSummary as any)?.[order.id] ?? 0;
+                const totalPaid = financeCardPaid(interestPaymentSummary, Number(order.id), financeCardCurrency(order.interest_base_currency)) ?? Number.NaN;
                 return (
                   <FinanceOrderCard
                     key={order.id}
@@ -2234,6 +2283,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     livePrices={livePrices}
                 cnyRate={cnyRate}
                     totalPaid={totalPaid}
+                    nativePaidLabel={financeCardPaidNative(interestPaymentSummary, Number(order.id))}
                     openedPaymentList={showPaymentPanel === order.id ? openedPaymentList : []}
                     currentUser={currentUser}
                     isAdmin={false}

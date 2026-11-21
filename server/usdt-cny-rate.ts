@@ -101,10 +101,11 @@ async function coinGecko(): Promise<Candidate | null> {
 
 /** URL 显式指定交易对/买方向；若响应也给出身份字段，则必须匹配，不能只拿一个 USD 价格。 */
 function matchesOkxMarket(value: Record<string, unknown>): boolean {
-  return (value.baseCurrency === undefined || value.baseCurrency === 'USDT')
-    && (value.quoteCurrency === undefined || value.quoteCurrency === 'CNY')
-    && (value.side === undefined || value.side === 'buy')
-    && (value.pair === undefined || value.pair === 'USDT/CNY');
+  // OKX 官方返回 baseCurrency=usdt、quoteCurrency=cny；只规范大小写，绝不混同 USD/USDT。
+  const matches = (field: string, expected: string): boolean => value[field] === undefined
+    || typeof value[field] === 'string' && value[field].trim().toUpperCase() === expected;
+  return matches('baseCurrency', 'USDT') && matches('quoteCurrency', 'CNY')
+    && matches('side', 'BUY') && matches('pair', 'USDT/CNY');
 }
 
 async function okx(): Promise<Candidate | null> {

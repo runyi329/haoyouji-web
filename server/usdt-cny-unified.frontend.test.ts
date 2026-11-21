@@ -211,8 +211,14 @@ describe('actual production TSX/AST input, wiring and execution', () => {
     expect(evaluate(`(${attrExpr(cnyCard, 'balance').getText(sources[key])});`, { cnyBalance: 670, mask: (s: string) => s })).toBe('670.00');
   });
   it('frozen card risk becomes unknown rather than deterministic zero when historical FX missing', () => {
-    const exposure = expression('exposure', 'components/FunderOrderCard', { cnyRate: NaN });
+    const key = 'components/FunderOrderCard';
+    const helper = required(nodes(sources[key], ts.isFunctionDeclaration).find(n => n.name?.text === 'readConfirmedExposureGap'), 'actual exposure normalizer');
+    const readConfirmedExposureGap = evaluate<(value: unknown) => number | null>(`(${helper.getText(sources[key])});`);
+    // 真实冻结混币缺口的上游值未知；装配新增helper，而不是删掉null安全断言。
+    const bindings = { cnyRate: NaN, readConfirmedExposureGap, isOptionOrder: true, optionExposure: NaN,
+      sharedOrderUsesCoinNativeCollateral: false, usesInitialPrincipalFormula: false };
+    const exposure = expression('exposure', key, bindings);
     expect(exposure).toBeNull();
-    expect(expression('sharedOrderExposure', 'components/FunderOrderCard', { cnyRate: NaN })).toBeNull();
+    expect(expression('sharedOrderExposure', key, bindings)).toBeNull();
   });
 });

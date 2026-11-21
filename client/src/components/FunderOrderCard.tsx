@@ -104,6 +104,7 @@ function formatWalletStyleAssetAmount(assetCode: unknown, value: unknown): strin
 
 // 仅担保说明弹窗使用：金额四舍五入显示整数，不将展示值回写或参与计算。
 export function formatFunderCollateralPopupAmount(value: unknown): string {
+  if (value === null || value === undefined || String(value).trim() === '' || typeof value === 'boolean') return '--';
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '--';
   const roundedAbsolute = Math.abs(amount).toFixed(0);
@@ -231,6 +232,7 @@ function formatFunderFloatingPnlForDisplay(
  * 只影响 UI 文案，不改变任何金额、计算或保存值；人民币沿用原先整数显示。
  */
 export function formatFunderCollateralGap(value: unknown, currency: 'U' | 'CNY' = 'U'): string {
+  if (value === null || value === undefined || String(value).trim() === '' || typeof value === 'boolean') return '--';
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '--';
   const fractionDigits = currency === 'CNY' || Math.abs(amount) >= 100_000 ? 0 : 2;
@@ -884,7 +886,7 @@ export interface FunderOrderCardProps {
 // `Number(null) === 0` 会把尚未到齐的订单缺口错误伪装成 +0.00 U。
 // 第⑤项需要严格区分真实零值和未加载值，未确认前只显示“加载中”。
 function readConfirmedExposureGap(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || String(value).trim() === '' || typeof value === 'boolean') return null;
   const gap = Number(value);
   return Number.isFinite(gap) ? gap : null;
 }
@@ -976,7 +978,7 @@ export function FunderOrderCard({
   // hasSettlementSnapshot 只决定是否能展示冻结数值，不决定是否继续请求外部数据。
   const isSettlementFinal = isPhysicalOrderSettled || isPrimaryJointSegmentSettled;
   const hasSettlementSnapshot = isSettlementFinal && !!settlementSnapshot;
-  const isPricingFrozen = hasSettlementSnapshot;
+  const isPricingFrozen = isSettlementFinal;
   const frozenPrices: Record<string, number> = {};
   if (isPricingFrozen) {
     for (const [symbol, price] of Object.entries(settlementSnapshot?.priceBySymbol || {})) {
@@ -1352,7 +1354,6 @@ export function FunderOrderCard({
     { fromcoin: "USDT", tocoin: "CNY", money: 1 },
     { enabled: !isSettlementFinal, staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
-  const frozenCnyRate = Number(settlementSnapshot?.usdtCnyRate);
   const cnyRate = getOrderUsdtCnyRate(isPricingFrozen, settlementSnapshot?.usdtCnyRate, _cnyRateData) ?? Number.NaN;
   // 当前个人视角的第一段和后续段均可独立加入该用户全部跨订单共享订单。
   // 参与者自己的快照同样只进入参与者自己的池；“他人”视角则永不加入。
@@ -1603,9 +1604,9 @@ export function FunderOrderCard({
   // 未设置基数时，沿用37号页的“占余额”降级口径。
   const referencedMarginRate = useMemo(() => {
     if (!hasExternalMarginRateReference) return { percent: null as number | null, denominator: 'base' as 'base' | 'balance' | null };
-    const canonicalTotalCny = Number((effectiveMarginRateValuation as any)?.totalCny);
+    const canonicalTotalCny = readConfirmedExposureGap((effectiveMarginRateValuation as any)?.totalCny) ?? Number.NaN;
     const valuationReady = effectiveMarginRateValuation !== undefined;
-    const latestBalance = Number((effectiveMarginRateTagSummary as any)?.latestBalance?.balance);
+    const latestBalance = readConfirmedExposureGap((effectiveMarginRateTagSummary as any)?.latestBalance?.balance) ?? Number.NaN;
     if (!valuationReady || !Number.isFinite(canonicalTotalCny) || !Number.isFinite(latestBalance)) {
       return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
     }
@@ -1668,9 +1669,9 @@ export function FunderOrderCard({
       if (isNaN(n) || n === 0) return 0;
       const normalizedCoin = String(coin || 'CNY').trim().toUpperCase();
       if (['CNY', 'RMB', '人民币', '元'].includes(normalizedCoin)) return n;
-      return n * (_prices[normalizedCoin] ?? 0);
+      return n * (_prices[normalizedCoin] ?? Number.NaN);
     };
-    const canonicalMarginTotalCny = Number((effectiveCollateralValuation as any)?.totalCny);
+    const canonicalMarginTotalCny = readConfirmedExposureGap((effectiveCollateralValuation as any)?.totalCny) ?? Number.NaN;
     const canonicalMarginValuationReady = effectiveCollateralValuation !== undefined;
     const locallyComputedMarginTotalCny = (() => {
       if (!linkedCollateralTagName || !effectiveCollateralTagConfig || _cnyR <= 0) return null;
@@ -1683,7 +1684,7 @@ export function FunderOrderCard({
         }
         return sum + _toCNY(item.amount, item.coin);
       }, 0);
-      return allKnown ? total : null;
+      return allKnown && Number.isFinite(total) ? total : null;
     })();
     // 外部37号担保一律等待同一份权威快照，不能先闪现一组由52前端自行估出的数。
     const marginTotalCny = hasExternalCollateral && linkedCollateralTagName
@@ -1692,7 +1693,7 @@ export function FunderOrderCard({
       ? canonicalMarginTotalCny
       : locallyComputedMarginTotalCny;
     const floatingPnlCny = (() => {
-      if (!linkedPnlTagName || !effectivePnlTagConfig || _cnyR <= 0) return null;
+      if (!linkedPnlTagName || !effectivePnlTagConfig) return null;
       const latestBalance = (effectivePnlTagSummary as any)?.currentHoldingValue?.value
         ?? (effectivePnlTagSummary as any)?.latestBalance?.balance;
       const balanceNum = latestBalance === undefined || latestBalance === null || latestBalance === '' ? null : Number(latestBalance);
@@ -1704,7 +1705,7 @@ export function FunderOrderCard({
         : balanceNum - initialNum;
     })();
     const holdingValueCny = (() => {
-      if (!linkedPnlTagName || _cnyR <= 0) return null;
+      if (!linkedPnlTagName) return null;
       const explicitValue = (effectivePnlTagSummary as any)?.currentHoldingValue?.value;
       const explicitNumber = explicitValue === undefined || explicitValue === null || explicitValue === '' ? null : Number(explicitValue);
       // 兼容尚未更新到新接口的服务端：旧summary的余额本身就是手工标签实际市值，
@@ -1727,7 +1728,7 @@ export function FunderOrderCard({
       extHoldingValueCny: holdingValueCny,
       extHoldingValueDate: String((effectivePnlTagSummary as any)?.currentHoldingValue?.updatedDate ?? (effectivePnlTagSummary as any)?.latestBalance?.recordDate ?? '').slice(0, 10) || null,
     };
-  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, effectivePnlTagConfig, effectivePnlTagSummary, effectiveCollateralTagConfig, effectiveCollateralTagSummary, effectiveCollateralValuation, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
+  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, effectivePnlTagConfig, effectivePnlTagSummary, effectiveCollateralTagConfig, effectiveCollateralTagSummary, effectiveCollateralValuation, isPricingFrozen, cnyRate, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
 
   // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结，
   // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
@@ -2196,13 +2197,13 @@ export function FunderOrderCard({
   const optionGreeksData = isPricingFrozen
     ? (frozenOptionQuote ? {
       instrumentName: frozenOptionQuote.instrumentName || '',
-      markPrice: Number.isFinite(Number(frozenOptionQuote.markPriceUsdt)) ? Number(frozenOptionQuote.markPriceUsdt) : null,
-      indexPrice: Number.isFinite(Number(frozenOptionQuote.indexPriceUsdt)) ? Number(frozenOptionQuote.indexPriceUsdt) : null,
-      delta: Number.isFinite(Number(frozenOptionQuote.delta)) ? Number(frozenOptionQuote.delta) : null,
-      gamma: Number.isFinite(Number(frozenOptionQuote.gamma)) ? Number(frozenOptionQuote.gamma) : null,
-      theta: Number.isFinite(Number(frozenOptionQuote.theta)) ? Number(frozenOptionQuote.theta) : null,
-      vega: Number.isFinite(Number(frozenOptionQuote.vega)) ? Number(frozenOptionQuote.vega) : null,
-      iv: Number.isFinite(Number(frozenOptionQuote.iv)) ? Number(frozenOptionQuote.iv) : null,
+      markPrice: readConfirmedExposureGap(frozenOptionQuote.markPriceUsdt),
+      indexPrice: readConfirmedExposureGap(frozenOptionQuote.indexPriceUsdt),
+      delta: readConfirmedExposureGap(frozenOptionQuote.delta),
+      gamma: readConfirmedExposureGap(frozenOptionQuote.gamma),
+      theta: readConfirmedExposureGap(frozenOptionQuote.theta),
+      vega: readConfirmedExposureGap(frozenOptionQuote.vega),
+      iv: readConfirmedExposureGap(frozenOptionQuote.iv),
       source: frozenOptionQuote.source || null,
       quotedAt: frozenOptionQuote.quotedAt || settlementSnapshot?.capturedAt || null,
       error: frozenOptionQuote.unavailableReason || null,
@@ -2266,7 +2267,9 @@ export function FunderOrderCard({
   const legacyInterestBaseCurrency = legacyInterestBaseCurrencyRaw === 'U' ? 'USDT' : legacyInterestBaseCurrencyRaw === 'RMB' ? 'CNY' : legacyInterestBaseCurrencyRaw;
   const financingDisplayAmount = savedFinancingInputAmount > 0 && savedFinancingInputCurrency === amountCurrency
     ? savedFinancingInputAmount
-    : linkedFinancingAmount > 0
+    : isStockOrder && storedAmount > 0
+      ? storedAmount
+      : linkedFinancingAmount > 0
       ? linkedFinancingAmount
       : legacyInterestBase > 0 && legacyInterestBaseCurrency === amountCurrency
         ? legacyInterestBase
@@ -2636,12 +2639,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const collateralItemPrices: (number | null)[] = [];
   for (const item of collateralAssets) {
     const iq = parseFloat(item.qty);
-    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; }
+    if (!item.coin || !Number.isFinite(iq)) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; }
     if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); collateralItemPrices.push(1); }
     else if (item.coin === 'CNY') { if (finitePositive(cnyRate) === null) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; } const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); collateralItemPrices.push(1 / cnyRate); }
     else {
       const p = livePrices[item.coin];
-      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); collateralItemPrices.push(p); }
+      if (Number.isFinite(p) && p > 0) { collateralValue += iq * p; collateralItemValues.push(iq * p); collateralItemPrices.push(p); }
       else { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; }
     }
   }
@@ -2663,7 +2666,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 与卡片模式一致：按计息基数优先、订单金额兜底，展示参考手续费全额及支付进度。
   const feeBase = Number(order.interest_base || totalU || 0);
   const referenceTradingFee = showTradingFee ? feeBase * tradingFeeRatePerMille / 1000 : 0;
-  const liveP = livePrices[order.coin] ?? null;
+  const liveP = order.coin === 'USDT' ? 1 : (livePrices[order.coin] ?? null);
   // 期权成本以权利金×张数为准，优先用订单保存的总投入（USDT基准）兼容历史记录。
   const optionContractQty = isOptionOrder ? Number(optionInfo?.buyQty || 0) : qty;
   const optionPremiumRaw = optionInfo?.premium != null ? Number(optionInfo.premium) : null;
@@ -2719,7 +2722,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const riskDisplayUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const isShort = isOptionOrder ? isShortOption : (order as any).trade_direction === 'short';
   // 现货、股票均用资产市值与真实买入价值比较；期权使用独立的合约标记价差额。
-  const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
+  const spotBuyValueUsdt = qty > 0 && price > 0 ? qty * quotedPriceUsdt : totalU;
   const floatPnlBase = isOptionOrder ? optionPremiumTotal : spotBuyValueUsdt;
   const floatPnl = isOptionOrder
     ? optionFloatPnl
@@ -2735,14 +2738,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const linkedPendingInterestForRisk = hasExternalPendingInterest
     ? (linked37PendingInterestCny === null ? null : linked37PendingInterestCny / cnyRate)
     : automaticAccruedForRisk;
-  const accruedForRisk = linkedPendingInterestForRisk ?? 0;
+  const accruedForRisk = readConfirmedExposureGap(linkedPendingInterestForRisk) ?? Number.NaN;
   const totalPaidForRisk = interestRiskUsesCny ? displayPaid / cnyRate : displayPaid;
   // 37号利息分段全部以人民币存储。风险敞口内部统一为U，避免把人民币直接当成U。
   // null 表示查询尚未返回，前端此时显示“加载中”而不是用0错误替代。
   const linkedPaidInterestForRisk = hasExternalPaidInterest
     ? (linked37PaidInterestCny === null ? null : linked37PaidInterestCny / cnyRate)
     : totalPaidForRisk;
-  const paidInterestForRisk = linkedPaidInterestForRisk ?? 0;
+  const paidInterestForRisk = readConfirmedExposureGap(linkedPaidInterestForRisk) ?? Number.NaN;
   const interestBaseForRisk = interestBaseRiskUsesCny ? interestBaseNum / cnyRate : interestBaseNum;
   // 买入价值必须使用真实的买入价 × 数量，并统一折为 U；缺少买入价时安全回退订单保存金额。
   const buyValueForRisk = isOptionOrder
@@ -2799,7 +2802,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
         : fullValueExposure)
     : null;
-  const exposure = finitePositive(cnyRate) === null ? null : isOptionOrder
+  const exposure = readConfirmedExposureGap(isOptionOrder
     ? optionExposure
     : usesCoinNativeCollateralFormula
       ? coinNativeCollateralExposure
@@ -2809,7 +2812,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
     : usesFloatingPnlFormula
       ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
-      : fullValueExposure;
+      : fullValueExposure);
   // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
   const linkedCollateralValueU = combinedCollateralValueU;
@@ -2826,9 +2829,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     ? extTagHoldingValueU
     : (linkedFloatingPnlU === null ? null : buyValueForRisk + linkedFloatingPnlU);
   const linkedStockContributionU = usesFloatingPnlFormula ? linkedFloatingPnlU : -principalLentOutValueForRisk;
-  const externalNonSharedGapU = finitePositive(cnyRate) !== null && usesConfiguredStockRiskData
-    && linkedPendingInterestForRisk !== null
-    && linkedPaidInterestForRisk !== null
+  const externalNonSharedGapU = readConfirmedExposureGap(usesConfiguredStockRiskData
+    && (usesCoinNativeCollateralFormula || (linkedPendingInterestForRisk !== null
+      && linkedPaidInterestForRisk !== null))
     ? usesCoinNativeCollateralFormula
       ? linkedCollateralValueU
       : usesInitialPrincipalFormula
@@ -2840,7 +2843,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           ? null
           : linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + paidInterestForRisk)
         : fullValueExposure
-    : null;
+    : null);
   // 共享担保模式分为两层口径：
   // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
   // 2) 共享池弹窗才把同一人的全部订单、担保物统一汇总。
@@ -2884,7 +2887,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     // 两种口径均以真实买入价值为本金额度，不能改用标的实时市值。
     return sharedOrderGapBaseU > 0 ? sharedOrderGapBaseU : principalLentOutValueForRisk;
   })();
-  const sharedOrderExposure = finitePositive(cnyRate) === null ? null : sharedOrderUsesCoinNativeCollateral
+  const sharedOrderExposure = readConfirmedExposureGap(sharedOrderUsesCoinNativeCollateral
     ? sharedOrderCollateralValueU
     : usesInitialPrincipalFormula
     ? initialPrincipalExposure
@@ -2899,13 +2902,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         ? (sharedOrderCollateralValueU === null || sharedOrderStockContributionU === null
           ? null
           : sharedOrderCollateralValueU + sharedOrderStockContributionU - sharedOrderPendingInterestU + sharedOrderPaidInterestU)
-        : -sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU;
+        : -sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU);
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
   const sharedPoolRemainingU = (() => {
     if (!isSharedMode || !sharedPoolInfo) return null;
     const poolOrders = (sharedPoolInfo as any).orders;
-    const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue);
+    const totalCollateral = readConfirmedExposureGap((sharedPoolInfo as any).totalCollateralValue) ?? Number.NaN;
     if (!Array.isArray(poolOrders) || !Number.isFinite(totalCollateral)) return null;
     const counted37Tags = new Set<string>();
     const counted37PendingInterestTags = new Set<string>();
@@ -2963,8 +2966,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       if (linkedTag) {
         if (!counted37Tags.has(linkedTag)) {
           counted37Tags.add(linkedTag);
-          const holdingValue = Number(poolOrder.linked37HoldingValue);
-          const floatingPnl = Number(poolOrder.linked37FloatingPnl);
+          const holdingValue = readConfirmedExposureGap(poolOrder.linked37HoldingValue) ?? Number.NaN;
+          const floatingPnl = readConfirmedExposureGap(poolOrder.linked37FloatingPnl) ?? Number.NaN;
           if (!Number.isFinite(holdingValue) || !Number.isFinite(floatingPnl)) return null;
           holdingValueU = holdingValue;
           // 37引用的担保风险项只取标签自身的净值盈亏，已由服务端按raw/leveraged
@@ -2998,7 +3001,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       if (holdingContributionU === null || !Number.isFinite(holdingContributionU)) return null;
       remaining += holdingContributionU - accruedInterestU + paidInterestU;
     }
-    return remaining;
+    return readConfirmedExposureGap(remaining);
   })();
   // 列表卡只展示本段担保物；共享池总担保仅在问号弹窗中汇总，避免打开弹窗后卡片跳数。
   const externalCollateralValueU = isSharedMode ? sharedOrderCollateralValueU : combinedCollateralValueU;
@@ -3060,9 +3063,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const isSufficient = effectiveExposure !== null && effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
-  const showExposureLoading = finitePositive(cnyRate) === null || (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
-    || (hasExternalPaidInterest && linkedPaidInterestForRisk === null)
-    || effectiveExposure === null;
+  const showExposureLoading = readConfirmedExposureGap(effectiveExposure) === null;
   // 编辑页口径对比直接复用订单卡已经完成的实时行情、37号引用与共享担保计算，
   // 不能在父级再用简化公式重算，否则股票、期权和人民币利息会与卡片显示不一致。
   const collateralFormulaPreview = useMemo<FunderCollateralFormulaPreview>(() => {
@@ -3086,8 +3087,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const previewPaidInterestU = isSharedMode
       ? sharedOrderPaidInterestU
       : (hasExternalPaidInterest ? linkedPaidInterestForRisk : paidInterestForRisk);
-    const hasBase = finitePositive(cnyRate) !== null && previewBaseValueU !== null && Number.isFinite(previewBaseValueU) && previewBaseValueU > 0;
-    const hasInterest = finitePositive(cnyRate) !== null && previewPendingInterestU !== null
+    const hasBase = previewBaseValueU !== null && Number.isFinite(previewBaseValueU) && previewBaseValueU > 0;
+    const hasInterest = previewPendingInterestU !== null
       && Number.isFinite(previewPendingInterestU)
       && previewPaidInterestU !== null
       && Number.isFinite(previewPaidInterestU);
@@ -3104,7 +3105,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const initialPrincipalGapU = hasInterest && initialFinancingPrincipalU !== null && Number.isFinite(initialFinancingPrincipalU)
       ? -initialFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU
       : null;
-    const coinNativeCollateralGapU = finitePositive(cnyRate) !== null && previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
+    const coinNativeCollateralGapU = previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
       ? previewCollateralValueU
       : null;
     return {
@@ -3151,7 +3152,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 每张订单卡都上报最终担保缺口。共享弹窗直接读取此结果，避免手工组合、37号标签
   // 或人民币利息在服务端摘要中被再次简化或重复计算。
   useEffect(() => {
-    if (!onExposureGapChange || finitePositive(cnyRate) === null) return;
+    if (!onExposureGapChange) return;
     // 外部担保数据未到齐时，exposure 只剩浮盈/利息的简化值。绝不能用它覆盖
     // 已有的最终缺口；待完整 externalNonSharedGapU 产生后再发布。
     const canonicalOrderId = Number(order.id);
@@ -4115,7 +4116,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                   ><Linked37BadgeText /></button>
                 </span>
-                {externalOnlyCollateralValueU !== null && Number.isFinite(externalOnlyCollateralValueU) ? (
+                {(externalCollateralDisplayMode === 'CRYPTO' || readConfirmedExposureGap(externalCollateralDisplayMode === 'U' ? externalOnlyCollateralValueU : extTagCollateralValueCny) !== null) ? (
                   <span className="min-w-0 max-w-[68%] font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
                     {externalCollateralDisplayMode === 'CRYPTO' ? (
                       externalCollateralDetailRows.length > 0 ? (
@@ -4128,7 +4129,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     ) : externalCollateralDisplayMode === 'U' ? (
                       <span className="block whitespace-nowrap text-gray-500">≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u</span>
                     ) : (
-                      <span className="block whitespace-nowrap text-gray-500">≈{formatFxEstimate((extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>
+                      <span className="block whitespace-nowrap text-gray-500">≈{formatFxEstimate((extTagCollateralValueCny ?? (externalOnlyCollateralValueU === null ? Number.NaN : externalOnlyCollateralValueU * cnyRate)), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>
                     )}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
@@ -4514,7 +4515,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                         : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {formatFxEstimate((entry.valueCny ?? entry.valueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>}
                                     </div>
                                   )) : <span className="text-gray-400">暂无手工或钱包担保</span>}
-                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{externalOnlyCollateralValueU === null ? '加载中...' : `= ${formatFxEstimate((extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
+                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{readConfirmedExposureGap(extTagCollateralValueCny) === null ? '汇率/估值待更新' : `= ${formatFxEstimate((extTagCollateralValueCny ?? (externalOnlyCollateralValueU === null ? Number.NaN : externalOnlyCollateralValueU * cnyRate)), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
                                 </div>
                                 <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
                                   <span className="text-slate-500">担保货币合计</span>{' '}
@@ -5085,7 +5086,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   ? collateralValue
                   : floatPnlForRisk !== null
                     ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
-                    : collateralValue - accruedForRisk + paidInterestForRisk;
+                    : Number.NaN;
                 // 手动基数与“担保缺口”采用相同主展示单位；内部仅为运算而换回 U，
                 // 避免人民币、U 或其他订单计价币种出现卡片数字和百分比口径不一致。
                 const rawManualMarginRateBase = dc ? (dc as any).marginRateBase : null;
@@ -5118,13 +5119,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   : uses52ExternalInputs
                     ? marginRateNumerator !== null && Number.isFinite(marginRateNumerator) && marginRateBaseU > 0
                     : collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0;
-                if (!canShowMarginRate || (!usesExternalMarginRate && (marginRateNumerator === null || finitePositive(cnyRate) === null))) return null;
+                if (!canShowMarginRate || (!usesExternalMarginRate && (readConfirmedExposureGap(marginRateNumerator) === null || !Number.isFinite(marginRateBaseU) || marginRateBaseU <= 0))) return null;
                 const resolvedMarginRateNumerator = marginRateNumerator ?? 0;
                 const marginRatio = usesExternalMarginRate
                   ? (referencedMarginRate.percent === null ? null : referencedMarginRate.percent / 100)
-                  : (marginRateBaseU > 0 ? resolvedMarginRateNumerator / marginRateBaseU : 0);
+                  : (marginRateBaseU > 0 ? resolvedMarginRateNumerator / marginRateBaseU : Number.NaN);
                 const marginColor = marginRatio === null ? '#9CA3AF' : marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
-                const marginRiskRatio = marginRatio ?? 0;
+                const marginRiskRatio = marginRatio ?? Number.NaN;
                 // 旧订单和编辑器实时预览可能把阈值保存为字符串（例如 "10"）。
                 // 统一按可解析数值读取，避免比例已经低于预警线却不显示红色告警。
                 const parsedAlertThreshold = Number(dc ? (dc as any).marginAlertThreshold : NaN);
@@ -5244,14 +5245,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 )}
                               </div>
                             )}
-                            <div className="p-2.5 rounded-lg" style={{ background: marginRiskRatio >= 1 ? '#F0FDF4' : marginRiskRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
-                              <div className="font-semibold mb-1" style={{ color: marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
+                            <div className="p-2.5 rounded-lg" style={{ background: marginRatio === null ? '#F3F4F6' : marginRiskRatio >= 1 ? '#F0FDF4' : marginRiskRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
+                              <div className="font-semibold mb-1" style={{ color: marginRatio === null ? '#9CA3AF' : marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#16A34A' }}>≥ 100%</span><span>担保充足，风险可控</span></div>
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#D97706' }}>50% ~ 100%</span><span>担保偏低，建议补充</span></div>
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#DC2626' }}>&lt; 50%</span><span>担保严重不足，高风险</span></div>
                               </div>
-                              <div className="mt-2 font-semibold" style={{ color: marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
+                              <div className="mt-2 font-semibold" style={{ color: marginRatio === null ? '#9CA3AF' : marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
                                 当前状态：{marginRatio === null ? '等待37号比例数据' : marginRiskRatio >= 1 ? '担保充足' : marginRiskRatio >= 0.5 ? '担保偏低，建议补充' : '担保严重不足，高风险'}
                               </div>
                             </div>

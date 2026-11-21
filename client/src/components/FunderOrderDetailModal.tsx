@@ -181,12 +181,12 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
   const price = parseFloat(order.buy_price || '0');
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USDT', tocoin: 'CNY', money: 1 },
-    { staleTime: 3000 }
+    { enabled: !['settled', 'completed'].includes(String(order.status)), staleTime: 3000 }
   );
   const detailSnapshot = (() => { try { const raw = order.settlement_snapshot; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
   const cnyRate = getOrderUsdtCnyRate(['settled', 'completed'].includes(String(order.status)), detailSnapshot?.usdtCnyRate, cnyRateData) ?? Number.NaN;
   const rawAmountCurrency = String(order.amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
-  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : ['RMB', '人民币', '元'].includes(rawAmountCurrency) ? 'CNY' : rawAmountCurrency;
   const amountUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'USDT' : amountCurrency;
   const storedAmountUsdt = order.asset_type === 'stock' ? parseFloat(order.amount || '0') / cnyRate : parseFloat(order.amount || '0');
   const totalU = !Number.isFinite(storedAmountUsdt) ? Number.NaN : storedAmountUsdt > 0
@@ -211,7 +211,8 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     ? savedFinancingInputAmount
     : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && (!Number.isFinite(calculatedFinancingDisplayAmount) || Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05)
       ? legacyInterestBase
-      : qty > 0 && price > 0 && amountCurrency === 'CNY' ? qty * price : calculatedFinancingDisplayAmount;
+      : order.asset_type === 'stock' && parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount)
+        : qty > 0 && price > 0 && amountCurrency === 'CNY' ? qty * price : calculatedFinancingDisplayAmount;
   const detailAssetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
     ? 'financing'
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
@@ -231,8 +232,9 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
       ? 'financing'
       : (detailPrincipalLentOut || detailAssetFundingType === 'financing' || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const displayFinancingAsPrimary = (configuredPrimaryDisplay ?? legacyPrimaryDisplay) === 'financing';
-  const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
-  const rateCurrency = String(order.interest_rate_currency || 'USDT').toUpperCase();
+  const normalizeCurrency = (value: unknown) => ['CNY', 'RMB', '人民币', '元'].includes(String(value || '').trim().toUpperCase()) ? 'CNY' : 'USDT';
+  const baseCurrency = normalizeCurrency(order.interest_base_currency);
+  const rateCurrency = normalizeCurrency(order.interest_rate_currency);
   const baseUnit = baseCurrency === 'CNY' ? '元' : baseCurrency === 'USDT' ? 'USDT' : baseCurrency;
   const interestUnit = rateCurrency === 'CNY' ? '元' : rateCurrency === 'USDT' ? 'USDT' : rateCurrency;
 

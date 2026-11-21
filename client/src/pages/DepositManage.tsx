@@ -51,7 +51,6 @@ import {
 
 const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
 const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
-const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获取
 const isCnyMarginCoin = (coin: string) => ["元", "人民币", "CNY", "RMB"].includes(String(coin || '').trim().toUpperCase());
 
 interface DepositEntry {
@@ -122,14 +121,15 @@ function sortTagMarginRecordsByBusinessDate<T extends { date?: unknown }>(record
     .map(({ record }) => record);
 }
 
-function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
+function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number | null {
   const num = typeof margin === 'number' ? margin : parseFloat(margin);
-  if (isNaN(num) || num === 0) return 0;
+  if (!Number.isFinite(num)) return null;
   if (!coin || isCnyMarginCoin(coin)) return num;
-  // USDT 和其他币种都通过 prices 映射表计算（prices["USDT"] 已是实时汇率）
-  const price = prices[coin];
-  if (!price) return 0;
-  return num * price;
+  const normalizedCoin = String(coin || '').trim().toUpperCase();
+  const price = prices[normalizedCoin] ?? prices[coin];
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const value = num * price;
+  return Number.isFinite(value) ? value : null;
 }
 
 function getBeijingDateText(): string {
@@ -403,15 +403,18 @@ export default function DepositManage() {
   // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
   const cryptoPrices: Record<string, number> = useMemo(() => {
-    const result: Record<string, number> = {};
+    const result: Record<string, number> = { CNY: 1, RMB: 1 };
     if (cryptoPricesRaw) {
-      // 使用接口返回的实时 USDT/CNY 汇率，居底用 CNY_RATE_FALLBACK
-      const cnyRate = (cryptoPricesRaw as any)?.usdtCnyRate ?? CNY_RATE_FALLBACK;
+      // 未知汇率不构造数字币人民币报价；人民币本身仍可估值。
+      const cnyRate = Number((cryptoPricesRaw as any)?.usdtCnyRate);
+      if (!Number.isFinite(cnyRate) || cnyRate <= 0) return result;
       const pricesMap = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
       for (const [coin, usdtPrice] of Object.entries(
         pricesMap as Record<string, number>
       )) {
-        result[coin] = (usdtPrice as number) * cnyRate;
+        const price = Number(usdtPrice);
+        const value = price * cnyRate;
+        if (Number.isFinite(price) && price > 0 && Number.isFinite(value)) result[coin.toUpperCase()] = value;
       }
       result["USDT"] = cnyRate; // USDT 直接是实时汇率
     }
@@ -514,22 +517,20 @@ export default function DepositManage() {
   const calcCNYStr = (margin: string, coin: string): string | null => {
     const num = parseFloat(margin);
     if (isNaN(num) || num === 0) return null;
-    if (!coin || coin === "元")
-      return `¥${num.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
-    const price = cryptoPrices[coin] ?? (coin === "USDT" ? CNY_RATE_FALLBACK : 0);
-    if (!price) return null;
-    return `≈¥${(num * price).toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
+    const value = toCNY(num, coin, cryptoPrices);
+    if (value === null) return cryptoPrices.USDT > 0 ? '估值待获取' : '汇率待更新';
+    return `${!coin || isCnyMarginCoin(coin) ? '' : '≈'}¥${value.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
   };
 
   const members = useMemo(() => (allBalancesData as any)?.members ?? [], [allBalancesData]);
 
   const stats = useMemo(() => {
     const byCoin: Record<string, { count: number; total: number }> = {};
-    const byMember: Record<number, { name: string; count: number; totalCNY: number }> = {};
+    const byMember: Record<number, { name: string; count: number; totalCNY: number | null }> = {};
     for (const member of members) {
       const userEdit = editState[member.userId] ?? {};
       let memberCount = 0;
-      let memberCNY = 0;
+      let memberCNY: number | null = 0;
       for (const cat of categories) {
         const entry = userEdit[cat.name] ?? { margin: "", marginCoin: "" };
         const num = parseFloat(entry.margin);
@@ -539,7 +540,8 @@ export default function DepositManage() {
           byCoin[coinKey].count += 1;
           byCoin[coinKey].total += num;
           memberCount += 1;
-          memberCNY += toCNY(entry.margin, entry.marginCoin, cryptoPrices);
+          const value = toCNY(entry.margin, entry.marginCoin, cryptoPrices);
+          memberCNY = memberCNY === null || value === null ? null : memberCNY + value;
         }
       }
       byMember[member.userId] = {
@@ -549,7 +551,7 @@ export default function DepositManage() {
       };
     }
     const totalCount = Object.values(byCoin).reduce((s, v) => s + v.count, 0);
-    const totalCNY = Object.values(byMember).reduce((s, v) => s + v.totalCNY, 0);
+    const totalCNY = Object.values(byMember).reduce<number | null>((s, v) => s === null || v.totalCNY === null ? null : s + v.totalCNY, 0);
     return { byCoin, byMember, totalCount, totalCNY };
   }, [members, editState, categories, cryptoPrices]);
 
@@ -576,14 +578,17 @@ export default function DepositManage() {
       if (sortMode === "name") {
         return (a.nickname || a.username || "").localeCompare(b.nickname || b.username || "", "zh");
       }
-      const totalA = categories.reduce((sum: number, cat: any) => {
+      const totalA = categories.reduce((sum: number | null, cat: any) => {
         const e = editState[a.userId]?.[cat.name];
-        return sum + (e ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0);
+        const value = e && e.margin !== '' ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0;
+        return sum === null || value === null ? null : sum + value;
       }, 0);
-      const totalB = categories.reduce((sum: number, cat: any) => {
+      const totalB = categories.reduce((sum: number | null, cat: any) => {
         const e = editState[b.userId]?.[cat.name];
-        return sum + (e ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0);
+        const value = e && e.margin !== '' ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0;
+        return sum === null || value === null ? null : sum + value;
       }, 0);
+      if (totalA === null || totalB === null) return totalA === totalB ? 0 : totalA === null ? 1 : -1;
       return totalB - totalA;
     });
   }, [members, editState, categories, filterHasDeposit, cryptoPrices, searchText, sortMode]);
@@ -1013,7 +1018,8 @@ export default function DepositManage() {
         const value = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
         return value === null ? null : sum + value;
       }
-      return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
+      const value = toCNY(String(entry.amount), entry.coin, cryptoPrices);
+      return value === null ? null : sum + value;
     }, 0);
   }, [rightMarginData, cryptoPrices, allMarginStockQuotes]);
   const rightMarginValueSummary = useMemo(() => {
@@ -1063,8 +1069,9 @@ export default function DepositManage() {
   }, [rightTagConfig]);
 
   const fundFlowTotalCNY = useMemo(() => {
-    return fundFlowData.reduce((sum, { coin, amount }) => {
-      return sum + toCNY(String(amount), coin, cryptoPrices);
+    return fundFlowData.reduce((sum: number | null, { coin, amount }: { coin: string; amount: number }) => {
+      const value = toCNY(String(amount), coin, cryptoPrices);
+      return sum === null || value === null ? null : sum + value;
     }, 0);
   }, [fundFlowData, cryptoPrices]);
 
@@ -1221,7 +1228,7 @@ export default function DepositManage() {
               <div>
                 <div className="text-xs text-blue-200 mb-0.5">总折合人民币</div>
                 <div className="text-2xl font-bold text-white">
-                  ¥{stats.totalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                  {stats.totalCNY === null ? (cryptoPrices.USDT > 0 ? '估值待获取' : '汇率待更新') : `¥${stats.totalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`}
                 </div>
               </div>
               <div className="text-right">
@@ -1238,11 +1245,7 @@ export default function DepositManage() {
                 {Object.entries(stats.byCoin)
                   .sort((a, b) => b[1].count - a[1].count)
                   .map(([coin, data]) => {
-                    const cnyVal = coin === "元"
-                      ? data.total
-                      : coin === "USDT"
-                      ? data.total * (cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK)
-                      : data.total * (cryptoPrices[coin] ?? 0);
+                    const cnyVal = toCNY(data.total, coin, cryptoPrices);
                     return (
                       <div
                         key={coin}
@@ -1254,9 +1257,9 @@ export default function DepositManage() {
                           {data.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
                         </div>
                         <div className="text-xs text-blue-300 mt-0.5">{data.count} 笔</div>
-                        {coin !== "元" && cnyVal > 0 && (
+                        {coin !== "元" && (
                           <div className="text-xs text-blue-200 mt-0.5">
-                            ≈¥{cnyVal.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                            {cnyVal === null ? (cryptoPrices.USDT > 0 ? '估值待获取' : '汇率待更新') : `≈¥${cnyVal.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`}
                           </div>
                         )}
                       </div>
@@ -1317,7 +1320,7 @@ export default function DepositManage() {
                     })
                   : categories;
                 const memberStats = stats.byMember[member.userId];
-                const memberTotalCNY = memberStats?.totalCNY ?? 0;
+                const memberTotalCNY = memberStats ? memberStats.totalCNY : 0;
                 const isExpanded = expandedMembers[member.userId] === true;
 
                 return (
@@ -1353,7 +1356,7 @@ export default function DepositManage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {memberTotalCNY > 0 ? (
+                          {memberTotalCNY !== null && memberTotalCNY > 0 ? (
                             <div className="text-right">
                               <div className="text-base font-bold text-blue-700">
                                 ¥{memberTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
@@ -1361,7 +1364,7 @@ export default function DepositManage() {
                               <div className="text-xs text-blue-400">折合人民币</div>
                             </div>
                           ) : (
-                            <div className="text-xs text-gray-400">—</div>
+                            <div className="text-xs text-gray-400">{memberTotalCNY === null ? (cryptoPrices.USDT > 0 ? '估值待获取' : '汇率待更新') : '—'}</div>
                           )}
                           {isExpanded
                             ? <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
@@ -1481,12 +1484,11 @@ export default function DepositManage() {
               }).map((cat: any) => {
                 const isSelected = selectedTagForRight === cat.name;
                 // 计算该标签的保证金占基数比（用于折叠行显示）
-                // 仅在 cryptoPrices 已加载（有 USDT 汇率）时才计算，避免汇率未就绪导致计算错误
+                // 逐项判定换汇依赖；纯人民币与已确定股票在无 USDT 汇率时仍可计算
                 const tagSummaryData = allTagsMarginSummary?.[cat.name];
                 const isPaused = !!(tagSummaryData?.marginPauseDate || (ledgerId === 37 && tagSummaryData?.pauseDate));
                 let collapseRatio: number | null = null;
-                const hasPrices = Object.keys(cryptoPrices).length > 0;
-                if (tagSummaryData && hasPrices) {
+                if (tagSummaryData) {
                   const marginBase = parseFloat(tagSummaryData.marginBase || '0') || 0;
                   if (marginBase > 0) {
                     // 与展开详情共用的口径：数字币/人民币按实时币价，A 股按最后一笔可用盘尾价估值。
@@ -1496,7 +1498,8 @@ export default function DepositManage() {
                         const value = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
                         return value === null ? null : sum + value;
                       }
-                      return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
+                      const value = toCNY(String(entry.amount), entry.coin, cryptoPrices);
+                      return value === null ? null : sum + value;
                     }, 0);
                     // 盈亏净值（与展开里 pnl 逻辑完全一致）
                     const latestBal = tagSummaryData.latestBalance;
@@ -1623,7 +1626,7 @@ export default function DepositManage() {
                                       const quote = resolveTagMarginStockQuote(entry, allMarginStockQuotes);
                                       const marketValue = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
                                       const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt);
-                                      const cnyRate = cryptoPrices.USDT ?? CNY_RATE_FALLBACK;
+                                      const cnyRate = Number.isFinite(cryptoPrices.USDT) && cryptoPrices.USDT > 0 ? cryptoPrices.USDT : 0;
                                       const saleSummary = getTagMarginStockSaleSummary(entry);
                                       const isStockReduction = entry.quantity < 0;
                                       return (
@@ -1647,6 +1650,7 @@ export default function DepositManage() {
                                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
                                             <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '估值待获取' : `${saleSummary.soldQuantity > 0 ? (saleSummary.remainingQuantity === 0 ? '卖出价值' : '保证金价值') : '约'} ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`}</span>
                                             {marketValue !== null && cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>}
+                                            {marketValue !== null && cnyRate <= 0 && <span className="text-[10px] text-gray-400">汇率待更新</span>}
                                           </div>
                                         </div>
                                       );
@@ -1690,10 +1694,11 @@ export default function DepositManage() {
                                               ≈{(Math.abs(amount) / cryptoPrices['USDT'] >= 0 ? (amount < 0 ? '-' : '') : '')}{(Math.abs(amount) / cryptoPrices['USDT']).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} u
                                             </span>
                                           )}
+                                          {(coin === '元' || coin === '人民币') && !(cryptoPrices.USDT > 0) && <span className="text-xs text-gray-400">汇率待更新</span>}
                                           {/* 其他币种：显示折合人民币 */}
                                           {coin !== '元' && coin !== '人民币' && (
                                             <span className="text-xs" style={{ color: amount < 0 ? '#388E3C' : '#6B7280' }}>
-                                              {amount < 0 ? '-' : ''}¥{cnyVal.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                              {cnyVal === null ? (cryptoPrices.USDT > 0 ? '估值待获取' : '汇率待更新') : `${amount < 0 ? '-' : ''}¥${cnyVal.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}
                                             </span>
                                           )}
                                         </div>
@@ -1713,20 +1718,20 @@ export default function DepositManage() {
                                       {rightMarginValueSummary.stockCount > 0 && (
                                         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
                                           <span className="text-xs font-medium" style={{ color: '#111827' }}>股票价值</span>
-                                          {rightMarginValueSummary.stockValueReady ? <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.stockValueCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span> : <span className="justify-self-end text-[10px] text-gray-400">待获取</span>}
+                                          {rightMarginValueSummary.stockValueReady && cryptoPrices.USDT > 0 ? <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.stockValueCNY / cryptoPrices.USDT).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span> : <span className="justify-self-end text-[10px] text-gray-400">{rightMarginValueSummary.stockValueReady ? '汇率待更新' : '待获取'}</span>}
                                           <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: '#1A2340' }}>{rightMarginValueSummary.stockValueReady ? `¥${rightMarginValueSummary.stockValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}</span>
                                         </div>
                                       )}
                                       {rightMarginValueSummary.cnyValueCNY !== 0 && (
                                         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
                                           <span className="text-xs font-medium" style={{ color: '#111827' }}>人民币价值</span>
-                                          <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.cnyValueCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
+                                          <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">{cryptoPrices.USDT > 0 ? `≈ ${(rightMarginValueSummary.cnyValueCNY / cryptoPrices.USDT).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u` : '汇率待更新'}</span>
                                           <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: rightMarginValueSummary.cnyValueCNY < 0 ? '#388E3C' : '#1A2340' }}>¥{rightMarginValueSummary.cnyValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
                                         </div>
                                       )}
                                       <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 pt-1.5" style={{ borderTop: '1px solid #E5E7EB' }}>
                                         <span className="text-sm font-bold" style={{ color: '#111827' }}>总担保价值</span>
-                                        <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">{rightTotalCNY !== null ? `≈ ${(rightTotalCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u` : '估值待获取'}</span>
+                                        <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">{rightTotalCNY !== null ? (cryptoPrices.USDT > 0 ? `≈ ${(rightTotalCNY / cryptoPrices.USDT).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u` : '汇率待更新') : (cryptoPrices.USDT > 0 ? '估值待获取' : '估值待获取 · 汇率待更新')}</span>
                                         <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">{rightTotalCNY !== null ? `¥${rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}</span>
                                       </div>
                                     </div>
@@ -1761,7 +1766,7 @@ export default function DepositManage() {
                               const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
                               // 盈亏净値 = (余额 - 初始金额) × 倍数
                               // 实时 USDT/CNY 汇率（用于盈亏净值折算为 u）
-                              const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
+                              const _cnyRate = Number.isFinite(cryptoPrices["USDT"]) && cryptoPrices["USDT"] > 0 ? cryptoPrices["USDT"] : 0;
                               const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
                               // 剩余保证金 = 盈亏净值 + 保证金资产 + 利息差额（已结 − 待结）。
                               const remainingMargin = pnl !== null && combinedRightMarginCNY !== null ? pnl + combinedRightMarginCNY : null;
