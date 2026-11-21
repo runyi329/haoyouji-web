@@ -45,6 +45,9 @@ describe('37号数字币独立应用内调度', () => {
     expect(mocks.warm).toHaveBeenCalledTimes(1);
   });
   it('15:05后在同一自然日重试，次日不会继续给昨天写新价格', async () => {
+    mocks.publish.mockImplementation(async ({ snapshotDate }) => ({ categories: 1, published: 0, alreadyPublished: 0, skipped: 1, snapshotDate,
+      failures: [{ categoryId: 81, snapshotDate, reason: 'missing_historical_fx' }] }));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     api.startCryptoPortfolioScheduler();
     await vi.advanceTimersByTimeAsync(2000 + 300000);
     expect(mocks.publish.mock.calls.filter(([input]) => input.snapshotDate === '2026-11-14')).toHaveLength(2);

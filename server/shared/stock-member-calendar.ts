@@ -1,5 +1,6 @@
-import { getUnifiedStockClosePublishAt, isStockSessionDate, shiftStockSessionDate } from '../../shared/stock-unified-close-policy';
+import { getUnifiedStockClosePublishAt, getUnifiedStockCloseSnapshotDate, isStockSessionDate, shiftStockSessionDate } from '../../shared/stock-unified-close-policy';
 import { isStockMarketSession, previousStockMarketSession, getOvernightUsSessionDate } from '../../shared/stock-market-session';
+import { latestCryptoPortfolioSnapshotDate } from '../../shared/crypto-portfolio-policy';
 
 const EPSILON = 1e-8;
 export type MemberCalendarParticipation = {
@@ -192,11 +193,21 @@ export function buildMemberStockCalendar(input: {
 }
 
 /** Overview-only mapping. Portfolio/funds APIs retain their existing live summary untouched. */
-export function memberCalendarSettlementSummary(snapshots: readonly MemberCalendarSnapshot[]) {
+export function memberCalendarSettlementSummary(snapshots: readonly MemberCalendarSnapshot[], options: {
+  settlementPolicy?: 'stock-trading-day' | 'mixed-crypto-natural-day';
+  now?: Date;
+} = {}) {
   const sorted = [...snapshots].sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate));
   const latestSnapshot = sorted[0] ?? null;
   const priorSnapshot = sorted.find(row => row.snapshotDate === latestSnapshot?.previousDate) ?? null;
   const dailyChange = latestSnapshot?.dailyPnl ?? null;
+  // A pending/latest value never becomes ready by borrowing an older confirmed amount.
+  // Only finite confirmed totals are usable; a true zero is distinct from missing evidence.
+  const lastConfirmedSnapshot = sorted.find(row => row.ready && typeof row.totalPnl === 'number' && Number.isFinite(row.totalPnl)) ?? null;
+  const settlementPolicy = options.settlementPolicy ?? 'stock-trading-day';
+  const now = options.now ?? new Date();
+  const expectedDate = settlementPolicy === 'mixed-crypto-natural-day'
+    ? latestCryptoPortfolioSnapshotDate(now) : getUnifiedStockCloseSnapshotDate(now);
   return {
     reportingCurrency: 'CNY' as const, usdCnyRate: latestSnapshot?.usdCnyRate ?? null,
     sourceDates: latestSnapshot?.sourceDates ?? null,
@@ -208,6 +219,8 @@ export function memberCalendarSettlementSummary(snapshots: readonly MemberCalend
     dailyChangeReady: latestSnapshot?.dailyPnlReady ?? false, dailyChangeDate: latestSnapshot?.snapshotDate ?? null,
     previousDate: latestSnapshot?.previousDate ?? null, latestSnapshot, priorSnapshot,
     valuationDate: latestSnapshot?.ready ? latestSnapshot.snapshotDate : null,
+    lastConfirmedSnapshot, confirmedTotalPnl: lastConfirmedSnapshot?.totalPnl ?? null,
+    confirmedAsOf: lastConfirmedSnapshot?.snapshotDate ?? null, settlementPolicy, expectedDate,
     awaitingFirstClose: !sorted.some(row => row.ready),
   };
 }

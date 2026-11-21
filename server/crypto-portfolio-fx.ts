@@ -9,6 +9,8 @@
 import { getLiveStockUsdCnyQuote, fetchStockUsdCnyAtClose } from './stock-usd-cny-rate';
 import { getUnifiedStockCloseSnapshotDate } from '../shared/stock-unified-close-policy';
 import { isStockMarketSession, isStockSessionDate } from '../shared/stock-market-session';
+import { validateCryptoUsdCnyClosePoint } from './crypto-portfolio-usd-anchor';
+import type { StockUsdCnyClosePoint } from './stock-usd-cny-rate';
 
 export type CryptoUsdtCnyProvenance = {
   carried: boolean;
@@ -38,6 +40,12 @@ export type CryptoUsdtCnyClosePoint = CryptoUsdtCnyProvenance & {
   source: string;
   pair: 'USDT/CNY';
   lockedAt: string;
+};
+export type CryptoUsdtCnyCloseOptions = {
+  /** Caller validates persistent scope/policy; this pure module revalidates point evidence. */
+  usdCnyClose?: StockUsdCnyClosePoint | null;
+  /** Optional transaction-owned shared fallback, so mixed USD/USDT scopes request USD only once. */
+  fetchUsdCnyAtClose?: (anchor: string) => Promise<StockUsdCnyClosePoint | null>;
 };
 type Leg = { rate: number; asOf: string; source: string };
 const TTL_MS = 30_000;
@@ -92,16 +100,13 @@ async function closeUsdtUsd(date: string): Promise<Leg | null> {
 }
 
 /** 非A交易日使用现有证券anchor；A交易日缺价不能偷换成前日价。 */
-async function forexClose(date: string, explicitAnchor?: string): Promise<(Leg & { anchor: string; carried: boolean }) | null> {
+async function forexClose(date: string, explicitAnchor?: string, options: CryptoUsdtCnyCloseOptions = {}): Promise<(Leg & { anchor: string; carried: boolean }) | null> {
   try {
     const anchor = explicitAnchor ?? (isStockMarketSession(date, 'A') ? date : getUnifiedStockCloseSnapshotDate(new Date(cutoffMs(date))));
     if (!isStockMarketSession(anchor, 'A') || cutoffMs(anchor) > Date.now()) return null;
-    const point = await fetchStockUsdCnyAtClose(anchor);
-    if (!point || point.pair !== 'USD/CNY' || point.snapshotDate !== anchor || !validTime(point.asOf)
-      || !['sina_usdcny', 'yahoo_usdcny_5m'].includes(point.source) || positive(point.usdCnyRate) === null) return null;
-    const asOf = Date.parse(point.asOf);
-    // 明确证明anchor 15:05前半小时内真实采样；不能把周末日期贴到周五外汇上。
-    if (asOf > cutoffMs(anchor) || cutoffMs(anchor) - asOf > MAX_GAP_MS || beijingDate(asOf) !== anchor) return null;
+    const point = validateCryptoUsdCnyClosePoint(options.usdCnyClose, anchor)
+      ?? validateCryptoUsdCnyClosePoint(await (options.fetchUsdCnyAtClose ?? fetchStockUsdCnyAtClose)(anchor), anchor);
+    if (!point) return null;
     return { rate: point.usdCnyRate, asOf: point.asOf, source: point.source, anchor, carried: anchor !== date };
   } catch { return null; }
 }
@@ -161,16 +166,22 @@ export async function getLiveCryptoUsdtCnyQuote(): Promise<CryptoUsdtCnyQuote | 
   } finally { liveFlight = null; }
 }
 
-export async function fetchCryptoUsdtCnyAtClose(date: string): Promise<CryptoUsdtCnyClosePoint | null> {
+export async function fetchCryptoUsdtCnyAtClose(date: string, options: CryptoUsdtCnyCloseOptions = {}): Promise<CryptoUsdtCnyClosePoint | null> {
   if (!isStockSessionDate(date) || cutoffMs(date) > Date.now()) return null;
-  const cached = closeCache.get(date);
+  let anchor: string;
+  try { anchor = isStockMarketSession(date, 'A') ? date : getUnifiedStockCloseSnapshotDate(new Date(cutoffMs(date))); }
+  catch { return null; }
+  const supplied = validateCryptoUsdCnyClosePoint(options.usdCnyClose, anchor);
+  // A prior upstream null or different source cannot mask a newly available archived leg.
+  const key = supplied ? JSON.stringify([date, supplied.snapshotDate, supplied.usdCnyRate, supplied.source, supplied.asOf, supplied.lockedAt]) : date;
+  const cached = closeCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return copy(cached.quote);
-  const existing = closeFlights.get(date);
+  const existing = closeFlights.get(key);
   if (existing) return copy(await existing);
   if (closeFlights.size >= 4) return null; // 本模块最多4日期并发，不扩展供应商全历史扫描。
   const pending = (async () => {
     try {
-      const [usdt, forex] = await Promise.all([closeUsdtUsd(date), forexClose(date)]);
+      const [usdt, forex] = await Promise.all([closeUsdtUsd(date), forexClose(date, anchor, { ...options, usdCnyClose: supplied })]);
       if (!usdt || !forex) return null;
       const rate = usdt.rate * forex.rate;
       if (positive(rate) === null) return null;
@@ -179,12 +190,12 @@ export async function fetchCryptoUsdtCnyAtClose(date: string): Promise<CryptoUsd
         pair: 'USDT/CNY' as const, lockedAt: `${date}T15:05:00+08:00` };
     } catch { return null; }
   })();
-  closeFlights.set(date, pending);
+  closeFlights.set(key, pending);
   try {
     const quote = await pending;
-    closeCache.delete(date);
-    closeCache.set(date, { quote, expiresAt: Date.now() + (quote ? 24 * 60 * 60_000 : TTL_MS) });
+    closeCache.delete(key);
+    closeCache.set(key, { quote, expiresAt: Date.now() + (quote ? 24 * 60 * 60_000 : TTL_MS) });
     trimCache();
     return copy(quote);
-  } finally { closeFlights.delete(date); }
+  } finally { closeFlights.delete(key); }
 }

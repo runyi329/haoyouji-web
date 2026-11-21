@@ -8,6 +8,8 @@ vi.mock('./db', () => ({ getDbConnection: deps.db, getDbTransactionConnection: d
 vi.mock('./price-scanner', () => ({ getUsdtCnyRate: () => 7, fetchIntradayStockQuotes: vi.fn(), refreshUsdtCnyRate: vi.fn(), resolveUsStockExchange: vi.fn(async () => 'NASDAQ'), searchManualStocks: vi.fn() }));
 vi.mock('./crypto-portfolio-quotes', () => ({ fetchCryptoPortfolioQuotes: deps.crypto, getCachedCryptoPortfolioQuote: deps.cryptoCache, searchCryptoPortfolio: vi.fn() }));
 vi.mock('./crypto-portfolio-fx', () => ({ getLiveCryptoUsdtCnyQuote: vi.fn(async () => ({ pair: 'USDT/CNY', rate: 7.2, stale: false })) }));
+vi.mock('./usdt-cny-rate', () => ({ getLiveUsdtCnyQuote: vi.fn(async () => ({ pair: 'USDT/CNY', rate: 7.2, stale: false })) }));
+vi.mock('./stock-usd-cny-rate', () => ({ getLiveStockUsdCnyQuote: vi.fn(async () => ({ pair: 'USD/CNY', rate: 7, stale: false })), fetchStockUsdCnyAtClose: vi.fn() }));
 vi.mock('./stock-calendar-result-cache', () => ({ ensureStockCalendarResultTable: vi.fn(), markStockCalendarResultDirty: vi.fn(), readStockCalendarResult: deps.calendar, rebuildCachedStockCalendarResult: vi.fn() }));
 import { getR1StockPresentationContext, setR1StockAiDisplay, getMyR1AiParticipationPortfolio, getStockTagPortfolio,
   getStockTagPublicPortfolio, getMyStockTagParticipantPortfolio, getStockTagDailySnapshots,

@@ -6,6 +6,7 @@ import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock
 import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, prioritizeUnifiedStockCloseCandidates } from '../shared/stock-unified-close-policy';
 import { marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { isTrustedMemberCalendarClose } from './shared/stock-member-calendar';
+import { portfolioCurrency, portfolioMarket, isCryptoPortfolioSymbol } from '../shared/portfolio-instruments';
 
 const source = readFileSync(new URL('./ledger-stock-portfolio.ts', import.meta.url), 'utf8');
 const schedulerSource = readFileSync(new URL('./manual-stock-close-scheduler.ts', import.meta.url), 'utf8');
@@ -85,6 +86,7 @@ function publisherHarness(input: { symbols?: string[]; saved?: string[]; savedFx
   const subject = loadFunctions([...globals, ...helpers, 'closeRefreshInProgress', 'refreshLedgerStockTagCloseSnapshots'], {
     getDbConnection: async () => ({ execute: read }), getDbTransactionConnection: async () => tx,
     ensureLedgerStockPortfolioTables: ensure, ensureStockCalendarResultTable: ensure,
+    portfolioCurrency, portfolioMarket, isCryptoPortfolioSymbol, getCryptoPortfolioActivationDate: async () => null,
     getOvernightUsSessionDate, isStockMarketSession, getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion,
     isUnifiedStockCloseReady: (date: string) => isUnifiedStockCloseReady(date, now), isUnifiedStockCloseQuoteForDate,
     marketSessionDateFromBeijingTradeTimestamp, isTrustedMemberCalendarClose,
@@ -205,7 +207,7 @@ describe('background-only pending close repair wiring (real production functions
     const forbidden = vi.fn(() => { throw new Error('Read path attempted write/background/network work'); });
     const read = vi.fn(async () => pending);
     const subject = loadFunctions(['getStockTagCalendar'], {
-      assertStockTagAccess: vi.fn(async () => ({ categoryId: 301, ledgerId: 37, canEdit: false })),
+      assertStockPresentationReadAccess: vi.fn(async () => ({ categoryId: 301, ledgerId: 37, canEdit: false })),
       isStockCalendarMemberEligible: vi.fn(async () => true), readStockCalendarResult: read,
       refreshLedgerStockTagCloseSnapshots: forbidden, repairPendingStockTagCalendarEvidence: forbidden,
       queueStockCalendarResultRebuild: forbidden, rebuildStockTagCalendarResult: forbidden,

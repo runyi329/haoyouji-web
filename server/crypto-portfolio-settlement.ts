@@ -1,8 +1,9 @@
 import { getDbConnection, getDbTransactionConnection } from './db';
 import { fetchCryptoPortfolioCloseQuotes, fetchCryptoPortfolioQuotes } from './crypto-portfolio-quotes';
 import { fetchCryptoUsdtCnyAtClose } from './crypto-portfolio-fx';
-import { fetchStockUsdCnyAtClose } from './stock-usd-cny-rate';
-import { fetchOvernightUnifiedCloseQuotes, fetchUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp } from './stock-unified-close-quotes';
+import { fetchStockUsdCnyAtClose, type StockUsdCnyClosePoint } from './stock-usd-cny-rate';
+import { validateCryptoSavedUsdAnchor, validateCryptoUsdCnyClosePoint } from './crypto-portfolio-usd-anchor';
+import { fetchOvernightUnifiedCloseQuotes, fetchUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, marketDateFromTimestamp } from './stock-unified-close-quotes';
 import { decodeStockCalendarResult, markStockCalendarResultDirty } from './stock-calendar-result-cache';
 import { buildMemberStockCalendar, type MemberCalendarSnapshot } from './shared/stock-member-calendar';
 import { CRYPTO_PORTFOLIO_POLICY_VERSION, cryptoPortfolioBeijingDate, cryptoPortfolioCutoffAt,
@@ -172,13 +173,15 @@ async function savedStockProofs(conn: any, categoryId: number): Promise<CryptoCa
       price: sourceNumber(r.price), currency: r.currency, source: r.source, priceDate: r.price_date, updatedAt: wallIso(r.captured_at) ?? '' }));
   } catch (error) { if (missingTable(error)) return []; throw error; }
 }
-async function savedUsdFx(conn: any, categoryId: number, anchor: string): Promise<CryptoCalendarUsdFx | null> {
+async function savedUsdFx(conn: any, categoryId: number, anchor: string): Promise<StockUsdCnyClosePoint | null> {
   try {
-    const [rows] = await conn.execute(`SELECT usd_cny_rate,source,DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS as_of,
+    // Fixed USD/CNY table has no pair column; expose its schema meaning, never relabel USDT.
+    const [rows] = await conn.execute(`SELECT ledger_id,category_id,policy_version,'USD/CNY' AS pair,
+      DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date,
+      usd_cny_rate,source,DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS as_of,
       DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at FROM ledger_stock_unified_close_fx
       WHERE ledger_id=? AND category_id=? AND snapshot_date=? AND policy_version=?`, [LEDGER_ID, categoryId, anchor, STOCK_POLICY]);
-    return rows.length ? { snapshotDate: anchor, usdCnyRate: sourceNumber(rows[0].usd_cny_rate), source: rows[0].source,
-      asOf: wallIso(rows[0].as_of) ?? '', lockedAt: wallIso(rows[0].locked_at) ?? '', pair: 'USD/CNY' } : null;
+    return validateCryptoSavedUsdAnchor(rows, { ledgerId: LEDGER_ID, categoryId, anchor });
   } catch (error) { if (missingTable(error)) return null; throw error; }
 }
 
@@ -196,8 +199,22 @@ async function legacyBaseline(conn: any, categoryId: number, activationDate: str
   const members: Record<string, MemberCalendarSnapshot> = {};
   // No persisted legacy member payload table exists. Reconstruction is admissible only with
   // unchanged, pre-cutoff configuration + already-saved exact historical quote/FX evidence.
+  const priorDates = cryptoPortfolioStockAnchor(date);
   for (const userId of Array.from(new Set(history.participations.map(p => p.userId)))) {
-    const ps = history.participations.filter(p => p.userId === userId && !isCryptoPortfolioSymbol(history.lots.find(l => l.id === p.lotId)?.symbol));
+    const ps = history.participations.filter(p => {
+      if (p.userId !== userId) return false;
+      const lot = history.lots.find(l => l.id === p.lotId), instrument = parsePortfolioInstrument(lot?.symbol);
+      if (!lot || !instrument || instrument.market === 'CRYPTO') return false;
+      // A genuinely later physical opening (e.g. Friday-night US) never belonged to this
+      // prior A+overnight-US snapshot. Do NOT use mutable participation startDate to exempt old lots.
+      const actual = Date.parse(lot.actualTradedAt ?? ''), registered = Date.parse(lot.registeredAt ?? '');
+      const assigned = Date.parse(p.assignedAt ?? ''), cutoff = cryptoPortfolioCutoffAt(date).getTime();
+      const provenLaterOpening = priorDates && lot.openedDate && lot.openedDate > priorDates[instrument.market]
+        && Number.isFinite(actual) && Number.isFinite(registered) && Number.isFinite(assigned)
+        && actual > cutoff && registered >= actual && assigned >= registered
+        && marketDateFromTimestamp(actual / 1000, instrument.market) === lot.openedDate;
+      return !provenLaterOpening;
+    });
     if (!ps.length) continue; // Unknown prior member scope is pending, not a fabricated zero.
     if (ps.some(p => !p.updatedAt || Date.parse(p.updatedAt) >= cryptoPortfolioCutoffAt(date).getTime())) continue;
     const snapshot = buildMemberStockCalendar({ participations: ps.map(p => {
@@ -256,8 +273,15 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
       const cryptoSymbols = symbols.filter(isCryptoPortfolioSymbol), stockSymbols = symbols.filter(s => !isCryptoPortfolioSymbol(s));
       const quotes: CryptoCalendarQuote[] = [...Array.from(stockProofs)];
       const hasUsdt = cryptoSymbols.length > 0, hasUsd = symbols.some(s => parsePortfolioInstrument(s)?.currency === 'USD');
-      const usdtPromise = hasUsdt ? fetchCryptoUsdtCnyAtClose(snapshotDate) : Promise.resolve(null);
-      const usdPromise = hasUsd ? savedUsdFx(tx, categoryId, dates.A).then(saved => saved ?? fetchStockUsdCnyAtClose(dates.A)) : Promise.resolve(null);
+      // Read once on this transaction, including crypto-only scopes: weekend bridge needs the saved A anchor.
+      const savedUsd = hasUsdt || hasUsd ? await savedUsdFx(tx, categoryId, dates.A) : null;
+      let usdFlight: Promise<StockUsdCnyClosePoint | null> | null = null;
+      const getUsdClose = () => usdFlight ??= savedUsd ? Promise.resolve(savedUsd)
+        : fetchStockUsdCnyAtClose(dates.A).then(point => validateCryptoUsdCnyClosePoint(point, dates.A), () => null);
+      const usdtPromise = hasUsdt ? fetchCryptoUsdtCnyAtClose(snapshotDate, {
+        usdCnyClose: savedUsd, fetchUsdCnyAtClose: getUsdClose,
+      }) : Promise.resolve(null);
+      const usdPromise = hasUsd ? getUsdClose() : Promise.resolve(null);
       const cryptoPromise = (async () => {
         for (const date of Array.from([...Array.from(quoteDates)].sort())) {
           if (date > snapshotDate) continue;

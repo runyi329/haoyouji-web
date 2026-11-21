@@ -24,6 +24,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { aggregateOverviewPnl, formatOverviewPnl, shortSettlementDate, stockOverviewSettlementDisplay } from "@/lib/stock-overview-settlement-display";
 import { expectedStockSettlementDate, isCryptoPortfolioCalendarPoint, normalizeStockCalendarPoints, nullableStockNumber, stockCalendarScope, sumKnownStockDailyPnl } from "@/lib/ledger-stock-calendar";
 import { millisecondsUntilStockCalendarWake, stockCalendarExpectedVersion, stockCalendarHasExpectedClose, stockCalendarPrefetchBlocked, stockCalendarQueryOptions, stockCalendarRetryWindowFor, stockCalendarUsesCryptoPolicy } from "@/lib/ledger-stock-calendar-cache";
 import { latestCryptoPortfolioSnapshotDate } from "@shared/crypto-portfolio-policy";
@@ -955,7 +956,7 @@ export default function LedgerDetailAA({
   const [showAllModeHelp, setShowAllModeHelp] = useState<'value' | 'pnl' | 'margin' | null>(null);
   const [showActiveMarginSummary, setShowActiveMarginSummary] = useState(false);
   // 概览表格盘价总和：用 ref 存储，在概览渲染时赋值，弹窗直接读取
-  const overviewTotalPnlRef = useRef<number>(0);
+  const overviewTotalPnlRef = useRef<number | null>(null);
 
   const personalMemosQuery = (trpc as any).ledger.getPersonalMemos.useQuery(
     { ledgerId, visibility: memoTab },
@@ -1470,7 +1471,9 @@ export default function LedgerDetailAA({
           name: tagName,
           color,
           isStockPortfolio: true,
-          stockUsesCryptoPolicy: (stockOverview.points || []).some(isCryptoPortfolioCalendarPoint),
+          stockSettlementSummary: stockSummary,
+          stockSettlementPoints: (stockOverview.points || [])
+            .filter((point: any) => !isMemberFacingLedgerView || !isDateInTagPausePeriod(point.date, tagPauseHistory)),
           stockStartDate: stockOverview.startDate || null,
           stockSummaryPnl: nullableStockNumber(stockSummary.totalPnl),
           stockSummaryMarketValue: nullableStockNumber(stockSummary.marketValue),
@@ -3487,10 +3490,15 @@ export default function LedgerDetailAA({
                 : tag.points;
               const _latestPoint = _effectivePoints[_effectivePoints.length - 1];
               const _prevPoint = _effectivePoints.length >= 2 ? _effectivePoints[_effectivePoints.length - 2] : null;
-              // 累计回报和当前市值仍可使用个人实时 summary；日收益/日期绝不从实时估值追加。
-              const latestPnl = tag.isStockPortfolio && !pnlCutoffDate
-                ? ((tag as any).stockSummaryPnl ?? _latestPoint?.pnl ?? 0)
-                : _latestPoint?.pnl ?? 0;
+              // 累计与当日日结分开：最近已确认累计可保留，pending 日收益不能用旧日冒充。
+              const stockDisplay = tag.isStockPortfolio ? stockOverviewSettlementDisplay({
+                summary: (tag as any).stockSettlementSummary,
+                points: (tag as any).stockSettlementPoints ?? _effectivePoints,
+                expectedStockDate: stockFocusDate,
+                expectedCryptoDate: latestCryptoPortfolioSnapshotDate(),
+                cutoffDate: pnlCutoffDate,
+              }) : null;
+              const latestPnl = stockDisplay ? stockDisplay.confirmedTotalPnl : _latestPoint?.pnl ?? 0;
               const latestDate = _latestPoint?.date ?? null;
               // 原始账户金额（日历格子里填的数字）
               const latestBalance = tag.isStockPortfolio && !pnlCutoffDate
@@ -3506,15 +3514,15 @@ export default function LedgerDetailAA({
               const prevPnl = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.pnl ?? 0) : 0;
               // 股票标签已经在服务端按成员的每笔入场价与股票批次计算，绝不能再乘旧版标签比例。
               // 手工余额标签保留原有的资金流剔除公式。
-              const tagSettlementDate = (tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate;
+              const tagSettlementDate = stockDisplay?.expectedDate ?? today2;
               const todayPnl = tag.isStockPortfolio
-                ? (latestDate === tagSettlementDate ? nullableStockNumber((_latestPoint as any)?.stockDailyPnl) : null)
+                ? stockDisplay!.dailyPnl
                 : (latestBalance !== null && prevBalance !== null)
                   ? (prevBalance + todayCapitalChange - todayWithdraw - latestBalance) * (_tagRatio / 100)
-                  : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
-              const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
+                  : (_tagRatio > 0 && tag.points.length > 0 ? ((latestPnl ?? 0) - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? (latestPnl ?? 0) - prevPnl : null)));
+              const annualized = latestPnl !== null && tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
+              return { tag, days, latestPnl, latestDate, todayPnl, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
             // 排序逻辑：默认（无手动排序）时暂停的排最下面；用户手动排序时参与全局排序
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
@@ -3534,7 +3542,10 @@ export default function LedgerDetailAA({
                 va = ra; vb = rb;
               }
               else if (overviewSort.col === 'amount') { va = a.tag.marginCny; vb = b.tag.marginCny; }
-              else if (overviewSort.col === 'pnl') { va = a.latestPnl; vb = b.latestPnl; }
+              else if (overviewSort.col === 'pnl') {
+                if ((a.latestPnl === null) !== (b.latestPnl === null)) return a.latestPnl === null ? 1 : -1;
+                va = a.latestPnl ?? 0; vb = b.latestPnl ?? 0;
+              }
               else if (overviewSort.col === 'annualized') { va = a.annualized ?? -Infinity; vb = b.annualized ?? -Infinity; }
               else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
               return overviewSort.dir === 'desc' ? vb - va : va - vb;
@@ -3548,9 +3559,9 @@ export default function LedgerDetailAA({
             });
             // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
-            // totalPnl = 直接把每行显示的 latestPnl 加总（含灰色，不含灰色均统计）
-            // tagData 在此之前已计算完毕，直接用
-            const totalPnl = tagData.reduce((s, td) => s + td.latestPnl, 0);
+            // 股票未知不得按0凑完整合计；旧已确认累计准确注明各行截止日期。
+            const totalPnlDisplay = aggregateOverviewPnl(tagData);
+            const totalPnl = totalPnlDisplay.total;
             overviewTotalPnlRef.current = totalPnl;
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
@@ -3559,7 +3570,7 @@ export default function LedgerDetailAA({
               const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
               return s + t.marginCny * (days / 365);
             }, 0);
-            const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
+            const weightedAnnualized = totalPnl !== null && weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // 右侧表头和数据网格必须共用同一组绝对轨道宽度；不能按各自内容自适应，
             // 否则在横向滑动时会出现标题与数字列宽不同、错位的情况。
@@ -3569,12 +3580,15 @@ export default function LedgerDetailAA({
             // 所有轨道基础和为 462px；年化焦点时把额外空间并入末列“占比”，避免产生右侧白边。
             const rightGridWidth = `${462 + annualizedFocusTail}px`;
             const overviewTableWidth = `${566 + annualizedFocusTail}px`;
-            // 概览表头始终表示北京时间的“当天”，不能被某个标签最后一笔手工记录或
-            // 某支股票的上一交易日快照改写。每一行是否真正完成当天计算，仍按该行自己的
-            // latestDate 与这个北京日期比对（R1 的9/28盘尾只影响R1本行）。
+            // 纯股票可显示共同预期日；混合行日期不同则不把昨日股票收益称为今天。
             const _nowBeijing = new Date(Date.now() + 8 * 3600 * 1000);
             const _latestDataDate = _nowBeijing.toISOString().slice(0, 10);
-            const todayColTitle = `${_nowBeijing.getUTCMonth() + 1}/${_nowBeijing.getUTCDate()}`;
+            const settlementDates = Array.from(new Set(tagData.map(td => td.tagSettlementDate)));
+            const todayColTitle = settlementDates.length === 1
+              ? shortSettlementDate(settlementDates[0]) : '日结/当日';
+            const todayColTooltip = tagData.map(td => `${td.tag.name}：${td.stockDisplay?.dailyTitle ?? `${_latestDataDate}当日回报`}`).join('；');
+            const stockSettlementCaption = Array.from(new Set(tagData.filter(td => td.stockDisplay).map(td =>
+              `${td.stockDisplay!.usesCryptoPolicy ? '混合组合自然日日结' : '股票最近交易日日结'} ${shortSettlementDate(td.tagSettlementDate)}`))).join(' · ');
             // 内容宽度：前4列占满屏幕，金额/年化/分红/占比全部溢出到右侧
             // 前4列占满屏幕：104px名称 + 3个1px分隔线 + 3个1fr内容列 = 100%
             // 溢出列：金额(70px)+分隔(1px)+年化(64px)+分隔(1px)+分红(64px)+分隔(1px)+占比(52px) = 253px
@@ -3599,9 +3613,10 @@ export default function LedgerDetailAA({
               ? sortedTagData.filter((td) => !td.isPaused)
               : sortedTagData;
             const pausedSummaryTodayItems = pausedTagData.filter((td) => td.todayPnl !== null);
-            const pausedSummaryHasToday = pausedSummaryTodayItems.length > 0;
+            const pausedSummaryHasToday = pausedSummaryTodayItems.length > 0 && pausedSummaryTodayItems.length === pausedTagData.length;
             const pausedSummaryTodayPnl = pausedSummaryTodayItems.reduce((sum, td) => sum + (td.todayPnl ?? 0), 0);
-            const pausedSummaryPnl = pausedTagData.reduce((sum, td) => sum + td.latestPnl, 0);
+            const pausedSummaryPnlDisplay = aggregateOverviewPnl(pausedTagData);
+            const pausedSummaryPnl = pausedSummaryPnlDisplay.total;
             const pausedSummaryMargin = pausedTagData.reduce((sum, td) => sum + td.tag.marginCny, 0);
             const pausedSummaryDividend = pausedTagData.reduce((sum, td) => sum + td.divAmt, 0);
             const activeFocusOption = OVERVIEW_FOCUS_OPTIONS.find((option) => option.key === overviewFocusMetric)!;
@@ -3684,7 +3699,7 @@ export default function LedgerDetailAA({
                 </button>}
               </div>
               {hasStockRows && <div className="px-3 py-1 text-[10px]" style={{ color: '#9E9E9E' }}>
-                股票日结 {stockFocusDate.slice(5).replace('-', '/')} · 15:05更新 · 当天A股＋隔夜美股
+                {stockSettlementCaption} · 15:05更新 · 个人已确认累计按行注明截至日期
                 {stockTagOverviewQuery.isPending ? ' · 加载中' : stockTagOverviewQuery.isFetching ? ' · 更新中' : ''}
               </div>}
               {showActiveMarginSummary && typeof document !== 'undefined' && createPortal(
@@ -3739,7 +3754,7 @@ export default function LedgerDetailAA({
                     <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#FFFFFF', width: rightGridWidth }}>
-                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('today')}><span style={{ color: overviewSort?.col === 'today' ? '#1565C0' : '#9E9E9E' }}>{todayColTitle}</span><SortArrow col="today" /></div>
+                    <div className={sortHeaderCls} title={todayColTooltip} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('today')}><span style={{ color: overviewSort?.col === 'today' ? '#1565C0' : '#9E9E9E' }}>{todayColTitle}</span><SortArrow col="today" /></div>
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                     <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
@@ -3825,17 +3840,17 @@ export default function LedgerDetailAA({
                 <div style={{ position: 'relative', zIndex: 0, flex: '0 0 auto', width: rightGridWidth, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', width: rightGridWidth }}>
                     {/* 数据行右侧各列 */}
-                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
+                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
                       const _todayBJ = _nowBJ.toISOString().slice(0, 10);
                       const _hourBJ = _nowBJ.getUTCHours();
                       const _dowBJ = _nowBJ.getUTCDay(); // 0=周日,6=周六
                       const _isTradeDay = _dowBJ >= 1 && _dowBJ <= 5;
-                      const _isStale = _isTradeDay && _hourBJ >= 15 && latestDate !== _todayBJ;
+                      const _isStale = !tag.isStockPortfolio && _isTradeDay && _hourBJ >= 15 && latestDate !== _todayBJ;
                       // 是否当天已更新：该用户最新数据日期 = 全局最新日期
                       const _isTodayNonTradeDay = false; // 已废弃交易日判断
-                      const _isTagUpdatedToday = latestDate === (tag.isStockPortfolio ? ((tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate) : _latestDataDate);
+                      const _isTagUpdatedToday = tag.isStockPortfolio ? stockDisplay?.dailyDate === tagSettlementDate : latestDate === _latestDataDate;
                       const _showTodayPnl = todayPnl !== null;
                   const rowBorder = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                   return (
@@ -3858,7 +3873,7 @@ export default function LedgerDetailAA({
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, height: rowHeight }}>
                             <span
-                              title={tag.isStockPortfolio ? `${(tag as any).stockUsesCryptoPolicy ? latestCryptoPortfolioSnapshotDate() : stockFocusDate}日结${todayPnl === null ? '待更新' : ''}` : undefined}
+                              title={stockDisplay?.dailyTitle}
                               style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowDetail ? 'pointer' : 'default',
                                 textDecoration: _canShowDetail ? 'underline' : 'none', textDecorationStyle: 'dashed',
                                 textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'normal', wordBreak: 'break-all', textAlign: 'center' }}
@@ -3869,8 +3884,8 @@ export default function LedgerDetailAA({
                                   tagName: tag.name,
                                   isStockPortfolio: !!tag.isStockPortfolio,
                                   isFirstSettlement: _isFirstStockSettlement,
-                                  latestDate,
-                                  previousDate: _prevDate,
+                                  latestDate: stockDisplay?.dailyDate ?? latestDate,
+                                  previousDate: stockDisplay?.dailyPoint?.previousDate ?? _prevDate,
                                   todayPnl: Number(todayPnl ?? 0),
                                   previousBalance: prevBalance ?? null,
                                   latestBalance: latestBalance ?? null,
@@ -3878,10 +3893,10 @@ export default function LedgerDetailAA({
                                   withdraw: Number(todayWithdraw ?? 0),
                                   ratio: _ratioNum,
                                   previousPnl: Number(prevPnl ?? 0),
-                                  latestPnl: tag.isStockPortfolio ? Number(tag.points[tag.points.length - 1]?.pnl ?? 0) : Number(latestPnl ?? 0),
+                                  latestPnl: Number(latestPnl ?? 0),
                                 });
                               }}
-                            >{_todayPnlText}{tag.isStockPortfolio && todayPnl === null && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>待更新</span>}</span>
+                            >{_todayPnlText}{stockDisplay && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>{todayPnl === null ? '待更新' : tagSettlementDate !== _todayBJ ? `${shortSettlementDate(tagSettlementDate)}日结` : ''}</span>}</span>
                           </div>
                         );
                       })()}
@@ -3889,8 +3904,9 @@ export default function LedgerDetailAA({
                       {/* 回报 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, height: rowHeight }}>
                         {(() => {
-                          const pnlColor = _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD';
-                          const pnlText = latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--';
+                          const pnlColor = _isStale || latestPnl === null ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#1A1A1A';
+                          const pnlText = stockDisplay ? formatOverviewPnl(latestPnl)
+                            : latestPnl !== 0 && latestPnl !== null ? formatOverviewPnl(latestPnl) : '--';
                           const fmt = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
                           // 构建分段详情
                           const pnlHistoryForAlert = (() => {
@@ -3900,9 +3916,9 @@ export default function LedgerDetailAA({
                             if (legacy) return [{ pauseDate: legacy }];
                             return [];
                           })() as Array<{ pauseDate: string; resumeDate?: string }>;
-                          const canClick = !!firstDate;
+                          const canClick = !!firstDate && latestPnl !== null;
                           const handlePnlClick = () => {
-                            if (!firstDate) return;
+                            if (!firstDate || latestPnl === null) return;
                             if (tag.isStockPortfolio) {
                               const stockSummary = (stockTagOverviewById.get(Number(categories.find((item: any) => item.name === tag.name)?.id)) as any)?.summary || {};
                               const latestMarketValue = stockSummary.marketValue === null || stockSummary.marketValue === undefined
@@ -3921,7 +3937,7 @@ export default function LedgerDetailAA({
                                 segments: [{
                                   segNo: 1,
                                   startDate: firstDate,
-                                  endDate: latestDate || firstDate,
+                                  endDate: stockDisplay?.confirmedAsOf || latestDate || firstDate,
                                   startBalance: 0,
                                   endBalance: latestMarketValue,
                                   effectiveInitial: Number(stockSummary.costValue ?? tag.initialBalance ?? 0),
@@ -4028,9 +4044,10 @@ export default function LedgerDetailAA({
                           };
                           return (
                             <span
+                              title={stockDisplay?.cumulativeTitle}
                               style={{ color: pnlColor, cursor: canClick ? 'pointer' : 'default', textDecoration: canClick ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: pnlColor, textUnderlineOffset: '2px' }}
                               onClick={canClick ? handlePnlClick : undefined}
-                            >{pnlText}</span>
+                            >{pnlText}{stockDisplay && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E', lineHeight: '11px' }}>{stockDisplay.cumulativeNote}</span>}</span>
                           );
                         })()}
                       </div>
@@ -4089,7 +4106,7 @@ export default function LedgerDetailAA({
                           // 表格金额按整数展示；超额判断也按同一显示口径，避免 277 与 276.999... 被误标为超额。
                           const displayedDividend = Math.round(distributedDividend);
                           const displayedReturn = Math.round(referenceReturn);
-                          const isOverDistributed = displayedDividend > 0 && displayedDividend > displayedReturn;
+                          const isOverDistributed = latestPnl !== null && displayedDividend > 0 && displayedDividend > displayedReturn;
                           const isDividendRecovery = distributedDividend < 0;
                           const dividendTextColor = isOverDistributed ? '#1565C0' : distributedDividend > 0 ? '#D32F2F' : isDividendRecovery ? '#388E3C' : '#BDBDBD';
                           const dividendProgressPercent = referenceReturn > 0
@@ -4219,7 +4236,7 @@ export default function LedgerDetailAA({
                     const todayColor = !pausedSummaryHasToday || pausedSummaryTodayPnl === 0
                       ? '#BDBDBD'
                       : pausedSummaryTodayPnl > 0 ? '#D32F2F' : '#388E3C';
-                    const pnlColor = pausedSummaryPnl === 0 ? '#BDBDBD' : pausedSummaryPnl > 0 ? '#D32F2F' : '#388E3C';
+                    const pnlColor = pausedSummaryPnl === null ? '#BDBDBD' : pausedSummaryPnl > 0 ? '#D32F2F' : pausedSummaryPnl < 0 ? '#388E3C' : '#1A1A1A';
                     const formatNumber = (value: number) => Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
                     return (
                       <>
@@ -4231,7 +4248,7 @@ export default function LedgerDetailAA({
                           style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: todayColor, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                           aria-label={`展开 ${pausedTagData.length} 位已暂停人员的详情`}
                         >
-                          {pausedSummaryHasToday && pausedSummaryTodayPnl !== 0 ? `${pausedSummaryTodayPnl < 0 ? '-' : ''}${formatNumber(pausedSummaryTodayPnl)}` : '--'}
+                          <span>{formatOverviewPnl(pausedSummaryHasToday ? pausedSummaryTodayPnl : null)}{!pausedSummaryHasToday && <span className="block text-[9px] font-normal">待更新</span>}</span>
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
@@ -4239,8 +4256,9 @@ export default function LedgerDetailAA({
                           onClick={() => setShowPausedTagDetails(true)}
                           className="px-1 text-center flex items-center justify-center"
                           style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pnlColor, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                          title={pausedSummaryPnlDisplay.title}
                         >
-                          {pausedSummaryPnl !== 0 ? `${pausedSummaryPnl < 0 ? '-' : ''}${formatNumber(pausedSummaryPnl)}` : '--'}
+                          <span>{formatOverviewPnl(pausedSummaryPnl)}{pausedSummaryPnlDisplay.note && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>{pausedSummaryPnlDisplay.note}</span>}</span>
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
@@ -4291,15 +4309,18 @@ export default function LedgerDetailAA({
                   <>
                     {/* 今日变动合计（第1列，对应表头"当天X/X"）*/}
                     {(() => {
-                      // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
-                      const updatedTagsData = tagData.filter(td => td.latestDate === _latestDataDate && td.todayPnl !== null && td.todayPnl !== 0);
-                      const staleTagsData = tagData.filter(td => td.todayPnl === null || td.latestDate !== _latestDataDate);
+                      // 按行自己的目标日，零也是真实更新；任何未知行都不冒充完整合计。
+                      const updatedTagsData = tagData.filter(td => td.todayPnl !== null && (td.stockDisplay ? td.stockDisplay.dailyDate === td.tagSettlementDate : td.latestDate === _latestDataDate));
+                      const staleTagsData = tagData.filter(td => !updatedTagsData.includes(td));
                       const totalTodayPnl = updatedTagsData.reduce((s, td) => s + (td.todayPnl ?? 0), 0);
                       const hasAny = updatedTagsData.length > 0;
+                      const complete = hasAny && staleTagsData.length === 0;
+                      const totalTodayNote = !complete ? '待更新' : settlementDates.length > 1 ? '各日已结' : settlementDates[0] !== _latestDataDate ? `${shortSettlementDate(settlementDates[0])}日结` : '';
                       return (
                         <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', position: 'relative', height: rowHeight }}>
                           <span
-                            style={{ fontSize: 13, fontWeight: 600, color: !hasAny ? '#BDBDBD' : totalTodayPnl > 0 ? '#D32F2F' : totalTodayPnl < 0 ? '#388E3C' : '#BDBDBD', cursor: hasAny ? 'pointer' : 'default', textDecoration: hasAny ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: totalTodayPnl > 0 ? '#D32F2F' : '#388E3C', textUnderlineOffset: '2px' }}
+                            title={`${todayColTooltip}；${complete ? '各行目标日日结合计，非同一自然日收益' : '合计待更新，未将未知收益按0计入完整合计'}`}
+                            style={{ fontSize: 13, fontWeight: 600, color: !complete ? '#BDBDBD' : totalTodayPnl > 0 ? '#D32F2F' : totalTodayPnl < 0 ? '#388E3C' : '#1A1A1A', cursor: hasAny ? 'pointer' : 'default', textDecoration: hasAny ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: totalTodayPnl > 0 ? '#D32F2F' : '#388E3C', textUnderlineOffset: '2px' }}
                             onClick={(e) => {
                               if (!hasAny) return;
                               e.stopPropagation();
@@ -4310,7 +4331,8 @@ export default function LedgerDetailAA({
                               });
                             }}
                           >
-                            {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
+                            {formatOverviewPnl(complete ? totalTodayPnl : null)}
+                            {totalTodayNote && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>{totalTodayNote}</span>}
                           </span>
                         </div>
                       );
@@ -4318,8 +4340,9 @@ export default function LedgerDetailAA({
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 回报 */}
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      <span title={totalPnlDisplay.title} style={{ fontSize: 13, fontWeight: 600, color: totalPnl === null ? '#BDBDBD' : totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#1A1A1A' }}>
+                        {formatOverviewPnl(totalPnl)}
+                        {totalPnlDisplay.note && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>{totalPnlDisplay.note}</span>}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
@@ -6316,11 +6339,11 @@ export default function LedgerDetailAA({
               {(() => {
                 const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
                 const perTag = allTagsStats.perTagDetail ?? [];
-                const fmt = (n: number) => (n > 0 ? '+' : n < 0 ? '-' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmt = (n: number | null) => n !== null && Number.isFinite(n) ? (n > 0 ? '+' : n < 0 ? '-' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '待更新';
                 const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                 if (showAllModeHelp === 'value') {
-                  const value = allTagsStats.totalMargin + overviewTotalPnlRef.current - totalDividend;
+                  const value = overviewTotalPnlRef.current === null ? null : allTagsStats.totalMargin + overviewTotalPnlRef.current - totalDividend;
                   return (
                     <>
                       <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 押金总和 + 盈亏总和 − 分红净额</div>
@@ -6329,7 +6352,7 @@ export default function LedgerDetailAA({
                         <span className="ml-1 text-xs font-normal text-gray-400">(存入与转出平移后的净额)</span>
                       </div>
                       <div className="font-semibold text-gray-900">② 盈亏总和
-                        <span className="ml-2 font-mono" style={{ color: overviewTotalPnlRef.current >= 0 ? '#D32F2F' : '#388E3C' }}>{fmt(overviewTotalPnlRef.current)}</span>
+                        <span className="ml-2 font-mono" style={{ color: overviewTotalPnlRef.current === null ? '#9E9E9E' : overviewTotalPnlRef.current >= 0 ? '#D32F2F' : '#388E3C' }}>{fmt(overviewTotalPnlRef.current)}</span>
                         <span className="ml-1 text-xs font-normal text-gray-400">(全部标签客户盈亏加总)</span>
                       </div>
                       <div className="font-semibold text-gray-900">③ 分红净额
@@ -6339,7 +6362,7 @@ export default function LedgerDetailAA({
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-gray-900">价値</span>
-                          <span className={`text-lg font-bold ${value >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(value)}</span>
+                          <span className={`text-lg font-bold ${value === null ? 'text-gray-400' : value >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(value)}</span>
                         </div>
                         <div className="text-xs text-gray-400 mt-1">{formatSignedMarginCny(allTagsStats.totalMargin)} + ({fmt(overviewTotalPnlRef.current)}) − ({fmt(totalDividend)}) = {fmt(value)}</div>
                       </div>
@@ -6418,7 +6441,7 @@ export default function LedgerDetailAA({
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-gray-900">盈亏总和</span>
-                          <span className={`text-lg font-bold ${overviewTotalPnlRef.current >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(overviewTotalPnlRef.current)}</span>
+                          <span className={`text-lg font-bold ${overviewTotalPnlRef.current === null ? 'text-gray-400' : overviewTotalPnlRef.current >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(overviewTotalPnlRef.current)}</span>
                         </div>
                         <div className="text-xs text-gray-400 mt-1">{perTag.filter(t => t.hasData).map(t => fmt(t.tagPnl)).join(' + ')} = {fmt(overviewTotalPnlRef.current)}</div>
                       </div>

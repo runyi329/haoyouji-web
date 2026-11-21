@@ -20,7 +20,8 @@ beforeEach(() => {
     member_user_id: 5, member_role: 'member', initialBalances: '{}' };
   fake.read.mockResolvedValue([]);
   fake.execute.mockImplementation(async (sql: string) => {
-    if (sql.includes('FROM ledger_categories c')) return [[fake.category]];
+    if (sql.includes('FROM ledger_categories c')) return [[{ ...fake.category,
+      ledger_owner_id: fake.category.member_role === 'owner' ? fake.category.member_user_id : 999 }]];
     if (sql.includes('SELECT 1 AS eligible')) return [fake.eligible ? [{ eligible: 1 }] : []];
     throw new Error(`Forbidden read route SQL: ${sql}`);
   });

@@ -43,7 +43,10 @@ describe('LedgerDetailAA crypto natural-day calendar exceptions', () => {
   it('ordinary stock/handwritten labels retain A-share non-trading behavior', () => {
     expect(source).toContain("if (dow === 0) return '周日'");
     expect(source).toContain("if (dow2 === 6) return '周六'");
-    expect(source).toContain('disabled={!canOpenCalendarCell}');
+    expect(source).toContain('disabled={!canOpenCalendarCell && !canRecordCalendarCell}');
+    expect(source).toContain('const canRecordCalendarCell = canRecordCalendarNumber && !isNonTrading');
+    expect(source).toContain('onClick={() => { if (canOpenCalendarCell) handleDayClick(day); }}');
+    expect(source).toContain('onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}');
     expect(source).toContain('disabled={!canOpenCalendarDayDetail}');
   });
 });

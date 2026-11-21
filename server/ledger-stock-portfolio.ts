@@ -1586,6 +1586,24 @@ export async function repairPendingStockTagCalendarEvidence(options: { categoryI
   }
 }
 
+/** Real member allocations only: closed shares still count; observations/category activation do not. */
+function memberCryptoParticipationStartDate(rows: readonly any[], today: string): string | null {
+  const dates: string[] = [];
+  for (const row of rows) {
+    if (!isCryptoPortfolioSymbol(String(row.symbol)) || row.opening_status !== 'active'
+      || !Number.isFinite(Number(row.allocated_quantity)) || Number(row.allocated_quantity) <= 0) continue;
+    const physicalDate = row.opening_actual_traded_at
+      ? getCryptoPortfolioTradeSettlementDate(toBeijingWallClockIso(row.opening_actual_traded_at)) : null;
+    const startDate = normalizeStoredDate(row.start_date) || physicalDate;
+    const openingEffectiveDate = normalizeStoredDate(row.opening_settlement_effective_date);
+    // Unknown opening history must not invent a securities fallback for a real allocation.
+    // Known future opening/business dates, however, must never activate today's member policy.
+    const effectiveDate = [startDate, physicalDate, openingEffectiveDate].filter((date): date is string => !!date).sort().at(-1);
+    if (!effectiveDate || effectiveDate <= today) dates.push(effectiveDate || today);
+  }
+  return dates.sort()[0] ?? null;
+}
+
 /**
  * A member's view is deliberately separate from the administrator's tag-wide
  * portfolio.  A member's baseline is each allocated lot's entry price and
@@ -1599,6 +1617,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
             p.start_date, p.pause_date, p.assigned_at,
             l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
             DATE_FORMAT(opening.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS opening_actual_traded_at,
+            opening.status AS opening_status,
+            DATE_FORMAT(opening.settlement_effective_date, '%Y-%m-%d') AS opening_settlement_effective_date,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
             COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
             MAX(c.closed_at) AS closed_at,
@@ -1838,8 +1858,14 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       lockedAt: row.locked_at == null ? null : toBeijingWallClockIso(row.locked_at),
     })),
   });
-  const cryptoActivationDate = tableNames.has('ledger_crypto_portfolio_daily_snapshots') || visibleParticipations.some(item => isCryptoPortfolioSymbol(item.symbol))
+  const memberCryptoStartDate = memberCryptoParticipationStartDate(rows as any[], today);
+  const categoryCryptoActivationDate = memberCryptoStartDate
     ? await getCryptoPortfolioActivationDate(categoryId, conn) : null;
+  // Category publication remains tag-wide; this member switches only at their first real crypto participation.
+  const memberActivationDate = memberCryptoStartDate && categoryCryptoActivationDate
+    ? [memberCryptoStartDate, categoryCryptoActivationDate].sort().at(-1)! : memberCryptoStartDate;
+  const cryptoActivationDate = memberActivationDate && memberActivationDate <= today ? memberActivationDate : null;
+  const settlementPolicy = cryptoActivationDate ? 'mixed-crypto-natural-day' as const : 'stock-trading-day' as const;
   const dailySnapshots = mergeCryptoPortfolioCalendarSnapshots(legacyDailySnapshots,
     cryptoActivationDate ? await readCryptoPortfolioCalendar(categoryId, userId, new Date(), conn) : [], cryptoActivationDate);
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
@@ -1855,7 +1881,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     isEligible: visibleParticipations.length > 0,
     startDate: visibleParticipations.map((item) => item.startDate).sort()[0] || null,
     dailySnapshots: dailySnapshots.slice().reverse(),
-    settlementSummary: memberCalendarSettlementSummary(dailySnapshots),
+    settlementSummary: memberCalendarSettlementSummary(dailySnapshots, { settlementPolicy }),
     summary: {
       reportingCurrency: 'CNY' as const,
       usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
@@ -3010,6 +3036,14 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
   return result;
 }
 
+/** AI overview keeps only already-authorized PnL and non-sensitive settlement metadata. */
+function projectMemberSettlementSnapshotForAi(snapshot: any) {
+  return snapshot ? { snapshotDate: snapshot.snapshotDate, ready: snapshot.ready, status: snapshot.status,
+    totalPnl: snapshot.totalPnl, floatingPnl: snapshot.floatingPnl, realizedPnl: snapshot.realizedPnl,
+    dailyPnl: snapshot.dailyPnl, dailyPnlReady: snapshot.dailyPnlReady,
+    previousDate: snapshot.previousDate, policyVersion: snapshot.policyVersion } : null;
+}
+
 export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
   const context = await getLedger37PresentationContext({ ...input, ledgerId: 37 });
@@ -3036,10 +3070,14 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
       totalPnl: row.summary.totalPnl, dailyChange: row.summary.dailyChange,
       dailyChangePercent: row.summary.dailyChangePercent, dailyChangeReady: row.summary.dailyChangeReady,
       dailyChangeDate: row.summary.dailyChangeDate, previousDate: row.summary.previousDate,
-      valuationDate: row.summary.valuationDate, awaitingFirstClose: row.summary.awaitingFirstClose },
+      valuationDate: row.summary.valuationDate, awaitingFirstClose: row.summary.awaitingFirstClose,
+      settlementPolicy: row.summary.settlementPolicy, expectedDate: row.summary.expectedDate,
+      confirmedTotalPnl: row.summary.confirmedTotalPnl, confirmedAsOf: row.summary.confirmedAsOf,
+      lastConfirmedSnapshot: projectMemberSettlementSnapshotForAi(row.summary.lastConfirmedSnapshot) },
     points: row.points.map((point: any) => ({ date: point.date, snapshotDate: point.snapshotDate,
       pnl: point.pnl, totalPnl: point.totalPnl, floatingPnl: point.floatingPnl, realizedPnl: point.realizedPnl,
-      dailyPnl: point.dailyPnl, dailyPnlReady: point.dailyPnlReady, ready: point.ready, status: point.status })),
+      dailyPnl: point.dailyPnl, dailyPnlReady: point.dailyPnlReady, ready: point.ready, status: point.status,
+      policyVersion: point.policyVersion })),
   }));
 }
 

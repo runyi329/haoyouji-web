@@ -6,6 +6,7 @@ import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock
 import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate } from '../shared/stock-unified-close-policy';
 import { marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { isTrustedMemberCalendarClose } from './shared/stock-member-calendar';
+import { portfolioCurrency, portfolioMarket, isCryptoPortfolioSymbol } from '../shared/portfolio-instruments';
 
 const source = readFileSync(new URL('./ledger-stock-portfolio.ts', import.meta.url), 'utf8');
 const snapshotDate = '2026-11-10';
@@ -126,6 +127,7 @@ function harness(input: {
   const context: any = { Date, Intl, exports: {}, console: { error: log },
     getDbConnection: async () => ({ execute: read }), getDbTransactionConnection: async () => tx,
     ensureLedgerStockPortfolioTables: vi.fn(), ensureStockCalendarResultTable: vi.fn(),
+    portfolioCurrency, portfolioMarket, isCryptoPortfolioSymbol, getCryptoPortfolioActivationDate: async () => null,
     getOvernightUsSessionDate, isStockMarketSession, getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion,
     isUnifiedStockCloseReady: (date: string) => input.ready !== false && isUnifiedStockCloseReady(date, now),
     isUnifiedStockCloseQuoteForDate, marketSessionDateFromBeijingTradeTimestamp, isTrustedMemberCalendarClose,

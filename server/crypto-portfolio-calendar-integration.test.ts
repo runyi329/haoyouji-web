@@ -6,6 +6,7 @@ import { pendingCryptoCalendarSnapshot } from './shared/crypto-portfolio-calenda
 import { CRYPTO_PORTFOLIO_POLICY_VERSION } from '../shared/crypto-portfolio-policy';
 import { encodeStockCalendarResult, decodeStockCalendarResult } from './stock-calendar-result-cache';
 import { vi } from 'vitest';
+import { stockOverviewSettlementDisplay } from '../client/src/lib/stock-overview-settlement-display';
 vi.mock('./db', () => ({ getDbConnection: () => { throw new Error('禁止连接真实DB'); }, getDbTransactionConnection: () => { throw new Error('禁止连接真实DB'); } }));
 const now = new Date('2026-11-15T16:00:00+08:00');
 const old = [{ snapshotDate: '2026-11-13', marketValue: 123, totalPnl: 23 }, { snapshotDate: '2026-11-14', marketValue: 999, totalPnl: 999 }];
@@ -60,7 +61,19 @@ describe('数字币新旧日历最终接线', () => {
   it('维护页旧日结接口和首页元数据都接新快照，前端尊重不同策略的日历时钟', () => {
     expect(fn('getStockTagDailySnapshots')).toContain('readCryptoPortfolioCalendar(input.categoryId, undefined, new Date(), conn)');
     const ui = readFileSync(new URL('../client/src/pages/LedgerDetailAA.tsx', import.meta.url), 'utf8');
-    expect(ui).toContain('stockUsesCryptoPolicy: (stockOverview.points || []).some(isCryptoPortfolioCalendarPoint)');
+    expect(ui).toContain('stockSettlementSummary: stockSummary');
+    expect(ui).toContain('summary: (tag as any).stockSettlementSummary');
+    expect(ui).toContain('stockDisplay!.dailyPnl');
+    expect(ui).not.toContain('stockUsesCryptoPolicy: (stockOverview.points || []).some(isCryptoPortfolioCalendarPoint)');
+    for (const settlementPolicy of ['stock-trading-day', 'mixed-crypto-natural-day']) {
+      const expectedDate = settlementPolicy === 'stock-trading-day' ? '2026-11-20' : '2026-11-21';
+      const result = stockOverviewSettlementDisplay({ summary: { settlementPolicy, expectedDate },
+        points: [{ ...fresh('2026-11-20'), dailyPnl: 8, dailyPnlReady: true }], expectedStockDate: '2026-11-20', expectedCryptoDate: '2026-11-21' });
+      expect(result.expectedDate).toBe(expectedDate);
+      expect(result.usesCryptoPolicy).toBe(settlementPolicy === 'mixed-crypto-natural-day');
+      expect(result.dailyPnl).toBe(settlementPolicy === 'stock-trading-day' ? 8 : null);
+      expect(result.confirmedAsOf).toBe('2026-11-20');
+    }
     expect(ui).toContain('millisecondsUntilStockCalendarWake(new Date(), watchingCrypto)');
     expect(ui).toContain('isCrypto ? crossedCryptoBoundary : crossedBoundary');
   });
