@@ -266,6 +266,40 @@ function R1StockPresentationTabs({ props, context }: { props: Props; context: Le
 }
 
 export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false, effectiveUserId, identityScoped = false, presentationMode = "legacy" }: Props & { presentationMode?: "legacy" | "user" | "admin" }) {
+  function renderHoldingDerivationDetail(detail: any, participantView: boolean, usdtCnyRate: number | null) {
+    const isUsdt = detail.nativeCurrency === 'USDT';
+    const useNativeMain = isUsdt && [detail.entryPrice, detail.purchaseValue, detail.currentPrice, detail.currentValue, detail.floatingPnl].some(value => value == null || !Number.isFinite(value));
+    const currency: StockCurrency = useNativeMain ? 'USDT' : 'CNY';
+    const floatingPnl = useNativeMain ? detail.nativeFloatingPnl : detail.floatingPnl;
+    const hasNativeQuote = detail.nativeCurrentPrice != null && Number.isFinite(detail.nativeCurrentPrice);
+    const pnlText = isUsdt && (floatingPnl == null || !Number.isFinite(floatingPnl))
+      ? hasNativeQuote ? '—' : '待报价'
+      : floatingPnl === null ? '待报价' : signedMoney(floatingPnl, currency);
+    const pnlUnknown = isUsdt ? floatingPnl == null || !Number.isFinite(floatingPnl) : floatingPnl === null;
+    const renderCalculation = (native: boolean) => {
+      const calculationCurrency: StockCurrency = native ? 'USDT' : 'CNY';
+      const entryPrice = native ? detail.nativeEntryPrice : detail.entryPrice;
+      const purchaseValue = native ? detail.nativePurchaseValue : detail.purchaseValue;
+      const currentPrice = native ? detail.nativeCurrentPrice : detail.currentPrice;
+      const currentValue = native ? detail.nativeCurrentValue : detail.currentValue;
+      const pnl = native ? detail.nativeFloatingPnl : detail.floatingPnl;
+      const currentPriceUnknown = native ? currentPrice == null || !Number.isFinite(currentPrice) : currentPrice === null;
+      const currentValueText = currentValue === null
+        ? native && !currentPriceUnknown ? '—' : '当前持仓价值（待更新）'
+        : money(currentValue, 2, calculationCurrency);
+      return <>
+        <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} {portfolioQuantityUnit(detail.symbol)} × {money(entryPrice, 2, calculationCurrency)} = <b className="font-medium text-[#222222]">{money(purchaseValue, 2, calculationCurrency)}</b></div><div>当前：{currentPriceUnknown ? "待更新" : `${formatQuantity(detail.quantity)} ${portfolioQuantityUnit(detail.symbol)} × ${money(currentPrice, 2, calculationCurrency)} = ${money(currentValue, 2, calculationCurrency)}`}</div></div>
+        <div className="mt-1.5 text-gray-500">本批浮动盈亏 = {participantView ? <>{money(purchaseValue, 2, calculationCurrency)} − {currentValueText}</> : <>{currentValueText} − {money(purchaseValue, 2, calculationCurrency)}</>}{pnl === null ? "" : ` = ${signedMoney(pnl, calculationCurrency)}`}</div>
+      </>;
+    };
+    return <div key={detail.positionNumber} className="rounded-xl border border-[#E8E8E8] bg-white p-3 text-[11px]">
+      <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{portfolioDisplaySymbol(detail.symbol)}</span>{detail.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{detail.exchange}</span>}</div><span className={`shrink-0 font-semibold ${pnlUnknown ? "text-gray-400" : floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{pnlText}</span></div>
+      {renderCalculation(useNativeMain)}
+      {isUsdt && !useNativeMain && <div className="mt-2 border-t border-gray-100 pt-1 text-[10px] text-gray-500"><div>原币明细 · USDT</div>{renderCalculation(true)}</div>}
+      {isUsdt && (useNativeMain || usdtCnyRate === null) && <div className="mt-1.5 text-[10px] text-amber-700">{usdtCnyRate === null ? '人民币汇率暂不可用' : '人民币参考暂不可用'}</div>}
+    </div>;
+  }
+
   const utils = trpc.useUtils();
   const { user: currentUser } = useAuth();
   const isR1Presentation = presentationMode !== "legacy";
@@ -314,13 +348,20 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         ? null
         : cnyValue / nativeRate;
     const showUsd = nativeCurrency !== 'CNY' && displayUsdValue !== null;
-    const renderAmount = (amountValue: number | null, currency: StockCurrency, secondary = false) => {
+    const renderAmount = (amountValue: number | null, currency: StockCurrency, secondary = false, forceCurrency = false) => {
       const formatted = signed ? signedMoney(amountValue, currency) : money(amountValue, 2, currency);
       const unit = portfolioQuotePrefix(currency);
-      const displayAmount = hideCurrency ? formatted.replace(unit, '') : formatted;
+      const displayAmount = hideCurrency && !forceCurrency ? formatted.replace(unit, '') : formatted;
       const decimalIndex = displayAmount.lastIndexOf('.');
       return <>{smallDecimals && !secondary && decimalIndex >= 0 ? <>{displayAmount.slice(0, decimalIndex)}<span className="text-[9px] font-normal opacity-80">{displayAmount.slice(decimalIndex)}</span></> : displayAmount}</>;
     };
+    if (nativeCurrency === 'USDT' && cnyValue === null && hasExactUsdValue) {
+      const wrapFallback = (className: string) => `${className.replace(/\bwhitespace-nowrap\b/g, '')} whitespace-normal break-words`;
+      return <>
+        <div className={wrapFallback(mainClassName)}>{renderAmount(displayUsdValue, 'USDT', false, true)}</div>
+        <div className={wrapFallback(subClassName)}>{nativeRate === null ? '人民币汇率暂不可用' : '人民币参考暂不可用'}</div>
+      </>;
+    }
     return <>
       <div className={mainClassName}>{renderAmount(cnyValue, 'CNY')}</div>
       {showUsd && <div className={subClassName}>{hasExactUsdValue ? '' : '≈ '}{renderAmount(displayUsdValue, nativeCurrency, true)}</div>}
@@ -852,11 +893,18 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         const currentValue = holding.myHolding?.marketValue === null || holding.myHolding?.marketValue === undefined
           ? null
           : Number(holding.myHolding.marketValue);
+        const nativeEntryPrice = holding.myHolding?.nativeEntryPrice == null || !Number.isFinite(holding.myHolding.nativeEntryPrice) ? null : Number(holding.myHolding.nativeEntryPrice);
         return {
           positionNumber: String(holding.positionNumber).padStart(2, "0"),
           stockName: String(holding.stockName || "股票"),
           symbol: String(holding.symbol || ""),
           exchange: holding.exchange || null,
+          nativeCurrency: holding.nativeCurrency,
+          nativeEntryPrice,
+          nativeCurrentPrice: holding.nativeMarketPrice == null || !Number.isFinite(holding.nativeMarketPrice) ? null : Number(holding.nativeMarketPrice),
+          nativePurchaseValue: nativeEntryPrice === null ? null : quantity * nativeEntryPrice,
+          nativeCurrentValue: holding.myHolding?.nativeMarketValue == null || !Number.isFinite(holding.myHolding.nativeMarketValue) ? null : Number(holding.myHolding.nativeMarketValue),
+          nativeFloatingPnl: holding.myHolding?.nativeFloatingPnl == null || !Number.isFinite(holding.myHolding.nativeFloatingPnl) ? null : Number(holding.myHolding.nativeFloatingPnl),
           quantity,
           entryPrice,
           purchaseValue,
@@ -952,6 +1000,12 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           stockName: String(holding.stockName || "股票"),
           symbol: String(holding.symbol || ""),
           exchange: holding.exchange || null,
+          nativeCurrency: holding.nativeCurrency,
+          nativeEntryPrice: holding.nativeUnitCost == null || !Number.isFinite(holding.nativeUnitCost) ? null : Number(holding.nativeUnitCost),
+          nativeCurrentPrice: holding.nativeMarketPrice == null || !Number.isFinite(holding.nativeMarketPrice) ? null : Number(holding.nativeMarketPrice),
+          nativePurchaseValue: holding.accountHolding?.nativeCostValue == null || !Number.isFinite(holding.accountHolding.nativeCostValue) ? null : Number(holding.accountHolding.nativeCostValue),
+          nativeCurrentValue: holding.accountHolding?.nativeMarketValue == null || !Number.isFinite(holding.accountHolding.nativeMarketValue) ? null : Number(holding.accountHolding.nativeMarketValue),
+          nativeFloatingPnl: holding.accountHolding?.nativeFloatingPnl == null || !Number.isFinite(holding.accountHolding.nativeFloatingPnl) ? null : Number(holding.accountHolding.nativeFloatingPnl),
           quantity,
           entryPrice,
           purchaseValue,
@@ -1675,11 +1729,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
             <div>
               <div className="mb-1.5 text-xs font-semibold text-[#333333]">按{participantView ? "参与" : "账户"}持仓编号逐笔推导</div>
               <div className="space-y-2">
-                {holdingSummary.details.map((detail: any) => <div key={detail.positionNumber} className="rounded-xl border border-[#E8E8E8] bg-white p-3 text-[11px]">
-                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{portfolioDisplaySymbol(detail.symbol)}</span>{detail.exchange && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium text-[#1565C0]">{detail.exchange}</span>}</div><span className={`shrink-0 font-semibold ${detail.floatingPnl === null ? "text-gray-400" : detail.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{detail.floatingPnl === null ? "待报价" : signedMoney(detail.floatingPnl, portfolioCurrency)}</span></div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} {portfolioQuantityUnit(detail.symbol)} × {money(detail.entryPrice, 2, portfolioCurrency)} = <b className="font-medium text-[#222222]">{money(detail.purchaseValue, 2, portfolioCurrency)}</b></div><div>当前：{detail.currentPrice === null ? "待更新" : `${formatQuantity(detail.quantity)} ${portfolioQuantityUnit(detail.symbol)} × ${money(detail.currentPrice, 2, portfolioCurrency)} = ${money(detail.currentValue, 2, portfolioCurrency)}`}</div></div>
-                  <div className="mt-1.5 text-gray-500">本批浮动盈亏 = {participantView ? <>{money(detail.purchaseValue, 2, portfolioCurrency)} − {detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)}</> : <>{detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)} − {money(detail.purchaseValue, 2, portfolioCurrency)}</>}{detail.floatingPnl === null ? "" : ` = ${signedMoney(detail.floatingPnl, portfolioCurrency)}`}</div>
-                </div>)}
+                {holdingSummary.details.map((detail: any) => renderHoldingDerivationDetail(detail, participantView, usdtCnyRate))}
               </div>
             </div>
             <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[10px] leading-4 text-gray-500">{participantView ? "按个人对应批次的买入价与当前报价计算；盘中报价每五分钟更新，15:05 固化盘尾快照。当前价格未更新的批次不会纳入总浮动盈亏。" : "按各股票批次的实际持仓成本与当前报价计算；盘中报价每五分钟更新，15:05 固化盘尾快照。当前价格未更新的批次不会纳入账户浮动盈亏。"}</div>
