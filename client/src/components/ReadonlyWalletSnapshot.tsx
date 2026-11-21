@@ -67,7 +67,9 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   const cnyBalance = Number(snapshot?.cnyBalanceSummary?.total ?? snapshot?.cnyBalance ?? 0);
   const unifiedPrices = ((unifiedPriceData as any)?.prices ?? {}) as Record<string, number>;
   const liveUsdtCnyRate = Number((unifiedPriceData as any)?.usdtCnyRate ?? 0);
-  const usdtCnyRate = liveUsdtCnyRate > 0 ? liveUsdtCnyRate : Number(snapshot?.usdtCnyRate || 7.25);
+  const hasUsdtCnyRate = Number.isFinite(liveUsdtCnyRate) && liveUsdtCnyRate > 0
+    && (unifiedPriceData as any)?.usdtCnyFx?.stale !== true;
+  const usdtCnyRate = hasUsdtCnyRate ? liveUsdtCnyRate : 0;
   // 成员快照与正式钱包都展示全局真实持仓，不因项目可交易币种配置隐藏已持有或担保的币。
   const multiAssets = (snapshot?.multiAssetBalances || [])
     .map((asset: any) => {
@@ -155,7 +157,7 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
             <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}>
               <div className="text-[10px] tracking-[.08em] text-[#a88942]">数字资产总估值</div>
               <div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(digitalTotalUsdt)}</span><span className="text-sm font-semibold text-[#a88942]">USDT</span></div>
-              <div className="mt-1 text-[11px] text-white/45">≈ ¥{money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值</div>
+              <div className="mt-1 text-[11px] text-white/45">{hasUsdtCnyRate ? `≈ ¥${money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值` : '人民币汇率暂不可用'}</div>
             </div>
             <div className="mb-2 flex items-center justify-between px-1 text-xs">
               <span className="font-semibold text-white/85">我的数字资产</span>
@@ -175,7 +177,7 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
               }) : <div className="py-6 text-center text-xs text-white/40">暂无对应资金明细</div>}
             </div>
           </> : <>
-            <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}><div className="text-[10px] tracking-[.08em] text-[#a88942]">人民币账户余额</div><div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(cnyBalance)}</span><span className="text-sm font-semibold text-[#a88942]">CNY</span></div><div className="mt-1 text-[11px] text-white/45">≈ {money(cnyBalance / usdtCnyRate)} USDT</div></div>
+            <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}><div className="text-[10px] tracking-[.08em] text-[#a88942]">人民币账户余额</div><div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(cnyBalance)}</span><span className="text-sm font-semibold text-[#a88942]">CNY</span></div><div className="mt-1 text-[11px] text-white/45">{hasUsdtCnyRate ? `≈ ${money(cnyBalance / usdtCnyRate)} USDT` : '人民币汇率暂不可用'}</div></div>
             <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}><div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">CNY</span></div>{cnyFlows.length ? cnyFlows.map((entry: any, index: number) => { const amount = Number(entry.amount || 0); const isIn = amount >= 0; return <div key={entry.id} className="flex items-start justify-between gap-3 py-2.5" style={{ borderBottom: index < cnyFlows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div className="flex min-w-0 items-start gap-2.5"><span className="relative mt-0.5"><SnapshotAssetIcon assetCode="CNY" /><span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2" style={{ background: isIn ? '#6ee7b7' : '#fca5a5', borderColor: '#111' }} /></span><div className="min-w-0"><div className="truncate text-xs font-medium text-white">{String(entry.note || '').replace(/^\[CNY\]\s*/, '') || (isIn ? '入账' : '扣除')} <span className="font-normal text-white/45">· CNY</span></div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime(entry.created_at || entry.createdAt, true)}</div></div></div><div className="shrink-0 text-right"><div className="text-sm font-bold tabular-nums" style={{ color: isIn ? '#6ee7b7' : '#fca5a5' }}>{isIn ? '+' : '-'}{Math.abs(amount).toFixed(2)} CNY</div></div></div>; }) : <div className="py-6 text-center text-xs text-white/40">暂无人民币资金明细</div>}</div>
           </>}
         </div>

@@ -1,3 +1,4 @@
+import { getOrderUsdtCnyRate, formatFxEstimate } from '@shared/usdt-cny-display';
 /**
  * FunderOrderDetailModal.tsx
  * 资金方订单详情弹窗
@@ -179,20 +180,21 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { fromcoin: 'USDT', tocoin: 'CNY', money: 1 },
     { staleTime: 3000 }
   );
-  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
+  const detailSnapshot = (() => { try { const raw = order.settlement_snapshot; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
+  const cnyRate = getOrderUsdtCnyRate(['settled', 'completed'].includes(String(order.status)), detailSnapshot?.usdtCnyRate, cnyRateData) ?? Number.NaN;
   const rawAmountCurrency = String(order.amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
   const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
   const amountUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'USDT' : amountCurrency;
   const storedAmountUsdt = order.asset_type === 'stock' ? parseFloat(order.amount || '0') / cnyRate : parseFloat(order.amount || '0');
-  const totalU = storedAmountUsdt > 0
+  const totalU = !Number.isFinite(storedAmountUsdt) ? Number.NaN : storedAmountUsdt > 0
     ? storedAmountUsdt
     : amountCurrency === 'CNY'
       ? (qty > 0 && price > 0 ? qty * price / cnyRate : 0)
       : (qty > 0 && price > 0 ? qty * price : 0);
-  const calculatedFinancingDisplayAmount = amountCurrency === 'CNY' ? totalU * cnyRate : totalU;
+  const calculatedFinancingDisplayAmount = order.asset_type === 'stock' && amountCurrency === 'CNY' ? parseFloat(order.amount || '0') : amountCurrency === 'CNY' ? totalU * cnyRate : totalU;
   const financingDisplayConfig = (() => {
     try {
       const raw = order.display_config;
@@ -207,9 +209,9 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
   const legacyInterestCurrency = legacyInterestCurrencyRaw === 'U' ? 'USDT' : legacyInterestCurrencyRaw === 'RMB' ? 'CNY' : legacyInterestCurrencyRaw;
   const financingDisplayAmount = savedFinancingInputAmount > 0 && savedFinancingInputCurrency === amountCurrency
     ? savedFinancingInputAmount
-    : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
+    : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && (!Number.isFinite(calculatedFinancingDisplayAmount) || Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05)
       ? legacyInterestBase
-      : calculatedFinancingDisplayAmount;
+      : qty > 0 && price > 0 && amountCurrency === 'CNY' ? qty * price : calculatedFinancingDisplayAmount;
   const detailAssetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
     ? 'financing'
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
@@ -282,7 +284,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             <div className="text-xs text-white/70 mb-1">{displayFinancingAsPrimary ? `${primaryAmountLabel} (${amountCurrency})` : `币种数量 (${order.asset_type === 'crypto_option' ? '张' : order.coin})`}</div>
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-4xl font-bold text-white tabular-nums">
-                {displayFinancingAsPrimary ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
+                {displayFinancingAsPrimary ? formatFxEstimate(financingDisplayAmount, 'toLocaleString', undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
               </span>
               <span className="text-xl font-semibold text-white/80">{displayFinancingAsPrimary ? amountUnit : (order.asset_type === 'crypto_option' ? '张' : order.coin)}</span>
             </div>
@@ -294,8 +296,8 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             <div className="flex items-center justify-between">
               <div className="text-sm text-white/60">
                 {displayFinancingAsPrimary && amountCurrency === 'CNY'
-                  ? `折算 ${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`
-                  : `${primaryAmountLabel} ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
+                  ? `折算 ${formatFxEstimate(totalU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} USDT`
+                  : `${primaryAmountLabel} ${formatFxEstimate(financingDisplayAmount, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                 {order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消'}
@@ -315,12 +317,12 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                   className="text-3xl font-bold tabular-nums"
                   style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                 >
-                  {displayAccrued.toFixed(2)}
+                  {formatFxEstimate(displayAccrued, 'toFixed', 2)}
                 </span>
                 <span className="text-base font-medium text-blue-400">{interestUnit}</span>
               </div>
               <div className="text-xs text-gray-400 mb-0.5">
-                ≈{alternateAccrued.toFixed(rateCurrency === 'CNY' ? 4 : 2)} {alternateInterestUnit}
+                ≈{formatFxEstimate(alternateAccrued, 'toFixed', rateCurrency === 'CNY' ? 4 : 2)} {alternateInterestUnit}
               </div>
               <div className="text-xs text-gray-400">
                 基数 {parseFloat(order.interest_base).toLocaleString()} × {normalizeFunderAnnualRate(order.interest_rate_annual)}% / 年

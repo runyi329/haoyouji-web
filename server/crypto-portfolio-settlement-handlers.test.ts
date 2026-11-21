@@ -120,10 +120,11 @@ function edit() {
 }
 const editInput = { ledgerId: 37, categoryId: 81, eventId: 91, userId: 28, executionPrice: 125, actualTradedAt: '2026-11-14 16:00:00' };
 function overview(state: ReturnType<typeof db>, old: any[]) {
-  return actualFunctions(['buildPortfolio'], { ...common(), stockCurrency: instruments.portfolioCurrency, stockMarket: instruments.portfolioMarket,
+  return actualFunctions(['buildPortfolio', 'readLiveUsdCnyRate'], { ...common(), stockCurrency: instruments.portfolioCurrency, stockMarket: instruments.portfolioMarket,
     getActiveLots: vi.fn(async () => state.opening() ? [{ symbol: BTC, remainingQuantity: 0 }] : []),
     getLatestReferenceQuotes: async () => ({}), getLatestQuotes: async () => ({}), getLatestIntradayQuotes: async () => ({}), getUsStockExchangeMap: async () => ({}),
-    getLiveCryptoQuotes: async () => ({}), readLiveUsdtCnyRate: async () => null, mergeLivePortfolioQuoteMaps: () => ({}), getSoldLots: async () => [], getUsdtCnyRate: () => 7,
+    getLiveCryptoQuotes: async () => ({}), readLiveUsdtCnyRate: async () => null, mergeLivePortfolioQuoteMaps: () => ({}), getSoldLots: async () => [],
+    getLiveStockUsdCnyQuote: async () => ({ rate: 7, pair: 'USD/CNY', stale: false, source: 'sina_usdcny', asOf: new Date().toISOString() }),
     getRealizedPnl: async () => 0, summarizePositionsByCurrency: () => [], summarizePositionsInCny: () => ({ costValue: 0, marketValue: 0, floatingPnl: 0, unpricedPositionCount: 0, fxUnavailable: false }),
     getLatestDailySnapshots: async () => old, getCryptoPortfolioActivationDate, readCryptoPortfolioCalendar, mergeCryptoPortfolioCalendarSnapshots,
   }).buildPortfolio;

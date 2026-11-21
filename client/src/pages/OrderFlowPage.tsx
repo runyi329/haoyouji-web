@@ -1,3 +1,4 @@
+import { getUsdtCnyRate, formatFxEstimate } from '@shared/usdt-cny-display';
 /**
  * OrderFlowPage.tsx
  * 订单流管理页面
@@ -531,14 +532,11 @@ export default function OrderFlowPage() {
     if (ethPrice && ethPrice > 0) setCurrentPrice(ethPrice);
   }, [cryptoPricesRaw]);
   // USDT/CNY 实时汇率
-  const [cnyRate, setCnyRate] = useState<number>(7.28);
+  const [cnyRate, setCnyRate] = useState<number>(Number.NaN);
   // 走服务器tRPC获取汇率（60秒刷新）
-  const { data: rateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
+  const { data: rateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USDT', tocoin: 'CNY', money: 1 }, { refetchInterval: 60000, staleTime: 30000 });
   useEffect(() => {
-    if (rateData?.success && rateData.money) {
-      const r = parseFloat(rateData.money);
-      if (!isNaN(r) && r > 0) setCnyRate(r);
-    }
+    setCnyRate(getUsdtCnyRate(rateData) ?? Number.NaN);
   }, [rateData]);
   // 北京时间实时时钟
   const [bjTime, setBjTime] = useState('');
@@ -1187,8 +1185,8 @@ export default function OrderFlowPage() {
                   </div>
                   {tpPnl != null && (
                     <div style={{ fontSize: '0.6rem', color: '#222222', marginTop: 2, fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
-                      ≈¥{Math.round(tpPnl * cnyRate).toLocaleString('zh-CN')}元
-                      <span style={{ color: '#888888', marginLeft: 3 }}>实时汇率 {cnyRate.toFixed(4)}</span>
+                      ≈¥{formatFxEstimate(Math.round(tpPnl * cnyRate), 'toLocaleString', 'zh-CN')}元
+                      <span style={{ color: '#888888', marginLeft: 3 }}>实时汇率 {formatFxEstimate(cnyRate, 'toFixed', 4)}</span>
                     </div>
                   )}
                 </div>

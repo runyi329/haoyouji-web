@@ -1,3 +1,4 @@
+import { finitePositive, getUsdtCnyRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue } from "react";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -6,7 +7,10 @@ import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLef
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
-import { calculateFunderInterestDays, formatFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
+import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
+function formatFunderPendingInterest(value: number, contract: boolean): string {
+  return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
+}
 
 // 银卡只用于编辑中的特定实时预览。首屏订单列表不再下载和解析其完整实现。
 const FunderOrderCardV2Silver = React.lazy(async () => {
@@ -456,7 +460,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   ];
   // 结息记录相关 state
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null); // 当前展开结息面板的订单id
-  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '6.75', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [showRecycleBin, setShowRecycleBin] = useState(false);
@@ -1657,7 +1661,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 仅在新增或编辑共享担保订单时加载确认清单，列表首屏不占用连接。
     { enabled: showForm && ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 30_000, refetchOnWindowFocus: false }
   );
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USDT", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   // 获取37号账本可引用标签。利息暂停与保证金查询暂停是独立状态，均保留历史引用能力。
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },
@@ -1671,12 +1675,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ? `${tag?.tagName || ''}（${statuses.join('；')}，可引用历史数据）`
       : String(tag?.tagName || '');
   };
-  const cnyRate = parseFloat((cnyRateData as any)?.money ?? "6.8") || 6.8;
+  // Number.NaN is internal-only for legacy multi-stage estimates; presentation and writes are guarded.
+  const cnyRate = getUsdtCnyRate(cnyRateData) ?? Number.NaN;
   // 通用折算：任一币种数额 -> USDT 基准（CNY 用 cnyRate，USDT=1，其余按实时价 USDT/枚）
   const toUsdtBase = (val: number, cur: string): number | null => {
     if (isNaN(val)) return null;
     if (cur === 'USDT') return val;
-    if (cur === 'CNY') return val / cnyRate;
+    if (cur === 'CNY') return finitePositive(cnyRate) === null ? null : val / cnyRate;
     const p = formLivePrices[cur];
     if (!p || p <= 0) return null;
     return val * p;
@@ -1685,7 +1690,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const fromUsdtBase = (usdtVal: number, cur: string): number | null => {
     if (isNaN(usdtVal)) return null;
     if (cur === 'USDT') return usdtVal;
-    if (cur === 'CNY') return usdtVal * cnyRate;
+    if (cur === 'CNY') return finitePositive(cnyRate) === null ? null : usdtVal * cnyRate;
     const p = formLivePrices[cur];
     if (!p || p <= 0) return null;
     return usdtVal / p;
@@ -1773,6 +1778,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   const handleAmountCurrencyChange = (nextCurrency: CoinType) => {
     const previousCurrency = formData.amountCurrency;
+    if (previousCurrency !== nextCurrency && [previousCurrency, nextCurrency].includes('CNY') && finitePositive(cnyRate) === null) { toast.error('汇率待更新，暂不能转换金额币种'); return; }
     if (previousCurrency === nextCurrency) return;
 
     const convertQuoteValue = (rawValue: string, field: 'amount' | 'price') => {
@@ -3186,7 +3192,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已添加');
-      setPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' });
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       trpcUtils.ledger.funderGetInterestPayments.invalidate();
       refetchEditingPayments();
@@ -3199,7 +3205,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     onSuccess: () => {
       toast.success('结息记录已更新');
       setEditingPaymentId(null);
-      setPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' });
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       trpcUtils.ledger.funderGetInterestPayments.invalidate();
       refetchEditingPayments();
@@ -3652,7 +3658,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       if (order.asset_type === 'stock') { setAmountInputValue(String(order.amount)); return; }
       if (normalizedEditCurrency === 'USDT') { setAmountInputValue(String(order.amount)); return; }
       const conv = fromUsdtBase(amtU, normalizedEditCurrency);
-      setAmountInputValue(conv !== null && !isNaN(conv) ? parseFloat(conv.toFixed(2)).toString() : String(order.amount));
+      setAmountInputValue(conv !== null && Number.isFinite(conv) ? parseFloat(conv.toFixed(2)).toString() : '');
     })();
     // 编辑已有订单：若已有计息基数则视为手动值，不被融资金额自动覆盖
     interestBaseTouchedRef.current = !!(order.interest_base && parseFloat(order.interest_base) > 0);
@@ -3765,6 +3771,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
 
   const handleSubmit = () => {
+    if (finitePositive(cnyRate) === null && ((formData.assetType !== 'stock' && formData.amountCurrency === 'CNY') || (formData.assetType === 'crypto_option' && optionFormData.premiumDenomination === 'CNY'))) { toast.error('汇率待更新，不能保存需要换汇的金额'); return; }
     if (isActiveJointEditorSegmentSettled) {
       toast.error('该联合订单段已结清，历史数据已锁定；如需更正请使用结清更正流程');
       return;
@@ -4564,7 +4571,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       const baseDraft: SettlementDraft = {
                         interestEndDate: today,
                         settlementPrice: Number.isFinite(livePrice) && livePrice > 0 ? String(livePrice) : '',
-                        settlementExchangeRate: String(cnyRate || ''),
+                        settlementExchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''),
                         settlementOptionMarkPrice: '',
                       };
                       const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
@@ -5229,7 +5236,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   if (usdtEquiv === null) return null;
                   return (
                     <span className="text-xs text-gray-400 -mt-1 block">
-                      ≈ {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                      ≈ {formatFxEstimate(usdtEquiv, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} USDT
                     </span>
                   );
                 })()}
@@ -5482,9 +5489,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-xs">
                         <span className="font-medium text-purple-600">总权利金</span>
                         <span className="text-right font-semibold text-purple-800 tabular-nums">
-                          {summary.totalInDenomination.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })} {summary.denomination}
+                          {formatFxEstimate(summary.totalInDenomination, 'toLocaleString', undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })} {summary.denomination}
                           {summary.denomination !== 'USDT' && summary.totalUsdt !== null && (
-                            <span className="ml-1 font-normal text-purple-500">≈ {summary.totalUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                            <span className="ml-1 font-normal text-purple-500">≈ {formatFxEstimate(summary.totalUsdt, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U</span>
                           )}
                         </span>
                       </div>
@@ -6260,7 +6267,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             return (
                               <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
                                 <span>{snapshotPrice > 0 ? quoteLabel : '最新价'}</span>
-                                <span className="font-semibold tabular-nums">{price === null ? '正在获取最新价' : `${price.toLocaleString()} ${unit}`}</span>
+                                <span className="font-semibold tabular-nums">{price === null ? '正在获取最新价' : `${formatFxEstimate(price, 'toLocaleString')} ${unit}`}</span>
                                 <span className="text-violet-400">{priceDate ? `价格日期 ${formatChineseStockPriceDate(priceDate)}` : updatedAt ? `更新于 ${new Date(updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` : '选择股票后自动带入'}</span>
                               </div>
                             );
@@ -6548,7 +6555,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 <div className="rounded-xl px-4 py-3 space-y-1.5" style={{ background: collateralShareMode === 'self' ? '#FFF7ED' : '#EFF6FF', border: collateralShareMode === 'self' ? '1px solid #FED7AA' : 'none' }}>
                     <div className="flex items-center justify-between text-sm">
                       <span style={{ color: '#6B7280' }}>担保价值</span>
-                      <span className="font-semibold text-blue-700">{computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                      <span className="font-semibold text-blue-700">{formatFxEstimate(computedCollateralValue, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U</span>
                     </div>
                     {computedCollateralGap !== null && (
                       <div className="flex items-center justify-between text-sm">
@@ -6556,7 +6563,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         <span className={`font-semibold ${
                           computedCollateralGap < 0 ? 'text-green-600' : 'text-red-500'
                         }`}>
-                          {computedCollateralGap > 0 ? '+' : ''}{computedCollateralGap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
+                          {computedCollateralGap > 0 ? '+' : ''}{formatFxEstimate(computedCollateralGap, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U
                         </span>
                       </div>
                     )}
@@ -6849,14 +6856,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <div className="mt-2 rounded-md border border-blue-100 bg-white p-2">
                         <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
                           <span>实时试算（U）</span>
-                          <span className="tabular-nums">担保 {formulaPreview.collateralValueU === null ? '加载中' : formulaPreview.collateralValueU.toFixed(2)} · 买入 {formulaPreview.baseValueU === null ? '待填写' : formulaPreview.baseValueU.toFixed(2)} · 本金 {formulaPreview.initialPrincipalU === null ? '待填写' : formulaPreview.initialPrincipalU.toFixed(2)} · 市值 {formulaPreview.marketValueU === null ? '加载中' : formulaPreview.marketValueU.toFixed(2)} · 待结 {formulaPreview.pendingInterestU === null ? '加载中' : formulaPreview.pendingInterestU.toFixed(2)} · 已结 {formulaPreview.paidInterestU === null ? '加载中' : formulaPreview.paidInterestU.toFixed(2)}{canUseCoinNativeCollateralFormula ? ' · 币本位订单盈亏 0.00' : ''}</span>
+                          <span className="tabular-nums">担保 {formulaPreview.collateralValueU === null ? '加载中' : formatFxEstimate(formulaPreview.collateralValueU, 'toFixed', 2)} · 买入 {formulaPreview.baseValueU === null ? '待填写' : formatFxEstimate(formulaPreview.baseValueU, 'toFixed', 2)} · 本金 {formulaPreview.initialPrincipalU === null ? '待填写' : formatFxEstimate(formulaPreview.initialPrincipalU, 'toFixed', 2)} · 市值 {formulaPreview.marketValueU === null ? '加载中' : formatFxEstimate(formulaPreview.marketValueU, 'toFixed', 2)} · 待结 {formulaPreview.pendingInterestU === null ? '加载中' : formatFxEstimate(formulaPreview.pendingInterestU, 'toFixed', 2)} · 已结 {formulaPreview.paidInterestU === null ? '加载中' : formatFxEstimate(formulaPreview.paidInterestU, 'toFixed', 2)}{canUseCoinNativeCollateralFormula ? ' · 币本位订单盈亏 0.00' : ''}</span>
                         </div>
                         <div className="space-y-1.5 text-[10px] leading-4">
                           {([
                             { value: 'principal_coverage', label: '担保差值', formula: '担保物 − 买入价值 − 待结利息 + 已结利息', result: formulaPreview.principalCoverageGapU },
-                            { value: 'floating_pnl', label: '担保＋浮盈', formula: `担保物 + ${formulaPreview.floatingPnlU === null ? '实时浮盈' : `${formulaPreview.floatingPnlU >= 0 ? '+' : ''}${formulaPreview.floatingPnlU.toFixed(2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.floatingPnlGapU },
-                            { value: 'full_value', label: '持仓全额', formula: `${formulaPreview.marketValueU === null ? '实时可变现市值' : `${formulaPreview.marketValueU >= 0 ? '+' : ''}${formulaPreview.marketValueU.toFixed(2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.fullValueGapU },
-                            { value: 'initial_principal', label: '初始本金', formula: `0 − ${formulaPreview.initialPrincipalU === null ? '初始融资金额' : `${formulaPreview.initialPrincipalU.toFixed(2)} u`} − 待结利息 + 已结利息（不计担保/市价/盈亏）`, result: formulaPreview.initialPrincipalGapU },
+                            { value: 'floating_pnl', label: '担保＋浮盈', formula: `担保物 + ${formulaPreview.floatingPnlU === null ? '实时浮盈' : `${formulaPreview.floatingPnlU >= 0 ? '+' : ''}${formatFxEstimate(formulaPreview.floatingPnlU, 'toFixed', 2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.floatingPnlGapU },
+                            { value: 'full_value', label: '持仓全额', formula: `${formulaPreview.marketValueU === null ? '实时可变现市值' : `${formulaPreview.marketValueU >= 0 ? '+' : ''}${formatFxEstimate(formulaPreview.marketValueU, 'toFixed', 2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.fullValueGapU },
+                            { value: 'initial_principal', label: '初始本金', formula: `0 − ${formulaPreview.initialPrincipalU === null ? '初始融资金额' : `${formatFxEstimate(formulaPreview.initialPrincipalU, 'toFixed', 2)} u`} − 待结利息 + 已结利息（不计担保/市价/盈亏）`, result: formulaPreview.initialPrincipalGapU },
                             ...(canUseCoinNativeCollateralFormula ? [{ value: 'coin_native_collateral', label: '币本位担保', formula: `担保物 + 订单盈亏 0.00 u（利息暂不计入）`, result: formulaPreview.coinNativeCollateralGapU }] : []),
                           ]).map(item => {
                             const active = collateralRiskFormula === item.value;
@@ -7548,7 +7555,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   <div className="divide-y divide-indigo-100">
                     {jointSettlementEntries.map((entry) => {
                       const checked = selectedJointSettleSegmentIds.includes(entry.segmentId) && !entry.isSettled;
-                      const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: String(cnyRate || ''), settlementOptionMarkPrice: '' };
+                      const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), settlementOptionMarkPrice: '' };
                       const isHistorical = (draft.interestEndDate || getBeijingToday()) !== getBeijingToday();
                       return (
                         <div key={entry.segmentId} className={entry.isSettled ? 'bg-red-50/60' : 'bg-white'}>
@@ -7863,7 +7870,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>持有资产</div>
                             <div className="flex items-baseline gap-1 flex-wrap mb-1">
                               <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                                {order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}
+                                {order.amount !== null && order.amount !== undefined && order.amount !== '' ? formatFxEstimate(totalU, 'toLocaleString', undefined, { maximumFractionDigits: 0 }) : '0'}
                               </span>
                               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{baseCur === 'CNY' ? 'CNY' : order.coin}</span>
                             </div>
@@ -7904,7 +7911,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             {price > 0 && (
                               <div className="flex items-center justify-between text-xs mt-1">
                                 <span className="text-gray-400">买入价</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate(price, 'toLocaleString')} U</span>
                               </div>
                             )}
                             {qty > 0 && (

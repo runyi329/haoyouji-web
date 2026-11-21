@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { hasLedger52T0PendingOrders, scanLedger52T0PendingOrders } from './ledger52-t0-journal';
+import { getLiveUsdtCnyQuote, peekUsdtCnyQuote } from './usdt-cny-rate';
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 const CRYPTO_SCAN_INTERVAL_MS = 3_000;
 const SLOW_MARKET_SCAN_INTERVAL_MS = 15_000;
@@ -51,7 +52,6 @@ export type T0EthPerpetualMarkSnapshot = {
 const latestPrices: Record<string, PriceEntry> = {};
 const priceHealth: Record<string, PriceHealth> = {};
 const t0EthPerpetualMarkListeners = new Set<(snapshot: T0EthPerpetualMarkSnapshot) => void>();
-let usdtCnyRate = 6.7;
 let scanInProgress = false;
 let nextScanTimer: NodeJS.Timeout | null = null;
 let lastSlowMarketScanAt = 0;
@@ -1066,22 +1066,12 @@ async function fetchOkxSpotQuote(instId: string): Promise<{ price: number; patch
 }
 
 /**
- * 37号混合币种股票标签在北京时间15:05固化日结前显式调用，避免将上一轮扫描
- * 的旧汇率写为当天的统一人民币结算汇率。
+ * 刷新共用实时参考报价；历史15:05证据仍由crypto-portfolio-fx独立读取。
+ * 0只表示同步旧接口的缺价哨兵，调用方不能据此做除法或定格结算。
  */
 export async function refreshUsdtCnyRate(): Promise<number> {
-  try {
-    const data = await fetchCryptoJson('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY');
-    const rate = Number(Array.isArray(data) ? data[0]?.last : 0);
-    if (rate > 5 && rate < 10) usdtCnyRate = rate;
-  } catch {
-    try {
-      const data = await fetchCryptoJson('https://www.okx.com/api/v5/market/ticker?instId=USDT-CNY');
-      const rate = Number(data?.code === '0' ? data.data?.[0]?.last : 0);
-      if (rate > 5 && rate < 10) usdtCnyRate = rate;
-    } catch {}
-  }
-  return usdtCnyRate;
+  const quote = await getLiveUsdtCnyQuote();
+  return quote && !quote.stale ? quote.rate : 0;
 }
 
 async function updateCrypto(coin: string) {
@@ -1291,7 +1281,7 @@ async function scanPricesInternal() {
   await updateAllCryptoFast();
   if (!usdtCnyRefreshInProgress) {
     usdtCnyRefreshInProgress = true;
-    // 人民币估值与数字币报价同频更新；失败时保留上一笔有效汇率。
+    // 扫描与页面共享TTL和single-flight；过期/失败不保留假实时值。
     void refreshUsdtCnyRate()
       .catch((error) => console.warn('[行情] USDT/CNY 刷新失败:', error))
       .finally(() => {
@@ -1422,7 +1412,7 @@ export function getMarketPriceHealth() {
   return result;
 }
 
-export function getUsdtCnyRate() { return usdtCnyRate; }
+export function getUsdtCnyRate() { return peekUsdtCnyQuote()?.rate ?? 0; }
 
 export async function testCoinPrice(symbol: string): Promise<{ price: number; source: string; supported: boolean }> {
   const coin = symbol.toUpperCase().trim();

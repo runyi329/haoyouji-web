@@ -1,3 +1,4 @@
+import { finitePositive, getUsdtCnyRate, getUsdCnyRate, getUsdtCnyRateFromPrices, getOrderUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
 // ===== FunderOrderCard 共享组件 =====
 // @refresh reset
 // 此文件由 FunderManagement.tsx 抽取，前后端统一使用此组件
@@ -9,7 +10,10 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
-import { calculateFunderInterestDays, formatFunderPendingInterest, getFunderJointSegmentDisplayOrder, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
+import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
+function formatFunderPendingInterest(value: number, contract: boolean): string {
+  return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
+}
 import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
@@ -212,7 +216,7 @@ function formatFunderFloatingPnlForDisplay(
   keepTwoDecimalsBelowThreshold = false
 ): string {
   const hideFraction = Math.abs(value) >= 100_000;
-  return value.toLocaleString(undefined, {
+  return formatFxEstimate(value, 'toLocaleString', undefined, {
     minimumFractionDigits: hideFraction
       ? 0
       : keepTwoDecimalsBelowThreshold
@@ -780,9 +784,9 @@ export function OwnerCollaborationInfoButton({ order, ledgerId }: { order: any; 
                 <div className="flex items-center justify-between gap-3 text-xs"><span className="text-violet-700">可见范围</span><span className="font-medium text-violet-800">{modeLabel[data.mode] || '仅本人金额'}</span></div>
                 <div className="mt-1 flex items-center justify-between gap-3 text-xs"><span className="text-violet-700">共同拥有者</span><span className="font-medium text-violet-800">{data.ownerCount} 人</span></div>
               </div>
-              {(data.totalByCurrency || []).length > 0 && data.mode !== 'self' && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-1.5 text-xs font-medium text-gray-500">订单总体本金</div><div className="flex flex-wrap gap-x-4 gap-y-1">{data.totalByCurrency.map((total: any) => <span key={total.currency} className="text-sm font-semibold tabular-nums text-gray-800">{Number(total.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {total.currency === 'CNY' ? '元' : 'U'}</span>)}</div></div>}
+              {(data.totalByCurrency || []).length > 0 && data.mode !== 'self' && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-1.5 text-xs font-medium text-gray-500">订单总体本金</div><div className="flex flex-wrap gap-x-4 gap-y-1">{data.totalByCurrency.map((total: any) => <span key={total.currency} className="text-sm font-semibold tabular-nums text-gray-800">{formatFxEstimate(Number(total.amount), 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {total.currency === 'CNY' ? '元' : 'U'}</span>)}</div></div>}
               {data.mode === 'self' && <div className="rounded-xl border border-gray-100 px-3 py-3 text-sm text-gray-500">当前设置仅显示本人独立订单数据；其他拥有者的金额不会显示。</div>}
-              {(data.visibleOwners || []).length > 0 && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-2 text-xs font-medium text-gray-500">获授权可见的拥有者</div><div className="space-y-2">{data.visibleOwners.map((owner: any) => <div key={owner.userId} className="flex items-center justify-between gap-3 text-sm"><span className="truncate text-gray-700">{owner.name}{owner.userId === viewerUserId ? '（本人）' : ''}</span><span className="shrink-0 font-semibold tabular-nums text-gray-800">{Number(owner.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {owner.amountCurrency === 'CNY' ? '元' : 'U'}</span></div>)}</div></div>}
+              {(data.visibleOwners || []).length > 0 && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-2 text-xs font-medium text-gray-500">获授权可见的拥有者</div><div className="space-y-2">{data.visibleOwners.map((owner: any) => <div key={owner.userId} className="flex items-center justify-between gap-3 text-sm"><span className="truncate text-gray-700">{owner.name}{owner.userId === viewerUserId ? '（本人）' : ''}</span><span className="shrink-0 font-semibold tabular-nums text-gray-800">{formatFxEstimate(Number(owner.amount || 0), 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {owner.amountCurrency === 'CNY' ? '元' : 'U'}</span></div>)}</div></div>}
               <p className="px-1 text-[11px] leading-5 text-gray-400">不展示其他拥有者的备注、担保物、钱包及结息流水。结算后，本订单仍保留完整历史记录。</p>
             </div>}
         </div>
@@ -1046,7 +1050,7 @@ export function FunderOrderCard({
   const trpcUtils = trpc.useUtils();
   // 结息面板
   const [_intShowPayment, _intSetShowPayment] = useState<number | null>(null);
-  const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '6.75', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [_intEditingPaymentId, _intSetEditingPaymentId] = useState<number | null>(null);
   const [_intShowPaymentDatePicker, _intSetShowPaymentDatePicker] = useState(false);
   const [showPeriodStartPicker, setShowPeriodStartPicker] = useState(false);
@@ -1250,7 +1254,7 @@ export function FunderOrderCard({
     { enabled: _activeShowPaymentPanelForQuery === order.id && Boolean(selectedJointPaymentSegmentId && selectedJointPaymentUserId) }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intDeletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
@@ -1263,7 +1267,7 @@ export function FunderOrderCard({
   });
   // 编辑结息记录的内联表单状态
   const [editPaymentId, setEditPaymentId] = useState<number | null>(null);
-  const [editPaymentForm, setEditPaymentForm] = useState<{ amount: string; currency: 'CNY' | 'U'; exchangeRate: string; payDate: string; note: string; periodStart: string; periodEnd: string }>({ amount: '', currency: 'U', exchangeRate: '6.75', payDate: '', note: '', periodStart: '', periodEnd: '' });
+  const [editPaymentForm, setEditPaymentForm] = useState<{ amount: string; currency: 'CNY' | 'U'; exchangeRate: string; payDate: string; note: string; periodStart: string; periodEnd: string }>({ amount: '', currency: 'U', exchangeRate: '', payDate: '', note: '', periodStart: '', periodEnd: '' });
   const [showEditStartPicker, setShowEditStartPicker] = useState(false);
   const [showEditEndPicker, setShowEditEndPicker] = useState(false);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
@@ -1345,13 +1349,11 @@ export function FunderOrderCard({
   ];
   // ===== END 内部 fallback =====
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: "USD", tocoin: "CNY", money: 1 },
+    { fromcoin: "USDT", tocoin: "CNY", money: 1 },
     { enabled: !isSettlementFinal, staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
   const frozenCnyRate = Number(settlementSnapshot?.usdtCnyRate);
-  const cnyRate = isPricingFrozen && Number.isFinite(frozenCnyRate) && frozenCnyRate > 0
-    ? frozenCnyRate
-    : (parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8);
+  const cnyRate = getOrderUsdtCnyRate(isPricingFrozen, settlementSnapshot?.usdtCnyRate, _cnyRateData) ?? Number.NaN;
   // 当前个人视角的第一段和后续段均可独立加入该用户全部跨订单共享订单。
   // 参与者自己的快照同样只进入参与者自己的池；“他人”视角则永不加入。
   const isSharedPoolSegmentView = String((order as any)._sharedPoolSegmentId || (order as any).joint_segment_id || '__primary__') !== '__primary__';
@@ -1535,6 +1537,14 @@ export function FunderOrderCard({
     const coefficient = Number(_parsedCollateralSource?.stockPnlCoefficient);
     return Number.isFinite(coefficient) && coefficient > 0 && coefficient <= 100000 ? coefficient : 1;
   }, [_parsedCollateralSource]);
+  // 美股报价/账户初始美元额度是真实USD，不得使用USDT/CNY当作USD/CNY。
+  const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { enabled: !isPricingFrozen && isManualStockPnlSource, staleTime: 30000, refetchInterval: 30000 },
+  );
+  const usdCnyRate = isPricingFrozen
+    ? (finitePositive((settlementSnapshot as any)?.usdCnyRate) ?? Number.NaN)
+    : (getUsdCnyRate(usdCnyRateData) ?? Number.NaN);
   const manualStockSymbols = useMemo(() => manualStockPositions.map((position) => position.symbol), [manualStockPositions]);
   const manualStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: manualStockSymbols },
@@ -1645,7 +1655,9 @@ export function FunderOrderCard({
   // 52订单的利息和借出本金不属于37号标签，仍在风险公式中另行处理。
   const { extValuationCnyRate: extTagValuationCnyRate, extCollateralValueU: extTagCollateralValueU, extCollateralValueCny: extTagCollateralValueCny, extFloatingPnlU: extTagFloatingPnlU, extHoldingValueU: extTagHoldingValueU, extHoldingValueCny: extTagHoldingValueCny, extHoldingValueDate: extTagHoldingValueDate } = useMemo(() => {
     const _canonicalCnyRate = Number((effectiveCollateralValuation as any)?.usdtCnyRate || 0);
-    const _cnyR = _canonicalCnyRate > 0 ? _canonicalCnyRate : ((_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0);
+    const _cnyR = isPricingFrozen
+      ? (finitePositive(_canonicalCnyRate) ?? finitePositive(cnyRate) ?? Number.NaN)
+      : (getUsdtCnyRateFromPrices(_extCryptoPricesRaw) ?? finitePositive(cnyRate) ?? Number.NaN);
     const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
     for (const [k, v] of Object.entries(_pricesMap)) { _prices[k] = Number(v) * _cnyR; }
@@ -1705,12 +1717,12 @@ export function FunderOrderCard({
     })();
     return {
       extValuationCnyRate: _cnyR,
-      extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
+      extCollateralValueU: marginTotalCny === null || finitePositive(_cnyR) === null ? null : marginTotalCny / _cnyR,
       // 37号保证金的人民币总值必须作为原值传递。52只展示同一次行情估值的
       // CNY/U双值，不能先折成U后再用另一条USD/CNY接口反推人民币。
       extCollateralValueCny: marginTotalCny,
-      extFloatingPnlU: floatingPnlCny === null ? null : floatingPnlCny / _cnyR,
-      extHoldingValueU: holdingValueCny === null ? null : holdingValueCny / _cnyR,
+      extFloatingPnlU: floatingPnlCny === null || finitePositive(_cnyR) === null ? null : floatingPnlCny / _cnyR,
+      extHoldingValueU: holdingValueCny === null || finitePositive(_cnyR) === null ? null : holdingValueCny / _cnyR,
       // 人民币视图必须直接展示37返回的原始市值，不能经不同汇率源往返折算。
       extHoldingValueCny: holdingValueCny,
       extHoldingValueDate: String((effectivePnlTagSummary as any)?.currentHoldingValue?.updatedDate ?? (effectivePnlTagSummary as any)?.latestBalance?.recordDate ?? '').slice(0, 10) || null,
@@ -2097,10 +2109,10 @@ export function FunderOrderCard({
         ? currentPrice
         : position.sellPrice ?? currentPrice;
       const marketValueCny = valuationPrice !== null
-        ? valuationPrice * position.quantity * (currency === 'CNY' ? 1 : cnyRate)
+        ? valuationPrice * position.quantity * (currency === 'CNY' ? 1 : usdCnyRate)
         : null;
       const pnlCny = manualStockPnlCalculationMode === 'position_cost' && valuationPrice !== null
-        ? (valuationPrice - position.buyPrice) * position.quantity * (currency === 'CNY' ? 1 : cnyRate)
+        ? (valuationPrice - position.buyPrice) * position.quantity * (currency === 'CNY' ? 1 : usdCnyRate)
         : null;
       return {
         ...position,
@@ -2116,7 +2128,7 @@ export function FunderOrderCard({
         quoteLabel: isPricingFrozen ? '结算快照价' : (isIntradayQuote ? '盘中参考价' : '盘尾收盘价'),
       };
     });
-  }, [manualStockPositions, manualStockCloseQuery.data, cnyRate, manualStockPnlCalculationMode, isPricingFrozen, isSettlementFinal, settlementSnapshot]);
+  }, [manualStockPositions, manualStockCloseQuery.data, usdCnyRate, manualStockPnlCalculationMode, isPricingFrozen, isSettlementFinal, settlementSnapshot]);
   const manualStockLastUpdatedAt = manualStockPnlDetail.reduce((latest, position) => {
     const updatedAt = position.updatedAt;
     return updatedAt && (!latest || new Date(updatedAt).getTime() > new Date(latest).getTime()) ? updatedAt : latest;
@@ -2126,7 +2138,7 @@ export function FunderOrderCard({
     ? manualStockPnlDetail.reduce((sum, position) => sum + (position.marketValueCny ?? 0), 0)
     : null;
   const manualStockTotalCapitalCny = hasManualStockTotalCapital
-    ? manualStockTotalCapital * (manualStockCapitalCurrency === 'CNY' ? 1 : cnyRate)
+    ? manualStockTotalCapital * (manualStockCapitalCurrency === 'CNY' ? 1 : usdCnyRate)
     : null;
   const manualStockRawFloatPnlCny = manualStockPnlCalculationMode === 'total_capital'
     ? (manualStockMarketValueCny !== null && manualStockTotalCapitalCny !== null
@@ -2626,7 +2638,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const iq = parseFloat(item.qty);
     if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; }
     if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); collateralItemPrices.push(1); }
-    else if (item.coin === 'CNY') { const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); collateralItemPrices.push(1 / cnyRate); }
+    else if (item.coin === 'CNY') { if (finitePositive(cnyRate) === null) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; } const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); collateralItemPrices.push(1 / cnyRate); }
     else {
       const p = livePrices[item.coin];
       if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); collateralItemPrices.push(p); }
@@ -2787,7 +2799,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
         : fullValueExposure)
     : null;
-  const exposure = isOptionOrder
+  const exposure = finitePositive(cnyRate) === null ? null : isOptionOrder
     ? optionExposure
     : usesCoinNativeCollateralFormula
       ? coinNativeCollateralExposure
@@ -2814,7 +2826,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     ? extTagHoldingValueU
     : (linkedFloatingPnlU === null ? null : buyValueForRisk + linkedFloatingPnlU);
   const linkedStockContributionU = usesFloatingPnlFormula ? linkedFloatingPnlU : -principalLentOutValueForRisk;
-  const externalNonSharedGapU = usesConfiguredStockRiskData
+  const externalNonSharedGapU = finitePositive(cnyRate) !== null && usesConfiguredStockRiskData
     && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
     ? usesCoinNativeCollateralFormula
@@ -2872,7 +2884,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     // 两种口径均以真实买入价值为本金额度，不能改用标的实时市值。
     return sharedOrderGapBaseU > 0 ? sharedOrderGapBaseU : principalLentOutValueForRisk;
   })();
-  const sharedOrderExposure = sharedOrderUsesCoinNativeCollateral
+  const sharedOrderExposure = finitePositive(cnyRate) === null ? null : sharedOrderUsesCoinNativeCollateral
     ? sharedOrderCollateralValueU
     : usesInitialPrincipalFormula
     ? initialPrincipalExposure
@@ -3048,7 +3060,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const isSufficient = effectiveExposure !== null && effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
-  const showExposureLoading = (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
+  const showExposureLoading = finitePositive(cnyRate) === null || (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
     || (hasExternalPaidInterest && linkedPaidInterestForRisk === null)
     || effectiveExposure === null;
   // 编辑页口径对比直接复用订单卡已经完成的实时行情、37号引用与共享担保计算，
@@ -3074,8 +3086,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const previewPaidInterestU = isSharedMode
       ? sharedOrderPaidInterestU
       : (hasExternalPaidInterest ? linkedPaidInterestForRisk : paidInterestForRisk);
-    const hasBase = previewBaseValueU !== null && Number.isFinite(previewBaseValueU) && previewBaseValueU > 0;
-    const hasInterest = previewPendingInterestU !== null
+    const hasBase = finitePositive(cnyRate) !== null && previewBaseValueU !== null && Number.isFinite(previewBaseValueU) && previewBaseValueU > 0;
+    const hasInterest = finitePositive(cnyRate) !== null && previewPendingInterestU !== null
       && Number.isFinite(previewPendingInterestU)
       && previewPaidInterestU !== null
       && Number.isFinite(previewPaidInterestU);
@@ -3092,7 +3104,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const initialPrincipalGapU = hasInterest && initialFinancingPrincipalU !== null && Number.isFinite(initialFinancingPrincipalU)
       ? -initialFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU
       : null;
-    const coinNativeCollateralGapU = previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
+    const coinNativeCollateralGapU = finitePositive(cnyRate) !== null && previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
       ? previewCollateralValueU
       : null;
     return {
@@ -3110,6 +3122,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       coinNativeCollateralGapU,
     };
   }, [
+    cnyRate,
     isSharedMode,
     sharedOrderCollateralValueU,
     sharedOrderBorrowedValueU,
@@ -3138,7 +3151,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // 每张订单卡都上报最终担保缺口。共享弹窗直接读取此结果，避免手工组合、37号标签
   // 或人民币利息在服务端摘要中被再次简化或重复计算。
   useEffect(() => {
-    if (!onExposureGapChange) return;
+    if (!onExposureGapChange || finitePositive(cnyRate) === null) return;
     // 外部担保数据未到齐时，exposure 只剩浮盈/利息的简化值。绝不能用它覆盖
     // 已有的最终缺口；待完整 externalNonSharedGapU 产生后再发布。
     const canonicalOrderId = Number(order.id);
@@ -3356,6 +3369,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       <div className={!jointSegmentMode && jointOrderSegments.length > 0 ? 'flex flex-col' : undefined}>
       {shouldRenderJointSegmentDetails && isPrimaryPreviewSegmentExpanded && <div style={!jointSegmentMode && jointOrderSegments.length > 0 ? { order: primaryJointSegmentDisplayNumber } : undefined}>
+      {finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">人民币估值/汇率待更新；原币金额和数量保留，换汇风险估值暂不确定。</p>}
       {/* 主体：左右两栏布局 */}
       <div className="flex">
 
@@ -3396,9 +3410,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
                 {displayFinancingAsPrimary
-                  ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  ? formatFxEstimate(financingDisplayAmount, 'toLocaleString', undefined, { maximumFractionDigits: 2 })
                   : order.asset_type === 'stock'
-                    ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0')
+                    ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? formatFxEstimate(storedAmount, 'toLocaleString', undefined, { maximumFractionDigits: 0 }) : '0')
                     : isOptionOrder
                       ? (optionInfo?.buyQty ? String(optionInfo.buyQty) : '---')
                       : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '0')}
@@ -3411,28 +3425,28 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 if (approxHolding === 'hidden') return null;
                 if (displayFinancingAsPrimary) {
                   if (!(financingAmountUsdt > 0)) return null;
-                  if (amountCurrency === 'CNY') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{financingAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
-                  if (amountCurrency === 'USDT') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(financingAmountUsdt * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
-                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{financingAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
-                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(financingAmountUsdt * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                  if (amountCurrency === 'CNY') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate(financingAmountUsdt, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u</span>;
+                  if (amountCurrency === 'USDT') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((financingAmountUsdt * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate(financingAmountUsdt, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((financingAmountUsdt * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>;
                 }
                 if (order.asset_type === 'stock') {
                   if (!(totalU > 0 && order.coin === 'CNY')) return null;
-                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
-                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((totalU / cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate(totalU, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>;
                 }
                 // 期权持仓的近似价值只能使用实时合约标记价 × 张数，不能使用标的现货价或行权价。
                 if (isOptionOrder) {
                   if (optionCurrentValue === null) return null;
-                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{optionCurrentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
-                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(optionCurrentValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate(optionCurrentValue, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((optionCurrentValue * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>;
                 }
                 if (!liveP || !(qty > 0)) return null;
                 const valU = qty * liveP;
                 // 持有资产“约等于”由管理员单选控制：选 U 或元时只显示对应一项。
                 const holdingApproximation = approxHolding === 'U'
-                  ? `≈${valU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
-                  : `≈${(valU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                  ? `≈${formatFxEstimate(valU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u`
+                  : `≈${formatFxEstimate((valU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`;
                 return <span className="text-xs font-medium leading-tight" style={{ color: '#3B82F6' }}>{holdingApproximation}</span>;
               })()}
             </div>
@@ -3468,7 +3482,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 {optionInfo.strikePrice && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">行权价</span>
-                    <span className="font-medium" style={{ color: '#1A2340' }}>{Number(optionInfo.strikePrice).toLocaleString()} u</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{formatFxEstimate(Number(optionInfo.strikePrice), 'toLocaleString')} u</span>
                   </div>
                 )}
                 {optionInfo.premium && (
@@ -3482,7 +3496,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   <span className="font-medium flex items-center gap-0.5" style={{ color: optionMarkPriceTone }}>
                     {optionMarkPriceDirection === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                     {optionMarkPriceDirection === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${optionMarkPrice.toFixed(2)} u` : (isOptionSettlementQuoteMissing ? '快照缺失' : '--')}
+                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${formatFxEstimate(optionMarkPrice, 'toFixed', 2)} u` : (isOptionSettlementQuoteMissing ? '快照缺失' : '--')}
                   </span>
                 </div>
               </>
@@ -3490,13 +3504,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             {show('buyPrice') && price > 0 && !isStockOrder && !isOptionOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} {buyQuoteUnit}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate(price, 'toLocaleString')} {buyQuoteUnit}</span>
               </div>
             )}
             {show('buyValue') && quotedBuyValue > 0 && !isStockOrder && !isOptionOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入价值</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{quotedBuyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} {buyQuoteUnit}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate(quotedBuyValue, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {buyQuoteUnit}</span>
               </div>
             )}
             {/* 计息基数已移至右侧（已结利息与计息日期之间） */}
@@ -3521,7 +3535,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      {liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u' : '---'}
+                      {liveP != null ? formatFxEstimate(liveP, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u' : '---'}
                     </span>
                   );
                 })()}
@@ -3604,8 +3618,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       <div className="mt-2 flex items-baseline justify-between gap-3 border-b border-slate-200 pb-2">
                         <span className="text-xs font-medium text-slate-600">账户初始本金</span>
                         <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900">
-                          {manualStockCapitalCurrency === 'CNY' ? `¥ ${manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD`}
-                          {manualStockCapitalCurrency === 'USD' && manualStockTotalCapitalCny !== null ? <span className="ml-1 text-[10px] font-normal text-slate-400">（¥ {manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}）</span> : null}
+                          {manualStockCapitalCurrency === 'CNY' ? `¥ ${formatFxEstimate(manualStockTotalCapital, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}` : `${formatFxEstimate(manualStockTotalCapital, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} USD`}
+                          {manualStockCapitalCurrency === 'USD' && manualStockTotalCapitalCny !== null ? <span className="ml-1 text-[10px] font-normal text-slate-400">（¥ {formatFxEstimate(manualStockTotalCapitalCny, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}）</span> : null}
                         </span>
                       </div>
                     )}
@@ -3632,11 +3646,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               <div className="mt-0.5 text-[9px] font-medium tracking-wide text-slate-400">{position.symbol}</div>
                             </div>
                             <div className="border-l border-slate-100 px-2 text-center leading-tight">
-                              <div className="text-xs font-semibold tabular-nums text-slate-700">{position.currentPrice === null ? '--' : `¥ ${position.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
-                              <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">{position.quantity.toLocaleString()} 股</div>
+                              <div className="text-xs font-semibold tabular-nums text-slate-700">{position.currentPrice === null ? '--' : `¥ ${formatFxEstimate(position.currentPrice, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                              <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">{formatFxEstimate(position.quantity, 'toLocaleString')} 股</div>
                             </div>
                             <div className="border-l border-slate-100 pl-2 text-right leading-tight">
-                              <div className="text-xs font-bold tabular-nums" style={{ color: '#1A2340' }}>{position.marketValueCny === null ? '--' : `¥ ${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                              <div className="text-xs font-bold tabular-nums" style={{ color: '#1A2340' }}>{position.marketValueCny === null ? '--' : `¥ ${formatFxEstimate(position.marketValueCny, 'toLocaleString', undefined, { maximumFractionDigits: 0 })}`}</div>
                             </div>
                           </div>
                         ) : (
@@ -3644,15 +3658,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold" style={{ color: '#1A2340' }}>
                               <span>{position.name || '未命名股票'}</span>
                               <span>{position.symbol}</span>
-                              <span>股数 <span className="tabular-nums" style={{ color: '#2563EB' }}>{position.quantity.toLocaleString()}</span> 股</span>
+                              <span>股数 <span className="tabular-nums" style={{ color: '#2563EB' }}>{formatFxEstimate(position.quantity, 'toLocaleString')}</span> 股</span>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                              <span>买入价：{position.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {position.currency === 'CNY' ? '元' : 'USD'}</span>
-                              <span>最新价：{position.currentPrice === null ? '暂未取得' : `${position.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${position.currency === 'CNY' ? '元' : 'USD'}`}{`（${position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待首次盘尾更新'} · ${manualStockMarketStatus}）`}</span>
+                              <span>买入价：{formatFxEstimate(position.buyPrice, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {position.currency === 'CNY' ? '元' : 'USD'}</span>
+                              <span>最新价：{position.currentPrice === null ? '暂未取得' : `${formatFxEstimate(position.currentPrice, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${position.currency === 'CNY' ? '元' : 'USD'}`}{`（${position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待首次盘尾更新'} · ${manualStockMarketStatus}）`}</span>
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1 rounded-md bg-gray-50 px-2.5 py-1.5 text-[11px] text-gray-500">
-                              <span>（{(position.valuationPrice ?? position.currentPrice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − {position.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}）× {position.quantity.toLocaleString()} 股 =</span>
-                              <span className="font-bold tabular-nums" style={{ color: position.pnlCny === null || position.pnlCny === 0 ? '#374151' : position.pnlCny > 0 ? '#DC2626' : '#16A34A' }}>{position.pnlCny === null ? '等待股票报价' : `${position.pnlCny >= 0 ? '+' : ''}${position.pnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}</span>
+                              <span>（{formatFxEstimate((position.valuationPrice ?? position.currentPrice ?? 0), 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − {formatFxEstimate(position.buyPrice, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}）× {formatFxEstimate(position.quantity, 'toLocaleString')} 股 =</span>
+                              <span className="font-bold tabular-nums" style={{ color: position.pnlCny === null || position.pnlCny === 0 ? '#374151' : position.pnlCny > 0 ? '#DC2626' : '#16A34A' }}>{position.pnlCny === null ? '等待股票报价' : `${position.pnlCny >= 0 ? '+' : ''}${formatFxEstimate(position.pnlCny, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}</span>
                             </div>
                           </>
                         )}
@@ -3666,7 +3680,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </div>
                         <div className="flex items-center justify-between py-1">
                           <span className="text-slate-500">当前持仓价值</span>
-                          <span className="font-semibold tabular-nums text-slate-800">{manualStockMarketValueCny === null ? '暂未取得最新价' : `¥ ${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</span>
+                          <span className="font-semibold tabular-nums text-slate-800">{manualStockMarketValueCny === null ? '暂未取得最新价' : `¥ ${formatFxEstimate(manualStockMarketValueCny, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}`}</span>
                         </div>
                         <div className="flex items-center justify-between py-1">
                           <span className="shrink-0 text-slate-500">差额 <span className="text-[9px] text-slate-400">（市值 − 本金）</span></span>
@@ -3674,18 +3688,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             {manualStockRawFloatPnlCny === null || manualStockMarketValueCny === null || manualStockTotalCapitalCny === null
                               ? '暂未取得'
                               : <>
-                                  <span className="text-slate-800">¥ {manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                  <span className="text-slate-800">¥ {formatFxEstimate(manualStockMarketValueCny, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}</span>
                                   <span className="px-1 text-slate-400">−</span>
-                                  <span className="text-slate-800">¥ {manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                  <span className="text-slate-800">¥ {formatFxEstimate(manualStockTotalCapitalCny, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}</span>
                                   <span className="px-1 text-slate-400">=</span>
-                                  <span style={{ color: manualStockDifferenceColor }}>{manualStockRawFloatPnlCny >= 0 ? '+' : '−'}¥ {Math.abs(manualStockRawFloatPnlCny).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span style={{ color: manualStockDifferenceColor }}>{manualStockRawFloatPnlCny >= 0 ? '+' : '−'}¥ {formatFxEstimate(Math.abs(manualStockRawFloatPnlCny), 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </>}
                           </span>
                         </div>
                         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2">
                           <span className="font-bold text-slate-800">账户浮动盈亏</span>
                           <span className="text-base font-bold tabular-nums" style={{ color: manualStockAccountPnlColor }}>
-                            {manualStockFloatPnlCny === null ? '暂未取得' : `${manualStockFloatPnlCny >= 0 ? '+' : '−'}¥ ${Math.abs(manualStockFloatPnlCny).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            {manualStockFloatPnlCny === null ? '暂未取得' : `${manualStockFloatPnlCny >= 0 ? '+' : '−'}¥ ${formatFxEstimate(Math.abs(manualStockFloatPnlCny), 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                           </span>
                         </div>
                       </div>
@@ -3694,7 +3708,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="flex items-center justify-between">
                           <span className="text-gray-400">原始盈亏合计</span>
                           <span className="font-semibold tabular-nums" style={{ color: (manualStockRawFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
-                            {manualStockRawFloatPnlCny === null ? '等待股票报价' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${manualStockRawFloatPnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
+                            {manualStockRawFloatPnlCny === null ? '等待股票报价' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${formatFxEstimate(manualStockRawFloatPnlCny, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-violet-600">
@@ -3704,7 +3718,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="flex items-center justify-between pt-0.5">
                           <span className="font-semibold text-gray-600">股票组合浮动盈亏</span>
                           <span className="font-bold tabular-nums" style={{ color: (manualStockFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
-                            {manualStockFloatPnlCny === null ? '等待股票报价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
+                            {manualStockFloatPnlCny === null ? '等待股票报价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${formatFxEstimate(manualStockFloatPnlCny, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
                           </span>
                         </div>
                       </div>
@@ -3807,7 +3821,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         const ps = p.period_start ? fmtD(p.period_start) : '';
                         const pe = p.period_end ? fmtD(p.period_end) : '';
                         const periodLabel = ps && pe ? `${ps} → ${pe}` : ps ? `${ps} 起` : pe ? `至 ${pe}` : '';
-                        const amtStr = `${parseFloat(p.amount || '0').toLocaleString(undefined, { maximumFractionDigits: 4 })} ${cur}`;
+                        const amtStr = `${formatFxEstimate(parseFloat(p.amount || '0'), 'toLocaleString', undefined, { maximumFractionDigits: 4 })} ${cur}`;
                         // 尝试一行：结算周期 + 金额；若无周期则结息日期 + 金额
                         const mainLeft = periodLabel ? `结算周期 ${periodLabel}` : `${payDateFmt} 结息`;
                         // 是否需要第二行（有周期时还需显示结息日期，或有备注）
@@ -3837,8 +3851,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             const uTotal = rows.filter(r => (r.currency || 'U') !== 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
                             const cnyTotal = rows.filter(r => (r.currency || 'U') === 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
                             const parts = [];
-                            if (uTotal > 0) parts.push(`${uTotal.toLocaleString(undefined, { maximumFractionDigits: 4 })} u`);
-                            if (cnyTotal > 0) parts.push(`${cnyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`);
+                            if (uTotal > 0) parts.push(`${formatFxEstimate(uTotal, 'toLocaleString', undefined, { maximumFractionDigits: 4 })} u`);
+                            if (cnyTotal > 0) parts.push(`${formatFxEstimate(cnyTotal, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} 元`);
                             return parts.join(' + ') || '0 u';
                           })()}
                         </span>
@@ -3972,7 +3986,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
                   ? <span className="text-xs text-gray-400">加载37号利息...</span>
-                  : <>{displayedPaidValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {displayedPaidUnit}</>}
+                  : <>{formatFxEstimate(displayedPaidValue, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {displayedPaidUnit}</>}
               </span>
             </div>
             {(() => {
@@ -3987,7 +4001,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               const approxPaidUnit = showU ? 'u' : '元';
               return (
                 <div className="flex justify-end">
-                  <span className="text-gray-400">≈{approxPaidVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
+                  <span className="text-gray-400">≈{formatFxEstimate(approxPaidVal, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
                 </div>
               );
             })()}
@@ -4022,7 +4036,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 whitespace-nowrap">{periodInterestTotal.label}</span>
                 <span className="font-medium" style={{ color: '#3B82F6' }}>
-                  {periodInterestTotal.value >= 0 ? '+' : ''}{periodInterestTotal.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                  {periodInterestTotal.value >= 0 ? '+' : ''}{formatFxEstimate(periodInterestTotal.value, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                 </span>
               </div>
             )}
@@ -4036,7 +4050,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   }}>{tradingFeeStatusLabel}</span>
                 </span>
                 <span className="font-medium whitespace-nowrap text-right" style={{ color: '#4B5563' }}>
-                  {referenceTradingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                  {formatFxEstimate(referenceTradingFee, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                 </span>
               </div>
             )}
@@ -4112,9 +4126,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </span>
                       ) : <span className="block whitespace-nowrap text-gray-400">暂无担保明细</span>
                     ) : externalCollateralDisplayMode === 'U' ? (
-                      <span className="block whitespace-nowrap text-gray-500">≈{externalOnlyCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                      <span className="block whitespace-nowrap text-gray-500">≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u</span>
                     ) : (
-                      <span className="block whitespace-nowrap text-gray-500">≈{(extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
+                      <span className="block whitespace-nowrap text-gray-500">≈{formatFxEstimate((extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>
                     )}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
@@ -4158,7 +4172,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             : (typeof aciRaw === 'string' ? aciRaw : 'U');
                           if (approxCI === 'hidden') return null;
                           const ciVal = collateralItemValues[idx] as number;
-                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${(ciVal * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${formatFxEstimate((ciVal * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`;
                           return <div className="flex items-center justify-between mt-0.5"><span></span><span className="font-medium" style={{ color: '#4B5563' }}>≈ {ciDisplay}</span></div>;
                         })()}
                       </div>
@@ -4196,7 +4210,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             : (typeof aciRaw === 'string' ? aciRaw : 'U');
                           if (approxCI === 'hidden') return null;
                           const ciVal = collateralItemValues[idx] as number;
-                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${(ciVal * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${formatFxEstimate((ciVal * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`;
                           return <div className="flex items-center justify-between mt-0.5"><span></span><span className="font-medium" style={{ color: '#4B5563' }}>≈ {ciDisplay}</span></div>;
                         })()}
                       </div>
@@ -4221,18 +4235,18 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               const cvDisplay = hasExternalCollateral || isStockOrder || isManualSharedCollateral
                 ? (orderCollateralValueU !== null && Number.isFinite(orderCollateralValueU)
                   ? (localValueDisplay === 'CNY'
-                    ? `≈ ${(orderCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
-                    : `≈ ${orderCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
+                    ? `≈ ${formatFxEstimate((orderCollateralValueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`
+                    : `≈ ${formatFxEstimate(orderCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u`)
                   : '实时价加载中...')
                 : collateralAssets.length > 1
                 ? (collateralValueKnown
                   ? (approxCollateralTotal === 'CNY'
-                    ? `≈ ${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                    ? `≈ ${formatFxEstimate((collateralValue * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`
                     : `≈ ${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
                   : '实时价加载中...')
                 : approxCV === 'hidden' ? null
                   : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
-                  : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                  : `${formatFxEstimate((collateralValue * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`;
               return (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">{hasExternalCollateral ? '担保总值（合并）' : ((isStockOrder || isManualSharedCollateral) ? '担保价值' : (collateralAssets.length > 1 ? '担保总值' : '担保价值'))}</span>
@@ -4257,8 +4271,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </div>
                         <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs">
                           {jointInternalSharedMemberIds.length > 0 ? <>
-                            <div className="flex justify-between gap-3"><span className="text-indigo-600">共享池担保总额</span><strong className="tabular-nums text-indigo-900">{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
-                            <div className="mt-1 flex justify-between gap-3"><span className="text-indigo-600">合并担保余量</span><strong className="tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                            <div className="flex justify-between gap-3"><span className="text-indigo-600">共享池担保总额</span><strong className="tabular-nums text-indigo-900">{jointInternalPoolCollateralValueU === null ? '计算中…' : `${formatFxEstimate(jointInternalPoolCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                            <div className="mt-1 flex justify-between gap-3"><span className="text-indigo-600">合并担保余量</span><strong className="tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${formatFxEstimate(jointInternalPoolRemainingU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
                           </> : <div className="leading-5 text-indigo-700">已选择参加的段均为“持仓全额”，各段按自身市值和利息独立计算，不建立合并担保池。</div>}
                         </div>
                         <div className="mt-3 space-y-2.5">
@@ -4287,8 +4301,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${member.poolEligible ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`}>{member.poolEligible ? '参加共享' : '已参加 · 独立公式'}</span>
                               </div>
                               {member.poolEligible ? <>
-                                <div className="mt-2 flex justify-between gap-3 text-xs"><span className="text-gray-500">本段担保前盈亏 / 风险差额</span><strong className="tabular-nums" style={{ color: risk === null || risk === undefined ? '#9CA3AF' : risk >= 0 ? '#15803D' : '#DC2626' }}>{risk === null || risk === undefined ? '计算中…' : `${risk >= 0 ? '+' : ''}${Number(risk).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
-                                <div className="mt-2 border-t border-gray-100 pt-2 text-xs"><div className="mb-1 text-gray-500">计入共享池的本段担保物</div><div className="flex flex-wrap gap-1">{assets.length > 0 ? assets.map((asset: any, index: number) => <span key={`${member.id}-${asset.coin}-${index}`} className={`rounded px-1.5 py-0.5 ${asset.source === 'wallet' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{asset.source === 'wallet' ? '钱包 ' : '手工 '}{asset.qty} {asset.coin}</span>) : <span className="text-gray-400">暂无担保物</span>}</div><div className="mt-1 text-right font-semibold tabular-nums" style={{ color: '#374151' }}>{valueU === null ? '实时价加载中…' : `本段担保 ≈ ${valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</div></div>
+                                <div className="mt-2 flex justify-between gap-3 text-xs"><span className="text-gray-500">本段担保前盈亏 / 风险差额</span><strong className="tabular-nums" style={{ color: risk === null || risk === undefined ? '#9CA3AF' : risk >= 0 ? '#15803D' : '#DC2626' }}>{risk === null || risk === undefined ? '计算中…' : `${risk >= 0 ? '+' : ''}${formatFxEstimate(Number(risk), 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</strong></div>
+                                <div className="mt-2 border-t border-gray-100 pt-2 text-xs"><div className="mb-1 text-gray-500">计入共享池的本段担保物</div><div className="flex flex-wrap gap-1">{assets.length > 0 ? assets.map((asset: any, index: number) => <span key={`${member.id}-${asset.coin}-${index}`} className={`rounded px-1.5 py-0.5 ${asset.source === 'wallet' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{asset.source === 'wallet' ? '钱包 ' : '手工 '}{asset.qty} {asset.coin}</span>) : <span className="text-gray-400">暂无担保物</span>}</div><div className="mt-1 text-right font-semibold tabular-nums" style={{ color: '#374151' }}>{valueU === null ? '实时价加载中…' : `本段担保 ≈ ${formatFxEstimate(valueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</div></div>
                               </> : <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">持仓全额：本段只按实时可变现市值与利息独立计算；本段手工和钱包担保不计入共享池，也不向其他段重复分摊。</div>}
                             </div>;
                           })}
@@ -4329,7 +4343,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           const showCny = collateralGapPrimaryDisplay === 'CNY';
                           const factor = showCny ? cnyRate : 1;
                           const unit = showCny ? '元' : 'u';
-                          const formatValue = (value: number) => `${value >= 0 ? '+' : ''}${(value * factor).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
+                          const formatValue = (value: number) => `${value >= 0 ? '+' : ''}${formatFxEstimate((value * factor), 'toLocaleString', undefined, { maximumFractionDigits: 2 })} ${unit}`;
                           const collateralU = linkedCollateralValueU;
                           const floatingPnlU = linkedFloatingPnlU;
                           const pendingInterestU = accruedForRisk;
@@ -4389,7 +4403,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             ? manualStockPnlDetail.map((position) => {
                                 const rawPnlCny = position.currentPrice === null
                                   ? null
-                                  : (position.currentPrice - position.buyPrice) * position.quantity * (position.currency === 'CNY' ? 1 : cnyRate);
+                                  : (position.currentPrice - position.buyPrice) * position.quantity * (position.currency === 'CNY' ? 1 : usdCnyRate);
                                 return {
                                   name: position.name || position.symbol,
                                   symbol: position.symbol,
@@ -4411,7 +4425,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             && Math.abs(manualStockBaseAdjustmentU) > 0.000001;
                           const collateralBreakdownEntries = collateralAssets.flatMap((item, index) => item.coin && Number.isFinite(Number(item.qty))
                                 ? [{
-                                    label: `${Number(item.qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${item.coin === 'CNY' ? '元' : item.coin}`,
+                                    label: `${formatFxEstimate(Number(item.qty), 'toLocaleString', undefined, { maximumFractionDigits: 4 })} ${item.coin === 'CNY' ? '元' : item.coin}`,
                                     valueU: collateralItemValues[index] ?? null,
                                     valueCny: collateralItemValues[index] === null || collateralItemValues[index] === undefined ? null : Number(collateralItemValues[index]) * cnyRate,
                                   }]
@@ -4433,12 +4447,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                           </div>
                                           <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-1 text-xs">
                                             <span className="font-medium" style={{ color: '#4B5563' }}>当前价值</span>
-                                            <span className="min-w-0 text-right text-[10px] text-slate-400">{stock.latestPrice === null ? '最新价加载中' : `${stock.latestPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${stock.currency === 'CNY' ? '元' : 'USD'}`} × {stock.quantity.toLocaleString()} 股</span>
-                                            <span className="shrink-0 font-medium leading-tight" style={{ color: stock.currentValue === null ? '#9CA3AF' : '#3B82F6' }}>= {stock.currentValue === null ? '加载中...' : `${stock.currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${stock.currency === 'CNY' ? '元' : 'USD'}`}</span>
+                                            <span className="min-w-0 text-right text-[10px] text-slate-400">{stock.latestPrice === null ? '最新价加载中' : `${stock.latestPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${stock.currency === 'CNY' ? '元' : 'USD'}`} × {formatFxEstimate(stock.quantity, 'toLocaleString')} 股</span>
+                                            <span className="shrink-0 font-medium leading-tight" style={{ color: stock.currentValue === null ? '#9CA3AF' : '#3B82F6' }}>= {stock.currentValue === null ? '加载中...' : `${formatFxEstimate(stock.currentValue, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} ${stock.currency === 'CNY' ? '元' : 'USD'}`}</span>
                                           </div>
                                           <div className="mt-0.5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-1 text-xs">
                                             <span className="font-medium" style={{ color: '#4B5563' }}>买入价值</span>
-                                            <span className="min-w-0 text-right text-[10px] text-slate-400">{stock.buyPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} {stock.currency === 'CNY' ? '元' : 'USD'} × {stock.quantity.toLocaleString()} 股</span>
+                                            <span className="min-w-0 text-right text-[10px] text-slate-400">{formatFxEstimate(stock.buyPrice, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {stock.currency === 'CNY' ? '元' : 'USD'} × {formatFxEstimate(stock.quantity, 'toLocaleString')} 股</span>
                                             <span className="shrink-0 font-medium leading-tight" style={{ color: '#3B82F6' }}>= {stock.buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} {stock.currency === 'CNY' ? '元' : 'USD'}</span>
                                           </div>
                                         </div>
@@ -4461,23 +4475,23 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <>
                                     <div className="mt-1 flex items-baseline justify-between gap-2 font-mono">
                                       <span>账户余额 <span className="ml-1 text-[10px] font-sans font-medium" style={{ color: '#2563EB' }}>{holdingValueDateBadge}</span></span>
-                                      <span style={{ color: '#DC2626' }}>{holdingValueDisplay === null ? '加载中...' : `${holdingValueDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`}</span>
+                                      <span style={{ color: '#DC2626' }}>{holdingValueDisplay === null ? '加载中...' : `${formatFxEstimate(holdingValueDisplay, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} ${unit}`}</span>
                                     </div>
-                                    <div className="mt-1 flex justify-between font-mono"><span>倍数（净值口径）</span><span className="font-semibold" style={{ color: '#1A2340' }}>{pnlMultiplier.toLocaleString(undefined, { maximumFractionDigits: 4 })}倍</span></div>
+                                    <div className="mt-1 flex justify-between font-mono"><span>倍数（净值口径）</span><span className="font-semibold" style={{ color: '#1A2340' }}>{formatFxEstimate(pnlMultiplier, 'toLocaleString', undefined, { maximumFractionDigits: 4 })}倍</span></div>
                                     <div className="mt-1 border-t border-blue-100 pt-1.5 font-mono">
                                       <div className="flex justify-between gap-2">
                                         <span className="text-slate-500">盈亏净值</span>
                                         <strong style={{ color: valueColor(floatingPnlU ?? 0) }}>{floatingPnlU === null ? '加载中...' : formatDirectValue(floatingPnlU, floatingPnlCny)}</strong>
                                       </div>
-                                      <div className="mt-0.5 text-[10px] text-slate-400">（余额 {holdingValueDisplay === null ? '—' : holdingValueDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} − 初始 {pnlInitialAmountDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })}）× {pnlMultiplier.toLocaleString(undefined, { maximumFractionDigits: 4 })}倍</div>
+                                      <div className="mt-0.5 text-[10px] text-slate-400">（余额 {holdingValueDisplay === null ? '—' : formatFxEstimate(holdingValueDisplay, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} − 初始 {formatFxEstimate(pnlInitialAmountDisplay, 'toLocaleString', undefined, { maximumFractionDigits: 2 })}）× {formatFxEstimate(pnlMultiplier, 'toLocaleString', undefined, { maximumFractionDigits: 4 })}倍</div>
                                     </div>
                                   </>
                                 ) : usesPrincipalCoverageFormula ? (
-                                  <div className="mt-1 flex justify-between font-mono"><span>买入价值（扣除）</span><span style={{ color: '#16A34A' }}>−{(principalLentOutValueForRisk * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                  <div className="mt-1 flex justify-between font-mono"><span>买入价值（扣除）</span><span style={{ color: '#16A34A' }}>−{formatFxEstimate((principalLentOutValueForRisk * factor), 'toLocaleString', undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
                                 ) : (
                                   <>
-                                    <div className="mt-1 flex justify-between font-mono"><span>当前持仓价值</span><span style={{ color: '#DC2626' }}>{holdingValueU === null ? '加载中...' : `${(holdingValueU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} ${unit}`}</span></div>
-                                    <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（扣除）</span><span style={{ color: '#16A34A' }}>−{(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                    <div className="mt-1 flex justify-between font-mono"><span>当前持仓价值</span><span style={{ color: '#DC2626' }}>{holdingValueU === null ? '加载中...' : `${formatFxEstimate((holdingValueU * factor), 'toLocaleString', undefined, { maximumFractionDigits: showCny ? 0 : 2 })} ${unit}`}</span></div>
+                                    <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（扣除）</span><span style={{ color: '#16A34A' }}>−{formatFxEstimate((gapBaseU * factor), 'toLocaleString', undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
                                   </>
                                 )}
                                 {!(isManualStockPnlSource && manualStockPnlCalculationMode === 'position_cost') && !isExternalStockPnlSource && (
@@ -4494,25 +4508,25 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 <div className="mt-1 space-y-1 font-mono">
                                   {collateralBreakdownEntries.length > 0 ? collateralBreakdownEntries.map((entry, index) => (
                                     <div key={`${entry.label}-${index}`} className="flex justify-between gap-3">
-                                      <span className="min-w-0 truncate">{entry.label}{entry.valueU !== null && <span className="text-slate-400">（≈{entry.valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}</span>
+                                      <span className="min-w-0 truncate">{entry.label}{entry.valueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(entry.valueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span>
                                       {entry.valueU === null
                                         ? <span className="shrink-0 text-gray-400">加载中...</span>
-                                        : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {(entry.valueCny ?? entry.valueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>}
+                                        : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {formatFxEstimate((entry.valueCny ?? entry.valueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>}
                                     </div>
                                   )) : <span className="text-gray-400">暂无手工或钱包担保</span>}
-                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{externalOnlyCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{externalOnlyCollateralValueU === null ? '加载中...' : `= ${(extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
+                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{externalOnlyCollateralValueU === null ? '加载中...' : `= ${formatFxEstimate((extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
                                 </div>
                                 <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
                                   <span className="text-slate-500">担保货币合计</span>{' '}
                                   {collateralU !== null
-                                    ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralCny ?? collateralU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</strong></>
+                                    ? <><span className="text-slate-400">（≈{formatFxEstimate(collateralU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {formatFxEstimate((collateralCny ?? collateralU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</strong></>
                                     : <span className="text-gray-400">担保物实时价加载中...</span>}
                                 </div>
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 订单利息</div>
-                                <div className="mt-1 flex justify-between font-mono"><span>待结利息（扣除）</span><span style={{ color: '#16A34A' }}>−{(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
-                                <div className="mt-1 flex justify-between font-mono"><span>已结利息（加回）</span><span style={{ color: '#DC2626' }}>+{(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                <div className="mt-1 flex justify-between font-mono"><span>待结利息（扣除）</span><span style={{ color: '#16A34A' }}>−{formatFxEstimate((pendingInterestU * factor), 'toLocaleString', undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                <div className="mt-1 flex justify-between font-mono"><span>已结利息（加回）</span><span style={{ color: '#DC2626' }}>+{formatFxEstimate((paidInterestU * factor), 'toLocaleString', undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
                                 <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
                                   <span className="text-slate-500">利息差值</span>{' '}
                                   <strong style={{ color: valueColor(interestDifferenceU) }}>{formatValue(interestDifferenceU)}</strong>
@@ -4583,7 +4597,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保缺口 ÷ 总风险基准</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} ÷ {formatFunderCollateralPopupAmount(totalGapBase)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} ÷ {formatFunderCollateralPopupAmount(totalGapBase)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? (Number.isFinite(marginRatio) ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '汇率/估值待更新') : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                   <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {formatFunderCollateralPopupAmount(totalGapBase)} u（担保减买入价值按真实买入价值；其余按保存口径）</div>
@@ -4871,12 +4885,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               {usesCoinNativeCollateralFormula
                                 ? <span style={{ color: '#3B82F6' }}>= 0.00 {riskDisplayUnit}（订单盈亏）</span>
                                 : usesInitialPrincipalFormula
-                                ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : `= 0 − ${riskValueInOrderCurrency(initialFinancingPrincipalU).toFixed(2)} ${riskDisplayUnit}（初始融资金额）`}</span>
+                                ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : `= 0 − ${formatFxEstimate(riskValueInOrderCurrency(initialFinancingPrincipalU), 'toFixed', 2)} ${riskDisplayUnit}（初始融资金额）`}</span>
                                 : usesPrincipalCoverageFormula
-                                ? <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
+                                ? <span style={{ color: '#3B82F6' }}>= −{formatFxEstimate(riskValueInOrderCurrency(principalLentOutValueForRisk), 'toFixed', 2)} {riskDisplayUnit}（买入价值）</span>
                                 : usesFloatingPnlFormula
-                                  ? <span style={{ color: '#3B82F6' }}>{formulaFloatingPnlU === null ? '浮盈加载中...' : `= ${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`}</span>
-                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : `= ${signedMarketValueForFullValueRisk >= 0 ? '+' : ''}${riskValueInOrderCurrency(signedMarketValueForFullValueRisk).toFixed(2)} ${riskDisplayUnit}（当前持仓市值）`}</span>
+                                  ? <span style={{ color: '#3B82F6' }}>{formulaFloatingPnlU === null ? '浮盈加载中...' : `= ${formulaFloatingPnlU >= 0 ? '+' : ''}${formatFxEstimate(riskValueInOrderCurrency(formulaFloatingPnlU), 'toFixed', 2)} ${riskDisplayUnit}`}</span>
+                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : `= ${signedMarketValueForFullValueRisk >= 0 ? '+' : ''}${formatFxEstimate(riskValueInOrderCurrency(signedMarketValueForFullValueRisk), 'toFixed', 2)} ${riskDisplayUnit}（当前持仓市值）`}</span>
                               }
                             </div>
                           </div>
@@ -4926,28 +4940,28 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               {exposure === null
                                 ? <span className="text-gray-400">期权标记价加载中...</span>
                                 : usesCoinNativeCollateralFormula
-                                ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） + 0.00 {riskDisplayUnit}（订单盈亏；利息暂不计入） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {formatFxEstimate(riskValueInOrderCurrency(collateralValue), 'toFixed', 2)} {riskDisplayUnit}（担保物） + 0.00 {riskDisplayUnit}（订单盈亏；利息暂不计入） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(exposure), 'toFixed', 2)} {riskDisplayUnit}</strong></span>
                                 : usesInitialPrincipalFormula
-                                ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : <> = 0 − {riskValueInOrderCurrency(initialFinancingPrincipalU).toFixed(2)} {riskDisplayUnit}（初始融资金额） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></>}</span>
+                                ? <span style={{ color: '#3B82F6' }}>{initialFinancingPrincipalU === null ? '初始融资金额待填写...' : <> = 0 − {formatFxEstimate(riskValueInOrderCurrency(initialFinancingPrincipalU), 'toFixed', 2)} {riskDisplayUnit}（初始融资金额） − {formatFxEstimate(riskValueInOrderCurrency(accruedForRisk), 'toFixed', 2)} {riskDisplayUnit} + {formatFxEstimate(riskValueInOrderCurrency(paidInterestForRisk), 'toFixed', 2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(exposure), 'toFixed', 2)} {riskDisplayUnit}</strong></>}</span>
                                 : isOptionOrder
                                 ? (usesPrincipalCoverageFormula
-                                  ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                  ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {formatFxEstimate(principalLentOutValueForRisk, 'toFixed', 2)}（买入价值） − {formatFxEstimate(accruedForRisk, 'toFixed', 2)} + {formatFxEstimate(paidInterestForRisk, 'toFixed', 2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} u</strong></span>
                                   : usesFloatingPnlFormula
-                                    ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） + {(formulaFloatingPnlU ?? 0).toFixed(2)}（期权浮盈） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
-                                    : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{signedMarketValueForFullValueRisk.toFixed(2)}（当前可变现市值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></>}</span>)
+                                    ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） + {formatFxEstimate((formulaFloatingPnlU ?? 0), 'toFixed', 2)}（期权浮盈） − {formatFxEstimate(accruedForRisk, 'toFixed', 2)} + {formatFxEstimate(paidInterestForRisk, 'toFixed', 2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} u</strong></span>
+                                    : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{formatFxEstimate(signedMarketValueForFullValueRisk, 'toFixed', 2)}（当前可变现市值） − {formatFxEstimate(accruedForRisk, 'toFixed', 2)} + {formatFxEstimate(paidInterestForRisk, 'toFixed', 2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} u</strong></>}</span>)
                                 : usesPrincipalCoverageFormula
-                                ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） − {riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {formatFxEstimate(riskValueInOrderCurrency(collateralValue), 'toFixed', 2)} {riskDisplayUnit}（担保物） − {formatFxEstimate(riskValueInOrderCurrency(principalLentOutValueForRisk), 'toFixed', 2)} {riskDisplayUnit}（买入价值） − {formatFxEstimate(riskValueInOrderCurrency(accruedForRisk), 'toFixed', 2)} {riskDisplayUnit} + {formatFxEstimate(riskValueInOrderCurrency(paidInterestForRisk), 'toFixed', 2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(exposure), 'toFixed', 2)} {riskDisplayUnit}</strong></span>
                                 : usesFloatingPnlFormula
-                                  ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） + {formulaFloatingPnlU === null ? '浮盈加载中' : `${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`} − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
-                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{riskValueInOrderCurrency(signedMarketValueForFullValueRisk).toFixed(2)} {riskDisplayUnit}（当前可变现市值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></>}</span>
+                                  ? <span style={{ color: '#3B82F6' }}>= {formatFxEstimate(riskValueInOrderCurrency(collateralValue), 'toFixed', 2)} {riskDisplayUnit}（担保物） + {formulaFloatingPnlU === null ? '浮盈加载中' : `${formulaFloatingPnlU >= 0 ? '+' : ''}${formatFxEstimate(riskValueInOrderCurrency(formulaFloatingPnlU), 'toFixed', 2)} ${riskDisplayUnit}`} − {formatFxEstimate(riskValueInOrderCurrency(accruedForRisk), 'toFixed', 2)} {riskDisplayUnit} + {formatFxEstimate(riskValueInOrderCurrency(paidInterestForRisk), 'toFixed', 2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(exposure), 'toFixed', 2)} {riskDisplayUnit}</strong></span>
+                                  : <span style={{ color: '#3B82F6' }}>{signedMarketValueForFullValueRisk === null ? '实时市值加载中...' : <> = {signedMarketValueForFullValueRisk >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(signedMarketValueForFullValueRisk), 'toFixed', 2)} {riskDisplayUnit}（当前可变现市值） − {formatFxEstimate(riskValueInOrderCurrency(accruedForRisk), 'toFixed', 2)} {riskDisplayUnit} + {formatFxEstimate(riskValueInOrderCurrency(paidInterestForRisk), 'toFixed', 2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(riskValueInOrderCurrency(exposure), 'toFixed', 2)} {riskDisplayUnit}</strong></>}</span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                               {exposure === null
-                                ? '期权标记价加载中…'
+                                ? (finitePositive(cnyRate) === null ? '人民币估值/汇率待更新，风险暂不确定' : '期权标记价加载中…')
                                 : isSufficient
-                                ? `担保充足，尚有 ${exposure.toFixed(2)} u 的余量空间`
-                                : `担保不足，还需补充 ${Math.abs(exposure).toFixed(2)} u 才能覆盖风险`
+                                ? `担保充足，尚有 ${formatFxEstimate(exposure, 'toFixed', 2)} u 的余量空间`
+                                : `担保不足，还需补充 ${formatFxEstimate(Math.abs(exposure), 'toFixed', 2)} u 才能覆盖风险`
                               }
                             </div>
                           </div>
@@ -5084,7 +5098,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   : effectiveExposure;
                 const manualMarginRateBaseU = hasManualMarginRateBase
                   ? (collateralGapPrimaryDisplay === 'CNY'
-                    ? (cnyRate > 0 ? manualMarginRateBaseDisplay / cnyRate : 0)
+                    ? (cnyRate > 0 ? manualMarginRateBaseDisplay / cnyRate : Number.NaN)
                     : amountCurrency === 'USDT'
                       ? manualMarginRateBaseDisplay
                       : (amountCurrencyPrice && amountCurrencyPrice > 0
@@ -5104,7 +5118,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   : uses52ExternalInputs
                     ? marginRateNumerator !== null && Number.isFinite(marginRateNumerator) && marginRateBaseU > 0
                     : collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0;
-                if (!canShowMarginRate || (!usesExternalMarginRate && marginRateNumerator === null)) return null;
+                if (!canShowMarginRate || (!usesExternalMarginRate && (marginRateNumerator === null || finitePositive(cnyRate) === null))) return null;
                 const resolvedMarginRateNumerator = marginRateNumerator ?? 0;
                 const marginRatio = usesExternalMarginRate
                   ? (referencedMarginRate.percent === null ? null : referencedMarginRate.percent / 100)
@@ -5129,7 +5143,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           style={{ ...SOFT_BLUE_INDICATOR_STYLE, cursor: 'pointer' }}
                         ><HelpMarkerText symbol="?" /></button>
                       </div>
-                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{marginRatio === null ? '加载中...' : `${(marginRatio * 100).toFixed(1)}%${isAlerting ? ' ⚠' : ''}`}</span>
+                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{marginRatio === null ? '加载中...' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%${isAlerting ? ' ⚠' : ''}`}</span>
                     </div>
                     {showMarginInfo && (
                       <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
@@ -5146,7 +5160,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div>保证金率 = 37号账本“剩余保证金占基数比”</div>
                                   <div className="mt-1 font-mono text-[10px]">
                                     <span style={{ color: '#3B82F6' }}>标签「{linkedMarginRateTagName}」原始比例 = </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '加载中...' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '加载中...' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                   <div className="mt-1 text-[10px] text-gray-400">{referencedMarginRate.denominator === 'balance' ? '37号未设置保证金基数，已按其原页面的“占余额”备用口径显示。' : '直接引用37号原始比例，不混入52号订单的本金、利息或担保缺口。'}</div>
                                 </>
@@ -5155,9 +5169,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div>保证金率 = 担保缺口 ÷ 保证金率计算基数 × 100%</div>
                                   <div className="mt-1 font-mono text-[10px]">
                                     <span style={{ color: '#3B82F6' }}>
-                                      = {marginRateNumerator === null ? '担保缺口加载中' : `${riskValueInOrderCurrency(marginRateNumerator).toFixed(2)} ${riskDisplayUnit}`} ÷ {manualMarginRateBaseDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} {riskDisplayUnit} × 100% =
+                                      = {marginRateNumerator === null ? '担保缺口加载中' : `${formatFxEstimate(riskValueInOrderCurrency(marginRateNumerator), 'toFixed', 2)} ${riskDisplayUnit}`} ÷ {formatFxEstimate(manualMarginRateBaseDisplay, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {riskDisplayUnit} × 100% =
                                     </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                   <div className="mt-1 text-[10px] text-gray-400">计算基数由管理员录入，单位自动与本订单担保缺口保持一致。</div>
                                 </>
@@ -5169,10 +5183,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="mt-1 font-mono text-[10px]">
                                     <span style={{ color: '#3B82F6' }}>
                                       {usesPrincipalCoverageFormula
-                                        ? `= (${Number(linkedCollateralValueU ?? 0).toFixed(2)} − ${principalLentOutValueForRisk.toFixed(2)} − ${accruedForRisk.toFixed(2)} + ${paidInterestForRisk.toFixed(2)}) ÷ ${marginRateBaseU.toFixed(2)} × 100% = `
-                                        : `= (${Number(linkedStockContributionU ?? 0).toFixed(2)} + ${Number(linkedCollateralValueU ?? 0).toFixed(2)} − ${accruedForRisk.toFixed(2)} + ${paidInterestForRisk.toFixed(2)}) ÷ ${marginRateBaseU.toFixed(2)} × 100% = `}
+                                        ? `= (${formatFxEstimate(Number(linkedCollateralValueU ?? 0), 'toFixed', 2)} − ${formatFxEstimate(principalLentOutValueForRisk, 'toFixed', 2)} − ${formatFxEstimate(accruedForRisk, 'toFixed', 2)} + ${formatFxEstimate(paidInterestForRisk, 'toFixed', 2)}) ÷ ${formatFxEstimate(marginRateBaseU, 'toFixed', 2)} × 100% = `
+                                        : `= (${formatFxEstimate(Number(linkedStockContributionU ?? 0), 'toFixed', 2)} + ${formatFxEstimate(Number(linkedCollateralValueU ?? 0), 'toFixed', 2)} − ${formatFxEstimate(accruedForRisk, 'toFixed', 2)} + ${formatFxEstimate(paidInterestForRisk, 'toFixed', 2)}) ÷ ${formatFxEstimate(marginRateBaseU, 'toFixed', 2)} × 100% = `}
                                     </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                   <div className="mt-1 text-[10px] text-gray-400">当前未引用37号原始比例，按52号订单自身担保缺口口径计算。</div>
                                 </>
@@ -5180,24 +5194,24 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 <>
                                   <div>保证金率 = 担保物市值 ÷ 计息基数 × 100%（订单盈亏与利息暂不计入）</div>
                                   <div className="mt-1 font-mono text-[10px]">
-                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)} + 0.00 − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)} + 0.00 − {formatFxEstimate(accrued, 'toFixed', 2)} + {formatFxEstimate(totalPaid, 'toFixed', 2)}) ÷ {formatFxEstimate(interestBaseNum, 'toFixed', 2)} × 100% = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                 </>
                               ) : usesPrincipalCoverageFormula ? (
                                 <>
                                   <div>保证金率 = (担保物市值 − 买入价值 − 应付利息 + 已付利息) ÷ 买入价值 × 100%</div>
                                   <div className="mt-1 font-mono text-[10px]">
-                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)} − {principalLentOutValueForRisk.toFixed(2)} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {principalLentOutValueForRisk.toFixed(2)} × 100% = </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)} − {formatFxEstimate(principalLentOutValueForRisk, 'toFixed', 2)} − {formatFxEstimate(accrued, 'toFixed', 2)} + {formatFxEstimate(totalPaid, 'toFixed', 2)}) ÷ {formatFxEstimate(principalLentOutValueForRisk, 'toFixed', 2)} × 100% = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                 </>
                               ) : (
                                 <>
                                   <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
                                   <div className="mt-1 font-mono text-[10px]">
-                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
-                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${formatFxEstimate(floatPnl, 'toFixed', 2)})` : ''} − {formatFxEstimate(accrued, 'toFixed', 2)} + {formatFxEstimate(totalPaid, 'toFixed', 2)}) ÷ {formatFxEstimate(interestBaseNum, 'toFixed', 2)} × 100% = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%`}</strong>
                                   </div>
                                 </>
                               )}
@@ -5283,7 +5297,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="flex items-center justify-between"><span className="text-gray-400">Gamma</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.gamma)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
-                        {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
+                        {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate((Number(d.iv) * 100), 'toFixed', 1)}%</span></div>}
                         {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice, 2)} u</span></div>}
                       </>
                     );
@@ -5470,11 +5484,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           {jointInternalSharedMemberIds.length > 0 ? <>
             <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
               <span style={{ color: '#6366F1' }}>手工担保池（仅计一次）</span>
-              <span className="font-semibold tabular-nums" style={{ color: '#312E81' }}>{jointInternalPoolCollateralValueU === null ? '计算中…' : `${jointInternalPoolCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+              <span className="font-semibold tabular-nums" style={{ color: '#312E81' }}>{jointInternalPoolCollateralValueU === null ? '计算中…' : `${formatFxEstimate(jointInternalPoolCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</span>
             </div>
             <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
               <span style={{ color: '#6366F1' }}>合并担保余量</span>
-              <span className="font-semibold tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${jointInternalPoolRemainingU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}</span>
+              <span className="font-semibold tabular-nums" style={{ color: jointInternalPoolRemainingU === null ? '#6B7280' : jointInternalPoolRemainingU >= 0 ? '#15803D' : '#DC2626' }}>{jointInternalPoolRemainingU === null ? '计算中…' : `${jointInternalPoolRemainingU >= 0 ? '+' : ''}${formatFxEstimate(jointInternalPoolRemainingU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}</span>
             </div>
             <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>仅合并本订单、当前拥有者明确勾选且非持仓全额的段；手工与已归属的钱包冻结均只计一次，37号引用不进入本池。</p>
           </> : <p className="mt-1.5 text-[10px] leading-4" style={{ color: '#6366F1' }}>已参加的段均为“持仓全额”，每段仅按自身市值与利息独立计算，不建立合并担保池。</p>}
@@ -5602,7 +5616,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
               $setShowPaymentPanel(isOpening ? order.id : null);
-              $setPaymentForm(() => ({ amount: '', currency: rateCur === 'CNY' ? 'CNY' : 'U', exchangeRate: String(cnyRate || 7.0), payDate: new Date().toISOString().slice(0, 10), note: '' }));
+              $setPaymentForm(() => ({ amount: '', currency: rateCur === 'CNY' ? 'CNY' : 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), payDate: new Date().toISOString().slice(0, 10), note: '' }));
               if (isOpening) {
                 // 初始化利息约等于配置
                 try {
@@ -5956,7 +5970,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               step="0.00000001"
                               value={selected.qty}
                               onChange={(event) => setWalletCollateralEditItems((previous) => previous.map((item) => item.coin === assetCode ? { ...item, qty: event.target.value, note: '钱包担保冻结', source: 'wallet' } : item))}
-                              placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}`}
+                              placeholder={`最多 ${formatFxEstimate(maximum, 'toLocaleString', 'zh-CN', { maximumFractionDigits: 8 })}`}
                               className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500"
                             />
                             <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
@@ -6011,17 +6025,17 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             <div className="flex gap-2 mb-1">
               <span className="text-xs text-gray-500 self-center">结息币种：</span>
               <button
-                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'U', exchangeRate: String(cnyRate || 7.0) }))}
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : '') }))}
                 className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
                 style={{ backgroundColor: $paymentForm.currency === 'U' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'U' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'U' ? '#1A2340' : '#D1D5DB' }}
               >U</button>
               <button
-                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'CNY', exchangeRate: String(cnyRate || 7.0) }))}
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'CNY', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : '') }))}
                 className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
                 style={{ backgroundColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'CNY' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#D1D5DB' }}
               >元</button>
               {$paymentForm.currency === 'CNY' && cnyRate && (
-                <span className="text-[10px] self-center" style={{ color: '#94a3b8' }}>汇率 {cnyRate.toFixed(4)}</span>
+                <span className="text-[10px] self-center" style={{ color: '#94a3b8' }}>汇率 {formatFxEstimate(cnyRate, 'toFixed', 4)}</span>
               )}
             </div>
             <div className="flex gap-2">
@@ -6112,7 +6126,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: selectedJointPaymentSegmentId ? selectedJointPaymentUserId : _participantUserId, jointSegmentId: selectedJointPaymentSegmentId || undefined });
+                if (resolveUsdtCnyPaymentRate($paymentForm.exchangeRate, cnyRate) === null) { toast.error('汇率待更新，请输入有效的 USDT/CNY 汇率后付款'); return; }
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: resolveUsdtCnyPaymentRate($paymentForm.exchangeRate, cnyRate)!, payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: selectedJointPaymentSegmentId ? selectedJointPaymentUserId : _participantUserId, jointSegmentId: selectedJointPaymentSegmentId || undefined });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -6233,7 +6248,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       <button
                         onClick={() => {
                           if (!editPaymentForm.amount || parseFloat(editPaymentForm.amount) <= 0) { toast.error('请填写金额'); return; }
-                          _intUpdatePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id, amount: parseFloat(editPaymentForm.amount), currency: editPaymentForm.currency, exchangeRate: parseFloat(editPaymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: editPaymentForm.payDate, note: editPaymentForm.note || undefined, periodStart: editPaymentForm.periodStart || undefined, periodEnd: editPaymentForm.periodEnd || undefined });
+                          if (resolveUsdtCnyPaymentRate(editPaymentForm.exchangeRate, cnyRate) === null) { toast.error('汇率待更新，请输入有效的 USDT/CNY 汇率后保存'); return; }
+                          _intUpdatePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id, amount: parseFloat(editPaymentForm.amount), currency: editPaymentForm.currency, exchangeRate: resolveUsdtCnyPaymentRate(editPaymentForm.exchangeRate, cnyRate)!, payDate: editPaymentForm.payDate, note: editPaymentForm.note || undefined, periodStart: editPaymentForm.periodStart || undefined, periodEnd: editPaymentForm.periodEnd || undefined });
                         }}
                         disabled={_intUpdatePaymentMutation.isPending}
                         className="flex-1 py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-50"
@@ -6246,7 +6262,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   <div className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {(p.currency || 'U') === 'CNY' ? '元' : 'u'}</span>
+                        <span className="font-medium" style={{ color: '#16A34A' }}>+{formatFxEstimate(parseFloat(p.amount), 'toFixed', 2)} {(p.currency || 'U') === 'CNY' ? '元' : 'u'}</span>
                         {(p.pay_date || p.payment_date) && <span className="text-gray-400">{fmtDate(p.pay_date || p.payment_date)}</span>}
                       </div>
                       {(p.period_start || p.period_end) && <div className="text-[10px] text-gray-400 mt-0.5">{p.period_start ? fmtDate(p.period_start) : ''}{p.period_start && p.period_end ? ' → ' : ''}{p.period_end ? fmtDate(p.period_end) : ''}</div>}
@@ -6254,7 +6270,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     </div>
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       <button
-                        onClick={() => { setEditPaymentId(p.id); setEditPaymentForm({ amount: String(p.amount), currency: (p.currency || 'U') as 'CNY'|'U', exchangeRate: String(p.exchange_rate || 7.0), payDate: p.pay_date ? String(p.pay_date).slice(0,10) : '', note: p.note || '', periodStart: p.period_start ? String(p.period_start).slice(0,10) : '', periodEnd: p.period_end ? String(p.period_end).slice(0,10) : '' }); }}
+                        onClick={() => { setEditPaymentId(p.id); setEditPaymentForm({ amount: String(p.amount), currency: (p.currency || 'U') as 'CNY'|'U', exchangeRate: (finitePositive(p.exchange_rate) !== null ? String(p.exchange_rate) : ''), payDate: p.pay_date ? String(p.pay_date).slice(0,10) : '', note: p.note || '', periodStart: p.period_start ? String(p.period_start).slice(0,10) : '', periodEnd: p.period_end ? String(p.period_end).slice(0,10) : '' }); }}
                         className="p-1 rounded hover:bg-blue-50 text-blue-400 hover:text-blue-600 transition-colors"
                         title="编辑"
                       >

@@ -1,11 +1,11 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
+import { fetchIntradayStockQuotes, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 import { normalizePortfolioSymbol, portfolioCurrency, portfolioMarket, portfolioQuantityIsEmpty, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, portfolioCashMultiplier } from '../shared/portfolio-instruments';
 import { getCryptoPortfolioEffectiveDate, getCryptoPortfolioTradeSettlementDate, latestCryptoPortfolioSnapshotDate, CRYPTO_PORTFOLIO_POLICY_VERSION } from '../shared/crypto-portfolio-policy';
 import { guardCryptoPortfolioAllocationWrite } from './crypto-portfolio-allocation-write-guard';
 import { fetchCryptoPortfolioQuotes, getCachedCryptoPortfolioQuote, searchCryptoPortfolio } from './crypto-portfolio-quotes';
-import { getLiveCryptoUsdtCnyQuote } from './crypto-portfolio-fx';
+import { getLiveUsdtCnyQuote } from './usdt-cny-rate';
 import { readTagVisible } from "../shared/tag-visibility";
 import { isLedger37FullManager } from "../shared/ledger37-permissions";
 import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
@@ -150,9 +150,17 @@ function parsePortfolioActualTime(value: string | undefined, now: Date): Date {
 async function readLiveUsdtCnyRate(symbols: string[]): Promise<number | null> {
   if (!symbols.some(isCryptoPortfolioSymbol)) return null;
   try {
-    const quote = await getLiveCryptoUsdtCnyQuote();
+    const quote = await getLiveUsdtCnyQuote();
     return quote && !quote.stale && quote.pair === 'USDT/CNY' && Number.isFinite(quote.rate) && quote.rate > 0 ? quote.rate : null;
   } catch { return null; }
+}
+
+/** 美股本金和盈亏以USD计价，绝不借用USDT的场外参考汇率。 */
+async function readLiveUsdCnyRate(): Promise<number> {
+  try {
+    const quote = await getLiveStockUsdCnyQuote();
+    return quote && !quote.stale && quote.pair === 'USD/CNY' && Number.isFinite(quote.rate) && quote.rate > 0 ? quote.rate : 0;
+  } catch { return 0; }
 }
 
 function toIso(value: unknown): string {
@@ -1271,7 +1279,7 @@ async function buildPortfolio(categoryId: number) {
     getSoldLots(categoryId, allLots, true),
   ]);
 
-  const usdCnyRate = Number(getUsdtCnyRate() || 0);
+  const usdCnyRate = await readLiveUsdCnyRate();
   const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate, usdtCnyRate);
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
@@ -1712,7 +1720,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   });
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
-  const usdCnyRate = Number(getUsdtCnyRate() || 0);
+  const usdCnyRate = await readLiveUsdCnyRate();
   const cnySummary = summarizePositionsInCny(positions, usdCnyRate, usdtCnyRate);
   const closedLots = visibleParticipations
     .filter((item) => portfolioQuantityIsEmpty(item.symbol, item.remainingQuantity))

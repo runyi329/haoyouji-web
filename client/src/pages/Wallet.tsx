@@ -1,3 +1,4 @@
+import { getWalletFxValuation } from '@shared/usdt-cny-display';
 import { useEffect, useState, type CSSProperties } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
@@ -811,6 +812,21 @@ function WalletTransferContent({
   );
 }
 
+/** Existing asset rows need a numeric FX; render original units explicitly while FX is unavailable. */
+export function WalletFxAssetList({ assets, usdtCnyRate, mask }: {
+  assets: ReturnType<typeof buildWalletDigitalAssets>; usdtCnyRate: number | null; mask: (value: string) => string;
+}) {
+  if (usdtCnyRate !== null) return <WalletDigitalAssetList assets={assets} usdtCnyRate={usdtCnyRate} mask={mask} />;
+  return <div className="overflow-hidden rounded-xl" style={{ border: `1px solid ${G.divider}` }}>
+    {assets.map(asset => <div key={asset.assetCode} className="border-b px-3 py-3" style={{ borderColor: G.divider }}>
+      <div className="flex justify-between gap-3 text-sm" style={{ color: G.white }}><span>{asset.assetCode}</span><strong>{mask(formatDigitalAssetAmount(asset.assetCode, asset.totalBalance))} {asset.assetCode}</strong></div>
+      <div className="mt-1 text-[11px]" style={{ color: G.whiteDim }}>可用 {asset.availableBalance === null ? '—' : mask(formatDigitalAssetAmount(asset.assetCode, asset.availableBalance))} · 担保 {asset.frozenBalance === null ? '—' : mask(formatDigitalAssetAmount(asset.assetCode, asset.frozenBalance))}</div>
+      {asset.assetCode !== 'USDT' && <div className="mt-1 text-[11px]" style={{ color: G.whiteDim }}>{asset.priceUsdt > 0 ? `≈ ${mask((asset.totalBalance * asset.priceUsdt).toLocaleString('zh-CN', { maximumFractionDigits: 2 }))} USDT` : '行情待更新'}</div>}
+      <div className="mt-1 text-[11px]" style={{ color: G.whiteDim }}>人民币估值/汇率待更新</div>
+    </div>)}
+  </div>;
+}
+
 // ─── 主页面 ──────────────────────────────────────────────────
 export default function Wallet({ appearance = "default" }: { appearance?: "default" | "miban" } = {}) {
   const [, setLocation] = useLocation();
@@ -918,18 +934,18 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
   const cnyAvailableBalance = Number(cnySummary.available ?? cnyBalance);
   const unifiedPrices = ((walletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
-  const unifiedUsdtCnyRate = Number((walletPricesQuery.data as any)?.usdtCnyRate ?? 0);
-  const usdtCnyRate = unifiedUsdtCnyRate > 0 ? unifiedUsdtCnyRate : 7.25;
-  const usdtToCny = usdtTotalBalance * usdtCnyRate;
-  const cnyToUsdt = cnyBalance / usdtCnyRate;
+  const walletFxValuation = getWalletFxValuation(usdtTotalBalance, cnyBalance, walletPricesQuery.data);
+  const usdtCnyRate = walletFxValuation.rate;
+  const usdtToCny = walletFxValuation.usdtValueCny;
+  const cnyToUsdt = walletFxValuation.cnyValueUsdt;
   const multiAssetBalances = ((multiAssetBalancesQuery.data ?? []) as any[]).map((asset) => {
     const assetCode = String(asset.assetCode || '').trim().toUpperCase();
     const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
-    const priceUsdt = Number.isFinite(livePriceUsdt) && livePriceUsdt > 0 ? livePriceUsdt : isMibanWalletEntry ? 0 : Number(asset.priceUsdt || 0);
+    const priceUsdt = Number.isFinite(livePriceUsdt) && livePriceUsdt > 0 ? livePriceUsdt : 0;
     return {
       ...asset,
       priceUsdt,
-      priceCny: priceUsdt > 0 ? priceUsdt * usdtCnyRate : isMibanWalletEntry ? 0 : Number(asset.priceCny || 0),
+      priceCny: priceUsdt > 0 && usdtCnyRate !== null ? priceUsdt * usdtCnyRate : null,
     };
   });
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
@@ -944,13 +960,13 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
     0,
   );
   const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
-  // 米伴共用相同卡片，但未知行情不能被当成真实零值或静默漏掉持有资产。
-  const mibanDigitalValuationKnown = usdtBalanceSummaryQuery.data !== undefined
+  // 所有入口（含37/52/米伴）统一：未知行情不能被当成零或完整估值。
+  const digitalValuationKnown = usdtBalanceSummaryQuery.data !== undefined
     && multiAssetBalancesQuery.data !== undefined
     && walletPricesQuery.data !== undefined
     && visibleMultiAssetBalances.every((asset) => Number.isFinite(Number(asset.priceUsdt)) && Number(asset.priceUsdt) > 0);
-  const mibanCnyValuationKnown = mibanDigitalValuationKnown
-    && Number.isFinite(unifiedUsdtCnyRate) && unifiedUsdtCnyRate > 0;
+  const cnyValuationKnown = digitalValuationKnown
+    && usdtCnyRate !== null;
   // 钱包为全局共享账户；当前仅开放数字币和人民币两类账户。
   const cryptoAccountLabel = "数字币账户";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = [
@@ -1361,7 +1377,7 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
           unit="USDT"
           subLine={!hideBalance && (
             <div className="flex items-center space-x-1 mt-0.5" style={{ color: G.goldDim }}>
-              <span className="text-xs">≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
+              <span className="text-xs">≈ ¥{(usdtToCny === null ? "人民币估值待更新" : usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} 人民币</span>
               <span className="text-xs">· 可用 {usdtAvailableBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               {Number(usdtSummary.frozen) > 0 && <span className="text-xs" style={{ color: '#B0BEC5' }}>· 冻结 {Number(usdtSummary.frozen).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
             </div>
@@ -1430,7 +1446,7 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
           balanceCaption="总资产估值"
           balanceFontSize="2rem"
           subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
-            ≈ {cnyToUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            ≈ {(cnyToUsdt === null ? "汇率待更新" : cnyToUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} USDT
           </div>}
           txPath="/wallet/cny-transactions"
           onRefresh={() => { void cnyBalanceQuery.refetch(); void cnyBalanceSummaryQuery.refetch(); void cnyHistoryQuery.refetch(); }}
@@ -1499,11 +1515,11 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
         {isGlobalWalletView && activeAsset === "CRYPTO" && <AccountCard
           icon="₿"
           label="数字币账户"
-          balance={mask(isMibanWalletEntry && !mibanDigitalValuationKnown ? "估值待更新" : digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-          unit={isMibanWalletEntry && !mibanDigitalValuationKnown ? "" : "USDT"}
+          balance={mask(!digitalValuationKnown ? "估值待更新" : digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+          unit={!digitalValuationKnown ? "" : "USDT"}
           balanceCaption="总资产估值"
           subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
-            {isMibanWalletEntry && !mibanCnyValuationKnown ? "人民币估值待更新" : `≈ ¥${(digitalTotalUsdt * usdtCnyRate).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币`}
+            {!cnyValuationKnown ? "人民币估值待更新" : `≈ ¥${(digitalTotalUsdt * usdtCnyRate!).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币`}
           </div>}
           txPath=""
           onRefresh={refreshWalletData}
@@ -1523,7 +1539,8 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
                 <span className="font-semibold" style={{ color: G.white }}>我的数字资产</span>
                 <span style={{ color: G.whiteDim }}>{visibleDigitalAssetBalances.length > 0 ? "数量 / 估值" : "暂无持仓"}</span>
               </div>
-              {visibleDigitalAssetBalances.length > 0 ? <WalletDigitalAssetList assets={visibleDigitalAssetBalances} usdtCnyRate={usdtCnyRate} mask={mask} /> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.025)", border: `1px dashed ${G.divider}` }}>
+              <p className="mb-2 px-1 text-xs" style={{ color: G.whiteDim }}>人民币余额 ¥{mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}（原币）</p>
+              {visibleDigitalAssetBalances.length > 0 ? <WalletFxAssetList assets={visibleDigitalAssetBalances} usdtCnyRate={usdtCnyRate} mask={mask} /> : <div className="flex min-h-28 flex-col items-center justify-center rounded-xl px-5 py-4 text-center" style={{ background: "rgba(var(--wallet-neutral-rgb,255,255,255),0.025)", border: `1px dashed ${G.divider}` }}>
                 <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(var(--wallet-accent-rgb,201,168,76),0.10)", border: `1px solid rgba(var(--wallet-accent-rgb,201,168,76),0.20)` }}>
                   <WalletIcon className="h-4 w-4" style={{ color: G.goldDim }} />
                 </div>

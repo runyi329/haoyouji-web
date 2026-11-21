@@ -56,6 +56,10 @@ export function useMibanWalletValue() {
     ) {
       return { value: null, error: null };
     }
+    const usdtCnyRate = pricesQuery.data.usdtCnyRate;
+    if (usdtCnyRate === null) {
+      return { value: null, error: "人民币汇率暂不可用" };
+    }
     try {
       return {
         value: calculateMibanWalletValue({
@@ -63,7 +67,7 @@ export function useMibanWalletValue() {
           cny: cnyQuery.data,
           assets: assetsQuery.data,
           prices: pricesQuery.data.prices,
-          usdtCnyRate: pricesQuery.data.usdtCnyRate,
+          usdtCnyRate,
         }),
         error: null,
       };

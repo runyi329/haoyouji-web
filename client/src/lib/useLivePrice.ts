@@ -25,7 +25,7 @@ type UnifiedCryptoPrices = {
   prices: Record<string, number>;
   changes: Record<string, number>;
   opens: Record<string, number>;
-  usdtCnyRate: number;
+  usdtCnyRate: number | null;
 };
 
 let _unifiedCryptoCache: (UnifiedCryptoPrices & { fetchedAt: number }) | null = null;
@@ -36,24 +36,23 @@ async function fetchUnifiedCryptoPrices(): Promise<UnifiedCryptoPrices | null> {
   }
   try {
     const response = await fetch('/api/trpc/getCryptoPrices', { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return _unifiedCryptoCache;
+    if (!response.ok) return _unifiedCryptoCache ? { ..._unifiedCryptoCache, usdtCnyRate: null } : null;
     const raw = await response.json() as any;
     const payload = raw?.result?.data?.json ?? raw?.result?.data ?? raw;
     const prices = payload?.prices && typeof payload.prices === 'object' ? payload.prices : {};
     const changes = payload?.changes && typeof payload.changes === 'object' ? payload.changes : {};
     const opens = payload?.opens && typeof payload.opens === 'object' ? payload.opens : {};
     const rate = Number(payload?.usdtCnyRate || 0);
-    if (Object.keys(prices).length === 0) return _unifiedCryptoCache;
     _unifiedCryptoCache = {
-      prices,
+      prices: Object.keys(prices).length ? prices : (_unifiedCryptoCache?.prices ?? {}),
       changes,
       opens,
-      usdtCnyRate: rate > 0 ? rate : (_unifiedCryptoCache?.usdtCnyRate || 6.8),
+      usdtCnyRate: Number.isFinite(rate) && rate > 0 && payload?.usdtCnyFx?.stale !== true ? rate : null,
       fetchedAt: Date.now(),
     };
     return _unifiedCryptoCache;
   } catch {
-    return _unifiedCryptoCache;
+    return _unifiedCryptoCache ? { ..._unifiedCryptoCache, usdtCnyRate: null } : null;
   }
 }
 
@@ -82,7 +81,7 @@ export async function fetchCryptoPrices(coins: string[]): Promise<{
   prices: Record<string, number>;
   changes: Record<string, number>;
   opens: Record<string, number>;
-  usdtCnyRate: number;
+  usdtCnyRate: number | null;
 }> {
   const source = await fetchUnifiedCryptoPrices();
   const prices: Record<string, number> = {};
@@ -98,7 +97,7 @@ export async function fetchCryptoPrices(coins: string[]): Promise<{
       _cryptoCache[key] = { price, changePercent: changes[key], open: opens[key], fetchedAt: Date.now() };
     }
   }
-  return { prices, changes, opens, usdtCnyRate: Number(source?.usdtCnyRate || _unifiedCryptoCache?.usdtCnyRate || 6.8) };
+  return { prices, changes, opens, usdtCnyRate: source?.usdtCnyRate ?? null };
 }
 
 // ===== 通道二：市场行情（直接调用服务器 tRPC，待 Cloudflare Worker 部署后切换）=====
@@ -226,30 +225,19 @@ export async function fetchUsdCnyRate(): Promise<number> {
     return _rateCacheValue.rate;
   }
   try {
-    const res = await fetch(`/api/trpc/exchange.getRate?input=${encodeURIComponent(JSON.stringify({ fromcoin: 'USD', tocoin: 'CNY' }))}`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`/api/trpc/exchange.getRate?input=${encodeURIComponent(JSON.stringify({ json: { fromcoin: 'USD', tocoin: 'CNY', money: 1 } }))}`, { signal: AbortSignal.timeout(5000) });
     if (res.ok) {
       const d = await res.json() as any;
-      const rateResult = d?.result?.data;
-      const rate = rateResult?.success ? parseFloat(rateResult.money || '0') : 0;
-      if (rate > 0) {
+      const rateResult = d?.result?.data?.json ?? d?.result?.data;
+      const rate = rateResult?.success && rateResult.stale !== true ? Number(rateResult.money || '0') : 0;
+      if (Number.isFinite(rate) && rate > 0) {
         _rateCacheValue = { rate, fetchedAt: Date.now() };
         return rate;
       }
     }
-  } catch { /* 兜底 */ }
-  // 兜底：fawazahmed0 currency-api（免费，无需 Key，支持 CORS）
-  try {
-    const res = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json', { signal: AbortSignal.timeout(5000) });
-    if (res.ok) {
-      const d = await res.json() as any;
-      const rate = d?.usd?.cny;
-      if (rate && rate > 0) {
-        _rateCacheValue = { rate, fetchedAt: Date.now() };
-        return rate;
-      }
-    }
-  } catch { /* 兜底 */ }
-  return _rateCacheValue?.rate || 6.8; // 最终兜底
+  } catch { /* 明确未知，不在浏览器另找法币源或套固定值 */ }
+  _rateCacheValue = null;
+  return 0;
 }
 
 // ===== React Hooks =====
@@ -286,8 +274,8 @@ export function useCryptoPrices(intervalMs = 3000) {
     prices: Record<string, number>;
     changes: Record<string, number>;
     opens: Record<string, number>;
-    usdtCnyRate: number;
-  }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 6.8 });
+    usdtCnyRate: number | null;
+  }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: null });
 
   const BUILTIN_COINS_LIST = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
 
@@ -300,7 +288,7 @@ export function useCryptoPrices(intervalMs = 3000) {
       prices: { ...prev.prices, ...result.prices },
       changes: { ...prev.changes, ...result.changes },
       opens: { ...prev.opens, ...result.opens },
-      usdtCnyRate: result.usdtCnyRate || prev.usdtCnyRate,
+      usdtCnyRate: result.usdtCnyRate,
     }));
   }, []);
 
@@ -315,18 +303,18 @@ export function useCryptoPrices(intervalMs = 3000) {
 
 /** Hook：USD/CNY 汇率（替换 trpc.exchange.getRate.useQuery） */
 export function useUsdCnyRate(intervalMs = 60000) {
-  const [rate, setRate] = useState<number>(6.8);
+  const [rate, setRate] = useState<number>(0);
 
   useEffect(() => {
-    fetchUsdCnyRate().then(r => { if (r > 0) setRate(r); });
+    fetchUsdCnyRate().then(setRate);
     const timer = setInterval(() => {
-      fetchUsdCnyRate().then(r => { if (r > 0) setRate(r); });
+      fetchUsdCnyRate().then(setRate);
     }, intervalMs);
     return () => clearInterval(timer);
   }, [intervalMs]);
 
   // 返回与 trpc.exchange.getRate 兼容的格式
-  return { data: { success: true, money: String(rate), fromcoin: 'USD', tocoin: 'CNY' } };
+  return { data: { success: Number.isFinite(rate) && rate > 0, money: String(rate), fromcoin: 'USD', tocoin: 'CNY' } };
 }
 
 /** Hook：黄金价格（替换 trpc.stock.getGoldPrice.useQuery） */

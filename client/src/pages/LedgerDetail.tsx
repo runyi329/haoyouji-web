@@ -1,9 +1,13 @@
+import { finitePositive, getUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
-import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
+import { formatFunderPendingInterest as formatOriginalFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
+function formatFunderPendingInterest(value: number, contract: boolean): string {
+  return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
+}
 import { getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
 import { Ledger37PresentationGate, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
 import { matchesUserSearch } from "@/lib/userIdentity";
@@ -406,7 +410,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
                 ? <>
                     <span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {buyValue.toFixed(2)} = </span>
                     <strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
-                      {floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U
+                      {floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)} U
                       {floatPnl >= 0 ? '（浮盈）' : '（亏损）'}
                     </strong>
                   </>
@@ -444,14 +448,14 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
             <div>担保物 + 浮动盈亏 − 代结利息 + 已结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
-                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)}) − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
+                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
               }
             </div>
             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
               {isSufficient
-                ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
-                : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
+                ? `担保物充足，还有 ${formatFxEstimate(exposure, 'toFixed', 2)} U 的余量空间`
+                : `担保物不足，还需补充 ${formatFxEstimate(Math.abs(exposure), 'toFixed', 2)} U 才能覆盖风险`
               }
             </div>
           </div>
@@ -544,8 +548,8 @@ function FunderOrderCardLegacy({
   setParticipantsEditMode,
 }: FunderOrderCardLegacyProps) {
   // 走服务器tRPC获取汇率，3秒刷新（与订单卡片保持一致）
-  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.75") || 6.75;
+  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USDT', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
+  const cnyRate = getUsdtCnyRate(_cnyRateData) ?? Number.NaN;
 
 
 
@@ -932,7 +936,7 @@ function FunderOrderCardLegacy({
             </div>
             {order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{formatFxEstimate((totalU / cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} U</div>
               )
             ) : isOptionOrder ? (
               optionCurrentValue !== null && (
@@ -1121,12 +1125,12 @@ function FunderOrderCardLegacy({
             <div className="flex items-center justify-between">
               <span className="whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                {formatFxEstimate(displayPaid, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
             {approxPaidMode !== 'hidden' && (
               <div className="flex justify-end">
-                <span className="text-gray-400">≈{approxPaidValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
+                <span className="text-gray-400">≈{formatFxEstimate(approxPaidValue, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
               </div>
             )}
             </>
@@ -1228,8 +1232,8 @@ function FunderOrderCardLegacy({
                         <div className="mt-1 font-mono">
                           {floatPnl !== null
                             ? (isSelfFundedOption
-                              ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} U（自有资产实时价值）</strong></>
-                              : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {totalU.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
+                              ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{formatFxEstimate(floatPnl, 'toFixed', 2)} U（自有资产实时价值）</strong></>
+                              : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {totalU.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
                             : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                           }
                         </div>
@@ -1264,16 +1268,16 @@ function FunderOrderCardLegacy({
                         <div>{isSelfFundedOption ? '自有资产期权只采用实时合约价值，不叠加利息或担保物' : '担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）'}</div>
                         <div className="mt-1 font-mono">
                           {isSelfFundedOption
-                            ? <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{exposure.toFixed(2)} U</strong></span>
+                            ? <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
                             : floatPnl !== null
-                            ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                            : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                            ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{formatFxEstimate(floatPnl, 'toFixed', 2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
+                            : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{formatFxEstimate(exposure, 'toFixed', 2)} U</strong></span>
                           }
                         </div>
                         <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                           {isSufficient
-                            ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
-                            : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
+                            ? `担保物充足，还有 ${formatFxEstimate(exposure, 'toFixed', 2)} U 的余量空间`
+                            : `担保物不足，还需补充 ${formatFxEstimate(Math.abs(exposure), 'toFixed', 2)} U 才能覆盖风险`
                           }
                         </div>
                       </div>
@@ -1330,7 +1334,7 @@ function FunderOrderCardLegacy({
                   >?</button>
                 </div>
                 <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
-                  {isSufficient ? '100%' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                  {isSufficient ? '100%' : `-${formatFxEstimate((Math.abs(exposure)), 'toLocaleString', undefined, { maximumFractionDigits: 2 })} U`}
                 </span>
               </div>
               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
@@ -1358,7 +1362,7 @@ function FunderOrderCardLegacy({
                           style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
                         >?</button>
                       </div>
-                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{isAlerting ? ' ⚠' : ''}</span>
+                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%{isAlerting ? ' ⚠' : ''}</span>
                     </div>
                     {showMarginInfo && (
                       <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
@@ -1372,8 +1376,8 @@ function FunderOrderCardLegacy({
                               <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
                               <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
                               <div className="mt-1 font-mono text-[10px]">
-                                <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
-                                <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
+                                <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${formatFxEstimate(floatPnl, 'toFixed', 2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                <strong style={{ color: marginColor }}>{formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%</strong>
                               </div>
                             </div>
                             <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
@@ -1644,10 +1648,10 @@ function FunderOrderCardLegacy({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{formatFxEstimate(displayPaid, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
           <button
-            onClick={() => { setShowPaymentPanel?.(showPaymentPanel === order.id ? null : order.id); setPaymentForm?.(() => ({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
+            onClick={() => { setShowPaymentPanel?.(showPaymentPanel === order.id ? null : order.id); setPaymentForm?.(() => ({ amount: '', currency: 'U', exchangeRate: (finitePositive(cnyRate) !== null ? String(cnyRate) : ''), payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
             style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
           >
@@ -1703,8 +1707,9 @@ function FunderOrderCardLegacy({
             </div>
             <button
               onClick={() => {
-                if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                addPaymentMutation?.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: parseFloat(paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
+                if (!paymentForm?.amount || parseFloat(paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
+                if (resolveUsdtCnyPaymentRate(paymentForm.exchangeRate, cnyRate) === null) { toast.error('汇率待更新，请输入有效的 USDT/CNY 汇率后付款'); return; }
+                addPaymentMutation?.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: resolveUsdtCnyPaymentRate(paymentForm.exchangeRate, cnyRate)!, payDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
               }}
               disabled={addPaymentMutation?.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -2923,9 +2928,9 @@ export default function LedgerDetail() {
   const equityLivePrices: Record<string, number> = effectiveIsFunder
     ? funderLivePrices
     : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
-  // 实时 USD/CNY 汇率 — 资方订单返回后启用，30秒刷新
+  // 实时 USDT/CNY 汇率 — 资方订单返回后启用，30秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { fromcoin: 'USDT', tocoin: 'CNY', money: 1 },
     {
       // 先让资方订单独立返回，再加载外部汇率，避免同一tRPC批次被慢汇率拖住。
       enabled: isCustomAF && effectiveIsFunder && funderAssetOrders.length > 0,
@@ -2935,7 +2940,7 @@ export default function LedgerDetail() {
       staleTime: 30000,
     }
   );
-  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 6.75;
+  const cnyRate = getUsdtCnyRate(cnyRateData) ?? Number.NaN;
 
 
 
@@ -3024,7 +3029,7 @@ export default function LedgerDetail() {
     for (const r of arr) {
       const oid = Number(r.orderId);
       if (!map[oid]) map[oid] = [];
-      map[oid].push({ currency: r.currency || 'U', total: parseFloat(r.total || '0'), exchangeRate: parseFloat(r.exchangeRate || '1') });
+      map[oid].push({ currency: r.currency || 'U', total: parseFloat(r.total || '0'), exchangeRate: finitePositive(r.exchangeRate) ?? Number.NaN });
     }
     return map;
   }, [interestSummary]);
@@ -3038,7 +3043,7 @@ export default function LedgerDetail() {
       const paidInBase = payments.reduce((sum, payment) => {
         const amount = Number(payment.total || 0);
         const paymentCurrency = String(payment.currency || 'U').toUpperCase();
-        const exchangeRate = Number(payment.exchangeRate || cnyRate || 1);
+        const exchangeRate = finitePositive(payment.exchangeRate) ?? finitePositive(cnyRate) ?? Number.NaN;
         if (!Number.isFinite(amount)) return sum;
         if (paymentCurrency === baseCurrency || (paymentCurrency === 'U' && baseCurrency === 'USDT')) return sum + amount;
         if (paymentCurrency === 'CNY' && baseCurrency === 'USDT') return sum + amount / (exchangeRate > 0 ? exchangeRate : cnyRate);
@@ -4086,7 +4091,7 @@ export default function LedgerDetail() {
 	              {/* 资方视角：合作资金总额汇总 */}
               {isCustomAF && effectiveIsFunder && (() => {
                 const activeOrders: any[] = (funderAssetOrders as any[] || []).filter((o: any) => o.status !== 'settled');
-                const effectiveCnyRate2 = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
+                const effectiveCnyRate2 = cnyRate;
                 const usdtTotal = activeOrders.reduce((sum: number, o: any) => {
                   // 股票类型归入人民币，不计入数字币
                   if (o.asset_type === 'stock') return sum;
@@ -4118,12 +4123,12 @@ export default function LedgerDetail() {
                   if (baseCur !== 'CNY') return sum + baseAmt * effectiveCnyRate2;
                   return sum + baseAmt;
                 }, 0);
-	                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
+	                const effectiveCnyRate = cnyRate;
 	                const usdtInCny = usdtTotal * effectiveCnyRate;
 	                const totalInCny = cnyTotal + usdtInCny;
 	                // 总览容器首屏始终占位：订单和行情稍后返回时仅回填内容，不让下方列表被再次挤开。
 	                const funderSummaryLoading = funderOrdersLoading || funderAssetData === undefined;
-	                const hasFunderSummary = totalInCny > 0;
+	                const hasFunderSummary = !Number.isFinite(totalInCny) || totalInCny > 0;
 	                const displayCnyTotal = hasFunderSummary ? cnyTotal : 0;
 	                const displayUsdtTotal = hasFunderSummary ? usdtTotal : 0;
 	                const displayTotalInCny = hasFunderSummary ? totalInCny : 0;

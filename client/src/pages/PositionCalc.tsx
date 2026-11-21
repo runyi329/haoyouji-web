@@ -1,3 +1,4 @@
+import { finitePositive, getUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
 /**
  * PositionCalc.tsx
  * ETH 持仓计算页面
@@ -6,6 +7,7 @@
  * - 点击档位弹出 modal，选择修改计划量或已买量
  */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { toast } from "sonner";
 // 注入双端滑块样式
 const RANGE_SLIDER_STYLE = `
   .dual-range input[type=range] {
@@ -164,15 +166,17 @@ export default function PositionCalc() {
   const strategyUnlockedRef = useRef(false); // ref 版本，供事件回调使用
   useEffect(() => { strategyUnlockedRef.current = strategyUnlocked; }, [strategyUnlocked]);
   const strategyLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 自动重新锁定计时器
-  const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率（初始占位，会被实时值覆盖）
+  const [cnyRate, setCnyRate] = useState<number>(Number.NaN); // 缺价不伪填占位汇率
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
+  const [manualCnyRate, setManualCnyRate] = useState<number | null>(null);
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
   const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
   const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
   // 计算目标止盈价（组件级别，用于保存到数据库供P155引用）
   const computedTargetExitPrice = useMemo(() => {
+    if (finitePositive(cnyRate) === null) return Number.NaN;
     const targetQty = parseFloat(targetEthQty) || 0;
-    const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+    const profitUsdt = finitePositive(cnyRate) === null ? Number.NaN : (parseFloat(targetProfitCny) || 0) / cnyRate;
     let _planCost = 0, _planQty = 0;
     priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
     const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
@@ -284,19 +288,13 @@ export default function PositionCalc() {
   }, [allocManualQtys, allocMinPrice, allocMaxPrice]);
 
   // 获取实时 USDT/CNY 汇率 — 走服务器tRPC，60秒刷新
-  const { data: rateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
+  const { data: rateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USDT', tocoin: 'CNY', money: 1 }, { refetchInterval: 60000, staleTime: 30000 });
   useEffect(() => {
-    if (rateData?.success && rateData.money) {
-      const r = parseFloat(rateData.money);
-      if (!isNaN(r) && r > 0) {
-        setRateFromApi(r); // 记录实时汇率
-        if (!editingRate) {
-          setCnyRate(r); // 实时汇率优先，非编辑状态下立即更新显示
-        }
-      }
-    }
-    // 若接口失败，rateFromApi 保留上次成功值，不清空
-  }, [rateData, editingRate]);
+    const r = getUsdtCnyRate(rateData);
+    setRateFromApi(r);
+    // 失败/过期立即撤销实时值；仅当前编辑中的显式有效输入可由保存操作接受。
+    if (!editingRate) setCnyRate(manualCnyRate ?? r ?? Number.NaN);
+  }, [rateData, editingRate, manualCnyRate]);
 
   const utils = trpc.useUtils();
 
@@ -357,6 +355,7 @@ export default function PositionCalc() {
     if (computedTargetExitPrice > 0 && computedTargetExitPrice !== lastSavedExitPrice.current && ledgerId > 0 && !isViewAs) {
       lastSavedExitPrice.current = computedTargetExitPrice;
       const timer = setTimeout(() => {
+        if (finitePositive(cnyRate) === null || !Number.isFinite(computedTargetExitPrice)) { toast.error('汇率待更新，目标换汇计算暂不能保存'); return; }
         saveSettingsMutation.mutate({
           ledgerId,
           targetProfitCny: parseFloat(targetProfitCny) || 0,
@@ -384,7 +383,8 @@ export default function PositionCalc() {
 
   const handleStrategyDragSave = useCallback((val: number) => {
     if (isViewAs) return; // 视角查看时禁用写入
-    saveSettingsMutation.mutate({
+    if (finitePositive(cnyRate) === null || !Number.isFinite(computedTargetExitPrice)) { toast.error('汇率待更新，目标换汇计算暂不能保存'); return; }
+        saveSettingsMutation.mutate({
       ledgerId,
       targetProfitCny: parseFloat(targetProfitCny) || 0,
       cnyRate: 0,
@@ -899,7 +899,7 @@ export default function PositionCalc() {
                     <span className="text-base font-light" style={{ color: 'rgba(212,175,55,0.45)', marginRight: '4px', lineHeight: 1, alignSelf: 'center' }}>≈</span>
                     <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #d4af37 0%, #9a7a1a 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                        ? (parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })
+                        ? formatFxEstimate((parseFloat(targetProfitCny) / cnyRate), 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })
                         : <span style={{ color: 'rgba(212,175,55,0.2)' }}>--</span>
                       }
                     </span>
@@ -920,7 +920,7 @@ export default function PositionCalc() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(192,192,192,0.45)' }}>USDT/CNY</div>
-                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #e8e8e8 0%, #c0c0c0 50%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>{cnyRate.toFixed(5)}</div>
+                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #e8e8e8 0%, #c0c0c0 50%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>{formatFxEstimate(cnyRate, 'toFixed', 5)}</div>
                   </div>
                 </div>
               </div>
@@ -931,7 +931,7 @@ export default function PositionCalc() {
                   const targetQty = parseFloat(targetEthQty) || 0;
                   const actualQty = summary.totalQty || 0;
                   const pct = targetQty > 0 ? Math.min(actualQty / targetQty, 1) : 0;
-                  const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+                  const profitUsdt = finitePositive(cnyRate) === null ? Number.NaN : (parseFloat(targetProfitCny) || 0) / cnyRate;
                   // 目标均价：按计划档位数量加权均价
                   let _planCost = 0, _planQty = 0;
                   priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
@@ -951,7 +951,7 @@ export default function PositionCalc() {
                         <div>
                           <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>实际持仓</div>
                           <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
-                            {actualQty > 0 ? actualQty.toFixed(1) : '--'}
+                            {actualQty > 0 ? formatFxEstimate(actualQty, 'toFixed', 1) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(192,192,192,0.3)' }}>ETH</span>
                         </div>
@@ -989,7 +989,7 @@ export default function PositionCalc() {
                                 className="text-[10px] font-bold whitespace-nowrap"
                                 style={{ color: 'rgba(255,255,255,0.95)', textShadow: '0 0 4px rgba(79,70,229,0.8)' }}
                               >
-                                {(pct * 100).toFixed(0)}%
+                                {formatFxEstimate((pct * 100), 'toFixed', 0)}%
                               </span>
                             )}
                           </div>
@@ -1209,7 +1209,7 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>实际需要涨幅</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice
-                                      ? `+${((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%`
+                                      ? `+${formatFxEstimate(((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100), 'toFixed', 1)}%`
                                       : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -1220,7 +1220,7 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>目标需要涨幅</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice
-                                      ? `+${((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%`
+                                      ? `+${formatFxEstimate(((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100), 'toFixed', 1)}%`
                                       : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -1286,7 +1286,7 @@ export default function PositionCalc() {
 
             {/* 汇率输入 */}
             <div className="mb-4">
-              <div className="text-xs text-gray-400 mb-1">USD/CNY 汇率</div>
+              <div className="text-xs text-gray-400 mb-1">USDT/CNY 汇率</div>
               <div className="flex items-center gap-2 border-b border-gray-200 pb-1">
                 <input
                   type="number"
@@ -1301,13 +1301,19 @@ export default function PositionCalc() {
             <button
               onClick={() => {
                 const v = parseFloat(cnyRateInput);
-                const rate = (!isNaN(v) && v > 0) ? v : cnyRate;
+                const rate = resolveUsdtCnyPaymentRate(cnyRateInput, cnyRate);
+                if (rate === null) { toast.error('汇率待更新，请输入有效汇率后保存'); return; }
                 const profit = parseFloat(targetProfitCny) || 0;
-                if (!isNaN(v) && v > 0) setCnyRate(v);
+                setManualCnyRate(rate);
+                setCnyRate(rate);
                 setEditingRate(false);
                 // 保存到数据库（汇率不保存，始终用实时值）
                 if (ledgerId > 0) {
-                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
+                  const qty = parseFloat(targetEthQty) || 0;
+                  let cost = 0, planQty = 0;
+                  priceLevels.forEach(p => { const q = planned[p] || 0; cost += q * p; planQty += q; });
+                  const exitPrice = planQty > 0 && qty > 0 ? Math.round(cost / planQty + profit / rate / qty) : 0;
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: qty, priceStep, targetExitPrice: exitPrice });
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
@@ -1339,7 +1345,7 @@ export default function PositionCalc() {
                     color: summary.totalPlanned > 0 ? (summary.totalQty / summary.totalPlanned >= 1 ? '#059669' : '#1A56DB') : '#9CA3AF',
                   }}
                 >
-                  达成率 {summary.totalPlanned > 0 ? `${Math.min((summary.totalQty / summary.totalPlanned) * 100, 100).toFixed(1)}%` : '--'}
+                  达成率 {summary.totalPlanned > 0 ? `${formatFxEstimate(Math.min((summary.totalQty / summary.totalPlanned) * 100, 100), 'toFixed', 1)}%` : '--'}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1349,7 +1355,7 @@ export default function PositionCalc() {
                 >
                   <div className="text-[10px] text-gray-400 mb-0.5">实际持仓</div>
                   <div className="text-lg font-bold tabular-nums" style={{ color: '#1A56DB' }}>
-                    {summary.totalQty.toFixed(2)}
+                    {formatFxEstimate(summary.totalQty, 'toFixed', 2)}
                   </div>
                   <div className="text-[10px] text-gray-400">ETH</div>
                 </div>
@@ -1359,7 +1365,7 @@ export default function PositionCalc() {
                 >
                   <div className="text-[10px] text-gray-400 mb-0.5">计划持仓</div>
                   <div className="text-lg font-bold tabular-nums text-gray-600">
-                    {summary.totalPlanned.toFixed(2)}
+                    {formatFxEstimate(summary.totalPlanned, 'toFixed', 2)}
                   </div>
                   <div className="text-[10px] text-gray-400">ETH</div>
                 </div>
@@ -1379,20 +1385,20 @@ export default function PositionCalc() {
             <div className="rounded-xl p-3" style={{ background: '#0d0900', border: '1px solid rgba(192,192,192,0.12)' }}>
               <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(192,192,192,0.4)' }}>当前市值</div>
               <div className="text-xl font-bold" style={{ color: '#c0c0c0', textShadow: '0 0 12px rgba(192,192,192,0.35)' }}>
-                {summary.totalValue > 0 ? `$${summary.totalValue.toFixed(0)}` : '--'}
+                {summary.totalValue > 0 ? `$${formatFxEstimate(summary.totalValue, 'toFixed', 0)}` : '--'}
               </div>
               <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>
-                成本 ${summary.avgPrice > 0 ? (summary.avgPrice * summary.totalQty).toFixed(0) : '--'}
+                成本 ${summary.avgPrice > 0 ? formatFxEstimate((summary.avgPrice * summary.totalQty), 'toFixed', 0) : '--'}
               </div>
             </div>
             <div className="rounded-xl p-3" style={{ background: '#0d0900', border: `1px solid ${isPnlPositive ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}` }}>
               <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(192,192,192,0.4)' }}>总浮盈亏</div>
               <div className={`text-xl font-bold flex items-center gap-1 ${isPnlPositive ? 'text-red-500' : 'text-green-600'}`}>
                 {isPnlPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {summary.totalPnl !== 0 ? `${isPnlPositive ? '+' : ''}$${summary.totalPnl.toFixed(0)}` : '--'}
+                {summary.totalPnl !== 0 ? `${isPnlPositive ? '+' : ''}$${formatFxEstimate(summary.totalPnl, 'toFixed', 0)}` : '--'}
               </div>
               <div className={`text-xs mt-0.5 ${isPnlPositive ? 'text-red-400' : 'text-green-500'}`}>
-                {summary.pnlPct !== 0 ? `${isPnlPositive ? '+' : ''}${summary.pnlPct.toFixed(2)}%` : '--'}
+                {summary.pnlPct !== 0 ? `${isPnlPositive ? '+' : ''}${formatFxEstimate(summary.pnlPct, 'toFixed', 2)}%` : '--'}
               </div>
             </div>
           </div>
@@ -1738,7 +1744,7 @@ export default function PositionCalc() {
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-4">
                 {/* 步骤 0：目标止盈 + 持仓数量联动 */}
                 {allocStep === 'setup' && (() => {
-                  const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+                  const profitUsdt = finitePositive(cnyRate) === null ? Number.NaN : (parseFloat(targetProfitCny) || 0) / cnyRate;
                   const qty = parseFloat(targetEthQty) || 0;
                   const simpleTargetPrice = qty > 0 && profitUsdt > 0 ? (currentPrice || 0) + profitUsdt / qty : 0;
                   const simpleRisePct = currentPrice && simpleTargetPrice > currentPrice
@@ -1790,7 +1796,7 @@ export default function PositionCalc() {
                           />
                         </div>
                         {profitUsdt > 0 && (
-                          <div className="text-xs mt-2" style={{ color: 'rgba(96,165,250,0.8)' }}>≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</div>
+                          <div className="text-xs mt-2" style={{ color: 'rgba(96,165,250,0.8)' }}>≈ ${formatFxEstimate(profitUsdt, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })} USDT</div>
                         )}
                       </div>
 
@@ -1807,7 +1813,7 @@ export default function PositionCalc() {
                           <div className="text-right">
                             <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>需涨至（估算）</div>
                             <div className="text-xl font-bold" style={{ color: profitUsdt > 0 && qty > 0 ? '#fbbf24' : 'rgba(255,255,255,0.2)' }}>
-                              {simpleTargetPrice > 0 ? `$${simpleTargetPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
+                              {simpleTargetPrice > 0 ? `$${formatFxEstimate(simpleTargetPrice, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })}` : '--'}
                             </div>
                           </div>
                         </div>
@@ -1818,14 +1824,14 @@ export default function PositionCalc() {
                           />
                           {progressPct > 0 && (
                             <div className="absolute inset-0 flex items-center justify-end pr-2">
-                              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>{(progressPct * 100).toFixed(0)}%</span>
+                              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>{formatFxEstimate((progressPct * 100), 'toFixed', 0)}%</span>
                             </div>
                           )}
                         </div>
                         <div className="flex justify-between">
                           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>当前价</span>
                           <span className="text-xs font-semibold" style={{ color: simpleRisePct > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>
-                            {simpleRisePct > 0 ? `还需涨 +${simpleRisePct.toFixed(1)}%` : '请先输入目标利润和持仓数'}
+                            {simpleRisePct > 0 ? `还需涨 +${formatFxEstimate(simpleRisePct, 'toFixed', 1)}%` : '请先输入目标利润和持仓数'}
                           </span>
                           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>止盈价</span>
                         </div>
@@ -1970,7 +1976,8 @@ export default function PositionCalc() {
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
-                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
+                            if (finitePositive(cnyRate) === null || !Number.isFinite(computedTargetExitPrice)) { toast.error('汇率待更新，目标换汇计算暂不能保存'); return; }
+        saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
                           }
                           setShowAutoAlloc(false);
                         }}
@@ -1993,7 +2000,7 @@ export default function PositionCalc() {
         const ethQty = parseFloat(targetEthQty) || 0;  // 计划持仓数量
         const actualEthQty = summary.totalQty;           // 实际持仓数量
         const profitCny = parseFloat(targetProfitCny) || 0;
-        const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : 0;
+        const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : Number.NaN;
         // 目标均价（按计划档位加权）
         let _mPlanCost = 0, _mPlanQty = 0;
         priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _mPlanCost += q * p; _mPlanQty += q; } });
@@ -2053,7 +2060,7 @@ export default function PositionCalc() {
                   <div className="text-xs font-semibold text-blue-600 mb-2 tracking-wide">目标利润</div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">¥{profitCny.toLocaleString('zh-CN')}</span>
-                    <span className="font-semibold text-gray-800">≈ {profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
+                    <span className="font-semibold text-gray-800">≈ {formatFxEstimate(profitUsdt, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })} USDT</span>
                   </div>
                 </div>
               )}
@@ -2077,16 +2084,16 @@ export default function PositionCalc() {
                       </div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-gray-500">每币需涨</span>
-                        <span className="text-sm font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                        <span className="text-sm font-semibold" style={{ color: '#f97316' }}>+${formatFxEstimate((profitUsdt / ethQty), 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })}</span>
                       </div>
                       {/* 公式推导 */}
                       <div className="rounded-lg px-3 py-2 mb-2 text-xs font-mono text-orange-700" style={{ background: 'rgba(251,146,60,0.1)' }}>
-                        {targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {ethQty.toFixed(0)} = <span className="font-bold">${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}</span>
+                        {targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${formatFxEstimate(profitUsdt, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {ethQty.toFixed(0)} = <span className="font-bold">${exitPrice ? formatFxEstimate(exitPrice, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 }) : '--'}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #FED7AA' }}>
                         <span className="text-sm font-semibold text-gray-700">目标止盈价</span>
                         <span className="text-xl font-bold" style={{ color: '#f97316' }}>
-                          ${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                          ${exitPrice ? formatFxEstimate(exitPrice, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 }) : '--'}
                         </span>
                       </div>
                     </div>
@@ -2100,7 +2107,7 @@ export default function PositionCalc() {
                       </div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-500">持仓数量</span>
-                        <span className="text-sm font-semibold text-gray-800">{actualEthQty.toFixed(0)} ETH</span>
+                        <span className="text-sm font-semibold text-gray-800">{formatFxEstimate(actualEthQty, 'toFixed', 0)} ETH</span>
                       </div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-500">持仓均价</span>
@@ -2108,16 +2115,16 @@ export default function PositionCalc() {
                       </div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-gray-500">每币需涨</span>
-                        <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>+${(profitUsdt / actualEthQty).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                        <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>+${formatFxEstimate((profitUsdt / actualEthQty), 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })}</span>
                       </div>
                       {/* 公式推导 */}
                       <div className="rounded-lg px-3 py-2 mb-2 text-xs font-mono text-green-700" style={{ background: 'rgba(34,197,94,0.1)' }}>
-                        {actualAvgForModal > 0 ? `$${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {actualEthQty.toFixed(0)} = <span className="font-bold">${actualExitPrice ? actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}</span>
+                        {actualAvgForModal > 0 ? `$${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${formatFxEstimate(profitUsdt, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {formatFxEstimate(actualEthQty, 'toFixed', 0)} = <span className="font-bold">${actualExitPrice ? formatFxEstimate(actualExitPrice, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 }) : '--'}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #BBF7D0' }}>
                         <span className="text-sm font-semibold text-gray-700">实际止盈价</span>
                         <span className="text-xl font-bold" style={{ color: '#16a34a' }}>
-                          ${actualExitPrice ? actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                          ${actualExitPrice ? formatFxEstimate(actualExitPrice, 'toLocaleString', 'en-US', { maximumFractionDigits: 0 }) : '--'}
                         </span>
                       </div>
                     </div>
@@ -2654,8 +2661,10 @@ export default function PositionCalc() {
       )}
       {/* ===== 盈利路径分析：联动滑块 ===== */}
       {(() => {
+        // 缺汇率时不运行联动换汇，原 USDT/ETH 持仓仍正常显示。
+        if (finitePositive(cnyRate) === null) return <p className="px-4 py-3 text-xs text-amber-500">人民币估值/汇率待更新，盈利路径换汇计算暂不可用。</p>;
         // 基础数据
-        const profitUsdt = (parseFloat(targetProfitCny) || 0) / (cnyRate || 6.8);
+        const profitUsdt = (parseFloat(targetProfitCny) || 0) / cnyRate;
         const curPrice = currentPrice || 0;
         // 实际均价
         let _actCost2 = 0, _actQty2 = 0;
@@ -2877,7 +2886,7 @@ function ProfitPathPanel({
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
         } else if (lockedField === 'rise') {
-          const targetUsdt = val / (cnyRate || 6.8);
+          const targetUsdt = val / cnyRate;
           if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + sliderRise / 100);
             const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
@@ -2901,7 +2910,7 @@ function ProfitPathPanel({
           if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + sliderRise / 100);
             const targetUsdt = val * (exitP - avgPrice);
-            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * cnyRate)));
             setSliderTarget(targetCny);
             sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
           }
@@ -2921,7 +2930,7 @@ function ProfitPathPanel({
           if (curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + val / 100);
             const targetUsdt = sliderQty * (exitP - avgPrice);
-            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * cnyRate)));
             setSliderTarget(targetCny);
             sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
           }
@@ -3002,7 +3011,7 @@ function ProfitPathPanel({
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
       } else if (lockedField === 'rise') {
         // 涨幅锁定：止盈变 → 持仓联动
-        const targetUsdt = target / (cnyRate || 6.8);
+        const targetUsdt = target / cnyRate;
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
           const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
@@ -3031,7 +3040,7 @@ function ProfitPathPanel({
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
           const targetUsdt = qty * (exitP - avgPrice);
-          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * cnyRate)));
           setSliderTarget(targetCny);
           sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
         }
@@ -3054,7 +3063,7 @@ function ProfitPathPanel({
         if (curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + rise / 100);
           const targetUsdt = sliderQty * (exitP - avgPrice);
-          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * cnyRate)));
           setSliderTarget(targetCny);
           sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
         }
@@ -3267,7 +3276,7 @@ function ProfitPathPanel({
         <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', letterSpacing: 1 }}>盈利路径分析</span>
         {targetProfitCny > 0 && (
           <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.7)', marginLeft: 4 }}>
-            目标 ¥{targetProfitCny.toLocaleString('zh-CN')} ≈ ${profitUsdt.toFixed(0)}
+            目标 ¥{targetProfitCny.toLocaleString('zh-CN')} ≈ ${formatFxEstimate(profitUsdt, 'toFixed', 0)}
           </span>
         )}
       </div>
@@ -3290,7 +3299,7 @@ function ProfitPathPanel({
                   border: `1px solid ${diffColor(currentDifficulty)}55`,
                   background: `${diffColor(currentDifficulty)}15`,
                 }}>
-                  {diffLabel(currentDifficulty)}&nbsp;{currentDifficulty.toFixed(0)}
+                  {diffLabel(currentDifficulty)}&nbsp;{formatFxEstimate(currentDifficulty, 'toFixed', 0)}
                 </span>
               )}
             </div>
@@ -3329,9 +3338,9 @@ function ProfitPathPanel({
 
               {/* 曲线下方填充 */}
               {diffCurvePoints.length > 1 && (() => {
-                const fillPts = diffCurvePoints.map(pt => `${toX(pt.rise).toFixed(1)},${toY(pt.difficulty).toFixed(1)}`).join(' ');
-                const firstX = toX(diffCurvePoints[0].rise).toFixed(1);
-                const lastX = toX(diffCurvePoints[diffCurvePoints.length - 1].rise).toFixed(1);
+                const fillPts = diffCurvePoints.map(pt => `${formatFxEstimate(toX(pt.rise), 'toFixed', 1)},${formatFxEstimate(toY(pt.difficulty), 'toFixed', 1)}`).join(' ');
+                const firstX = formatFxEstimate(toX(diffCurvePoints[0].rise), 'toFixed', 1);
+                const lastX = formatFxEstimate(toX(diffCurvePoints[diffCurvePoints.length - 1].rise), 'toFixed', 1);
                 const baseY = (padT + plotH).toFixed(1);
                 return (
                   <polygon
@@ -3356,10 +3365,10 @@ function ProfitPathPanel({
                     return (
                       <line
                         key={i}
-                        x1={toX(pt.rise).toFixed(1)}
-                        y1={toY(pt.difficulty).toFixed(1)}
-                        x2={toX(next.rise).toFixed(1)}
-                        y2={toY(next.difficulty).toFixed(1)}
+                        x1={formatFxEstimate(toX(pt.rise), 'toFixed', 1)}
+                        y1={formatFxEstimate(toY(pt.difficulty), 'toFixed', 1)}
+                        x2={formatFxEstimate(toX(next.rise), 'toFixed', 1)}
+                        y2={formatFxEstimate(toY(next.difficulty), 'toFixed', 1)}
                         stroke={segColor}
                         strokeWidth="2.5"
                         strokeLinecap="round"
@@ -3389,8 +3398,8 @@ function ProfitPathPanel({
                   <circle cx={selX} cy={selY} r="5.5" fill="#fff" stroke={diffColor(currentDifficulty)} strokeWidth="2" />
                   {/* 标注文字：靠近左边时向右显示，否则向左显示 */}
                   {selX < padL + plotW * 0.65
-                    ? <text x={selX + 8} y={selY - 3} fontSize="8" fill="rgba(255,255,255,0.85)">+{riseDisplay.toFixed(1)}% 难度{currentDifficulty.toFixed(0)}</text>
-                    : <text x={selX - 8} y={selY - 3} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.85)">+{riseDisplay.toFixed(1)}% 难度{currentDifficulty.toFixed(0)}</text>
+                    ? <text x={selX + 8} y={selY - 3} fontSize="8" fill="rgba(255,255,255,0.85)">+{formatFxEstimate(riseDisplay, 'toFixed', 1)}% 难度{formatFxEstimate(currentDifficulty, 'toFixed', 0)}</text>
+                    : <text x={selX - 8} y={selY - 3} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.85)">+{formatFxEstimate(riseDisplay, 'toFixed', 1)}% 难度{formatFxEstimate(currentDifficulty, 'toFixed', 0)}</text>
                   }
                 </g>
               )}
@@ -3615,7 +3624,7 @@ function ProfitPathPanel({
                 }} />
                 {/* 轨道内文字：左显最小值，右显 10000E */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
-                  {lockedField === 'target' && dynQtyMin > ETH_MIN ? `${dynQtyMin.toFixed(0)}` : '1'}
+                  {lockedField === 'target' && dynQtyMin > ETH_MIN ? `${formatFxEstimate(dynQtyMin, 'toFixed', 0)}` : '1'}
                 </span>
                 <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>10000E</span>
               </div>
@@ -3714,12 +3723,12 @@ function ProfitPathPanel({
                     background: 'rgba(255,154,48,0.06)',
                   }}
                 >
-                  <span style={{ padding: '1px 7px' }}>+{riseDisplay.toFixed(1)}%</span>
+                  <span style={{ padding: '1px 7px' }}>+{formatFxEstimate(riseDisplay, 'toFixed', 1)}%</span>
                   {exitPrice > 0 && curPrice > 0 && (
                     <>
                       <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,154,48,0.35)' }} />
                       <span style={{ padding: '1px 7px', fontSize: 15, fontWeight: 700, color: 'rgba(255,154,48,0.8)', whiteSpace: 'nowrap' }}>
-                        {exitPrice.toFixed(0)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 1, opacity: 0.7 }}>u</span>
+                        {formatFxEstimate(exitPrice, 'toFixed', 0)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 1, opacity: 0.7 }}>u</span>
                       </span>
                     </>
                   )}
@@ -3756,7 +3765,7 @@ function ProfitPathPanel({
                 }} />
                 {/* 轨道内文字 */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
-                  {lockedField === 'target' && dynRiseMin > RISE_LOG_MIN ? `${dynRiseMin.toFixed(2)}%` : '0.01%'}
+                  {lockedField === 'target' && dynRiseMin > RISE_LOG_MIN ? `${formatFxEstimate(dynRiseMin, 'toFixed', 2)}%` : '0.01%'}
                 </span>
                 <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{dynamicMaxRisePct}%</span>
               </div>
@@ -3810,14 +3819,15 @@ function ProfitPathPanel({
             // 持仓总价値（USDT）= 持仓数量 × 实时币价
             const positionUsdt = sliderQty * curPrice;
             // 所需本金（CNY）= 持仓总价値 × 汇率 ÷ 杠杆倍数
-            const requiredCny = cnyRate > 0 ? positionUsdt * cnyRate / leverage : 0;
+            const requiredCny = cnyRate > 0 ? positionUsdt * cnyRate / leverage : Number.NaN;
             // 实际占用比例
             const marginRatio = leverage > 1 ? (1 / leverage * 100) : 100;
             // 格式化金额
             const fmtCny = (n: number) => {
-              if (n >= 100000000) return `${(n / 100000000).toFixed(2)}亿`;
-              if (n >= 10000) return `${(n / 10000).toFixed(2)}万`;
-              return n.toFixed(0);
+              if (!Number.isFinite(n)) return '人民币估值待更新';
+              if (n >= 100000000) return `${formatFxEstimate((n / 100000000), 'toFixed', 2)}亿`;
+              if (n >= 10000) return `${formatFxEstimate((n / 10000), 'toFixed', 2)}万`;
+              return formatFxEstimate(n, 'toFixed', 0);
             };
             return (
               <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,200,210,0.12)', padding: '10px 14px' }}>
@@ -3844,7 +3854,7 @@ function ProfitPathPanel({
                 {/* 第三行：市值 + 占用比 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    市值&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>¥{fmtCny(positionUsdt * (cnyRate || 6.8))}</span>
+                    市值&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>¥{fmtCny(positionUsdt * cnyRate)}</span>
                   </span>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.35)' }}>·</span>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', whiteSpace: 'nowrap' }}>

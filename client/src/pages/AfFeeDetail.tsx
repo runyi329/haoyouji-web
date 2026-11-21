@@ -1,3 +1,4 @@
+import { finitePositive, getUsdtCnyRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import React, { useState, useMemo, useRef } from 'react';
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, DollarSign, X } from "lucide-react";
@@ -259,8 +260,8 @@ export default function AfFeeDetail() {
     ? ((yjhInviteTreeData as any).users as any[]).filter((member: any) => ledgerMemberIdSet.has(Number(member.id)))
     : [];
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，3秒刷新（与订单卡片、FinanceManagement 保持一致）
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
-  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USDT', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
+  const cnyRate = getUsdtCnyRate(cnyRateData) ?? Number.NaN;
 
   // 已付利息汇总（按订单聚合）
   const finOrderIds = useMemo(
@@ -503,9 +504,9 @@ export default function AfFeeDetail() {
                     {/* 金额行 */}
                     <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
                       <div className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>应收(U)</div>
-                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#d97706', borderRight: '1px solid #e5e7eb' }}>{totalOngoing.toFixed(2)}</div>
-                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#16a34a', borderRight: '1px solid #e5e7eb' }}>{totalSettled.toFixed(2)}</div>
-                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#1e3a8a' }}>{totalAll.toFixed(2)}</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#d97706', borderRight: '1px solid #e5e7eb' }}>{formatFxEstimate(totalOngoing, 'toFixed', 2)}</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#16a34a', borderRight: '1px solid #e5e7eb' }}>{formatFxEstimate(totalSettled, 'toFixed', 2)}</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#1e3a8a' }}>{formatFxEstimate(totalAll, 'toFixed', 2)}</div>
                     </div>
                   </div>
                 );
@@ -523,7 +524,7 @@ export default function AfFeeDetail() {
                   <div className="py-2 px-2 text-xs text-gray-500 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>
                     {new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '/')}
                   </div>
-                  <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#334155', borderRight: '1px solid #e5e7eb' }}>{dailyTotal2.toFixed(2)}</div>
+                  <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#334155', borderRight: '1px solid #e5e7eb' }}>{formatFxEstimate(dailyTotal2, 'toFixed', 2)}</div>
                   <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#0369a1', borderRight: '1px solid #e5e7eb' }}>{Math.round(monthlyForecast2)}</div>
                   <div className="py-2 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#16a34a' }}>{Math.round(yearlyForecast2)}</div>
                 </div>
@@ -548,6 +549,8 @@ export default function AfFeeDetail() {
             </div>
           );
         })() : (() => {
+          // 复杂人民币利息、人员合计仅在换汇可用时运行；原币记录保留。
+          if (finitePositive(cnyRate) === null && financeOrders.some((o: any) => o.coin === 'CNY' || String(o.interest_base_currency).toUpperCase() === 'CNY')) return <div className="px-3 py-3 text-xs text-amber-700">人民币估值/汇率待更新，融资汇总暂不确定；原币订单数量和金额见下方记录。</div>;
           // 融资付息：收息/付息/日息汇总
           const ongoingOrders = financeOrders.filter((o: any) => o.status === 'active');
           const getBase = (o: any) => {
@@ -556,6 +559,7 @@ export default function AfFeeDetail() {
           };
           const getDailyAbs = (o: any) => {
             const b = getBase(o);
+            if (!Number.isFinite(b)) return Number.NaN;
             const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
             return (b && r != null) ? Math.abs(b * (r / 100) / 365) : 0;
           };
@@ -573,7 +577,7 @@ export default function AfFeeDetail() {
             const rawBase = order.interest_base != null ? Number(order.interest_base) : (order.amount != null ? Number(order.amount) : 0);
             const baseInU = (order.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? rawBase / cnyRate : rawBase;
             const annualRate = order.interest_rate_annual != null ? Number(order.interest_rate_annual) : null;
-            return baseInU && annualRate != null ? baseInU * (Math.abs(annualRate) / 100) / 365 : 0;
+            return !Number.isFinite(baseInU) ? Number.NaN : baseInU && annualRate != null ? baseInU * (Math.abs(annualRate) / 100) / 365 : 0;
           };
           const financePersonOrders = new Map<string, { userId: number; orders: any[] }>();
           // 融资付息固定覆盖 52 号账本全体真实成员；无订单但有余额的成员也参与钱包余额汇总。
@@ -637,9 +641,9 @@ export default function AfFeeDetail() {
                       </div>
                     </div>
                     {[
-                      { label: '收息本金(U)', value: '+' + collectBaseTotal.toFixed(0), color: '#dc2626' },
-                      { label: '付息本金(U)', value: '-' + payBaseTotal.toFixed(0), color: '#16a34a' },
-                      { label: '净本金(U)', value: (collectBaseTotal - payBaseTotal >= 0 ? '+' : '') + (collectBaseTotal - payBaseTotal).toFixed(0), color: collectBaseTotal >= payBaseTotal ? '#dc2626' : '#16a34a', bold: true },
+                      { label: '收息本金(U)', value: '+' + formatFxEstimate(collectBaseTotal, 'toFixed', 0), color: '#dc2626' },
+                      { label: '付息本金(U)', value: '-' + formatFxEstimate(payBaseTotal, 'toFixed', 0), color: '#16a34a' },
+                      { label: '净本金(U)', value: (collectBaseTotal - payBaseTotal >= 0 ? '+' : '') + formatFxEstimate((collectBaseTotal - payBaseTotal), 'toFixed', 0), color: collectBaseTotal >= payBaseTotal ? '#dc2626' : '#16a34a', bold: true },
                     ].map((row, i, arr) => (
                       <div key={i} className="flex" style={{ borderBottom: i < arr.length - 1 ? BORDER : 'none' }}>
                         <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, borderRight: BORDER, background: CELL_BG }}>
@@ -711,7 +715,7 @@ export default function AfFeeDetail() {
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
                   {[
                     { v: '收息(应收)', color: '#374151', bold: false },
-                    { v: `+${collectDailyTotal.toFixed(2)}`, color: '#dc2626', bold: true },
+                    { v: `+${formatFxEstimate(collectDailyTotal, 'toFixed', 2)}`, color: '#dc2626', bold: true },
                     { v: `+${Math.round(collectDailyTotal * 30)}`, color: '#dc2626', bold: true },
                     { v: `+${Math.round(collectDailyTotal * 365)}`, color: '#dc2626', bold: true },
                   ].map((col, i) => (
@@ -724,7 +728,7 @@ export default function AfFeeDetail() {
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.10)' }}>
                   {[
                     { v: '付息(应付)', color: '#374151', bold: false },
-                    { v: `-${payDailyTotal.toFixed(2)}`, color: '#16a34a', bold: true },
+                    { v: `-${formatFxEstimate(payDailyTotal, 'toFixed', 2)}`, color: '#16a34a', bold: true },
                     { v: `-${Math.round(payDailyTotal * 30)}`, color: '#16a34a', bold: true },
                     { v: `-${Math.round(payDailyTotal * 365)}`, color: '#16a34a', bold: true },
                   ].map((col, i) => (
@@ -737,7 +741,7 @@ export default function AfFeeDetail() {
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
                   {[
                     { v: '汇总', color: '#111827', bold: true },
-                    { v: `${netDaily >= 0 ? '+' : ''}${netDaily.toFixed(2)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${formatFxEstimate(netDaily, 'toFixed', 2)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
                     { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 30)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
                     { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 365)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
                   ].map((col, i) => (
@@ -851,7 +855,7 @@ export default function AfFeeDetail() {
               <div className="rounded shadow-sm px-4 py-3 flex gap-3" style={{background:'linear-gradient(135deg,#eff6ff 0%,#e0f2fe 100%)',border:'1px solid #bfdbfe'}}>
                 <div className="flex-1 text-center">
                   <p className="text-[10px] text-gray-400 mb-1">每日（当前）</p>
-                  <p className="text-sm font-bold text-gray-700">{currentDailyTotal.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
+                  <p className="text-sm font-bold text-gray-700">{formatFxEstimate(currentDailyTotal, 'toFixed', 2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
                 </div>
                 <div className="w-px bg-gray-100" />
                 <div className="flex-1 text-center">
@@ -897,7 +901,7 @@ export default function AfFeeDetail() {
                         <span className="text-xs text-gray-400">{totalOrders}单</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-blue-600">{totalFee.toFixed(4)} U</span>
+                        <span className="text-sm font-bold text-blue-600">{formatFxEstimate(totalFee, 'toFixed', 4)} U</span>
                         {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                       </div>
                     </button>
@@ -925,14 +929,14 @@ export default function AfFeeDetail() {
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0', item.coin)}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
-                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
+                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{formatFxEstimate(item.dailyFee, 'toFixed', 2)}</td>
                             </tr>
                           ))}
                           </tbody>
                           <tfoot>
                             <tr className="bg-gray-50">
                               <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={6}>当日合计</td>
-                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{totalFee.toFixed(2)}</td>
+                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{formatFxEstimate(totalFee, 'toFixed', 2)}</td>
                             </tr>
                           </tfoot>
                         </table>
@@ -1002,8 +1006,8 @@ export default function AfFeeDetail() {
                       const gjRow2 = [
                         { label: '钱包(U)', value: walletKnown ? walletTotal.toFixed(2) : '--', color: walletTotal > 0 ? '#dc2626' : '#94a3b8', bg: '#f8fbff', action: 'wallet' as const },
                         { label: '可用(U)', value: walletKnown ? walletAvailable.toFixed(2) : '--', color: walletAvailable > 0 ? '#dc2626' : '#94a3b8', bg: '#f8fbff', action: 'available' as const },
-                        { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + gjPendingFee.toFixed(2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined, action: 'orders' as const },
-                        { label: '缺口(U)', value: walletKnown ? (isShortfall ? '-' + shortfall.toFixed(2) : '0.00') : '--', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined, action: 'orders' as const },
+                        { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + formatFxEstimate(gjPendingFee, 'toFixed', 2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined, action: 'orders' as const },
+                        { label: '缺口(U)', value: walletKnown ? (isShortfall ? '-' + formatFxEstimate(shortfall, 'toFixed', 2) : '0.00') : '--', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined, action: 'orders' as const },
                       ];
                       const handleCellClick = (action: 'orders' | 'wallet' | 'available') => {
                         if (action === 'wallet' || action === 'available') {
@@ -1086,7 +1090,7 @@ export default function AfFeeDetail() {
                           const stShort = createdAtStr ? (() => { const p2 = createdAtStr.split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : createdAtStr.slice(5,10); })() : '-';
                           const coinColor = item.coin === 'BTC' ? '#d97706' : item.coin === 'ETH' ? '#2563eb' : item.coin === 'SOL' ? '#7c3aed' : '#334155';
                           const orderNo = String(item.id).padStart(4, '0');
-                          const dailyDisplay = item.dailyFee > 0 ? '-' + item.dailyFee.toFixed(2) + '/天' : '-';
+                          const dailyDisplay = item.dailyFee > 0 ? '-' + formatFxEstimate(item.dailyFee, 'toFixed', 2) + '/天' : '-';
                           const startLabel = '开仓' + (stShort !== '-' ? ' ' + stShort : '');
                           const feeStartAt = getAfManagementFeeStartAt(item);
                           const numColor = (v: number) => v > 0 ? '#dc2626' : v < 0 ? '#16a34a' : '#94a3b8';
@@ -1198,7 +1202,7 @@ export default function AfFeeDetail() {
                 <div className="w-px bg-gray-100" />
                 <div className="flex-1 text-center">
                   <p className="text-[10px] text-gray-400 mb-1">每日合计</p>
-                  <p className="text-sm font-bold text-blue-600">{grandDaily.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
+                  <p className="text-sm font-bold text-blue-600">{formatFxEstimate(grandDaily, 'toFixed', 2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
                 </div>
                 <div className="w-px bg-gray-100" />
                 <div className="flex-1 text-center">
@@ -1260,7 +1264,7 @@ export default function AfFeeDetail() {
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0', item.coin)}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{item.holdDays}天</td>
-                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
+                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{formatFxEstimate(item.dailyFee, 'toFixed', 2)}</td>
                             </tr>
                           ))}
                           </tbody>
@@ -1362,16 +1366,16 @@ export default function AfFeeDetail() {
                         </td>
                         <td className="px-1.5 py-2 text-right border border-gray-200 whitespace-nowrap text-gray-600">{item.holdDays}</td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
-                          <span className="block font-bold text-gray-900">{item.totalFee.toFixed(2)}</span>
-                          <span className="block text-[10px] text-gray-400">{item.dailyFee.toFixed(2)}/天</span>
+                          <span className="block font-bold text-gray-900">{formatFxEstimate(item.totalFee, 'toFixed', 2)}</span>
+                          <span className="block text-[10px] text-gray-400">{formatFxEstimate(item.dailyFee, 'toFixed', 2)}/天</span>
                         </td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
                           {item.holdDays > 30 ? (
                             <span className="text-gray-300">—</span>
                           ) : (
                             <>
-                              <span className="block font-bold text-gray-900">{item.totalFee12.toFixed(2)}</span>
-                              <span className="block text-[10px] text-gray-400">{item.dailyFee12.toFixed(2)}/天</span>
+                              <span className="block font-bold text-gray-900">{formatFxEstimate(item.totalFee12, 'toFixed', 2)}</span>
+                              <span className="block text-[10px] text-gray-400">{formatFxEstimate(item.dailyFee12, 'toFixed', 2)}/天</span>
                             </>
                           )}
                         </td>
@@ -1429,12 +1433,12 @@ export default function AfFeeDetail() {
                           <td className="px-1 py-2 border border-gray-200" />
                           <td className="px-1.5 py-2 border border-gray-200" />
                           <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
-                            <span className="block font-bold text-gray-900">{sumFee.toFixed(2)}</span>
-                            <span className="block text-[10px] text-gray-600">{sumDaily.toFixed(2)}/天</span>
+                            <span className="block font-bold text-gray-900">{formatFxEstimate(sumFee, 'toFixed', 2)}</span>
+                            <span className="block text-[10px] text-gray-600">{formatFxEstimate(sumDaily, 'toFixed', 2)}/天</span>
                           </td>
                           <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
-                            <span className="block font-bold text-gray-900">{sumFee12.toFixed(2)}</span>
-                            <span className="block text-[10px] text-gray-600">{sumDaily12.toFixed(2)}/天</span>
+                            <span className="block font-bold text-gray-900">{formatFxEstimate(sumFee12, 'toFixed', 2)}</span>
+                            <span className="block text-[10px] text-gray-600">{formatFxEstimate(sumDaily12, 'toFixed', 2)}/天</span>
                           </td>
                           <td className="px-1.5 py-2 border border-gray-200" />
                           <td className="px-1.5 py-2 border border-gray-200" />
@@ -1465,6 +1469,16 @@ export default function AfFeeDetail() {
         ) : financeOrders.length === 0 ? (
           <div className="text-center py-16 text-gray-400 text-sm">暂无融资付息订单</div>
         ) : (() => {
+          if (finitePositive(cnyRate) === null && financeOrders.some((o: any) => o.coin === 'CNY' || String(o.interest_base_currency).toUpperCase() === 'CNY')) return <div className="space-y-2">
+            <p className="text-xs text-amber-700">人民币估值/汇率待更新；人民币融资统计暂不确定，原币订单不受影响。</p>
+            {financeOrders.map((o: any) => <div key={o.id} className="rounded border p-3 text-xs text-slate-700">
+              <div>{o.order_no || o.id} · {o.username || o.userName || ''}</div>
+              <div>原币数量 {o.buy_quantity ?? '—'} {o.coin || ''}</div>
+              <div>计息本金 {o.interest_base ?? o.amount ?? '—'} {o.interest_base_currency || 'USDT'}</div>
+              <div>登记金额 {o.amount ?? '—'} {o.asset_type === 'stock' ? (o.amount_currency || 'CNY') : 'USDT'}</div>
+              <div className="text-amber-700">换汇估值及合计待更新</div>
+            </div>)}
+          </div>;
           const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
           const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
           // 只显示进行中的订单，已结清完全排除
@@ -1546,7 +1560,8 @@ export default function AfFeeDetail() {
                 return Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
               };
               const getAccrued = (o: any) => {
-                const b = getBase(o); const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+                const b = getBase(o);
+            if (!Number.isFinite(b)) return Number.NaN; const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                 const d = getDays(o);
                 return (b && r != null && d) ? b * (r / 100) / 365 * d : 0;
               };
@@ -1689,18 +1704,18 @@ export default function AfFeeDetail() {
                                     }}
                                     className="underline decoration-dotted underline-offset-2"
                                     style={{ color: '#374151' }}
-                                  >{base.toFixed(2)}</button>
-                                ) : <span>{base.toFixed(2)}</span>
+                                  >{formatFxEstimate(base, 'toFixed', 2)}</button>
+                                ) : <span>{formatFxEstimate(base, 'toFixed', 2)}</span>
                               ) : '-'}
                             </td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{rate != null ? rate + '%' : '-'}</td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#6b7280' }}>
-                              {(base && rate != null) ? (Math.abs(base * (rate / 100) / 365)).toFixed(2) : '-'}
+                              {(base && rate != null) ? formatFxEstimate((Math.abs(base * (rate / 100) / 365)), 'toFixed', 2) : '-'}
                             </td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#6b7280' }}>
-                              {(base && rate != null) ? (Math.abs(base * (rate / 100) / 365) * 30).toFixed(0) : '-'}
+                              {(base && rate != null) ? formatFxEstimate((Math.abs(base * (rate / 100) / 365) * 30), 'toFixed', 0) : '-'}
                             </td>
-                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#2563eb' }}>{accrued != null ? accrued.toFixed(2) : '-'}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#2563eb' }}>{accrued != null ? formatFxEstimate(accrued, 'toFixed', 2) : '-'}</td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">
                               <button
                                 type="button"
@@ -1726,11 +1741,11 @@ export default function AfFeeDetail() {
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
-                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">{baseSum.toFixed(2)}</td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">{formatFxEstimate(baseSum, 'toFixed', 2)}</td>
                         <td className="px-2 py-2 border border-gray-200"></td>
-                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#6b7280' }}>{dailySum.toFixed(2)}</td>
-                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#6b7280' }}>{monthlySum.toFixed(0)}</td>
-                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#2563eb' }}>{accruedSum.toFixed(2)}</td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#6b7280' }}>{formatFxEstimate(dailySum, 'toFixed', 2)}</td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#6b7280' }}>{formatFxEstimate(monthlySum, 'toFixed', 0)}</td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#2563eb' }}>{formatFxEstimate(accruedSum, 'toFixed', 2)}</td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#16a34a' }}>{paidSum.toFixed(2)}</td>
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
@@ -1762,7 +1777,7 @@ export default function AfFeeDetail() {
           // 计息本金折算Tooltip内容
           const baseTooltipContent = finBaseTooltip ? (
             <div className="text-xs text-gray-700 flex items-center gap-1 pr-4 whitespace-nowrap">
-              <span className="font-medium">{finBaseTooltip.baseRaw.toLocaleString()}</span>
+              <span className="font-medium">{formatFxEstimate(finBaseTooltip.baseRaw, 'toLocaleString')}</span>
               <span className="text-gray-400">{finBaseTooltip.coin}</span>
               <span className="text-gray-300 mx-0.5">÷</span>
               <span className="text-gray-400">汇率</span>
@@ -1914,8 +1929,8 @@ export default function AfFeeDetail() {
                               <span className="text-xs text-gray-400">{items.length}单</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              {collectDaily > 0 && <span className="text-sm font-bold" style={{ color: '#dc2626' }}>+{collectDaily.toFixed(2)}/天</span>}
-                              {payDaily > 0 && <span className="text-sm font-bold" style={{ color: '#16a34a' }}>-{payDaily.toFixed(2)}/天</span>}
+                              {collectDaily > 0 && <span className="text-sm font-bold" style={{ color: '#dc2626' }}>+{formatFxEstimate(collectDaily, 'toFixed', 2)}/天</span>}
+                              {payDaily > 0 && <span className="text-sm font-bold" style={{ color: '#16a34a' }}>-{formatFxEstimate(payDaily, 'toFixed', 2)}/天</span>}
                               {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
                             </div>
                           </button>
@@ -1949,11 +1964,11 @@ export default function AfFeeDetail() {
                                      </div>
                                     <div className="flex flex-col items-end gap-0.5">
                                       <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
-                                        {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                        {collect ? '+' : '-'}{formatFxEstimate(daily, 'toFixed', 2)}/天
                                       </span>
                                       {accInterest > 0 && (
                                         <span className="text-[10px] font-semibold" style={{ color: collect ? '#dc2626' : '#16a34a', opacity: 0.75 }}>
-                                          累计 {collect ? '+' : '-'}{accInterest.toFixed(2)} U
+                                          累计 {collect ? '+' : '-'}{formatFxEstimate(accInterest, 'toFixed', 2)} U
                                         </span>
                                       )}
                                     </div>
@@ -1962,7 +1977,7 @@ export default function AfFeeDetail() {
                                     <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
                                     {stShort && <span className="text-[10px] text-gray-400">{stShort}</span>}
                                     {rate != null && <span className="text-[10px]" style={{ color: '#2563eb' }}>年利率 {rate}%</span>}
-                                    <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? base2.toFixed(0) : '-'} U</span>
+                                    <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? formatFxEstimate(base2, 'toFixed', 0) : '-'} U</span>
                                   </div>
                                 </div>
                                 );
@@ -2060,15 +2075,15 @@ export default function AfFeeDetail() {
                             const shortfallAmt = finShortfall ? (pendingAbs - walBal) : 0;
                             const row1 = [
                               { label: '姓名', value: p.name, color: '#0f172a', bold: true, bg: undefined },
-                              { label: '錢包(U)', value: walBal.toFixed(2), color: finShortfall ? '#dc2626' : '#16a34a', bg: undefined },
-                              { label: '应付(U)', value: (finPendingFee === 0 ? '0.00' : (finPendingFee > 0 ? '+' : '') + finPendingFee.toFixed(2)), color: finPendingFee > 0 ? '#dc2626' : finPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
-                              { label: '缺口(U)', value: finShortfall ? '-' + shortfallAmt.toFixed(2) : '0.00', color: finShortfall ? '#16a34a' : '#94a3b8', bg: finShortfall ? '#fee2e2' : undefined },
+                              { label: '錢包(U)', value: formatFxEstimate(walBal, 'toFixed', 2), color: finShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                              { label: '应付(U)', value: (finPendingFee === 0 ? '0.00' : (finPendingFee > 0 ? '+' : '') + formatFxEstimate(finPendingFee, 'toFixed', 2)), color: finPendingFee > 0 ? '#dc2626' : finPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                              { label: '缺口(U)', value: finShortfall ? '-' + formatFxEstimate(shortfallAmt, 'toFixed', 2) : '0.00', color: finShortfall ? '#16a34a' : '#94a3b8', bg: finShortfall ? '#fee2e2' : undefined },
                             ];
                             const row2 = [
                               { label: '单数', value: p.orders.length + '单', color: '#475569', bg: undefined },
-                              { label: '收息/天(U)', value: p.collectDaily > 0 ? '+' + p.collectDaily.toFixed(2) : '0', color: p.collectDaily > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
-                              { label: '付息/天(U)', value: p.payDaily > 0 ? '-' + p.payDaily.toFixed(2) : '0', color: p.payDaily > 0 ? '#16a34a' : '#94a3b8', bg: undefined },
-                              { label: '净日息(U)', value: (netD >= 0 ? '+' : '') + netD.toFixed(2), color: netD >= 0 ? '#dc2626' : '#16a34a', bg: undefined },
+                              { label: '收息/天(U)', value: p.collectDaily > 0 ? '+' + formatFxEstimate(p.collectDaily, 'toFixed', 2) : '0', color: p.collectDaily > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
+                              { label: '付息/天(U)', value: p.payDaily > 0 ? '-' + formatFxEstimate(p.payDaily, 'toFixed', 2) : '0', color: p.payDaily > 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                              { label: '净日息(U)', value: (netD >= 0 ? '+' : '') + formatFxEstimate(netD, 'toFixed', 2), color: netD >= 0 ? '#dc2626' : '#16a34a', bg: undefined },
                             ];
                             return (
                               <button onClick={() => togglePerson('fin_' + p.name)} className="w-full">
@@ -2154,10 +2169,10 @@ export default function AfFeeDetail() {
                                 const remainingPayable = signedAcc - (collect ? paidForOrder : -paidForOrder);
                                 const dirLabel = collect ? '(收)' : '(付)';
                                 // 起息格：标签显示“起息 MM/DD”，值显示“X.XX/天”
-                                const dailyVal = daily.toFixed(2);
+                                const dailyVal = formatFxEstimate(daily, 'toFixed', 2);
                                 const startLabel = '起息' + (stShort !== '-' ? ' ' + stShort : '');
                                 const dailyDisplay = daily > 0 ? (collect ? '+' : '-') + dailyVal + '/天' : '-';
-                                const accVal = accInterestP.toFixed(2);
+                                const accVal = formatFxEstimate(accInterestP, 'toFixed', 2);
                                 const finOrdRow1 = [
                                   { label: '币种' + dirLabel, value: o.coin || '-', color: collect ? '#dc2626' : '#16a34a', bold: true },
                                   { label: '订单号(' + typeLabel + ')', value: orderNo, color: '#334155' },
@@ -2169,7 +2184,7 @@ export default function AfFeeDetail() {
                                 const numDisplay = (v: number) => v === 0 ? '0.00' : (v > 0 ? '+' : '') + v.toFixed(2);
                                 const remainingDisplay = numDisplay(remainingPayable);
                                 const finOrdRow2 = [
-                                  { label: '本金(U)', value: base2 > 0 ? base2.toFixed(2) : '-', color: '#334155' },
+                                  { label: '本金(U)', value: base2 > 0 ? formatFxEstimate(base2, 'toFixed', 2) : '-', color: '#334155' },
                                   { label: '累计应付', value: numDisplay(signedAcc), color: numColor(signedAcc) },
                                   { label: '已付(U)', value: paidForOrder > 0 ? paidForOrder.toFixed(2) : '0.00', color: paidForOrder > 0 ? '#dc2626' : '#94a3b8' },
                                   { label: '待付(U)', value: remainingDisplay, color: numColor(remainingPayable) },
@@ -2263,11 +2278,11 @@ export default function AfFeeDetail() {
                                    </div>
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className="text-sm font-bold" style={{ color }}>
-                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                      {collect ? '+' : '-'}{formatFxEstimate(daily, 'toFixed', 2)}/天
                                     </span>
                                     {accInterestD > 0 && (
                                       <span className="text-[10px] font-semibold" style={{ color, opacity: 0.75 }}>
-                                        累计 {collect ? '+' : '-'}{accInterestD.toFixed(2)} U
+                                        累计 {collect ? '+' : '-'}{formatFxEstimate(accInterestD, 'toFixed', 2)} U
                                       </span>
                                     )}
                                   </div>
@@ -2276,7 +2291,7 @@ export default function AfFeeDetail() {
                                   <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
                                   <span className="text-[10px] text-gray-400">起息 {stShort}</span>
                                   {rate != null && <span className="text-[10px]" style={{ color: '#2563eb' }}>年利率 {rate}%</span>}
-                                  <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? base2.toFixed(0) : '-'} U</span>
+                                  <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? formatFxEstimate(base2, 'toFixed', 0) : '-'} U</span>
                                 </div>
                               </div>
                             );
@@ -2320,8 +2335,8 @@ export default function AfFeeDetail() {
                           <span className="text-xs text-gray-400">{orders.length}单</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          {collectDaily > 0 && <span className="text-sm font-bold" style={{ color: '#dc2626' }}>+{collectDaily.toFixed(2)}/天</span>}
-                          {payDaily > 0 && <span className="text-sm font-bold" style={{ color: '#16a34a' }}>-{payDaily.toFixed(2)}/天</span>}
+                          {collectDaily > 0 && <span className="text-sm font-bold" style={{ color: '#dc2626' }}>+{formatFxEstimate(collectDaily, 'toFixed', 2)}/天</span>}
+                          {payDaily > 0 && <span className="text-sm font-bold" style={{ color: '#16a34a' }}>-{formatFxEstimate(payDaily, 'toFixed', 2)}/天</span>}
                           {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
                         </div>
                       </button>
@@ -2351,11 +2366,11 @@ export default function AfFeeDetail() {
                                   </div>
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
-                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                      {collect ? '+' : '-'}{formatFxEstimate(daily, 'toFixed', 2)}/天
                                     </span>
                                     {accInterestT > 0 && (
                                       <span className="text-[10px] font-semibold" style={{ color: collect ? '#dc2626' : '#16a34a', opacity: 0.75 }}>
-                                        累计 {collect ? '+' : '-'}{accInterestT.toFixed(2)} U
+                                        累计 {collect ? '+' : '-'}{formatFxEstimate(accInterestT, 'toFixed', 2)} U
                                       </span>
                                     )}
                                   </div>
@@ -2364,7 +2379,7 @@ export default function AfFeeDetail() {
                                   <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
                                   <span className="text-[10px] text-gray-400">起息 {stShort}</span>
                                   {rate != null && <span className="text-[10px]" style={{ color: '#2563eb' }}>年利率 {rate}%</span>}
-                                  <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? base2.toFixed(0) : '-'} U</span>
+                                  <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? formatFxEstimate(base2, 'toFixed', 0) : '-'} U</span>
                                 </div>
                               </div>
                             );
@@ -2491,7 +2506,7 @@ export default function AfFeeDetail() {
                 {finPaidDetailList.map((p: any) => (
                   <div key={p.id} className="bg-gray-50 rounded px-4 py-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm" style={{ color: '#dc2626' }}>+{parseFloat(p.amount).toFixed(2)} U</span>
+                      <span className="font-semibold text-sm" style={{ color: '#dc2626' }}>+{formatFxEstimate(parseFloat(p.amount), 'toFixed', 2)} U</span>
                       <span className="text-xs text-gray-400">{p.pay_date || p.payment_date || '-'}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
@@ -2601,23 +2616,23 @@ export default function AfFeeDetail() {
               <div className="space-y-2 text-xs text-gray-700">
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">下单金额</span>
-                  <span className="font-medium">{amount.toFixed(2)} U</span>
+                  <span className="font-medium">{formatFxEstimate(amount, 'toFixed', 2)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">订单价值{aprInfo.isGift ? '（赠单）' : `（×${orderMultiplier}）`}</span>
-                  <span className="font-medium">{tradeValue.toFixed(2)} U</span>
+                  <span className="font-medium">{formatFxEstimate(tradeValue, 'toFixed', 2)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">日费率 = 订单价值 ÷ 0.75 × 0.12 ÷ 365</span>
-                  <span className="font-medium">{dailyFee.toFixed(4)} U</span>
+                  <span className="font-medium">{formatFxEstimate(dailyFee, 'toFixed', 4)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">年化费用 = 日费率 × 365</span>
-                  <span className="font-medium">{annualFee.toFixed(2)} U</span>
+                  <span className="font-medium">{formatFxEstimate(annualFee, 'toFixed', 2)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">名义年化费率 = 年化费用 ÷ 订单价值</span>
-                  <span className="font-bold text-blue-600">{apr.toFixed(2)}%</span>
+                  <span className="font-bold text-blue-600">{formatFxEstimate(apr, 'toFixed', 2)}%</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
                   <span className="text-gray-500">权益档位（用户实际拥有资金比例）</span>
@@ -2625,7 +2640,7 @@ export default function AfFeeDetail() {
                 </div>
                 <div className="flex justify-between pt-1">
                   <span className="text-gray-700 font-semibold">实际年化费率 = 名义年化 ÷ 档位比例</span>
-                  <span className="font-bold" style={{ color: '#1e40af' }}>{(aprInfo.actualApr * 100).toFixed(2)}%</span>
+                  <span className="font-bold" style={{ color: '#1e40af' }}>{formatFxEstimate((aprInfo.actualApr * 100), 'toFixed', 2)}%</span>
                 </div>
               </div>
               <button
@@ -2665,15 +2680,15 @@ export default function AfFeeDetail() {
                 <Row k="类型" v={d.isGift ? '赠单' : '正单'} />
                 <Row k="状态" v={statusText} />
                 <Row k="币种" v={d.coin || '-'} />
-                <Row k="下单金额" v={`${amount.toFixed(2)} U`} />
-                <Row k="订单价值" v={`${(d.tradeValue || 0).toFixed(2)} U`} />
-                <Row k="权益档位" v={`第${d.equityTier}档 · ${(d.discountRate * 100).toFixed(2)}%`} />
+                <Row k="下单金额" v={`${formatFxEstimate(amount, 'toFixed', 2)} U`} />
+                <Row k="订单价值" v={`${formatFxEstimate((d.tradeValue || 0), 'toFixed', 2)} U`} />
+                <Row k="权益档位" v={`第${d.equityTier}档 · ${formatFxEstimate((d.discountRate * 100), 'toFixed', 2)}%`} />
                 {(d.isAdvanced || d.advancedOrderId || !feeStartAt) && <Row k="成交日起计费" v={feeStartAt ? new Date(feeStartAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '成交时间待核对'} />}
                 <Row k="持有天数" v={`${d.holdDays} 天`} />
-                <Row k="日费率" v={`${d.dailyFee.toFixed(4)} U`} />
-                <Row k="累计管理费" v={`${d.totalFee.toFixed(2)} U`} />
-                <Row k="名义年化" v={`${(d.nominalApr * 100).toFixed(2)}%`} color="#2563eb" />
-                <Row k="实际年化" v={`${(d.actualApr * 100).toFixed(2)}%`} color="#1e40af" />
+                <Row k="日费率" v={`${formatFxEstimate(d.dailyFee, 'toFixed', 4)} U`} />
+                <Row k="累计管理费" v={`${formatFxEstimate(d.totalFee, 'toFixed', 2)} U`} />
+                <Row k="名义年化" v={`${formatFxEstimate((d.nominalApr * 100), 'toFixed', 2)}%`} color="#2563eb" />
+                <Row k="实际年化" v={`${formatFxEstimate((d.actualApr * 100), 'toFixed', 2)}%`} color="#1e40af" />
               </div>
               <button onClick={() => setDetailOrder(null)} className="mt-4 w-full py-2 rounded text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
             </div>
@@ -2741,11 +2756,11 @@ export default function AfFeeDetail() {
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">累计管理费</span>
-                  <span className="font-bold text-gray-800">{totalFee.toFixed(2)} U</span>
+                  <span className="font-bold text-gray-800">{formatFxEstimate(totalFee, 'toFixed', 2)} U</span>
                 </div>
                 <div className="text-[10px] text-gray-400 leading-relaxed">
                   {(order.isAdvanced || order.advancedOrderId) && '成交日起计费：'}
-                  {startDateStr} → {todayStr}，共 {holdDays} 天，{dailyFee.toFixed(2)} U/天
+                  {startDateStr} → {todayStr}，共 {holdDays} 天，{formatFxEstimate(dailyFee, 'toFixed', 2)} U/天
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">已付管理费</span>
@@ -2753,7 +2768,7 @@ export default function AfFeeDetail() {
                 </div>
                 <div className="flex justify-between text-xs border-t border-gray-200 pt-1.5">
                   <span className="text-gray-500">待付管理费</span>
-                  <span className="font-bold text-orange-500">{remaining.toFixed(2)} U</span>
+                  <span className="font-bold text-orange-500">{formatFxEstimate(remaining, 'toFixed', 2)} U</span>
                 </div>
               </div>
               {/* 历史扣除记录 */}
@@ -2767,7 +2782,7 @@ export default function AfFeeDetail() {
                           <span className="text-gray-400 text-[10px]">{log.createdAt?.slice(0, 16) || '-'}</span>
                           {log.note && <span className="text-gray-500">{log.note}</span>}
                         </div>
-                        <span className="font-bold text-green-600">-{log.amount.toFixed(2)} U</span>
+                        <span className="font-bold text-green-600">-{formatFxEstimate(log.amount, 'toFixed', 2)} U</span>
                       </div>
                     ))}
                   </div>

@@ -1817,6 +1817,8 @@ type FunderSettlementSnapshot = {
   primaryPriceUsdt: string;
   priceBySymbol: Record<string, string>;
   usdtCnyRate: string;
+  usdCnyRate?: string;
+  usdCnyFx?: { rate: number; source: string; asOf: string; pair: 'USD/CNY' };
   priceMode: 'manual_historical' | 'live_confirmed';
   capturedAt: string;
   capturedBy: number;
@@ -2154,8 +2156,8 @@ async function buildFunderSettlementSnapshot(
   const suppliedPrice = Number(manualPrimaryPrice);
   const suppliedRate = Number(manualUsdtCnyRate);
   const suppliedOptionMarkPrice = Number(manualOptionMarkPrice);
-  const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
-  const liveRate = Number(getUsdtCnyRate() || 0);
+  const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+  const liveRate = isHistorical ? 0 : await refreshUsdtCnyRate();
   const usdtCnyRate = isHistorical ? suppliedRate : (liveRate || suppliedRate);
   if (!Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: isHistorical ? '历史结算日请填写当日 USDT 兑人民币汇率' : '当前汇率暂不可用，请稍后重试' });
@@ -2213,6 +2215,11 @@ async function buildFunderSettlementSnapshot(
     captureFunderExternal37SettlementSnapshot(sourceOrder, usdtCnyRate),
   ]);
 
+  // 新股票快照额外留真正USD证据；历史手填USDT值不能被推断为USD。
+  // 缺证据只保留未知，不以USDT等价或当前日期去改写历史。
+  const { readCurrentStockUsdCnyFreezeEvidence } = await import('./unified-cny-exchange');
+  const usdCnyFx = await readCurrentStockUsdCnyFreezeEvidence(String(sourceOrder.asset_type || ''), isHistorical);
+
   return {
     version: 2,
     effectiveDate,
@@ -2225,6 +2232,7 @@ async function buildFunderSettlementSnapshot(
     priceMode: isHistorical ? 'manual_historical' : 'live_confirmed',
     capturedAt: new Date().toISOString(),
     capturedBy: actorUserId,
+    ...(usdCnyFx ? { usdCnyRate: String(usdCnyFx.rate), usdCnyFx } : {}),
     ...(optionQuote ? { optionQuote } : {}),
     ...(manualStockQuotes ? { manualStockQuotes } : {}),
     ...(external37 ? { external37 } : {}),
@@ -4470,8 +4478,8 @@ ${klinesSummary}
           targetUserId = input.viewAsUserId;
         }
         const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId);
-        const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
-        const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+        const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+        const usdtCnyRate = await refreshUsdtCnyRate();
         return balances.map((balance) => {
           const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
           return {
@@ -25205,9 +25213,12 @@ ${klinesSummary}
 
           // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价。
           // 共享池中的人民币担保物必须按同一 USDT/CNY 汇率折算，不能将 1 元误当成 1 U。
-          const { getLatestPrice, getMarketPriceHealth, getUsdtCnyRate } = await import('./price-scanner');
+          const { getLatestPrice, getMarketPriceHealth, refreshUsdtCnyRate } = await import('./price-scanner');
           const marketPriceHealth = getMarketPriceHealth();
-          const usdtCnyRate = getUsdtCnyRate() || 6.8;
+          const usdtCnyRate = await refreshUsdtCnyRate();
+          if (!Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '人民币汇率暂不可用，共享担保估值待更新' });
+          }
 
           // 构建实时价格映射（供前端弹窗计算缺口使用）
           const livePrices: Record<string, number> = {};
@@ -27049,7 +27060,7 @@ ${klinesSummary}
         orderId: z.number(),
         amount: z.number().positive(),
         currency: z.enum(['CNY', 'U']).default('U'),
-        exchangeRate: z.number().positive().default(7.0),
+        exchangeRate: z.number().positive().optional(),
         payDate: z.string(), // YYYY-MM-DD
         note: z.string().optional(),
         periodStart: z.string().optional(), // YYYY-MM-DD 结算起始日
@@ -27058,6 +27069,13 @@ ${klinesSummary}
         jointSegmentId: z.string().min(1).max(48).optional(), // 联合订单第二段归属
       }))
       .mutation(async ({ ctx, input }) => {
+        const { resolveRecordedUsdtCnyRate } = await import('./unified-cny-exchange');
+        let exchangeRate: number;
+        try {
+          exchangeRate = await resolveRecordedUsdtCnyRate(input.exchangeRate, input.payDate, getBeijingDateString());
+        } catch (error) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error instanceof Error ? error.message : '人民币汇率暂不可用' });
+        }
         const db = await getLedgerDb();
         // 自动建表（幂等）
         await db.execute(sql`CREATE TABLE IF NOT EXISTS ledger_order_payments (
@@ -27126,7 +27144,7 @@ ${klinesSummary}
         }
         await db.execute(
           sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by, participant_user_id, joint_segment_id)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null}, ${jointSegmentId || null})`
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${exchangeRate}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null}, ${jointSegmentId || null})`
         );
         return { success: true };
       }),
@@ -33133,8 +33151,8 @@ ${klinesSummary}
           dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
           dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
         ]);
-        const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
-        const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+        const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+        const usdtCnyRate = await refreshUsdtCnyRate();
         const pricedMultiAssets = multiAssetBalances.map((balance) => {
           const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
           return {
@@ -33147,7 +33165,7 @@ ${klinesSummary}
         return {
           member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
           visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
-          usdtCnyRate: usdtCnyRate || 7.25,
+          usdtCnyRate: usdtCnyRate > 0 ? usdtCnyRate : null,
           usdtBalance: usdtBalanceSummary.total,
           cnyBalance: cnyBalanceSummary.total,
           usdtBalanceSummary,
@@ -34145,40 +34163,11 @@ ${klinesSummary}
 
   // ==================== 汇率计算器 ====================
   exchange: router({
-    // 多源汇率查询：主 API 失败依次尝试备用，全部失败返回缓存
-    // USD/CNY 查询优先走 CoinGecko USDT/CNY 场外市场价（与 price-scanner 保持一致）
+    // USD/CNY和USDT/CNY明确分开；钱包、融资和R1共享有来源及时效的基准报价。
+    // 其他法币对保留原有提供商兼容行为。
     getRate: (() => {
       // 进程级缓存，key = "USD_CNY"
       const _cache: Record<string, { rate: string; updatedAt: number }> = {};
-
-      // 场外主源：CoinGecko USDT/CNY（场外市场价，无需 API Key）
-      async function fetchCoinGeckoUsdtCny(money: number): Promise<string | null> {
-        const res = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny',
-          { signal: AbortSignal.timeout(6000) }
-        );
-        const j = await res.json() as { tether?: { cny?: number } };
-        const rate = j?.tether?.cny;
-        if (typeof rate === 'number' && rate > 5 && rate < 10) {
-          return String((rate * money).toFixed(6));
-        }
-        return null;
-      }
-
-      // 场外备用：OKX C2C USDT/CNY 场外买价
-      async function fetchOkxC2cUsdtCny(money: number): Promise<string | null> {
-        const res = await fetch(
-          'https://www.okx.com/v3/c2c/tradingOrders/books?quoteCurrency=CNY&baseCurrency=USDT&side=buy&paymentMethod=all&userType=all&showTrade=false&showFollow=false&showAlreadyTraded=false&isAbleFilter=false',
-          { signal: AbortSignal.timeout(6000) }
-        );
-        const j = await res.json() as { data?: { buy?: Array<{ price: string }> } };
-        const items = j?.data?.buy ?? [];
-        if (items.length > 0) {
-          const rate = parseFloat(items[0]?.price ?? '0');
-          if (rate > 5 && rate < 10) return String((rate * money).toFixed(6));
-        }
-        return null;
-      }
 
       // 天行数据（已有 API Key，小额免费）
       async function fetchTianapi(from: string, to: string, money: number): Promise<string | null> {
@@ -34222,21 +34211,16 @@ ${klinesSummary}
         }))
         .query(async ({ input }) => {
           const cacheKey = `${input.fromcoin}_${input.tocoin}`;
-          // USD/CNY 或 USDT/CNY 查询：优先走场外 USDT/CNY 市场价
-          const isUsdCny = (input.fromcoin === 'USD' || input.fromcoin === 'USDT') && input.tocoin === 'CNY';
-          const fetchers = isUsdCny
-            ? [
-                () => fetchCoinGeckoUsdtCny(input.money),
-                () => fetchOkxC2cUsdtCny(input.money),
-                () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
-                () => fetchErApi(input.fromcoin, input.tocoin, input.money),
-              ]
-            : [
-                () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
-                () => fetchErApi(input.fromcoin, input.tocoin, input.money),
-                () => fetchFrankfurter(input.fromcoin, input.tocoin, input.money),
-                () => fetchFawaz(input.fromcoin, input.tocoin, input.money),
-              ];
+          if ((input.fromcoin === 'USD' || input.fromcoin === 'USDT') && input.tocoin === 'CNY') {
+            const { readUnifiedCnyExchangeRate } = await import('./unified-cny-exchange');
+            return readUnifiedCnyExchangeRate(input.fromcoin, input.money);
+          }
+          const fetchers = [
+            () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
+            () => fetchErApi(input.fromcoin, input.tocoin, input.money),
+            () => fetchFrankfurter(input.fromcoin, input.tocoin, input.money),
+            () => fetchFawaz(input.fromcoin, input.tocoin, input.money),
+          ];
           for (const fetcher of fetchers) {
             try {
               const result = await fetcher();
@@ -37093,7 +37077,9 @@ insights 数组每项包含：
     // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
     // changePercent 已由 price-scanner 用火币日K开盘价实时计算（北京时间 00:00 对齐）
     // 不再查数据库，直接返回缓存即可
-    const { getAllLatestPrices, getMarketPriceHealth, getUsdtCnyRate } = await import('./price-scanner');
+    const { getAllLatestPrices, getMarketPriceHealth } = await import('./price-scanner');
+    const { getLiveUsdtCnyQuote } = await import('./usdt-cny-rate');
+    const usdtCnyFx = await getLiveUsdtCnyQuote();
     const allPrices = getAllLatestPrices();
     const prices: Record<string, number> = {};
     const changes: Record<string, number> = {};
@@ -37105,8 +37091,8 @@ insights 数组每项包含：
       opens[coin] = entry.todayOpen ?? 0;
       updatedAt[coin] = entry.updatedAt;
     }
-    const usdtCnyRate = getUsdtCnyRate();
-    return { prices, changes, opens, updatedAt, health: getMarketPriceHealth(), usdtCnyRate };
+    const usdtCnyRate = usdtCnyFx && !usdtCnyFx.stale ? usdtCnyFx.rate : null;
+    return { prices, changes, opens, updatedAt, health: getMarketPriceHealth(), usdtCnyRate, usdtCnyFx };
   }),
 
   // 52号账本 T+0 专用：只返回服务端统一缓存的 ETH 永续标记价，避免高频前端刷新传输整份行情表。
@@ -37698,8 +37684,8 @@ insights 数组每项包含：
         dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
         dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
       ]);
-      const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
-      const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+      const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+      const usdtCnyRate = await refreshUsdtCnyRate();
       const pricedMultiAssets = multiAssetBalances.map((balance) => {
         const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
         return {
@@ -37712,7 +37698,7 @@ insights 数组每项包含：
       return {
         member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
         visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
-        usdtCnyRate: usdtCnyRate || 7.25,
+        usdtCnyRate: usdtCnyRate > 0 ? usdtCnyRate : null,
         usdtBalance: usdtBalanceSummary.total,
         cnyBalance: cnyBalanceSummary.total,
         usdtBalanceSummary,
