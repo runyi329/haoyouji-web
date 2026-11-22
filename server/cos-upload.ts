@@ -119,6 +119,10 @@ export async function uploadImageToCOS(
       Region: REGION,
       Key: key,
       Body: buffer,
+      // Unique public Miban images only; never private payment proofs.
+      ...(folder === 'miban-reviews' && !filename
+        ? { CacheControl: 'public, max-age=31536000, immutable' }
+        : {}),
       ContentType: contentType,
     });
     
@@ -182,6 +186,9 @@ export async function uploadFileToCOS(
       Region: REGION,
       Key: key,
       Body: buffer,
+      ...(folder === 'assets/miban'
+        ? { CacheControl: 'public, max-age=31536000, immutable' }
+        : {}),
       ContentType: contentType,
     });
     const url = `https://${BUCKET}.cos.${REGION}.myqcloud.com/${key}`;

@@ -20,6 +20,7 @@ import {
   useMibanUsdtCnyRate,
 } from "../client/src/pages/miban/useMibanUsdtCnyRate";
 import MidaniangPurchaseActions from "../client/src/pages/miban/MidaniangPurchaseActions";
+import { getMibanImageSource } from "../client/src/pages/miban/MibanImage";
 import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
@@ -427,7 +428,7 @@ describe("midaniang selection horizontal list and accessibility", () => {
       expect(html).toContain("一份米粮，一份日常心意");
       expect(html).toContain("商家产地介绍 · 五常龙凤山镇");
       const logo = html.match(/<img\b[^>]*alt="米大娘品牌Logo"[^>]*>/)?.[0];
-      expect(logo).toContain(midaniangSelectionAssets.logo);
+      expect(logo).toContain(getMibanImageSource(midaniangSelectionAssets.logo, "icon"));
       expect(logo).not.toMatch(/bg-|background/);
     }
     expect(listSource).toContain("useState(false)");
@@ -539,7 +540,7 @@ describe("midaniang merchant-confirmed organic certification and transparent pub
     const images = html.match(/<img\b[^>]*alt="中国有机产品标识"[^>]*>/g) ?? [];
     expect(images).toHaveLength(2);
     for (const image of images) {
-      expect(image).toContain(`src="${midaniangSelectionAssets.organicMark}"`);
+      expect(image).toContain(`src="${getMibanImageSource(midaniangSelectionAssets.organicMark, "icon")}"`);
       expect(image).toContain(`alt="${markAlt}"`);
       expect(image).toContain('width="32"');
       expect(image).toContain('height="32"');
@@ -597,7 +598,7 @@ describe("midaniang merchant-confirmed organic certification and transparent pub
         html.match(
           /<img\b[^>]*data-testid="midaniang-detail-organic-mark-image"[^>]*>/
         )?.[0] ?? "";
-      expect(image).toContain(`src="${midaniangSelectionAssets.organicMark}"`);
+      expect(image).toContain(`src="${getMibanImageSource(midaniangSelectionAssets.organicMark, "icon")}"`);
       expect(image).toContain(`alt="${markAlt}"`);
       expect(image).toContain('width="48"');
       expect(image).toContain('height="48"');
@@ -617,7 +618,7 @@ describe("midaniang merchant-confirmed organic certification and transparent pub
         marks.match(
           /<img\b[^>]*data-testid="midaniang-detail-brand-mark"[^>]*>/
         )?.[0] ?? "";
-      expect(brandImage).toContain(`src="${midaniangSelectionAssets.logo}"`);
+      expect(brandImage).toContain(`src="${getMibanImageSource(midaniangSelectionAssets.logo, "icon")}"`);
       expect(brandImage).toContain('alt="米大娘品牌标签"');
       expect(brandImage).toContain('width="48"');
       expect(brandImage).toContain('height="48"');
@@ -868,24 +869,24 @@ describe("midaniang detail image and document structure", () => {
   });
 
   it.each(["classic-rice-gift", "family-rice-gift"])(
-    "preserves edge-to-edge original-ratio posters and eager/lazy behavior on %s",
+    "preserves original-ratio posters with lazy loading and a priority hero on %s",
     key => {
       const html = renderDetail(key);
       const images = extractImages(html);
       expect(images).toHaveLength(5);
-      for (const [index, image] of images.entries()) {
+      for (const image of images) {
         const posterKey = image.match(
           /data-poster-key="([^"]+)"/
         )?.[1] as keyof typeof midaniangSelectionAssets.posters;
         expect(image).toContain(
-          `src="${midaniangSelectionAssets.posters[posterKey]}"`
+          `src="${getMibanImageSource(midaniangSelectionAssets.posters[posterKey], "poster")}"`
         );
         expect(image).toContain('width="1120"');
         expect(image).toContain('height="1680"');
         expect(image).toContain(
           'style="display:block;width:100%;height:auto;margin:0;padding:0;border:0"'
         );
-        expect(image).toContain(`loading="${index === 0 ? "eager" : "lazy"}"`);
+        expect(image).toContain('loading="lazy"');
         expect(image).not.toMatch(/object-cover|aspect-square/);
       }
       const stack = html.match(

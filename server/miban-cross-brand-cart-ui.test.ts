@@ -465,7 +465,13 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       expect(cartMarkup).toContain(`¥${item.priceCny.toFixed(2)}`);
     }
     expect(cartMarkup).toContain('data-testid="cart-split-order-notice"');
-    const markup = html(cart.confirm());
+    const confirmation = cart.confirm();
+    const allocation = findElement(confirmation, node =>
+      typeof node.type === "function" && node.type.name === "MibanMixedPaymentAllocation"
+    );
+    expect(allocation.props.payment.selectedDigitalCode).toBe("ETH");
+    allocation.props.payment.useOnlyAsset("USDT");
+    const markup = html(cart.render());
     for (const item of [rice(), aloe()])
       expect(markup).toContain(
         `data-testid="confirmation-group-${item.checkoutGroupKey}"`
@@ -487,7 +493,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    const confirmation = cart.confirm();
+    findElement(confirmation, node =>
+      typeof node.type === "function" && node.type.name === "MibanMixedPaymentAllocation"
+    ).props.payment.useOnlyAsset("USDT");
+    cart.render();
     clickPay(cart);
     expect(boundary.mutate).toHaveBeenCalledOnce();
     const input = boundary.mutate.mock.calls[0][0];

@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { Link } from "wouter";
 import { ArrowLeft, ChevronRight, MapPin } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
@@ -82,7 +83,7 @@ export default function SeasonalFruitSelection() {
           >
             <article className="grid min-h-[174px] grid-cols-[132px_minmax(0,1fr)] max-[360px]:grid-cols-[118px_minmax(0,1fr)]">
               <div className="relative overflow-hidden bg-[#EFF3E3]">
-                <img
+                <MibanImage variant="thumbnail" priority
                   src={MAJIAYOU_IMAGE}
                   alt="广丰马家柚"
                   className="h-full w-full object-cover object-center"
@@ -145,7 +146,7 @@ export default function SeasonalFruitSelection() {
           >
             <article className="grid min-h-[168px] grid-cols-[132px_minmax(0,1fr)] max-[360px]:grid-cols-[118px_minmax(0,1fr)]">
               <div className="relative overflow-hidden bg-[#F2F0E9]">
-                <img
+                <MibanImage variant="thumbnail"
                   src={TIANGUI_PEAR_IMAGE}
                   alt="天桂梨"
                   className="h-full w-full object-cover object-center"

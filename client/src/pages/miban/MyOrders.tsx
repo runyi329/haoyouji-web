@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useState, useEffect, useRef, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -33,6 +34,16 @@ import {
 import AddressBook from "./AddressBook";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
+import type { mibanOrders } from "../../../../drizzle/schema";
+
+type OrderItem = Omit<typeof mibanOrders.$inferSelect, "ingredients"> & {
+  ingredients: (typeof mibanOrders.$inferSelect)["ingredients"] | string | null;
+  trackingNumber?: string | null;
+  userName?: string | null;
+  userUsername?: string | null;
+  userAvatar?: string | null;
+  walletPayments?: unknown;
+};
 
 function dedupeAddress(addr: string): string {
   return (addr ?? "").replace(/(北京市|上海市|天津市|重庆市)\1/, "$1");
@@ -168,7 +179,7 @@ function OrdersTab() {
     return () => clearInterval(t);
   }, []);
 
-  const orderSearchIndex = useMemo(() => new Map((orders ?? []).map(order => [
+  const orderSearchIndex = useMemo(() => new Map<number, string>((orders ?? []).map((order: OrderItem) => [
     order.id,
     getPersonalOrderSearchText({
       ...order,
@@ -205,26 +216,19 @@ function OrdersTab() {
   const allOrders = orders ?? [];
   const searchTerms = normalizeOrderKeyword(searchText).trim().split(/\s+/).filter(Boolean);
   const hasSearch = searchTerms.length > 0;
-  const matchingOrders = hasSearch ? allOrders.filter(order => {
+  const matchingOrders = hasSearch ? allOrders.filter((order: OrderItem) => {
     const content = orderSearchIndex.get(order.id) || "";
     return searchTerms.every(term => content.includes(term));
   }) : allOrders;
   const statusCounts = Object.fromEntries(PERSONAL_ORDER_STATUS_TABS.map(tab => [
     tab.value,
-    tab.value === "all" ? matchingOrders.length : matchingOrders.filter(order => getPersonalOrderStatus(order.status) === tab.value).length,
+    tab.value === "all" ? matchingOrders.length : matchingOrders.filter((order: OrderItem) => getPersonalOrderStatus(order.status) === tab.value).length,
   ]));
   const filteredOrders = statusFilter === "all"
     ? matchingOrders
-    : matchingOrders.filter(order => getPersonalOrderStatus(order.status) === statusFilter);
+    : matchingOrders.filter((order: OrderItem) => getPersonalOrderStatus(order.status) === statusFilter);
 
   // ─── 订阅分组：将同一 subscriptionGroupId 的订单合并 ───────────────────────
-  type OrderItem = (typeof orders)[0] & {
-    subscriptionGroupId?: string;
-    subscriptionMonths?: number;
-    subscriptionIndex?: number;
-    scheduledShipDate?: string;
-  };
-
   const { singleOrders, subscriptionGroups } = (() => {
     const singles: OrderItem[] = [];
     const groups: Map<string, OrderItem[]> = new Map();
@@ -239,7 +243,7 @@ function OrdersTab() {
       }
     }
     // 每组内按 subscriptionIndex 排序
-    for (const [k, v] of groups.entries()) {
+    for (const [k, v] of Array.from(groups.entries())) {
       groups.set(
         k,
         v.sort(
@@ -255,7 +259,7 @@ function OrdersTab() {
     | { type: "single"; order: OrderItem }
     | { type: "group"; groupId: string; orders: OrderItem[] }
   > = [];
-  for (const [groupId, groupOrders] of subscriptionGroups.entries()) {
+  for (const [groupId, groupOrders] of Array.from(subscriptionGroups.entries())) {
     renderList.push({ type: "group", groupId, orders: groupOrders });
   }
   for (const o of singleOrders) {
@@ -301,10 +305,10 @@ function OrdersTab() {
           : hoursLeft > 0
             ? `${hoursLeft}小时${minsLeft}分后自动确认`
             : `${minsLeft}分钟后自动确认`
-        : "即将自动确认收货";
+            : "即将自动确认收货";
     const ingredients: any[] = (() => {
       try {
-        return JSON.parse(order.ingredients ?? "[]");
+        return JSON.parse(order.ingredients as string ?? "[]");
       } catch {
         return [];
       }
@@ -424,7 +428,7 @@ function OrdersTab() {
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-[#fcfcfc]">
             <div className="flex min-h-[64px]">
               {order.productImg ? (
-                <img
+                <MibanImage variant="thumbnail"
                   src={order.productImg}
                   alt={order.recipeName || "商品图片"}
                   className="w-[76px] shrink-0 self-stretch object-cover"
@@ -651,7 +655,7 @@ function OrdersTab() {
                 <span className="font-medium text-gray-400">下单人</span>
                 <span className="flex w-full min-w-0 items-center justify-end gap-1.5 text-right font-semibold text-gray-600">
                   {ordererAvatar ? (
-                    <img src={ordererAvatar} alt={`${ordererName}头像`} className="h-4 w-4 shrink-0 rounded-full border border-gray-100 object-cover" onError={event => { event.currentTarget.style.display = "none"; }} />
+                    <MibanImage variant="thumbnail" src={ordererAvatar} alt={`${ordererName}头像`} className="h-4 w-4 shrink-0 rounded-full border border-gray-100 object-cover" onError={event => { event.currentTarget.style.display = "none"; }} />
                   ) : (
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400"><User className="h-2.5 w-2.5" /></span>
                   )}
@@ -1370,7 +1374,7 @@ function FavoritesTab() {
                     className="bg-white rounded-2xl p-3 flex items-center gap-3 shadow-sm"
                   >
                     {item.productImg ? (
-                      <img
+                      <MibanImage variant="thumbnail"
                         src={item.productImg}
                         alt={item.productName}
                         className="w-16 h-16 rounded-xl object-cover flex-shrink-0"

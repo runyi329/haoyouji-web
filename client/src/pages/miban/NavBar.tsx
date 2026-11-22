@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
@@ -160,7 +161,7 @@ function LogoWithVersionSwitch() {
         onClick={() => canSwitch && options.length > 0 ? setOpen(v => !v) : undefined}
         className={`flex items-center gap-2 ${canSwitch && options.length > 0 ? "active:opacity-70" : ""}`}
       >
-        <img
+        <MibanImage variant="icon" priority
           src={MIBAN_LOGO}
           alt="米伴"
           className="w-7 h-7 rounded-md object-cover"
@@ -184,7 +185,7 @@ function LogoWithVersionSwitch() {
               切换版本
             </div>
             <div className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 text-[#FF6900] font-semibold bg-orange-50/50">
-              <img src={MIBAN_LOGO} alt="" width={24} height={24} className="rounded-full object-cover" style={{ width: 24, height: 24 }} />
+              <MibanImage variant="icon" priority src={MIBAN_LOGO} alt="" width={24} height={24} className="rounded-full object-cover" style={{ width: 24, height: 24 }} />
               <span className="flex-1">米伴</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 6L9 17l-5-5" />
@@ -198,7 +199,7 @@ function LogoWithVersionSwitch() {
                 className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-gray-50 text-gray-700"
               >
                 {VERSION_ICONS[opt.versionKey] ? (
-                  <img
+                  <MibanImage variant="icon" priority
                     src={VERSION_ICONS[opt.versionKey]}
                     alt=""
                     width={24}

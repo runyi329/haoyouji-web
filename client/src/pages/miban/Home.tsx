@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { Link } from "wouter";
 import { useRef, useState, useEffect, useCallback } from "react";
@@ -8,6 +9,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { ShoppingCart, Trash2, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
+import type { mibanUserRecipes } from "../../../../drizzle/schema";
 
 type RiceNutrition = {
   energy?: string | number;   // 热量 kcal/100g（旧字段，兼容硬编码）
@@ -216,7 +218,7 @@ function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => voi
 
           {/* 有实验室信息图时：展示全屏图片 */}
           {labImg ? (
-            <img
+            <MibanImage variant="original" priority
               src={labImg}
               alt={rice.name}
               className="w-full rounded-2xl"
@@ -394,7 +396,7 @@ function RecipeDrawer({ onClose }: { onClose: () => void }) {
   );
   const deleteMutation = mtrpc.recipe.delete.useMutation({
     onSuccess: () => { toast.success("配方已删除"); refetch(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   return (
@@ -448,7 +450,7 @@ function RecipeDrawer({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <div className="space-y-3 pt-4">
-              {recipes.slice(0, 5).map((recipe) => {
+              {recipes.slice(0, 5).map((recipe: typeof mibanUserRecipes.$inferSelect) => {
                 const ingredients: any[] = (() => {
                   try { return JSON.parse(recipe.ingredients as any ?? "[]"); }
                   catch { return []; }
@@ -610,7 +612,7 @@ export default function Home() {
               ) : (
                 <>
                   <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 4 }}>
-                    <img
+                    <MibanImage variant="thumbnail"
                       src={cosImg(rice.img, 280)}
                       alt={rice.name}
                       style={{ width: "80%", height: "100%", objectFit: "contain" }}

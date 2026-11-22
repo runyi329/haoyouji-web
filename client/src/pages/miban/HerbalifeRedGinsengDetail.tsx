@@ -30,6 +30,7 @@ import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
 import { toast } from "sonner";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
+import { MibanImage, getMibanPosterParts } from "./MibanImage";
 
 type LimitedOrderSuccess = {
   orderNo: string;
@@ -143,6 +144,7 @@ export default function HerbalifeRedGinsengDetail() {
   const [receiverDetail, setReceiverDetail] = useState("");
   const [userNote, setUserNote] = useState("");
   const [favoritePending, setFavoritePending] = useState(false);
+  const [failedPosters, setFailedPosters] = useState<Set<string>>(() => new Set());
   const startXRef = useRef(0);
   const orderReceiptRef = useRef<HTMLDivElement>(null);
 
@@ -494,15 +496,19 @@ export default function HerbalifeRedGinsengDetail() {
               style={{ aspectRatio: "1 / 1" }}
             >
               {heroBackgroundImage && index === 0 && (
-                <img
+                <MibanImage
                   src={heroBackgroundImage}
+                  variant="hero"
+                  priority={currentSlide === 0}
                   alt=""
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-0 h-full w-full object-cover"
                 />
               )}
-              <img
+              <MibanImage
                 src={image}
+                variant="hero"
+                priority={index === currentSlide}
                 alt={`${currentProduct.detail.title}展示图 ${index + 1}`}
                 className={
                   heroBackgroundImage && index === 0
@@ -511,7 +517,6 @@ export default function HerbalifeRedGinsengDetail() {
                       ? "h-full w-full object-cover"
                       : "h-full w-full object-contain p-5"
                 }
-                loading={index === 0 ? "eager" : "lazy"}
               />
             </div>
           ))}
@@ -690,15 +695,36 @@ export default function HerbalifeRedGinsengDetail() {
                 : "space-y-px bg-gray-100"
             }
           >
-            {detailImages.map((image, index) => (
-              <img
+            {detailImages.map((image, index) => {
+              const parts = failedPosters.has(image) ? undefined : getMibanPosterParts(image);
+              if (parts?.length) return (
+                <div key={image} data-miban-poster-parts={parts.length} style={{ margin: 0, padding: 0, lineHeight: 0 }}>
+                  {parts.map((part, partIndex) => (
+                    <MibanImage
+                      key={part.src}
+                      src={part.src}
+                      variant="poster"
+                      alt={`${currentProduct.detail.title}商品图 ${index + 1} · ${partIndex + 1}`}
+                      width={part.width}
+                      height={part.height}
+                      className="block h-auto w-full"
+                      loading="lazy"
+                      onError={() => setFailedPosters(previous => new Set(previous).add(image))}
+                    />
+                  ))}
+                </div>
+              );
+              return (
+              <MibanImage
                 key={image}
                 src={image}
+                variant="poster"
                 alt={`${currentProduct.detail.title}商品图 ${index + 1}`}
                 className="block w-full bg-white"
                 loading="lazy"
               />
-            ))}
+              );
+            })}
           </div>
         )}
         {currentProduct.detail.storySections?.length ? (
@@ -721,8 +747,9 @@ export default function HerbalifeRedGinsengDetail() {
                       : undefined
                   }
                 >
-                  <img
+                  <MibanImage
                     src={story.image}
+                    variant="poster"
                     alt={`${currentProduct.detail.title}${story.title}`}
                     className="absolute inset-0 h-full w-full object-cover"
                     loading="lazy"
@@ -790,8 +817,9 @@ export default function HerbalifeRedGinsengDetail() {
               <div>
                 <h3 className="font-bold text-gray-900">产品简介</h3>
                 {currentProduct.detail.introImage && (
-                  <img
+                  <MibanImage
                     src={currentProduct.detail.introImage}
+                    variant="poster"
                     alt={
                       currentProduct.detail.introImageAlt ||
                       `${currentProduct.detail.title}产品介绍图`
@@ -835,8 +863,9 @@ export default function HerbalifeRedGinsengDetail() {
               消费者告知
             </h2>
           </div>
-          <img
+          <MibanImage
             src={currentProduct.detail.consumerNoticeImage}
+            variant="poster"
             alt="消费者告知书"
             className="block w-full rounded-xl border border-gray-100"
             loading="lazy"
@@ -973,8 +1002,9 @@ export default function HerbalifeRedGinsengDetail() {
                 className="flex gap-3 rounded-2xl p-3"
                 style={{ background: theme.surfaceMuted }}
               >
-                <img
+                <MibanImage
                   src={checkoutProductImage}
+                  variant="thumbnail"
                   alt=""
                   className="h-16 w-16 rounded-xl bg-white object-contain p-1"
                 />

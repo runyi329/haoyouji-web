@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { midaniangSelectionAssets } from "@shared/midaniang-selection-assets";
 import {
   Dialog,
@@ -39,7 +40,7 @@ export default function MidaniangOrganicMark({
             className
           )}
         >
-          <img
+          <MibanImage variant="icon" priority
             src={midaniangSelectionAssets.organicMark}
             alt={ORGANIC_MARK_ALT}
             width={size}
@@ -58,7 +59,7 @@ export default function MidaniangOrganicMark({
         <DialogDescription className="text-[13px] leading-6 text-[#676b60]">
           商家确认产品已获有机认证，具体认证范围与有效期以认证证书和实物标签为准。
         </DialogDescription>
-        <img
+        <MibanImage variant="icon" priority
           src={midaniangSelectionAssets.organicMark}
           alt={ORGANIC_MARK_ALT}
           width={100}

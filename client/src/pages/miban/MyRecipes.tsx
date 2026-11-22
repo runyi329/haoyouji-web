@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -9,6 +10,7 @@ import { BookOpen, ShoppingCart, Trash2, User, Heart, Plus } from "lucide-react"
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { useRef } from "react";
+import type { mibanUserRecipes, SavedRecipe } from "../../../../drizzle/schema";
 
 // 米种数据（用于海报颜色映射）
 const RICE_TYPES_MAP: Record<string, { name: string; color: string }> = {
@@ -152,7 +154,7 @@ export default function MyRecipes() {
   const { data: recipes, isLoading, refetch } = mtrpc.recipe.list.useQuery(undefined, { enabled: isAuthenticated });
   const deleteMutation = mtrpc.recipe.delete.useMutation({
     onSuccess: () => { toast.success("配方已删除"); refetch(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   const { data: savedRecipes, isLoading: savedLoading, refetch: refetchSaved } = mtrpc.savedRecipes.list.useQuery(
@@ -160,7 +162,7 @@ export default function MyRecipes() {
   );
   const deleteSaved = mtrpc.savedRecipes.delete.useMutation({
     onSuccess: () => { toast.success("已取消收藏"); refetchSaved(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
   // 收藏米种
   const { data: favRiceList, refetch: refetchFavRice } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
@@ -171,7 +173,7 @@ export default function MyRecipes() {
   const favRices = (favRiceList ?? []).filter((f: any) => f.productKey?.startsWith("rice_"));
   const addToCart = mtrpc.cart.addBatch.useMutation({
     onSuccess: () => toast.success("已加入购物车"),
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   if (!isAuthenticated) return (
@@ -253,7 +255,7 @@ export default function MyRecipes() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recipes.map((recipe) => {
+                {recipes.map((recipe: typeof mibanUserRecipes.$inferSelect) => {
                   const ingredients: any[] = (() => {
                     try { return JSON.parse(recipe.ingredients as any ?? "[]"); }
                     catch { return []; }
@@ -326,7 +328,7 @@ export default function MyRecipes() {
                   {favRices.map((item: any) => (
                     <div key={item.id} className="bg-white rounded-2xl p-3 flex items-center gap-3 shadow-sm border border-gray-50">
                       {item.productImg ? (
-                        <img src={item.productImg} alt={item.productName} className="w-14 h-14 rounded-xl object-contain flex-shrink-0" style={{ mixBlendMode: "multiply", background: "#F8F6F3" }} />
+                        <MibanImage variant="thumbnail" src={item.productImg} alt={item.productName} className="w-14 h-14 rounded-xl object-contain flex-shrink-0" style={{ mixBlendMode: "multiply", background: "#F8F6F3" }} />
                       ) : (
                         <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                           <Heart className="w-5 h-5 text-gray-300" />
@@ -370,7 +372,7 @@ export default function MyRecipes() {
               </div>
             ) : (
               <div className="space-y-3">
-                {savedRecipes.map((recipe) => {
+                {savedRecipes.map((recipe: SavedRecipe) => {
                   const items: Array<{ riceId: string; riceName: string; ratio: number; pricePerJin: string }> = (() => {
                     try { return JSON.parse(recipe.items as string ?? "[]"); }
                     catch { return []; }
@@ -484,7 +486,7 @@ export default function MyRecipes() {
             onClick={e => e.stopPropagation()}
           >
             {sharePosterImg ? (
-              <img src={sharePosterImg} alt="分享海报" className="w-full rounded-2xl" />
+              <MibanImage variant="thumbnail" src={sharePosterImg} alt="分享海报" className="w-full rounded-2xl" />
             ) : (
               <div ref={sharePosterRef} className="w-full">
                 <SavedRecipePoster

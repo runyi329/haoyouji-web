@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -163,7 +164,7 @@ function RiceManageTab() {
             {/* 图片 + 上传 */}
             <label className="relative flex-shrink-0 cursor-pointer group">
               {rice.img
-                ? <img src={rice.img} alt={rice.name} className="w-12 h-12 rounded-xl object-cover" />
+                ? <MibanImage variant="thumbnail" src={rice.img} alt={rice.name} className="w-12 h-12 rounded-xl object-cover" />
                 : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: rice.colorHex ?? "#C8A87A" }}>{rice.name[0]}</div>
               }
               <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

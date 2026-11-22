@@ -5,6 +5,7 @@ import { midaniangSelectionCatalog } from "@shared/midaniang-selection-catalog";
 import { midaniangSelectionAssets } from "@shared/midaniang-selection-assets";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import MidaniangOrganicMark from "./MidaniangOrganicMark";
+import { MibanImage, getMibanImageSource } from "./MibanImage";
 
 export const MIDANIANG_SELECTION_PATH = "/p/proj_hzxm2t/limited/midaniang";
 
@@ -35,7 +36,8 @@ export default function MidaniangSelection() {
 
       <section aria-label="米大娘品牌介绍" className="px-4 pb-4 pt-6">
         <div className="flex items-center gap-4">
-          <img
+          <MibanImage
+            variant="icon"
             src={midaniangSelectionAssets.logo}
             alt="米大娘品牌Logo"
             width={72}
@@ -114,10 +116,12 @@ export default function MidaniangSelection() {
                         aria-hidden="true"
                         className="absolute -inset-3 bg-cover bg-center opacity-60 blur-[10px]"
                         style={{
-                          backgroundImage: `url("${midaniangSelectionAssets.grid[item.key]}")`,
+                          backgroundImage: `url("${getMibanImageSource(midaniangSelectionAssets.grid[item.key], "thumbnail")}")`,
                         }}
                       />
-                      <img
+                      <MibanImage
+                        variant="thumbnail"
+                        priority={index === 0}
                         src={midaniangSelectionAssets.grid[item.key]}
                         alt={`米大娘${item.title}包装示意`}
                         width={1024}

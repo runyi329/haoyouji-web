@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useState } from "react";
 import { mtrpc, cosImg } from "./mibanTrpc";
@@ -104,7 +105,7 @@ export default function RiceEncyclopedia() {
                   {/* 米种图片或色块 */}
                   {rice.img ? (
                     <div className="w-10 h-10 rounded-full mb-3 flex-shrink-0 overflow-hidden shadow-sm">
-                      <img src={cosImg(rice.img, 40)} alt={rice.stdName} className="w-full h-full object-cover" />
+                      <MibanImage variant="thumbnail" src={cosImg(rice.img, 40)} alt={rice.stdName} className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div

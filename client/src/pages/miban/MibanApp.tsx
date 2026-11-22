@@ -4,32 +4,34 @@
  * 复用 haoyouji-web 的 wouter Router 上下文
  */
 import { Route, Switch, useLocation } from "wouter";
-import { useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { prepareMibanPersonalQueries } from "@/lib/miban-wallet-query-scope";
 import NavBar from "./NavBar";
-import Home from "./Home";
-import RiceEncyclopedia from "./RiceEncyclopedia";
-import RiceDetail from "./RiceDetail";
-import DiyWorkshop from "./DiyWorkshop";
-import LimitedSale from "./LimitedSale";
-import AiHealth from "./AiHealth";
-import PresetRecipes from "./PresetRecipes";
-import MyRecipes from "./MyRecipes";
-import MyOrders from "./MyOrders";
-import UnifiedAdmin from "./UnifiedAdmin";
-import MibanWallet from "./MibanWallet";
-import JoinPage from "./JoinPage";
-import BrandAssets from "./BrandAssets";
-import TianguiPearDetail from "./TianguiPearDetail";
-import ReviewPage from "./ReviewPage";
-import HerbalifeRedGinsengDetail from "./HerbalifeRedGinsengDetail";
-import LimitedBrandProducts from "./LimitedBrandProducts";
-import SeasonalFruitSelection from "./SeasonalFruitSelection";
 import { LimitedProductCartProvider } from "./LimitedProductCart";
-import MidaniangSelection from "./MidaniangSelection";
-import MidaniangSelectionDetail from "./MidaniangSelectionDetail";
+
+// Public product pages do not download admin/editor and unrelated detail pages.
+const Home = lazy(() => import("./Home"));
+const RiceEncyclopedia = lazy(() => import("./RiceEncyclopedia"));
+const RiceDetail = lazy(() => import("./RiceDetail"));
+const DiyWorkshop = lazy(() => import("./DiyWorkshop"));
+const LimitedSale = lazy(() => import("./LimitedSale"));
+const AiHealth = lazy(() => import("./AiHealth"));
+const PresetRecipes = lazy(() => import("./PresetRecipes"));
+const MyRecipes = lazy(() => import("./MyRecipes"));
+const MyOrders = lazy(() => import("./MyOrders"));
+const UnifiedAdmin = lazy(() => import("./UnifiedAdmin"));
+const MibanWallet = lazy(() => import("./MibanWallet"));
+const JoinPage = lazy(() => import("./JoinPage"));
+const BrandAssets = lazy(() => import("./BrandAssets"));
+const TianguiPearDetail = lazy(() => import("./TianguiPearDetail"));
+const ReviewPage = lazy(() => import("./ReviewPage"));
+const HerbalifeRedGinsengDetail = lazy(() => import("./HerbalifeRedGinsengDetail"));
+const LimitedBrandProducts = lazy(() => import("./LimitedBrandProducts"));
+const SeasonalFruitSelection = lazy(() => import("./SeasonalFruitSelection"));
+const MidaniangSelection = lazy(() => import("./MidaniangSelection"));
+const MidaniangSelectionDetail = lazy(() => import("./MidaniangSelectionDetail"));
 
 const BASE = "/p/proj_hzxm2t";
 
@@ -60,7 +62,7 @@ export default function MibanApp() {
   </div>;
 
   // 钱包复用原钱包独立页面：避免重复导航挤压账户与流水的原有布局。
-  if (location === `${BASE}/wallet`) return <MibanWallet />;
+  if (location === `${BASE}/wallet`) return <Suspense fallback={<MibanPageLoading />}><MibanWallet /></Suspense>;
 
   return (
     <LimitedProductCartProvider>
@@ -68,7 +70,7 @@ export default function MibanApp() {
         <NavBar />
         {/* 顶部 NavBar 占位 52px，底部 Tab 占位 64px */}
         <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
-          <Switch>
+          <Suspense fallback={<MibanPageLoading />}><Switch>
             <Route
               path={`${BASE}/pear/tiangui`}
               component={TianguiPearDetail}
@@ -129,9 +131,13 @@ export default function MibanApp() {
             <Route path={`${BASE}/`} component={Home} />
             {/* 默认回首页 */}
             <Route component={Home} />
-          </Switch>
+          </Switch></Suspense>
         </div>
       </div>
     </LimitedProductCartProvider>
   );
+}
+
+function MibanPageLoading() {
+  return <div role="status" className="flex min-h-[240px] items-center justify-center text-sm text-gray-400">页面加载中…</div>;
 }

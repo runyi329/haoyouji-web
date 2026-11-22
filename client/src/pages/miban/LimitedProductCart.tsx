@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import {
   createContext,
   useCallback,
@@ -725,7 +726,7 @@ function LimitedProductCartOverlay() {
                             key={cartKey(item)}
                             className="flex min-w-0 items-start gap-2"
                           >
-                            <img
+                            <MibanImage variant="thumbnail"
                               src={item.image}
                               alt=""
                               className="h-11 w-11 shrink-0 rounded-lg border border-gray-100 object-cover"
@@ -979,7 +980,7 @@ function LimitedProductCartOverlay() {
                       key={cartKey(item)}
                       className="flex min-w-0 gap-2 rounded-2xl border border-gray-100 p-2.5 min-[375px]:gap-3 min-[375px]:p-3"
                     >
-                      <img
+                      <MibanImage variant="thumbnail"
                         src={item.image}
                         alt={item.productName}
                         className="h-14 w-14 shrink-0 rounded-xl bg-gray-50 object-cover min-[390px]:h-18 min-[390px]:w-18"

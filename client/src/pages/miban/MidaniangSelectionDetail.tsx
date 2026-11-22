@@ -12,6 +12,7 @@ import { MIDANIANG_SELECTION_PATH } from "./MidaniangSelection";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import MidaniangOrganicMark from "./MidaniangOrganicMark";
 import MidaniangPurchaseActions from "./MidaniangPurchaseActions";
+import { MibanImage } from "./MibanImage";
 
 const POSTER_KEYS = {
   "classic-rice-gift": [
@@ -142,23 +143,24 @@ export default function MidaniangSelectionDetail() {
       </header>
       <div className="relative" data-testid="midaniang-detail-hero">
         <div className="aspect-square w-full bg-[#ece8dc]">
-          <img
+          <MibanImage
             src={midaniangSelectionAssets.grid[item.key]}
             alt={`米大娘${item.title}礼盒包装示意`}
             width={1024}
             height={1024}
-            loading="eager"
-            fetchPriority="high"
+            variant="hero"
+            priority
             className="block h-full w-full object-contain"
             data-testid="midaniang-detail-main-image"
           />
         </div>
         <div className="absolute right-3 top-3 z-10 flex items-start gap-3" data-testid="midaniang-detail-brand-marks">
-          <img
+          <MibanImage
             src={midaniangSelectionAssets.logo}
             alt="米大娘品牌标签"
             width={48}
             height={48}
+            variant="icon"
             className="h-12 w-12 object-contain"
             data-testid="midaniang-detail-brand-mark"
           />
@@ -229,14 +231,15 @@ export default function MidaniangSelectionDetail() {
         data-testid="midaniang-poster-stack"
         style={{ margin: 0, padding: 0, border: 0, lineHeight: 0 }}
       >
-        {POSTER_KEYS[item.key].map((posterKey, index) => (
-          <img
+        {POSTER_KEYS[item.key].map(posterKey => (
+          <MibanImage
             key={posterKey}
             src={midaniangSelectionAssets.posters[posterKey]}
             alt={POSTER_DESCRIPTIONS[posterKey]}
             width={midaniangSelectionPosterDimensions.width}
             height={midaniangSelectionPosterDimensions.height}
-            loading={index === 0 ? "eager" : "lazy"}
+            variant="poster"
+            loading="lazy"
             decoding="async"
             data-poster-key={posterKey}
             style={{

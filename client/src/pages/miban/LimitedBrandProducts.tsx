@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, ChevronRight, PackageOpen } from "lucide-react";
@@ -105,7 +106,7 @@ export default function LimitedBrandProducts() {
       >
         {brandProducts.length > 0 ? (
           <div className="space-y-3">
-            {brandProducts.map(product => {
+            {brandProducts.map((product, imageIndex) => {
               const sku = getActiveSku(
                 product,
                 availabilityBySku,
@@ -137,7 +138,7 @@ export default function LimitedBrandProducts() {
                       >
                         {product.card.badge}
                       </div>
-                      <img
+                      <MibanImage variant="thumbnail" priority={imageIndex === 0}
                         src={product.card.image}
                         alt={product.card.title}
                         className={`h-full w-full ${useAdaptiveProductCard ? "object-cover object-center" : "object-contain p-3"}`}

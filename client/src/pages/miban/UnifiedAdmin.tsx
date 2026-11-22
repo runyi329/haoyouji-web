@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -477,7 +478,7 @@ function OrdersPanel() {
   ).sort() as string[];
 
   // 从所有订单中提取去重的下单人列表（用于下拉选项）
-  const allUsers = Array.from(
+  const allUsers = Array.from<[string, string]>(
     safeOrders.reduce((map: Map<string, string>, o: any) => {
       const key = String(o.userId);
       if (!map.has(key))
@@ -1043,7 +1044,7 @@ function OrdersPanel() {
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-[#fcfcfc]">
               <div className="flex min-h-[64px]">
                 {order.productImg ? (
-                  <img
+                  <MibanImage variant="thumbnail"
                     src={order.productImg}
                     alt={order.recipeName || "商品缩略图"}
                     className="w-[76px] shrink-0 self-stretch object-cover"
@@ -1176,7 +1177,7 @@ function OrdersPanel() {
                   </span>
                   <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5 text-right font-semibold text-gray-600">
                     {ordererAvatar ? (
-                      <img
+                      <MibanImage variant="thumbnail"
                         src={ordererAvatar}
                         alt={`${ordererDisplayName}头像`}
                         className="h-4 w-4 shrink-0 rounded-full border border-gray-100 object-cover"
@@ -1800,7 +1801,7 @@ function CatalogPanel() {
     },
   });
   const batchUpdateMutation = mtrpc.rice.catalogBatchUpdate.useMutation({
-    onSuccess: data => {
+    onSuccess: (data: { count: number }) => {
       toast.success(`已批量更新 ${data.count} 条`);
       refetch();
       setBatchMode(false);
@@ -2434,7 +2435,7 @@ function CatalogPanel() {
                 {/* 图片/色块 */}
                 <label className="relative flex-shrink-0 cursor-pointer group">
                   {item.img ? (
-                    <img
+                    <MibanImage variant="thumbnail"
                       src={cosImg(item.img, 48)}
                       alt={item.stdName}
                       className="w-12 h-12 rounded-xl object-cover"

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
+import { MibanImage } from "./MibanImage";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AddressBook from "./AddressBook";
 import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./regionData";
@@ -160,10 +161,12 @@ function ReviewSection() {
               {r.images?.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {r.images.map((img: string, i: number) => (
-                    <img
+                    <MibanImage
                       key={i}
                       src={img}
                       alt=""
+                      variant="thumbnail"
+                      loading="lazy"
                       className="w-16 h-16 rounded-lg object-cover border border-gray-100"
                     />
                   ))}
@@ -463,11 +466,12 @@ export default function TianguiPearDetail() {
               className="flex-shrink-0 w-full"
               style={{ aspectRatio: "1/1", overflow: "hidden" }}
             >
-              <img
+              <MibanImage
                 src={src}
                 alt={`天桂梨图${i + 1}`}
                 className="w-full h-full object-cover"
-                loading={i === 0 ? "eager" : "lazy"}
+                variant="hero"
+                priority={i === cur}
               />
             </div>
           ))}
@@ -551,10 +555,11 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片1：食用场景 + 极早熟稀缺 ── */}
-      <img
+      <MibanImage
         src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-scene.webp"
         alt="天桂梨食用场景"
         className="w-full block"
+        variant="poster"
         loading="lazy"
       />
       <div
@@ -608,10 +613,11 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片2：整果展示 + 糖度超高 ── */}
-      <img
+      <MibanImage
         src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-hero.webp"
         alt="天桂梨整果"
         className="w-full block"
+        variant="poster"
         loading="lazy"
       />
       <div
@@ -776,10 +782,11 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片3：果园产地 + 产地直发 ── */}
-      <img
+      <MibanImage
         src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-poster-orchard.webp"
         alt="天桂梨果园产地"
         className="w-full block"
+        variant="poster"
         loading="lazy"
       />
       <div
@@ -823,10 +830,11 @@ export default function TianguiPearDetail() {
             className="relative rounded-xl overflow-hidden"
             style={{ aspectRatio: "1/1" }}
           >
-            <img
+            <MibanImage
               src={IMGS.scene}
               alt="鲜切果盘"
               className="w-full h-full object-cover"
+              variant="thumbnail"
               loading="lazy"
             />
             <div
@@ -843,10 +851,11 @@ export default function TianguiPearDetail() {
             className="relative rounded-xl overflow-hidden"
             style={{ aspectRatio: "1/1" }}
           >
-            <img
+            <MibanImage
               src={IMGS.juicy}
               alt="冰镇鲜食"
               className="w-full h-full object-cover"
+              variant="thumbnail"
               loading="lazy"
             />
             <div
@@ -863,10 +872,11 @@ export default function TianguiPearDetail() {
             className="relative rounded-xl overflow-hidden col-span-2"
             style={{ aspectRatio: "2/1" }}
           >
-            <img
+            <MibanImage
               src={IMGS.hero}
               alt="鲜榨梨汁"
               className="w-full h-full object-cover"
+              variant="thumbnail"
               loading="lazy"
             />
             <div
@@ -891,10 +901,11 @@ export default function TianguiPearDetail() {
           精选规格
         </div>
         <div className="text-xs text-gray-300 mb-4">自用送礼，均有合适之选</div>
-        <img
+        <MibanImage
           src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_giftbox_scene.webp"
           alt="天桂梨礼盒"
           className="w-full block rounded-xl mb-4"
+          variant="poster"
           loading="lazy"
         />
         <div className="flex flex-col gap-2.5">

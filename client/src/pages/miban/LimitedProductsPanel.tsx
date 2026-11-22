@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 // @ts-nocheck
 import { useMemo, useState } from "react";
 import { mtrpc, cosImg } from "./mibanTrpc";
@@ -94,18 +95,18 @@ export default function LimitedProductsPanel() {
 
   const catalog = catalogQuery.data ?? [];
   const brands = useMemo(
-    () => [...new Set(catalog.map((item: any) => item.brand))],
+    () => Array.from(new Set<string>(catalog.map((item: any) => item.brand))),
     [catalog]
   );
   const selectedBrand = brand || brands[0] || "";
   const categories = useMemo(
     () => [
       "全部",
-      ...new Set(
+      ...Array.from(new Set<string>(
         catalog
           .filter((item: any) => item.brand === selectedBrand)
           .map((item: any) => item.category)
-      ),
+      )),
     ],
     [catalog, selectedBrand]
   );
@@ -495,7 +496,7 @@ export default function LimitedProductsPanel() {
                 onClick={() => openSku(row)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <img
+                <MibanImage variant="thumbnail"
                   src={cosImg(row.image, 72)}
                   alt=""
                   className="h-[64px] w-[64px] rounded-xl bg-gray-50 object-contain"
@@ -584,7 +585,7 @@ export default function LimitedProductsPanel() {
             <div className="space-y-3 p-4">
               <div className="overflow-hidden rounded-2xl bg-white p-3 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <img
+                  <MibanImage variant="thumbnail"
                     src={cosImg(selectedSku.image, 96)}
                     alt=""
                     className="h-20 w-20 rounded-xl bg-gray-50 object-contain"

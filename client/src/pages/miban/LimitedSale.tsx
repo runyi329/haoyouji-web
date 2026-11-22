@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { ChevronRight, Sparkles } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
+import { MibanImage } from "./MibanImage";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import {
   LINGCHUANG_THEME,
@@ -134,7 +135,9 @@ export default function LimitedSale() {
             boxShadow: "0 14px 32px rgba(59,128,37,0.22)",
           }}
         >
-          <img
+          <MibanImage
+            variant="card"
+            priority={sortedBrands[0] === "herbalife"}
             src={HERBALIFE_NUTRITION_CARD}
             alt="康宝莱营养精选产品与饮品场景"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
@@ -190,7 +193,9 @@ export default function LimitedSale() {
             boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
           }}
         >
-          <img
+          <MibanImage
+            variant="card"
+            priority={sortedBrands[0] === "tuoquetang"}
             src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
             alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover"
@@ -243,7 +248,9 @@ export default function LimitedSale() {
             boxShadow: "0 14px 32px rgba(106,45,51,0.18)",
           }}
         >
-          <img
+          <MibanImage
+            variant="card"
+            priority={sortedBrands[0] === "lingchuang"}
             src={LINGCHUANG_DUO_CARD}
             alt="凌创PQQ透明质酸钠与氨糖透明质酸钠营养固体饮料"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
@@ -296,7 +303,9 @@ export default function LimitedSale() {
             boxShadow: "0 14px 32px rgba(131,111,61,0.16)",
           }}
         >
-          <img
+          <MibanImage
+            variant="card"
+            priority={sortedBrands[0] === "fruits"}
             src={SEASONAL_FRUITS_CARD}
             alt="四季水果精选组合"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
@@ -349,7 +358,9 @@ export default function LimitedSale() {
             boxShadow: "0 14px 32px rgba(144,104,55,0.16)",
           }}
         >
-          <img
+          <MibanImage
+            variant="card"
+            priority={sortedBrands[0] === "midaniang"}
             src={MIDANIANG_BRAND_CARD}
             alt="米大娘五常大米礼盒为主，搭配亚麻籽油与大米年糕的米粮系列陈列"
             data-testid="midaniang-stage"
@@ -365,7 +376,8 @@ export default function LimitedSale() {
           <div className="relative z-10 flex min-h-[224px] max-w-[58%] flex-col justify-between px-5 py-4">
             <div>
               <div className="flex items-center gap-2">
-                <img
+                <MibanImage
+                  variant="icon"
                   src={MIDANIANG_APPROVED_LOGO}
                   alt="米大娘红金交织Logo，右上角R1标签"
                   data-testid="midaniang-approved-logo"

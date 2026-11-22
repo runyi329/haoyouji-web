@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { useState, useCallback, useRef, useEffect } from "react";
 
 // 数字滚动动画组件
@@ -661,7 +662,7 @@ export default function DiyWorkshop() {
                   )}
                   {/* 图片区：和卡片同色，mix-blend-mode让白色背景透明融合 */}
                   <div className="w-full flex items-center justify-center" style={{ paddingTop: 16, paddingBottom: 8, background: "#F8F6F3" }}>
-                    <img
+                    <MibanImage variant="thumbnail"
                       src={cosImg(rice.img, 140)}
                       alt={rice.name}
                       className="object-contain"
@@ -768,7 +769,7 @@ export default function DiyWorkshop() {
                 >
                   <X size={9} className="text-gray-600" style={{ position: 'absolute', top: 9, left: 9 }} />
                 </button>
-                <img src={cosImg(rice.img, 56)} alt={rice.name}
+                <MibanImage variant="thumbnail" src={cosImg(rice.img, 56)} alt={rice.name}
                   className="w-14 h-14 object-contain flex-shrink-0 rounded-xl"
                   style={{ mixBlendMode: "multiply", background: "#F8F6F3" }}
                 />
@@ -969,7 +970,7 @@ export default function DiyWorkshop() {
           <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: `repeat(${Math.min(selRices.length, 3)}, 1fr)` }}>
             {selRices.map((rice) => (
               <div key={rice.id} className="flex flex-col items-center rounded-2xl py-2.5 px-1.5 gap-1" style={{ background: rice.color + "12", border: `1px solid ${rice.color}30` }}>
-                <img
+                <MibanImage variant="thumbnail"
                   src={cosImg(rice.img, 80)}
                   alt={rice.name}
                   className="object-contain"
@@ -1230,7 +1231,7 @@ export default function DiyWorkshop() {
               </div>
             )}
             {aiPosterImg && (
-              <img src={aiPosterImg} alt="AI配比海报" className="w-full rounded-2xl" />
+              <MibanImage variant="thumbnail" src={aiPosterImg} alt="AI配比海报" className="w-full rounded-2xl" />
             )}
             {generatingAiPoster && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl">
@@ -1488,7 +1489,7 @@ export default function DiyWorkshop() {
               </div>
             )}
             {posterImg && (
-              <img src={posterImg} alt="配方海报" className="w-full rounded-2xl" />
+              <MibanImage variant="thumbnail" src={posterImg} alt="配方海报" className="w-full rounded-2xl" />
             )}
             {generating && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl">

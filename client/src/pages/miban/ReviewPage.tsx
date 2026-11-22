@@ -1,3 +1,4 @@
+import { MibanImage } from "./MibanImage";
 import { useState, useRef } from "react";
 import { useSearch, useLocation } from "wouter";
 import { mtrpc } from "./mibanTrpc";
@@ -140,7 +141,7 @@ export default function ReviewPage() {
       <div className="p-4 space-y-4">
         {/* 商品信息 */}
         <div className="bg-white rounded-2xl p-4 flex items-center gap-3">
-          <img src="/pear-img-hero.jpg" alt="天桂梨" className="w-14 h-14 rounded-xl object-cover" />
+          <MibanImage variant="thumbnail" src="/pear-img-hero.jpg" alt="天桂梨" className="w-14 h-14 rounded-xl object-cover" />
           <div>
             <p className="text-[14px] font-bold text-gray-900">天桂梨</p>
             <p className="text-[12px] text-gray-400 mt-0.5">订单 #{orderId}</p>
@@ -173,7 +174,7 @@ export default function ReviewPage() {
           <div className="flex flex-wrap gap-2">
             {images.map((img, i) => (
               <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-100">
-                <img src={img} alt="" className="w-full h-full object-cover" />
+                <MibanImage variant="thumbnail" src={img} alt="" className="w-full h-full object-cover" />
                 <button
                   onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
                   className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"
