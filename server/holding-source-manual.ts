@@ -52,16 +52,34 @@ export function normalizeManualHoldingSeed(input: unknown): Ledger37HoldingSourc
   let fullValue = ZERO, includedValue = ZERO;
   for (const inputRow of seed.originalRows) {
     const row = record(inputRow), value = money(row.valueUSD), shares = money(row.shares);
-    if (typeof row.symbol !== 'string' || !/^(?:CUSIP:[A-Z0-9*@#]{9}|ISIN:[A-Z0-9]{12})$/.test(row.symbol)
+    const standardSymbol = typeof row.symbol === 'string'
+      && row.symbol === row.symbol.trim()
+      && /^(?:CUSIP:[A-Z0-9*@#]{9}|ISIN:[A-Z0-9]{12})$/.test(row.symbol) && row.symbol !== 'CUSIP:000000000';
+    const identifier = row.sourceIdentifier === undefined ? undefined : record(row.sourceIdentifier);
+    // INTERNAL is an official, series-scoped N-PORT identifier, never a CUSIP or ticker.
+    const internalSymbol = nport && identifier !== undefined
+      && Object.keys(identifier).length === 3 && identifier.type === 'INTERNAL'
+      && identifier.seriesId === provenance.seriesId
+      && typeof identifier.value === 'string' && identifier.value === identifier.value.trim()
+      && /^[A-Z0-9]{1,64}$/.test(identifier.value)
+      && row.symbol === `SEC_INTERNAL:${identifier.seriesId}:${identifier.value}`;
+    if ((!standardSymbol && !internalSymbol) || (identifier !== undefined && !internalSymbol)
+      || (internalSymbol && row.displaySymbol !== undefined)
       || typeof row.stockName !== 'string' || !row.stockName.trim() || row.stockName.length > 300
       || typeof row.titleOfClass !== 'string' || row.titleOfClass.length > 300
       || !['SH', 'PRN', 'OTHER'].includes(row.unit) || ![null, 'Put', 'Call'].includes(row.putCall)) throw new Error('公开快照证券行异常');
+    // Legacy seeds keep their unit; reviewed N-PORT categories have an explicit mapping.
+    const unit = nport && row.assetCategory !== undefined
+      ? row.assetCategory === 'EC' || row.assetCategory === 'EP' ? 'SH'
+        : row.assetCategory === 'STIV' ? 'OTHER' : undefined
+      : row.unit;
+    if (unit === undefined) throw new Error('公开快照资产分类异常');
     fullValue += value;
-    if (row.unit !== 'SH' || row.putCall !== null || shares === ZERO) continue;
+    if (unit !== 'SH' || row.putCall !== null || shares === ZERO) continue;
     includedValue += value;
     const key = `${row.symbol}|${row.titleOfClass}`;
     const existing = groups.get(key);
-    const displaySymbol = typeof row.displaySymbol === 'string' && /^[A-Z0-9][A-Z0-9.^/-]{0,19}$/.test(row.displaySymbol)
+    const displaySymbol = internalSymbol ? undefined : typeof row.displaySymbol === 'string' && /^[A-Z0-9][A-Z0-9.^/-]{0,19}$/.test(row.displaySymbol)
       ? row.displaySymbol : row.symbol.startsWith('CUSIP:') ? getVerifiedHoldingDisplaySymbol(row.symbol.slice(6), row.titleOfClass) : undefined;
     if (existing) {
       if (existing.stockName !== row.stockName || existing.displaySymbol !== displaySymbol) throw new Error('公开快照同证券身份异常');
@@ -70,7 +88,7 @@ export function normalizeManualHoldingSeed(input: unknown): Ledger37HoldingSourc
   }
   const denominator = money(provenance.denominatorUSD);
   if (fullValue !== money(provenance.tableValueTotalUSD) || includedValue !== money(provenance.includedValueTotalUSD) || !groups.size || denominator <= ZERO
-    || (nport ? provenance.weightBasis !== 'reported-net-assets' || includedValue > denominator : provenance.weightBasis !== 'included-equity-market-value' || includedValue !== denominator)) throw new Error('公开快照市值或分母异常');
+    || (nport ? provenance.weightBasis !== 'reported-net-assets' : provenance.weightBasis !== 'included-equity-market-value' || includedValue !== denominator)) throw new Error('公开快照市值或分母异常');
   const holdings: Ledger37HoldingPosition[] = Array.from(groups.values()).map(row => {
     const fraction = (row.shares % SCALE).toString().padStart(24, '0').replace(/0+$/, '');
     const shares = `${row.shares / SCALE}${fraction ? `.${fraction}` : ''}`;
@@ -80,7 +98,9 @@ export function normalizeManualHoldingSeed(input: unknown): Ledger37HoldingSourc
   });
   return { id, displayName: catalog.displayName, entityName: catalog.entityName, kind: nport ? 'etf' : '13f', status: 'available', asOf, publishedAt, checkedAt: seed.checkedAt, sourceUrl: url.href,
     description: catalog.description,
-    coverageNote: `${catalog.description} 本条为手动导入的SEC${nport ? ' N-PORT基金' : ' 13F季度'}真实披露快照，截止日期以本条标注为准，不是实时持仓。只显示已披露的非期权股票及权益证券；${nport ? '比例按该报告基金净资产计算，未显示部分不重新归一化为100%。' : '重复管理人条目按证券识别码及股类合并，比例分母为同份报告纳入的非期权SH证券申报市值，不是机构全部资产。'}现金、债务及期权不计入股票列表，不推断本人私人账户或交易记录。`, holdings };
+    coverageNote: nport
+      ? `${catalog.description} SEC N-PORT公开快照，非实时。权益含未上市权益及权证；货币基金、现金、债务及期权不显示。比例按报告基金净资产计算，未显示部分不归一化。`
+      : `${catalog.description} 本条为手动导入的SEC 13F季度真实披露快照，截止日期以本条标注为准，不是实时持仓。只显示已披露的非期权股票及权益证券；重复管理人条目按证券识别码及股类合并，比例分母为同份报告纳入的非期权SH证券申报市值，不是机构全部资产。现金、债务及期权不计入股票列表，不推断本人私人账户或交易记录。`, holdings };
 }
 const loaded: Ledger37HoldingSource[] = [];
 const seen = new Set<Ledger37HoldingSourceId>();
