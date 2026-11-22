@@ -72,7 +72,7 @@ describe("midaniang selection catalog", () => {
   it("preserves the confirmed classic specification", () => {
     const item = midaniangSelectionCatalog[0];
     expect(item.priceCny).toBe(228);
-    expect(item.specification).toBe("500g×6 · 净含量3000g（6斤）");
+    expect(item.specification).toBe("500g×6包 · 净含量3000g（6斤）");
     expect(item.specification).toContain("500g×6");
     expect(item.specification).toContain("3000g");
     expect(item.tags).toEqual(
@@ -94,6 +94,55 @@ describe("midaniang selection catalog", () => {
     expect(item.specification).not.toContain("3000g");
     expect(item.tags).not.toContain("净含量待确认");
   });
+
+  it.each([
+    {
+      key: "classic-rice-gift",
+      gramsPerPack: 500,
+      packCount: 6,
+      netGrams: 3000,
+      weightJin: 6,
+    },
+    {
+      key: "family-rice-gift",
+      gramsPerPack: 300,
+      packCount: 9,
+      netGrams: 2700,
+      weightJin: 5.4,
+    },
+  ])(
+    "$key keeps explicit pack count, net grams and jin consistent with its official SKU",
+    ({ key, gramsPerPack, packCount, netGrams, weightJin }) => {
+      const item = midaniangSelectionCatalog.find(item => item.key === key)!;
+      const product = getMibanLimitedProduct(item.productKey)!;
+      const sku = getMibanLimitedProductSku(product, item.skuId)!;
+      const specification = item.specification.match(
+        /^(\d+)g×(\d+)包 · 净含量(\d+)g（(\d+(?:\.\d+)?)斤）$/
+      );
+      const officialContent = sku.netContentText.replace(/\s/g, "");
+      const officialSpecification = officialContent.match(
+        /^(\d+)g×(\d+)包·(\d+)g（(\d+(?:\.\d+)?)斤）$/
+      );
+      expect(specification).not.toBeNull();
+      expect(officialSpecification).not.toBeNull();
+      expect(specification?.slice(1).map(Number)).toEqual([
+        gramsPerPack,
+        packCount,
+        netGrams,
+        weightJin,
+      ]);
+      expect(officialSpecification?.slice(1)).toEqual(specification?.slice(1));
+      expect(item.specification.replace(/\s|净含量/g, "")).toBe(officialContent);
+      expect(Number(specification?.[1]) * Number(specification?.[2])).toBe(
+        Number(specification?.[3])
+      );
+      expect(Number(specification?.[3]) / 500).toBe(
+        Number(specification?.[4])
+      );
+      expect(item.specification).not.toContain("3800");
+      expect(sku.netContentText).not.toContain("3800");
+    }
+  );
 
   it("returns all products for the all filter", () => {
     expect(filterMidaniangSelection(allFilters).map(item => item.key)).toEqual([

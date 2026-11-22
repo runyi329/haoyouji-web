@@ -349,12 +349,70 @@ describe("midaniang selection horizontal list and accessibility", () => {
       expect(image).toContain("object-contain");
       expect(image).not.toContain("object-cover");
     }
-    expect(html).toContain("500g×6 · 净含量3000g（6斤）");
-    expect(html).toContain("300g×9包 · 净含量2700g（5.4斤）");
+    expect(priceTexts(html, "midaniang-product-specification")).toEqual([
+      "500g×6包 净含量3000g （6斤）",
+      "300g×9包 净含量2700g （5.4斤）",
+    ]);
     expect(html).toContain("推荐零售价");
     expect(html).toContain("商品信息由商家提供");
     expect(html).not.toMatch(/未开放购买|资料预览|待核验/);
   });
+
+  it.each([
+    {
+      key: "classic-rice-gift",
+      expectedLines: ["500g×6包", "净含量3000g", "（6斤）"],
+    },
+    {
+      key: "family-rice-gift",
+      expectedLines: ["300g×9包", "净含量2700g", "（5.4斤）"],
+    },
+  ])(
+    "$key renders exactly three explicit non-wrapping block lines in pack/net-grams/jin order",
+    ({ key, expectedLines }) => {
+      const html = renderList();
+      const row =
+        html.match(
+          new RegExp(
+            `<a\\b[^>]*data-selection-key="${key}"[^>]*>[\\s\\S]*?<\\/a>`
+          )
+        )?.[0] ?? "";
+      const specifications = Array.from(
+        row.matchAll(
+          /<p\b[^>]*data-testid="midaniang-product-specification"[^>]*>([\s\S]*?)<\/p>/g
+        )
+      );
+      expect(specifications).toHaveLength(1);
+      const lines = Array.from(
+        (specifications[0]?.[1] ?? "").matchAll(
+          /<span\b([^>]*)>([\s\S]*?)<\/span>/g
+        )
+      );
+      expect(lines).toHaveLength(3);
+      expect(lines.map(line => textContent(line[2]))).toEqual(expectedLines);
+      for (const line of lines) {
+        expect(line[1]).toContain(
+          'data-testid="midaniang-product-specification-line"'
+        );
+        const classes = (line[1].match(/class="([^"]*)"/)?.[1] ?? "").split(
+          /\s+/
+        );
+        expect(classes).toContain("block");
+        expect(classes).toContain("whitespace-nowrap");
+      }
+      const pack = textContent(lines[0]?.[2] ?? "").match(/^(\d+)g×(\d+)包$/);
+      const net = textContent(lines[1]?.[2] ?? "").match(/^净含量(\d+)g$/);
+      const jin = textContent(lines[2]?.[2] ?? "").match(
+        /^（(\d+(?:\.\d+)?)斤）$/
+      );
+      expect(pack).not.toBeNull();
+      expect(net).not.toBeNull();
+      expect(jin).not.toBeNull();
+      expect(Number(pack?.[1]) * Number(pack?.[2])).toBe(Number(net?.[1]));
+      expect(Number(net?.[1]) / 500).toBe(Number(jin?.[1]));
+      expect(html).not.toContain("3800");
+    }
+  );
 
   it("omits the redundant rice category and aligns the mark with a two-line name area", () => {
     const html = renderList();
@@ -835,7 +893,7 @@ describe("midaniang detail image and document structure", () => {
       "classicGift",
       "cookingStory",
     ]);
-    expect(html).toContain("500g×6 · 净含量3000g（6斤）");
+    expect(html).toContain("500g×6包 · 净含量3000g（6斤）");
     expect(html).toContain("经典礼盒为500g×6，净含量3000g（6斤）");
   });
 
@@ -918,6 +976,66 @@ describe("midaniang detail image and document structure", () => {
           html.indexOf("midaniang-poster-stack")
         );
       }
+    }
+  );
+
+  it.each(["classic-rice-gift", "family-rice-gift"])(
+    "keeps the same Shanghai shipping origin and GB/T rice standard distinct from merchant origin in bottom specifications on %s",
+    key => {
+      const html = renderDetail(key);
+      const specification = html.match(
+        /<section\b[^>]*id="specification-info"[^>]*>[\s\S]*?<\/section>/
+      )?.[0] ?? "";
+      expect(specification).not.toBe("");
+      const entries = Array.from(
+        specification.matchAll(
+          /<dt\b[^>]*>([\s\S]*?)<\/dt>\s*<dd\b([^>]*)>([\s\S]*?)<\/dd>/g
+        ),
+        match => ({
+          label: textContent(match[1]),
+          attributes: match[2],
+          value: textContent(match[3]),
+        })
+      );
+      const merchantOrigins = entries.filter(
+        entry => entry.label === "商家产地介绍"
+      );
+      const shippingOrigins = entries.filter(entry => entry.label === "发货地");
+      const standards = entries.filter(entry => entry.label === "执行标准");
+      expect(merchantOrigins).toHaveLength(1);
+      expect(shippingOrigins).toHaveLength(1);
+      expect(standards).toHaveLength(1);
+      expect(merchantOrigins[0]?.value).toBe("五常龙凤山镇");
+      expect(shippingOrigins[0]?.value).toBe("上海 · 米大娘发货中心");
+      expect(shippingOrigins[0]?.attributes).toContain(
+        'data-testid="midaniang-specification-shipping-origin"'
+      );
+      expect(standards[0]?.value).toBe("GB/T 19266（五常大米）");
+      expect(standards[0]?.value).not.toMatch(/GB\s+19266/);
+      expect(standards[0]?.attributes).toContain(
+        'data-testid="midaniang-specification-standard"'
+      );
+      expect(merchantOrigins[0]?.value).not.toBe(shippingOrigins[0]?.value);
+      expect(merchantOrigins[0]?.attributes).not.toContain(
+        'data-testid="midaniang-specification-shipping-origin"'
+      );
+      expect(entries.findIndex(entry => entry.label === "发货地")).toBe(
+        entries.findIndex(entry => entry.label === "商家产地介绍") + 1
+      );
+      const posterStack = html.match(
+        /<section\b[^>]*data-testid="midaniang-poster-stack"[^>]*>[\s\S]*?<\/section>/
+      );
+      expect(posterStack).not.toBeNull();
+      expect(html.indexOf(specification)).toBeGreaterThan(
+        (posterStack?.index ?? -1) + (posterStack?.[0].length ?? 0)
+      );
+      const summary = html.match(
+        /<section\b[^>]*aria-label="商品信息摘要"[^>]*>([\s\S]*?)<\/section>/
+      )?.[1] ?? "";
+      expect(summary).not.toBe("");
+      expect(summary).not.toMatch(
+        /发货地|上海 · 米大娘发货中心|执行标准|GB\/T 19266|GB\s+19266|midaniang-specification-(?:shipping-origin|standard)/
+      );
     }
   );
 

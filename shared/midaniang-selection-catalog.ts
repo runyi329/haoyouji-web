@@ -37,7 +37,7 @@ export const midaniangSelectionCatalog: readonly MidaniangSelectionItem[] = [
     category: "rice",
     packaging: "classic",
     description: "米大娘经典大米礼盒，适合作为日常分享或节日心意。",
-    specification: "500g×6 · 净含量3000g（6斤）",
+    specification: "500g×6包 · 净含量3000g（6斤）",
     priceCny: 228,
     specificationConfirmed: true,
     tags: ["大米", "礼盒", "经典", "500g×6", "3000g", "6斤"],

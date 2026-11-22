@@ -162,8 +162,22 @@ export default function MidaniangSelection() {
                         >
                           {item.title}
                         </h2>
-                        <p className="mt-1 break-words text-[11px] leading-[18px] text-[#676b60]">
-                          {item.specification}
+                        <p
+                          className="mt-1 text-[11px] leading-[18px] text-[#676b60]"
+                          data-testid="midaniang-product-specification"
+                        >
+                          {item.specification
+                            .split(" · ")
+                            .flatMap(part => part.split(/(?=（)/))
+                            .map((line, lineIndex) => (
+                              <span
+                                key={lineIndex}
+                                data-testid="midaniang-product-specification-line"
+                                className="block whitespace-nowrap"
+                              >
+                                {line}
+                              </span>
+                            ))}
                         </p>
                       </div>
                       <div className="mt-3 min-w-0">

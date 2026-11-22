@@ -295,10 +295,11 @@ export default function MidaniangSelectionDetail() {
               ["商品名称", item.title],
               ["包装", isFamily ? "绿色礼盒 · 家庭分享装" : "经典礼盒"],
               ["商家产地介绍", "五常龙凤山镇"],
+              ["发货地", "上海 · 米大娘发货中心"],
               ["参考价", `${priceU.toFixed(2)} USDT /盒`],
               ["规格 / 净含量", item.specification],
               ["配料", "以实物包装标签为准"],
-              ["执行标准", "以实物包装标签为准"],
+              ["执行标准", "GB/T 19266（五常大米）"],
               ["生产日期 / 保质期", "以实物包装标签为准"],
               ["有机认证 / 检测报告", "商家确认已获有机认证，认证范围与批次检测以实际文件为准"],
             ].map(([label, value]) => (
@@ -312,6 +313,10 @@ export default function MidaniangSelectionDetail() {
                   data-testid={
                     label === "参考价"
                       ? "midaniang-specification-price"
+                      : label === "发货地"
+                        ? "midaniang-specification-shipping-origin"
+                        : label === "执行标准"
+                          ? "midaniang-specification-standard"
                       : undefined
                   }
                 >
