@@ -5,13 +5,19 @@ import ts from 'typescript';
 import { normalizePortfolioSymbol, portfolioCurrency } from '../shared/portfolio-instruments';
 import { getOvernightUsSessionDate } from '../shared/stock-market-session';
 import { isTrustedMemberCalendarClose } from './shared/stock-member-calendar';
+import { isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
+  ledger37HoldingKey, ledger37HoldingAmount } from './shared/ledger37-holding-valuation';
+import { USDT_USD_PARITY_POLICY } from '../shared/usdt-usd-parity-policy';
 
 // Evaluate ONLY the new production read function, never import server DB/scanner.
 const source = readFileSync(new URL('./ledger-stock-portfolio.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('portfolio.ts', source, ts.ScriptTarget.Latest, true);
 const declaration = tree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'getMyLedger37R1HoldingSnapshot')!;
 const body = declaration.getText(tree).replace(/^export /, '');
-const compiled = ts.transpileModule(body + '\ngetMyLedger37R1HoldingSnapshot;', {
+const liveBody = tree.statements.filter(node => ts.isFunctionDeclaration(node) && [
+  'readLedger37LiveHoldingValuation', 'mergeLivePortfolioQuoteMaps', 'mergeLatestQuoteMaps',
+].includes(node.name?.text ?? '')).map(node => node.getText(tree)).join('\n');
+const compiled = ts.transpileModule(liveBody + '\n' + body + '\ngetMyLedger37R1HoldingSnapshot;', {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
 }).outputText;
 const input = { ledgerId: 37, userId: 201 };
@@ -30,7 +36,8 @@ function fx(category_id = 2, patch: Record<string, unknown> = {}) {
 function fixture() {
   const state = { canManage: false, member: true, aiEnabled: true, viewerUserId: 201, viewer: { userId: 201 } as any,
     ledgerId: 37, authError: null as any, lotError: null as any, quoteError: null as any, fxError: null as any, noConnection: false };
-  const data = { lots: [lot()] as any[], quotes: [proof()] as any[], fx: [] as any[] };
+  const data = { lots: [lot()] as any[], quotes: [proof()] as any[], fx: [] as any[],
+    liveStocks: {} as Record<string, any>, liveCrypto: {} as Record<string, any>, liveFx: null as any };
   const log: Array<{ sql: string; values: any[] }> = [];
   const conn = { execute: vi.fn(async (sql: string, values: any[]) => {
     log.push({ sql, values });
@@ -56,6 +63,11 @@ function fixture() {
   });
   const db = vi.fn(async () => state.noConnection ? null : conn);
   const read = runInNewContext(compiled, { Error, Map, Set, BigInt, Number, JSON, Array, Date,
+    isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
+    ledger37HoldingKey, ledger37HoldingAmount, USDT_USD_PARITY_POLICY,
+    getLatestQuotes: vi.fn(async () => data.liveStocks), getLatestIntradayQuotes: vi.fn(async () => ({})),
+    getLiveCryptoQuotes: vi.fn(async () => data.liveCrypto), getLiveStockUsdCnyQuote: vi.fn(async () => data.liveFx),
+    isCryptoPortfolioSymbol: (symbol: string) => symbol.startsWith('CRYPTO:'),
     readLedger37PresentationState: auth, getDbConnection: db,
     normalizeSymbol: normalizePortfolioSymbol, stockCurrency: portfolioCurrency,
     getUnifiedStockCloseSnapshotDate: () => snapshotDate, getOvernightUsSessionDate,
@@ -65,7 +77,7 @@ function fixture() {
   return { state, data, log, conn, auth, db, read };
 }
 function safe(result: any) {
-  expect(JSON.stringify(result)).not.toMatch(/category|lotId|order|project|绝密|"userId"|allocated|entryPrice|unit_cost|price|cost|marketValue|quantity|members|participation/i);
+  expect(JSON.stringify(result)).not.toMatch(/category|lotId|order|project|绝密|"userId"|allocated|entryPrice|unit_cost|price|quote|cost|marketValue|quantity|members|participation/i);
   for (const holding of result.holdings) expect(Object.keys(holding).sort()).toEqual(['currency', 'shares', 'stockName', 'symbol', 'weightPct']);
 }
 function unknown(result: any) {
@@ -181,6 +193,18 @@ describe('R1 source-wide holdings: exact shares, read-only and fail closed', () 
     const f = fixture(); f.data.lots.push(lot(2, 'CRYPTO:BTC-USDT', '0.00000001', '比特币'));
     const result = await f.read(input); expect(result.holdings[1].shares).toBe('0.00000001'); unknown(result);
     expect(f.log).toHaveLength(1);
+  });
+  it('successful mixed-crypto valuation keeps the source-wide strict DTO free of quote/marketValue details', async () => {
+    const f = fixture(); f.data.lots = [lot(), lot(2, 'CRYPTO:BTC-USDT', '0.0001', '比特币')];
+    const updatedAt = new Date().toISOString(), date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    f.data.liveStocks = { '600000.SH': { symbol: '600000.SH', price: 10, priceDate: snapshotDate, updatedAt } };
+    f.data.liveCrypto = { 'CRYPTO:BTC-USDT': { symbol: 'CRYPTO:BTC-USDT', price: 50000, priceDate: date, updatedAt } };
+    f.data.liveFx = { rate: 7, asOf: updatedAt, source: 'sina_usdcny', pair: 'USD/CNY', stale: false };
+    const result = await f.read(input);
+    expect(result.reportingCurrency).toBe('CNY'); expect(result.valuationAsOf).toBe(date);
+    expect(result.holdings.reduce((sum: number, row: any) => sum + row.weightPct, 0)).toBe(100);
+    expect(result.holdings[1].weightPct).toBeCloseTo(35 / 1035 * 100, 10);
+    expect(f.log).toHaveLength(1); safe(result);
   });
   it('read path is SELECT-only, no caches/scanners/migrations and ES5-compatible syntax', async () => {
     const f = fixture(); safe(await f.read(input)); expect(f.log.every(row => /^\s*SELECT/.test(row.sql))).toBe(true);

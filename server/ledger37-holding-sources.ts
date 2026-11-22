@@ -51,9 +51,18 @@ export async function getMyLedger37HoldingSources(input: Ledger37PresentationInp
       || value.asOf !== member.valuationAsOf || !/^\d{4}-\d{2}-\d{2}$/.test(value.asOf)
       || !Number.isFinite(Date.parse(`${value.asOf}T00:00:00Z`))
       || new Date(`${value.asOf}T00:00:00Z`).toISOString().slice(0, 10) !== value.asOf)) throw new Error('个人持仓市值无效');
+    // Explicit safe market-price fields only: never spread entry/order/cost data.
+    const quote = row.quote;
+    const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const validQuote = quote && typeof quote === 'object' && !Array.isArray(quote)
+      && typeof quote.amount === 'string' && /^\d{1,195}(?:\.\d{1,400})?$/.test(quote.amount) && /[1-9]/.test(quote.amount)
+      && quote.currency === row.currency && typeof quote.asOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(quote.asOf)
+      && quote.asOf <= today && Number.isFinite(Date.parse(`${quote.asOf}T00:00:00Z`))
+      && new Date(`${quote.asOf}T00:00:00Z`).toISOString().slice(0, 10) === quote.asOf;
     memberHoldings.push({ symbol: row.symbol, stockName: row.stockName, currency: row.currency,
       shares: row.shares, weightPct: row.weightPct,
-      marketValue: value ? { amount: value.amount, currency: value.currency, asOf: value.asOf } : null });
+      marketValue: value ? { amount: value.amount, currency: value.currency, asOf: value.asOf } : null,
+      quote: validQuote ? { amount: quote.amount, currency: quote.currency, asOf: quote.asOf } : null });
   }
   const memberWeighted = memberHoldings.filter(row => row.weightPct !== null);
   if (memberWeighted.length && (memberWeighted.length !== memberHoldings.length || !member.valuationAsOf || !member.reportingCurrency

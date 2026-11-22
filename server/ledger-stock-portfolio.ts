@@ -8,6 +8,9 @@ import { fetchCryptoPortfolioQuotes, getCachedCryptoPortfolioQuote, searchCrypto
 import { getLiveUsdtCnyQuote } from './usdt-cny-rate';
 import { readTagVisible } from "../shared/tag-visibility";
 import { isLedger37FullManager } from "../shared/ledger37-permissions";
+import { USDT_USD_PARITY_POLICY } from '../shared/usdt-usd-parity-policy';
+import { isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
+  ledger37HoldingKey, ledger37HoldingAmount, type Ledger37ValuationPosition } from './shared/ledger37-holding-valuation';
 import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
 import { fetchOvernightUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { getOvernightUsSessionDate, isStockMarketSession } from '../shared/stock-market-session';
@@ -2342,14 +2345,62 @@ export async function getMyLedger37AiStockPool(input: Ledger37PresentationInput)
     part.usdCnyRate = usdCnyRate;
     part.usdtCnyRate = usdtCnyRate;
   }
-  return { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, stocks: mergeLedger37AiStockPool(parts) };
+  const stocks = mergeLedger37AiStockPool(parts);
+  const participated = stocks.filter(stock => stock.hasParticipation);
+  // 本次完整个人净值披露的服务端时间：包括已结束收益，不是行情日或15:05冻结净值。
+  // 未参与目录行不参与验证；任何真实参与未知/nonfinite都不能出具披露时间。
+  const disclosedAt = participated.length > 0 && participated.every(stock =>
+    typeof stock.pnlCny === 'number' && Number.isFinite(stock.pnlCny)) ? new Date().toISOString() : null;
+  // Display conversion only; keep the personal CNY P/L and disclosure accounting unchanged.
+  const disclosureUsdCnyRate = disclosedAt ? usdCnyRate ?? await readLedger37StockPoolUsdCnyRate() : null;
+  return { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, stocks, disclosedAt, disclosureUsdCnyRate };
+}
+
+/** Current market valuation only; never a 15:05 historical calendar reconstruction.
+ * SELECT existing securities quotes, fresh crypto spot and one live USD/CNY leg.
+ * No buy/reference-price fallback, historical backfill, DDL or DB writes.
+ * Caller has already proven identity and scope; quantities remain the caller's
+ * exact real current allocations (or source lots for the existing R1 route). */
+async function readLedger37LiveHoldingValuation(current: Ledger37ValuationPosition[]) {
+  const categories = Array.from(new Set(current.map(row => row.categoryId)));
+  const symbols = Array.from(new Set(current.map(row => row.symbol)));
+  let stockMaps: Array<Record<string, StoredQuote>>;
+  let cryptoQuotes: Record<string, StoredQuote>;
+  let usdFx: Awaited<ReturnType<typeof getLiveStockUsdCnyQuote>>;
+  try {
+    [stockMaps, cryptoQuotes, usdFx] = await Promise.all([
+      Promise.all(categories.map(async categoryId => {
+        const categorySymbols = current.filter(row => row.categoryId === categoryId).map(row => row.symbol);
+        const maps = await Promise.all([getLatestQuotes(categoryId, categorySymbols), getLatestIntradayQuotes(categoryId, categorySymbols)]);
+        return maps;
+      })).then(maps => maps.flat()),
+      getLiveCryptoQuotes(symbols),
+      getLiveStockUsdCnyQuote(),
+    ]);
+  } catch (error) {
+    if (['ER_NO_SUCH_TABLE', 'ER_TABLEACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR'].includes((error as { code?: string })?.code || '')) return null;
+    throw error;
+  }
+  const now = Date.now();
+  const valid = (map: Record<string, StoredQuote>): Record<string, StoredQuote> => {
+    const result: Record<string, StoredQuote> = {};
+    for (const [symbol, quote] of Object.entries(map)) {
+      if (symbol === quote.symbol && isLedger37LiveHoldingQuoteValid(quote, now)) result[symbol] = quote;
+    }
+    return result;
+  };
+  // Filter future/bad candidates BEFORE merging so the newest VALID real quote wins.
+  const quotes = mergeLivePortfolioQuoteMaps(valid(cryptoQuotes), ...stockMaps.map(valid));
+  return valueLedger37LiveHoldings({ current, quotes, usdFx, conversionPolicy: USDT_USD_PARITY_POLICY, now });
 }
 
 /**
  * R1 source-wide current holdings, NOT member allocations or participation.
  * Revalidates strict global member/AI identity before aggregate SELECTs.
- * Quantities stay exact decimal strings; latest due unified close's archived
- * proofs value the current quantities. No scan, lazy DDL or cache write.
+ * Quantities stay exact decimal strings. Securities-only retains unified-close
+ * archive proofs; mixed crypto uses current latest real market quotes and the
+ * shared live accounting FX, independent of the 15:05 historical calendar.
+ * No historical backfill, lazy DDL or DB write.
  * No category/lot/order/member identifier, price or cost leaves this function.
  */
 export async function getMyLedger37R1HoldingSnapshot(input: Ledger37PresentationInput): Promise<{
@@ -2416,8 +2467,18 @@ export async function getMyLedger37R1HoldingSnapshot(input: Ledger37Presentation
     .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.currency.localeCompare(b.currency));
   const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, holdings,
     valuationAsOf: null as string | null, reportingCurrency: null as 'CNY' | 'USD' | 'USDT' | null };
-  // This securities archive has no unified crypto proof/FX: never borrow USD.
-  if (!current.length || current.some(row => row.currency === 'USDT')) return result;
+  if (!current.length) return result;
+  if (current.some(row => row.currency === 'USDT')) {
+    const valuation = await readLedger37LiveHoldingValuation(current);
+    if (!valuation) return result;
+    const values = holdings.map(holding => valuation.values.get(ledger37HoldingKey(holding.symbol, holding.currency))!);
+    const weights = ledger37HoldingWeights(values);
+    if (!weights) return result;
+    holdings.forEach((holding, index) => { holding.weightPct = weights[index]; });
+    result.valuationAsOf = valuation.valuationAsOf;
+    result.reportingCurrency = valuation.reportingCurrency;
+    return result;
+  }
   const snapshotDate = getUnifiedStockCloseSnapshotDate(), usSession = getOvernightUsSessionDate(snapshotDate);
   if (!usSession) return result;
   const categories = Array.from(new Set(current.map(row => row.categoryId)));
@@ -2757,9 +2818,11 @@ export async function getMyLedger37MemberPositionChanges(input: Ledger37Presenta
 /**
  * Effective member's real remaining allocations only, never source-wide lots.
  * Global and each category's pure read authorization precede the holdings read.
- * Uses the source snapshot's exact decimal / strict archived close + FX rules;
+ * Exact decimal valuation: stock-only retains archived close + FX rules; mixed
+ * crypto uses latest actual quotes + one live accounting USD/CNY (USDT=USD).
  * all values and weights stay unknown unless the whole personal denominator is
- * trustworthy. No observation, cache, scanner, migration or funds calculation.
+ * trustworthy. No observation quantity, buy-reference fallback, historical
+ * calendar mutation, migration or funds calculation.
  */
 export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37PresentationInput): Promise<{
   viewerUserId: number; aiEnabled: boolean;
@@ -2802,6 +2865,7 @@ export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37Presenta
   }
   const holdings: Array<import('../shared/ledger37-ai-holdings').Ledger37HoldingPosition & {
     marketValue: { amount: string; currency: 'CNY' | 'USD' | 'USDT'; asOf: string } | null;
+    quote: import('../shared/ledger37-ai-holdings').Ledger37HoldingQuote | null;
   }> = [];
   const result = { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, holdings,
     valuationAsOf: null as string | null, reportingCurrency: null as 'CNY' | 'USD' | 'USDT' | null };
@@ -2846,10 +2910,25 @@ export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37Presenta
     current.push({ categoryId, symbol, currency, shares });
   }
   holdings.push(...Array.from(merged.values()).map(row => ({ symbol: row.symbol, stockName: row.stockName,
-    currency: row.currency, shares: decimalString(row.shares), weightPct: null, marketValue: null }))
+    currency: row.currency, shares: decimalString(row.shares), weightPct: null, marketValue: null, quote: null }))
     .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.currency.localeCompare(b.currency)));
-  // The stock archive has no unified USDT proof/FX. Never substitute USD.
-  if (!current.length || current.some(row => row.currency === 'USDT')) return result;
+  if (!current.length) return result;
+  if (current.some(row => row.currency === 'USDT')) {
+    const valuation = await readLedger37LiveHoldingValuation(current);
+    if (!valuation) return result;
+    const values = holdings.map(holding => valuation.values.get(ledger37HoldingKey(holding.symbol, holding.currency))!);
+    const weights = ledger37HoldingWeights(values);
+    if (!weights) return result;
+    holdings.forEach((holding, index) => {
+      holding.weightPct = weights[index];
+      holding.marketValue = { amount: ledger37HoldingAmount(values[index], valuation.decimalPlaces),
+        currency: valuation.reportingCurrency, asOf: valuation.valuationAsOf };
+      holding.quote = valuation.quotes.get(ledger37HoldingKey(holding.symbol, holding.currency))!;
+    });
+    result.valuationAsOf = valuation.valuationAsOf;
+    result.reportingCurrency = valuation.reportingCurrency;
+    return result;
+  }
   const snapshotDate = getUnifiedStockCloseSnapshotDate(), usSession = getOvernightUsSessionDate(snapshotDate);
   if (!usSession) return result;
   const categories = Array.from(new Set(current.map(row => row.categoryId)));
@@ -2934,6 +3013,9 @@ export async function getMyLedger37MemberHoldingSnapshot(input: Ledger37Presenta
     const value = values.get(JSON.stringify([holding.symbol, holding.currency]))!;
     holding.weightPct = Number(value * BigInt('100') * weightUnit / total) / Number(weightUnit);
     holding.marketValue = { amount: decimalString((value + amountDivisor / BigInt('2')) / amountDivisor, amountUnit, 18), currency: reportingCurrency, asOf: snapshotDate };
+    // Reuse the exact validated native close, not converted value / member shares.
+    holding.quote = { amount: decimalString(prices.get(JSON.stringify([holding.symbol, holding.currency]))!),
+      currency: holding.currency, asOf: holding.currency === 'USD' ? usSession : snapshotDate };
   }
   result.valuationAsOf = snapshotDate;
   result.reportingCurrency = reportingCurrency;

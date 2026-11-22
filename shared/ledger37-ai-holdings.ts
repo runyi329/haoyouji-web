@@ -1,9 +1,16 @@
-export const LEDGER37_HOLDING_SOURCE_IDS = ['r1', 'berkshire', 'pelosi', 'ark', 'nvidia'] as const;
+export const LEDGER37_HOLDING_SOURCE_IDS = ['r1', 'berkshire', 'pelosi', 'ark', 'nvidia', 'soros', 'pershing', 'himalaya', 'bridgewater'] as const;
 export type Ledger37HoldingSourceId = typeof LEDGER37_HOLDING_SOURCE_IDS[number];
 export type Ledger37HoldingMarketValue = {
   /** Exact decimal valuation of this member's remaining allocated quantity, not wallet cash. */
   amount: string;
   currency: 'CNY' | 'USD' | 'USDT';
+  asOf: string;
+};
+export type Ledger37HoldingQuote = {
+  /** Verified market price per share/coin in its native currency, never cost or member value. */
+  amount: string;
+  currency: 'CNY' | 'USD' | 'USDT';
+  /** Actual market evidence date, not the portfolio reporting date. */
   asOf: string;
 };
 export type Ledger37HoldingPosition = {
@@ -15,6 +22,8 @@ export type Ledger37HoldingPosition = {
   shares: string | null;
   weightPct: number | null;
   marketValue?: Ledger37HoldingMarketValue | null;
+  /** Member detail only; source-wide holdings do not expose market-price detail. */
+  quote?: Ledger37HoldingQuote | null;
 };
 export type Ledger37HoldingClosedTrade = {
   symbol: string;

@@ -81,7 +81,7 @@ function home(query: any = { data: overview(), isFetching: false, isFetchedAfter
   query.data = { viewerUserId: query.data.viewerUserId, aiEnabled: query.data.aiEnabled, sources: [{ id: "r1", status: "available", holdings: [{}] }, { id: "berkshire", status: "available", holdings: [{}] }] };
   query.isFetchedAfterMount ??= true;
   const h = hooks(), spy = vi.fn(() => query);
-  const component = actual(homeSource, "Ledger37AiHome", { useState: h.useState, trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: spy } } }, ArrowLeft: "span", Loader2: "span", Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "renderer", ledger37HoldingSourceHasDetails: actual(holdingsSource, "ledger37HoldingSourceHasDetails"), Ledger37AiStockParticipationView: "safe" });
+  const component = actual(homeSource, "Ledger37AiHome", { useState: h.useState, trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: spy } } }, ArrowLeft: "span", Loader2: "span", Ledger37AiIdentityHeader: "identity-header", Ledger37AiNetValueDisclosure: "net-value-disclosure", Ledger37HoldingSourcesRenderer: "renderer", ledger37HoldingSourceHasDetails: actual(holdingsSource, "ledger37HoldingSourceHasDetails"), Ledger37AiStockParticipationView: "safe" });
   return { query, spy, render: (viewerUserId = 901, adminPreview = false) => { h.reset(); return component({ viewerUserId, adminPreview, onBack: vi.fn() }); } };
 }
 

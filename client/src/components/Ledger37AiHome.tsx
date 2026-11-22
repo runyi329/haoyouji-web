@@ -6,6 +6,7 @@ import { resolveR1EffectiveUserId, r1ParticipationMoney, r1RecordedMarginAmount 
 import { R1AiParticipationRenderer } from "@/components/R1AiParticipationView";
 import Ledger37AiIdentityHeader from "@/components/Ledger37AiIdentityHeader";
 import { ledger37HoldingSourceHasDetails, Ledger37HoldingSourcesRenderer } from "@/components/Ledger37HoldingSources";
+import Ledger37AiNetValueDisclosure from "@/components/Ledger37AiNetValueDisclosure";
 import Ledger37CalendarRecorder from "@/components/Ledger37CalendarRecorder";
 import type { Ledger37HoldingSourceId, Ledger37HoldingSources } from "@shared/ledger37-ai-holdings";
 /** 全账本37共用同一身份级query key，不包含category或旧标签开关。 */
@@ -97,7 +98,7 @@ export default function Ledger37AiHome({ viewerUserId, onBack, adminPreview = fa
   const data: Ledger37HoldingSources | undefined = validViewer && !query.error && query.isFetchedAfterMount && query.data?.viewerUserId === viewerUserId && (query.data.aiEnabled || adminPreview) ? query.data : undefined;
   const backToSources = () => { setSelectedSourceId(null); if (typeof window !== "undefined") window.scrollTo(0, 0); };
   return <div className="min-h-screen bg-[#F2F6FA] pb-8 [color-scheme:light]"><Ledger37AiIdentityHeader key={viewerUserId} viewerUserId={viewerUserId} onBack={selectedSourceId ? backToSources : onBack} />
-    {!validViewer || query.error ? <div role="alert" className="mx-auto max-w-[480px] p-8 text-center text-sm leading-6 text-[#61758A]">持仓来源暂不可用，请稍后重试</div> : !data ? <div role="status" className="mx-auto flex max-w-[480px] justify-center gap-2 p-10 text-sm text-[#61758A]"><Loader2 size={18} className="animate-spin" />正在确认持仓来源…</div> : <Ledger37HoldingSourcesRenderer key={viewerUserId} data={data} selectedSourceId={selectedSourceId} updating={query.isFetching} onOpen={id => { if (id !== "berkshire" && id !== "nvidia" && data.sources.some(source => source.id === id && ledger37HoldingSourceHasDetails(source))) { setSelectedSourceId(id); if (typeof window !== "undefined") window.scrollTo(0, 0); } }} />}
+    {!validViewer || query.error ? <div role="alert" className="mx-auto max-w-[480px] p-8 text-center text-sm leading-6 text-[#61758A]">持仓来源暂不可用，请稍后重试</div> : !data ? <div role="status" className="mx-auto flex max-w-[480px] justify-center gap-2 p-10 text-sm text-[#61758A]"><Loader2 size={18} className="animate-spin" />正在确认持仓来源…</div> : <Ledger37HoldingSourcesRenderer key={viewerUserId} data={data} selectedSourceId={selectedSourceId} updating={query.isFetching} netValueDisclosure={selectedSourceId === null || selectedSourceId === "r1" ? <Ledger37AiNetValueDisclosure key={`net-disclosure-${viewerUserId}`} viewerUserId={viewerUserId} adminPreview={adminPreview} /> : undefined} onOpen={id => { if (id === "r1" && data.sources.some(source => source.id === id && ledger37HoldingSourceHasDetails(source))) { setSelectedSourceId(id); if (typeof window !== "undefined") window.scrollTo(0, 0); } }} />}
     {validViewer && !query.error && data && canRecordCalendar && <Ledger37CalendarRecorder key={`calendar-recorder-${viewerUserId}`} viewerUserId={viewerUserId} />}
   </div>;
 }

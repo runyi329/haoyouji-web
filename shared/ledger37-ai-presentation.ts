@@ -47,5 +47,9 @@ export type Ledger37AiStockPool = {
   viewerUserId: number;
   aiEnabled: boolean;
   stocks: StockPoolRow[];
+  /** 服务端验证全部真实个人参与（含已结束）pnlCny后出具；不是行情/日结时间。 */
+  disclosedAt?: string | null;
+  /** Verified live USD/CNY for display only; never a fixed fallback or a new P/L calculation. */
+  disclosureUsdCnyRate?: number | null;
 };
 export type Ledger37AiDisplayResult = { success: true; aiEnabled: boolean };

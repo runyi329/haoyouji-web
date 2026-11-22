@@ -29,7 +29,7 @@ function hooks() {
 function home(query: any = { data: payload(), isFetchedAfterMount: true, isFetching: false }) {
   const h = hooks(), spy = vi.fn((_input: any, _options: any) => query), onBack = vi.fn();
   const rawGuard = new Proxy({ getMyLedger37HoldingSources: { useQuery: spy } }, { get(target, key) { if (!(key in target)) throw new Error(`Forbidden hook: ${String(key)}`); return (target as any)[key]; } });
-  const component = actual(homeSource, ["Ledger37AiHome"], { useState: h.useState, trpc: { ledger: rawGuard }, Ledger37AiIdentityHeader: "identity-header", Ledger37HoldingSourcesRenderer: "sources", ledger37HoldingSourceHasDetails: actual(source, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails }).Ledger37AiHome;
+  const component = actual(homeSource, ["Ledger37AiHome"], { useState: h.useState, trpc: { ledger: rawGuard }, Ledger37AiIdentityHeader: "identity-header", Ledger37AiNetValueDisclosure: "net-value-disclosure", Ledger37HoldingSourcesRenderer: "sources", ledger37HoldingSourceHasDetails: actual(source, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails }).Ledger37AiHome;
   return { spy, query, onBack, render: (viewerUserId = 901, adminPreview = false) => { h.reset(); return component({ viewerUserId, adminPreview, onBack }); } };
 }
 function list(data = payload()) { const component = actual(source, ["Ledger37HoldingSourceList"]).Ledger37HoldingSourceList; return renderToStaticMarkup(React.createElement(component, { data, onOpen: vi.fn() })); }
@@ -43,7 +43,7 @@ function compactRowName(row: any): string {
   return nodes(row).find(node => typeof node.props?.title === "string")?.props.title;
 }
 function expectCompactRow(tree: any, row: Ledger37HoldingPosition, isDetail = false, showMarketValue = false) {
-  const api = actual(source, ["ledger37HoldingSymbol", "ledger37HoldingWeightLabel", "ledger37DisclosedWeight"]);
+  const api = actual(source, ["ledger37HoldingSymbol", "ledger37HoldingWeightLabel", "ledger37DisclosedWeight", "ledger37HoldingColor", "ledger37HoldingQuoteLabel"]);
   const name = row.stockName || api.ledger37HoldingSymbol(row);
   const weight = api.ledger37DisclosedWeight(row.weightPct), label = api.ledger37HoldingWeightLabel(row.weightPct);
   expect(tree.type).toBe("li");
@@ -52,18 +52,25 @@ function expectCompactRow(tree: any, row: Ledger37HoldingPosition, isDetail = fa
   expect(tree.props["data-holding-row"]).toBe(isDetail ? "true" : undefined);
   for (const token of ["flex", "min-h-9", "min-w-0", "items-center", "gap-3", "py-2"]) expect(tree.props.className.split(/\s+/)).toContain(token);
   const children = React.Children.toArray(tree.props.children) as React.ReactElement<any>[];
-  expect(children).toHaveLength(showMarketValue ? 4 : 3);
+  const showQuote = children[1]?.props["data-holding-quote"] !== undefined;
+  const quoteLabel = showQuote ? api.ledger37HoldingQuoteLabel(row.quote, row.currency) || "待更新" : "";
+  expect(children).toHaveLength((showMarketValue ? 4 : 3) + Number(showQuote));
   expect(children[0].props.title).toBe(name); expect(text(children[0])).toBe(name);
   expect(children[0].props.className).toContain("truncate");
-  expect(children[1].props["data-holding-bar"]).toBe(weight === null ? "neutral" : "disclosed");
-  const fills = nodes(children[1]).filter(node => node.props?.style?.width !== undefined);
+  if (showQuote) expect(text(children[1])).toBe(quoteLabel);
+  const barIndex = showQuote ? 2 : 1;
+  expect(children[barIndex].props["data-holding-bar"]).toBe(weight === null ? "neutral" : "disclosed");
+  const fills = nodes(children[barIndex]).filter(node => node.props?.style?.width !== undefined);
   if (weight === null) expect(fills).toHaveLength(0);
-  else { expect(fills).toHaveLength(1); expect(fills[0].props.style.width).toBe(`${row.weightPct}%`); }
-  expect(text(children[2])).toBe(label);
+  else {
+    expect(fills).toHaveLength(1); expect(fills[0].props.style.width).toBe(`${row.weightPct}%`);
+    expect(fills[0].props.style.backgroundColor).toBe(api.ledger37HoldingColor(row));
+  }
+  expect(text(children[barIndex + 1])).toBe(label);
   if (showMarketValue) {
-    expect(children[3].props["data-holding-market-value"]).toBe("true");
-    expect(text(children[3])).toMatch(/^市值(?: |待更新$)/);
-  } else expect(text(tree)).toBe(`${name}${label}`);
+    expect(children[barIndex + 2].props["data-holding-market-value"]).toBe("true");
+    expect(text(children[barIndex + 2])).toMatch(/^市值(?: |待更新$)/);
+  } else expect(text(tree)).toBe(`${name}${quoteLabel}${label}`);
   expect(nodes(tree).some(node => ["img", "dl", "dt", "dd"].includes(node.type) || node.type?.name === "HoldingLogo")).toBe(false);
   expect(renderToStaticMarkup(tree)).not.toMatch(/披露股数|零权重已披露|证券标识|披露日期|资料截至|核验日期| · USD| · CNY/);
 }
@@ -119,8 +126,32 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     expect(nodes(tree).filter(node => node.type === "article").map(article => text(nodes(article).find(node => node.type === "h3")))).toEqual(["R1 持仓", "巴菲特持仓", "佩洛西持仓", "木头姐持仓", "英伟达持仓"]);
     for (const button of nodes(tree).filter(node => node.type === "button")) { expect(button.props.className).toMatch(/min-h-\[(?:128|136)px\]/); expect(button.props.className).toContain("w-full"); }
     const html = list(data);
-    expect(html).toContain("1 只已接入证券"); expect(html).not.toMatch(/年化|一年收益|收益率|¥0\.00|<canvas|<svg[^>]*recharts/);
-    expect(html).toContain("2026-09-30"); expect(JSON.stringify(data)).toBe(snapshot);
+    expect(html).toContain("1只已披露"); expect(html).not.toMatch(/年化|一年收益|收益率|¥0\.00|<canvas|<svg[^>]*recharts/);
+    expect(html).toContain("截至2026年9月30日"); expect(JSON.stringify(data)).toBe(snapshot);
+  });
+  it("数量统一使用只，R1显示已披露、公开来源数量与真实截至日期合行，不带证券或虚构日期", () => {
+    const api = actual(source, ["sourceStatusLabel", "sourceHoldingSummary"]);
+    const r1 = item({ id: "r1", holdings: Array.from({ length: 14 }, (_, i) => position({ symbol: `R1${i}`, weightPct: null })) });
+    const publicSource = item({ holdings: Array.from({ length: 30 }, (_, i) => position({ symbol: `P${i}`, weightPct: null })) });
+    expect(api.sourceStatusLabel(r1)).toBe("14只已披露");
+    expect(api.sourceHoldingSummary(publicSource)).toBe("30只 · 截至2026年9月30日");
+    const data = { ...payload(), sources: [r1, publicSource] }, snapshot = JSON.stringify(data), html = list(data);
+    expect(html).toContain("14只已披露"); expect(html).toContain("30只 · 截至2026年9月30日");
+    expect(html).toContain("全部持仓 · 30只"); expect(html).not.toMatch(/只已接入证券|只已披露证券|\d+ 只/);
+    for (const asOf of [null, "2026-02-29", "bad"]) expect(api.sourceHoldingSummary({ ...publicSource, asOf })).toBe("30只已披露");
+    expect(api.sourceHoldingSummary({ ...publicSource, status: "unavailable" })).toBe("资料暂不可用");
+    expect(JSON.stringify(data)).toBe(snapshot);
+  });
+  it("R1数量字体与巴菲特数量行完全一致，不使用大号青色数字", () => {
+    const api = actual(source, ["Ledger37HoldingSourceList"]);
+    const tree = api.Ledger37HoldingSourceList({ data: payload(), onOpen: vi.fn() });
+    const r1 = nodes(tree).find(node => node.props?.["data-holding-source"] === "r1");
+    const berkshire = nodes(tree).find(node => node.props?.["data-holding-source"] === "berkshire");
+    const r1Count = nodes(r1).find(node => node.type === "span" && node.props.children === "1只已披露");
+    const publicCount = nodes(berkshire).find(node => node.type === "span" && node.props.children === "1只 · 截至2026年9月30日");
+    expect(r1Count.props.className).toBe(publicCount.props.className);
+    expect(r1Count.props.className).toContain("text-[11px] font-medium leading-5 text-[#142A3F]");
+    expect(r1Count.props.className).not.toMatch(/text-\[24px\]|font-semibold|leading-8|text-\[#087987\]/);
   });
   it("环图只映射真实weightPct，未知不归一化、不以股数或Pnl替代", () => {
     const api = actual(source, ["ledger37HoldingRing"]);
@@ -133,6 +164,56 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     expect(api.ledger37HoldingRing([position({ weightPct: 0 })]).hasWeight).toBe(false);
     expect(api.ledger37HoldingRing([position({ weightPct: 80 }), position({ weightPct: 30 })]).hasWeight).toBe(false);
     for (const weightPct of [-1, Infinity, NaN, 101]) expect(api.ledger37HoldingRing([position({ weightPct })]).hasWeight).toBe(false);
+  });
+  it("股票颜色按原始证券身份固定，权重、名字、展示代码、排序和筛选不换色", () => {
+    const api = actual(source, ["ledger37HoldingColor", "ledger37OrderedHoldings"]);
+    const row = position({ symbol: "AAPL" }), color = api.ledger37HoldingColor(row);
+    expect(color).toMatch(/^hsl\(\d+ \d+% \d+%\)$/);
+    for (const changed of [position({ symbol: " aapl ", weightPct: 99, stockName: "新名称", displaySymbol: "另一个展示代码" }), { ...row, weightPct: null }]) {
+      expect(api.ledger37HoldingColor(changed)).toBe(color);
+    }
+    const identified = Object.assign(position({ symbol: "OLD_CODE" }), { securityId: " EXACT_ID " });
+    expect(api.ledger37HoldingColor(identified)).toBe(api.ledger37HoldingColor({ ...identified, symbol: "NEW_CODE", securityId: "exact_id" }));
+    const rows = [row, position({ symbol: "MSFT", weightPct: 50 }), position({ symbol: "TSLA", weightPct: 10 })];
+    const colors = new Map(rows.map(item => [item.symbol, api.ledger37HoldingColor(item)]));
+    expect(new Set(colors.values()).size).toBe(rows.length);
+    for (const sort of ["weight-desc", "weight-asc", "name"]) {
+      for (const item of api.ledger37OrderedHoldings(rows, "", sort)) expect(api.ledger37HoldingColor(item)).toBe(colors.get(item.symbol));
+    }
+    expect(api.ledger37HoldingColor(api.ledger37OrderedHoldings(rows, "aapl")[0])).toBe(color);
+    expect(api.ledger37HoldingColor(position({ symbol: " " }))).toBe("#EAF2F7");
+  });
+  it("环每个真实分段与共享详情条同色，起止比例保持原样且无数据变更", () => {
+    const api = actual(source, ["ledger37HoldingRing", "ledger37HoldingColor", "HoldingCompactRow"]);
+    const rows = [position({ symbol: "MSFT", weightPct: 30 }), position({ symbol: "AAPL", weightPct: 60 }), position({ symbol: "TSLA", weightPct: 10 })];
+    const snapshot = JSON.stringify(rows), ring = api.ledger37HoldingRing(rows);
+    for (const [row, start, end] of [[rows[1], 0, 60], [rows[0], 60, 90], [rows[2], 90, 100]] as const) {
+      const color = api.ledger37HoldingColor(row);
+      expect(ring.background).toContain(`${color} ${start}% ${end}%`);
+      for (const detail of [false, true]) {
+        const fill = nodes(api.HoldingCompactRow({ row, detail })).find(node => node.props?.style?.width !== undefined);
+        expect(fill.props.style).toEqual({ width: `${row.weightPct}%`, backgroundColor: color });
+      }
+    }
+    expect(api.ledger37HoldingRing([...rows].reverse()).background).toBe(ring.background);
+    expect(JSON.stringify(rows)).toBe(snapshot);
+  });
+  it("R1列表环与详情环都按本人披露比例绘制，缺失或空个人数据不回退总组合", () => {
+    const h = hooks(), api = actual(source, ["SourceRing", "Ledger37HoldingSourceDetail", "ledger37HoldingRing"], { useState: h.useState });
+    const own = [position({ symbol: "OWN1", stockName: "本人一", weightPct: 60 }), position({ symbol: "OWN2", stockName: "本人二", weightPct: 40 })];
+    const r1 = item({ id: "r1", holdings: [position({ symbol: "SOURCE_SECRET", weightPct: null })], memberPortfolio: { holdings: own, valuationAsOf: "2026-11-20", reportingCurrency: "CNY" } });
+    const snapshot = JSON.stringify(r1), expected = api.ledger37HoldingRing(own).background;
+    const background = (tree: any) => nodes(tree).find(node => node.props?.["data-holding-ring"]).props.style.background;
+    expect(background(api.SourceRing({ source: r1 }))).toBe(expected);
+    const detailNode = nodes(api.Ledger37HoldingSourceDetail({ source: r1 })).find(node => node.type === api.SourceRing);
+    expect(background(api.SourceRing(detailNode.props))).toBe(expected);
+    for (const memberPortfolio of [undefined, { ...r1.memberPortfolio, holdings: [] }, { ...r1.memberPortfolio, holdings: [position({ weightPct: null })] }]) {
+      const html = renderToStaticMarkup(api.SourceRing({ source: { ...r1, holdings: [position({ symbol: "SOURCE_SECRET", weightPct: 100 })], memberPortfolio } }));
+      expect(html).toContain('data-holding-ring="neutral"');
+      expect(html).not.toMatch(/SOURCE_SECRET|conic-gradient/);
+    }
+    expect(background(api.SourceRing({ source: { ...r1, status: "unavailable" } }))).toBe("#EAF2F7");
+    expect(JSON.stringify(r1)).toBe(snapshot);
   });
   it("真实权重降序未知末尾；筛选股票不改变原始数据", () => {
     const api = actual(source, ["ledger37OrderedHoldings"]);
@@ -155,7 +236,7 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
       expect(row).toEqual(snapshot);
     }
   });
-  it("外部内联与R1详情都复用同一HoldingCompactRow，R1全部24只不分页且头部环图日期保留", () => {
+  it("外部内联与R1详情都复用同一HoldingCompactRow，R1全部24只不分页且环图与折叠估值日期保留", () => {
     const h = hooks(), api = actual(source, ["SourceInlineHoldings", "Ledger37HoldingSourceDetail", "HoldingCompactRow", "SourceRing"], { useState: h.useState });
     const rows = Array.from({ length: 24 }, (_, index) => Object.freeze(position({ symbol: `EXACT${index}`, stockName: `真实名称${index}`, weightPct: index === 23 ? null : index / 10 })));
     const data = item({ id: "r1", displayName: "R1 持仓", kind: "internal", holdings: rows, memberPortfolio: { holdings: rows, valuationAsOf: "2026-09-30", reportingCurrency: "USD" } }), snapshot = JSON.stringify(data);
@@ -170,9 +251,11 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
       expect(html).not.toMatch(/显示更多|加载更多|下一页|分页|披露股数/);
     }
     expect(nodes(detailed).filter(node => node.type === api.SourceRing)).toHaveLength(1);
-    expect(renderToStaticMarkup(detailed)).toContain("资料截至 2026-09-30");
+    expect(renderToStaticMarkup(detailed)).not.toContain("资料截至 2026-09-30");
+    expect(renderToStaticMarkup(detailed)).toContain("行情截至</dt><dd");
+    expect(renderToStaticMarkup(detailed)).toContain(">2026-09-30</dd>");
     expect(renderToStaticMarkup(detailed)).not.toContain('aria-label="搜索股票名称或代码"');
-    expect(renderToStaticMarkup(detailed)).toContain('aria-label="持股排序"');
+    expect(renderToStaticMarkup(detailed)).not.toContain('aria-label="持股排序"');
     expect(JSON.stringify(data)).toBe(snapshot);
   });
   it("详情仅名字、比例与进度条，精度DTO不变，零与未知区分且不泄露股数和资金", () => {
@@ -262,7 +345,7 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     const neutral = item({ id: "r1", kind: "internal", holdings: [position({ symbol: "CATALOG", weightPct: null, shares: null })] });
     const html = list({ ...payload(), sources: [neutral] });
     expect(html).toContain('data-holding-ring="neutral"'); expect(html).not.toContain('data-holding-satellite="CATALOG"');
-    expect(html).toContain("比例待更新"); expect(html).not.toContain("比例未披露，仅股票名录"); expect(html).not.toContain("conic-gradient");
+    expect(html).not.toContain("比例待更新"); expect(html).not.toContain("比例未披露，仅股票名录"); expect(html).not.toContain("conic-gradient");
     expect(html).not.toContain("TOP HOLDINGS"); expect(html).not.toContain("25%");
     for (const data of [item({ holdings: [] }), item({ status: "unavailable", holdings: [position()] })]) {
       const empty = list({ ...payload(), sources: [data] });
@@ -297,10 +380,10 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     expect(JSON.stringify(data)).toBe(snapshot); expect(data.holdings[0].shares).toBe("12.123456789123456789"); expect(data.holdings[1].shares).toBe(longShares);
     expect(source).not.toMatch(/(?:Number|parseFloat|parseInt)\(\s*(?:row\.)?shares/);
   });
-  it("真实权重、名称排序和搜索可交互，未知权重始终排在权重排序末尾", () => {
+  it("外部来源真实权重、名称排序和搜索可交互，未知权重始终排在权重排序末尾", () => {
     const h = hooks(), api = actual(source, ["Ledger37HoldingSourceDetail"], { useState: h.useState });
     const ownRows = [position({ symbol: "ZZ", stockName: "Zebra", weightPct: 40 }), position({ symbol: "AA", stockName: "Alpha", weightPct: 10 }), position({ symbol: "UNK", stockName: "Unknown", weightPct: null })];
-    const data = item({ id: "r1", kind: "internal", holdings: ownRows, memberPortfolio: { holdings: ownRows, valuationAsOf: null, reportingCurrency: null } }), snapshot = JSON.stringify(data);
+    const data = item({ holdings: ownRows }), snapshot = JSON.stringify(data);
     const render = () => { h.reset(); return api.Ledger37HoldingSourceDetail({ source: data }); };
     const symbols = (tree: any) => compactRows(tree).map(row => data.holdings.find(holding => holding.stockName === compactRowName(row))?.symbol);
     let tree = render(); expect(symbols(tree)).toEqual(["ZZ", "AA", "UNK"]);
@@ -308,7 +391,7 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     tree = render(); expect(symbols(tree)).toEqual(["AA", "ZZ", "UNK"]);
     nodes(tree).find(node => node.type === "select").props.onChange({ target: { value: "name" } });
     tree = render(); expect(symbols(tree)).toEqual(["AA", "UNK", "ZZ"]);
-    expect(nodes(tree).some(node => node.type === "input")).toBe(false);
+    expect(nodes(tree).some(node => node.type === "input")).toBe(true);
     const external = item({ holdings: ownRows });
     const renderExternal = () => { h.reset(); return api.Ledger37HoldingSourceDetail({ source: external }); };
     tree = renderExternal();
@@ -319,6 +402,25 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     nodes(renderExternal()).find(node => node.type === "input").props.onChange({ target: { value: "AA" } });
     tree = renderExternal(); expect(symbols(tree)).toEqual(["AA"]);
     expect(renderToStaticMarkup(tree)).not.toContain("AA · USD"); expect(JSON.stringify(data)).toBe(snapshot);
+  });
+  it("R1固定持股排列：比例降序无标题、排序按钮或额外百分比说明，其他来源的排序状态不影响本人", () => {
+    const h = hooks(), api = actual(source, ["Ledger37HoldingSourceDetail"], { useState: h.useState });
+    const rows = [position({ symbol: "AA", stockName: "Alpha", weightPct: 10 }), position({ symbol: "UNK", stockName: "Unknown", weightPct: null }), position({ symbol: "ZZ", stockName: "Zebra", weightPct: 40 })];
+    const r1 = item({ id: "r1", kind: "internal", holdings: rows, memberPortfolio: { holdings: rows, valuationAsOf: null, reportingCurrency: null } });
+    const snapshot = JSON.stringify(r1);
+    const render = (data: Ledger37HoldingSource) => { h.reset(); return api.Ledger37HoldingSourceDetail({ source: data }); };
+    const external = render(item({ holdings: rows }));
+    nodes(external).find(node => node.type === "select").props.onChange({ target: { value: "weight-asc" } });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const tree = render(r1), panel = nodes(tree).find(node => node.props?.role === "tabpanel");
+      expect(compactRows(tree).map(compactRowName)).toEqual(["Zebra", "Alpha", "Unknown"]);
+      expect(nodes(panel).some(node => ["select", "input", "label", "button"].includes(node.type))).toBe(false);
+      expect(text(compactRows(tree))).toBe("Zebra待更新40%Alpha待更新10%Unknown待更新未披露");
+      expect(text(panel)).toBe("");
+      const html = renderToStaticMarkup(tree);
+      expect(html).not.toMatch(/持股排序|持仓比例 ↓|持仓比例 ↑|百分比仅表示我的持仓构成|不代表可提现余额或收益/);
+    }
+    expect(JSON.stringify(r1)).toBe(snapshot);
   });
   it("320px移动结构：36px单行名字截断、有限轨道与触控搜索排序，不加行级精度字段或返回箭头", () => {
     const listComponent = actual(source, ["Ledger37HoldingSourceList"]).Ledger37HoldingSourceList;
@@ -482,7 +584,7 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     const data = item({ id }), html = list({ ...payload(), sources: [data] });
     expect(html).toContain("资料来源与说明"); expect(html).toContain(data.coverageNote!);
     expect(html).toContain("不代表完整资产或实时持仓"); expect(html).toContain("图片来源与许可"); expect(html).toContain("Wikimedia Commons");
-    expect(html).toContain("不代表产品背书"); expect(html).toContain("2026-09-30");
+    expect(html).toContain("不代表产品背书"); expect(html).toContain("截至2026年9月30日");
     expect(html).toContain(data.sourceUrl!); expect(html).toContain('target="_blank"'); expect(html).toContain('rel="noopener noreferrer"');
     expect(html.indexOf("资料来源与说明")).toBeGreaterThan(html.lastIndexOf("data-inline-holding-row="));
     expect(html.indexOf("图片来源与许可")).toBeGreaterThan(html.indexOf("资料来源与说明"));
@@ -514,6 +616,7 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
   it("R1真实SSR使用96px干净比例环：无卫星、无虚线轨道，保留真实ring与头像", () => {
     const api = actual(source, ["SourceRing"]);
     const r1 = item({ id: "r1", displayName: "R1 持仓", entityName: "R1", kind: "internal", holdings: [position({ symbol: "AAPL", weightPct: 25 }), position({ symbol: "MSFT", weightPct: 15 })] });
+    r1.memberPortfolio = { holdings: r1.holdings, valuationAsOf: "2026-09-30", reportingCurrency: "USD" };
     const tree = api.SourceRing({ source: r1 });
     const html = renderToStaticMarkup(tree);
     expect(tree.props["data-holding-orbit"]).toBe("true");
@@ -524,15 +627,15 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     expect(html).toContain("R1"); expect(html).not.toContain("data-holding-satellite=");
     expect(html).not.toContain("border-dashed"); expect(html).not.toContain("h-[124px]");
   });
-  it("R1列表卡片只保留名称、纯数字数量、日期及比例待更新，不泄露目录摘要且整卡仍一次打开", () => {
+  it("R1列表卡片只保留名称、带只的已披露数量，不展示日期及比例待更新，不泄露目录摘要且整卡仍一次打开", () => {
     const r1 = item({ id: "r1", displayName: "R1 持仓", entityName: "R1", kind: "internal", holdings: [position({ symbol: "CATALOG", stockName: "目录证券", weightPct: null })] });
     const data = { ...payload(), sources: [r1] }, onOpen = vi.fn();
     const api = actual(source, ["Ledger37HoldingSourceList"]);
     const tree = api.Ledger37HoldingSourceList({ data, onOpen });
     const card = nodes(tree).find(node => node.type === "article")!;
     const html = renderToStaticMarkup(card);
-    expect(html).toContain("R1 持仓"); expect(html).toContain(">1<"); expect(html).toContain("资料截至 2026-09-30");
-    expect(html).toContain("比例待更新");
+    expect(html).toContain("R1 持仓"); expect(html).toContain(">1只已披露<"); expect(html).not.toContain("资料截至 2026-09-30");
+    expect(html).not.toContain("比例待更新");
     expect(html).not.toContain("内部股票目录"); expect(html).not.toContain(">R1 持仓</span>");
     expect(html).not.toContain("TOP HOLDINGS"); expect(html).not.toContain("目录证券"); expect(html).not.toContain("CATALOG");
     expect(nodes(card).some(node => node.type === icons.ChevronRight)).toBe(false);
@@ -548,7 +651,8 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     const html = renderToStaticMarkup(React.createElement(api.Ledger37HoldingSourceDetail, { source: r1 }));
     expect(html).not.toContain("data-holding-satellite="); expect(html).not.toContain("h-[124px]");
     expect(html).toContain("本人证券"); expect(html).toContain("width:12.123456789%"); expect(html).toContain("12.12%");
-    expect(html).toContain("资料截至 2026-09-30");
+    expect(html).not.toContain("资料截至 2026-09-30");
+    expect(html).toContain("行情截至</dt><dd"); expect(html).toContain(">2026-09-30</dd>");
     const pagedHtml = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { trades }));
     expect((pagedHtml.match(/data-holding-position-change=/g) || [])).toHaveLength(20);
     expect(pagedHtml).toContain("减持"); expect(pagedHtml).not.toMatch(/2026-01-01|2026-11-18|新增 未记录|减少/); expect(pagedHtml).toContain("下一页");
@@ -607,7 +711,8 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     expect(detailHtml).toContain("客户专属证券"); expect(detailHtml).not.toContain("来源总组合证券");
     expect(detailHtml).toContain("持股百分比"); expect(detailHtml).toContain("60%"); expect(detailHtml).toContain("40%");
     expect(detailHtml).not.toMatch(/市值|data-holding-market-value|12,345,678,901,234,567,890|12345678901234567890|0\.00 元/);
-    expect(detailHtml).toContain("资料截至 2026-09-30");
+    expect(detailHtml).not.toContain("资料截至 2026-09-30");
+    expect(detailHtml).toContain("行情截至</dt><dd"); expect(detailHtml).toContain(">2026-09-30</dd>");
     expect(detailHtml).not.toContain("资料截至 2026-01-01"); expect(detailHtml).not.toContain("999,999,999,999"); expect(detailHtml).not.toContain("888,888,888,888");
     const detailRows = compactRows(detailed);
     expect(detailRows.map(row => compactRowName(row))).toEqual(["共享证券", "客户专属证券"]);
@@ -622,7 +727,10 @@ describe("37 AI首页真实持仓来源：离线前端安全回归", () => {
     const html = detail(data);
     expect(html).toContain(expected); expect(html).not.toContain("来源秘密组合");
     expect(html).not.toContain("来源秘密组合");
-    if (memberPortfolio) expect(html).toContain("资料截至 2026-09-30");
+    if (memberPortfolio) {
+      expect(html).not.toContain("资料截至 2026-09-30");
+      expect(html).toContain("行情截至</dt><dd"); expect(html).toContain(">2026-09-30</dd>");
+    }
   });
   it("外部inline即使夹带marketValue也不显示市值，R1日期不匹配也不显示金额或市值占位", () => {
     const malicious = position({ stockName: "外部证券", marketValue: { amount: "777777777777", currency: "CNY", asOf: "2026-09-30" } });
@@ -689,7 +797,7 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
       expectHomeTheme(html);
       expect(html).toContain("divide-[#EAF2F7]");
       expect(html).toContain("bg-[#EAF2F7]");
-      expect(html).toContain("bg-[#087987]");
+      expect(html).toContain("background-color:hsl(");
       expect(html).toContain('data-holding-ring="disclosed"');
     }
     const listTree = actual(source, ["Ledger37HoldingSourceList"]).Ledger37HoldingSourceList({ data: payload(), onOpen: vi.fn() });
@@ -742,7 +850,8 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
       }
       const panel = nodes(tree).find(node => node.props?.role === "tabpanel"), panelHtml = renderToStaticMarkup(panel);
       expect(panelHtml).toContain("bg-[#FFFFFF]"); expect(panelHtml).toContain("border-[#DCE7F0]");
-      expect(panelHtml).toContain(label === "持股列表" || label === "交易变动" && id === "r1" ? "text-[#142A3F]" : "text-[#142A3F]"); expect(panelHtml).toContain("text-[#61758A]");
+      expect(panelHtml).toContain("text-[#142A3F]");
+      if (id !== "r1" || label !== "持股列表") expect(panelHtml).toContain("text-[#61758A]");
       if (label === "持股列表") { expect(panelHtml).toContain('data-holding-row="true"'); expect(panelHtml).toContain(id === "r1" ? "width:12.123456789%" : "width:25%"); }
       if (label === "交易变动") {
         if (id === "r1") { expect(panelHtml).toContain("减持"); expect(panelHtml).not.toMatch(/2026-01-01|2026-11-18|未记录|减少/); expect(panelHtml).toContain('data-holding-position-change="decrease"'); expect(panelHtml).not.toMatch(/开仓 |平仓 |已平仓记录/); }
@@ -757,8 +866,8 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
     }
     expect(JSON.stringify(data)).toBe(snapshot);
   });
-  it("真实紧凑行以深色名字、浅蓝轨道和青绿进度显示原始百分比，未知仍为次要色而非假零", () => {
-    const compact = actual(source, ["HoldingCompactRow"]).HoldingCompactRow;
+  it("真实紧凑行以深色名字、浅蓝轨道和固定股票颜色显示原始百分比，未知仍为次要色而非假零", () => {
+    const api = actual(source, ["HoldingCompactRow", "ledger37HoldingColor"]), compact = api.HoldingCompactRow;
     for (const weightPct of [12.123456789, 0.00001, 0, null]) {
       const row = position({ stockName: "真实证券", weightPct });
       for (const isDetail of [false, true]) {
@@ -768,38 +877,44 @@ describe("持仓来源首页浅蓝青绿配色：纯展示契约", () => {
         expect(children[1].props.className).toContain("bg-[#EAF2F7]");
         expect(children[2].props.className).toContain(weightPct === null ? "text-[#61758A]" : "text-[#142A3F]");
         const fills = nodes(children[1]).filter(node => node.props?.style?.width !== undefined);
-        for (const fill of fills) expect(fill.props.className).toContain("bg-[#087987]");
+        for (const fill of fills) expect(fill.props.style.backgroundColor).toBe(api.ledger37HoldingColor(row));
         if (weightPct === null) { expect(fills).toHaveLength(0); expect(text(children[2])).toBe("未披露"); }
         expect(renderToStaticMarkup(tree)).not.toMatch(/#303B49|#FF9F43|#F0F3F7|#DDE5EF|#8F9BAD|市值|披露股数/);
       }
     }
   });
   it("未知权重与空来源在浅蓝空态保留浅蓝中性环，无推算比例或不可用旧持仓泄漏", () => {
-    const api = actual(source, ["ledger37HoldingRing"]), ring = api.ledger37HoldingRing([position({ weightPct: null })]);
+    const api = actual(source, ["ledger37HoldingRing", "ledger37HoldingColor"]), ring = api.ledger37HoldingRing([position({ weightPct: null })]);
     expect(ring.background).toBe("#EAF2F7"); expect(ring.hasWeight).toBe(false);
     const disclosed = api.ledger37HoldingRing([position({ weightPct: 12.123456789 })]);
-    expect(disclosed.background).toContain("#087987 0% 12.123456789%"); expect(disclosed.background).toContain("#EAF2F7 12.123456789% 100%");
+    expect(disclosed.background).toContain(`${api.ledger37HoldingColor(position())} 0% 12.123456789%`); expect(disclosed.background).toContain("#EAF2F7 12.123456789% 100%");
     const redGold = api.ledger37HoldingRing([position({ weightPct: 25 }), position({ symbol: "MSFT", weightPct: 10 })]);
-    expect(redGold.background).toContain("#087987 0% 25%"); expect(redGold.background).toContain("#459CAF 25% 35%"); expect(redGold.background).toContain("#EAF2F7 35% 100%");
+    expect(redGold.background).toContain(`${api.ledger37HoldingColor(position())} 0% 25%`); expect(redGold.background).toContain(`${api.ledger37HoldingColor(position({ symbol: "MSFT" }))} 25% 35%`); expect(redGold.background).toContain("#EAF2F7 35% 100%");
     const unknownHtml = list({ ...payload(), sources: [item({ holdings: [position({ weightPct: null })] })] });
     expectHomeTheme(unknownHtml); expect(unknownHtml).toContain('data-holding-ring="neutral"'); expect(unknownHtml).toContain("未披露"); expect(unknownHtml).not.toContain("conic-gradient");
     const emptyHtml = list({ ...payload(), sources: [item({ status: "unavailable", holdings: [position({ stockName: "STALE_THEME_SECRET" })] })] });
     expect(emptyHtml).toContain('data-holding-theme="home"'); expect(emptyHtml).toContain("bg-[#F2F6FA]"); expect(emptyHtml).toContain("bg-[#FFFFFF]"); expect(emptyHtml).toContain("text-[#61758A]");
     expect(emptyHtml).toContain("暂无已接入来源"); expect(emptyHtml).not.toMatch(/STALE_THEME_SECRET|data-holding-ring=|data-inline-holding-row=|#0B0E11|#171C23/);
   });
-  it("比例环浅蓝青绿各分区可区分，首个主色对白底保持至少3比1，不改真实比例", () => {
-    const api = actual(source, ["RING_COLORS", "ledger37HoldingRing"]);
-    const luminance = (hex: string) => {
-      const rgb = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  it("比例环股票色各分区可区分，股票色对白底保持至少3比1，不改真实比例", () => {
+    const api = actual(source, ["ledger37HoldingColor", "ledger37HoldingRing"]);
+    const luminance = (hsl: string) => {
+      const match = /^hsl\((\d+) (\d+)% (\d+)%\)$/.exec(hsl)!;
+      const hue = Number(match[1]), saturation = Number(match[2]) / 100, lightness = Number(match[3]) / 100;
+      const a = saturation * Math.min(lightness, 1 - lightness);
+      const rgb = [0, 8, 4].map(offset => {
+        const k = (offset + hue / 30) % 12;
+        const value = lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
       return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
     };
-    const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
-    expect(api.RING_COLORS).toEqual(["#087987", "#459CAF", "#73AFC0", "#86BED1", "#ADCEDC", "#729BAC", "#A5B9CA", "#D2E3EC"]);
-    expect(api.RING_COLORS).not.toContain("#8F1425"); expect(api.RING_COLORS).not.toContain("#C08A14");
-    expect(contrast(api.RING_COLORS[0], "#FFFFFF")).toBeGreaterThanOrEqual(3);
+    const colors = ["AAPL", "MSFT", "GOOGL", "META", "COIN", "HOOD", "TSLA", "CRYPTO:BTC-USDT", "CRYPTO:UNI-USDT", "600000.SH"].map(symbol => api.ledger37HoldingColor(position({ symbol })));
+    expect(new Set(colors).size).toBe(colors.length);
+    for (const color of colors) expect(1.05 / (luminance(color) + 0.05)).toBeGreaterThanOrEqual(3);
     const rows = [position({ weightPct: 25 }), position({ symbol: "MSFT", weightPct: 10 })], before = JSON.stringify(rows);
     const ring = api.ledger37HoldingRing(rows);
-    expect(ring.background).toContain("#087987 0% 25%"); expect(ring.background).toContain("#459CAF 25% 35%");
+    expect(ring.background).toContain(`${api.ledger37HoldingColor(rows[0])} 0% 25%`); expect(ring.background).toContain(`${api.ledger37HoldingColor(rows[1])} 25% 35%`);
     expect(ring.background).toContain("#EAF2F7 35% 100%"); expect(JSON.stringify(rows)).toBe(before);
   });
 });
@@ -810,10 +925,11 @@ describe("R1客户持仓简化与真实仓位变动", () => {
   it("数量仅显示数字，客户不出现已披露或已接入证券数量文案、搜索框和市值，仅保留持股百分比", () => {
     const data = ownSource(), snapshot = JSON.stringify(data);
     const api = actual(source, ["sourceStatusLabel"]);
-    expect(api.sourceStatusLabel(data)).toBe("1");
+    expect(api.sourceStatusLabel(data)).toBe("1只已披露");
     const html = detail(data);
     expect(html).not.toMatch(/1 只已接入证券|已接入证券 ·|已披露权重 ↓|搜索股票名称或代码|type="search"/);
-    expect(html).toContain("持仓比例 ↓"); expect(html).toContain("环图按持股百分比绘制");
+    expect(html).not.toContain("持股排序"); expect(html).not.toContain("环图按持股百分比绘制");
+    expect(html).toContain("环图为个人持股百分比");
     expect(html).not.toMatch(/市值|data-holding-market-value/); expect(JSON.stringify(data)).toBe(snapshot);
   });
   it.each(["2026-02-29", "2026-13-01", "2026-11-31", "2026-11-19T00:00:00Z", "", null, undefined])("不真实日期%s不能变成今天或有效交易日期", value => {
@@ -948,5 +1064,64 @@ describe("个人获配交易变动：简洁动作、分页与入口", () => {
     const html = renderToStaticMarkup(React.createElement(api.HoldingPositionChangeList, { changes: rows }));
     expect(html.match(/data-holding-position-change=/g)).toHaveLength(1);
     expect(html).toContain(`title="${longName}"`); expect(html).toContain("truncate"); expect(html).toContain("min-w-0"); expect(html).not.toMatch(/BAD_ACTION_SECRET|<table|減持/);
+  });
+});
+
+
+describe("R1个人持股股价：只展示安全市场行情，不改变比例", () => {
+  const quote = (amount = "259.885", currency: "CNY" | "USD" | "USDT" = "USD", asOf = "2026-11-20") => ({ amount, currency, asOf });
+  it("原币种股价使用人民币、美元及USDT单位，不用人民币个人市值冒充股价", () => {
+    const api = actual(source, ["ledger37HoldingQuoteLabel"]);
+    expect(api.ledger37HoldingQuoteLabel(quote(), "USD")).toBe("$259.89");
+    expect(api.ledger37HoldingQuoteLabel(quote("12.3", "CNY"), "CNY")).toBe("¥12.30");
+    expect(api.ledger37HoldingQuoteLabel(quote("5.672", "USDT"), "USDT")).toBe("5.67 USDT");
+    expect(api.ledger37HoldingQuoteLabel(quote("999999999999999999.995"), "USD")).toBe("$1,000,000,000,000,000,000.00");
+  });
+  it("极小非零股价保留有效小数，不误写为0.00", () => {
+    const api = actual(source, ["ledger37HoldingQuoteLabel"]);
+    expect(api.ledger37HoldingQuoteLabel(quote("0.000123456", "USDT"), "USDT")).toBe("0.0001234 USDT");
+    expect(api.ledger37HoldingQuoteLabel(quote("0.00000001", "USDT"), "USDT")).toBe("0.00000001 USDT");
+    expect(api.ledger37HoldingQuoteLabel(quote("0.00000000000000000001", "USDT"), "USDT")).toBe("<0.0000000000000001 USDT");
+  });
+  it("缺失、零、负值、非法日期、未来日期和币种错配股价均待更新，不回退买入价", () => {
+    const api = actual(source, ["ledger37HoldingQuoteLabel", "HoldingCompactRow"]);
+    for (const invalid of [undefined, null, quote("0"), quote("0.0000"), quote("-1"), quote("NaN"), quote("Infinity"), quote("1e-8"), quote("12", "CNY"), quote("12", "USD", "2026-02-30"), quote("12", "USD", "2999-01-01")]) {
+      expect(api.ledger37HoldingQuoteLabel(invalid, "USD")).toBeNull();
+      const row = position({ quote: invalid as any });
+      Object.assign(row, { entryPrice: "88112233", buyPrice: "99112233", currentPrice: "77112233", marketValue: { amount: "999", currency: "USD", asOf: "2026-11-20" } });
+      const tree = api.HoldingCompactRow({ row, detail: true, showQuote: true });
+      const html = renderToStaticMarkup(tree);
+      expect(html).toContain('data-holding-quote="unavailable"');
+      expect(text(tree)).toBe("苹果待更新25%");
+      expect(html).not.toMatch(/88112233|99112233|77112233|\$0\.00|\$999|买入价|卖出价/);
+      expectCompactRow(tree, row, true);
+    }
+  });
+  it("仅R1本人详情在名称与进度条之间加股价，比例降序、真实颜色和DTO保持不变", () => {
+    const rows = [position({ symbol: "CRYPTO:UNI-USDT", stockName: "Uniswap", currency: "USDT", weightPct: 20, quote: quote("5.672", "USDT") }), position({ symbol: "GOOGL", stockName: "Google", weightPct: 80, quote: quote("259.885") })];
+    const r1 = item({ id: "r1", displayName: "R1持股", kind: "internal", holdings: [position({ stockName: "来源总组合不可冒用", quote: quote("88112233") })], memberPortfolio: { holdings: rows, valuationAsOf: "2026-11-22", reportingCurrency: "CNY" } });
+    const snapshot = JSON.stringify(r1), h = hooks();
+    const api = actual(source, ["Ledger37HoldingSourceDetail", "SourceInlineHoldings"], { useState: h.useState });
+    const tree = api.Ledger37HoldingSourceDetail({ source: r1 }), rendered = compactRows(tree);
+    expect(rendered.map(compactRowName)).toEqual(["Google", "Uniswap"]);
+    for (const renderedRow of rendered) {
+      const children = React.Children.toArray(renderedRow.props.children) as React.ReactElement<any>[];
+      expect(children[1].props["data-holding-quote"]).toBe("available");
+      expect(children[2].props["data-holding-bar"]).toBe("disclosed");
+      expect(children[1].props.className).toContain("text-[11px]");
+      expect(children[1].props.className).toContain("break-words");
+      expectCompactRow(renderedRow, rows.find(row => row.stockName === compactRowName(renderedRow))!, true);
+    }
+    const html = renderToStaticMarkup(tree);
+    expect(html).toContain("$259.89"); expect(html).toContain("5.67 USDT");
+    expect(html).toContain("行情日期 2026-11-20");
+    expect(html).not.toMatch(/来源总组合不可冒用|88112233|持股排序|搜索股票名称或代码|百分比仅表示/);
+    expect(JSON.stringify(r1)).toBe(snapshot);
+    for (const id of ["berkshire", "nvidia", "ark"] as const) {
+      const external = item({ id, holdings: rows });
+      const inline = renderToStaticMarkup(api.SourceInlineHoldings({ source: external }));
+      const detailed = renderToStaticMarkup(api.Ledger37HoldingSourceDetail({ source: external }));
+      expect(inline + detailed).not.toMatch(/data-holding-quote=|\$259\.89|5\.67 USDT/);
+    }
   });
 });

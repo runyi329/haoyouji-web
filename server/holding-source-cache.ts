@@ -4,6 +4,7 @@ import type { Ledger37HoldingPosition, Ledger37HoldingSource } from '../shared/l
 import nvidiaSeed from './holding-source-nvidia-seed.json';
 import berkshireSeed from './holding-source-berkshire-seed.json';
 import { getVerifiedHoldingDisplaySymbol } from './holding-security-catalog';
+import { getManualExternalHoldingSources } from './holding-source-manual';
 
 export type ExternalHoldingSourceId = 'berkshire' | 'pelosi' | 'ark' | 'nvidia';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -81,7 +82,7 @@ let stopRefresh: (() => void) | null = null;
 
 /** Returns a defensive snapshot immediately; requests never wait on external network. */
 export function getExternalHoldingSources(): Ledger37HoldingSource[] {
-  return IDS.map(id => {
+  const original: Ledger37HoldingSource[] = IDS.map(id => {
     const entry = cache.get(id);
     if (entry?.lastGood) return {
       ...entry.lastGood, checkedAt: entry.checkedAt,
@@ -90,6 +91,9 @@ export function getExternalHoldingSources(): Ledger37HoldingSource[] {
     };
     return { ...CATALOG[id], status: 'unavailable', asOf: null, publishedAt: null, checkedAt: entry?.checkedAt ?? null, holdings: [], coverageNote: CATALOG[id].coverageNote + (entry?.failure ? ` ${entry.failure}` : ' 尚未取得可验证快照。') };
   });
+  const manual = getManualExternalHoldingSources();
+  const replacements = new Map(manual.map(source => [source.id, source]));
+  return [...original.map(source => replacements.get(source.id) || source), ...manual.filter(source => !original.some(existing => existing.id === source.id))];
 }
 
 /** Internal-only URL construction: callers can select catalog ID, never provide a URL. */

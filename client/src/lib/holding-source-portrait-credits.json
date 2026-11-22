@@ -1,0 +1,20 @@
+{
+  "soros": {
+    "author": "Sebastian Derungs / swiss-image.ch; copyright World Economic Forum",
+    "license": "CC BY-SA 2.0 Generic",
+    "page": "https://commons.wikimedia.org/wiki/File:George_Soros_-_World_Economic_Forum_Annual_Meeting_Davos_2010.jpg",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/"
+  },
+  "pershing": {
+    "author": "Senate Democrats (photographer metadata: Perisha Gates; Wikimedia crop by MarginalCost)",
+    "license": "CC BY 2.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Bill_Ackman_%2826410186110%29_%28cropped%29.jpg",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/"
+  },
+  "bridgewater": {
+    "author": "Harry Murphy / Web Summit via Sportsfile; Wikimedia version framing and levels edited by WikiPedant",
+    "license": "CC BY 2.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Web_Summit_2018_-_Forum_-_Day_2%2C_November_7_HM1_7481_%2844858045925%29.jpg",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/"
+  }
+}

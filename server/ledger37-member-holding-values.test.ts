@@ -9,6 +9,9 @@ import { readTagVisible } from '../shared/tag-visibility';
 import { LEDGER37_AI_DISPLAY_KEY } from '../shared/ledger37-ai-presentation';
 import { replaceTopLevelJsonValue } from './r1-lossless-json';
 import { isTrustedMemberCalendarClose } from './shared/stock-member-calendar';
+import { isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
+  ledger37HoldingKey, ledger37HoldingAmount } from './shared/ledger37-holding-valuation';
+import { USDT_USD_PARITY_POLICY } from '../shared/usdt-usd-parity-policy';
 
 // Execute the actual production helper without importing DB/scanner/startup.
 const source = readFileSync(new URL('./ledger-stock-portfolio.ts', import.meta.url), 'utf8');
@@ -53,10 +56,14 @@ function fixture(realPermissions = false) {
     ledgerId: 37, authError: null as any, categoryError: null as any, lotError: null as any,
     quoteError: null as any, fxError: null as any, noConnection: false,
     denied: new Set<number>(), memberRole: 'member',
+    now: Date.parse('2026-11-10T16:00:00+08:00'),
     balances: JSON.stringify({ [LEDGER37_AI_DISPLAY_KEY]: 1 }),
     categoryPatch: {} as Record<string, unknown>, categoryIdentityPatch: {} as Record<string, unknown> };
-  const data = { lots: [lot()] as any[], quotes: [proof()] as any[], fx: [] as any[] };
+  const data = { lots: [lot()] as any[], quotes: [proof()] as any[], fx: [] as any[],
+    liveStocks: {} as Record<number, Record<string, any>>, liveIntraday: {} as Record<number, Record<string, any>>,
+    liveCrypto: {} as Record<string, any>, liveFx: null as any };
   const log: Array<{ sql: string; values: any[] }> = [];
+  const liveLog: Array<{ kind: string; categoryId?: number; symbols: string[] }> = [];
   const positive = (value: unknown) => typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value)
     ? /[1-9]/.test(value) : true; // malformed values reach the real helper validation
   const effective = (userId: number) => data.lots.filter(row => row.ledger_id === 37 && row.user_id === userId
@@ -111,8 +118,24 @@ function fixture(realPermissions = false) {
       viewerUserId: request.userId, aiEnabled: state.aiEnabled, canManage: state.canManage, ...state.categoryIdentityPatch } };
   });
   const db = vi.fn(async () => state.noConnection ? null : conn);
-  const text = (realPermissions ? permissionBody + '\n' : '') + body + '\ngetMyLedger37MemberHoldingSnapshot;';
-  const read = runInNewContext(compile(text), { Error, Map, Set, BigInt, Number, JSON, Array, Date,
+  const liveBody = extract('./ledger-stock-portfolio.ts', [
+    'readLedger37LiveHoldingValuation', 'mergeLivePortfolioQuoteMaps', 'mergeLatestQuoteMaps',
+  ]);
+  const text = (realPermissions ? permissionBody + '\n' : '') + liveBody + '\n' + body + '\ngetMyLedger37MemberHoldingSnapshot;';
+  const read = runInNewContext(compile(text), { Error, Map, Set, BigInt, Number, JSON, Array,
+    Date: class extends Date { static now() { return state.now; } },
+    isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
+    ledger37HoldingKey, ledger37HoldingAmount, USDT_USD_PARITY_POLICY,
+    getLatestQuotes: vi.fn(async (categoryId: number, symbols: string[]) => {
+      liveLog.push({ kind: 'stock', categoryId, symbols }); return data.liveStocks[categoryId] || {};
+    }),
+    getLatestIntradayQuotes: vi.fn(async (categoryId: number, symbols: string[]) => {
+      liveLog.push({ kind: 'intraday', categoryId, symbols }); return data.liveIntraday[categoryId] || {};
+    }),
+    getLiveCryptoQuotes: vi.fn(async (symbols: string[]) => {
+      liveLog.push({ kind: 'crypto', symbols }); return data.liveCrypto;
+    }), getLiveStockUsdCnyQuote: vi.fn(async () => data.liveFx),
+    isCryptoPortfolioSymbol: (symbol: string) => symbol.startsWith('CRYPTO:'),
     readLedger37PresentationState: auth, readR1StockPresentationState: categoryAuth,
     getDbConnection: db, normalizeSymbol: normalizePortfolioSymbol, stockCurrency: portfolioCurrency,
     beijingDate: () => today, getUnifiedStockCloseSnapshotDate: () => snapshotDate, getOvernightUsSessionDate,
@@ -120,24 +143,45 @@ function fixture(realPermissions = false) {
     isTrustedMemberCalendarClose, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION: 'cn-day-us-overnight-1505-v1',
     readTagVisible, isLedger37FullManager, canRecordLedger37Calendar, LEDGER37_AI_DISPLAY_KEY, replaceTopLevelJsonValue, R1_STOCK_LEDGER_ID: 37,
   }, { timeout: 1000 }) as (request: any) => Promise<any>;
-  return { state, data, log, conn, auth, categoryAuth, db, read };
+  return { state, data, log, liveLog, conn, auth, categoryAuth, db, read };
 }
 function safe(result: any) {
   expect(Object.keys(result).sort()).toEqual(['aiEnabled', 'holdings', 'reportingCurrency', 'valuationAsOf', 'viewerUserId']);
   expect(JSON.stringify(result)).not.toMatch(/category|lot_id|lotId|order|project|绝密|隐私|"userId"|allocated|entry_price|unit_cost|"price"|cost|members|participation|username|avatar/i);
   for (const holding of result.holdings) {
-    expect(Object.keys(holding).sort()).toEqual(['currency', 'marketValue', 'shares', 'stockName', 'symbol', 'weightPct']);
+    expect(Object.keys(holding).sort()).toEqual(['currency', 'marketValue', 'quote', 'shares', 'stockName', 'symbol', 'weightPct']);
     if (holding.marketValue) {
       expect(Object.keys(holding.marketValue).sort()).toEqual(['amount', 'asOf', 'currency']);
       expect(holding.marketValue.asOf).toBe(result.valuationAsOf);
       expect(holding.marketValue.currency).toBe(result.reportingCurrency);
       expect(holding.marketValue.amount).toMatch(/^\d+(?:\.\d{1,18})?$/);
     }
+    expect(holding.quote === null).toBe(holding.marketValue === null);
+    if (holding.quote) {
+      expect(Object.keys(holding.quote).sort()).toEqual(['amount', 'asOf', 'currency']);
+      expect(holding.quote.currency).toBe(holding.currency);
+      expect(holding.quote.amount).toMatch(/^\d+(?:\.\d+)?$/);
+      expect(Number(holding.quote.amount)).toBeGreaterThan(0);
+      expect(holding.quote.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
   }
 }
 function unknown(result: any) {
-  expect(result.holdings.every((row: any) => row.marketValue === null && row.weightPct === null)).toBe(true);
+  expect(result.holdings.every((row: any) => row.marketValue === null && row.weightPct === null && row.quote === null)).toBe(true);
   expect(result.valuationAsOf).toBeNull(); expect(result.reportingCurrency).toBeNull(); safe(result);
+}
+function liveQuote(symbol: string, price: number, priceDate = snapshotDate, patch: Record<string, unknown> = {}) {
+  return { symbol, price, priceDate, updatedAt: '2026-11-10T15:59:30+08:00',
+    providerSource: 'private-provider', source: 'intraday', ...patch };
+}
+function liveFixture() {
+  const f = fixture();
+  f.data.lots = [lot(1, '600000.SH', '2'), lot(2, 'AAPL', '3', '苹果'), lot(3, 'CRYPTO:BTC-USDT', '0.0001', '比特币')];
+  f.data.liveStocks = { 1: { '600000.SH': liveQuote('600000.SH', 10) },
+    2: { AAPL: liveQuote('AAPL', 20, '2026-11-09') } };
+  f.data.liveCrypto = { 'CRYPTO:BTC-USDT': liveQuote('CRYPTO:BTC-USDT', 50000) };
+  f.data.liveFx = { rate: 7, asOf: '2026-11-10T15:59:00+08:00', source: 'sina_usdcny', pair: 'USD/CNY', stale: false };
+  return f;
 }
 
 describe('ledger37 personal holding snapshot: real remaining shares, exact values and pure SELECT', () => {
@@ -151,7 +195,8 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
       lot(6, 'AAPL', '500', '苹果', { opening_status: 'void' })];
     const result = await f.read(input);
     expect(result.holdings).toEqual([{ symbol: '600000.SH', stockName: '浦发银行', currency: 'CNY', shares: '2',
-      weightPct: 100, marketValue: { amount: '20', currency: 'CNY', asOf: snapshotDate } }]); safe(result);
+      weightPct: 100, marketValue: { amount: '20', currency: 'CNY', asOf: snapshotDate },
+      quote: { amount: '10', currency: 'CNY', asOf: snapshotDate } }]); safe(result);
     expect(f.categoryAuth.mock.calls.map(call => call[0].categoryId)).toEqual([1]);
     for (const entry of f.log.filter(row => /FROM ledger_stock_lot_participations/.test(row.sql))) {
       expect(entry.sql).toContain('p.user_id=?'); expect(entry.sql).toContain('p.ledger_id=?');
@@ -179,6 +224,9 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     const result = await f.read(input);
     expect(result.reportingCurrency).toBe('USD'); expect(result.valuationAsOf).toBe(snapshotDate);
     expect(result.holdings.map((row: any) => row.marketValue.amount)).toEqual(['200', '100']);
+    expect(result.holdings.map((row: any) => row.quote)).toEqual([
+      { amount: '20', currency: 'USD', asOf: '2026-11-09' }, { amount: '10', currency: 'USD', asOf: '2026-11-09' },
+    ]);
     expect(result.holdings[0].weightPct).toBeCloseTo(200 / 300 * 100, 10);
     expect(result.holdings[1].weightPct).toBeCloseTo(100 / 300 * 100, 10);
     expect(f.log.some(row => /FROM ledger_stock_unified_close_fx/.test(row.sql))).toBe(false); safe(result);
@@ -188,6 +236,9 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     f.data.quotes = [proof(), proof(2, 'AAPL', '20'), proof(3, 'AAPL', '20')]; f.data.fx = [fx(2), fx(3)];
     const result = await f.read(input); expect(result.reportingCurrency).toBe('CNY');
     expect(result.holdings.map((row: any) => [row.shares, row.marketValue.amount])).toEqual([['100', '1000'], ['15', '2100']]);
+    expect(result.holdings.map((row: any) => row.quote)).toEqual([
+      { amount: '10', currency: 'CNY', asOf: snapshotDate }, { amount: '20', currency: 'USD', asOf: '2026-11-09' },
+    ]);
     expect(result.holdings[0].weightPct).toBeCloseTo(1000 / 3100 * 100, 10);
     expect(result.holdings[1].weightPct).toBeCloseTo(2100 / 3100 * 100, 10); safe(result);
   });
@@ -196,6 +247,7 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     f.data.quotes = [proof(1, '600000.SH', '1.00000001')];
     const result = await f.read(input);
     expect(result.holdings[0].marketValue.amount).toBe('9007199344812985.6708667112345678');
+    expect(result.holdings[0].quote).toEqual({ amount: '1.00000001', currency: 'CNY', asOf: snapshotDate });
     expect(result.holdings[0].weightPct).toBe(100); safe(result);
   });
   it('fixed-point rounds mixed-currency amount to at most 18dp without changing the exact denominator', async () => {
@@ -205,6 +257,54 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     const result = await f.read(input);
     expect(result.holdings[0].marketValue.amount).toBe('0.0000000000000001');
     expect(result.holdings[1].marketValue.amount).toBe('0.000000000000000712'); safe(result);
+  });
+  it('mixed crypto reuses the same verified native market prices used for the personal valuation, not FX/value/cost', async () => {
+    const f = liveFixture(); const result = await f.read(input);
+    expect(result.reportingCurrency).toBe('CNY'); expect(result.valuationAsOf).toBe(snapshotDate);
+    expect(result.holdings.map((row: any) => row.marketValue.amount)).toEqual(['20', '420', '35']);
+    expect(result.holdings.map((row: any) => row.quote)).toEqual([
+      { amount: '10', currency: 'CNY', asOf: snapshotDate },
+      { amount: '20', currency: 'USD', asOf: '2026-11-09' },
+      { amount: '50000', currency: 'USDT', asOf: snapshotDate },
+    ]);
+    expect(result.holdings.reduce((sum: number, row: any) => sum + row.weightPct, 0)).toBe(100);
+    expect(f.log).toHaveLength(2); expect(f.log.every(row => /^\s*SELECT/.test(row.sql))).toBe(true);
+    expect(f.log.some(row => /unified_close/.test(row.sql))).toBe(false); safe(result);
+  });
+  it('mixed crypto exports only the newest VALID market price actually selected, not newer future/invalid evidence', async () => {
+    const f = liveFixture();
+    f.data.liveIntraday = { 1: { '600000.SH': liveQuote('600000.SH', 11) },
+      2: { AAPL: liveQuote('AAPL', 999, '2026-11-09', { updatedAt: '2026-11-10T16:01:00+08:00' }) } };
+    const result = await f.read(input);
+    expect(result.holdings[0].quote.amount).toBe('11'); expect(result.holdings[0].marketValue.amount).toBe('22');
+    expect(result.holdings[1].quote.amount).toBe('20'); safe(result);
+  });
+  it('live quote requests and DTO only include the effective member authorized holdings, never hidden/other-user/nonowned prices', async () => {
+    const f = liveFixture(); f.data.lots.push(lot(4, 'MSFT', '99', '隐藏持股'), lot(5, 'NVDA', '99', '其他用户', { user_id: 999 }));
+    f.state.denied.add(4);
+    f.data.liveStocks[1].MSFT = liveQuote('MSFT', 999); f.data.liveCrypto['CRYPTO:ETH-USDT'] = liveQuote('CRYPTO:ETH-USDT', 999);
+    const result = await f.read(input);
+    expect(result.holdings.map((row: any) => row.symbol)).toEqual(['600000.SH', 'AAPL', 'CRYPTO:BTC-USDT']);
+    expect(f.liveLog.flatMap(row => row.symbols)).not.toContain('MSFT');
+    expect(f.liveLog.flatMap(row => row.symbols)).not.toContain('NVDA');
+    expect(f.liveLog.flatMap(row => row.symbols)).not.toContain('CRYPTO:ETH-USDT');
+    expect(f.liveLog.filter(row => row.categoryId).every(row => [1, 2, 3].includes(row.categoryId!))).toBe(true); safe(result);
+  });
+  it.each([{ price: 0 }, { price: NaN }, { price: Infinity }, { symbol: 'CRYPTO:ETH-USDT' },
+    { priceDate: '2026-11-09' }, { priceDate: '2026-11-11' }, { priceDate: '2026-02-30' },
+    { updatedAt: '2026-11-10T15:57:00+08:00' }, { updatedAt: '2026-11-10T16:01:00+08:00' }])('invalid crypto evidence keeps ALL quotes null, with no archived/cost fallback %j', async patch => {
+    const f = liveFixture(); Object.assign(f.data.liveCrypto['CRYPTO:BTC-USDT'], patch); unknown(await f.read(input));
+  });
+  it.each(['stock', 'crypto', 'fx'])('missing live %s evidence never exports a partial price map or fabricates zero', async leg => {
+    const f = liveFixture();
+    if (leg === 'stock') f.data.liveStocks = {};
+    if (leg === 'crypto') f.data.liveCrypto = {};
+    if (leg === 'fx') f.data.liveFx = null;
+    unknown(await f.read(input));
+  });
+  it.each([{ currency: 'CNY' }, { currency: 'USDT' }, { session_date: snapshotDate }, { session_date: '2026-11-06' }])('USD archived close never borrows reporting currency/date or a different session %j', async patch => {
+    const f = fixture(); f.data.lots = [lot(1, 'AAPL', '3', '苹果')];
+    f.data.quotes = [proof(1, 'AAPL', '20', patch)]; unknown(await f.read(input));
   });
   it.each([null, undefined, '', 9007199254740992, 'NaN', '-1', '1e3', '0.000000001'])('invalid/Number shares fail rather than becoming zero or imprecise %s', async shares => {
     const f = fixture(); f.data.lots = [{ ...lot(), shares }];
@@ -304,6 +404,39 @@ describe('ledger37 personal holding snapshot: real remaining shares, exact value
     expect((tree as any).parseDiagnostics).toHaveLength(0);
     const es5 = ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES5 }, reportDiagnostics: true });
     expect(es5.diagnostics?.filter(row => row.category === ts.DiagnosticCategory.Error)).toEqual([]);
+  });
+});
+
+describe('live valuation verified native quote map contract', () => {
+  function valuationInput(price = 1e-8) {
+    return { current: [{ categoryId: 1, symbol: 'CRYPTO:BTC-USDT', currency: 'USDT' as const, shares: BigInt('100000000') }],
+      quotes: { 'CRYPTO:BTC-USDT': liveQuote('CRYPTO:BTC-USDT', price) },
+      usdFx: { rate: 7, asOf: '2026-11-10T15:59:00+08:00', source: 'sina_usdcny', pair: 'USD/CNY', stale: false },
+      conversionPolicy: USDT_USD_PARITY_POLICY, now: Date.parse('2026-11-10T16:00:00+08:00') };
+  }
+  it.each([[1e-8, '0.00000001'], [1.23456789e-8, '0.0000000123456789'], [1e21, '1000000000000000000000'],
+    [10.25, '10.25']])('serializes exact validated native decimal %s as %s without member-value division or exponent rounding', (price, amount) => {
+    const result = valueLedger37LiveHoldings(valuationInput(price as number))!;
+    expect(result.quotes.get(ledger37HoldingKey('CRYPTO:BTC-USDT', 'USDT'))).toEqual({ amount, currency: 'USDT', asOf: snapshotDate });
+    expect(result.reportingCurrency).toBe('CNY');
+    expect(ledger37HoldingAmount(result.values.get(ledger37HoldingKey('CRYPTO:BTC-USDT', 'USDT'))!, result.decimalPlaces)).not.toBe(amount);
+  });
+  it('white-lists only current symbol+currency and never exports extra prices/provider fields or input object references', () => {
+    const request = valuationInput(); Object.assign(request.quotes, { AAPL: liveQuote('AAPL', 999, '2026-11-09') });
+    const result = valueLedger37LiveHoldings(request)!;
+    expect(Array.from(result.quotes.keys())).toEqual([ledger37HoldingKey('CRYPTO:BTC-USDT', 'USDT')]);
+    const quote = result.quotes.get(ledger37HoldingKey('CRYPTO:BTC-USDT', 'USDT'))!;
+    expect(Object.keys(quote).sort()).toEqual(['amount', 'asOf', 'currency']);
+    request.quotes['CRYPTO:BTC-USDT'].price = 999;
+    expect(quote.amount).toBe('0.00000001');
+  });
+  it.each(['CNY', 'USD'])('never relabels a USDT market price as the holding currency %s', currency => {
+    const request = valuationInput(); (request.current[0] as { currency: string }).currency = currency;
+    expect(valueLedger37LiveHoldings(request)).toBeNull();
+  });
+  it('unknown instruments cannot produce a verified quote map even with an otherwise valid market price', () => {
+    const request = valuationInput(); request.current[0].symbol = 'CRYPTO:INVALID/USDT';
+    expect(valueLedger37LiveHoldings(request)).toBeNull();
   });
 });
 

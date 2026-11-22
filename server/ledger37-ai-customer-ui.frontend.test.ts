@@ -237,6 +237,7 @@ describe("37号AI主客户UI：真实AST与SSR安全设计契约", () => {
     const { Ledger37AiHome } = actualModule(homeSource, ["Ledger37AiHome"], {
       useState: (initial: any) => { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], (value: any) => { state[i] = value; }]; },
       Ledger37AiIdentityHeader: () => React.createElement("div", { "data-identity-header": true }),
+      Ledger37AiNetValueDisclosure: "net-value-disclosure",
       Ledger37HoldingSourcesRenderer: "sources-renderer",
       ledger37HoldingSourceHasDetails: actualModule(holdingsSource, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails,
       trpc: { ledger: rawGuard, stock: { getUsdCnyRate: { useQuery: () => ({ data: { success: true, rate: 7 } }) } } }, R1AiParticipationRenderer: () => React.createElement("div", { "data-safe-detail": true }),
@@ -268,6 +269,7 @@ describe("37号AI主客户UI：真实AST与SSR安全设计契约", () => {
       const { Ledger37AiHome } = actualModule(homeSource, ["Ledger37AiHome"], {
         useState: (initial: any) => { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], (value: any) => { state[i] = value; }]; },
         Ledger37AiIdentityHeader: "identity-header",
+        Ledger37AiNetValueDisclosure: "net-value-disclosure",
         Ledger37HoldingSourcesRenderer: "sources-renderer",
         ledger37HoldingSourceHasDetails: actualModule(holdingsSource, ["ledger37HoldingSourceHasDetails"]).ledger37HoldingSourceHasDetails,
         trpc: { ledger: { getMyLedger37HoldingSources: { useQuery: () => ({ data, isFetching: false, isFetchedAfterMount: true }) } } },
