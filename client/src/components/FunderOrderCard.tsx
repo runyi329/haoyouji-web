@@ -8,6 +8,7 @@ import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } fr
 // @since FV0245（2026-06-25）之后的新订单使用此组件
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
+import { QuoteRefreshDot } from "@/components/QuoteRefreshDot";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
@@ -5270,8 +5271,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             {shouldShowOptionGreeks && !historicalGreeksMissing && (
               <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                 <div className="h-4 flex items-center justify-between">
-                  <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>Greeks</span>
-                  {greeksResult.loading && <span className="text-[10px]" style={{ color: '#9CA3AF' }}>刷新中...</span>}
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: '#7C3AED' }}>
+                    Greeks
+                    <QuoteRefreshDot refreshKey={greeksResult.refreshKey} enabled={!isSettlementFinal} />
+                  </span>
                 </div>
                 <div className="mt-1 space-y-0.5">
                   {greeksResult.loading && !greeksResult.data && <div className="text-xs text-gray-400">加载中...</div>}

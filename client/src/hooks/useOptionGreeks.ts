@@ -12,6 +12,7 @@ export interface OptionGreeksData {
   indexPrice?: number | null;
   error?: string;
   fetchedAt?: number;
+  cacheStale?: boolean;
 }
 
 interface UseOptionGreeksParams {
@@ -49,6 +50,20 @@ function normalizeOptionExerciseDate(value: unknown): string {
 function hasUsableOptionMarkPrice(value: unknown): boolean {
   const markPrice = Number(value);
   return Number.isFinite(markPrice) && markPrice > 0;
+}
+
+/** 仅新取得的有效行情触发反馈；重复缓存、请求中与历史快照不冒充刷新成功。 */
+function getOptionGreeksRefreshKey(
+  rawData: OptionGreeksData | null | undefined,
+  enabled: boolean,
+  queryError: unknown,
+  contractKey: string,
+): string | null {
+  if (!enabled || queryError || !rawData || rawData.error || rawData.cacheStale === true) return null;
+  if (!hasUsableOptionMarkPrice(rawData.markPrice)) return null;
+  const fetchedAt = rawData.fetchedAt;
+  if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt) || fetchedAt <= 0) return null;
+  return `${contractKey}:${fetchedAt}`;
 }
 
 function readPersistedMarkPrices(): MarkPriceCache {
@@ -165,5 +180,6 @@ export function useOptionGreeks({
     loading: enabled && (query.isLoading || query.isFetching),
     error: enabled ? (query.error?.message ?? null) : null,
     markPriceDirection: enabled ? markPriceDirection : 'same',
+    refreshKey: getOptionGreeksRefreshKey(rawData, enabled, query.error, contractKey),
   };
 }
