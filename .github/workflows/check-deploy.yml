@@ -1,4 +1,4 @@
-name: Deribit fixed overseas DNS read-only diagnostic
+name: Deribit fixed resolver IPv4 read-only diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -15,7 +15,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-      - name: Fixed public DNS and official contract reads only
+      - name: Fixed public resolver IP and official contract reads only
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -39,22 +39,22 @@ jobs:
             });
           }
           const resolvers=[
-            ['dns_sb','https://doh.dns.sb/dns-query?name=www.deribit.com&type=A'],
-            ['dns_sb_hk','https://hk-hkg.doh.sb/dns-query?name=www.deribit.com&type=A'],
-            ['cloudflare_mozilla','https://mozilla.cloudflare-dns.com/dns-query?name=www.deribit.com&type=A'],
-            ['alidns_ecs','https://dns.alidns.com/resolve?name=www.deribit.com&type=A&edns_client_subnet=8.8.8.8/24'],
+            ['dns_sb_ip1','https://185.222.222.222/dns-query?name=www.deribit.com&type=A',undefined],
+            ['dns_sb_ip2','https://45.11.45.11/dns-query?name=www.deribit.com&type=A',undefined],
+            ['dns_sb_hk_public','https://hk-hkg.doh.sb/dns-query?name=www.deribit.com&type=A','45.11.45.11'],
+            ['google_ipv4','https://dns.google/resolve?name=www.deribit.com&type=A','8.8.4.4'],
+            ['adguard','https://unfiltered.adguard-dns.com/dns-query?name=www.deribit.com&type=A',undefined],
           ];
-          for(const [label,url] of resolvers) {
+          for(const [label,url,ip] of resolvers) {
             const started=Date.now();
             try {
-              const d=await get(url);
-              const answers=d.data.Answer?.filter(row=>row.type===1)||[];
+              const d=await get(url,ip),answers=d.data.Answer?.filter(row=>row.type===1)||[];
               console.log(JSON.stringify({label:'dns_'+label,http:d.http,type:d.type,Status:d.data.Status,Question:d.data.Question,answers,elapsedMs:Date.now()-started}));
               const address=answers[0]?.data;
               if(address && /^\d+\.\d+\.\d+\.\d+$/.test(address)) {
                 const q=await get(quote,address),r=q.data.result;
                 console.log(JSON.stringify({label:'official_quote_via_'+label,address,http:q.http,instrument:r?.instrument_name,mark:r?.mark_price,index:r?.index_price,timestamp:r?.timestamp}));
               }
-            } catch(e) {console.log(JSON.stringify({label,error:e.message,code:e.code,elapsedMs:Date.now()-started}));}
+            }catch(e){console.log(JSON.stringify({label,error:e.message,code:e.code,elapsedMs:Date.now()-started}));}
           }
           JS
