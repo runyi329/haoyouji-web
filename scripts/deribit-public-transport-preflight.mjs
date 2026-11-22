@@ -1,5 +1,6 @@
 // server/deribit-public-transport.ts
 import https from "node:https";
+import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { performance } from "node:perf_hooks";
 var HOST = "www.deribit.com";
@@ -69,7 +70,7 @@ function parseDNS(json) {
   if (records.some((r) => !chain.has(r.owner) || r.type === 1 && r.owner !== terminal)) {
     throw error("DERIBIT_DNS_INVALID");
   }
-  const addresses = [...new Set(records.filter((r) => r.type === 1).map((r) => r.data))];
+  const addresses = Array.from(new Set(records.filter((r) => r.type === 1).map((r) => r.data)));
   if (!addresses.length) throw error("DERIBIT_DNS_INVALID");
   return { addresses: addresses.slice(0, 2), ttl: Math.min(300, ...records.map((r) => r.ttl)) };
 }
@@ -81,12 +82,28 @@ function validInstrument(value) {
   const date = new Date(Date.UTC(2e3 + Number(match[4]), month, Number(match[2])));
   return date.getUTCMonth() === month && date.getUTCDate() === Number(match[2]);
 }
+function bootstrapAddresses(value, wallTime) {
+  if (!value || value.hostname !== HOST || value.kind !== "deployment_dns_tls_validated" || !Number.isFinite(value.resolvedAt) || value.resolvedAt <= 0 || value.resolvedAt > wallTime + 6e4 || !Array.isArray(value.addresses) || !value.addresses.length || value.addresses.length > 2 || !value.addresses.every(publicIPv4) || value.expiresAt !== void 0 && (!Number.isFinite(value.expiresAt) || value.expiresAt < value.resolvedAt)) return [];
+  return Array.from(new Set(value.addresses));
+}
+function deploymentBootstrap() {
+  try {
+    const text = readFileSync(new URL("./deribit-dns-bootstrap.json", import.meta.url), "utf8");
+    return text.length <= DNS_LIMIT ? JSON.parse(text) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function validRPCResult(json, instrumentName) {
+  return json?.jsonrpc === "2.0" && !Object.prototype.hasOwnProperty.call(json, "error") && Object.prototype.hasOwnProperty.call(json, "result") && json.result !== null && (instrumentName ? json.result.instrument_name === instrumentName : Array.isArray(json.result));
+}
 function createDeribitPublicTransport(deps = {}) {
   const get = deps.get ?? ((options, callback) => https.get(options, callback));
   const now = deps.now ?? (() => performance.now());
   const agent = new PublicAgent({ keepAlive: true, family: 4, maxSockets: 8, maxTotalSockets: 8, maxFreeSockets: 2 });
   let cache;
   let resolving;
+  let connectionHints = bootstrapAddresses(deps.bootstrap, (deps.wallNow ?? Date.now)());
   function requestJSON(options, limit, duration, deadline) {
     return new Promise((resolve, reject) => {
       let request, response, settled = false;
@@ -160,14 +177,15 @@ function createDeribitPublicTransport(deps = {}) {
       }
     });
   }
-  async function resolveAddresses() {
+  async function resolveAddresses(deadline) {
     if (cache && now() < cache.expires) return cache.addresses;
     if (resolving) return resolving;
     resolving = (async () => {
       for (const provider of PROVIDERS) {
         const started = now();
+        if (started >= deadline) throw error("DERIBIT_TIMEOUT");
         try {
-          const { json, age } = await requestJSON(provider, DNS_LIMIT, DNS_MS, started + DNS_MS);
+          const { json, age } = await requestJSON(provider, DNS_LIMIT, DNS_MS, Math.min(started + DNS_MS, deadline));
           const parsed = parseDNS(json);
           cache = { addresses: parsed.addresses, expires: started + Math.max(0, parsed.ttl - age) * 1e3 };
           return parsed.addresses;
@@ -196,26 +214,56 @@ function createDeribitPublicTransport(deps = {}) {
       });
     });
   }
-  async function call(path, limit) {
+  async function call(path, limit, instrumentName) {
     const deadline = now() + TOTAL_MS;
-    const addresses = await bounded(resolveAddresses(), deadline);
-    for (const address of addresses ?? [void 0]) {
-      const options = { hostname: HOST, path, transportAddress: address };
-      if (address) {
-        options.lookup = (_hostname, _options, callback) => callback(null, address, 4);
+    const attempted = /* @__PURE__ */ new Set();
+    let lastFailure = error("DERIBIT_NETWORK");
+    async function attempt(addresses, refreshDNS = false) {
+      for (const address of addresses) {
+        if (attempted.has(address)) continue;
+        if (now() >= deadline) throw error("DERIBIT_TIMEOUT");
+        if (attempted.size >= 4) break;
+        attempted.add(address);
+        const options = { hostname: HOST, path, transportAddress: address };
+        if (address) {
+          options.lookup = (_hostname, _options, callback) => callback(null, address, 4);
+        }
+        try {
+          const { json } = await requestJSON(options, limit, API_MS, deadline);
+          if (address && validRPCResult(json, instrumentName)) {
+            connectionHints = [address, ...connectionHints.filter((hint) => hint !== address)].slice(0, 2);
+            if (refreshDNS && cache) void resolveAddresses(deadline).catch(() => {
+            });
+          }
+          return { json };
+        } catch (failure) {
+          if (!(failure instanceof DeribitTransportError) || !failure.retryable) throw failure;
+          lastFailure = failure;
+          connectionHints = connectionHints.filter((hint) => hint !== address);
+        }
       }
-      try {
-        return (await requestJSON(options, limit, API_MS, deadline)).json;
-      } catch (failure) {
-        if (!(failure instanceof DeribitTransportError) || !failure.retryable || address === addresses?.at(-1) || now() >= deadline) throw failure;
-      }
+      return void 0;
     }
-    throw error("DERIBIT_NETWORK");
+    try {
+      if (connectionHints.length) {
+        const result2 = await attempt(connectionHints.slice(), true);
+        if (result2) return result2.json;
+        cache = void 0;
+      }
+      const addresses = await bounded(resolveAddresses(deadline), deadline);
+      const result = await attempt(addresses ?? [void 0]);
+      if (result) return result.json;
+      if (now() >= deadline) throw error("DERIBIT_TIMEOUT");
+      throw lastFailure;
+    } catch (failure) {
+      cache = void 0;
+      throw failure;
+    }
   }
   return {
     getDeribitOptionOrderBook(instrumentName) {
       if (!validInstrument(instrumentName)) return Promise.reject(error("DERIBIT_INVALID_INSTRUMENT"));
-      return call(`/api/v2/public/get_order_book?instrument_name=${encodeURIComponent(instrumentName)}&depth=1`, QUOTE_LIMIT);
+      return call(`/api/v2/public/get_order_book?instrument_name=${encodeURIComponent(instrumentName)}&depth=1`, QUOTE_LIMIT, instrumentName);
     },
     getDeribitOptionInstruments(currency) {
       if (currency !== "BTC" && currency !== "ETH") return Promise.reject(error("DERIBIT_INVALID_CURRENCY"));
@@ -223,7 +271,7 @@ function createDeribitPublicTransport(deps = {}) {
     }
   };
 }
-var production = createDeribitPublicTransport();
+var production = createDeribitPublicTransport({ bootstrap: deploymentBootstrap() });
 var getDeribitOptionOrderBook = production.getDeribitOptionOrderBook;
 var getDeribitOptionInstruments = production.getDeribitOptionInstruments;
 export {
@@ -234,7 +282,9 @@ export {
 };
 
 import traceHttps from 'node:https';
-const tracedTransport = createDeribitPublicTransport({get(options, callback) {
+const bootstrap = JSON.parse(process.env.DERIBIT_PREFLIGHT_BOOTSTRAP || 'null');
+if (!bootstrap || bootstrap.hostname !== 'www.deribit.com') throw new Error('Validated deployment bootstrap missing');
+const tracedTransport = createDeribitPublicTransport({bootstrap,get(options, callback) {
   const started = Date.now();
   console.log(JSON.stringify({label:'trace_request',host:options.hostname,address:options.transportAddress,family:options.family,sni:options.servername}));
   const request = traceHttps.get(options, response => {

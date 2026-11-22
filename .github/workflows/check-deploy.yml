@@ -1,4 +1,4 @@
-name: Deribit fixed resolver IPv4 read-only diagnostic
+name: Deribit dynamic bootstrap read-only production preflight
 on:
   workflow_dispatch:
 permissions:
@@ -8,6 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
+      - name: Checkout isolated diagnostic branch
+        uses: actions/checkout@v4
+      - name: Dynamically resolve and validate official TLS bootstrap
+        run: |
+          node scripts/create-deribit-dns-bootstrap.mjs /tmp/deribit-preflight-bootstrap.json
+          test -s /tmp/deribit-preflight-bootstrap.json
+          printf 'DERIBIT_PREFLIGHT_BOOTSTRAP=%s\n' "$(cat /tmp/deribit-preflight-bootstrap.json)" >> "$GITHUB_ENV"
       - name: Configure existing deployment SSH
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -15,46 +22,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-      - name: Fixed public resolver IP and official contract reads only
+      - name: Only fixed public option and directory GETs without production file writes
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
-            "$DEPLOY_USER@$DEPLOY_HOST" 'node --input-type=module -' <<'JS'
-          import https from 'node:https';
-          const quote='https://www.deribit.com/api/v2/public/get_order_book?instrument_name=ETH-25JUN27-1700-C&depth=1';
-          function get(url,address) {
-            return new Promise((resolve,reject)=>{
-              const options={family:4,rejectUnauthorized:true,headers:{Accept:'application/dns-json, application/json'}};
-              if(address)options.lookup=(_host,_options,cb)=>cb(null,address,4);
-              const request=https.get(url,options,response=>{
-                let text='';response.on('data',b=>{text+=b;if(text.length>1000000)request.destroy(new Error('body limit'));});
-                response.on('error',reject);response.on('end',()=>{try{resolve({http:response.statusCode,type:response.headers['content-type'],data:JSON.parse(text)});}catch{reject(new Error('non JSON'));}});
-              });
-              const timer=setTimeout(()=>request.destroy(new Error('bounded 4s timeout')),4000);
-              request.on('error',reject);request.on('close',()=>clearTimeout(timer));
-            });
-          }
-          const resolvers=[
-            ['dns_sb_ip1','https://185.222.222.222/dns-query?name=www.deribit.com&type=A',undefined],
-            ['dns_sb_ip2','https://45.11.45.11/dns-query?name=www.deribit.com&type=A',undefined],
-            ['dns_sb_hk_public','https://hk-hkg.doh.sb/dns-query?name=www.deribit.com&type=A','45.11.45.11'],
-            ['google_ipv4','https://dns.google/resolve?name=www.deribit.com&type=A','8.8.4.4'],
-            ['adguard','https://unfiltered.adguard-dns.com/dns-query?name=www.deribit.com&type=A',undefined],
-          ];
-          for(const [label,url,ip] of resolvers) {
-            const started=Date.now();
-            try {
-              const d=await get(url,ip),answers=d.data.Answer?.filter(row=>row.type===1)||[];
-              console.log(JSON.stringify({label:'dns_'+label,http:d.http,type:d.type,Status:d.data.Status,Question:d.data.Question,answers,elapsedMs:Date.now()-started}));
-              const address=answers[0]?.data;
-              if(address && /^\d+\.\d+\.\d+\.\d+$/.test(address)) {
-                const q=await get(quote,address),r=q.data.result;
-                console.log(JSON.stringify({label:'official_quote_via_'+label,address,http:q.http,instrument:r?.instrument_name,mark:r?.mark_price,index:r?.index_price,timestamp:r?.timestamp}));
-              }
-            }catch(e){console.log(JSON.stringify({label,error:e.message,code:e.code,elapsedMs:Date.now()-started}));}
-          }
-          JS
+          { cat scripts/deribit-public-transport-preflight.mjs; printf '\n'; } | \
+            ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+              "$DEPLOY_USER@$DEPLOY_HOST" "DERIBIT_PREFLIGHT_BOOTSTRAP='$DERIBIT_PREFLIGHT_BOOTSTRAP' node --input-type=module -"
