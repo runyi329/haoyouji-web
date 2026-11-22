@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
+import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
 function formatFunderPendingInterest(value: number, contract: boolean): string {
   return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
 }
@@ -125,7 +126,7 @@ type SettlementDraft = {
   interestEndDate: string;
   settlementPrice: string;
   settlementExchangeRate: string;
-  // 历史日期无法从当前期权市场回溯，必须由管理员录入当日合约标记价（每张、U）。
+  // 历史日期必填真实合约价；当天可明确手填，否则使用服务器确认报价。归零可填0。
   settlementOptionMarkPrice: string;
 };
 
@@ -7495,6 +7496,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           segmentId: entry.id,
           label: `第${entry.displayIndex + 1}段${entry.isPrimary ? '（订单主体）' : ''}`,
           interestStartDate: String(entry.interestStartDate || targetOrder?.interest_start_date || '').slice(0, 10),
+          segment: entry.segment,
           isSettled: entry.isPrimary
             ? String(primaryJointSettlement?.status || '').toLowerCase() === 'settled'
             : String(entry.segment?.status || '').toLowerCase() === 'settled',
@@ -7532,7 +7534,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         return (
           <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); setSelectedJointSettleSegmentIds([]); setJointSettlementDrafts({}); }}>
             <div className="absolute inset-0 bg-black/50" />
-            <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm max-h-[85dvh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-base font-semibold text-gray-900 mb-2">{hasJointSegments ? '选择需要结清的关联订单分段' : hasOtherCollaborators ? '选择需要结清的订单视图' : '确认结清'}</h3>
               {hasJointSegments ? (
                 <p className="text-sm text-indigo-600 mb-2">每一段可单独选择结算日。已结清的段继续留在原位；仅当全部分段结清后，整张订单才转入已结清。</p>
@@ -7583,8 +7585,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   [entry.segmentId]: {
                                   ...draft,
                                   interestEndDate: e.target.value,
-                                  settlementPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementPrice,
-                                  settlementOptionMarkPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementOptionMarkPrice,
+                                  settlementPrice: '',
+                                  settlementExchangeRate: e.target.value === getBeijingToday() && finitePositive(cnyRate) !== null ? String(cnyRate) : '',
+                                  settlementOptionMarkPrice: '',
                                 },
                                 }))}
                                 className="mt-1.5 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
@@ -7597,11 +7600,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   <label className="block text-[11px] text-amber-900">USDT兑人民币
                                     <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementExchangeRate} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementExchangeRate: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
                                   </label>
-                                  {targetOrder?.asset_type === 'crypto_option' && <label className="col-span-2 block text-[11px] text-amber-900">期权结算价（u/张）
-                                    <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementOptionMarkPrice} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementOptionMarkPrice: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
-                                  </label>}
                                 </div>
                               ) : <p className="mt-2 text-[11px] leading-4 text-indigo-700">当天结清时，系统会立即冻结当前结算币价与 USDT 兑人民币汇率。</p>}
+                              {(entry.segment?.asset_type || targetOrder?.asset_type) === 'crypto_option' && (
+                                <label className="mt-2 block text-[11px] text-amber-900">真实合约结算价（u/张）
+                                  <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementOptionMarkPrice} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementOptionMarkPrice: e.target.value } }))} placeholder={isHistorical ? '按历史凭证填写，归零可填0' : '可留空获取报价，或按真实凭证填写'} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                                  <span className="mt-1 block leading-4">{isHistorical ? '只记录本段结算时的真实合约价，不使用今天行情。' : '合约报价缺失时不能直接结清；手填价会记录来源。Greeks 可不填。'}</span>
+                                </label>
+                              )}
                             </div>
                           )}
                         </div>
@@ -7654,7 +7660,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       setSettleValuation((current) => ({
                         ...current,
                         interestEndDate: nextDate,
-                        settlementPrice: nextDate !== getBeijingToday() ? '' : current.settlementPrice,
+                        settlementPrice: '',
+                        settlementExchangeRate: nextDate === getBeijingToday() && finitePositive(cnyRate) !== null ? String(cnyRate) : '',
+                        settlementOptionMarkPrice: '',
                       }));
                     }}
                     className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
@@ -7667,11 +7675,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <label className="block text-[11px] text-amber-900">USDT兑人民币
                         <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementExchangeRate} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementExchangeRate: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
                       </label>
-                      {targetOrder?.asset_type === 'crypto_option' && <label className="col-span-2 block text-[11px] text-amber-900">期权结算价（u/张）
-                        <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementOptionMarkPrice} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementOptionMarkPrice: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
-                      </label>}
                     </div>
                   ) : <p className="mt-2 text-[11px] leading-4 text-amber-800">确认时系统会从服务器行情缓存锁定当前结算币价和汇率。</p>}
+                  {targetOrder?.asset_type === 'crypto_option' && (
+                    <label className="mt-2 block text-[11px] text-amber-900">真实合约结算价（u/张）
+                      <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementOptionMarkPrice} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementOptionMarkPrice: e.target.value }))} placeholder={(settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday()) !== getBeijingToday() ? '按历史凭证填写，归零可填0' : '可留空获取报价，或按真实凭证填写'} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                      <span className="mt-1 block leading-4">合约报价缺失时不能直接结清；手填价会记录来源。Greeks 可不填。</span>
+                    </label>
+                  )}
                 </div>
               )}
               {hasJointSegments ? <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedJointEntries.length}</span> 段；未勾选的分段会继续持有并保持实时计算。</p> : hasOtherCollaborators && <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedIds.length}</span> 位。未勾选的拥有者或参与者继续保持持有中。</p>}
@@ -7694,14 +7705,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       }
                       const segments = selectedJointEntries.map((entry) => {
                         const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: '', settlementOptionMarkPrice: '' };
-                        return { segmentId: entry.segmentId, ...draft };
+                        return { segmentId: entry.segmentId, ...draft, assetType: entry.segment?.asset_type || targetOrder?.asset_type };
                       });
-                      const incompleteHistory = segments.some((segment) => segment.interestEndDate !== getBeijingToday()
-                        && (!(Number(segment.settlementPrice) > 0)
-                          || !(Number(segment.settlementExchangeRate) > 0)
-                          || (targetOrder?.asset_type === 'crypto_option' && !(Number(segment.settlementOptionMarkPrice) > 0))));
-                      if (incompleteHistory) {
-                        toast.error(targetOrder?.asset_type === 'crypto_option' ? '历史期权结算日请填写标的价、汇率和期权结算价' : '历史结算日请逐段填写最终结算价和 USDT 兑人民币汇率');
+                      const invalidDraft = segments.map((segment) => getFunderSettlementDraftError(segment, getBeijingToday(), segment.assetType)).find(Boolean);
+                      if (invalidDraft) {
+                        toast.error(invalidDraft);
                         return;
                       }
                       settleJointSegmentsMutation.mutate({
@@ -7713,20 +7721,21 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           interestEndDate: segment.interestEndDate || getBeijingToday(),
                           ...(segment.settlementPrice ? { settlementPrice: segment.settlementPrice } : {}),
                           ...(segment.settlementExchangeRate ? { settlementExchangeRate: segment.settlementExchangeRate } : {}),
-                          ...(segment.settlementOptionMarkPrice ? { settlementOptionMarkPrice: segment.settlementOptionMarkPrice } : {}),
+                          ...(readFunderSettlementOptionMarkInput(segment.settlementOptionMarkPrice) !== null ? { settlementOptionMarkPrice: readFunderSettlementOptionMarkInput(segment.settlementOptionMarkPrice)! } : {}),
                         })),
                       }, { onSuccess: closeSettlementDialog });
                       return;
                     }
                     const interestEndDate = settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday();
-                    if (interestEndDate !== getBeijingToday() && (!(Number(settleValuation.settlementPrice) > 0) || !(Number(settleValuation.settlementExchangeRate) > 0) || (targetOrder?.asset_type === 'crypto_option' && !(Number(settleValuation.settlementOptionMarkPrice) > 0)))) {
-                      toast.error(targetOrder?.asset_type === 'crypto_option' ? '历史期权结算日请填写标的价、汇率和期权结算价' : '历史结算日请填写最终结算价和 USDT 兑人民币汇率');
+                    const invalidDraft = getFunderSettlementDraftError({ ...settleValuation, interestEndDate }, getBeijingToday(), targetOrder?.asset_type);
+                    if (invalidDraft) {
+                      toast.error(invalidDraft);
                       return;
                     }
                     const valuation = {
                       ...(settleValuation.settlementPrice ? { settlementPrice: settleValuation.settlementPrice } : {}),
                       ...(settleValuation.settlementExchangeRate ? { settlementExchangeRate: settleValuation.settlementExchangeRate } : {}),
-                      ...(settleValuation.settlementOptionMarkPrice ? { settlementOptionMarkPrice: settleValuation.settlementOptionMarkPrice } : {}),
+                      ...(readFunderSettlementOptionMarkInput(settleValuation.settlementOptionMarkPrice) !== null ? { settlementOptionMarkPrice: readFunderSettlementOptionMarkInput(settleValuation.settlementOptionMarkPrice)! } : {}),
                     };
                     if (isWholeOrderSettlement) {
                       updateMutation.mutate({ id: Number(targetOrder.id), ledgerId, status: 'settled', interestEndDate, ...valuation }, { onSuccess: closeSettlementDialog });

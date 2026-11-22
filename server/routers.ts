@@ -7,6 +7,7 @@ import { getStockReturnRanking } from "./stock-return-ranking";
 import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
+import { captureFunderOptionEvidence, getFunderOptionSettlementEvidenceError, buildFunderRegisteredSettlementEvidence, readFunderEvidenceNumber, type FunderSettlementEvidenceScope } from "./shared/funder-settlement-evidence";
 import { getStockChipDistribution } from "./stock-chip-distribution";
 import { afEffectiveOrderStatusSql, getAfGiftActivationError } from "@shared/af-gift-order-state";
 import { afManagementFeeStartAtSql, afHasAdvancedFeeSourceSql, getAfManagementFeeStartAt } from "@shared/af-management-fee-start";
@@ -1822,6 +1823,10 @@ type FunderSettlementSnapshot = {
   priceMode: 'manual_historical' | 'live_confirmed';
   capturedAt: string;
   capturedBy: number;
+  // 仅新快照可选扩展：登记条款与严格的个人/段落证据范围，不代表最终收付款。
+  registeredTerms?: ReturnType<typeof buildFunderRegisteredSettlementEvidence>['registeredTerms'];
+  evidenceScope?: ReturnType<typeof buildFunderRegisteredSettlementEvidence>['evidenceScope'];
+  registeredPayments?: ReturnType<typeof buildFunderRegisteredSettlementEvidence>['registeredPayments'];
   // v2：期权合约价格不能用标的现货价替代；结清时把同一份合约标记价与 Greeks 固化。
   optionQuote?: {
     instrumentName: string | null;
@@ -1879,91 +1884,18 @@ function parseFunderJsonObject(value: unknown): Record<string, any> | null {
   }
 }
 
-/** 将期权配置转换为行情服务使用的唯一合约名；期权过期后也保留该身份供结算快照审计。 */
-function buildFunderOptionInstrument(optionInfo: Record<string, any> | null): {
-  currency: 'BTC' | 'ETH'; instrumentName: string; gateSymbol: string; cacheKey: string;
-} | null {
-  const currency = String(optionInfo?.coin || '').toUpperCase();
-  const exerciseDate = normalizeOptionExerciseDateInBeijing(optionInfo?.exerciseDate);
-  const strikePrice = Number(optionInfo?.strikePrice);
-  const direction = String(optionInfo?.direction || '');
-  if ((currency !== 'BTC' && currency !== 'ETH') || !exerciseDate || !Number.isFinite(strikePrice) || strikePrice <= 0) return null;
-  const date = new Date(`${exerciseDate}T08:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  const isCall = direction === 'long_call' || direction === 'short_call';
-  const optionType = isCall ? 'C' : 'P';
-  const dd = date.getUTCDate();
-  const mon = DERIBIT_MONTHS[date.getUTCMonth()];
-  const yy = String(date.getUTCFullYear()).slice(2);
-  const instrumentName = `${currency}-${dd}${mon}${yy}-${strikePrice}-${optionType}`;
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return {
-    currency: currency as 'BTC' | 'ETH',
-    instrumentName,
-    gateSymbol: `${currency}_USDT-${yyyy}${mm}${day}-${strikePrice}-${optionType}`,
-    cacheKey: `greeks:${instrumentName}`,
-  };
-}
-
 /**
- * 结清时主动取得一次期权合约报价；失败时明确存为不可用，绝不用结清后的实时行情补写。
+ * 手填真实合约价（含0）优先且支持当天；历史日期绝不请求今天报价。
+ * 行情异常由纯helper转为缺证据，由统一必需字段门槛拒绝，不把Greeks缺值当0。
  */
 async function captureFunderOptionSettlementQuote(
   optionInfo: Record<string, any> | null,
   options: { isHistorical: boolean; manualMarkPrice?: unknown },
 ): Promise<FunderSettlementSnapshot['optionQuote'] | undefined> {
-  const instrument = buildFunderOptionInstrument(optionInfo);
-  if (!instrument) return undefined;
-  const capturedAt = new Date().toISOString();
-  const manualMarkPrice = Number(options.manualMarkPrice);
-  // 历史日期只能信任管理员确认的当日期权合约价；严禁用今天的市场报价回填过去。
-  if (options.isHistorical) {
-    if (Number.isFinite(manualMarkPrice) && manualMarkPrice > 0) {
-      return {
-        instrumentName: instrument.instrumentName,
-        markPriceUsdt: String(manualMarkPrice),
-        indexPriceUsdt: null,
-        delta: null,
-        gamma: null,
-        theta: null,
-        vega: null,
-        iv: null,
-        source: 'manual_historical',
-        quotedAt: capturedAt,
-      };
-    }
-    return {
-      instrumentName: instrument.instrumentName,
-      markPriceUsdt: null,
-      indexPriceUsdt: null,
-      delta: null,
-      gamma: null,
-      theta: null,
-      vega: null,
-      iv: null,
-      source: 'manual_historical',
-      quotedAt: capturedAt,
-      unavailableReason: '历史结算未填写期权合约结算价',
-    };
-  }
-  const cached = await deribitDbGet(instrument.cacheKey);
-  const quote = await refreshOptionGreeksQuote({ ...instrument, cached });
-  const markPrice = Number(quote?.markPrice);
-  return {
-    instrumentName: instrument.instrumentName,
-    markPriceUsdt: Number.isFinite(markPrice) && markPrice > 0 ? String(markPrice) : null,
-    indexPriceUsdt: Number.isFinite(Number(quote?.indexPrice)) && Number(quote.indexPrice) > 0 ? String(quote.indexPrice) : null,
-    delta: Number.isFinite(Number(quote?.delta)) ? Number(quote.delta) : null,
-    gamma: Number.isFinite(Number(quote?.gamma)) ? Number(quote.gamma) : null,
-    theta: Number.isFinite(Number(quote?.theta)) ? Number(quote.theta) : null,
-    vega: Number.isFinite(Number(quote?.vega)) ? Number(quote.vega) : null,
-    iv: Number.isFinite(Number(quote?.iv)) ? Number(quote.iv) : null,
-    source: typeof quote?.source === 'string' ? quote.source : null,
-    quotedAt: capturedAt,
-    ...(Number.isFinite(markPrice) && markPrice > 0 ? {} : { unavailableReason: String(quote?.error || '结清时未取得有效合约报价') }),
-  };
+  return captureFunderOptionEvidence(optionInfo, { ...options, quotedAt: new Date().toISOString() }, async (instrument) => {
+    const cached = await deribitDbGet(instrument.cacheKey);
+    return refreshOptionGreeksQuote({ ...instrument, cached, settlementEvidence: true });
+  });
 }
 
 /** 结清时捕获每只手工股票实际采用的已保存报价，不调用客户端或第三方行情。 */
@@ -2154,11 +2086,17 @@ async function buildFunderSettlementSnapshot(
   manualPrimaryPrice?: unknown,
   manualUsdtCnyRate?: unknown,
   manualOptionMarkPrice?: unknown,
+  evidenceScope?: FunderSettlementEvidenceScope,
 ): Promise<FunderSettlementSnapshot> {
   const isHistorical = effectiveDate !== getBeijingDateString();
   const suppliedPrice = Number(manualPrimaryPrice);
   const suppliedRate = Number(manualUsdtCnyRate);
-  const suppliedOptionMarkPrice = Number(manualOptionMarkPrice);
+  const optionInfo = parseFunderJsonObject(sourceOrder.option_info);
+  const optionQuote = String(sourceOrder.asset_type || '') === 'crypto_option'
+    ? await captureFunderOptionSettlementQuote(optionInfo, { isHistorical, manualMarkPrice: manualOptionMarkPrice })
+    : undefined;
+  const optionEvidenceError = getFunderOptionSettlementEvidenceError(sourceOrder.asset_type, optionQuote);
+  if (optionEvidenceError) throw new TRPCError({ code: 'BAD_REQUEST', message: optionEvidenceError });
   const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
   const liveRate = isHistorical ? 0 : await refreshUsdtCnyRate();
   const usdtCnyRate = isHistorical ? suppliedRate : (liveRate || suppliedRate);
@@ -2171,7 +2109,7 @@ async function buildFunderSettlementSnapshot(
     ? 1 / usdtCnyRate
     : primarySymbol === 'USDT'
       ? 1
-      : Number(getLatestPrice(primarySymbol) || 0);
+      : isHistorical ? 0 : Number(getLatestPrice(primarySymbol) || 0);
   const primaryPriceUsdt = isHistorical ? suppliedPrice : (livePrimaryPrice || suppliedPrice);
   if (!Number.isFinite(primaryPriceUsdt) || primaryPriceUsdt <= 0) {
     throw new TRPCError({
@@ -2179,17 +2117,12 @@ async function buildFunderSettlementSnapshot(
       message: isHistorical ? '历史结算日请填写该标的的最终结算价格' : '当前标的价格暂不可用，请稍后重试',
     });
   }
-  if (isHistorical && String(sourceOrder.asset_type || '') === 'crypto_option'
-    && (!Number.isFinite(suppliedOptionMarkPrice) || suppliedOptionMarkPrice <= 0)) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: '历史期权结算日请填写期权合约结算价（u/张）' });
-  }
 
   const symbols = new Set<string>(['USDT', 'CNY', primarySymbol]);
   for (const asset of [...parseFunderJsonArray(sourceOrder.collateral_assets), ...parseFunderJsonArray(sourceOrder.lent_out_assets)]) {
     const symbol = String(asset?.coin || '').trim().toUpperCase();
     if (symbol) symbols.add(symbol);
   }
-  const optionInfo = parseFunderJsonObject(sourceOrder.option_info);
   [optionInfo?.coin, optionInfo?.premiumCurrency, optionInfo?.denomination]
     .map((value) => String(value || '').trim().toUpperCase())
     .filter(Boolean)
@@ -2203,19 +2136,18 @@ async function buildFunderSettlementSnapshot(
       continue;
     }
     if (symbol === 'USDT' || symbol === 'CNY') continue;
+    // 尚无历史辅币手填接口：保留未知，不能把今天行情装成过去证据。
+    if (isHistorical) continue;
     const price = Number(getLatestPrice(symbol) || 0);
     // 行情不可用时不拿实时值补算；前端将显示暂无结算报价，而不是继续跳动。
     if (Number.isFinite(price) && price > 0) priceBySymbol[symbol] = String(price);
   }
 
-  const [optionQuote, manualStockQuotes, external37] = await Promise.all([
-    String(sourceOrder.asset_type || '') === 'crypto_option'
-      ? captureFunderOptionSettlementQuote(optionInfo, { isHistorical, manualMarkPrice: manualOptionMarkPrice })
-      : Promise.resolve(undefined),
-    String(sourceOrder.asset_type || '') === 'stock'
+  const [manualStockQuotes, external37] = await Promise.all([
+    !isHistorical && String(sourceOrder.asset_type || '') === 'stock'
       ? captureFunderManualStockSettlementQuotes(sourceOrder)
       : Promise.resolve(undefined),
-    captureFunderExternal37SettlementSnapshot(sourceOrder, usdtCnyRate),
+    isHistorical ? Promise.resolve(undefined) : captureFunderExternal37SettlementSnapshot(sourceOrder, usdtCnyRate),
   ]);
 
   // 新股票快照额外留真正USD证据；历史手填USDT值不能被推断为USD。
@@ -2237,6 +2169,7 @@ async function buildFunderSettlementSnapshot(
     capturedBy: actorUserId,
     ...(usdCnyFx ? { usdCnyRate: String(usdCnyFx.rate), usdCnyFx } : {}),
     ...(optionQuote ? { optionQuote } : {}),
+    ...(evidenceScope ? buildFunderRegisteredSettlementEvidence(sourceOrder, evidenceScope) : {}),
     ...(manualStockQuotes ? { manualStockQuotes } : {}),
     ...(external37 ? { external37 } : {}),
   };
@@ -2559,12 +2492,13 @@ type OptionGreeksQuoteInput = {
   gateSymbol: string;
   cacheKey: string;
   cached: { data: any; fetchedAt: number } | null;
+  settlementEvidence?: boolean;
 };
 
 function hasUsableOptionMarkPrice(value: unknown): boolean {
-  const markPrice = Number(value);
+  const markPrice = readFunderEvidenceNumber(value);
   // 未到期合约返回 0 通常代表报价暂缺，不能覆盖旧的正数报价并让前端盈亏消失。
-  return Number.isFinite(markPrice) && markPrice > 0;
+  return markPrice !== null && markPrice > 0;
 }
 
 // 期权格每 3 秒可刷新一次。只查询账本实际持有的单一合约，
@@ -2612,19 +2546,24 @@ async function refreshOptionGreeksQuote({
   gateSymbol,
   cacheKey,
   cached,
+  settlementEvidence = false,
 }: OptionGreeksQuoteInput): Promise<any> {
+  const acceptsMark = (value: unknown) => {
+    const mark = readFunderEvidenceNumber(value);
+    return mark !== null && (settlementEvidence ? mark >= 0 : mark > 0);
+  };
   try {
     const ticker = await getGateOptionTicker(currency, gateSymbol);
-    if (!hasUsableOptionMarkPrice(ticker.mark_price)) throw new Error(`Gate.io 合约没有有效标记价: ${gateSymbol}`);
+    if (!acceptsMark(ticker.mark_price)) throw new Error(`Gate.io 合约没有有效标记价: ${gateSymbol}`);
     const result = {
       instrumentName,
-      delta: ticker.delta != null ? parseFloat(ticker.delta) : null,
-      gamma: ticker.gamma != null ? parseFloat(ticker.gamma) : null,
-      theta: ticker.theta != null ? parseFloat(ticker.theta) : null,
-      vega: ticker.vega != null ? parseFloat(ticker.vega) : null,
-      iv: ticker.mark_iv != null ? parseFloat(ticker.mark_iv) : null,
-      markPrice: parseFloat(ticker.mark_price),
-      indexPrice: ticker.index_price != null ? parseFloat(ticker.index_price) : null,
+      delta: readFunderEvidenceNumber(ticker.delta),
+      gamma: readFunderEvidenceNumber(ticker.gamma),
+      theta: readFunderEvidenceNumber(ticker.theta),
+      vega: readFunderEvidenceNumber(ticker.vega),
+      iv: readFunderEvidenceNumber(ticker.mark_iv),
+      markPrice: readFunderEvidenceNumber(ticker.mark_price),
+      indexPrice: readFunderEvidenceNumber(ticker.index_price),
       source: 'gateio',
     };
     await deribitDbSet(cacheKey, result);
@@ -2635,20 +2574,20 @@ async function refreshOptionGreeksQuote({
       const data = await res.json() as any;
       if (data.error) throw new Error(data.error.message || '合约不存在');
       const r = data.result;
+      if (r?.instrument_name !== instrumentName) throw new Error('Deribit 返回的合约身份不匹配');
       // Deribit mark_price 单位是标的资产（ETH/BTC），需乘以 index_price 换算成 USDT。
-      const deribitMarkRaw = r.mark_price != null ? parseFloat(r.mark_price) : null;
-      const deribitIndexPrice = r.index_price != null ? parseFloat(r.index_price) : null;
-      const deribitMarkUsdt = (deribitMarkRaw != null && deribitIndexPrice != null && deribitIndexPrice > 0)
-        ? parseFloat((deribitMarkRaw * deribitIndexPrice).toFixed(4))
-        : deribitMarkRaw;
-      if (!hasUsableOptionMarkPrice(deribitMarkUsdt)) throw new Error(`Deribit 合约没有有效标记价: ${instrumentName}`);
+      const deribitMarkRaw = readFunderEvidenceNumber(r.mark_price);
+      const deribitIndexPrice = readFunderEvidenceNumber(r.index_price);
+      const deribitMarkUsdt = (deribitMarkRaw !== null && deribitMarkRaw >= 0 && deribitIndexPrice !== null && deribitIndexPrice > 0)
+        ? deribitMarkRaw * deribitIndexPrice : null;
+      if (!acceptsMark(deribitMarkUsdt)) throw new Error(`Deribit 合约没有有效标记价: ${instrumentName}`);
       const result = {
         instrumentName,
-        delta: r.greeks?.delta ?? null,
-        gamma: r.greeks?.gamma ?? null,
-        theta: r.greeks?.theta ?? null,
-        vega: r.greeks?.vega ?? null,
-        iv: r.mark_iv ?? null,
+        delta: readFunderEvidenceNumber(r.greeks?.delta),
+        gamma: readFunderEvidenceNumber(r.greeks?.gamma),
+        theta: readFunderEvidenceNumber(r.greeks?.theta),
+        vega: readFunderEvidenceNumber(r.greeks?.vega),
+        iv: readFunderEvidenceNumber(r.mark_iv),
         markPrice: deribitMarkUsdt,
         indexPrice: deribitIndexPrice,
         source: 'deribit',
@@ -28481,23 +28420,38 @@ ${klinesSummary}
           || shouldSyncParticipantTags;
         try {
           let settlementSnapshot: FunderSettlementSnapshot | null = null;
+          if (shouldSyncParticipantSnapshot) await ensureFunderParticipantSnapshotColumns();
+          if (shouldSyncParticipantSnapshot) await conn.beginTransaction();
           if (input.status === 'settled' && interestEndDate) {
             const [sourceRows] = await conn.execute(
-              'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+              'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
               [input.id, input.ledgerId],
             ) as any;
             const sourceOrder = Array.isArray(sourceRows) ? sourceRows[0] : null;
             if (!sourceOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
-            settlementSnapshot = await buildFunderSettlementSnapshot(
-              sourceOrder,
-              interestEndDate,
-              ctx.user.id,
-              input.settlementPrice,
-              input.settlementExchangeRate,
-              input.settlementOptionMarkPrice,
-            );
-            updateCols.push('settlement_snapshot = ?');
-            updateVals.push(JSON.stringify(settlementSnapshot));
+            if (sourceOrder.status === 'settled' || sourceOrder.status === 'completed' || sourceOrder.settlement_snapshot != null) {
+              // 重复结清/普通编辑不改历史v1/v2，空历史也绝不拿今天数据回填。
+              settlementSnapshot = parseFunderParticipantSnapshot(sourceOrder.settlement_snapshot) as FunderSettlementSnapshot | null;
+            } else {
+              // 同次保存可能改变本金、张数、币种或合约：按即将实际登记的值捕获，不能仍用旧行。
+              const settlementSource = { ...sourceOrder };
+              updateCols.forEach((assignment, index) => {
+                const column = /^([a-z_]+) = \?$/.exec(assignment)?.[1];
+                if (column) settlementSource[column] = updateVals[index];
+              });
+              settlementSnapshot = await buildFunderSettlementSnapshot(
+                settlementSource,
+                interestEndDate,
+                ctx.user.id,
+                input.settlementPrice,
+                input.settlementExchangeRate,
+                input.settlementOptionMarkPrice,
+                { ledgerId: input.ledgerId, orderId: input.id, userId: Number(settlementSource.user_id),
+                  participantId: null, jointSegmentId: null, physicalOwnerUserId: Number(settlementSource.user_id), sourceKind: 'primary_order' },
+              );
+              updateCols.push('settlement_snapshot = ?');
+              updateVals.push(JSON.stringify(settlementSnapshot));
+            }
           }
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
@@ -28509,8 +28463,6 @@ ${klinesSummary}
               throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于计息开始日' });
             }
           }
-          if (shouldSyncParticipantSnapshot) await ensureFunderParticipantSnapshotColumns();
-          if (shouldSyncParticipantSnapshot) await conn.beginTransaction();
 
           // 结清快照在上方异步生成并追加到 updateCols/updateVals。订单定位参数必须
           // 最后再追加，确保 JSON 快照永远不会错位绑定到 WHERE 中的数值列。
@@ -28589,7 +28541,18 @@ ${klinesSummary}
                   status: input.status,
                   settled_at: input.status === 'settled' ? statusChangedAt : null,
                   interest_end_date: input.status === 'settled' ? interestEndDate : null,
-                  settlement_snapshot: input.status === 'settled' ? settlementSnapshot : undefined,
+                  settlement_snapshot: input.status === 'settled'
+                    ? (persistedSnapshot.status === 'settled' || persistedSnapshot.status === 'completed' || persistedSnapshot.settlement_snapshot != null
+                      ? persistedSnapshot.settlement_snapshot ?? null
+                      : settlementSnapshot?.evidenceScope ? {
+                        ...settlementSnapshot,
+                        ...buildFunderRegisteredSettlementEvidence({ ...buildFunderParticipantSnapshot(updatedOrder), ...snapshot }, {
+                          ledgerId: input.ledgerId, orderId: input.id, userId: Number(participant.user_id),
+                          participantId: Number(participant.id), jointSegmentId: null,
+                          physicalOwnerUserId: Number(updatedOrder.user_id), sourceKind: 'individual_snapshot',
+                        }),
+                      } : settlementSnapshot)
+                    : undefined,
                 };
                 if (input.status === 'active') delete snapshot.settlement_snapshot;
               }
@@ -28641,6 +28604,7 @@ ${klinesSummary}
           }
           console.error('[FUO-DEBUG] UPDATE失败:', e?.message, '| SQL:', `UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, '| VALS:', JSON.stringify(updateVals));
           await conn.end();
+          if (e instanceof TRPCError) throw e;
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
         }
         // 除周期总息外，display_config 不联动同步到其他订单，每张订单独立保存自己的配置。
@@ -28781,6 +28745,8 @@ ${klinesSummary}
               ),
               parentOrder,
             );
+            // 个人已结清记录（含无证据旧记录）不由正常结清入口重建。
+            if (personalSnapshot.status === 'settled' || personalSnapshot.status === 'completed' || personalSnapshot.settlement_snapshot != null) continue;
             // 计算结清价可读取主订单作为缺字段的显示默认值，但绝不把这些默认值写回个人快照。
             const settlementSource = { ...buildFunderParticipantSnapshot(parentOrder), ...personalSnapshot };
             const interestStartDate = String(
@@ -28796,6 +28762,9 @@ ${klinesSummary}
               input.settlementPrice,
               input.settlementExchangeRate,
               input.settlementOptionMarkPrice,
+              { ledgerId: input.ledgerId, orderId: input.orderId, userId: targetUserId,
+                participantId: Number(participant.id), jointSegmentId: null,
+                physicalOwnerUserId: Number(parentOrder.user_id), sourceKind: 'individual_snapshot' },
             );
             snapshotsToSave.push({
               participantId: Number(participant.id),
@@ -28865,7 +28834,7 @@ ${klinesSummary}
         try {
           await conn.beginTransaction();
           const [rows] = await conn.execute(
-            `SELECT p.id AS participant_id, p.order_snapshot, p.user_id, p.role, o.*
+            `SELECT p.id AS participant_id, p.order_snapshot, p.user_id AS participant_user_id, p.role, o.*
              FROM ledger_order_participants p
              INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
              WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ?
@@ -28876,6 +28845,9 @@ ${klinesSummary}
           const row = Array.isArray(rows) ? rows[0] : null;
           if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到当前拥有者的联合订单视图' });
 
+          if (row.status === 'settled' || row.status === 'completed') {
+            throw new TRPCError({ code: 'CONFLICT', message: '该订单已统一结清，不可重建历史分段快照' });
+          }
           const persistedSnapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
           const snapshot = syncFunderParticipantSharedAssetSnapshot(
             syncFunderParticipantCollateralSnapshot(
@@ -28893,6 +28865,12 @@ ${klinesSummary}
           for (const segmentId of suppliedById.keys()) {
             if (!validSegmentIds.has(segmentId)) throw new TRPCError({ code: 'NOT_FOUND', message: '存在无效的关联订单分段' });
           }
+          for (const segment of jointSegments) {
+            if (suppliedById.has(String(segment?.id || '')) && segment?.owner_user_id != null
+              && Number(segment.owner_user_id) !== input.userId) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '关联订单分段不属于当前用户，不能跨用户捕获结算证据' });
+            }
+          }
 
           const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
           const newlySettledSegmentIds: string[] = [];
@@ -28900,7 +28878,7 @@ ${klinesSummary}
             ? { ...snapshot.joint_order_primary_settlement }
             : {};
           const primaryRequest = suppliedById.get('__primary__');
-          if (primaryRequest && primaryState.status !== 'settled') {
+          if (primaryRequest && primaryState.status !== 'settled' && primaryState.status !== 'completed' && primaryState.settlement_snapshot == null) {
             const interestStartDate = String(snapshot.interest_start_date || row.interest_start_date || '').slice(0, 10);
             if (interestStartDate && primaryRequest.interestEndDate < interestStartDate) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '第一段结息截止日不能早于计息开始日' });
@@ -28916,6 +28894,9 @@ ${klinesSummary}
               primaryRequest.settlementPrice,
               primaryRequest.settlementExchangeRate,
               primaryRequest.settlementOptionMarkPrice,
+              { ledgerId: input.ledgerId, orderId: input.orderId, userId: input.userId,
+                participantId: Number(row.participant_id), jointSegmentId: '__primary__',
+                physicalOwnerUserId: Number(row.user_id), sourceKind: 'joint_primary' },
             );
           }
 
@@ -28924,7 +28905,7 @@ ${klinesSummary}
             const segmentId = String(segment?.id || '');
             const request = suppliedById.get(segmentId);
             const nextSegment = { ...(segment || {}) };
-            if (request && nextSegment.status !== 'settled') {
+            if (request && nextSegment.status !== 'settled' && nextSegment.status !== 'completed' && nextSegment.settlement_snapshot == null) {
               const interestStartDate = String(nextSegment.interest_start_date || snapshot.interest_start_date || row.interest_start_date || '').slice(0, 10);
               if (interestStartDate && request.interestEndDate < interestStartDate) {
                 throw new TRPCError({ code: 'BAD_REQUEST', message: '关联分段的结息截止日不能早于其计息开始日' });
@@ -28940,6 +28921,9 @@ ${klinesSummary}
                 request.settlementPrice,
                 request.settlementExchangeRate,
                 request.settlementOptionMarkPrice,
+                { ledgerId: input.ledgerId, orderId: input.orderId, userId: input.userId,
+                  participantId: Number(row.participant_id), jointSegmentId: segmentId,
+                  physicalOwnerUserId: Number(row.user_id), sourceKind: 'joint_segment' },
               );
             }
             nextSegments.push(nextSegment);

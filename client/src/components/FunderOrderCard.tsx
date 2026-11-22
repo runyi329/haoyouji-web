@@ -1,4 +1,6 @@
 import { finitePositive, getUsdtCnyRate, getUsdCnyRate, getUsdtCnyRateFromPrices, getOrderUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
+import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, isFunderSettledStatus, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
+import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
 // ===== FunderOrderCard 共享组件 =====
 // @refresh reset
 // 此文件由 FunderManagement.tsx 抽取，前后端统一使用此组件
@@ -11,9 +13,6 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
-function formatFunderPendingInterest(value: number, contract: boolean): string {
-  return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
-}
 import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
@@ -956,29 +955,20 @@ export function FunderOrderCard({
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
-  const parseSettlementSnapshot = (value: unknown): Record<string, any> | null => {
-    try {
-      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null;
-    } catch {
-      return null;
-    }
-  };
-  const isPhysicalOrderSettled = order.status === 'settled' || order.status === 'completed';
-  const primaryJointSettlement = !jointSegmentMode && (order as any).joint_order_primary_settlement && typeof (order as any).joint_order_primary_settlement === 'object'
-    ? (order as any).joint_order_primary_settlement
-    : null;
-  const isPrimaryJointSegmentSettled = !jointSegmentMode && String(primaryJointSettlement?.status || '').toLowerCase() === 'settled';
-  const settlementSnapshot = parseSettlementSnapshot(
-    jointSegmentMode
-      ? (order as any).settlement_snapshot
-      : (isPrimaryJointSegmentSettled ? primaryJointSettlement?.settlement_snapshot : (order as any).settlement_snapshot),
-  );
+  const historicalDisplay = selectFunderHistoricalDisplay(order, jointSegmentMode);
+  const isPhysicalOrderSettled = isFunderSettledStatus(order.status);
+  const primaryJointSettlement = historicalDisplay.primary;
+  const isPrimaryJointSegmentSettled = historicalDisplay.primarySettled;
+  const settlementSnapshot = historicalDisplay.snapshot;
   // 已结清即进入历史只读模式：旧订单即使没有快照，也绝不能退回当前实时行情。
   // hasSettlementSnapshot 只决定是否能展示冻结数值，不决定是否继续请求外部数据。
   const isSettlementFinal = isPhysicalOrderSettled || isPrimaryJointSegmentSettled;
   const hasSettlementSnapshot = isSettlementFinal && !!settlementSnapshot;
   const isPricingFrozen = isSettlementFinal;
+  const unknownEstimateText = getFunderUnknownEstimateText(isSettlementFinal, settlementSnapshot?.usdtCnyRate);
+  const formatFxEstimate = createFunderDisplayFormatter(isSettlementFinal, settlementSnapshot?.usdtCnyRate);
+  const formatFunderPendingInterest = (value: number, contract: boolean): string => Number.isFinite(value)
+    ? formatOriginalFunderPendingInterest(value, contract) : unknownEstimateText;
   const frozenPrices: Record<string, number> = {};
   if (isPricingFrozen) {
     for (const [symbol, price] of Object.entries(settlementSnapshot?.priceBySymbol || {})) {
@@ -1070,6 +1060,11 @@ export function FunderOrderCard({
   // 结清确认
   const [_intConfirmSettleId, _intSetConfirmSettleId] = useState<number | null>(null);
   const [_intSettleInterestEndDate, _intSetSettleInterestEndDate] = useState('');
+  const [_intSettlePrice, _intSetSettlePrice] = useState('');
+  const [_intSettleExchangeRate, _intSetSettleExchangeRate] = useState('');
+  const [_intSettleOptionMarkPrice, _intSetSettleOptionMarkPrice] = useState('');
+  const clearInternalSettlePrices = () => { _intSetSettlePrice(''); _intSetSettleExchangeRate(''); _intSetSettleOptionMarkPrice(''); };
+  const closeInternalSettleConfirm = () => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); clearInternalSettlePrices(); };
   // 结息面板：利息约等于快捷配置
   const [interestApproxConfig, setInterestApproxConfig] = useState<{ approxInterest: string; approxPaid: string }>({ approxInterest: 'U', approxPaid: 'U' });
   const _intSaveInterestApproxMutation = trpc.ledger.financeUpdateOrder.useMutation({
@@ -1341,6 +1336,8 @@ export function FunderOrderCard({
       onConfirmSettle(order);
       return;
     }
+    clearInternalSettlePrices();
+    _intSetSettleInterestEndDate('');
     _intSetConfirmSettleId(Number(order.id));
   };
   const $getPaymentLabel = getPaymentLabel !== undefined ? getPaymentLabel : (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
@@ -2191,24 +2188,10 @@ export function FunderOrderCard({
     enabled: shouldLoadRemoteDetails && isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
   });
   // 结算快照优先级高于任何浏览器缓存。期权到期/下架后不再向 Gate.io 或 Deribit 请求。
-  const frozenOptionQuote = isPricingFrozen && settlementSnapshot?.optionQuote && typeof settlementSnapshot.optionQuote === 'object'
-    ? settlementSnapshot.optionQuote as Record<string, any>
-    : null;
   const optionGreeksData = isPricingFrozen
-    ? (frozenOptionQuote ? {
-      instrumentName: frozenOptionQuote.instrumentName || '',
-      markPrice: readConfirmedExposureGap(frozenOptionQuote.markPriceUsdt),
-      indexPrice: readConfirmedExposureGap(frozenOptionQuote.indexPriceUsdt),
-      delta: readConfirmedExposureGap(frozenOptionQuote.delta),
-      gamma: readConfirmedExposureGap(frozenOptionQuote.gamma),
-      theta: readConfirmedExposureGap(frozenOptionQuote.theta),
-      vega: readConfirmedExposureGap(frozenOptionQuote.vega),
-      iv: readConfirmedExposureGap(frozenOptionQuote.iv),
-      source: frozenOptionQuote.source || null,
-      quotedAt: frozenOptionQuote.quotedAt || settlementSnapshot?.capturedAt || null,
-      error: frozenOptionQuote.unavailableReason || null,
-    } : null)
+    ? readFunderHistoricalOptionQuote(settlementSnapshot)
     : greeksResult.data;
+  const historicalGreeksMissing = isSettlementFinal && !hasValidFunderHistoricalGreeks(optionGreeksData);
   const hasOptionSettlementQuote = isPricingFrozen && optionGreeksData?.markPrice !== null && optionGreeksData?.markPrice !== undefined;
   const isOptionSettlementQuoteMissing = isSettlementFinal && isOptionOrder && !hasOptionSettlementQuote;
   // 融资金额统一以 order.amount 的 USDT 基准值保存；amount_currency 表示买入价格和融资金额的计价币种。
@@ -2404,6 +2387,11 @@ export function FunderOrderCard({
   const displayedPaidAltValue = hasExternalPaidInterest && linked37PaidInterestCny !== null
     ? linked37PaidInterestCny / cnyRate
     : altPaid;
+  // Only the visible row can fall back to the original registered currency. Risk still uses displayPaid.
+  const registeredPaidDisplay = getFunderRegisteredPaidDisplay(order.paidTotal, baseCur, displayPaid, rateCur);
+  const paidRowValue = hasExternalPaidInterest ? displayedPaidValue : registeredPaidDisplay.value;
+  const paidRowUnit = hasExternalPaidInterest ? displayedPaidUnit : getFunderRegisteredCurrencyUnit(registeredPaidDisplay.currency);
+  const registeredCommissionDisplay = jointSegmentMode ? null : getFunderRegisteredCommissionDisplay(order);
   // 周期总息是订单约定利率的展示预测，不参与待结、已结或担保缺口计算。
   // 默认关闭，必须在“右栏·利息担保”中明确启用才显示。
   const periodInterestTotal = (() => {
@@ -3370,7 +3358,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       <div className={!jointSegmentMode && jointOrderSegments.length > 0 ? 'flex flex-col' : undefined}>
       {shouldRenderJointSegmentDetails && isPrimaryPreviewSegmentExpanded && <div style={!jointSegmentMode && jointOrderSegments.length > 0 ? { order: primaryJointSegmentDisplayNumber } : undefined}>
-      {finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">人民币估值/汇率待更新；原币金额和数量保留，换汇风险估值暂不确定。</p>}
+      {finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">{isSettlementFinal ? '未保存结算汇率；原币金额和数量保留，历史换汇估值未知。' : '人民币估值/汇率待更新；原币金额和数量保留，换汇风险估值暂不确定。'}</p>}
       {/* 主体：左右两栏布局 */}
       <div className="flex">
 
@@ -3497,7 +3485,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   <span className="font-medium flex items-center gap-0.5" style={{ color: optionMarkPriceTone }}>
                     {optionMarkPriceDirection === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                     {optionMarkPriceDirection === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${formatFxEstimate(optionMarkPrice, 'toFixed', 2)} u` : (isOptionSettlementQuoteMissing ? '快照缺失' : '--')}
+                    {greeksResult.loading && optionMarkPrice === null ? '加载中...' : optionMarkPrice !== null ? `${formatFxEstimate(optionMarkPrice, 'toFixed', 2)} u` : (isOptionSettlementQuoteMissing ? '未保存结算合约价' : '--')}
                   </span>
                 </div>
               </>
@@ -3587,7 +3575,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   </span>
                   )
                 ) : (
-                  <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : (isOptionSettlementQuoteMissing ? '结算快照未保留合约报价' : '暂无合约报价')}</span>
+                  <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : (isOptionSettlementQuoteMissing ? '未保存结算合约价' : '暂无合约报价')}</span>
                 )}
               </div>
             )}
@@ -3985,9 +3973,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 >{hasExternalPaidInterest ? <Linked37BadgeText /> : <HelpMarkerText symbol="!" />}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {displayedPaidValue === null
-                  ? <span className="text-xs text-gray-400">加载37号利息...</span>
-                  : <>{formatFxEstimate(displayedPaidValue, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {displayedPaidUnit}</>}
+                {paidRowValue === null
+                  ? <span className="text-xs text-gray-400">{isSettlementFinal ? '未保存历史已付利息' : '加载37号利息...'}</span>
+                  : <>{formatFxEstimate(paidRowValue, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {paidRowUnit}</>}
               </span>
             </div>
             {(() => {
@@ -4007,6 +3995,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               );
             })()}
             </>
+            )}
+            {registeredCommissionDisplay && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-400">已登记分成</span>
+                <span className="font-medium tabular-nums" style={{ color: '#4B5563' }}>{formatFxEstimate(registeredCommissionDisplay.value, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} {getFunderRegisteredCurrencyUnit(registeredCommissionDisplay.currency)}</span>
+              </div>
             )}
             {/* 收益分成使用与订单卡其余字段一致的扁平明细行。 */}
             {(show('profitShare') || Boolean(order.show_profit_share)) && order.show_profit_share && order.commission_share && (() => {
@@ -4028,7 +4022,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 <div className="mt-0.5 space-y-0.5 text-xs">
                   <div className="flex items-center justify-between gap-2"><span className="text-gray-400">收益分成</span><span className="font-medium" style={{ color: '#4B5563' }}>{typeLabel}</span></div>
                   <div className="flex items-center justify-between gap-2"><span className="text-gray-400">分成比例</span><span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span></div>
-                  <div className="flex items-center justify-between gap-2"><span className="text-gray-400">{shareAmountLabel}</span><span className="font-medium tabular-nums" style={{ color: isCoin ? '#DC2626' : '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-gray-400">{shareAmountLabel}</span><span className="font-medium tabular-nums" style={{ color: isCoin ? '#DC2626' : '#4B5563' }}>{shareAmt != null ? `≈ ${formatFxEstimate(shareAmt, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u` : (isCoin && isOptionSettlementQuoteMissing ? '未保存结算合约价' : '---')}</span></div>
                 </div>
               );
             })()}
@@ -4515,7 +4509,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                         : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {formatFxEstimate((entry.valueCny ?? entry.valueU * cnyRate), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元</span>}
                                     </div>
                                   )) : <span className="text-gray-400">暂无手工或钱包担保</span>}
-                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{readConfirmedExposureGap(extTagCollateralValueCny) === null ? '汇率/估值待更新' : `= ${formatFxEstimate((extTagCollateralValueCny ?? (externalOnlyCollateralValueU === null ? Number.NaN : externalOnlyCollateralValueU * cnyRate)), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
+                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{formatFxEstimate(externalOnlyCollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{readConfirmedExposureGap(extTagCollateralValueCny) === null ? unknownEstimateText : `= ${formatFxEstimate((extTagCollateralValueCny ?? (externalOnlyCollateralValueU === null ? Number.NaN : externalOnlyCollateralValueU * cnyRate)), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
                                 </div>
                                 <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
                                   <span className="text-slate-500">担保货币合计</span>{' '}
@@ -4598,7 +4592,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保缺口 ÷ 总风险基准</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} ÷ {formatFunderCollateralPopupAmount(totalGapBase)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? (Number.isFinite(marginRatio) ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '汇率/估值待更新') : '--'}</span></>
+                                      ? <>{diff >= 0 ? '+' : ''}{formatFunderCollateralPopupAmount(diff)} ÷ {formatFunderCollateralPopupAmount(totalGapBase)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? (Number.isFinite(marginRatio) ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : unknownEstimateText) : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                   <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {formatFunderCollateralPopupAmount(totalGapBase)} u（担保减买入价值按真实买入价值；其余按保存口径）</div>
@@ -4959,7 +4953,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                               {exposure === null
-                                ? (finitePositive(cnyRate) === null ? '人民币估值/汇率待更新，风险暂不确定' : '期权标记价加载中…')
+                                ? (finitePositive(cnyRate) === null ? (isSettlementFinal ? '未保存结算汇率，历史风险估值未知' : '人民币估值/汇率待更新，风险暂不确定') : '期权标记价加载中…')
                                 : isSufficient
                                 ? `担保充足，尚有 ${formatFxEstimate(exposure, 'toFixed', 2)} u 的余量空间`
                                 : `担保不足，还需补充 ${formatFxEstimate(Math.abs(exposure), 'toFixed', 2)} u 才能覆盖风险`
@@ -5267,7 +5261,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             )}
 
             {/* 期权 Greeks 面板 */}
-            {shouldShowOptionGreeks && (
+            {shouldShowOptionGreeks && historicalGreeksMissing && (
+              <details className="border-t mt-1 pt-1 text-xs text-gray-400" style={{ borderColor: '#E8EFFF' }}>
+                <summary className="cursor-pointer">历史 Greeks 未保存</summary>
+                <p className="mt-1 leading-5">结算时未保存有效 Greeks；不使用当前行情补历史。合约价与原币登记金额分别保留。</p>
+              </details>
+            )}
+            {shouldShowOptionGreeks && !historicalGreeksMissing && (
               <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                 <div className="h-4 flex items-center justify-between">
                   <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>Greeks</span>
@@ -5278,9 +5278,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   {greeksResult.error && !greeksResult.data && <div className="text-xs" style={{ color: '#DC2626' }}>获取失败: {greeksResult.error}</div>}
                   {(() => {
                     const d = optionGreeksData;
-                    if (!d) return isOptionSettlementQuoteMissing ? <div className="text-xs text-gray-400">结算快照未保留 Greeks</div> : null;
-                    const hasData = d.delta != null || d.gamma != null || d.markPrice != null;
-                    const fmtN = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '---';
+                    if (!d) return null;
+                    const hasData = hasValidFunderHistoricalGreeks(d) || readFunderHistoricalNumber(d.markPrice) !== null;
+                    const fmtN = (v: any, dp = 4) => { const number = readFunderHistoricalNumber(v); return number !== null ? number.toFixed(dp) : '---'; };
                     if (!hasData) return (
                       <div className="text-xs" style={{ color: '#9CA3AF' }}>
                         {d.instrumentName ? `合约 ${d.instrumentName} 暂无行情数据` : '暂无数据'}
@@ -5298,7 +5298,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="flex items-center justify-between"><span className="text-gray-400">Gamma</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.gamma)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
-                        {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate((Number(d.iv) * 100), 'toFixed', 1)}%</span></div>}
+                        {readFunderHistoricalNumber(d.iv) !== null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{formatFxEstimate((Number(d.iv) * 100), 'toFixed', 1)}%</span></div>}
                         {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice, 2)} u</span></div>}
                       </>
                     );
@@ -6400,10 +6400,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     {/* 内部结清确认弹窗（仅当父组件未传入 onConfirmSettle 时使用） */}
     {onConfirmSettle === undefined && _intConfirmSettleId !== null && (() => {
       const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? (order as any)._participantUserIds?.length ?? 0);
+      const historicalDate = (_intSettleInterestEndDate || getBeijingToday()) !== getBeijingToday();
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={closeInternalSettleConfirm}>
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
             {participantCount > 0 ? (
               <p className="text-sm text-indigo-600 mb-2">该订单关联 <span className="font-semibold">{participantCount}</span> 位共同拥有者或参与者。确认后，所有关联订单视图将使用同一时间结清，并影响其各自的利息结算。</p>
@@ -6419,18 +6420,43 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 value={_intSettleInterestEndDate || getBeijingToday()}
                 min={order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : undefined}
                 max={getBeijingToday()}
-                onChange={(e) => _intSetSettleInterestEndDate(e.target.value)}
+                onChange={(e) => { _intSetSettleInterestEndDate(e.target.value); clearInternalSettlePrices(); }}
                 className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
               />
             </div>
+            {historicalDate && (
+              <div className="space-y-2 mb-3 text-xs text-amber-900">
+                <p>历史结算必须填写当日真实价格和汇率，不使用当前行情补历史。</p>
+                <label className="block">标的最终结算价（u/{order.coin || '单位'}）
+                  <input type="text" inputMode="decimal" value={_intSettlePrice} onChange={e => _intSetSettlePrice(e.target.value)} placeholder="填写当日正数标的价" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                </label>
+                <label className="block">USDT 兑人民币结算汇率
+                  <input type="text" inputMode="decimal" value={_intSettleExchangeRate} onChange={e => _intSetSettleExchangeRate(e.target.value)} placeholder="填写当日正数汇率" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                </label>
+              </div>
+            )}
+            {isOptionOrder && (
+              <label className="block mb-3 text-xs text-amber-900">真实合约结算价（u/张）{historicalDate ? '（必填）' : '（可选）'}
+                <input type="text" inputMode="decimal" value={_intSettleOptionMarkPrice} onChange={e => _intSetSettleOptionMarkPrice(e.target.value)} placeholder={historicalDate ? '填写当日合约价，归零填0' : '留空用服务器报价；归零可填0'} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                <span className="block mt-1 leading-5">标的价不等于合约价；空值不视为0。当天报价缺失时可填写真实合约价。</span>
+              </label>
+            )}
             <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位共同拥有者或参与者为持有中，确定继续？</p>
             <div className="flex gap-3">
-              <button onClick={() => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+              <button onClick={closeInternalSettleConfirm} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
               <button
                 onClick={() => {
-                  $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled', interestEndDate: _intSettleInterestEndDate || getBeijingToday() });
-                  _intSetConfirmSettleId(null);
-                  _intSetSettleInterestEndDate('');
+                  const draft = {
+                    interestEndDate: _intSettleInterestEndDate || getBeijingToday(),
+                    settlementPrice: _intSettlePrice.trim() || undefined,
+                    settlementExchangeRate: _intSettleExchangeRate.trim() || undefined,
+                    settlementOptionMarkPrice: isOptionOrder ? (readFunderSettlementOptionMarkInput(_intSettleOptionMarkPrice) ?? undefined) : undefined,
+                  };
+                  const error = getFunderSettlementDraftError({ ...draft, settlementOptionMarkPrice: isOptionOrder ? _intSettleOptionMarkPrice : undefined }, getBeijingToday(), order.asset_type);
+                  if (error) { toast.error(error); return; }
+                  if (historicalDate && (![draft.settlementPrice, draft.settlementExchangeRate].every(value => value && /^\d+(?:\.\d+)?$/.test(value)))) { toast.error('标的价和汇率须使用有效的十进制数字'); return; }
+                  $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled', ...draft });
+                  closeInternalSettleConfirm();
                 }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
               >{participantCount > 0 ? '全部结清' : '确认结清'}</button>

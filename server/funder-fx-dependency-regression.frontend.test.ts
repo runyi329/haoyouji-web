@@ -3,6 +3,7 @@ import { createContext, Script } from 'node:vm';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { finitePositive, getOrderUsdtCnyRate, getUsdtCnyRateFromPrices, formatFxEstimate } from '../shared/usdt-cny-display';
+import * as settledDisplay from '../shared/funder-settled-display';
 
 // Execute the actual production helpers/expressions/JSX offline, without importing React/tRPC/DB.
 function parse(file: string) {
@@ -41,6 +42,7 @@ function text(tree: any): string {
 function run(expression: string, bindings: Record<string, any> = {}, code = baseHelpers): any {
   const forbidden = vi.fn(() => { throw Error('Network/DB forbidden in regression'); });
   const context = createContext({ finitePositive, getOrderUsdtCnyRate, getUsdtCnyRateFromPrices, formatFxEstimate,
+    ...settledDisplay,
     useMemo: (factory: () => unknown) => factory(), __element: elements, __fragment: 'fragment',
     fetch: forbidden, trpc: new Proxy({}, { get: forbidden }), ...bindings });
   const compiled = ts.transpileModule(`${code}\n(${expression});`, { compilerOptions: {
@@ -221,7 +223,7 @@ describe('same-currency interest and frozen history are independent of current F
   });
   it('old card frozen rate and option quote do not fill missing history from live cache', () => {
     expect(run(expr(old, 'cnyRate'), { isPricingFrozen: true, settlementSnapshot: { usdtCnyRate: null }, _cnyRateData: { success: true, money: 7 } })).toBeNaN();
-    const quote = run(expr(old, 'optionGreeksData'), { isPricingFrozen: true, settlementSnapshot: {}, frozenOptionQuote: { markPriceUsdt: null }, greeksResult: { data: { markPrice: 999 } } });
+    const quote = run(expr(old, 'optionGreeksData'), { isPricingFrozen: true, settlementSnapshot: { optionQuote: { markPriceUsdt: null } }, greeksResult: { data: { markPrice: 999 } } });
     expect(quote.markPrice).toBeNull();
     expect(run(expr(old, 'isPricingFrozen'), { isSettlementFinal: true, hasSettlementSnapshot: false })).toBe(true);
   });

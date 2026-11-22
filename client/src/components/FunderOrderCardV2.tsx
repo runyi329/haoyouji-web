@@ -1,4 +1,5 @@
 import { finitePositive, getUsdtCnyRateFromPrices, formatFxEstimate } from '@shared/usdt-cny-display';
+import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -487,14 +488,7 @@ const FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Ne
 
 // 结清显示只认历史快照；缺失历史FX/报价保持未知，绝不能用当前行情补齐。
 function getFunderCardDisplayInputs(order: any, prices: Record<string, number>, rate: unknown) {
-  const primary = order?.joint_order_primary_settlement;
-  const frozen = ['settled', 'completed'].includes(String(order?.status)) || primary?.status === 'settled';
-  let snapshot: any = null;
-  try {
-    const raw = primary?.status === 'settled' ? primary.settlement_snapshot : order?.settlement_snapshot;
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    snapshot = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-  } catch {}
+  const { frozen, snapshot } = selectFunderHistoricalDisplay(order);
   const frozenPrices: Record<string, number> = { USDT: 1, CNY: 1 };
   for (const [coin, price] of Object.entries(snapshot?.priceBySymbol ?? {})) {
     const numericPrice = finitePositive(price);
@@ -675,6 +669,8 @@ export function FunderOrderCardV2({
 }: FunderOrderCardV2Props) {
   const displayInputs = getFunderCardDisplayInputs(order, sourceLivePrices, sourceCnyRate);
   const { livePrices, cnyRate } = displayInputs;
+  const unknownEstimateText = getFunderUnknownEstimateText(displayInputs.frozen, cnyRate);
+  const formatFxEstimate = createFunderDisplayFormatter(displayInputs.frozen, cnyRate);
   const [feeExpanded, setFeeExpanded] = useState(false);
 
   const coin = (order.coin || "ETH") as CoinType;
@@ -747,7 +743,7 @@ export function FunderOrderCardV2({
   collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   const fmt = (v: number | null, digits = 2) =>
-    v == null ? "--" : !Number.isFinite(v) ? "汇率/估值待更新" : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    v == null ? "--" : !Number.isFinite(v) ? unknownEstimateText : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
   return (
     <div
@@ -790,6 +786,7 @@ export function FunderOrderCardV2({
         )}
       </div>
 
+      {displayInputs.frozen && finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">未保存结算汇率；原币金额和数量保留，历史换汇估值未知。</p>}
       {/* ── 行2：主数据行（4列）—— 持有量 / 买入价 / 当前价 / 浮盈 ── */}
       <div
         className="grid grid-cols-4 gap-0 px-3 py-3"
@@ -1017,6 +1014,8 @@ export function FunderOrderCardV2Light({
 }: FunderOrderCardV2Props) {
   const displayInputs = getFunderCardDisplayInputs(order, sourceLivePrices, sourceCnyRate);
   const { livePrices, cnyRate } = displayInputs;
+  const unknownEstimateText = getFunderUnknownEstimateText(displayInputs.frozen, cnyRate);
+  const formatFxEstimate = createFunderDisplayFormatter(displayInputs.frozen, cnyRate);
   const [feeExpanded, setFeeExpanded] = useState(false);
 
   const coin = (order.coin || "ETH") as CoinType;
@@ -1082,7 +1081,7 @@ export function FunderOrderCardV2Light({
   collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   const fmt = (v: number | null, digits = 2) =>
-    v == null ? "--" : !Number.isFinite(v) ? "汇率/估值待更新" : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    v == null ? "--" : !Number.isFinite(v) ? unknownEstimateText : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
   return (
     <div
@@ -1111,6 +1110,7 @@ export function FunderOrderCardV2Light({
         )}
       </div>
 
+      {displayInputs.frozen && finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">未保存结算汇率；原币金额和数量保留，历史换汇估值未知。</p>}
       {/* 行2：主数据行（4列） */}
       <div className="grid grid-cols-4 gap-0 px-3 py-3" style={{ borderTop: `1px solid ${LT_BORDER}` }}>
         <div>
@@ -1350,6 +1350,8 @@ export function FunderOrderCardV2Silver({
 }: FunderOrderCardV2Props) {
   const displayInputs = getFunderCardDisplayInputs(order, sourceLivePrices, sourceCnyRate);
   const { livePrices, cnyRate } = displayInputs;
+  const unknownEstimateText = getFunderUnknownEstimateText(displayInputs.frozen, cnyRate);
+  const formatFxEstimate = createFunderDisplayFormatter(displayInputs.frozen, cnyRate);
   const cardExportRef = useRef<HTMLDivElement>(null);
   const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
@@ -1516,7 +1518,9 @@ export function FunderOrderCardV2Silver({
     enabled: !displayInputs.frozen && _isOptCard && optionGreeksSupported && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
   });
   // Gate.io主源和Deribit备用均由接口统一为USDT/张。
-  const optMarkPrice = displayInputs.frozen ? readConfirmedExposureGap(displayInputs.snapshot?.optionQuote?.markPriceUsdt) : (greeksResult.data?.markPrice ?? null);
+  const optionDisplayQuote = displayInputs.frozen ? readFunderHistoricalOptionQuote(displayInputs.snapshot) : greeksResult.data;
+  const historicalGreeksMissing = displayInputs.frozen && !hasValidFunderHistoricalGreeks(optionDisplayQuote);
+  const optMarkPrice = optionDisplayQuote?.markPrice ?? null;
   // 期权价格只和同一合约的上一笔标记价比较，不能引用 ETH/BTC 现货涨跌。
   const optMarkPriceDirection = greeksResult.markPriceDirection;
   const optCurrentValue = optMarkPrice !== null && qty > 0 ? optMarkPrice * qty : null;
@@ -1566,6 +1570,10 @@ export function FunderOrderCardV2Silver({
   const displayAccrued = convertAccrued(accrued);
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
   const displayPaid = convertAccrued(totalPaid);
+  const registeredPaidDisplay = getFunderRegisteredPaidDisplay(order.paidTotal, baseCur, displayPaid, rateCur);
+  const paidRowValue = registeredPaidDisplay.value;
+  const paidRowUnit = getFunderRegisteredCurrencyUnit(registeredPaidDisplay.currency);
+  const registeredCommissionDisplay = getFunderRegisteredCommissionDisplay(order);
   const approxPaidMode = getDisplayMode(order, 'approxPaid', 'U');
   const approxPaidValue = approxPaidMode === 'U'
     ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
@@ -1845,10 +1853,10 @@ export function FunderOrderCardV2Silver({
   const isSufficient = finalExposureGapU !== null && finalExposureGapU >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
-    v == null ? '--' : !Number.isFinite(v) ? '汇率/估值待更新' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    v == null ? '--' : !Number.isFinite(v) ? unknownEstimateText : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   // 动态小数位：有小数显两位，整数不显小数点
   const fmtQty = (v: number | null) =>
-    v == null ? '--' : !Number.isFinite(v) ? '汇率/估值待更新' : v % 1 === 0 ? v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    v == null ? '--' : !Number.isFinite(v) ? unknownEstimateText : v % 1 === 0 ? v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // 四角铆钉位置
   const rivets = [
@@ -2079,6 +2087,7 @@ export function FunderOrderCardV2Silver({
         })()}
       </div>
 
+      {displayInputs.frozen && finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">未保存结算汇率；原币金额和数量保留，历史换汇估值未知。</p>}
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
       <div className="flex gap-0 px-5" style={{ borderBottom: `1px solid ${DIVIDER}`, paddingTop: isOptionCard ? '8px' : '12px', paddingBottom: isOptionCard ? '8px' : '12px' }}>
         {/* 持有数量/持有资产：占 40% */}
@@ -2181,13 +2190,13 @@ export function FunderOrderCardV2Silver({
 
             {/* 当前价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '期权现价 (U)' : '当前价 (U)'}</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? (displayInputs.frozen ? '结算期权价 (U)' : '期权现价 (U)') : '当前价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
                 <span className="text-sm font-semibold inline-flex items-center justify-end gap-0.5" style={{ color: isOptionCard ? optMarkPriceTone : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard && optMarkPriceDirection === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                   {isOptionCard && optMarkPriceDirection === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                   {isOptionCard
-                    ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (greeksResult.loading ? '...' : '--'))
+                    ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (displayInputs.frozen ? '未保存结算合约价' : greeksResult.loading ? '...' : '--'))
                     : (liveP != null ? fmt(liveP, 2) : '--')}
                 </span>
               </div>
@@ -2314,7 +2323,7 @@ export function FunderOrderCardV2Silver({
                 />
               ) : (
                 <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
-                  {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
+                  {displayInputs.frozen && optMarkPrice === null ? '未保存结算合约价' : '--'}
                 </div>
               )
             ) : (order as any).order_fill_status === 'pending' ? (
@@ -2408,6 +2417,12 @@ export function FunderOrderCardV2Silver({
         );
       })()}
 
+      {(registeredCommissionDisplay || (order.paidTotal != null && (registeredPaidDisplay.nativeFallback || !Number.isFinite(paidRowValue)))) && (
+        <div className="px-4 py-2 space-y-1 text-xs" style={{ borderTop: `1px solid ${DIVIDER}` }}>
+          {order.paidTotal != null && (registeredPaidDisplay.nativeFallback || !Number.isFinite(paidRowValue)) && <div className="flex justify-between gap-2"><span style={{ color: TXT_SEC }}>已结利息（原登记）</span><span style={{ color: TXT_PRI }}>{fmt(paidRowValue, 2)} {paidRowUnit}</span></div>}
+          {registeredCommissionDisplay && <div className="flex justify-between gap-2"><span style={{ color: TXT_SEC }}>已登记分成</span><span style={{ color: TXT_PRI }}>{fmt(registeredCommissionDisplay.value, 2)} {getFunderRegisteredCurrencyUnit(registeredCommissionDisplay.currency)}</span></div>}
+        </div>
+      )}
       {/* ── Tab栏：详情 | 备注 ── */}
       <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>
         <button
@@ -2459,8 +2474,9 @@ export function FunderOrderCardV2Silver({
         };
         if (isOptionCard) {
           // 期权卡片详情：展示 P&L 曲线 + 最大亏损/盈利 + 希腊字母
-          const d = greeksResult.data;
-          const fmtG = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '--';
+          const d = optionDisplayQuote;
+          const fmtG = (v: any, dp = 4) => { const number = readFunderHistoricalNumber(v); return number !== null ? number.toFixed(dp) : '--'; };
+          const historicalIv = readFunderHistoricalNumber(d?.iv);
           const loadingVal = <span style={{ color: TXT_DIM }}>--</span>;
 
           // 计算 P&L 曲线数据
@@ -2520,13 +2536,18 @@ export function FunderOrderCardV2Silver({
                 <div className="text-right">
                   <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>IV 波动率</div>
                   <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                    {d?.iv != null ? `${(Number(d.iv) * 100).toFixed(1)}%` : '--'}
+                    {historicalIv !== null ? `${(historicalIv * 100).toFixed(1)}%` : '--'}
                   </div>
                 </div>
               </div>
 
               {/* 第2行： Delta / Gamma / Theta / Vega —— 4列网格 */}
-              <div className="grid grid-cols-4 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+              {historicalGreeksMissing ? (
+                <details className="px-4 py-2" style={{ color: TXT_SEC }}>
+                  <summary className="cursor-pointer">历史 Greeks 未保存</summary>
+                  <p className="mt-1">结算时未保存有效 Greeks，不使用当前行情补历史。</p>
+                </details>
+              ) : <div className="grid grid-cols-4 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
                 <div>
                   <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Delta</div>
                   <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.delta) : '--'}</div>
@@ -2543,7 +2564,7 @@ export function FunderOrderCardV2Silver({
                   <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Vega</div>
                   <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.vega) : '--'}</div>
                 </div>
-              </div>
+              </div>}
 
               {/* P&L 曲线图 */}
               {payoffData.length > 1 && optStrikeNum && (
@@ -2630,7 +2651,7 @@ export function FunderOrderCardV2Silver({
                 >!</button>
               </span>
               <span className="flex flex-col items-end" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                <span>+{fmt(displayPaid, 2)} {interestUnit}</span>
+                <span>{Number.isFinite(paidRowValue) && paidRowValue > 0 ? '+' : ''}{fmt(paidRowValue, 2)} {paidRowUnit}</span>
                 {approxPaidMode !== 'hidden' && (
                   <span className="text-[10px]" style={{ color: TXT_DIM }}>≈{fmt(approxPaidValue, 2)} {approxPaidUnit}</span>
                 )}
@@ -2959,7 +2980,7 @@ export function FunderOrderCardV2Silver({
                 {hasExternalCollateral && (
                   <div className="flex justify-between" style={{ marginTop: 6 }}>
                     <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>37号引用担保</span>
-                    <span style={{ color: TXT_PRI }}>{getDisplayMode(order, 'externalCollateralValueDisplay', 'CNY') === 'CNY' ? `${formatFxEstimate(fc2977CollateralValueCny, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元` : fc2977CollateralValueU === null ? '汇率/估值待更新' : `≈ ${formatFxEstimate(fc2977CollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u`}</span>
+                    <span style={{ color: TXT_PRI }}>{getDisplayMode(order, 'externalCollateralValueDisplay', 'CNY') === 'CNY' ? `${formatFxEstimate(fc2977CollateralValueCny, 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元` : fc2977CollateralValueU === null ? unknownEstimateText : `≈ ${formatFxEstimate(fc2977CollateralValueU, 'toLocaleString', undefined, { maximumFractionDigits: 2 })} u`}</span>
                   </div>
                 )}
                 {collateralAssets.map((a, idx) => (
@@ -3309,6 +3330,8 @@ export function FunderLenderCardSilver({
 }: FunderOrderCardV2Props) {
   const displayInputs = getFunderCardDisplayInputs(order, sourceLivePrices, sourceCnyRate);
   const { livePrices, cnyRate } = displayInputs;
+  const unknownEstimateText = getFunderUnknownEstimateText(displayInputs.frozen, cnyRate);
+  const formatFxEstimate = createFunderDisplayFormatter(displayInputs.frozen, cnyRate);
   const cardExportRef = useRef<HTMLDivElement>(null);
   const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
@@ -3516,7 +3539,7 @@ export function FunderLenderCardSilver({
     enabled: !displayInputs.frozen && _lnIsOpt && optionGreeksSupported && !!_lnOptInfo?.exerciseDate && !!_lnOptInfo?.strikePrice,
   });
   // 接口返回的期权标记价统一为USDT/张。
-  const optionMarkPrice = displayInputs.frozen ? readConfirmedExposureGap(displayInputs.snapshot?.optionQuote?.markPriceUsdt) : (optionGreeksResult.data?.markPrice ?? null);
+  const optionMarkPrice = displayInputs.frozen ? (readFunderHistoricalOptionQuote(displayInputs.snapshot)?.markPrice ?? null) : (optionGreeksResult.data?.markPrice ?? null);
   const optionCurrentValue = optionMarkPrice !== null && qty > 0 ? optionMarkPrice * qty : null;
   const optionIsShort = _lnOptInfo?.direction === 'short_call' || _lnOptInfo?.direction === 'short_put';
   // 融资付息期权使用合约标记价与权利金成本差额；自有资产期权只显示当前合约价值。
@@ -3572,6 +3595,10 @@ export function FunderLenderCardSilver({
   const displayAccrued = convertAccrued(accrued);
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
   const displayPaid = convertAccrued(totalPaid);
+  const registeredPaidDisplay = getFunderRegisteredPaidDisplay(order.paidTotal, baseCur, displayPaid, rateCur);
+  const paidRowValue = registeredPaidDisplay.value;
+  const paidRowUnit = getFunderRegisteredCurrencyUnit(registeredPaidDisplay.currency);
+  const registeredCommissionDisplay = getFunderRegisteredCommissionDisplay(order);
   const approxInterestMode = getDisplayMode(order, 'approxInterest', 'U');
   const approxInterestValue = approxInterestMode === 'U'
     ? (interestUnit === 'U' ? displayAccrued : displayAccrued / cnyRate)
@@ -3707,9 +3734,9 @@ export function FunderLenderCardSilver({
   };
 
   const fmt = (v: number | null, digits = 2) =>
-    v == null ? '--' : !Number.isFinite(v) ? '汇率/估值待更新' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    v == null ? '--' : !Number.isFinite(v) ? unknownEstimateText : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const fmtQty = (v: number | null) =>
-    v == null ? '--' : !Number.isFinite(v) ? '汇率/估值待更新' : v % 1 === 0
+    v == null ? '--' : !Number.isFinite(v) ? unknownEstimateText : v % 1 === 0
       ? v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
       : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -3895,6 +3922,7 @@ export function FunderLenderCardSilver({
         })()}
       </div>
 
+      {displayInputs.frozen && finitePositive(cnyRate) === null && <p className="px-4 py-2 text-xs text-amber-700">未保存结算汇率；原币金额和数量保留，历史换汇估值未知。</p>}
       {/* ── 行2：应收利息大字（左）+ 年化利率（右）── */}
       <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -3952,7 +3980,7 @@ export function FunderLenderCardSilver({
                 />
               ) : (
                 <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                  {_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--'}
+                  {displayInputs.frozen && optionMarkPrice === null ? '未保存结算合约价' : '--'}
                 </span>
               )}
             </div>
@@ -3987,9 +4015,9 @@ export function FunderLenderCardSilver({
         <div className="text-right">
           {!isNegRate ? (
             <>
-              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>已收利息 ({interestUnit})</div>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>已收利息 ({paidRowUnit})</div>
               <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
-                {displayPaid > 0 ? fmt(displayPaid) : '--'}
+                {fmt(paidRowValue)}
               </div>
             </>
           ) : showField('collateral') ? (
@@ -4012,6 +4040,12 @@ export function FunderLenderCardSilver({
         </div>
       )}
 
+      {(registeredCommissionDisplay || (order.paidTotal != null && (registeredPaidDisplay.nativeFallback || !Number.isFinite(paidRowValue)))) && (
+        <div className="px-4 py-2 space-y-1 text-xs" style={{ borderTop: `1px solid ${DIVIDER}` }}>
+          {order.paidTotal != null && (registeredPaidDisplay.nativeFallback || !Number.isFinite(paidRowValue)) && <div className="flex justify-between gap-2"><span style={{ color: TXT_SEC }}>已结利息（原登记）</span><span style={{ color: TXT_PRI }}>{fmt(paidRowValue, 2)} {paidRowUnit}</span></div>}
+          {registeredCommissionDisplay && <div className="flex justify-between gap-2"><span style={{ color: TXT_SEC }}>已登记分成</span><span style={{ color: TXT_PRI }}>{fmt(registeredCommissionDisplay.value, 2)} {getFunderRegisteredCurrencyUnit(registeredCommissionDisplay.currency)}</span></div>}
+        </div>
+      )}
       {/* ── Tab 栏：详情 | 备注 ── */}
       <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>
         <button
@@ -4160,7 +4194,7 @@ export function FunderLenderCardSilver({
                 已结利息
               </span>
               <span className="flex flex-col items-end" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                <span>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
+                <span>{Number.isFinite(paidRowValue) && paidRowValue > 0 ? '+' : ''}{fmt(paidRowValue, 2)} {paidRowUnit}</span>
                 {approxPaidMode !== 'hidden' && (
                   <span className="text-[10px]" style={{ color: TXT_DIM }}>≈{fmt(approxPaidValue, 2)} {approxPaidUnit}</span>
                 )}
@@ -4225,7 +4259,7 @@ export function FunderLenderCardSilver({
                             </div>
                             <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
                               <div className="flex justify-between"><span>手工/钱包担保</span><strong>{collateralValue === null ? '加载中...' : `${collateralValue.toFixed(2)} U`}</strong></div>
-                              <div className="mt-1 flex justify-between"><span>37号引用担保</span><strong>{getDisplayMode(order, 'externalCollateralValueDisplay', 'CNY') === 'CNY' ? `${formatFxEstimate(readConfirmedExposureGap(_lnExtCollateralValuation?.totalCny), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元` : lnExtCollateralValueU === null ? '汇率/估值待更新' : `${lnExtCollateralValueU.toFixed(2)} U`}</strong></div>
+                              <div className="mt-1 flex justify-between"><span>37号引用担保</span><strong>{getDisplayMode(order, 'externalCollateralValueDisplay', 'CNY') === 'CNY' ? `${formatFxEstimate(readConfirmedExposureGap(_lnExtCollateralValuation?.totalCny), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元` : lnExtCollateralValueU === null ? unknownEstimateText : `${lnExtCollateralValueU.toFixed(2)} U`}</strong></div>
                               <div className="mt-1 border-t border-slate-200 pt-1 flex justify-between font-semibold text-slate-800"><span>担保总值（合并）</span><span>{combinedCollateralValueU === null ? '加载中...' : `${combinedCollateralValueU.toFixed(2)} U`}</span></div>
                             </div>
                             <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={lnExternalCollateralTagName} />
