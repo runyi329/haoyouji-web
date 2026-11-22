@@ -2,12 +2,12 @@ import type { Ledger37HoldingPosition, Ledger37HoldingSource, Ledger37HoldingSou
 import seeds from './holding-source-manual-seeds.json';
 import { getVerifiedHoldingDisplaySymbol } from './holding-security-catalog';
 
-type ManualId = Extract<Ledger37HoldingSourceId, 'soros' | 'ark' | 'pershing' | 'himalaya' | 'bridgewater'>;
+type ManualId = Extract<Ledger37HoldingSourceId, 'duan' | 'soros' | 'ark' | 'pershing' | 'bridgewater'>;
 const CATALOG: Record<ManualId, { displayName: string; entityName: string; cik: string | null; description: string }> = {
+  duan: { displayName: '段永平持股', entityName: 'H&H International Investment', cik: '1759760', description: '段永平关联的H&H International Investment管理机构公开披露，不代表段永平个人或机构全部资产。' },
   soros: { displayName: '索罗斯持股', entityName: 'Soros Fund Management', cik: '1029160', description: '索罗斯基金管理机构公开持仓，不是乔治·索罗斯个人账户或个人全部资产。' },
   ark: { displayName: '木头姐持股', entityName: 'ARK Innovation ETF · ARKK', cik: '1579982', description: '仅ARKK基金的正式公开披露，不是凯茜·伍德个人持仓，也不是ARK全部基金组合。' },
   pershing: { displayName: '阿克曼持股', entityName: 'Pershing Square Capital Management', cik: '1336528', description: '阿克曼关联的潘兴广场管理机构公开披露，不是阿克曼个人账户。' },
-  himalaya: { displayName: '李录持股', entityName: 'Himalaya Capital Management', cik: '1709323', description: '李录关联的喜马拉雅资本管理机构公开披露，不代表李录个人或机构全部资产。' },
   bridgewater: { displayName: '桥水持股', entityName: 'Bridgewater Associates · 达利欧创办', cik: '1350694', description: '桥水机构公开披露，达利欧为创办人，不是达利欧个人现时持仓或机构全部策略。' },
 };
 const SCALE = BigInt(10) ** BigInt(24);

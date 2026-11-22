@@ -1,4 +1,4 @@
-export const LEDGER37_HOLDING_SOURCE_IDS = ['r1', 'berkshire', 'pelosi', 'ark', 'nvidia', 'soros', 'pershing', 'himalaya', 'bridgewater'] as const;
+export const LEDGER37_HOLDING_SOURCE_IDS = ['r1', 'duan', 'berkshire', 'pelosi', 'ark', 'nvidia', 'soros', 'pershing', 'bridgewater'] as const;
 export type Ledger37HoldingSourceId = typeof LEDGER37_HOLDING_SOURCE_IDS[number];
 export type Ledger37HoldingMarketValue = {
   /** Exact decimal valuation of this member's remaining allocated quantity, not wallet cash. */

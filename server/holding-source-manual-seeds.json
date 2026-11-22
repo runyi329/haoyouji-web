@@ -1,5 +1,171 @@
 [
   {
+    "id": "duan",
+    "asOf": "2026-09-30",
+    "publishedAt": "2026-11-16",
+    "checkedAt": "2026-11-22T09:09:15.064021+00:00",
+    "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1759760/000175976026000008/infotable.xml",
+    "provenance": {
+      "format": "sec-13f-raw-xml",
+      "cik": "1759760",
+      "seriesId": null,
+      "rawSha256": "81c8baa0c38cfbc4438dec3059d581dc0b4f7503b03f5a3507ad64ab467c76fc",
+      "tableEntryTotal": 16,
+      "tableValueTotalUSD": "17190742843",
+      "includedValueTotalUSD": "17190742843",
+      "weightBasis": "included-equity-market-value",
+      "denominatorUSD": "17190742843",
+      "isAmendment": false,
+      "isConfidentialOmitted": false
+    },
+    "originalRows": [
+      {
+        "symbol": "CUSIP:02079K107",
+        "stockName": "ALPHABET INC",
+        "titleOfClass": "CAP STK CL C",
+        "shares": "1151700",
+        "valueUSD": "392430258",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:037833100",
+        "stockName": "APPLE INC",
+        "titleOfClass": "COM",
+        "shares": "21202403",
+        "valueUSD": "7060824247",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:084670702",
+        "stockName": "BERKSHIRE HATHAWAY INC DEL",
+        "titleOfClass": "CL B NEW",
+        "shares": "8356796",
+        "valueUSD": "4161266568",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:G25457105",
+        "stockName": "CREDO TECHNOLOGY GROUP HOLDI",
+        "titleOfClass": "ORDINARY SHARES",
+        "shares": "601300",
+        "valueUSD": "117127227",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:254687106",
+        "stockName": "DISNEY WALT CO",
+        "titleOfClass": "COM",
+        "shares": "1706600",
+        "valueUSD": "179022340",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:594918104",
+        "stockName": "MICROSOFT CORP",
+        "titleOfClass": "COM",
+        "shares": "694100",
+        "valueUSD": "356003890",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:67066G104",
+        "stockName": "NVIDIA CORPORATION",
+        "titleOfClass": "COM",
+        "shares": "2319475",
+        "valueUSD": "529721701",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:674599105",
+        "stockName": "OCCIDENTAL PETE CORP",
+        "titleOfClass": "COM",
+        "shares": "10261500",
+        "valueUSD": "567666180",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:69608A108",
+        "stockName": "PALANTIR TECHNOLOGIES INC",
+        "titleOfClass": "CL A",
+        "shares": "60000",
+        "valueUSD": "11223000",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:722304102",
+        "stockName": "PDD HOLDINGS INC",
+        "titleOfClass": "SPONSORED ADS",
+        "shares": "27990859",
+        "valueUSD": "2181607550",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:833445109",
+        "stockName": "SNOWFLAKE INC",
+        "titleOfClass": "COM SHS",
+        "shares": "10000",
+        "valueUSD": "3395600",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:84615Q103",
+        "stockName": "SPACE EXPLORATION TECHN CORP",
+        "titleOfClass": "CLASS A COM STK",
+        "shares": "199900",
+        "valueUSD": "30156914",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:871607107",
+        "stockName": "SYNOPSYS INC",
+        "titleOfClass": "COM",
+        "shares": "10000",
+        "valueUSD": "4349400",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:88023B103",
+        "stockName": "TEMPUS AI INC",
+        "titleOfClass": "CL A",
+        "shares": "20000",
+        "valueUSD": "1638000",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:88160R101",
+        "stockName": "TESLA INC",
+        "titleOfClass": "COM",
+        "shares": "4080000",
+        "valueUSD": "1447624800",
+        "unit": "SH",
+        "putCall": null
+      },
+      {
+        "symbol": "CUSIP:91324P102",
+        "stockName": "UNITEDHEALTH GROUP INC",
+        "titleOfClass": "COM",
+        "shares": "399600",
+        "valueUSD": "146685168",
+        "unit": "SH",
+        "putCall": null
+      }
+    ]
+  },
+  {
     "id": "soros",
     "asOf": "2026-06-30",
     "publishedAt": "2026-08-14",
@@ -3015,100 +3181,6 @@
         "titleOfClass": "COM",
         "shares": "29958771",
         "valueUSD": "2154934398",
-        "unit": "SH",
-        "putCall": null
-      }
-    ]
-  },
-  {
-    "id": "himalaya",
-    "asOf": "2026-09-30",
-    "publishedAt": "2026-11-16",
-    "checkedAt": "2026-11-22T06:44:15.298440+00:00",
-    "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1709323/000204358526000030/13fhciq326.xml",
-    "provenance": {
-      "format": "sec-13f-raw-xml",
-      "cik": "1709323",
-      "seriesId": null,
-      "rawSha256": "b8d7cd409f691eb5d828011ef83bd3c44f48435df57cea99bf7c56c8677da836",
-      "tableEntryTotal": 8,
-      "tableValueTotalUSD": "3781431260",
-      "includedValueTotalUSD": "3781431260",
-      "weightBasis": "included-equity-market-value",
-      "denominatorUSD": "3781431260",
-      "isAmendment": false,
-      "isConfidentialOmitted": false
-    },
-    "originalRows": [
-      {
-        "symbol": "CUSIP:02079K305",
-        "stockName": "ALPHABET INC",
-        "titleOfClass": "CAP STK CL A",
-        "shares": "2543300",
-        "valueUSD": "875098664",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:02079K107",
-        "stockName": "ALPHABET INC",
-        "titleOfClass": "CAP STK CL C",
-        "shares": "2451300",
-        "valueUSD": "835255962",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:037833100",
-        "stockName": "APPLE INC",
-        "titleOfClass": "COM",
-        "shares": "110600",
-        "valueUSD": "36832012",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:084670702",
-        "stockName": "BERKSHIRE HATHAWAY INC DEL",
-        "titleOfClass": "CL B NEW",
-        "shares": "1108318",
-        "valueUSD": "551886948",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:227046109",
-        "stockName": "CROCS INC",
-        "titleOfClass": "COM",
-        "shares": "887093",
-        "valueUSD": "104064880",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:27579R104",
-        "stockName": "EAST WEST BANCORP INC",
-        "titleOfClass": "COM",
-        "shares": "2776351",
-        "valueUSD": "344073179",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:722304102",
-        "stockName": "PDD HOLDINGS INC",
-        "titleOfClass": "SPON ADS",
-        "shares": "11761119",
-        "valueUSD": "916661615",
-        "unit": "SH",
-        "putCall": null
-      },
-      {
-        "symbol": "CUSIP:88034P109",
-        "stockName": "TENCENT MUSIC ENTERTAINM",
-        "titleOfClass": "SPON ADS",
-        "shares": "14824464",
-        "valueUSD": "117558000",
         "unit": "SH",
         "putCall": null
       }

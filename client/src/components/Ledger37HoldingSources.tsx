@@ -2,8 +2,9 @@ import { useState, type ReactNode } from "react";
 import { ArrowDownWideNarrow, ChevronDown, ExternalLink, FileText, Search, X } from "lucide-react";
 import type { Ledger37HoldingClosedTrade, Ledger37HoldingMarketValue, Ledger37HoldingQuote, Ledger37HoldingPosition, Ledger37HoldingPositionChange, Ledger37HoldingSource, Ledger37HoldingSourceId, Ledger37HoldingSources } from "@shared/ledger37-ai-holdings";
 import manualPortraitCredits from "@/lib/holding-source-portrait-credits.json";
+import portraitAssets from "@/lib/holding-source-portraits.json";
 
-const SOURCE_ORDER: Ledger37HoldingSourceId[] = ["r1", "berkshire", "nvidia", "soros", "ark", "pershing", "himalaya", "bridgewater", "pelosi"];
+const SOURCE_ORDER: Ledger37HoldingSourceId[] = ["r1", "berkshire", "duan", "nvidia", "soros", "ark", "pershing", "bridgewater", "pelosi"];
 const NEUTRAL_RING = "#EAF2F7";
 // Existing asset map is a lookup, never a source of holdings. Unknown securities use their real code.
 const STOCK_ASSET_ROOT = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
@@ -29,7 +30,7 @@ function PortraitCredit({ source }: { source: Ledger37HoldingSource }) {
     <summary className="min-h-[44px] cursor-pointer py-3 font-medium">图片来源与许可</summary>
     <p className="break-words">{credit.author} · {credit.license}</p>
     <div className="flex flex-wrap gap-x-4"><a href={credit.page} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center text-[#087987]">查看原图与署名</a>{credit.licenseUrl && <a href={credit.licenseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center text-[#087987]">许可条款</a>}</div>
-    <p>原文件未修改，仅以圆形样式展示。人物肖像用于识别来源，不代表产品背书。{source.id === "nvidia" && "英伟达来源为公司 13F 披露，并非黄仁勋个人持仓。"}</p>
+    <p>照片仅作居中头像裁剪与压缩，不修改人物。人物肖像用于识别来源，不代表产品背书。{source.id === "nvidia" && "英伟达来源为公司 13F 披露，并非黄仁勋个人持仓。"}</p>
   </details>;
 }
 
@@ -181,9 +182,12 @@ function officialSourceHref(value: string | null): string | null {
 
 function SourcePortrait({ source }: { source: Ledger37HoldingSource }) {
   const [failed, setFailed] = useState(false);
+  const [localFallback, setLocalFallback] = useState(false);
+  const asset = (portraitAssets as Partial<Record<Ledger37HoldingSourceId, { src: string; width: number; height: number }>>)[source.id];
+  const src = asset ? localFallback ? `/holdings/portraits/${source.id}.jpg` : asset.src : `/holdings/${source.id}.jpg`;
   const fallback = source.id === "r1" ? "R1" : source.id === "ark" ? "ARK" : source.id === "nvidia" ? "NV" : source.displayName.slice(0, 1);
   return <span className="absolute inset-[11px] flex items-center justify-center overflow-hidden rounded-full border-[3px] border-[#FFFFFF] bg-[#EAF2F7] text-[22px] font-semibold tracking-tight text-[#087987] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-    {source.id === "r1" || failed ? <span aria-label={`${source.displayName}标识`}>{fallback}</span> : <img src={`/holdings/${source.id}.jpg`} alt={source.entityName} onError={() => setFailed(true)} className="h-full w-full object-cover object-center" loading="lazy" />}
+    {source.id === "r1" || failed ? <span aria-label={`${source.displayName}标识`}>{fallback}</span> : <img src={src} alt={source.entityName} width={asset?.width || 192} height={asset?.height || 192} onError={() => asset && !localFallback ? setLocalFallback(true) : setFailed(true)} className="h-full w-full object-cover object-center" loading={source.id === "berkshire" || source.id === "duan" ? "eager" : "lazy"} decoding="async" fetchPriority={source.id === "berkshire" ? "high" : "auto"} />}
   </span>;
 }
 function HoldingLogo({ symbol, satellite = false }: { symbol: string; satellite?: boolean }) {

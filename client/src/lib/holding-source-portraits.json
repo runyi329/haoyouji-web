@@ -1,0 +1,37 @@
+{
+  "berkshire": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/berkshire-38a97c955547/1795339588334-dnlsucs-poNq5N_hvaCah.jpeg",
+    "width": 192,
+    "height": 192
+  },
+  "duan": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/duan-af04614d6ae1/1795339589121-wEdPutZNgm8pC6c7U1j9f.jpeg",
+    "width": 168,
+    "height": 168
+  },
+  "nvidia": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/nvidia-8929fc0b828f/1795339711165-DBEFfPcg_GME8UDhfoEQC.jpeg",
+    "width": 192,
+    "height": 192
+  },
+  "soros": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/soros-1c1a01ea6d31/1795339593719-IYI25hK7fJV5Kq9xkKioR.jpeg",
+    "width": 192,
+    "height": 192
+  },
+  "ark": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/ark-dbcfc53f6653/1795339594639-y3EWMof6UANbbr9SuMSdm.jpeg",
+    "width": 192,
+    "height": 192
+  },
+  "pershing": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/pershing-a2770fb1ef06/1795339597150-4_Spub9dbOqM1APl1KzKN.jpeg",
+    "width": 192,
+    "height": 192
+  },
+  "bridgewater": {
+    "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ledger37-holding-portraits/v1/bridgewater-d5103c3b1e9c/1795339712206-httm-uC8_hfPRpYklubH5.jpeg",
+    "width": 192,
+    "height": 192
+  }
+}
