@@ -1,4 +1,4 @@
-name: Deribit fixed public API read-only network diagnostic
+name: Deribit fixed public API read-only DNS diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -8,14 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - name: Resolve official host on runner
-        run: |
-          node --input-type=module <<'JS'
-          import dns from 'node:dns/promises';
-          import fs from 'node:fs';
-          const addresses = await dns.resolve4('www.deribit.com');
-          fs.appendFileSync(process.env.GITHUB_ENV, 'DERIBIT_DIAGNOSTIC_IPV4=' + addresses.filter(a => /^\d+\.\d+\.\d+\.\d+$/.test(a)).join(',') + '\n');
-          JS
       - name: Configure existing deployment SSH
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -23,7 +15,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-      - name: Fixed read-only network probes only
+      - name: Fixed read-only DNS and public quote probes only
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -31,42 +23,48 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "DERIBIT_DIAGNOSTIC_IPV4='$DERIBIT_DIAGNOSTIC_IPV4' node --input-type=module -" <<'JS'
-          import dns from 'node:dns/promises';
+            "$DEPLOY_USER@$DEPLOY_HOST" 'node --input-type=module -' <<'JS'
           import https from 'node:https';
-          const url = 'https://www.deribit.com/api/v2/public/get_order_book?instrument_name=ETH-25JUN27-1700-C&depth=1';
-          function summarize(data) {
-            const r = data?.result;
-            return {instrument: r?.instrument_name, mark: r?.mark_price, index: r?.index_price, timestamp: r?.timestamp, apiError: data?.error?.code};
-          }
+          const quoteUrl = 'https://www.deribit.com/api/v2/public/get_order_book?instrument_name=ETH-25JUN27-1700-C&depth=1';
           async function probe(label, task) {
-            const start = Date.now();
-            try {console.log(JSON.stringify({label, ...(await task()), elapsedMs:Date.now()-start}));}
-            catch(e) {console.log(JSON.stringify({label, elapsedMs:Date.now()-start, error:e.message, code:e.code, cause:e.cause?.code}));}
+            const start=Date.now();
+            try {console.log(JSON.stringify({label,...(await task()),elapsedMs:Date.now()-start}));}
+            catch(e) {console.log(JSON.stringify({label,elapsedMs:Date.now()-start,error:e.message,code:e.code}));}
           }
-          function ipv4(address) {
-            return new Promise((resolve,reject) => {
-              const options = {family:4, rejectUnauthorized:true, headers:{Accept:'application/json'}};
-              if (address) options.lookup = (_host,_options,cb) => cb(null,address,4);
-              const request = https.get(url, options, response => {
+          function get(url,address) {
+            return new Promise((resolve,reject)=>{
+              const options={family:4,rejectUnauthorized:true,headers:{Accept:'application/dns-json, application/json'}};
+              if(address) options.lookup=(_host,_options,cb)=>cb(null,address,4);
+              const request=https.get(url,options,response=>{
                 let text='';
-                response.on('data', b=>{text+=b; if(text.length>1000000) request.destroy(new Error('body limit'));});
-                response.on('error', reject);
-                response.on('end', ()=>{try {resolve({http:response.statusCode,...summarize(JSON.parse(text))});} catch {reject(new Error('non JSON response'));}});
+                response.on('data',b=>{text+=b;if(text.length>1000000)request.destroy(new Error('body limit'));});
+                response.on('error',reject);
+                response.on('end',()=>{try{resolve({http:response.statusCode,data:JSON.parse(text)});}catch{reject(new Error('non JSON response'));}});
               });
-              const timer = setTimeout(()=>request.destroy(new Error('bounded 8s timeout')),8000);
-              request.on('error',reject);
-              request.on('close',()=>clearTimeout(timer));
+              const timer=setTimeout(()=>request.destroy(new Error('bounded 5s timeout')),5000);
+              request.on('error',reject);request.on('close',()=>clearTimeout(timer));
             });
           }
-          await probe('system_dns_ipv4', async()=>({addresses:await dns.resolve4('www.deribit.com')}));
-          await probe('native_fetch', async()=>{const response=await fetch(url,{signal:AbortSignal.timeout(8000)});return {http:response.status,...summarize(await response.json())};});
-          await probe('https_ipv4_system_dns', ()=>ipv4());
-          for (const address of (process.env.DERIBIT_DIAGNOSTIC_IPV4||'').split(',').filter(Boolean).slice(0,2)) {
-            await probe('https_ipv4_runner_dns_'+address, ()=>ipv4(address));
+          const resolvers=[
+            ['alidns','https://dns.alidns.com/resolve?name=www.deribit.com&type=A'],
+            ['cloudflare','https://cloudflare-dns.com/dns-query?name=www.deribit.com&type=A'],
+            ['google','https://dns.google/resolve?name=www.deribit.com&type=A'],
+            ['cloudflare_secondary','https://1.0.0.1/dns-query?name=www.deribit.com&type=A'],
+          ];
+          for(const [name,url] of resolvers) {
+            await probe('doh_'+name,async()=>{
+              const response=await get(url);
+              const addresses=response.data.Answer?.filter(r=>r.type===1).map(r=>r.data)||[];
+              return {http:response.http,status:response.data.Status,answers:response.data.Answer,addresses};
+            });
+            if(name==='alidns') {
+              await probe('alidns_resolved_official_quote',async()=>{
+                const response=await get(url);
+                const address=response.data.Answer?.find(r=>r.type===1)?.data;
+                if(!address)throw new Error('no IPv4 address');
+                const q=await get(quoteUrl,address);const r=q.data.result;
+                return {address,http:q.http,instrument:r?.instrument_name,mark:r?.mark_price,index:r?.index_price,timestamp:r?.timestamp};
+              });
+            }
           }
-          await probe('cloudflare_doh_ipv4', async()=>{
-            const response=await fetch('https://1.1.1.1/dns-query?name=www.deribit.com&type=A',{headers:{Accept:'application/dns-json'},signal:AbortSignal.timeout(8000)});
-            const data=await response.json(); return {http:response.status, status:data.Status, addresses:data.Answer?.filter(r=>r.type===1).map(r=>r.data)};
-          });
           JS
