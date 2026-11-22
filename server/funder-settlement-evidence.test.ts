@@ -196,11 +196,11 @@ describe('真实结算源码离线回归：必需字段门槛及所有接线', (
 
 describe('真实报价刷新源码：结算0、nullable Greeks、原币转换', () => {
   function refresher(ticker: any, deribit: any = null) {
-    const fetch = vi.fn(async () => ({ json: async () => deribit ?? { error: { message: 'missing quote' } } }));
+    const fetch = vi.fn(async () => deribit ?? { error: { message: 'missing quote' } });
     const run = actual('refreshOptionGreeksQuote', { readFunderEvidenceNumber: evidence.readFunderEvidenceNumber,
       hasUsableOptionMarkPrice: (v: any) => { const n = evidence.readFunderEvidenceNumber(v); return n !== null && n > 0; },
       getGateOptionTicker: async () => { if (ticker instanceof Error) throw ticker; return ticker; },
-      deribitDbSet: async () => {}, fetch, AbortSignal });
+      deribitDbSet: async () => {}, getDeribitOptionOrderBook: fetch, optionGreeksQuoteRefreshes: new Map() });
     return { run: (settlementEvidence: boolean, cached: any = null) => run({ ...instrument, cached, settlementEvidence }), fetch };
   }
   it('settlementEvidence接收真实Gate0，常规活跃行情仍不以0覆盖正报价', async () => {

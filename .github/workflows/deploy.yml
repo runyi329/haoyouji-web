@@ -62,6 +62,9 @@ jobs:
           test -f dist/index.js
           test -f dist/public/index.html
 
+      - name: 生成Deribit官方TLS验证连接引导（不保存行情价格）
+        run: node scripts/create-deribit-dns-bootstrap.mjs dist/deribit-dns-bootstrap.json
+
       - name: 配置 SSH
         run: |
           mkdir -p ~/.ssh
