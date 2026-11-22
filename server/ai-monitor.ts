@@ -23,6 +23,7 @@ export const AI_FEATURE_LABELS: Record<string, string> = {
   "prediction_analysis":      "预测市场分析",
   "bank_account_parser":      "银行流水解析",
   "ocr_recognize":            "通用 OCR 识别",
+  "aj_invoice_review":        "发票照片核对与归类",
   // 新增：之前漏网的功能
   "ai_employee":              "AI 员工（定时任务）",
   "ai_search":                "AI 搜索增强",

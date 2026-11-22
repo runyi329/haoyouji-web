@@ -5,6 +5,7 @@ import { TRPCError } from '@trpc/server';
 import { getLedgerRecordDateError } from '../shared/ledger-record-date';
 import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 import { assertLedger37Owner, assertLedger37ResourceOwner, getLedger37Access } from './ledger37-calendar-recorder';
+import { reviewAJInvoice, editAJInvoice, withdrawAJInvoice, assertAJCompanyAccess } from './aj-invoice-review';
 
 /**
  * 从公司名提取拼音首字母缩写
@@ -3358,6 +3359,25 @@ export async function getTransactionsList(
   if (userPermission === 'own') {
     conditions.push(sql`${ledgerRecords.createdBy} = ${userId}`);
   }
+  const ledgerInfo = await db.select({ type: ledgers.type }).from(ledgers).where(eq(ledgers.id, ledgerId)).limit(1);
+  if (ledgerInfo[0]?.type === 'custom_aj') {
+    const role = membership[0].role;
+    if (!['owner', 'admin', 'funder'].includes(role)) conditions.push(eq(ledgerRecords.createdBy, userId));
+    if (role === 'funder') {
+      conditions.push(sql`EXISTS (SELECT 1 FROM aj_companies ac
+        INNER JOIN aj_company_access a ON a.company_id=ac.id AND a.ledger_id=ac.ledger_id
+        WHERE ac.id=${ledgerRecords.ajCompanyId} AND ac.ledger_id=${ledgerRecords.ledgerId}
+          AND a.user_id=${userId} AND a.is_enabled=1 AND COALESCE(a.access_type,'worker')='funder')`);
+    } else if (['owner', 'admin'].includes(role)) {
+      conditions.push(sql`(${ledgerRecords.ajCompanyId} IS NULL OR ${ledgerRecords.ajCompanyId}=0 OR EXISTS
+        (SELECT 1 FROM aj_companies ac WHERE ac.id=${ledgerRecords.ajCompanyId} AND ac.ledger_id=${ledgerRecords.ledgerId}))`);
+    } else {
+      conditions.push(sql`EXISTS (SELECT 1 FROM aj_companies ac WHERE ac.id=${ledgerRecords.ajCompanyId}
+        AND ac.ledger_id=${ledgerRecords.ledgerId} AND (ac.created_by=${userId} OR EXISTS
+          (SELECT 1 FROM aj_company_access a WHERE a.company_id=ac.id AND a.ledger_id=ac.ledger_id
+            AND a.user_id=${userId} AND a.is_enabled=1)))`);
+    }
+  }
   
   if (options?.startDate) {
     conditions.push(sql`${ledgerRecords.recordDate} >= ${options.startDate}`);
@@ -3418,6 +3438,7 @@ export async function getTransactionsList(
       ajCompanyName: ledgerRecords.ajCompanyName,
       ajApprovedBy: ledgerRecords.ajApprovedBy,
       ajApprovedAt: ledgerRecords.ajApprovedAt,
+      ajApproveComment: ledgerRecords.ajApproveComment,
       ajTaxCategory: ledgerRecords.ajTaxCategory,
       ajAccountingCode: ledgerRecords.ajAccountingCode,
       ajExpenseReason: ledgerRecords.ajExpenseReason,
@@ -3430,6 +3451,20 @@ export async function getTransactionsList(
     .limit(options?.limit || 100)
     .offset(options?.offset || 0);
   
+  // 只对 AJ 记录一次集合读取重提标记；不增加普通账本的日志表依赖，也不逐单查询。
+  const ajRecordIds = records.filter(record => record.ajStatus != null).map(record => record.id);
+  const resubmittedIds = new Set<number>();
+  if (ajRecordIds.length > 0) {
+    const conn = await getDbConnection();
+    if (!conn) throw new Error("数据库连接失败");
+    const [logRows] = await conn.execute(
+      `SELECT DISTINCT record_id FROM ledger_record_logs WHERE ledger_id=?
+         AND record_id IN (${ajRecordIds.map(() => '?').join(',')})
+         AND field_name='aj_status' AND action='resubmit'`, [ledgerId, ...ajRecordIds]
+    );
+    for (const log of logRows as any[]) resubmittedIds.add(Number(log.record_id));
+  }
+
   // 获取所有涉及的分类ID
   const categoryIds = new Set<number>();
   records.forEach((r: any) => {
@@ -3581,6 +3616,8 @@ export async function getTransactionsList(
       ajCompanyName: record.ajCompanyName || null,
       ajApprovedBy: record.ajApprovedBy || null,
       ajApprovedAt: record.ajApprovedAt || null,
+      ajApproveComment: record.ajApproveComment ?? null,
+      ajResubmitted: resubmittedIds.has(record.id),
       ajTaxCategory: record.ajTaxCategory || null,
       ajAccountingCode: record.ajAccountingCode || null,
       ajExpenseReason: record.ajExpenseReason || null,
@@ -3678,6 +3715,11 @@ export async function getTransactionDetail(
       pendingType: ledgerRecords.pendingType,
       pendingIncludeStats: ledgerRecords.pendingIncludeStats,
       ajStatus: ledgerRecords.ajStatus,
+      ajApproveComment: ledgerRecords.ajApproveComment,
+      ajApprovedBy: ledgerRecords.ajApprovedBy,
+      ajApprovedAt: ledgerRecords.ajApprovedAt,
+      ajCompanyId: ledgerRecords.ajCompanyId,
+      ajCompanyName: ledgerRecords.ajCompanyName,
       ajCreatedBy: ledgerRecords.createdBy,
       ajTaxCategory: ledgerRecords.ajTaxCategory,
       ajAccountingCode: ledgerRecords.ajAccountingCode,
@@ -3702,6 +3744,8 @@ export async function getTransactionDetail(
   }
   
   const transaction = record[0];
+  // AJ详情与日志统一企业scope；普通permission_view='all'不是AJ他人单授权。
+  await assertAJRecordLogAccess(conn, transactionId, ledgerId, userId, userRole);
   
   // 如果权限是"仅自己"，检查该记录是否是自己创建的
   if (userPermission === 'own' && transaction.createdBy !== userId) {
@@ -3798,6 +3842,7 @@ export async function getTransactionDetail(
       if (aj === 'pending') return 'pending' as const;
       if (aj === 'approved') return 'approved' as const;
       if (aj === 'rejected') return 'rejected' as const;
+      if (aj === 'support_needed') return 'support_needed' as const;
       return 'not_required' as const;
     })(),
     images: (() => {
@@ -3815,6 +3860,12 @@ export async function getTransactionDetail(
     reimbursedBy: transaction.reimbursedBy || null,
     pendingType: transaction.pendingType || null,
     pendingIncludeStats: transaction.pendingIncludeStats ?? null,
+    ajStatus: transaction.ajStatus ?? null,
+    ajApproveComment: transaction.ajApproveComment ?? null,
+    ajApprovedBy: transaction.ajApprovedBy ?? null,
+    ajApprovedAt: transaction.ajApprovedAt ?? null,
+    ajCompanyId: transaction.ajCompanyId ?? null,
+    ajCompanyName: transaction.ajCompanyName ?? null,
     userPermissionDelete: userPermissionDelete as 'all' | 'own' | 'none',
     stockCodes: (() => {
       const raw = (transaction as any).stockCodes;
@@ -3849,7 +3900,9 @@ export async function deleteTransaction(
   
   // 获取记录信息（使用原始mysql2连接）
   const [recordRows] = await conn.execute(
-    'SELECT id, ledgerId, createdBy FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    `SELECT r.id, r.ledgerId, r.createdBy, r.aj_status AS ajStatus, l.type AS ledgerType
+     FROM ledger_records r INNER JOIN ledgers l ON l.id=r.ledgerId
+     WHERE r.id = ? AND r.deleted_at IS NULL LIMIT 1`,
     [recordId]
   ) as any;
   
@@ -3858,6 +3911,9 @@ export async function deleteTransaction(
   }
   const record = recordRows[0];
   const ledgerId = record.ledgerId;
+  if (record.ledgerType === 'custom_aj' || record.ajStatus != null) {
+    return withdrawAJInvoice({ ledgerId, transactionId: recordId, userId });
+  }
   console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.createdBy });
   
   // 验证用户是否是账本成员，并获取权限
@@ -4186,6 +4242,11 @@ export async function updateTransaction(
   // 即使仅编辑备注/金额，也必须校验最终日期；可将历史未来误录纠正为今天或过去。
   const dateError = getLedgerRecordDateError(oldRecord.ledgerId, finalTransactionDate);
   if (dateError) throw new TRPCError({ code: 'BAD_REQUEST', message: dateError });
+
+  const ledgerInfo = await db.select({ type: ledgers.type }).from(ledgers).where(eq(ledgers.id, oldRecord.ledgerId)).limit(1);
+  if (ledgerInfo[0]?.type === 'custom_aj' || oldRecord.ajStatus != null) {
+    return editAJInvoice(recordId, userId, data);
+  }
 
   if (oldRecord.ledgerId === 37 && finalType !== 'transfer' && !data.aaLockHeld) {
     const lockName = `ledger37:${finalCategoryId}:${finalTransactionDate}`;
@@ -4618,117 +4679,19 @@ export async function approveTransaction(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
-  // 先查询这条记录是否是AJ账本的发票申请（ajStatus不为null）
+  // 以账本类型识别 AJ（包括旧 aj_status=NULL 单），避免走普通审批绕过保护。
   const recordInfo = await db
-    .select({ ledgerId: ledgerRecords.ledgerId, ajStatus: ledgerRecords.ajStatus })
+    .select({ ledgerId: ledgerRecords.ledgerId, ledgerType: ledgers.type, ajStatus: ledgerRecords.ajStatus })
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.id, transactionId))
+    .innerJoin(ledgers, eq(ledgers.id, ledgerRecords.ledgerId))
+    .where(and(eq(ledgerRecords.id, transactionId), isNull(ledgerRecords.deletedAt)))
     .limit(1);
 
-  if (recordInfo.length > 0 && recordInfo[0].ajStatus !== null) {
-    // AJ账本发票申请审批：直接更新 ledger_records 表的 aj_status 字段
-    const ledgerId = recordInfo[0].ledgerId;
-    // 验证审批人是账本的管理员或owner
-    const membership = await db
-      .select({ role: ledgerMembers.role })
-      .from(ledgerMembers)
-      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
-      .limit(1);
-    if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
-      throw new Error('只有账本管理员或创始人可以审批发票申请');
-    }
-    // 先查出提交人 ID 和报销金额（审批通过时需要发放 USDT 奖励）
-    const recordDetail = await db
-      .select({ createdBy: ledgerRecords.createdBy, amount: ledgerRecords.amount, reimbursementAmount: ledgerRecords.reimbursementAmount })
-      .from(ledgerRecords)
-      .where(eq(ledgerRecords.id, transactionId))
-      .limit(1);
-
-    await db
-      .update(ledgerRecords)
-      .set({
-        ajStatus: action,
-        ajApprovedBy: userId,
-        ajApprovedAt: sql`NOW()`,
-        ajApproveComment: comment || null,
-      } as any)
-      .where(eq(ledgerRecords.id, transactionId));
-
-    // 审批通过时：按报销金额 1% 换算成等值 USDT 发放到提交人钱包
-    let usdtRewarded = 0;
-    if (action === 'approved' && recordDetail.length > 0) {
-      try {
-        const submitterId = recordDetail[0].createdBy;
-        // 优先使用 reimbursementAmount（报销申请金额），fallback 到 amount（账目金额）
-        const reimbursementAmount = parseFloat(recordDetail[0].reimbursementAmount || recordDetail[0].amount || '0');
-        console.log(`[AJ审批奖励] transactionId=${transactionId}, submitterId=${submitterId}, reimbursementAmount=${reimbursementAmount}, rawReimbursementAmount=${recordDetail[0].reimbursementAmount}, rawAmount=${recordDetail[0].amount}`);
-        if (reimbursementAmount > 0) {
-          // 获取实时 USD/CNY 汇率（多源备用，与以太坊计算器右上角同源）
-          let usdCnyRate = 7.2; // 默认兜底汇率
-          try {
-            const fetchers = [
-              async () => {
-                const key = '3878a89bed4728b65cc7d8dc0a644c07';
-                const p = new URLSearchParams({ key, fromcoin: 'USD', tocoin: 'CNY', money: '1' });
-                const res = await fetch(`https://apis.tianapi.com/fxrate/index?${p}`, { signal: AbortSignal.timeout(5000) });
-                const d = await res.json() as { code: number; result?: { money: string } };
-                return (d.code === 200 && d.result?.money) ? parseFloat(d.result.money) : null;
-              },
-              async () => {
-                const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
-                const d = await res.json() as { result: string; rates?: Record<string, number> };
-                return (d.result === 'success' && d.rates?.['CNY']) ? d.rates['CNY'] : null;
-              },
-              async () => {
-                const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=CNY', { signal: AbortSignal.timeout(5000) });
-                const d = await res.json() as { rates?: Record<string, number> };
-                return d.rates?.['CNY'] ?? null;
-              },
-            ];
-            for (const fetcher of fetchers) {
-              const rate = await fetcher().catch(() => null);
-              if (rate && rate > 0) { usdCnyRate = rate; break; }
-            }
-          } catch (_) { /* 全部失败，使用兜底汇率 */ }
-
-          // 计算 USDT 数量：报销金额 × 1% ÷ USD/CNY 汇率
-          // USDT ≈ 1 USD，所以 CNY 换 USDT = CNY金额 / USD/CNY汇率
-          const rewardCny = reimbursementAmount * 0.01;
-          usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
-
-          if (usdtRewarded > 0) {
-            // 用 Drizzle db.execute 写入 af_manual_balances（与审批用同一个连接，最可靠）
-            const rewardNote = `成本津贴 #${transactionId}`;
-            const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
-            );
-            // 同时写入 balance_history，使奖励记录天然出现在钱包明细中
-            try {
-              await db.execute(
-                sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${transactionId}, 0, ${rewardNote}, ${nowStr})`
-              );
-            } catch (bhErr: any) {
-              console.warn('[AJ审批奖励] balance_history 写入失败（不影响主流程）:', bhErr?.message);
-            }
-            console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
-          }
-        }
-       } catch (rewardErr) {
-        // 奖励发放失败不影响审批结果，但把错误写入数据库方便排查
-        const errMsg = (rewardErr instanceof Error) ? rewardErr.message : String(rewardErr);
-        console.error('[AJ审批奖励] 发放 USDT 失败:', errMsg);
-        try {
-          // 把错误信息写入 af_manual_balances 的 note 字段（amount=0），方便从数据库直接看到报错
-          const nowStr2 = new Date().toISOString().slice(0, 19).replace('T', ' ');
-          await db.execute(
-            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${recordDetail[0]?.createdBy ?? 0}, 0, ${`[ERROR] transactionId=${transactionId}: ${errMsg}`}, ${nowStr2}, ${nowStr2})`
-          );
-        } catch (_) { /* 写错误日志也失败，放弃 */ }
-        usdtRewarded = -1; // 标记奖励失败
-      }
-    }
-    return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected', usdtRewarded };
+  if (recordInfo[0]?.ledgerType === 'custom_aj' || recordInfo[0]?.ajStatus != null) {
+    const result = await reviewAJInvoice({
+      ledgerId: recordInfo[0].ledgerId, transactionId, userId, status: action, comment,
+    });
+    return { ...result, allApproved: action === 'approved', anyRejected: action === 'rejected' };
   }
 
   // 普通账本审批流程（原有逻辑）
@@ -5225,6 +5188,7 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         eq(ledgerRecords.reimbursementStatus, 'pending'),
+        sql`(${ledgerRecords.ajStatus} IS NULL OR ${ledgerRecords.ajStatus} NOT IN ('rejected', 'support_needed'))`,
         isNull(ledgerRecords.deletedAt)
       )
     )
@@ -5245,7 +5209,13 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
       )
     )
     .then((rows: any[]) => rows[0]);
-  
+
+  const rejectedStats = await db.select({
+    count: sql<number>`count(*)`, amount: sql<number>`sum(${ledgerRecords.amount})`,
+  }).from(ledgerRecords).where(and(
+    eq(ledgerRecords.ledgerId, ledgerId), eq(ledgerRecords.ajStatus, 'rejected'), isNull(ledgerRecords.deletedAt)
+  )).then((rows: any[]) => rows[0]);
+
   return {
     pending: {
       count: pendingStats?.count || 0,
@@ -5254,6 +5224,10 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
     completed: {
       count: completedStats?.count || 0,
       amount: Number(completedStats?.amount || 0),
+    },
+    rejected: {
+      count: Number(rejectedStats?.count || 0),
+      amount: Number(rejectedStats?.amount || 0),
     },
   };
 }
@@ -5905,6 +5879,26 @@ export async function getAllPendingTransactions(userId: number) {
 
 // ==================== 账目修改记录日志 ====================
 
+async function assertAJRecordLogAccess(
+  conn: NonNullable<Awaited<ReturnType<typeof getDbConnection>>>,
+  recordId: number, ledgerId: number, userId: number, role: string
+) {
+  const [rows] = await conn.execute(
+    `SELECT r.createdBy, r.aj_company_id AS companyId, l.type
+     FROM ledger_records r INNER JOIN ledgers l ON l.id=r.ledgerId
+     WHERE r.id=? AND r.ledgerId=? LIMIT 1`, [recordId, ledgerId]
+  );
+  const record = (rows as any[])[0];
+  if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '账目不存在或不属于该账本' });
+  if (record.type !== 'custom_aj') return;
+  const isOwn = Number(record.createdBy) === userId;
+  if (!isOwn && !['owner', 'admin', 'funder'].includes(role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '只能查看自己的 AJ 申请历史' });
+  }
+  // 本人/管理员也验证企业确属本账本；资方始终要求显式资方授权。
+  await assertAJCompanyAccess(conn, ledgerId, record.companyId, userId, role, role === 'funder');
+}
+
 /**
  * 写入账目修改日志（单条字段变更）
  */
@@ -5965,6 +5959,8 @@ export async function getRecordLogs(
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接失败");
 
+  await assertAJRecordLogAccess(conn, recordId, ledgerId, userId, member[0].role);
+
   const [rows] = await conn.execute(
     `SELECT l.id, l.record_id, l.ledger_id, l.operator_id, l.action, l.field_name, l.old_value, l.new_value, l.note, l.created_at,
             u.username as operator_name, u.avatar as operator_avatar
@@ -6023,6 +6019,8 @@ export async function getRecordLogCount(
 
     const conn = await getDbConnection();
     if (!conn) return 0;
+
+    await assertAJRecordLogAccess(conn, recordId, ledgerId, userId, member[0].role);
 
     const [rows] = await conn.execute(
       `SELECT COUNT(*) as cnt FROM ledger_record_logs WHERE record_id = ? AND ledger_id = ?`,

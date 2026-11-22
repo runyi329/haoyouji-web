@@ -16,6 +16,44 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ReimbursementForm from "@/components/ReimbursementForm";
+import AJInvoiceAIPanel from "@/components/AJInvoiceAIPanel";
+
+const ajStatusLabels: Record<string, string> = {
+  pending: '申请中，等待审核',
+  approved: '已批准',
+  rejected: '拒绝退回·本次不予报销',
+  support_needed: '补充材料',
+};
+
+// 历史旧新值可能是 JSON 快照，只提取审核状态/说明，不直接展示原始 JSON。
+function readAJReviewValue(value: unknown): { status: string; comment: string } {
+  if (typeof value === 'string') {
+    const text = value.trim();
+    try { return readAJReviewValue(JSON.parse(text)); } catch { /* 旧记录是纯状态文本 */ }
+    return { status: ajStatusLabels[text] ? text : '', comment: '' };
+  }
+  if (value && typeof value === 'object') {
+    const review = value as any;
+    const status = review.ajStatus ?? review.aj_status ?? review.status ?? '';
+    const comment = review.ajApproveComment ?? review.aj_approve_comment ?? review.comment ?? review.notes ?? review.note;
+    return { status: typeof status === 'string' && ajStatusLabels[status] ? status : '', comment: readAJReviewNote(comment) };
+  }
+  return { status: '', comment: '' };
+}
+
+function readAJReviewNote(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const text = value.trim();
+  if (!text) return '';
+  if (/^[{\[]/.test(text)) {
+    try {
+      const review = JSON.parse(text);
+      const note = review?.comment ?? review?.ajApproveComment ?? review?.aj_approve_comment ?? review?.notes ?? review?.note;
+      return typeof note === 'string' && !/^[{\[]/.test(note.trim()) ? note : '';
+    } catch { return ''; }
+  }
+  return text;
+}
 
 export default function TransactionDetail() {
   const [, params] = useRoute("/ledger/:ledgerId/transaction/:transactionId");
@@ -40,6 +78,18 @@ export default function TransactionDetail() {
 
   // AJ 报销账本使用深蓝金色系，覆盖全局主题色
   const isAJLedger = ledgerData?.type === 'custom_aj';
+  const ajStatus = (transaction as any)?.ajStatus ?? transaction?.approvalStatus;
+  const isAJReturned = isAJLedger && (ajStatus === 'rejected' || ajStatus === 'support_needed');
+  const isOwnTransaction = !!user && Number(transaction?.createdBy) === Number(user.id);
+  const canResubmitAJ = isAJReturned && isOwnTransaction;
+  const canReadAJReview = isOwnTransaction || ledgerData?.userRole === 'admin' || ledgerData?.userRole === 'owner';
+  const { data: ajReviewLogs, isLoading: ajReviewLoading, error: ajReviewError } = (trpc as any).ledger.getRecordLogs.useQuery(
+    { recordId: transactionId, ledgerId },
+    { enabled: isAJLedger && !!transaction && canReadAJReview }
+  );
+  const ajHistory = (Array.isArray(ajReviewLogs) ? ajReviewLogs : []).filter(
+    (log: any) => (log.fieldName ?? log.field_name) === 'aj_status'
+  );
   const themeColors = isAJLedger
     ? { ...baseThemeColors, primary: '#1A2B4A', accent1: '#FFFFFF', background: '#F4F6F9', text: '#1A2B4A' }
     : baseThemeColors;
@@ -234,6 +284,7 @@ export default function TransactionDetail() {
       setShowApprovalDialog(false);
       setComment('');
       refetch();
+      if (isAJLedger) invalidateAJReviewCaches();
     },
     onError: (error) => {
       toast.error(error.message || "操作失败");
@@ -242,6 +293,19 @@ export default function TransactionDetail() {
 
   // 获取tRPC utils用于缓存失效
   const utils = trpc.useUtils();
+
+  const invalidateAJReviewCaches = () => {
+    const ledgerUtils = (utils as any).ledger;
+    void Promise.allSettled([
+      ledgerUtils.getTransactionDetail.invalidate({ ledgerId, transactionId }),
+      ledgerUtils.getTransactions.invalidate({ ledgerId }),
+      ledgerUtils.getRecordLogs.invalidate({ recordId: transactionId, ledgerId }),
+      ledgerUtils.getRecordLogCount.invalidate({ recordId: transactionId, ledgerId }),
+      ...['ajOwnerGetCompanyInvoices', 'ajOwnerGetEmployeeStats', 'ajOwnerGetCompanyStats', 'ajOwnerGetPendingList', 'ajOwnerGetMyCompanies', 'getPendingApprovals'].map(
+        name => ledgerUtils[name].invalidate()
+      ),
+    ]);
+  };
 
   // 获取修改记录条数
   const { data: logCountData } = trpc.ledger.getRecordLogCount.useQuery({
@@ -254,6 +318,7 @@ export default function TransactionDetail() {
   const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
     onSuccess: () => {
       toast.success("删除成功");
+      if (isAJLedger) void (utils as any).ledger.invalidate();
       utils.ledger.getTransactions.invalidate({ ledgerId });
       utils.ledger.getById.invalidate({ ledgerId });
       setLocation(`/ledger/${ledgerId}`);
@@ -271,6 +336,7 @@ export default function TransactionDetail() {
     onSuccess: () => {
       toast.success('申请已撤回，账目已取消');
       setShowWithdrawReimbursementDialog(false);
+      if (isAJLedger) void (utils as any).ledger.invalidate();
       // 撤回即删除，跳转回账本列表
       setLocation(`/ledger/${ledgerId}`);
     },
@@ -286,11 +352,15 @@ export default function TransactionDetail() {
   };
 
   const confirmApproval = () => {
+    if (approveMutation.isPending) return;
+    if (isAJLedger && approvalAction === 'rejected' && !comment.trim()) {
+      toast.error('请填写拒绝退回原因');
+      return;
+    }
     approveMutation.mutate({
-      ledgerId,
-      recordId: transactionId,
+      transactionId,
       action: approvalAction,
-      comment: comment || undefined,
+      comment: comment.trim() || undefined,
     });
   };
 
@@ -336,7 +406,7 @@ export default function TransactionDetail() {
 
   // 判断账目是否已被审批（aj_status = 'approved'）
   // 使用服务端映射后的 approvalStatus 字段（'approved' 表示已审批）
-  const isApproved = transaction.approvalStatus === 'approved';
+  const isApproved = isAJLedger ? ajStatus === 'approved' : transaction.approvalStatus === 'approved';
 
   // 获取审批状态文本
   const getApprovalStatusText = () => {
@@ -447,8 +517,24 @@ export default function TransactionDetail() {
         <DetailItem label="日期" value={transaction.date} />
         <DetailItem label="备注" value={transaction.description || "未填写"} />
 
+        {isAJLedger && (
+          <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-gray-600 shrink-0">审核状态</span>
+              <span className={`font-medium text-right ${isAJReturned ? 'text-amber-800' : 'text-[#1A2B4A]'}`}>{ajStatusLabels[ajStatus || ''] || '未提交'}</span>
+            </div>
+            {canReadAJReview && (transaction as any).ajApproveComment && (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">审核意见：{readAJReviewNote((transaction as any).ajApproveComment) || '请查看审核历史'}</p>
+            )}
+            {canReadAJReview && (transaction as any).ajApprovedAt && (
+              <p className="text-xs text-gray-500">审核时间：{formatTime((transaction as any).ajApprovedAt)}</p>
+            )}
+            {canResubmitAJ && <p className="text-xs text-amber-700">保存修改仍保持当前退回状态；明确再次提交成功后才进入申请中。</p>}
+          </div>
+        )}
+
         {/* ========== 报销状态显示（全新实现）========== */}
-        {displayStatus !== 'none' && (
+        {!isAJReturned && displayStatus !== 'none' && (
           isAdminOrOwner ? (
             <div 
               className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100"
@@ -524,6 +610,23 @@ export default function TransactionDetail() {
         )}
       </div>
 
+      {isAJLedger && (
+        <div className="mt-3 px-3">
+          <AJInvoiceAIPanel
+            ledgerId={ledgerId}
+            recordId={transactionId}
+            readOnly={isApproved || approveMutation.isPending || deleteMutation.isPending || withdrawReimbursementMutation.isPending}
+            onChanged={() => {
+              // 清除详情页的乐观本地状态，重新以服务器原单为准。
+              setRbLocalStatus(null);
+              setPendingLocalType(null);
+              invalidateAJReviewCaches();
+              void refetch();
+            }}
+          />
+        </div>
+      )}
+
       {/* 添加信息 */}
       <div className="bg-white mt-3">
         <DetailItem
@@ -559,6 +662,29 @@ export default function TransactionDetail() {
         />
       </div>
 
+      {isAJLedger && canReadAJReview && (
+        <div className="bg-white mt-3 px-4 py-3">
+          <h2 className="text-sm font-medium text-gray-900 mb-3">审核历史</h2>
+          {ajReviewLoading ? <p className="text-xs text-gray-500">加载中...</p> : ajReviewError ? <p className="text-xs text-red-600">审核历史加载失败，请稍后重试</p> : ajHistory.length === 0 ? <p className="text-xs text-gray-500">暂无审核历史</p> : (
+            <div className="space-y-3">
+              {ajHistory.map((log: any, index: number) => {
+                const oldReview = readAJReviewValue(log.oldValue ?? log.old_value);
+                const newReview = readAJReviewValue(log.newValue ?? log.new_value);
+                const note = readAJReviewNote(log.notes ?? log.note) || newReview.comment;
+                return (
+                  <div key={log.id ?? index} className="rounded-lg bg-gray-50 p-3 text-sm">
+                    <div className="font-medium text-[#1A2B4A]">{oldReview.status ? `${ajStatusLabels[oldReview.status]} → ` : ''}{ajStatusLabels[newReview.status] || '审核状态更新'}</div>
+                    <div className="mt-1 text-xs text-gray-500">{log.operatorName ?? log.operator_name ?? '审核人'} · {formatTime(log.createdAt ?? log.created_at)}</div>
+                    {note && <p className="mt-2 text-gray-700 whitespace-pre-wrap break-words">{note}</p>}
+                    {oldReview.comment && oldReview.comment !== note && <p className="mt-2 text-gray-700 whitespace-pre-wrap break-words">此前审核意见：{oldReview.comment}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 审批信息（待审批状态显示） */}
       {transaction.approvalStatus === 'pending' && isApprover() && (
         <div className="bg-white mt-3 px-4 py-3">
@@ -587,7 +713,7 @@ export default function TransactionDetail() {
       )}
 
       {/* 待审批且是自己提交的：显示撤回报销申请按鈕（仅 AJ 账本） */}
-      {ledgerData?.type === 'custom_aj' && transaction.approvalStatus === 'pending' && transaction.createdBy === user?.id && (
+      {isAJLedger && ajStatus === 'pending' && isOwnTransaction && (
         <div className="bg-white px-4 py-3">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
             <div className="text-sm text-yellow-800 font-medium mb-1">报销申请待审批</div>
@@ -602,15 +728,23 @@ export default function TransactionDetail() {
         </div>
       )}
 
+      {canResubmitAJ && (
+        <div className="bg-white px-4 py-3">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}&resubmit=1`)} className="w-full py-3 bg-[#1A2B4A] text-white rounded-lg font-medium">修改并再次提交</button>
+        </div>
+      )}
+
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
           {/* 修改按钮：有修改权限才显示 */}
+          {(!isAJLedger || (!isApproved && !isAJReturned)) && (
           <button 
             onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
             className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
           >
             修改数据
           </button>
+          )}
           {/* 删除按钮：根据权限设置判断显示，all=可删全部，own=只能删自己的，none=不显示 */}
           {(() => {
             const perm = transaction.userPermissionDelete || 'none';
@@ -679,7 +813,7 @@ export default function TransactionDetail() {
           <DialogHeader>
             <DialogTitle>撤回报销申请</DialogTitle>
             <DialogDescription>
-              确定要撤回这条报销申请吗？撤回后账目将恢复为未提交状态，可重新提交。
+              确定要撤回这条报销申请吗？撤回将取消该申请并从账目列表移除，不是退回补充材料或再次提交。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2">
@@ -733,14 +867,14 @@ export default function TransactionDetail() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <label className="text-sm text-gray-600 mb-2 block">审批意见（可选）</label>
+            <label className="text-sm text-gray-600 mb-2 block">{isAJLedger && approvalAction === 'rejected' ? '拒绝退回原因（必填）' : '审批意见（可选）'}</label>
             <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="输入审批意见..." className="min-h-[100px]" />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowApprovalDialog(false)}>取消</Button>
             <Button 
               onClick={confirmApproval}
-              disabled={approveMutation.isPending}
+              disabled={approveMutation.isPending || (isAJLedger && approvalAction === 'rejected' && !comment.trim())}
               className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : (isAJLedger ? 'bg-[#1A2B4A] hover:bg-[#152238]' : 'bg-[#D32F2F] hover:bg-[#D32F2F]')}
             >
               {approveMutation.isPending ? '处理中...' : '确认'}

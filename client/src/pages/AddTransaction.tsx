@@ -44,6 +44,7 @@ import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
 import { formatLedgerRecordDate, getLedgerRecordInitialDate } from "@/lib/ledgerRecordDate";
 import { Ledger37PresentationGate, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
+import AJInvoiceAIPanel from "@/components/AJInvoiceAIPanel";
 
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -57,6 +58,17 @@ interface Category {
   color: string | null;
   sortOrder: number;
   createdBy: number;
+}
+
+function getAJMaterialKey(material: { amount: unknown; description?: string; images?: string[]; transactionDate: string; type: string; categoryId?: number | null }) {
+  return JSON.stringify({
+    amount: Number(material.amount) || 0,
+    description: material.description || "",
+    images: material.images || [],
+    date: material.transactionDate,
+    type: material.type,
+    categoryId: material.categoryId ?? null,
+  });
 }
 
 const AddTransaction = () => {
@@ -103,6 +115,20 @@ const AddTransaction = () => {
   const fromPage = urlParams.get('from'); // 来源页面：home=首页智能会计
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
+  const isResubmitEntry = urlParams.get('resubmit') === '1';
+  const [resubmitComment, setResubmitComment] = useState('');
+  const [ajSaveBusy, setAJSaveBusy] = useState(false);
+  const [ajSaveAction, setAJSaveAction] = useState<'save' | 'resubmit'>('save');
+  const [ajSaveMessage, setAJSaveMessage] = useState('');
+  const [ajSaveError, setAJSaveError] = useState('');
+  const [ajSavedDraftKey, setAJSavedDraftKey] = useState<string | null>(null);
+  const [ajSubmittedRecordId, setAJSubmittedRecordId] = useState<number | null>(null);
+  const [ajSubmitError, setAJSubmitError] = useState('');
+  const ajSaveLock = useRef(false);
+  const initializedEditRef = useRef<string | null>(null);
+  const ajNewSubmitLock = useRef(false);
+  const ajUploadLock = useRef(false);
+  const [ajUploadBusy, setAJUploadBusy] = useState(false);
   // 视角切换：管理员切换为业务员视角时，从 URL参数或sessionStorage获取 viewAs 参数
   // 使用useState初始化一次，避免sessionStorage清除后重新渲染时丢失
   const [viewAsUserId] = useState<number | null>(() => {
@@ -148,10 +174,10 @@ const AddTransaction = () => {
   const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
   // 当企业列表加载完成时，自动选中第1个企业（必须选中一个企业才能提交）
   useEffect(() => {
-    if (isCustomAJ && ajCompanies && (ajCompanies as any[]).length > 0 && selectedCompanyId === null) {
+    if (isCustomAJ && !isEditMode && ajCompanies && (ajCompanies as any[]).length > 0 && selectedCompanyId === null) {
       setSelectedCompanyId((ajCompanies as any[])[0].id);
     }
-  }, [isCustomAJ, ajCompanies]);
+  }, [isCustomAJ, isEditMode, ajCompanies]);
   const hasMultipleCompanies = isCustomAJ && (ajCompanies as any[])?.length > 1;
   
   // 获取要编辑的账目详情
@@ -159,12 +185,21 @@ const AddTransaction = () => {
     { ledgerId, transactionId: editTransactionId! },
     { enabled: isEditMode && !!editTransactionId }
   );
+  const ajEditStatus = (editTransaction as any)?.ajStatus ?? editTransaction?.approvalStatus;
+  const isAJReturned = isCustomAJ && isEditMode && (ajEditStatus === 'rejected' || ajEditStatus === 'support_needed');
+  const isOwnAJEdit = !!currentUser && Number(editTransaction?.createdBy) === Number(currentUser.id);
+  const canResubmitAJ = isAJReturned && isOwnAJEdit;
+  const isAJEditBlocked = isCustomAJ && isEditMode && (ajEditStatus === 'approved' || (isAJReturned && !isOwnAJEdit));
+
+  useEffect(() => {
+    const originalCompanyId = Number((editTransaction as any)?.ajCompanyId);
+    if (isCustomAJ && isEditMode && originalCompanyId > 0) setSelectedCompanyId(originalCompanyId);
+  }, [isCustomAJ, isEditMode, editTransaction]);
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
 
-  // 报销事由：固定为「待确认」
-  const expenseReasonLabel = '待确认';
+  // AJ 实际报销用途复用 note，并原样写入 description；未知保留空白。
 
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   // 默认选中第一个预设分类（ID为2）
@@ -425,6 +460,10 @@ const AddTransaction = () => {
 
   useEffect(() => {
     if (isEditMode && editTransaction) {
+      const editKey = `${ledgerId}:${editTransactionId}`;
+      // 缓存刷新只更新审核状态，不覆盖仍在页面上编辑的已存/未存材料。
+      if (isCustomAJ && initializedEditRef.current === editKey) return;
+      if (isCustomAJ) initializedEditRef.current = editKey;
       setTransactionType(editTransaction.type as TransactionType);
       setAmount(editTransaction.amount.toString());
       setNote(editTransaction.description || "");
@@ -435,6 +474,14 @@ const AddTransaction = () => {
       setSelectedDate(recordDate);
       setDisplayDate(recordDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
       setCalendarMonth(recordDate);
+      if (isCustomAJ) {
+        const originalPath = editTransaction.categoryPath;
+        setAJSavedDraftKey(getAJMaterialKey({
+          amount: editTransaction.amount, description: editTransaction.description || "", images: editTransaction.images || [],
+          transactionDate: formatLedgerRecordDate(recordDate), type: editTransaction.type,
+          categoryId: originalPath?.length ? originalPath[originalPath.length - 1] : editTransaction.categoryId || currentCategoryId,
+        }));
+      }
       
       // 设置分类路径
       if (editTransaction.categoryPath && editTransaction.categoryPath.length > 0) {
@@ -447,6 +494,8 @@ const AddTransaction = () => {
       // 加载图片
       if (editTransaction.images && editTransaction.images.length > 0) {
         setUploadedImages(editTransaction.images);
+      } else if (isCustomAJ) {
+        setUploadedImages([]);
       }
 
       // 加载股票代码
@@ -471,7 +520,7 @@ const AddTransaction = () => {
         setPendingIncludeStats(editTransaction.pendingIncludeStats ?? 1);
       }
     }
-  }, [isEditMode, editTransaction]);
+  }, [isEditMode, editTransaction, isCustomAJ]);
 
 
 
@@ -833,12 +882,26 @@ const AddTransaction = () => {
   // 添加记账mutation
   const addTransactionMutation = trpc.ledger.addTransaction.useMutation({
     onSuccess: (result) => {
+      ajNewSubmitLock.current = false;
       toast.success(result?.overwritten ? "已覆盖原记录，只保留一条数据" : "记账成功！");
       setShowDuplicateConfirm(false);
       setPendingDuplicatePayload(null);
       setPendingDuplicateMode('add');
       // 使缓存失效，强制重新获取数据
       utils.ledger.getTransactions.invalidate({ ledgerId });
+      if (isCustomAJ) {
+        const savedRecordId = Number(result.id); // dbLedger.addTransaction 的真实返回契约为 id。
+        setAJSubmitError('');
+        if (Number.isSafeInteger(savedRecordId) && savedRecordId > 0) {
+          setAJSubmittedRecordId(savedRecordId);
+          void (utils as any).ledger.invalidate();
+          if (fromPage === 'home') setSmartAccountingLastPage((currentUser as any)?.id, 'reimbursement');
+        } else {
+          setAJSubmitError('申请已提交，但服务器未返回有效原单 ID。请到原单列表查看，不要重复提交。');
+          setAJSubmittedRecordId(-1);
+        }
+        return;
+      }
       if (fromPage === 'home') {
         // 从首页智能会计进入：提交后继续留在报销申请单，并记住该功能页。
         setSmartAccountingLastPage((currentUser as any)?.id, 'reimbursement');
@@ -848,12 +911,14 @@ const AddTransaction = () => {
       }
     },
     onError: (error, variables) => {
+      ajNewSubmitLock.current = false;
       if (isCustomAA && error.data?.code === 'CONFLICT' && !variables.overwriteExisting) {
         setPendingDuplicatePayload(variables);
         setPendingDuplicateMode('add');
         setShowDuplicateConfirm(true);
         return;
       }
+      if (isCustomAJ) setAJSubmitError("申请未提交：" + error.message);
       toast.error("记账失败：" + error.message);
     },
   });
@@ -861,6 +926,8 @@ const AddTransaction = () => {
   // 更新记账mutation
   const updateTransactionMutation = trpc.ledger.updateTransaction.useMutation({
     onSuccess: (result) => {
+      // AJ 编辑由下方串联流程负责提示、刷新和导航，保存本身不代表重提成功。
+      if (isCustomAJ) return;
       toast.success(result?.overwritten ? "已覆盖冲突记录，只保留一条数据" : "账目修改成功！");
       setShowDuplicateConfirm(false);
       setPendingDuplicatePayload(null);
@@ -874,6 +941,7 @@ const AddTransaction = () => {
       setLocation(`/ledger/${id}`);
     },
     onError: (error, variables) => {
+      if (isCustomAJ) return;
       if (isCustomAA && error.data?.code === 'CONFLICT' && !variables.overwriteExisting) {
         setPendingDuplicatePayload(variables);
         setPendingDuplicateMode('edit');
@@ -886,6 +954,90 @@ const AddTransaction = () => {
   
   // 上传图片mutation
   const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
+
+  // 新路由在当前生成类型中尚未存在，通过 any 兼容；只更新原 transactionId。
+  const ajResubmitMutation = (trpc as any).ledger.ajResubmitInvoice.useMutation();
+  const isSaving = ajSaveBusy || addTransactionMutation.isPending || updateTransactionMutation.isPending || ajResubmitMutation.isPending || (isCustomAJ && ajUploadBusy);
+  const ajCurrentMaterialKey = getAJMaterialKey({
+    amount, description: note, images: uploadedImages, transactionDate: selectedDateStr,
+    type: transactionType, categoryId: currentCategoryId,
+  });
+  const ajCurrentMaterialRef = useRef(ajCurrentMaterialKey);
+  ajCurrentMaterialRef.current = ajCurrentMaterialKey;
+  const ajHasUnsavedChanges = isCustomAJ && isEditMode && (
+    !ajSavedDraftKey || ajSavedDraftKey !== ajCurrentMaterialKey || pendingFiles.length > 0 || uploadImageMutation.isPending
+  );
+  const invalidateAJEditCaches = () => {
+    // 全部详情/分类/日志/统计/AI 派生缓存均只读刷新，保存不执行识别。
+    void (utils as any).ledger.invalidate().catch(() => {
+      setAJSaveError('原单操作已完成，但只读缓存刷新失败；请刷新查看最新原单，不要重复保存或再次提交。');
+    });
+  };
+
+  const handleAJAIChanged = () => {
+    // 仅在无本地未保存材料时可操作 AI；确认后清掉旧提示并读取真实原单用途。
+    setAJSaveMessage('');
+    setAJSaveError('');
+    invalidateAJEditCaches();
+    if (!editTransactionId || ajHasUnsavedChanges) return;
+    const originalKey = getAJMaterialKey({
+      amount, description: note, images: uploadedImages, transactionDate: selectedDateStr,
+      type: transactionType, categoryId: currentCategoryId,
+    });
+    void utils.ledger.getTransactionDetail.fetch({ ledgerId, transactionId: editTransactionId }).then(fresh => {
+      if (!fresh) throw new Error('原单暂无可读取详情');
+      // 任一材料在 fetch 期间变化均保留草稿；不只比较备注，避免覆盖新选择。
+      if (ajCurrentMaterialRef.current !== originalKey) return;
+      const freshPath = fresh.categoryPath?.length ? fresh.categoryPath : fresh.categoryId ? [fresh.categoryId] : [];
+      setSelectedCategoryPath(freshPath);
+      setNote(fresh.description || '');
+      setAJSavedDraftKey(getAJMaterialKey({
+        amount, description: fresh.description || '', images: uploadedImages,
+        transactionDate: selectedDateStr, type: transactionType, categoryId: freshPath.at(-1),
+      }));
+    }).catch(() => setAJSaveError('AI 操作已成功，但原单用途刷新失败；请刷新原单查看最新材料，不要重复确认。'));
+  };
+
+  const saveAJOriginal = async (payload: any, resubmit: boolean) => {
+    if (ajSaveLock.current || isSaving || !editTransactionId) return;
+    ajSaveLock.current = true;
+    setAJSaveBusy(true);
+    setAJSaveAction(resubmit ? 'resubmit' : 'save');
+    setAJSaveError('');
+    setAJSaveMessage('');
+    let saved = false;
+    try {
+      await updateTransactionMutation.mutateAsync({ recordId: editTransactionId, ...payload });
+      saved = true;
+      setAJSavedDraftKey(getAJMaterialKey({ ...payload, categoryId: currentCategoryId }));
+      if (resubmit) {
+        await ajResubmitMutation.mutateAsync({
+          ledgerId,
+          transactionId: editTransactionId,
+          ...(resubmitComment.trim() ? { comment: resubmitComment.trim() } : {}),
+        });
+        // 只有后端明确重提成功才提示进入申请中；不写乐观 pending、不新增账单。
+        toast.success('已再次提交，等待审核');
+        invalidateAJEditCaches();
+        setLocation(`/ledger/${ledgerId}/transaction/${editTransactionId}`);
+      } else {
+        const message = isAJReturned ? '修改已保存，仍保持退回状态；尚未再次提交。' : '修改已保存，审核状态未改变。';
+        setAJSaveMessage(message);
+        toast.success(message);
+        invalidateAJEditCaches();
+      }
+    } catch (error: any) {
+      const message = saved
+        ? `修改已保存，但再次提交失败或结果未确认：${error.message || '请稍后重试'}。请刷新原单核对当前审核状态，不要直接重复提交。`
+        : `修改保存失败：${error.message || '请稍后重试'}，未再次提交。`;
+      setAJSaveError(message);
+      toast.error(message);
+      if (saved) invalidateAJEditCaches();
+    } finally {
+      ajSaveLock.current = false;
+      setAJSaveBusy(false);
+    }
+  };
 
   const handleConfirmOverwrite = () => {
     if (!pendingDuplicatePayload || addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
@@ -902,15 +1054,36 @@ const AddTransaction = () => {
   };
 
   // 处理保存
-  const handleSave = () => {
-    if (addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
+  const handleSave = () => saveTransaction(false);
+  const saveTransaction = (resubmit: boolean) => {
+    if (ajSaveLock.current || isSaving || (isCustomAJ && (ajNewSubmitLock.current || ajUploadLock.current || pendingFiles.length > 0 || (!isEditMode && ajSubmittedRecordId !== null)))) return;
+    if (!ledger) {
+      toast.error('账本信息尚未加载，请稍后重试');
+      return;
+    }
     if (isEditMode && !editTransaction) {
       toast.error("账目详情尚未加载，请稍后重试");
       return;
     }
+    if (isAJEditBlocked) {
+      toast.error(ajEditStatus === 'approved' ? '已批准的报销申请不可普通修改或再次提交' : '只有申请人本人可以修改并再次提交退回申请');
+      return;
+    }
+    if (resubmit && !canResubmitAJ) {
+      toast.error('只有本人拒绝退回或待补充材料的申请可以再次提交');
+      return;
+    }
+    if (isCustomAJ && (!Number.isFinite(Number(amount)) || Number(amount) <= 0)) {
+      toast.error('请输入有效的正数报销金额');
+      return;
+    }
+    if (isCustomAJ && !isEditMode && (!selectedCompanyId || !selectedCompany)) {
+      toast.error('请先选择有权限的开票企业');
+      return;
+    }
     if (!validateRecordDate(selectedDateStr)) return;
     // 余额记录保存（底部按钮仅用于余额记录，提现/入金已在折叠面板中独立处理）
-    if (selectedCategoryPath.length === 0) {
+    if (selectedCategoryPath.length === 0 && !(isCustomAJ && isEditMode)) {
       toast.error("请选择分类");
       return;
     }
@@ -948,24 +1121,38 @@ const AddTransaction = () => {
       toast.error("请至少上传一张开票凭证图片");
       return;
     }
-    // AJ账本：传递开票企业信息，提交后自动设为「申请中」状态
-    // AJ账本：报销事由写入description
-    if (isCustomAJ && expenseReasonLabel) {
-      payload.description = expenseReasonLabel;
+    // AJ 新增提交使用原逻辑；编辑不触碰审批/报销状态，不把退回悄悄改成申请中。
+    // 实际用途直接保存，不以「待确认」覆盖用户填写；空用途也不编造。
+    if (isCustomAJ && !isEditMode) {
+      payload.description = note;
+      setAJSubmitError('');
     }
-    if (isCustomAJ && selectedCompanyId) {
+    if (isCustomAJ && !isEditMode && selectedCompanyId) {
       payload.ajCompanyId = selectedCompanyId;
       payload.ajCompanyName = selectedCompany?.name || undefined;
     }
     
     if (isEditMode && editTransactionId) {
       // 编辑模式：调用更新API
+      if (isCustomAJ) {
+        delete payload.reimbursementStatus;
+        delete payload.pendingType;
+        delete payload.pendingIncludeStats;
+        delete payload.viewAsUserId;
+        // AJ 用途/图片编辑没有分类选择器，不写回旧 categoryId 覆盖 AI/人工已确认类目。
+        delete payload.categoryId;
+        payload.description = note;
+        payload.images = uploadedImages;
+        void saveAJOriginal(payload, resubmit);
+        return;
+      }
       updateTransactionMutation.mutate({
         recordId: editTransactionId,
         ...payload,
       });
     } else {
       // 新增模式：调用添加API
+      if (isCustomAJ) ajNewSubmitLock.current = true;
       addTransactionMutation.mutate(payload);
     }
   };
@@ -1081,7 +1268,24 @@ const AddTransaction = () => {
             </div>
           </div>
           {/* 内容区（可滚动） */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col px-3 pt-2 pb-4 gap-2">
+          <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col px-3 pt-2 pb-4 gap-2">
+          <fieldset disabled={isSaving || isAJEditBlocked || ajSubmittedRecordId !== null} className="min-w-0 flex-shrink-0 space-y-2 border-0 m-0 p-0">
+          {isEditMode && (
+            <div className="rounded-xl bg-white border border-amber-200 p-3 text-sm space-y-2 flex-shrink-0">
+              <p className="font-medium text-[#1A2B4A]">{ajEditStatus === 'rejected' ? '拒绝退回·本次不予报销' : ajEditStatus === 'support_needed' ? '补充材料' : ajEditStatus === 'approved' ? '已批准' : '申请中，等待审核'}</p>
+              {(editTransaction as any)?.ajApproveComment && <p className="text-gray-700 whitespace-pre-wrap break-words">审核意见：{String((editTransaction as any).ajApproveComment)}</p>}
+              {(editTransaction as any)?.ajApprovedAt && <p className="text-xs text-gray-500">审核时间：{String((editTransaction as any).ajApprovedAt)}</p>}
+              {isAJEditBlocked ? <p className="text-xs text-amber-800">{ajEditStatus === 'approved' ? '已批准单据不可普通修改或重提，请联系财务处理。' : '只有本人可以修改和重提此退回申请。'}</p> : <p className="text-xs text-amber-800">保存修改不改变审核状态。{canResubmitAJ ? '再次提交成功后才回到申请中；请修改材料或填写复核说明，纯重提且无说明会被拒绝。' : '此状态不可再次提交。'}</p>}
+              {canResubmitAJ && (
+                <div>
+                  <label htmlFor="aj-resubmit-comment" className="block text-xs text-gray-600 mb-1">复核说明（可选，无材料修改时请填写）</label>
+                  <textarea id="aj-resubmit-comment" value={resubmitComment} onChange={e => setResubmitComment(e.target.value)} disabled={isSaving} placeholder="说明补充的材料、修改内容或申请复核的依据" className="w-full min-h-[80px] rounded-lg border border-gray-200 p-2 text-sm" autoFocus={isResubmitEntry} />
+                </div>
+              )}
+              {ajSaveMessage && <p role="status" className="text-xs text-green-700">{ajSaveMessage}</p>}
+              {ajSaveError && <p role="alert" className="text-xs text-red-700 whitespace-pre-wrap break-words">{ajSaveError}</p>}
+            </div>
+          )}
           {/* 容器一：开票信息（紧凑两行） */}
           <div className="rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
@@ -1103,16 +1307,16 @@ const AddTransaction = () => {
                       </button>
                     </div>
                   )}
-                  {(ajCompanies as any[])?.length > 1 && (
+                  {!isEditMode && (ajCompanies as any[])?.length > 1 && (
                     <button className="text-[10px] text-[#1A2B4A] underline self-start" onClick={() => setShowCompanyPicker(true)}>更换企业</button>
                   )}
                 </div>
               ) : (
                 <div
                   className="text-sm text-gray-400 cursor-pointer flex items-center gap-1"
-                  onClick={() => (ajCompanies as any[])?.length > 0 && setShowCompanyPicker(true)}
+                  onClick={() => !isEditMode && (ajCompanies as any[])?.length > 0 && setShowCompanyPicker(true)}
                 >
-                  <span>请选择企业</span>
+                  <span>{isEditMode ? ((editTransaction as any)?.ajCompanyName || '原单开票企业（保持不变）') : '请选择企业'}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
               )}
@@ -1140,7 +1344,7 @@ const AddTransaction = () => {
                       setAmount(val);
                     }
                   }}
-                  className="text-3xl font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  className="min-w-0 text-3xl font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
                   style={{ caretColor: '#1A2B4A' }}
                   autoComplete="off"
                   onBlur={() => {
@@ -1203,17 +1407,28 @@ const AddTransaction = () => {
                 setPendingPreviewIndex(0);
                 setPendingFiles(previews);
                 setPendingUploadCallback(() => async (confirmedFiles: File[]) => {
+                  if (ajUploadLock.current || ajSaveLock.current || isSaving || isAJEditBlocked || ajSubmittedRecordId !== null) return;
+                  ajUploadLock.current = true;
+                  setAJUploadBusy(true);
                   toast.loading('上传中...', { id: 'upload' });
+                  const uploadedUrls: string[] = [];
                   try {
-                    const uploadedUrls: string[] = [];
                     for (const file of confirmedFiles) {
                       const { base64 } = await autoCompressImage(file, 'receipt');
                       const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                      if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                      if (!result.success || !result.imageUrl) throw new Error('服务器未返回有效图片');
+                      uploadedUrls.push(result.imageUrl);
                     }
-                    if (uploadedUrls.length > 0) { setUploadedImages(prev => [...prev, ...uploadedUrls]); toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' }); }
+                    if (uploadedUrls.length > 0) toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' });
                     else toast.dismiss('upload');
-                  } catch (error) { console.error('图片上传失败:', error); toast.error('图片上传失败，请重试', { id: 'upload' }); }
+                  } catch (error) {
+                    console.error('图片上传失败:', error);
+                    toast.error(`图片上传未完成，已保留 ${uploadedUrls.length} 张成功凭证；请补传未完成图片`, { id: 'upload' });
+                  } finally {
+                    if (uploadedUrls.length > 0) setUploadedImages(prev => [...prev, ...uploadedUrls]);
+                    ajUploadLock.current = false;
+                    setAJUploadBusy(false);
+                  }
                 });
                 e.target.value = '';
               }} />
@@ -1255,10 +1470,25 @@ const AddTransaction = () => {
             </div>
           </div>
 
+          <div className="flex-shrink-0 rounded-lg border border-slate-200 bg-white p-3">
+            <label htmlFor="aj-actual-expense-purpose" className="mb-2 block text-sm font-semibold text-[#1A2B4A]">实际报销用途</label>
+            <textarea id="aj-actual-expense-purpose" value={note} onChange={event => setNote(event.target.value)} placeholder="请填写真实的报销用途；未知可留空，不会自动编造" className="min-h-[88px] w-full rounded-md border border-slate-300 p-2 text-sm" />
+            <p className="mt-1 text-xs text-slate-500">将作为原单用途 / 备注保存。下方人工确认的报销事由是另一字段，修改此处不会覆盖人工锁定事由；识别会同时参考两项已保存内容。</p>
+          </div>
+          </fieldset>
+          {isEditMode && editTransactionId && (
+            <div className="flex-shrink-0 space-y-2">
+              <p role={ajHasUnsavedChanges ? 'alert' : undefined} className={`rounded-md border p-3 text-xs ${ajHasUnsavedChanges ? 'border-amber-300 bg-amber-50 font-semibold text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                {ajHasUnsavedChanges ? '当前图片、金额、日期、用途或分类有未保存改动。下方只显示服务器已保存原单的缓存，不是当前草稿结果；请先保存，再识别或确认。' : '下方核对的是已保存服务器原单。更改图片或用途后，请先保存原单；保存本身不执行识别或审批。'}
+              </p>
+              <AJInvoiceAIPanel ledgerId={ledgerId} recordId={editTransactionId} readOnly={isAJEditBlocked || isSaving || ajHasUnsavedChanges} onChanged={handleAJAIChanged} />
+            </div>
+          )}
+
           {/* 容器三：费用报销明细单预览 */}
-          {/* AI提示语 */}
+          {/* 填写预览，不冒充尚未发生的 AI 识别 */}
           <div className="px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
-            <span className="text-[11px]" style={{ color: '#4A5A8A' }}>以下为 <strong>AI财会助理</strong> 自动生成预览，提交后管理员可见</span>
+            <span className="text-[11px]" style={{ color: '#4A5A8A' }}>填写预览，保存原单后可识别核对；本预览不代表 AI 结果或审核通过</span>
           </div>
           <div className="mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0', maxWidth: '100%', width: '100%' }}>
 
@@ -1301,8 +1531,8 @@ const AddTransaction = () => {
                 <tr style={{ background: '#fff' }}>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200">1</td>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
-                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] text-[9px] overflow-hidden" style={{ maxWidth: 0 }}><span className="block truncate">待AI主管确认</span></td>
-                  <td className="px-1 py-1 text-center border-r border-gray-200 text-[#444] text-[9px]">待AI财务确认</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] text-[9px] overflow-hidden" style={{ maxWidth: 0 }}><span className="block truncate" title={note}>{note || '未填写用途'}</span></td>
+                  <td className="px-1 py-1 text-center border-r border-gray-200 text-[#444] text-[9px]">待原单核对 / 人工确认</td>
                   <td className="px-1 py-1 text-center border-r border-gray-200 font-bold text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="py-0.5 text-center" style={{ verticalAlign: 'middle' }}>
                     {uploadedImages.length > 0 ? (
@@ -1365,11 +1595,7 @@ const AddTransaction = () => {
                     color: '#1a237e',
                   }}
                 >
-                  {selectedCompany ? (() => {
-                    const surnames = ['王','李','张','刘','陈','杨','赵','黄','周','吴'];
-                    const seed = (selectedCompany.name.charCodeAt(0) + selectedCompany.name.charCodeAt(selectedCompany.name.length-1)) % 10;
-                    return surnames[seed];
-                  })() : '—'}
+                  未填写
                 </span>
               </div>
             </div>
@@ -1401,25 +1627,33 @@ const AddTransaction = () => {
             </div>
           )}
 
-          </div>{/* 关闭固定内容区 */}
+          </div>{/* 关闭固定内容区；AI 只读浏览不被禁用表单阻断 */}
 
           {/* 提交按鈕（固定在底部） */}
           <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
+            {ajSubmitError && <p role="alert" className="mb-2 whitespace-pre-wrap break-words rounded-md bg-red-50 p-2 text-xs text-red-800">{ajSubmitError}</p>}
+            {ajSubmittedRecordId !== null ? (
+              <div className="space-y-2">
+                <p role="status" className="text-xs text-[#1A2B4A]">申请已保存。尚未执行 AI 识别或审批，不会自动消耗 AI 额度。</p>
+                {ajSubmittedRecordId > 0 && <button type="button" onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${ajSubmittedRecordId}`)} className="min-h-11 w-full rounded-lg bg-[#1A2B4A] px-3 py-3 text-sm font-semibold text-white">前往已保存原单 · AI 照片核对</button>}
+                <button type="button" onClick={() => setLocation(`/ledger/${ledgerId}`)} className="min-h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-[#1A2B4A]">返回原单列表</button>
+              </div>
+            ) : <>
             {(() => {
-              const isReady = !!(amount && parseFloat(amount) > 0 && uploadedImages.length > 0);
+              const isReady = !!(amount && Number.isFinite(Number(amount)) && Number(amount) > 0 && uploadedImages.length > 0);
               return (
-                <>
-                  <div className="text-center text-xs text-gray-400 mb-2">
-                    {isReady ? '✓ 信息已完整，提交后管理员将收到通知' : '请填写金额并上传发票/凭证后提交'}
-                  </div>
-                  <button
-                    className="w-full text-white py-4 rounded-2xl text-base font-bold shadow-md tracking-wider transition-all duration-300"
+                  <>
+                    <div className="text-center text-xs text-gray-400 mb-2">
+                      {isEditMode ? '保存只修改原单；再次提交成功才进入申请中' : isReady ? '信息已完整，提交后管理员将收到通知' : '请填写金额并上传发票/凭证后提交'}
+                    </div>
+                    <button
+                      className="w-full text-white py-4 rounded-2xl text-base font-bold shadow-md tracking-wider transition-all duration-300"
                     style={{
                       background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#B0B8C4',
                       opacity: 1,
                       cursor: isReady ? 'pointer' : 'not-allowed'
                     }}
-                    disabled={!isReady}
+                    disabled={!ledger || !isReady || isSaving || pendingFiles.length > 0 || isAJEditBlocked || (isEditMode && !editTransaction) || (!isEditMode && !selectedCompany)}
                     onClick={() => {
                       if (!isReady) {
                         if (!amount || parseFloat(amount) <= 0) {
@@ -1432,11 +1666,17 @@ const AddTransaction = () => {
                       handleSave();
                     }}
                   >
-                    {isReady ? '✓ 提交申请' : '提交申请'}
+                    {isSaving ? (ajSaveAction === 'resubmit' ? '保存并再次提交中...' : '保存中...') : isEditMode ? '保存修改' : '提交申请'}
                   </button>
+                  {canResubmitAJ && (
+                    <button className="w-full mt-2 py-3 rounded-2xl border border-[#1A2B4A] text-[#1A2B4A] font-bold disabled:opacity-50" disabled={!isReady || isSaving || pendingFiles.length > 0} onClick={() => saveTransaction(true)}>
+                      {isSaving && ajSaveAction === 'resubmit' ? '再次提交中...' : '再次提交'}
+                    </button>
+                  )}
                 </>
               );
             })()}
+            </>}
           </div>
         </div>
       ) : isCustomAA ? (

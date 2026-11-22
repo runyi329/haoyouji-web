@@ -6927,7 +6927,7 @@ export default function LedgerDetail() {
                                 </div>
                               </div>
                               {/* 状态文字标签 + 撤销按钮 */}
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 1, justifyContent: 'flex-end', maxWidth: '60%' }}>
                                 {record.ajStatus && (
                                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                     <span style={{
@@ -6938,17 +6938,21 @@ export default function LedgerDetail() {
                                       display: 'inline-block',
                                       backgroundColor:
                                         record.ajStatus === 'pending' ? '#F59E0B' :
-                                        record.ajStatus === 'approved' ? '#4CAF50' : '#BDBDBD'
+                                        record.ajStatus === 'approved' ? '#4CAF50' : '#D97706'
                                     }} />
                                     <span style={{
                                       fontSize: '12px',
                                       fontWeight: 500,
                                       color:
                                         record.ajStatus === 'pending' ? '#B45309' :
-                                        record.ajStatus === 'approved' ? '#2E7D32' : '#757575'
+                                        record.ajStatus === 'approved' ? '#2E7D32' : '#92400E',
+                                      textAlign: 'right',
+                                      overflowWrap: 'anywhere',
                                     }}>
                                       {record.ajStatus === 'pending' ? '申请中' :
-                                       record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
+                                       record.ajStatus === 'approved' ? '已批准' :
+                                       record.ajStatus === 'rejected' ? '拒绝退回·本次不予报销' :
+                                       record.ajStatus === 'support_needed' ? '补充材料' : '未提交'}
                                     </span>
                                   </div>
                                 )}
@@ -6977,6 +6981,17 @@ export default function LedgerDetail() {
                                 )}
                               </div>
                             </div>
+                            {/* 仅申请人本人可重提；管理员查看别人的单据不会出现重提入口。 */}
+                            {user && Number((record as any).createdBy ?? record.member?.id) === Number(user.id) && (record.ajStatus === 'rejected' || record.ajStatus === 'support_needed') && (
+                              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                                <p className="text-xs text-amber-900 whitespace-pre-wrap break-words">审核意见：{(record as any).ajApproveComment || '未填写，请查看详情中的审核历史'}</p>
+                                {(record as any).ajApprovedAt && <p className="text-[11px] text-amber-700">审核时间：{String((record as any).ajApprovedAt)}</p>}
+                                <button
+                                  onClick={e => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/add?edit=${record.id}&resubmit=1`); }}
+                                  className="w-full rounded-lg bg-[#1A2B4A] py-2 text-xs font-semibold text-white"
+                                >修改并再次提交</button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

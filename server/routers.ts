@@ -51,6 +51,10 @@ import * as dbLedger from "./db-ledger";
 import { assertLedger37Owner, assertLedger37ResourceOwner, assertLedger37SelfRead,
   getLedger37Access, calendarNumberCategoriesSchema, calendarNumberSchema, saveCalendarNumberSchema,
   getCalendarNumberCategories, getCalendarNumber, saveCalendarNumber, prepareLedger37PersonalConfigPatch } from './ledger37-calendar-recorder';
+import { reviewAJInvoice, resubmitAJInvoice, withdrawAJInvoice, assertAJLedgerAccess, assertAJCompanyAccess, getAJUsdCnyRate } from './aj-invoice-review';
+import { getAJPendingInvoiceChecks, assertAJBatchInvoiceChecks, createAJBatchApprovalGuard } from './aj-invoice-checks';
+import { runAJBatchApproval } from './aj-batch-approval';
+import { ajInvoiceIdentitySchema, ajInvoiceManualSchema, ajExpenseConfigSchema, getAJCompanyExpenseConfig, setAJCompanyExpenseConfig, getAJInvoiceAIResult, analyzeAJInvoice, applyAJInvoiceRecommendation, confirmAJInvoiceClassification } from './aj-invoice-ai';
 import { smsService } from "./sms-service";
 import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
@@ -14883,30 +14887,7 @@ ${klinesSummary}
         recordId: z.number(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const db = await getDbConnection();
-        // 验证账本类型必须是 custom_aj
-        const [ledgerRows] = await db.execute(
-          'SELECT id, type FROM ledgers WHERE id = ? LIMIT 1',
-          [input.ledgerId]
-        ) as any;
-        if (!ledgerRows[0] || ledgerRows[0].type !== 'custom_aj') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '此操作仅限 AJ 账本' });
-        }
-        // 查询账目，验证归属和状态
-        const [rows] = await db.execute(
-          'SELECT id, createdBy, aj_status FROM ledger_records WHERE id = ? AND ledgerId = ? AND deleted_at IS NULL LIMIT 1',
-          [input.recordId, input.ledgerId]
-        ) as any;
-        const record = rows[0];
-        if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '账目不存在' });
-        if (record.aj_status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '只能撤回待审批状态的申请' });
-        if (record.createdBy !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能撤回自己提交的申请' });
-        // 撤回即删除：软删除账目（视同取消申请，账目不再显示）
-        await db.execute(
-          'UPDATE ledger_records SET deleted_at = NOW(), aj_status = NULL, updatedAt = NOW() WHERE id = ?',
-          [input.recordId]
-        );
-        return { success: true, deleted: true };
+        return withdrawAJInvoice({ ledgerId: input.ledgerId, transactionId: input.recordId, userId: ctx.user.id });
       }),
 
     // ==================== 账目变更申请 ====================
@@ -15319,123 +15300,30 @@ ${klinesSummary}
         );
       }),
 
-    // AJ审批状态直接设置（独立接口，使用drizzle ORM）
+    // AJ 发票审核：授权、行锁/CAS、日志与津贴共用同一事务。
     ajSetStatus: protectedProcedure
       .input(z.object({
+        ledgerId: z.number().optional(),
         transactionId: z.number(),
-        status: z.enum(['pending', 'approved', 'support_needed']),
+        status: z.enum(['pending', 'approved', 'rejected', 'support_needed']),
+        comment: z.string().max(1000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37ResourceOwner(ctx, 'record', input.transactionId);
-        console.log(`[ajSetStatus] ===== 接口被调用 =====`);
-        console.log(`[ajSetStatus] 操作人: ctx.user.id=${ctx.user.id}, openId=${ctx.user.openId}`);
-        console.log(`[ajSetStatus] 参数: transactionId=${input.transactionId}, status=${input.status}`);
-        
-        const conn = await getDbConnection();
-        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        return reviewAJInvoice({ ...input, userId: ctx.user.id });
+      }),
 
-        // 1. 查询记录（原始SQL，避免drizzle列名映射问题）
-        let row: any;
-        try {
-          const [rows] = await (conn as any).execute(
-            `SELECT id, ledgerId, aj_status as ajStatus, createdBy, amount, reimbursement_amount as reimbursementAmount FROM ledger_records WHERE id=? LIMIT 1`,
-            [input.transactionId]
-          );
-          console.log(`[ajSetStatus] 查询记录结果:`, JSON.stringify((rows as any[])[0]));
-          if ((rows as any[]).length === 0) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
-          }
-          row = (rows as any[])[0];
-        } catch (e: any) {
-          if (e instanceof TRPCError) throw e;
-          console.error(`[ajSetStatus] 查询记录失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `查询记录失败: ${e?.message}` });
-        }
-
-        // 2. 验证权限：账本管理员或owner（原始SQL）
-        try {
-          const [memberRows] = await (conn as any).execute(
-            `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
-            [row.ledgerId, ctx.user.id]
-          );
-          const memberRole = (memberRows as any[])[0]?.role || null;
-          console.log(`[ajSetStatus] 权限校验: ledgerId=${row.ledgerId}, userId=${ctx.user.id}, role=${memberRole}`);
-          if (!memberRole || !['owner', 'admin', 'funder'].includes(memberRole)) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: `权限不足: 您的角色是${memberRole || '未知'}，需要owner/admin/funder` });
-          }
-        } catch (e: any) {
-          if (e instanceof TRPCError) throw e;
-          console.error(`[ajSetStatus] 权限校验失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `权限校验失败: ${e?.message}` });
-        }
-
-        const oldStatus = row.ajStatus || 'pending';
-        const newStatus = input.status;
-
-        // 3. 更新 aj_status（原始SQL，避免drizzle列名映射问题）
-        try {
-          await (conn as any).execute(
-            `UPDATE ledger_records SET aj_status=?, aj_approved_by=?, aj_approved_at=NOW() WHERE id=?`,
-            [newStatus, ctx.user.id, input.transactionId]
-          );
-          console.log(`[ajSetStatus] 更新成功: 记录${input.transactionId}: ${oldStatus} -> ${newStatus}, 操作人: ${ctx.user.id}`);
-        } catch (e: any) {
-          console.error(`[ajSetStatus] 更新失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `更新状态失败: ${e?.message}` });
-        }
-
-        // 4. USDT 奖励逻辑
-        const rewardNote = `成本津贴 #${input.transactionId}`;
-
-        if (oldStatus !== 'approved' && newStatus === 'approved') {
-          // 切换到审批通过：发放 USDT 奖励
-          try {
-            const submitterId = row.createdBy;
-            const reimbursementAmount = parseFloat(row.reimbursementAmount || row.amount || '0');
-            if (reimbursementAmount > 0 && submitterId) {
-              let usdCnyRate = 7.2;
-              try {
-                const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
-                const d = await res.json() as any;
-                if (d.result === 'success' && d.rates?.['CNY']) usdCnyRate = d.rates['CNY'];
-              } catch (_) {}
-              const rewardCny = reimbursementAmount * 0.01;
-              const usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
-              if (usdtRewarded > 0) {
-                await (conn as any).execute(
-                  `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-                  [row.ledgerId, submitterId, usdtRewarded, rewardNote]
-                );
-                try {
-                  await (conn as any).execute(
-                    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (?, ?, 'reward', ?, 0, ?, NOW())`,
-                    [submitterId, usdtRewarded, input.transactionId, rewardNote]
-                  );
-                } catch (_) {}
-                console.log(`[ajSetStatus] 发放 ${usdtRewarded} USDT 给用户 ${submitterId}`);
-              }
-            }
-          } catch (e: any) {
-            console.error('[ajSetStatus] USDT奖励发放失败:', e?.message);
-          }
-        } else if (oldStatus === 'approved' && newStatus !== 'approved') {
-          // 从审批通过切换回其他状态：扣回之前发放的 USDT
-          try {
-            await (conn as any).execute(
-              `DELETE FROM af_manual_balances WHERE note = ? LIMIT 1`,
-              [rewardNote]
-            );
-            await (conn as any).execute(
-              `DELETE FROM balance_history WHERE description = ? AND type = 'reward' LIMIT 1`,
-              [rewardNote]
-            );
-            console.log(`[ajSetStatus] 已扣回奖励: ${rewardNote}`);
-          } catch (e: any) {
-            console.error('[ajSetStatus] 扣回USDT失败:', e?.message);
-          }
-        }
-
-        return { success: true, transactionId: input.transactionId, status: newStatus };
+    // 申请人对原退回单重新提交，保留单号且不自动审批或发放津贴。
+    ajResubmitInvoice: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        transactionId: z.number(),
+        comment: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.transactionId);
+        return resubmitAJInvoice({ ...input, userId: ctx.user.id });
       }),
 
     // 获取单条记账详情
@@ -15921,9 +15809,11 @@ ${klinesSummary}
             lr.aj_accounting_code as accountingCode,
             CASE lr.aj_status
               WHEN 'approved' THEN '已审批'
-              WHEN 'rejected' THEN '已驳回'
+              WHEN 'rejected' THEN '拒绝退回'
+              WHEN 'support_needed' THEN '补充材料'
               ELSE '待审核'
             END as status,
+            lr.aj_approve_comment as ajApproveComment,
             lr.description as remark
            FROM ledger_records lr
            LEFT JOIN users u ON u.id = lr.createdBy
@@ -15956,6 +15846,7 @@ ${klinesSummary}
           { header: '报销类目', key: 'taxCategory', width: 18 },
           { header: '会计科目', key: 'accountingCode', width: 18 },
           { header: '审批状态', key: 'status', width: 12 },
+          { header: '审批/退回理由', key: 'ajApproveComment', width: 40 },
           { header: '备注', key: 'remark', width: 25 },
         ];
         wsSheet.columns = colDefs;
@@ -15966,20 +15857,26 @@ ${klinesSummary}
         wsSheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
         wsSheet.getRow(1).height = 24;
 
+        // 强制作为文本写入，不把理由或其他用户内容解释为公式。
+        const excelText = (value: unknown) => {
+          const text = String(value ?? '');
+          return /^[\s\u0000-\u001f]*[=+@-]/.test(text) ? `'${text}` : text;
+        };
         invoices.forEach((inv: any, idx: number) => {
           const row = wsSheet.addRow({
             id: `No.${inv.id}`,
-            companyName: inv.companyName || '',
-            taxNo: inv.taxNo || '',
+            companyName: excelText(inv.companyName),
+            taxNo: excelText(inv.taxNo),
             amount: inv.amount ? `¥${Number(inv.amount).toFixed(2)}` : '',
-            recordDate: inv.recordDate || '',
-            applicant: inv.applicant || '',
-            employeeNo: inv.employeeNo || '',
-            expenseReason: inv.expenseReason || '',
-            taxCategory: inv.taxCategory || '',
-            accountingCode: inv.accountingCode || '',
-            status: inv.status || '',
-            remark: inv.remark || '',
+            recordDate: excelText(inv.recordDate),
+            applicant: excelText(inv.applicant),
+            employeeNo: excelText(inv.employeeNo),
+            expenseReason: excelText(inv.expenseReason),
+            taxCategory: excelText(inv.taxCategory),
+            accountingCode: excelText(inv.accountingCode),
+            status: excelText(inv.status),
+            ajApproveComment: excelText(inv.ajApproveComment),
+            remark: excelText(inv.remark),
           });
           row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 0 ? 'FFF5F7FA' : 'FFFFFFFF' } };
           row.alignment = { vertical: 'middle' };
@@ -16012,7 +15909,7 @@ ${klinesSummary}
 
         // 统计审批状态分布
         const approvedCount = invoices.filter((r: any) => r.status === '已审批').length;
-        const rejectedCount = invoices.filter((r: any) => r.status === '已驳回').length;
+        const rejectedCount = invoices.filter((r: any) => r.status === '拒绝退回').length;
         const pendingCount = invoices.filter((r: any) => r.status === '待审核').length;
 
         // 获取额外收件邮箱列表
@@ -31707,81 +31604,52 @@ ${klinesSummary}
         };
       }),
 
-    // ========== AJ账本：企业报销类型配置 ==========
-    // 获取企业允许的报销类型配置（管理员或员工均可查询）
+    // ========== AJ账本：企业报销类型配置（查询绝不建表） ==========
     ajGetCompanyExpenseTypes: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), companyId: z.number() }))
+      .input(z.object({ ledgerId: z.number().int().positive().safe(), companyId: z.number().int().positive().safe() }))
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 建表（如果不存在）
-        await (conn as any).execute(`
-          CREATE TABLE IF NOT EXISTS aj_company_expense_types (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ledger_id INT NOT NULL,
-            company_id INT NOT NULL,
-            config JSON NOT NULL COMMENT '报销类型配置，格式：{categoryKey: {enabled: bool, items: {itemKey: bool}}}',
-            updated_by INT,
-            updated_at BIGINT,
-            UNIQUE KEY uk_company (company_id)
-          )
-        `);
-        const [rows] = await (conn as any).execute(
-          `SELECT config FROM aj_company_expense_types WHERE company_id=?`,
-          [input.companyId]
-        );
-        if ((rows as any[]).length > 0) {
-          const config = typeof (rows as any[])[0].config === 'string'
-            ? JSON.parse((rows as any[])[0].config)
-            : (rows as any[])[0].config;
-          return config;
-        }
-        // 没有配置时返回默认全部启用
-        return null;
+        return getAJCompanyExpenseConfig(conn, input.ledgerId, input.companyId, ctx.user.id);
       }),
 
-    // 更新企业报销类型配置（仅管理员/创始人）
     ajSetCompanyExpenseTypes: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        companyId: z.number(),
-        config: z.record(z.object({
-          enabled: z.boolean(),
-          items: z.record(z.boolean()),
-        })),
-      }))
+      .input(z.object({ ledgerId: z.number().int().positive().safe(), companyId: z.number().int().positive().safe(), config: ajExpenseConfigSchema }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [memberRows] = await (conn as any).execute(
-          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
-          [input.ledgerId, ctx.user.id]
-        );
-        const memberRole = (memberRows as any[])[0]?.role;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改报销类型配置' });
-        }
-        await (conn as any).execute(`
-          CREATE TABLE IF NOT EXISTS aj_company_expense_types (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ledger_id INT NOT NULL,
-            company_id INT NOT NULL,
-            config JSON NOT NULL,
-            updated_by INT,
-            updated_at BIGINT,
-            UNIQUE KEY uk_company (company_id)
-          )
-        `);
-        await (conn as any).execute(
-          `INSERT INTO aj_company_expense_types (ledger_id, company_id, config, updated_by, updated_at)
-           VALUES (?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE config=VALUES(config), updated_by=VALUES(updated_by), updated_at=VALUES(updated_at)`,
-          [input.ledgerId, input.companyId, JSON.stringify(input.config), ctx.user.id, Date.now()]
-        );
-        return { success: true };
+        return setAJCompanyExpenseConfig(conn, input.ledgerId, input.companyId, ctx.user.id, input.config);
+      }),
+
+    // AI 仅明确 mutation 点击才分析；查询/批审仅确定性读取现有缓存。
+    ajGetInvoiceAIResult: protectedProcedure
+      .input(ajInvoiceIdentitySchema)
+      .query(({ ctx, input }) => getAJInvoiceAIResult({ ...input, userId: ctx.user.id })),
+    ajAnalyzeInvoice: protectedProcedure
+      .input(ajInvoiceIdentitySchema.extend({ force: z.boolean().optional(), autoApply: z.boolean().default(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
+        return analyzeAJInvoice({ ...input, userId: ctx.user.id });
+      }),
+    ajApplyInvoiceRecommendation: protectedProcedure
+      .input(ajInvoiceIdentitySchema.extend({
+        analysisId: z.number().int().positive().safe(), snapshotKey: z.string().regex(/^[a-f0-9]{64}$/),
+        categoryKey: z.string().min(1).max(80), itemKey: z.string().min(1).max(80),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
+        return applyAJInvoiceRecommendation({ ...input, userId: ctx.user.id });
+      }),
+    ajConfirmInvoiceClassification: protectedProcedure
+      .input(ajInvoiceManualSchema)
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
+        return confirmAJInvoiceClassification({ ...input, userId: ctx.user.id });
       }),
 
     // ========== AJ账本：企业主（admin角色）专用接口 ==========
@@ -32251,6 +32119,11 @@ ${klinesSummary}
 
         const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
+                  lr.aj_approve_comment as ajApproveComment,
+                  lr.aj_approved_at as ajApprovedAt, lr.aj_approved_by as ajApprovedBy,
+                  EXISTS(SELECT 1 FROM ledger_record_logs aj_log WHERE aj_log.record_id=lr.id
+                    AND aj_log.ledger_id=lr.ledgerId AND aj_log.field_name='aj_status'
+                    AND aj_log.action='resubmit') as ajResubmitted,
                   lr.images as images,
                   lr.aj_tax_category as ajTaxCategory,
                   lr.aj_accounting_code as ajAccountingCode,
@@ -32273,7 +32146,7 @@ ${klinesSummary}
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
         const [rows] = await (conn as any).execute(finalSql, finalParams);
         console.log('[ajOwnerGetCompanyInvoices] rows count:', (rows as any[]).length);
-        return rows as any[];
+        return (rows as any[]).map(row => ({ ...row, ajResubmitted: Boolean(Number(row.ajResubmitted)) }));
       }),
     // AJ账本资方：查询指定业务员的详细统计（状态分布、金额分布、已发/待发津贴）
     ajOwnerGetEmployeeStats: protectedProcedure
@@ -32292,7 +32165,8 @@ ${klinesSummary}
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
         );
-        if (!(memberRows as any[])[0]?.role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const role = await assertAJLedgerAccess(conn, input.ledgerId, ctx.user.id, true);
+        await assertAJCompanyAccess(conn, input.ledgerId, input.companyId, ctx.user.id, role, true);
         // 日期过滤
         const now = new Date();
         const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -32333,11 +32207,14 @@ ${klinesSummary}
         const [bonusRows] = await (conn as any).execute(
           `SELECT COALESCE(SUM(amb.amount), 0) as totalBonus
            FROM af_manual_balances amb
+           JOIN ledger_records lr ON lr.id = CAST(SUBSTRING_INDEX(amb.note, '#', -1) AS UNSIGNED)
+             AND lr.ledgerId=amb.ledger_id AND lr.aj_company_id=? AND lr.deleted_at IS NULL
+             AND lr.aj_status='approved' ${dateFilter}
            JOIN users u ON u.id = amb.user_id
            LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
            WHERE amb.ledger_id = ? AND amb.note LIKE '成本津贴 #%' AND amb.amount > 0
              ${bonusEmployeeFilter}`,
-          [input.ledgerId, input.ledgerId, ...bonusEmployeeParams]
+          [input.companyId, ...dateParams, input.ledgerId, input.ledgerId, ...bonusEmployeeParams]
         );
         const statusMap: Record<string, { count: number; amount: number }> = {};
         for (const row of statusRows as any[]) {
@@ -32346,6 +32223,7 @@ ${klinesSummary}
         const approved = statusMap['approved'] || { count: 0, amount: 0 };
         const pending = statusMap['pending'] || { count: 0, amount: 0 };
         const supportNeeded = statusMap['support_needed'] || { count: 0, amount: 0 };
+        const rejected = statusMap['rejected'] || { count: 0, amount: 0 };
         const totalBonus = Number((bonusRows as any[])[0]?.totalBonus || 0);
         // 预计待发：待审核记录按1%/汇率估算（用固定汇率7.2近似）
         const estimatedBonus = parseFloat((pending.amount * 0.01 / 7.2).toFixed(4));
@@ -32353,6 +32231,7 @@ ${klinesSummary}
           approved,
           pending,
           supportNeeded,
+          rejected,
           totalBonus,
           estimatedBonus,
         };
@@ -32360,114 +32239,40 @@ ${klinesSummary}
     // AJ账本资方：批量审核通过（按公司+业务员筛选）
     ajOwnerBatchApprove: protectedProcedure
       .input(z.object({
-        ledgerId: z.number(),
-        companyId: z.number().optional(),   // 不传则全部企业
-        employeeName: z.string().optional(), // 不传则全部业务员
+        ledgerId: z.number().int().positive().safe(),
+        companyId: z.number().int().positive().safe().optional(),   // 不传则全部企业
+        employeeName: z.string().max(100).optional(), // 不传则全部业务员
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+        recordIds: z.array(z.number().int().positive()).min(1).max(5000).optional(),
+        reviewedRisks: z.array(z.object({ id: z.number().int().positive(), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) })).max(5000).optional(),
+        expectedChecks: z.array(z.object({ id: z.number().int().positive(), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) })).max(5000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 权限校验
-        const [memberRows] = await (conn as any).execute(
-          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        );
-        const memberRole = (memberRows as any[])[0]?.role || null;
-        if (!memberRole || !['owner', 'admin', 'funder'].includes(memberRole)) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '权限不足' });
-        }
-        // 日期过滤
-        const now = new Date();
-        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-        const today = bjNow.toISOString().split('T')[0];
-        let dateFilter = '';
-        const dateParams: string[] = [];
-        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
-        else if (input.period === 'week') {
-          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
-          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
-          dateParams.push(ws.toISOString().split('T')[0], today);
-        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
-        else if (input.period === 'quarter') {
-          const q = Math.floor(bjNow.getUTCMonth()/3);
-          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
-          dateFilter = 'AND lr.recordDate >= ?';
-          dateParams.push(qStart.toISOString().split('T')[0]);
-        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
-        // 构建企业和业务员过滤
-        const companyFilter = input.companyId ? 'AND lr.aj_company_id = ?' : '';
-        const companyParams = input.companyId ? [input.companyId] : [];
-        const employeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
-        const employeeParams = input.employeeName ? [input.employeeName] : [];
-        // 查询所有待审记录
-        const [pendingRows] = await (conn as any).execute(
-          `SELECT lr.id, lr.createdBy, lr.amount, lr.ledgerId,
-                  COALESCE(lr.reimbursement_amount, lr.amount) as reimbursementAmount
-           FROM ledger_records lr
-           LEFT JOIN users u ON u.id = lr.createdBy
-           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
-           WHERE lr.ledgerId=? AND lr.deleted_at IS NULL
-             AND (lr.aj_status IS NULL OR lr.aj_status = 'pending')
-             ${dateFilter} ${companyFilter} ${employeeFilter}`,
-          [input.ledgerId, ...dateParams, ...companyParams, ...employeeParams]
-        );
-        const records = pendingRows as any[];
-        // Preflight the entire real result set before network calls, status writes or wallet rewards.
-        // A caller-supplied non-37 ledgerId must never authorize a real 37 record.
-        for (const rec of records) await assertLedger37Owner(ctx, Number(rec.ledgerId));
-        if (records.length === 0) return { approved: 0, totalAmount: 0, totalBonus: 0 };
-        // 获取汇率
-        let usdCnyRate = 7.2;
-        try {
-          const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
-          const d = await res.json() as any;
-          if (d.result === 'success' && d.rates?.['CNY']) usdCnyRate = d.rates['CNY'];
-        } catch (_) {}
-        // 批量更新状态并发放津贴
-        let totalBonus = 0;
-        for (const rec of records) {
-          await (conn as any).execute(
-            `UPDATE ledger_records SET aj_status='approved', aj_approved_by=?, aj_approved_at=NOW() WHERE id=?`,
-            [ctx.user.id, rec.id]
-          );
-          const reimbursementAmount = parseFloat(rec.reimbursementAmount || rec.amount || '0');
-          if (reimbursementAmount > 0 && rec.createdBy) {
-            const rewardNote = `成本津贴 #${rec.id}`;
-            // 检查是否已发放过
-            const [existRows] = await (conn as any).execute(
-              `SELECT id FROM af_manual_balances WHERE note=? LIMIT 1`,
-              [rewardNote]
-            );
-            if ((existRows as any[]).length === 0) {
-              const usdtRewarded = parseFloat((reimbursementAmount * 0.01 / usdCnyRate).toFixed(6));
-              if (usdtRewarded > 0) {
-                await (conn as any).execute(
-                  `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-                  [rec.ledgerId, rec.createdBy, usdtRewarded, rewardNote]
-                );
-                try {
-                  await (conn as any).execute(
-                    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (?, ?, 'reward', ?, 0, ?, NOW())`,
-                    [rec.createdBy, usdtRewarded, rec.id, rewardNote]
-                  );
-                } catch (_) {}
-                totalBonus += usdtRewarded;
-              }
-            }
-          }
-        }
-        const totalAmount = records.reduce((s: number, r: any) => s + parseFloat(r.reimbursementAmount || r.amount || '0'), 0);
-        return { approved: records.length, totalAmount, totalBonus: parseFloat(totalBonus.toFixed(4)) };
+        const memberRole = await assertAJLedgerAccess(conn, input.ledgerId, ctx.user.id, true);
+        if (input.companyId) await assertAJCompanyAccess(conn, input.ledgerId, input.companyId, ctx.user.id, memberRole, true);
+        // 精确选中 ID 必须全部仍在当前待审/授权/日期/业务员 scope 中；不可退化为批准整个 scope。
+        const records = await getAJPendingInvoiceChecks(conn, input, ctx.user.id, memberRole);
+        // 整批预检必须先于任何审核写入，旧调用未传 recordIds 也不得绕过风险确认。
+        assertAJBatchInvoiceChecks(records, input.reviewedRisks, input.expectedChecks);
+        if (records.length === 0) return { approved: 0, totalAmount: 0, totalBonus: 0, skipped: 0, failed: [], remaining: 0 };
+        const usdCnyRate = await getAJUsdCnyRate();
+        return runAJBatchApproval(records, rec => reviewAJInvoice({
+          ledgerId: input.ledgerId, transactionId: rec.id, userId: ctx.user.id,
+          status: 'approved', onlyPending: true, usdCnyRate,
+          beforeApprove: createAJBatchApprovalGuard(input, ctx.user.id,
+            { id: rec.id, fingerprint: rec.reviewFingerprint }, input.reviewedRisks?.find(item => item.id === rec.id)),
+        }));
       }),
     // AJ账本资方：获取待审单明细（用于批量审核确认弹窗）
     ajOwnerGetPendingList: protectedProcedure
       .input(z.object({
-        ledgerId: z.number(),
-        companyId: z.number().optional(),
-        employeeName: z.string().optional(),
+        ledgerId: z.number().int().positive().safe(),
+        companyId: z.number().int().positive().safe().optional(),
+        employeeName: z.string().max(100).optional(),
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
@@ -32475,170 +32280,48 @@ ${klinesSummary}
         if (input.companyId !== undefined) await assertLedger37AjResourceOwner(ctx, 'company', input.companyId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [memberRows] = await (conn as any).execute(
-          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        );
-        if (!(memberRows as any[])[0]?.role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        const now = new Date();
-        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-        const today = bjNow.toISOString().split('T')[0];
-        let dateFilter = '';
-        const dateParams: string[] = [];
-        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
-        else if (input.period === 'week') {
-          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
-          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
-          dateParams.push(ws.toISOString().split('T')[0], today);
-        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
-        else if (input.period === 'quarter') {
-          const q = Math.floor(bjNow.getUTCMonth()/3);
-          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
-          dateFilter = 'AND lr.recordDate >= ?';
-          dateParams.push(qStart.toISOString().split('T')[0]);
-        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
-        const companyFilter = input.companyId ? 'AND lr.aj_company_id = ?' : '';
-        const companyParams = input.companyId ? [input.companyId] : [];
-        const employeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
-        const employeeParams = input.employeeName ? [input.employeeName] : [];
-        const [rows] = await (conn as any).execute(
-          `SELECT lr.id, lr.recordDate,
-                  COALESCE(lr.reimbursement_amount, lr.amount) as amount,
-                  COALESCE(lm.nickname, u.name, u.username) as employeeName,
-                  c.name as companyName,
-                  lr.aj_expense_reason as expenseReason,
-                  lr.aj_tax_category as taxCategory
-           FROM ledger_records lr
-           LEFT JOIN users u ON u.id = lr.createdBy
-           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
-           LEFT JOIN aj_companies c ON c.id = lr.aj_company_id
-           WHERE lr.ledgerId=? AND lr.deleted_at IS NULL
-             AND (lr.aj_status IS NULL OR lr.aj_status = 'pending')
-             ${dateFilter} ${companyFilter} ${employeeFilter}
-           ORDER BY lr.recordDate DESC, lr.id DESC`,
-          [input.ledgerId, ...dateParams, ...companyParams, ...employeeParams]
-        );
-        return (rows as any[]).map(r => ({
-          id: r.id,
-          recordDate: r.recordDate,
-          amount: parseFloat(r.amount || '0'),
-          employeeName: r.employeeName || '',
-          companyName: r.companyName || '',
-          expenseReason: r.expenseReason || '',
-          taxCategory: r.taxCategory || '',
-        }));
+        const memberRole = await assertAJLedgerAccess(conn, input.ledgerId, ctx.user.id, true);
+        if (input.companyId) await assertAJCompanyAccess(conn, input.ledgerId, input.companyId, ctx.user.id, memberRole, true);
+        return getAJPendingInvoiceChecks(conn, input, ctx.user.id, memberRole);
       }),
-    // AJ账本资方：修改申请单的报销类目（税务分类名称）
+    // 旧四个归类入口统一走安全人工保存：授权/独占事务/行锁/津贴检查/来源锁定。
     ajOwnerUpdateInvoiceCategory: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        recordId: z.number(),
-        categoryName: z.string().max(100),
-      }))
+      .input(ajInvoiceIdentitySchema.extend({ categoryName: z.string().max(100) }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
+        const state = await confirmAJInvoiceClassification({ ledgerId: input.ledgerId, recordId: input.recordId,
+          userId: ctx.user.id, taxCategory: input.categoryName });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 验证当前用户是该账本的成员
-        const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id, lm.role FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        ) as any;
-        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        // 查找或创建对应的 ledger_category
-        const [catRows] = await (conn as any).execute(
-          `SELECT id FROM ledger_categories WHERE ledgerId=? AND name=? LIMIT 1`,
-          [input.ledgerId, input.categoryName]
-        ) as any;
-        let categoryId: number;
-        if (catRows && catRows.length > 0) {
-          categoryId = catRows[0].id;
-        } else {
-          const [insertResult] = await (conn as any).execute(
-            `INSERT INTO ledger_categories (ledgerId, name, parentId, isDefault, createdAt) VALUES (?, ?, NULL, 0, NOW())`,
-            [input.ledgerId, input.categoryName]
-          ) as any;
-          categoryId = insertResult.insertId;
-        }
-        // 更新记录的 categoryId，同时写入 aj_tax_category（报销类目名称）
-        await (conn as any).execute(
-          `UPDATE ledger_records SET categoryId=?, aj_tax_category=? WHERE id=? AND ledgerId=?`,
-          [categoryId, input.categoryName, input.recordId, input.ledgerId]
-        );
-        return { success: true, categoryId, categoryName: input.categoryName };
+        const role = await assertAJLedgerAccess(conn, input.ledgerId, ctx.user.id);
+        await assertAJCompanyAccess(conn, input.ledgerId, state.company.id, ctx.user.id, role);
+        const [rows] = await conn.execute('SELECT categoryId FROM ledger_records WHERE id=? AND ledgerId=? AND deleted_at IS NULL LIMIT 1', [input.recordId, input.ledgerId]);
+        return { success: true, categoryId: (rows as any[])[0]?.categoryId ?? null, categoryName: state.current.taxCategory };
       }),
-
-    // AJ账本：资方更新申请单的税务分类（aj_tax_category）
     ajOwnerUpdateTaxCategory: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        recordId: z.number(),
-        taxCategory: z.string().max(200),
-      }))
+      .input(ajInvoiceIdentitySchema.extend({ taxCategory: z.string().max(200) }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
-        const conn = await (await import('./db')).getDbConnection();
-        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        ) as any;
-        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        await (conn as any).execute(
-          `UPDATE ledger_records SET aj_tax_category=? WHERE id=? AND ledgerId=?`,
-          [input.taxCategory, input.recordId, input.ledgerId]
-        );
-        return { success: true, taxCategory: input.taxCategory };
+        const state = await confirmAJInvoiceClassification({ ...input, userId: ctx.user.id });
+        return { success: true, taxCategory: state.current.taxCategory };
       }),
-
-    // AJ账本：资方更新申请单的会计科目（aj_accounting_code）
     ajOwnerUpdateAccountingCode: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        recordId: z.number(),
-        accountingCode: z.string().max(100),
-      }))
+      .input(ajInvoiceIdentitySchema.extend({ accountingCode: z.string().max(100) }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
-        const conn = await (await import('./db')).getDbConnection();
-        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        ) as any;
-        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        await (conn as any).execute(
-          `UPDATE ledger_records SET aj_accounting_code=? WHERE id=? AND ledgerId=?`,
-          [input.accountingCode, input.recordId, input.ledgerId]
-        );
-        return { success: true, accountingCode: input.accountingCode };
+        const state = await confirmAJInvoiceClassification({ ...input, userId: ctx.user.id });
+        return { success: true, accountingCode: state.current.accountingCode };
       }),
-
-    // AJ账本：资方更新申请单的报销事由（aj_expense_reason）
     ajOwnerUpdateExpenseReason: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        recordId: z.number(),
-        expenseReason: z.string().max(200),
-      }))
+      .input(ajInvoiceIdentitySchema.extend({ expenseReason: z.string().max(200) }))
       .mutation(async ({ ctx, input }) => {
         await assertLedger37Owner(ctx, input.ledgerId);
         await assertLedger37ResourceOwner(ctx, 'record', input.recordId);
-        const conn = await (await import('./db')).getDbConnection();
-        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        ) as any;
-        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        await (conn as any).execute(
-          `UPDATE ledger_records SET aj_expense_reason=? WHERE id=? AND ledgerId=?`,
-          [input.expenseReason, input.recordId, input.ledgerId]
-        );
-        return { success: true, expenseReason: input.expenseReason };
+        const state = await confirmAJInvoiceClassification({ ...input, userId: ctx.user.id });
+        return { success: true, expenseReason: state.current.expenseReason };
       }),
 
     // AJ账本市场管理：获取当前用户的推荐下线中同时是该账本成员的人员及其开票业绩绩

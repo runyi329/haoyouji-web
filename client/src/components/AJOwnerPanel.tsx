@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import taxCategoriesRaw from "@/data/tax_categories.json";
-import taxAccountingMap from "@/data/tax_accounting_map.json";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
   ChevronRight, List, X, Receipt, ChevronDown, Search, Archive
@@ -12,10 +11,52 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useCenterToast } from "@/components/ui/center-toast";
-import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyManager";
+import { ACCOUNTING_SUBJECTS } from "@shared/aj-expense-config";
+import ExpenseTypePanel from "@/components/AJExpenseConfigPanel";
+import AJInvoiceAIPanel from "@/components/AJInvoiceAIPanel";
+import AJBatchReview from "@/components/AJBatchReview";
+import { describeAJBatchApproveResult, isAJBatchSnapshotCurrent, type AJBatchApproveResult } from "@shared/aj-invoice-ai";
 
 // AJ 账本主色调（与账本首页一致）
 const AJ_COLOR = '#1A2B4A';
+
+type InvoiceReviewStatus = 'pending' | 'approved' | 'support_needed' | 'rejected';
+type InvoiceStatusFilter = InvoiceReviewStatus | 'all' | 'active';
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  pending: '待审核', approved: '审批通过', support_needed: '补充材料', rejected: '拒绝退回',
+};
+const INVOICE_STATUS_TABS: { value: InvoiceStatusFilter; label: string }[] = [
+  { value: 'pending', label: '待审核' }, { value: 'approved', label: '审批通过' },
+  { value: 'support_needed', label: '补充材料' }, { value: 'rejected', label: '拒绝退回' },
+  { value: 'all', label: '全部' },
+];
+
+function InvoiceReviewHistory({ ledgerId, recordId }: { ledgerId: number; recordId: number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, error } = (trpc as any).ledger.getRecordLogs.useQuery(
+    { ledgerId, recordId }, { enabled: open, staleTime: 0 }
+  );
+  const history = (Array.isArray(data) ? data : []).filter((log: any) => log.fieldName === 'aj_status');
+  return (
+    <div className="mt-2">
+      <button onClick={() => setOpen(v => !v)} className="text-[11px] text-slate-500 py-1">
+        {open ? '收起审核记录' : '查看审核记录'}
+      </button>
+      {open && <div className="space-y-2 border-t border-dashed border-slate-200 pt-2 text-[11px]">
+        {isLoading ? <div className="text-slate-400">加载中...</div>
+          : error ? <div className="text-red-600">审核记录加载失败，请收起后重试</div>
+          : history.length === 0 ? <div className="text-slate-400">暂无审核记录</div>
+          : history.map((log: any) => <div key={log.id}>
+            <div className="flex justify-between gap-2 text-slate-500">
+              <span>{log.action === 'resubmit' || (log.newValue === 'pending' && ['rejected', 'support_needed'].includes(log.oldValue)) ? '再次提交' : (INVOICE_STATUS_LABELS[log.newValue] || '状态变更')} · {log.operatorName}</span>
+              <span className="shrink-0">{String(log.createdAt || '')}</span>
+            </div>
+            {log.note && <div className="mt-1 whitespace-pre-wrap break-words text-slate-700">{log.note}</div>}
+          </div>)}
+      </div>}
+    </div>
+  );
+}
 
 // 税务分类数据
 const TAX_CATEGORIES = taxCategoriesRaw as Array<{
@@ -277,28 +318,6 @@ function TaxCategoryPicker({
 }
 
 // ========== 标准会计科目数据（两层：一级科目 → 常用明细）==========
-const ACCOUNTING_SUBJECTS = [
-  { code: '1001', name: '库存现金', children: [] },
-  { code: '1002', name: '银行存款', children: [] },
-  { code: '1122', name: '应收账款', children: [] },
-  { code: '1221', name: '其他应收款', children: [] },
-  { code: '1401', name: '原材料', children: [] },
-  { code: '1403', name: '库存商品', children: [] },
-  { code: '1601', name: '固定资产', children: ['办公设备','电子设备','交通运输工具','机械设备'] },
-  { code: '1701', name: '无形资产', children: ['软件使用权','商标权','专利权'] },
-  { code: '1801', name: '长期待摊费用', children: ['装修费','开办费'] },
-  { code: '2202', name: '应付账款', children: [] },
-  { code: '2241', name: '其他应付款', children: [] },
-  { code: '5001', name: '生产成本', children: ['直接材料','直接人工','制造费用'] },
-  { code: '6001', name: '主营业务收入', children: [] },
-  { code: '6051', name: '其他业务收入', children: [] },
-  { code: '6401', name: '主营业务成本', children: [] },
-  { code: '6601', name: '销售费用', children: ['广告费','宣传费','业务招待费','运输费','销售人员工资','展览费'] },
-  { code: '6602', name: '管理费用', children: ['办公费','差旅费','咨询费','租赁费','水电费','物业费','劳保费','职工教育经费','福利费','车辆费','会议费','软件服务费','折旧费','维修费','业务招待费'] },
-  { code: '6603', name: '财务费用', children: ['利息支出','手续费','汇兑损益'] },
-  { code: '6711', name: '营业外支出', children: ['罚款支出','捐赠支出'] },
-];
-
 // ========== 会计科目选择器 ==========
 function AccountingCodePicker({
   onSelect,
@@ -572,117 +591,6 @@ function safeStr(v: unknown): string {
 }
 
 // ========== 开票分类配置面板 ==========
-function ExpenseTypePanel({
-  ledgerId,
-  company,
-  onClose,
-}: {
-  ledgerId: number;
-  company: { id: number; name: string };
-  onClose: () => void;
-}) {
-  const toast = useCenterToast();
-  const utils = trpc.useUtils();
-  const { data: savedConfig, isLoading } = (trpc as any).ledger.ajGetCompanyExpenseTypes.useQuery({
-    ledgerId,
-    companyId: company.id,
-  });
-  const [config, setConfig] = useState<Record<string, { enabled: boolean; items: Record<string, boolean> }> | null>(null);
-  const effectiveConfig = config ?? (savedConfig ? savedConfig as any : getDefaultExpenseConfig());
-  const saveMutation = (trpc as any).ledger.ajSetCompanyExpenseTypes.useMutation({
-    onSuccess: () => {
-      utils.ledger.ajGetCompanyExpenseTypes.invalidate({ ledgerId, companyId: company.id });
-      toast.success("开票分类配置已保存");
-      onClose();
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-  const toggleCategory = (catKey: string) => {
-    setConfig((prev) => {
-      const base = prev ?? (savedConfig ? savedConfig as any : getDefaultExpenseConfig());
-      return { ...base, [catKey]: { ...base[catKey], enabled: !base[catKey]?.enabled } };
-    });
-  };
-  const toggleItem = (catKey: string, itemKey: string) => {
-    setConfig((prev) => {
-      const base = prev ?? (savedConfig ? savedConfig as any : getDefaultExpenseConfig());
-      return {
-        ...base,
-        [catKey]: {
-          ...base[catKey],
-          items: { ...base[catKey]?.items, [itemKey]: !(base[catKey]?.items?.[itemKey] !== false) },
-        },
-      };
-    });
-  };
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-      <div className="bg-white w-full rounded-t-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
-          <div>
-            <div className="font-semibold text-gray-800">{safeStr(company.name)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">开票分类配置</div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
-            <X className="w-4 h-4 text-gray-500" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {isLoading ? (
-            <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
-          ) : (
-            EXPENSE_CATEGORIES.map((cat) => {
-              const catState = effectiveConfig[cat.key] ?? { enabled: true, items: {} };
-              return (
-                <div key={cat.key} className="bg-gray-50 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleCategory(cat.key)}
-                    className="w-full flex items-center justify-between px-4 py-3"
-                  >
-                    <span className="font-medium text-sm text-gray-700">{cat.label}</span>
-                    <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${catState.enabled ? 'bg-[#1A2B4A]' : 'bg-gray-300'}`}>
-                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${catState.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </div>
-                  </button>
-                  {catState.enabled && (
-                    <div className="px-4 pb-3 grid grid-cols-2 gap-2">
-                      {cat.items.map((item) => {
-                        const itemEnabled = catState.items[item.key] !== false;
-                        return (
-                          <button
-                            key={item.key}
-                            onClick={() => toggleItem(cat.key, item.key)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-colors ${itemEnabled ? 'bg-blue-50 text-[#1A2B4A]' : 'bg-white text-gray-400 border border-gray-200'}`}
-                          >
-                            <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-shrink-0 ${itemEnabled ? 'bg-[#1A2B4A] border-[#1A2B4A]' : 'border-gray-300'}`}>
-                              {itemEnabled && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                            </div>
-                            {cat.label === cat.label && item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-        <div className="p-4 border-t border-gray-100 flex-shrink-0">
-          <Button
-            className="w-full rounded-xl text-white"
-            style={{ backgroundColor: AJ_COLOR }}
-            onClick={() => saveMutation.mutate({ ledgerId, companyId: company.id, config: effectiveConfig })}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? '保存中...' : '保存配置'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ========== 图片全屏预览弹窗 ==========
 function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: string[]; initialIndex: number; onClose: () => void }) {
   const [current, setCurrent] = useState(initialIndex);
@@ -888,19 +796,23 @@ function InvoiceListInline({
   period: externalPeriod,
   searchText = '',
   externalEmployee = '',
+  statusFilter: externalStatusFilter,
   onEmployeeNamesChange,
 }: {
   ledgerId: number;
   companyId?: number;
-  period?: 'all' | 'day' | 'week' | 'month' | 'year';
+  period?: 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year';
   searchText?: string;
   externalEmployee?: string;
+  statusFilter?: InvoiceStatusFilter;
   onEmployeeNamesChange?: (names: string[], invoices: any[]) => void;
 }) {
   const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
+  const [internalStatusFilter, setInternalStatusFilter] = useState<InvoiceStatusFilter>('pending');
+  const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const period = externalPeriod ?? internalPeriod;
   const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
-  const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
+  const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', quarter: '本季', year: '本年' };
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [pickerInvoiceId, setPickerInvoiceId] = useState<number | null>(null);
@@ -909,77 +821,106 @@ function InvoiceListInline({
   const [localAccountingCodes, setLocalAccountingCodes] = useState<Record<number, string>>({});
   const [reasonPickerInvoiceId, setReasonPickerInvoiceId] = useState<number | null>(null);
   const [localExpenseReasons, setLocalExpenseReasons] = useState<Record<number, string>>({});
+  const [aiInvoiceId, setAIInvoiceId] = useState<number | null>(null);
   const toast = useCenterToast();
   const utils = trpc.useUtils();
+  useEffect(() => {
+    // 实际清单刷新后不让旧本地人工值遮住新确认结果；企业切换也不沿用上一清单草稿。
+    setLocalCategories({});
+    setLocalAccountingCodes({});
+    setLocalExpenseReasons({});
+    setPickerInvoiceId(null);
+    setAccountingPickerInvoiceId(null);
+    setReasonPickerInvoiceId(null);
+  }, [invoices, ledgerId, companyId]);
+  const invalidateClassification = (recordId: number) => {
+    // 包括审核历史/统计与 AI 状态，读取缓存刷新不等于再次识别。
+    void (utils as any).ledger.invalidate();
+  };
   const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
-    onSuccess: () => {
-      toast.show('类目已更新', 'success');
-      utils.ledger.getTransactions.invalidate();
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+    onSuccess: (_data: any, variables: any) => {
+      setLocalCategories(prev => ({ ...prev, [variables.recordId]: variables.categoryName }));
+      toast.show('人工类目已保存，AI不会覆盖', 'success');
+      invalidateClassification(variables.recordId);
     },
-    onError: () => toast.show('更新失败，请重试', 'error'),
+    onError: (error: any) => toast.show(error.message || '更新失败，请重试', 'error'),
   });
   const updateAccountingCodeMutation = (trpc as any).ledger.ajOwnerUpdateAccountingCode.useMutation({
-    onSuccess: () => {
-      toast.show('会计科目已更新', 'success');
-      utils.ledger.getTransactions.invalidate();
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+    onSuccess: (_data: any, variables: any) => {
+      setLocalAccountingCodes(prev => ({ ...prev, [variables.recordId]: variables.accountingCode }));
+      toast.show('人工科目已保存，AI不会覆盖', 'success');
+      invalidateClassification(variables.recordId);
     },
-    onError: () => toast.show('更新失败，请重试', 'error'),
+    onError: (error: any) => toast.show(error.message || '更新失败，请重试', 'error'),
   });
   const updateExpenseReasonMutation = (trpc as any).ledger.ajOwnerUpdateExpenseReason.useMutation({
-    onSuccess: () => {
-      toast.show('报销事由已更新', 'success');
-      utils.ledger.getTransactions.invalidate();
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+    onSuccess: (_data: any, variables: any) => {
+      setLocalExpenseReasons(prev => ({ ...prev, [variables.recordId]: variables.expenseReason }));
+      toast.show('实际用途已保存，AI建议需重新核对', 'success');
+      invalidateClassification(variables.recordId);
     },
-    onError: () => toast.show('更新失败，请重试', 'error'),
+    onError: (error: any) => toast.show(error.message || '更新失败，请重试', 'error'),
   });
   const handleCategorySelect = useCallback((categoryName: string) => {
-    if (pickerInvoiceId == null) return;
+    if (pickerInvoiceId == null || updateCategoryMutation.isPending) return;
     const invoiceId = pickerInvoiceId;
     setPickerInvoiceId(null);
-    setLocalCategories(prev => ({ ...prev, [invoiceId]: categoryName }));
+    // 只保存人工类目，不再用全局税收表静默覆盖人工会计科目。
     updateCategoryMutation.mutate({ ledgerId, recordId: invoiceId, categoryName });
-    // 从预设对照表中查找对应会计科目（4199条全覆盖）
-    const map = taxAccountingMap as Record<string, string>;
-    const autoCode = map[categoryName] || '';
-    if (autoCode) {
-      setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: autoCode }));
-      updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: autoCode });
-    }
-  }, [pickerInvoiceId, ledgerId]);
+  }, [pickerInvoiceId, ledgerId, updateCategoryMutation.isPending]);
   const handleAccountingCodeSelect = useCallback((code: string) => {
-    if (accountingPickerInvoiceId == null) return;
+    if (accountingPickerInvoiceId == null || updateAccountingCodeMutation.isPending) return;
     const invoiceId = accountingPickerInvoiceId;
     setAccountingPickerInvoiceId(null);
-    setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: code }));
     updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: code });
-  }, [accountingPickerInvoiceId, ledgerId]);
+  }, [accountingPickerInvoiceId, ledgerId, updateAccountingCodeMutation.isPending]);
   const handleExpenseReasonSelect = useCallback((reason: string) => {
-    if (reasonPickerInvoiceId == null) return;
+    if (reasonPickerInvoiceId == null || updateExpenseReasonMutation.isPending) return;
     const invoiceId = reasonPickerInvoiceId;
     setReasonPickerInvoiceId(null);
-    setLocalExpenseReasons(prev => ({ ...prev, [invoiceId]: reason }));
     updateExpenseReasonMutation.mutate({ ledgerId, recordId: invoiceId, expenseReason: reason });
-  }, [reasonPickerInvoiceId, ledgerId]);
+  }, [reasonPickerInvoiceId, ledgerId, updateExpenseReasonMutation.isPending]);
   // ===== 审批状态切换（全新实现）=====
   // 当前弹窗对应的发票对象
   const [statusPopupInv, setStatusPopupInv] = useState<any | null>(null);
   // 本地乐观更新：key=transactionId, value=新状态
   const [localStatusMap, setLocalStatusMap] = useState<Record<number, string>>({});
+  const [returnInvoice, setReturnInvoice] = useState<any | null>(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [localReviewMap, setLocalReviewMap] = useState<Record<number, { reason: string; at: string }>>({});
   // 按钮按下状态（触摸反馈）
   const [pressedStatus, setPressedStatus] = useState<string | null>(null);
   const ajSetStatusMutation = (trpc as any).ledger.ajSetStatus.useMutation({
-    onSuccess: (_data: any, variables: any) => {
-      // 静默成功，刷新列表数据
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
-      utils.ledger.getTransactions.invalidate();
+    onSuccess: async (_data: any, variables: any) => {
+      setLocalStatusMap(prev => ({ ...prev, [variables.transactionId]: variables.status }));
+      if (variables.status === 'rejected') {
+        setLocalReviewMap(prev => ({ ...prev, [variables.transactionId]: { reason: variables.comment, at: new Date().toLocaleString('zh-CN', { hour12: false }) } }));
+        setReturnInvoice(null);
+        setReturnReason('');
+      }
+      setStatusPopupInv(null);
+      toast.show(variables.status === 'rejected' ? '已退回，本次申请不予报销' : '审批状态已更新', 'success');
+      const refreshed = await Promise.allSettled([
+        utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId }),
+        utils.ledger.getTransactions.invalidate({ ledgerId }),
+        utils.ledger.getTransactionDetail.invalidate({ ledgerId, transactionId: variables.transactionId }),
+        utils.ledger.ajOwnerGetEmployeeStats.invalidate({ ledgerId }),
+        utils.ledger.ajOwnerGetCompanyStats.invalidate({ ledgerId }),
+        utils.ledger.ajOwnerGetPendingList.invalidate({ ledgerId }),
+        utils.ledger.getRecordLogs.invalidate({ ledgerId, recordId: variables.transactionId }),
+        utils.ledger.getRecordLogCount.invalidate({ ledgerId, recordId: variables.transactionId }),
+        (utils as any).ledger.ajGetInvoiceAIResult.invalidate({ ledgerId, recordId: variables.transactionId }),
+      ]);
+      if (refreshed.some(result => result.status === 'rejected')) {
+        toast.show('审核状态已保存，但只读缓存刷新失败；请刷新查看，不要重复操作。', 'error');
+        return;
+      }
+      setLocalStatusMap(prev => { const next = { ...prev }; delete next[variables.transactionId]; return next; });
+      setLocalReviewMap(prev => { const next = { ...prev }; delete next[variables.transactionId]; return next; });
     },
     onError: (err: any, variables: any) => {
-      // 失败时回滚乐观更新并提示
+      // 拒绝操作只有保存成功才移动分类；失败保留理由，便于重试。
       toast.show(err?.message || '操作失败，请重试', 'error');
-      setLocalStatusMap(prev => { const n = { ...prev }; delete n[variables.transactionId]; return n; });
     },
   });
 
@@ -997,6 +938,10 @@ function InvoiceListInline({
   const filteredInvoices = useMemo(() => {
     const list: any[] = Array.isArray(invoices) ? invoices : [];
     let result = list;
+    result = result.filter((inv: any) => {
+      const status = localStatusMap[inv.id] ?? inv.ajStatus ?? 'pending';
+      return statusFilter === 'all' || (statusFilter === 'active' ? status !== 'rejected' : status === statusFilter);
+    });
     // 员工筛选（由父组件控制）
     if (externalEmployee) {
       result = result.filter((inv: any) => {
@@ -1020,10 +965,14 @@ function InvoiceListInline({
       const idMatch = idStr.includes(kwClean) || idRaw.includes(kwClean);
       return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw) || idMatch;
     });
-  }, [invoices, searchText, externalEmployee]);
+  }, [invoices, searchText, externalEmployee, statusFilter, localStatusMap]);
 
   return (
     <div>
+      {externalStatusFilter == null && <div className="flex gap-2 overflow-x-auto px-4 py-2 border-b border-slate-100">
+        {INVOICE_STATUS_TABS.map(tab => <button key={tab.value} onClick={() => setInternalStatusFilter(tab.value)}
+          className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium ${statusFilter === tab.value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-50 text-slate-500'}`}>{tab.label}</button>)}
+      </div>}
       {!externalPeriod && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-100">
           <div className="relative">
@@ -1171,7 +1120,7 @@ function InvoiceListInline({
                   </div>
                   {/* 第二行：报销事由（可编辑） */}
                   <div
-                    onClick={e => { e.stopPropagation(); setReasonPickerInvoiceId(inv.id); }}
+                    onClick={e => { e.stopPropagation(); if ((localStatusMap[inv.id] ?? inv.ajStatus) !== 'approved' && inv.reimbursementStatus !== 'completed') setReasonPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
@@ -1181,7 +1130,7 @@ function InvoiceListInline({
                   </div>
                   {/* 第二行：报销类目（可编辑） */}
                   <div
-                    onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
+                    onClick={e => { e.stopPropagation(); if ((localStatusMap[inv.id] ?? inv.ajStatus) !== 'approved' && inv.reimbursementStatus !== 'completed') setPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
@@ -1191,25 +1140,35 @@ function InvoiceListInline({
                   </div>
                   {/* 第二行：会计科目（可编辑） */}
                   <div
-                    onClick={e => { e.stopPropagation(); setAccountingPickerInvoiceId(inv.id); }}
+                    onClick={e => { e.stopPropagation(); if ((localStatusMap[inv.id] ?? inv.ajStatus) !== 'approved' && inv.reimbursementStatus !== 'completed') setAccountingPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
                     <div style={{ fontSize: '10px', color: '#aaa' }}>会计科目</div>
                     <div style={{ fontSize: '11px', color: '#1A2B4A', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderBottom: '1px dashed #1A2B4A', display: 'inline-block', maxWidth: '100%' }}>
-                      {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '自动匹配')}
+                      {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '待人工配置')}
                     </div>
                   </div>
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
                 {/* 底部：审批状态区域（可点击切换） */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                {((localStatusMap[inv.id] ?? inv.ajStatus) === 'rejected') && (
+                  <div className="mb-2 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-[11px]">
+                    <div className="font-semibold text-red-700">本次申请不予报销</div>
+                    <div className="mt-1 whitespace-pre-wrap break-words text-red-700">退回原因：{localReviewMap[inv.id]?.reason || inv.ajApproveComment || '历史退回单未填写原因'}</div>
+                    {(localReviewMap[inv.id]?.at || inv.ajApprovedAt) && <div className="mt-1 text-red-500">退回时间：{localReviewMap[inv.id]?.at || new Date(inv.ajApprovedAt).toLocaleString('zh-CN', { hour12: false })}</div>}
+                    <div className="mt-1 text-slate-500">等待申请人更正并再次提交后重新审核</div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="text-[10px] text-blue-600">{inv.ajResubmitted && (localStatusMap[inv.id] ?? inv.ajStatus) === 'pending' ? '再次提交' : ''}</span>
                   {(() => {
                     const curStatus = localStatusMap[inv.id] ?? (inv.ajStatus || 'pending');
-                    const dotColor = curStatus === 'approved' ? '#4CAF50' : curStatus === 'support_needed' ? '#FF9800' : '#F59E0B';
-                    const label = curStatus === 'approved' ? '审批通过' : curStatus === 'support_needed' ? '补充材料' : '待审核';
+                    const dotColor = curStatus === 'approved' ? '#4CAF50' : curStatus === 'support_needed' ? '#FF9800' : curStatus === 'rejected' ? '#DC2626' : '#F59E0B';
+                    const label = INVOICE_STATUS_LABELS[curStatus] || '待审核';
                     return (
                       <button
+                        disabled={ajSetStatusMutation.isPending || curStatus === 'approved' || curStatus === 'rejected' || inv.reimbursementStatus === 'completed'}
                         onClick={e => { e.stopPropagation(); setStatusPopupInv({ ...inv, _curStatus: curStatus }); }}
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -1226,6 +1185,20 @@ function InvoiceListInline({
                     );
                   })()}
                 </div>
+                <div className="mt-2 border-t border-dashed border-slate-200 pt-2">
+                  <button type="button" onClick={() => setAIInvoiceId(prev => prev === inv.id ? null : inv.id)}
+                    className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-medium text-[#1A2B4A]">
+                    {aiInvoiceId === inv.id ? '收起AI核对与归类' : 'AI核对与归类'}
+                  </button>
+                  {aiInvoiceId === inv.id && <div className="mt-2"><AJInvoiceAIPanel ledgerId={ledgerId} recordId={inv.id} compact
+                    readOnly={(localStatusMap[inv.id] ?? inv.ajStatus) === 'approved' || inv.reimbursementStatus === 'completed'}
+                    onChanged={() => {
+                      const clear = (prev: Record<number, string>) => { const next = { ...prev }; delete next[inv.id]; return next; };
+                      setLocalCategories(clear); setLocalAccountingCodes(clear); setLocalExpenseReasons(clear);
+                      invalidateClassification(inv.id);
+                    }} /></div>}
+                </div>
+                <InvoiceReviewHistory ledgerId={ledgerId} recordId={inv.id} />
               </div>
             </div>
           ))}
@@ -1233,11 +1206,34 @@ function InvoiceListInline({
       )}
 
       {/* 审批状态切换确认弹窗 */}
+      {returnInvoice && <div
+        className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/45"
+        onClick={() => { if (!ajSetStatusMutation.isPending) setReturnInvoice(null); }}
+      >
+        <div className="w-full max-w-[480px] rounded-t-2xl bg-white px-4 pt-5 pb-8" onClick={e => e.stopPropagation()}>
+          <div className="text-center text-base font-bold text-[#1A2B4A]">拒绝退回</div>
+          <div className="mt-1 text-center text-xs text-slate-500">报销申请单 No.{String(returnInvoice.id).padStart(4, '0')}</div>
+          <label htmlFor="aj-return-reason" className="mt-5 mb-2 block text-sm font-medium text-slate-700">退回原因 <span className="text-red-600">（必填）</span></label>
+          <textarea id="aj-return-reason" value={returnReason} onChange={e => setReturnReason(e.target.value)} maxLength={1000}
+            disabled={ajSetStatusMutation.isPending} rows={4} placeholder="请手动填写退回原因，申请人将看到此内容，例如：发票重复，请核对后重新提交。"
+            className="w-full resize-none rounded-md border border-slate-200 p-3 text-sm text-slate-800 outline-none focus:border-[#1A2B4A]" />
+          <div className="mt-1 text-right text-[10px] text-slate-400">{returnReason.length}/1000</div>
+          <div className="mt-2 rounded-md bg-red-50 p-3 text-xs leading-relaxed text-red-700">退回后，本次申请不予报销，移入“拒绝退回”分类，不产生成本津贴。申请人更正并再次提交后重新审核。</div>
+          <div className="mt-5 flex gap-3">
+            <button disabled={ajSetStatusMutation.isPending} onClick={() => setReturnInvoice(null)} className="flex-1 rounded-md border border-slate-200 py-3 text-sm text-slate-600">取消</button>
+            <button disabled={!returnReason.trim() || ajSetStatusMutation.isPending}
+              onClick={() => { if (returnReason.trim() && !ajSetStatusMutation.isPending) ajSetStatusMutation.mutate({ ledgerId, transactionId: returnInvoice.id, status: 'rejected', comment: returnReason.trim() }); }}
+              className="flex-1 rounded-md bg-[#1A2B4A] py-3 text-sm font-semibold text-white disabled:opacity-40">
+              {ajSetStatusMutation.isPending ? '退回中...' : '确认退回'}
+            </button>
+          </div>
+        </div>
+      </div>}
       {/* 审批状态切换弹窗（全新实现） */}
       {statusPopupInv && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-          onClick={() => setStatusPopupInv(null)}
+          onClick={() => { if (!ajSetStatusMutation.isPending) setStatusPopupInv(null); }}
         >
           <div
             style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: '480px', padding: '20px 16px 32px', boxShadow: '0 -4px 24px rgba(0,0,0,0.15)' }}
@@ -1245,11 +1241,12 @@ function InvoiceListInline({
           >
             <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: '#e0e0e0', margin: '0 auto 14px' }} />
             <div style={{ fontSize: '15px', fontWeight: 700, color: '#1A2B4A', textAlign: 'center', marginBottom: '4px' }}>审批状态</div>
-            <div style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginBottom: '16px' }}>选择后立即生效</div>
+            <div style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginBottom: '16px' }}>拒绝退回需填写原因后确认</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {([
                 { status: 'approved', label: '审批通过', dot: '#4CAF50', activeBg: '#E8F5E9', activeBorder: '#4CAF50', desc: '确认通过该报销申请' },
                 { status: 'support_needed', label: '补充材料', dot: '#FF9800', activeBg: '#FFF3E0', activeBorder: '#FF9800', desc: '需要补充相关证明材料' },
+                { status: 'rejected', label: '拒绝退回', dot: '#DC2626', activeBg: '#FEF2F2', activeBorder: '#DC2626', desc: '本次不予报销，填写原因退回申请人' },
                 { status: 'pending', label: '待审核', dot: '#F59E0B', activeBg: '#FFF8E1', activeBorder: '#F59E0B', desc: '撤回审批，返回待审核状态' },
               ] as const).map(opt => {
                 const isCurrent = statusPopupInv._curStatus === opt.status;
@@ -1257,7 +1254,7 @@ function InvoiceListInline({
                 return (
                   <button
                     key={opt.status}
-                    disabled={isCurrent}
+                    disabled={isCurrent || ajSetStatusMutation.isPending}
                     onTouchStart={() => { if (!isCurrent) setPressedStatus(opt.status); }}
                     onTouchEnd={() => setPressedStatus(null)}
                     onTouchCancel={() => setPressedStatus(null)}
@@ -1265,13 +1262,14 @@ function InvoiceListInline({
                     onMouseUp={() => setPressedStatus(null)}
                     onMouseLeave={() => setPressedStatus(null)}
                     onClick={() => {
-                      if (isCurrent) return;
-                      // 立即乐观更新并关闭弹窗
-                      const invId = statusPopupInv.id;
-                      setLocalStatusMap(prev => ({ ...prev, [invId]: opt.status }));
-                      setStatusPopupInv(null);
-                      // 后台静默同步
-                      ajSetStatusMutation.mutate({ transactionId: invId, status: opt.status });
+                      if (isCurrent || ajSetStatusMutation.isPending) return;
+                      if (opt.status === 'rejected') {
+                        setReturnInvoice(statusPopupInv);
+                        setReturnReason('');
+                        setStatusPopupInv(null);
+                        return;
+                      }
+                      ajSetStatusMutation.mutate({ ledgerId, transactionId: statusPopupInv.id, status: opt.status });
                     }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
@@ -1376,6 +1374,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     return null;
   });
   const [searchText, setSearchText] = useState('');
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<InvoiceStatusFilter>('pending');
   // 员工筛选
   const [selectedEmployee, setSelectedEmployee] = useState<string>(() => {
     return localStorage.getItem(`fvp_employee_${ledgerId}`) || '';
@@ -1386,8 +1385,9 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
 
   // 批量审核弹窗状态
   const [showBatchConfirm, setShowBatchConfirm] = useState(false); // 第一次确认（明细列表）
-  const [showBatchConfirm2, setShowBatchConfirm2] = useState(false); // 第二次确认
   const [batchApproving, setBatchApproving] = useState(false);
+  const batchApprovalLock = useRef(false);
+  const [batchFeedback, setBatchFeedback] = useState<{ message: string; details?: string; error: boolean } | null>(null);
 
   // 备份弹窗状态
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -1521,6 +1521,21 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     return { totalAmount, invoiceCount: filtered.length };
   }, [allInvoices, selectedEmployee]);
 
+  const invoiceStatusStats = useMemo(() => {
+    const result: Record<string, { count: number; amount: number }> = {};
+    const source = selectedEmployee
+      ? allInvoices.filter((inv: any) => safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername) === selectedEmployee)
+      : allInvoices;
+    for (const inv of source) {
+      const status = inv.ajStatus || 'pending';
+      result[status] ??= { count: 0, amount: 0 };
+      result[status].count++;
+      result[status].amount += Number(inv.amount || 0);
+    }
+    result.all = { count: source.length, amount: source.reduce((sum: number, inv: any) => sum + Number(inv.amount || 0), 0) };
+    return result;
+  }, [allInvoices, selectedEmployee]);
+
   // 业务员详细统计（状态分布、金额分布、已发/待发津贴）
   const { data: employeeStats } = (trpc as any).ledger.ajOwnerGetEmployeeStats.useQuery(
     { ledgerId, companyId: selectedCompanyId!, employeeName: selectedEmployee, period },
@@ -1528,31 +1543,36 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   );
 
   // 待审单明细（批量审核确认弹窗用）
-  const { data: pendingList, refetch: refetchPendingList } = (trpc as any).ledger.ajOwnerGetPendingList.useQuery(
+  const { data: pendingList, refetch: refetchPendingList, isLoading: pendingListLoading, isFetching: pendingListRefreshing, error: pendingListError } = (trpc as any).ledger.ajOwnerGetPendingList.useQuery(
     { ledgerId, companyId: (selectedCompanyId === 0 ? undefined : selectedCompanyId) ?? undefined, employeeName: selectedEmployee || undefined, period },
     { enabled: selectedCompanyId != null, staleTime: 0, refetchOnWindowFocus: false, refetchOnMount: false }
   );
 
   // 批量审核 mutation
   const batchApproveMutation = (trpc as any).ledger.ajOwnerBatchApprove.useMutation({
-    onSuccess: (result: any) => {
+    retry: false,
+    onSuccess: (result: AJBatchApproveResult) => {
+      batchApprovalLock.current = false;
       setBatchApproving(false);
-      setShowBatchConfirm2(false);
-      toast.success(`批量审核完成：${result.approved} 笔已通过，共 ${result.totalAmount.toFixed(2)} 元，共发放津贴 ${result.totalBonus.toFixed(4)} USDT`);
+      setShowBatchConfirm(false);
+      const feedback = describeAJBatchApproveResult(result);
+      setBatchFeedback({ message: feedback.message, details: feedback.details, error: feedback.hasFailures });
+      if (feedback.hasFailures) toast.error(feedback.message);
+      else toast.success(feedback.message);
       // 刷新所有相关数据，保持当前公司+业务员筛选状态不变
-      if (selectedCompanyId != null) {
-        const cid = selectedCompanyId === 0 ? undefined : selectedCompanyId;
-        utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId: cid, period });
-        if (cid != null) {
-          utils.ledger.ajOwnerGetEmployeeStats.invalidate({ ledgerId, companyId: cid, employeeName: selectedEmployee, period });
-          utils.ledger.ajOwnerGetCompanyStats.invalidate({ ledgerId, companyId: cid, period });
-        }
-      }
-      refetchPendingList();
+      void (utils as any).ledger.invalidate();
+      void refetchPendingList();
     },
     onError: (err: any) => {
+      batchApprovalLock.current = false;
       setBatchApproving(false);
-      toast.error('批量审核失败: ' + (err?.message || '未知错误'));
+      setShowBatchConfirm(false);
+      const message = `批量审核请求未完整确认：${err?.message || '未知错误'}。请刷新实际清单核对已通过单，不要直接重复提交。`;
+      setBatchFeedback({ message, error: true });
+      toast.error(message);
+      // 网络失败也不能推断整批回滚，先读取服务端的真实结果。
+      void (utils as any).ledger.invalidate();
+      void refetchPendingList();
     },
   });
 
@@ -1638,7 +1658,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             <div className="flex items-center justify-around w-full">
               <div className="text-center">
                 <div className="text-white/60 text-[10px] mb-0.5">
-                  {selectedEmployee ? `${selectedEmployee}累计金额` : `${periodLabels[period]}累计金额`}
+                  {selectedEmployee ? `${selectedEmployee}累计申请` : `${periodLabels[period]}累计申请金额`}
                 </div>
                 <div className="text-white text-xl font-bold leading-none">
                   {filteredStats
@@ -1734,7 +1754,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   <div />
                   <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>待审</div>
                   <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>已审</div>
-                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>总计</div>
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>有效合计</div>
                 </div>
 
                 {/* 笔数行 */}
@@ -1746,7 +1766,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>开票笔数</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
                     <span style={{ color: '#FCD34D', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
-                      {employeeStats ? (employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
+                      {employeeStats ? employeeStats.pending.count : '--'}
                     </span>
                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>笔</span>
                   </div>
@@ -1758,7 +1778,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
                     <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
-                      {employeeStats ? (employeeStats.approved.count + employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
+                      {employeeStats ? (employeeStats.approved.count + employeeStats.pending.count) : '--'}
                     </span>
                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>笔</span>
                   </div>
@@ -1819,7 +1839,11 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 </div>
 
                 {/* 批量审核按鈕 */}
-                {employeeStats && employeeStats.pending.count > 0 && (
+                {(invoiceStatusStats.rejected?.count > 0 || invoiceStatusStats.support_needed?.count > 0) && <div className="mt-2 text-center text-[10px] text-white/60">
+                  补充材料 {invoiceStatusStats.support_needed?.count || 0} 笔 · 拒绝退回 {invoiceStatusStats.rejected?.count || 0} 笔 / ¥{(invoiceStatusStats.rejected?.amount || 0).toFixed(2)}
+                  <div className="mt-0.5">退回单不计入报销金额及成本津贴</div>
+                </div>}
+                {employeeStats && employeeStats.pending.count > 0 && (invoiceStatusFilter === 'pending' || invoiceStatusFilter === 'all') && (
                   <div style={{ marginTop: '10px' }}>
                     <button
                       onClick={() => { setShowBatchConfirm(true); refetchPendingList(); }}
@@ -1851,8 +1875,19 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
         )}
       </div>
       {/* 白色发票列表区域 */}
+      {batchFeedback && <div role={batchFeedback.error ? 'alert' : 'status'} className={`mx-3 my-3 space-y-2 rounded-lg border p-3 text-xs ${batchFeedback.error ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-green-200 bg-green-50 text-green-800'}`}>
+        <p className="whitespace-pre-wrap break-words">{batchFeedback.message}</p>
+        {batchFeedback.details && <p className="whitespace-pre-wrap break-words">{batchFeedback.details}</p>}
+        <button type="button" onClick={() => setBatchFeedback(null)} className="min-h-8 underline">关闭本次反馈</button>
+      </div>}
       {selectedCompanyId != null && (
         <div className="bg-white">
+          <div className="flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3">
+            {INVOICE_STATUS_TABS.map(tab => <button key={tab.value} onClick={() => setInvoiceStatusFilter(tab.value)}
+              className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium ${invoiceStatusFilter === tab.value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-50 text-slate-500'}`}>
+              {tab.label}<span className="ml-1 text-[10px] opacity-65">{invoiceStatusStats[tab.value]?.count || 0}</span>
+            </button>)}
+          </div>
           {/* 搜索框 */}
           <div className="px-4 pt-3 pb-2">
             <div className="relative">
@@ -1880,6 +1915,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             period={period}
             searchText={searchText}
             externalEmployee={selectedEmployee}
+            statusFilter={invoiceStatusFilter}
             onEmployeeNamesChange={(names, invs) => { setEmployeeNames(names); setAllInvoices(invs); }}
           />
         </div>
@@ -2112,235 +2148,34 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
         </DialogContent>
       </Dialog>
 
-      {/* 批量审核第一次确认弹窗：明细列表 */}
-      {showBatchConfirm && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          }}
-          onClick={() => setShowBatchConfirm(false)}
-        >
-          <div
-            style={{
-              background: '#fff', borderRadius: '16px 16px 0 0',
-              width: '100%', maxWidth: 480, maxHeight: '80vh',
-              display: 'flex', flexDirection: 'column',
-              padding: '0 0 env(safe-area-inset-bottom)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* 弹窗标题 */}
-            <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid #f0f0f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px', color: '#1A2B4A' }}>
-                    批量审核确认
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
-                    {selectedEmployee ? `业务员：${selectedEmployee}` : selectedCompanyId ? '本公司全部业务员' : '全部企业全部业务员'}
-                    {' · '}{pendingList ? `${pendingList.length} 笔待审` : '加载中...'}
-                  </div>
-                </div>
-                <button onClick={() => setShowBatchConfirm(false)} style={{ color: '#999', fontSize: '20px', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
-              </div>
-              {/* 汇总信息 */}
-              {pendingList && pendingList.length > 0 && (
-                <div style={{
-                  marginTop: '10px', padding: '10px 12px',
-                  background: '#f0fdf4', borderRadius: '10px',
-                  display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px',
-                }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>{pendingList.length}</div>
-                    <div style={{ fontSize: '10px', color: '#888' }}>待审笔数</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>
-                      {pendingList.reduce((s: number, r: any) => s + r.amount, 0).toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#888' }}>总金额（元）</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>
-                      {(pendingList.reduce((s: number, r: any) => s + r.amount, 0) * 0.01 / 7.2).toFixed(4)}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#888' }}>预计津贴（U）</div>
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* 明细列表 */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 0' }}>
-              {!pendingList ? (
-                <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>加载中...</div>
-              ) : pendingList.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>暂无待审单</div>
-              ) : (() => {
-                // 按公司分组
-                const groups: Record<string, any[]> = {};
-                pendingList.forEach((item: any) => {
-                  const key = item.companyName || '未知公司';
-                  if (!groups[key]) groups[key] = [];
-                  groups[key].push(item);
-                });
-                // 检测金额相近（差值 < 5%），记录每个id对应的相近单号列表
-                const similarMap = new Map<number, number[]>();
-                pendingList.forEach((a: any) => {
-                  pendingList.forEach((b: any) => {
-                    if (a.id !== b.id && Math.abs(a.amount - b.amount) / Math.max(a.amount, b.amount) < 0.05) {
-                      if (!similarMap.has(a.id)) similarMap.set(a.id, []);
-                      if (!similarMap.get(a.id)!.includes(b.id)) similarMap.get(a.id)!.push(b.id);
-                    }
-                  });
-                });
-                const fmtDate = (d: any) => {
-                  const dt = new Date(d);
-                  if (!isNaN(dt.getTime())) return `${dt.getMonth() + 1}月${dt.getDate()}日`;
-                  const s = String(d).slice(0, 10);
-                  const parts = s.split('-');
-                  if (parts.length === 3) return `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
-                  return s;
-                };
-                let globalIdx = 0;
-                return Object.entries(groups).map(([company, items]) => (
-                  <div key={company}>
-                    {/* 公司分组标题 */}
-                    <div style={{
-                      padding: '6px 16px 4px',
-                      fontSize: '11px', fontWeight: 700, color: '#16a34a',
-                      background: '#f0fdf4', borderTop: '1px solid #e8f5e9',
-                      letterSpacing: '0.5px',
-                    }}>{company}（{items.length} 笔）</div>
-                    {/* 表头 */}
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px',
-                      gap: '4px', padding: '3px 16px',
-                      fontSize: '10px', color: '#bbb', borderBottom: '1px solid #f5f5f5',
-                    }}>
-                      <span>#</span><span>业务员 · 日期 · 单号</span><span style={{textAlign:'right'}}>金额</span><span style={{textAlign:'right'}}>津贴</span>
-                    </div>
-                    {items.map((item: any) => {
-                      globalIdx++;
-                      const similarIds = similarMap.get(item.id);
-                      const isSimilar = !!similarIds && similarIds.length > 0;
-                      return (
-                        <div key={item.id} style={{
-                          display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px',
-                          gap: '4px', padding: '5px 16px',
-                          borderBottom: '1px solid #f9f9f9',
-                          alignItems: 'center',
-                          background: isSimilar ? '#fffbeb' : 'transparent',
-                        }}>
-                          <span style={{ fontSize: '10px', color: '#ccc' }}>{globalIdx}</span>
-                          <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.employeeName || '未知'}</span>
-                            <span style={{ fontSize: '10px', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0 }}>·</span>
-                            <span style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtDate(item.recordDate)}</span>
-                            <span style={{ fontSize: '10px', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0 }}>·</span>
-                            <span style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>#{item.id}{item.expenseReason ? ` · ${item.expenseReason}` : ''}</span>
-                            {isSimilar && (
-                              <span style={{ fontSize: '9px', color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: '#fef3c7', padding: '1px 4px', borderRadius: '4px' }}>
-                                ≈#{similarIds!.join(' #')}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a', textAlign: 'right' }}>
-                            {item.amount.toFixed(0)}<span style={{ fontSize: '9px', color: '#aaa' }}>元</span>
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#86efac', textAlign: 'right' }}>
-                            +{(item.amount * 0.01 / 7.2).toFixed(2)}<span style={{ fontSize: '9px' }}>U</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ));
-              })()}
-            </div>
-            {/* 底部按鈕 */}
-            {pendingList && pendingList.length > 0 && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0' }}>
-                <button
-                  onClick={() => { setShowBatchConfirm(false); setShowBatchConfirm2(true); }}
-                  style={{
-                    width: '100%', padding: '12px 0', borderRadius: '10px',
-                    background: 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)',
-                    color: '#fff', fontWeight: 700, fontSize: '14px',
-                    border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  确认，进入第二步确认
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 批审前辅助核对：同额分组、凭证与基础信息提示，按确认单号审核。 */}
+      {showBatchConfirm && <AJBatchReview
+        key={`${ledgerId}:${selectedCompanyId}:${selectedEmployee}:${period}`}
+        ledgerId={ledgerId}
+        title={selectedEmployee ? `业务员：${selectedEmployee}` : selectedCompanyId ? '本公司全部业务员' : '全部授权企业'}
+        items={pendingList}
+        loading={pendingListLoading}
+        refreshing={pendingListRefreshing}
+        error={pendingListError?.message}
+        approving={batchApproving || batchApproveMutation.isPending}
+        onRefresh={() => { refetchPendingList(); }}
+        onClose={() => { if (!batchApproving && !batchApproveMutation.isPending) setShowBatchConfirm(false); }}
+        onApprove={selection => {
+          if (batchApprovalLock.current || batchApproving || batchApproveMutation.isPending || pendingListLoading || pendingListRefreshing || pendingListError
+            || !Array.isArray(pendingList) || !isAJBatchSnapshotCurrent(selection, pendingList)) return;
+          batchApprovalLock.current = true;
+          setBatchFeedback(null);
+          setBatchApproving(true);
+          batchApproveMutation.mutate({
+            ledgerId,
+            companyId: selectedCompanyId === 0 ? undefined : selectedCompanyId ?? undefined,
+            employeeName: selectedEmployee || undefined,
+            period,
+            ...selection,
+          });
+        }}
+      />}
 
-      {/* 批量审核第二次确认弹窗：最终确认 */}
-      {showBatchConfirm2 && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.65)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-          onClick={() => !batchApproving && setShowBatchConfirm2(false)}
-        >
-          <div
-            style={{
-              background: '#fff', borderRadius: '16px',
-              width: 'calc(100% - 48px)', maxWidth: 360,
-              padding: '24px 20px',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '8px' }}>&#9888;&#65039;</div>
-              <div style={{ fontWeight: 700, fontSize: '16px', color: '#1A2B4A' }}>最终确认批量审核</div>
-              <div style={{ fontSize: '13px', color: '#888', marginTop: '6px', lineHeight: 1.6 }}>
-                即将对 <span style={{ color: '#16a34a', fontWeight: 700 }}>{pendingList?.length || 0} 笔</span> 待审单执行审核通过，
-                共计金额 <span style={{ color: '#16a34a', fontWeight: 700 }}>¥{pendingList ? pendingList.reduce((s: number, r: any) => s + r.amount, 0).toFixed(2) : '0.00'}</span>，
-                预计发放津贴 <span style={{ color: '#16a34a', fontWeight: 700 }}>{pendingList ? (pendingList.reduce((s: number, r: any) => s + r.amount, 0) * 0.01 / 7.2).toFixed(4) : '0.0000'} U</span>。
-                <br /><span style={{ color: '#e53e3e', fontSize: '12px' }}>此操作不可撤销，请确认。</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setShowBatchConfirm2(false)}
-                disabled={batchApproving}
-                style={{
-                  flex: 1, padding: '11px 0', borderRadius: '10px',
-                  background: '#f5f5f5', color: '#666',
-                  fontWeight: 600, fontSize: '14px', border: 'none', cursor: 'pointer',
-                }}
-              >返回</button>
-              <button
-                onClick={() => {
-                  setBatchApproving(true);
-                  batchApproveMutation.mutate({
-                    ledgerId,
-                    companyId: selectedCompanyId ?? undefined,
-                    employeeName: selectedEmployee || undefined,
-                    period,
-                  });
-                }}
-                disabled={batchApproving}
-                style={{
-                  flex: 2, padding: '11px 0', borderRadius: '10px',
-                  background: batchApproving ? '#86efac' : 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)',
-                  color: '#fff', fontWeight: 700, fontSize: '14px',
-                  border: 'none', cursor: batchApproving ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {batchApproving ? '审核中...' : '确认批量审核通过'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
