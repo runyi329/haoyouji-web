@@ -233,6 +233,22 @@ export {
   getDeribitOptionOrderBook
 };
 
+import traceHttps from 'node:https';
+const tracedTransport = createDeribitPublicTransport({get(options, callback) {
+  const started = Date.now();
+  console.log(JSON.stringify({label:'trace_request',host:options.hostname,address:options.transportAddress,family:options.family,sni:options.servername}));
+  const request = traceHttps.get(options, response => {
+    console.log(JSON.stringify({label:'trace_response',host:options.hostname,http:response.statusCode,type:response.headers['content-type'],elapsedMs:Date.now()-started}));
+    if (options.hostname !== 'www.deribit.com') {
+      let text='';
+      response.on('data', b=>{if(text.length<65536)text+=b;});
+      response.on('end',()=>{try{const data=JSON.parse(text);console.log(JSON.stringify({label:'trace_dns_schema',host:options.hostname,Status:data.Status,Question:data.Question,Answer:data.Answer}));}catch{}});
+    }
+    callback(response);
+  });
+  request.on('error', error => console.log(JSON.stringify({label:'trace_error',host:options.hostname,code:error.code,elapsedMs:Date.now()-started})));
+  return request;
+}});
 const contract = 'ETH-25JUN27-1700-C';
 function assertQuote(data) {
   const q = data?.result;
@@ -242,13 +258,13 @@ function assertQuote(data) {
   return q;
 }
 const start = Date.now();
-const first = assertQuote(await getDeribitOptionOrderBook(contract));
+const first = assertQuote(await tracedTransport.getDeribitOptionOrderBook(contract));
 console.log(JSON.stringify({label:'actual_helper_june_first',elapsedMs:Date.now()-start,instrument:first.instrument_name,markNative:first.mark_price,indexUsd:first.index_price,timestamp:first.timestamp}));
 await new Promise(resolve => setTimeout(resolve, 1200));
-const second = assertQuote(await getDeribitOptionOrderBook(contract));
+const second = assertQuote(await tracedTransport.getDeribitOptionOrderBook(contract));
 if (second.timestamp <= first.timestamp) throw new Error('Second official quote was not refreshed');
 console.log(JSON.stringify({label:'actual_helper_june_second',instrument:second.instrument_name,markNative:second.mark_price,indexUsd:second.index_price,timestamp:second.timestamp,updated:true}));
-const directory = await getDeribitOptionInstruments('ETH');
+const directory = await tracedTransport.getDeribitOptionInstruments('ETH');
 if (directory?.error || !Array.isArray(directory?.result) || !directory.result.length) throw new Error('Official directory missing');
 const june = directory.result.find(row => row.instrument_name === contract);
 if (!june || june.kind !== 'option' || june.strike !== 1700 || june.expiration_timestamp !== 1813910400000) throw new Error('June directory identity did not match');
