@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import InventoryPanel from "./InventoryPanel";
 import LimitedProductsPanel from "./LimitedProductsPanel";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { formatMibanPaymentSummary, getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import {
   Package,
   Wheat,
@@ -208,8 +209,9 @@ function OrdersPanel() {
       if (res.refundCny > 0.001) parts.push(`¥${res.refundCny.toFixed(2)} CNY`);
       if (res.refundUsdt > 0.000001)
         parts.push(`${res.refundUsdt.toFixed(4)} USDT`);
+      const originalAssetRefund = Array.isArray(res.refundAssets) && res.refundAssets.length ? formatMibanPaymentSummary(res.refundAssets) : parts.join(" + ");
       toast.success(
-        parts.length ? `已取消并退款 ${parts.join(" + ")}` : "已取消（无退款）"
+        originalAssetRefund ? `已取消并退款 ${originalAssetRefund}` : "已取消（无退款）"
       );
       refetch();
     },
@@ -947,7 +949,8 @@ function OrdersPanel() {
               ? `${(orderTotalUsdt / singleLimitedQuantity).toFixed(2)}U/${singleLimitedUnit} × ${singleLimitedQuantity}${singleLimitedUnit} = ${orderTotalUsdt.toFixed(2)}U`
               : `= ${orderTotalUsdt.toFixed(2)}U`
             : "待核实";
-        const hasWalletPaymentRecord = paidCny > 0.001 || paidUsdt > 0.000001;
+        const originalAssetPayment = getMibanOrderWalletPaymentSummary(order);
+        const hasWalletPaymentRecord = Boolean(originalAssetPayment) || paidCny > 0.001 || paidUsdt > 0.000001;
         const walletDeductUsdtEquivalent =
           displayOrderRate > 0
             ? paidUsdt + paidCny / displayOrderRate
@@ -955,9 +958,9 @@ function OrdersPanel() {
               ? paidUsdt
               : null;
         const walletPaymentSummary =
-          walletDeductUsdtEquivalent !== null
+          originalAssetPayment ?? (walletDeductUsdtEquivalent !== null
             ? `${walletDeductUsdtEquivalent.toFixed(2)}U`
-            : "待核实";
+            : "待核实");
         const customerNote = String(order.userNote ?? "").trim();
         // allOrders 仅管理员可调用：下单人必须与收货人分开展示，
         // 避免代收/赠送订单中把收货人误认为实际下单账号。

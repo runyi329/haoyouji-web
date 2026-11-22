@@ -237,6 +237,8 @@ const trpcClient = trpc.createClient({
         if (isAdminWalletRequest(op.path)) return true;
         // 纵向股票列表独立读取，不等待同批钱包/总览统计；减小移动WebView请求URL。
         return op.path === "aiStockLifecycle"
+          // 关注点击独立提交，避免与导航时的访问日志混批或被慢请求拖延。
+          || op.path === "limitedProduct.recordBrandAttention"
           || op.path === "aiStockLatestQuotes"
           || op.path === "aiStockReturnRanking"
           || op.path === "aiStockMAMonitor"

@@ -47,7 +47,18 @@ import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 import { readMibanFruitSales } from "./miban-fruit-sales";
+import { getMibanWalletPaymentQuote } from "./miban-wallet-payment-quote";
+import {
+  ensureMibanWalletPaymentInfrastructure, prepareMibanWalletPayment,
+  mibanFundingDeductionAmounts, debitMibanWalletPayment,
+  readMibanOrderWalletPayments, cancelMibanOrderWithWalletRefund,
+  mibanWalletPaymentSalesValue, debitMibanLegacyCartWalletPayment,
+} from "./miban-wallet-payment-service";
+import { PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPaymentDeductions, type MibanPaymentDeduction } from "../shared/miban-wallet-payment";
+import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
+import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
+import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
 import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
@@ -968,7 +979,8 @@ async function getUserOrders(userId: number) {
     .from(mibanOrders)
     .where(eq(mibanOrders.userId, userId))
     .orderBy(desc(mibanOrders.createdAt));
-  return rows.map(serializeOrder);
+  const payments = await readMibanOrderWalletPayments(rows.map(row => row.id));
+  return rows.map(row => ({ ...serializeOrder(row), walletPayments: payments.get(row.id) ?? [] }));
 }
 
 async function getAllOrders() {
@@ -1015,6 +1027,7 @@ async function getAllOrders() {
       mibanLimitedProducts.map(product => [product.key, product])
     );
 
+    const walletPayments = await readMibanOrderWalletPayments((Array.isArray(rows) ? rows : []).map((row: any) => Number(row.id)), conn);
     return (Array.isArray(rows) ? rows : []).map((o: any) => {
       const limitedLines = readLimitedProductLines(o);
       let commissionPreviewVisible = true;
@@ -1042,6 +1055,7 @@ async function getAllOrders() {
       }
       return {
         ...serializeOrder(o),
+        walletPayments: walletPayments.get(Number(o.id)) ?? [],
         userName: o.userName ?? o.userUsername ?? null,
         commissionPreviewVisible,
       };
@@ -1076,10 +1090,12 @@ async function updateOrderStatus(
     extra.shippedAt = now;
     extra.autoConfirmAt = autoConfirm;
   }
-  await db
+  const [updated] = await db
     .update(mibanOrders)
     .set({ status, trackingNo, trackingCompany, adminNote, ...extra })
-    .where(eq(mibanOrders.id, id));
+    // Cancelled is a financial terminal state. Never reopen it and permit another legacy refund.
+    .where(and(eq(mibanOrders.id, id), sql`${mibanOrders.status} <> 'cancelled'`));
+  if (Number((updated as any).affectedRows) !== 1) throw new Error("订单已取消、已删除或状态已变动，请刷新后重试");
 }
 
 async function getAllCommissionConfigs() {
@@ -3147,6 +3163,7 @@ export const mibanRecipeRouter = router({
 });
 
 export const mibanOrderRouter = router({
+  walletPaymentQuote: protectedProcedure.query(({ ctx }) => getMibanWalletPaymentQuote(ctx.user!.id)),
   create: protectedProcedure
     .input(
       z.object({
@@ -3172,6 +3189,8 @@ export const mibanOrderRouter = router({
           .optional(), // 订阅期数
         // 未传时保持历史“优先扣人民币”的兼容行为；新结算页会传入用户指定的人民币分配额。
         cnyAmount: z.number().finite().min(0).optional(),
+        paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36).optional(),
+        paymentQuoteToken: z.string().max(16000).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -3190,9 +3209,12 @@ export const mibanOrderRouter = router({
       }
 
       // 1. 仅预检全局钱包可用余额；扣款时会在锁定用户行的事务内再次校验。
+      const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
+      if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
-      const usdtRate = Number(Number(await getUsdtCnyRate()).toFixed(4)); // 1 USDT = ? CNY
+      const usdtRate = payment ? Number(payment.usdtCnyRate) : Number(Number(await getUsdtCnyRate()).toFixed(4)); // 1 USDT = ? CNY
       if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -3203,7 +3225,7 @@ export const mibanOrderRouter = router({
       // 2. 用户可指定本次使用的人民币；剩余金额由 U 按订单时汇率支付。
       // 老客户端不传 cnyAmount 时，继续采用历史的“优先扣人民币”规则。
       const requestedCny = input.cnyAmount ?? Math.max(0, Math.min(cnyBalance, totalCny));
-      const deductCny = Number(requestedCny.toFixed(2));
+      const deductCny = funding ? Number(funding.cnyAmount) : Number(requestedCny.toFixed(2));
       if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
@@ -3211,7 +3233,7 @@ export const mibanOrderRouter = router({
         });
       }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
-      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      const deductUsdt = funding ? Number(funding.usdtAmount) : Number((remainingCnyForUsdt / usdtRate).toFixed(8));
       if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
@@ -3266,6 +3288,7 @@ export const mibanOrderRouter = router({
 
       const orderIds: number[] = [];
       const orderNos: string[] = [];
+      const periodPayments = payment ? splitMibanPaymentDeductions(payment.deductions, totalPeriods) : [];
 
       // 所有订阅期订单与两币扣款共用一个事务，任一步失败均整体回滚。
       await withGlobalWalletTransaction(userId, async transaction => {
@@ -3308,8 +3331,8 @@ export const mibanOrderRouter = router({
             receiverAddress: input.receiverAddress,
             userNote: input.userNote,
             productImg: input.productImg,
-            walletDeductCny: perPeriodDeductCny.toString() as any,
-            walletDeductUsdt: perPeriodDeductUsdt.toString() as any,
+            walletDeductCny: (payment ? mibanFundingDeductionAmounts(periodPayments[i]).cnyAmount : perPeriodDeductCny.toString()) as any,
+            walletDeductUsdt: (payment ? mibanFundingDeductionAmounts(periodPayments[i]).usdtAmount : perPeriodDeductUsdt.toString()) as any,
             usdtCnyRateAtOrder: usdtRate.toString() as any,
             commissionTrigger: commissionTriggerSnapshot,
             subscriptionGroupId: subscriptionGroupId ?? undefined,
@@ -3326,7 +3349,9 @@ export const mibanOrderRouter = router({
           subMonths !== null
             ? `米伴订阅${subMonths}期扣款 #${subscriptionGroupId}`
             : `米伴订单扣款 #${orderNos[0]}`;
-        await debitGlobalWallet({
+        if (payment) await debitMibanWalletPayment({ transaction, userId, payment,
+          orders: orderIds.map((orderId, index) => ({ orderId, deductions: periodPayments[index] })) });
+        else await debitGlobalWallet({
           transaction,
           userId,
           cnyAmount: deductCny,
@@ -3348,7 +3373,8 @@ export const mibanOrderRouter = router({
         orderCount: totalPeriods,
         deductCny,
         deductUsdt,
-        usdtCnyRateAtOrder: usdtRate,
+        usdtCnyRateAtOrder: payment?.usdtCnyRate ?? usdtRate,
+        walletPayments: payment?.deductions ?? [],
       };
     }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
@@ -3927,101 +3953,25 @@ export const mibanOrderRouter = router({
       };
     }),
 
-  // 管理员取消订单（退款原路返回）
+  // 管理员取消：用户锁→当前订单锁→佣金锁；原币退款/佣金作废/状态同事务。
   adminCancel: mibanAdminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "DB not available",
-        });
-      const [order] = await db
-        .select()
-        .from(mibanOrders)
-        .where(eq(mibanOrders.id, input.id))
-        .limit(1);
-      if (!order)
-        throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
-      if (order.status === "cancelled")
-        throw new TRPCError({ code: "BAD_REQUEST", message: "订单已取消" });
-      if (order.status === "shipped")
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "订单已发货，请在完成退货验收入库后处理退款",
-        });
-      if (order.status === "delivered")
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "已送达订单不可取消",
-        });
-
-      // 未结算奖金必须和整单退款一起作废；已经实际打款的奖金不允许静默删除，
-      // 避免退款后仍保留奖金资产。当前销售制度为手动结算，正常取消会自动作废 pending 记录。
-      const commissionRows = await db
-        .select({ id: mibanCommissions.id, status: mibanCommissions.status })
-        .from(mibanCommissions)
-        .where(eq(mibanCommissions.orderId, input.id));
-      if (commissionRows.some(row => row.status === "settled")) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "该订单奖金已结算，请先处理奖金冲正后再退款",
-        });
-      }
-      if (commissionRows.some(row => row.status === "pending")) {
-        await db
-          .update(mibanCommissions)
-          .set({ status: "cancelled" })
-          .where(
-            and(
-              eq(mibanCommissions.orderId, input.id),
-              eq(mibanCommissions.status, "pending")
-            )
-          );
-      }
-
-      const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
-      const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
-      const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.7;
-      const orderNo = order.orderNo;
-      const userId = order.userId;
-
-      if (deductCny > 0.001) {
-        await adminAdjustCnyBalance({
-          userId,
-          amount: deductCny,
-          note: `米伴订单退款 #${orderNo}`,
-          operatorId: userId,
-        });
-      }
-      if (deductUsdt > 0.000001) {
-        await addUserBalance(
-          userId,
-          deductUsdt,
-          "reward",
-          order.id,
-          `米伴订单退款 #${orderNo} (+${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`
-        );
-      }
-      await db
-        .update(mibanOrders)
-        .set({ status: "cancelled" })
-        .where(eq(mibanOrders.id, input.id));
-      const restocked = await restockLimitedOrderIfManaged(
-        order,
-        ctx.user!.id,
-        `管理员取消订单 #${orderNo}，回补库存`
-      );
-      console.log(
-        `[Miban] 管理员取消并退款: orderId=${order.id}, refundCny=${deductCny}, refundUsdt=${deductUsdt}, restocked=${restocked}`
-      );
-      return {
-        success: true,
-        refundCny: deductCny,
-        refundUsdt: deductUsdt,
-        restocked,
-      };
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+      // 这里只读取归属以获取用户锁；状态/金额必须在事务内当前锁定读取后决定。
+      const [owner] = await db.select({ userId: mibanOrders.userId }).from(mibanOrders)
+        .where(eq(mibanOrders.id, input.id)).limit(1);
+      if (!owner) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      const result = await withGlobalWalletTransaction(owner.userId, transaction =>
+        cancelMibanOrderWithWalletRefund({ transaction, userId: owner.userId,
+          orderId: input.id, actorUserId: ctx.user!.id }));
+      // 原库存助手有独立事务与一次性回库保护。回库失败后再次取消只重试回库，绝不二次入账。
+      const restocked = await restockLimitedOrderIfManaged(result.order, ctx.user!.id,
+        `管理员取消订单 #${result.order.orderNo}，回补库存`);
+      const funding = mibanFundingDeductionAmounts(result.walletPayments);
+      return { success: true, refundCny: Number(funding.cnyAmount), refundUsdt: Number(funding.usdtAmount),
+        walletPayments: result.walletPayments, alreadyCancelled: result.alreadyCancelled, restocked };
     }),
 
   // 管理员删除订单（不退款，直接从数据库删除）
@@ -4268,6 +4218,35 @@ export const mibanOrderRouter = router({
 // 商品与 SKU 的名称、金额、图片和单位都从 shared/miban-limited-products.ts 读取。
 // 浏览器只提交 productKey、skuId、数量和收货信息，不能篡改成交金额或伪造成米种。
 export const mibanLimitedProductRouter = router({
+  // 关注度独立于库存和订单：读取不增加次数，真实点击按唯一事件幂等累计。
+  brandAttention: publicProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "关注度暂时无法读取" });
+    try {
+      await ensureBrandAttentionTables(conn);
+      return await readBrandAttention(conn);
+    } finally {
+      await conn.end();
+    }
+  }),
+  recordBrandAttention: publicProcedure
+    .input(z.object({
+      brandSlug: z.string().refine(slug => mibanLimitedBrands.some(brand => brand.slug === slug && brand.status === "on_sale"), "品牌不存在"),
+      eventId: z.string().uuid(),
+    }))
+    .mutation(async ({ input }) => {
+      // pool facade不能保证事务使用同一物理连接，必须使用独占连接。
+      const conn = await getDbTransactionConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "关注度暂时无法记录" });
+      try {
+        await ensureBrandAttentionTables(conn);
+        return await recordBrandAttention(conn, input);
+      } finally {
+        if ("release" in conn && typeof conn.release === "function") conn.release();
+        else await conn.end();
+      }
+    }),
+
   // 前台只读取运营覆盖层，商品内容、价格与规格始终以静态目录为准。
   publicAvailability: publicProcedure.query(async () => {
     const conn = await ensureLimitedProductManagementTables();
@@ -4357,8 +4336,7 @@ export const mibanLimitedProductRouter = router({
         const bucket = buckets.get(date);
         if (!bucket) continue;
 
-        const cny = positiveOrderAmount(order.walletDeductCny);
-        const usdt = positiveOrderAmount(order.walletDeductUsdt);
+        const { cny, usdt } = mibanWalletPaymentSalesValue(order);
         if (String(order.status) === "cancelled") {
           bucket.cancelledOrderCount += 1;
           bucket.cancelledCny += cny;
@@ -4743,6 +4721,8 @@ export const mibanLimitedProductRouter = router({
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
         cnyAmount: z.number().finite().min(0),
+        paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36).optional(),
+        paymentQuoteToken: z.string().max(16000).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -4777,11 +4757,14 @@ export const mibanLimitedProductRouter = router({
       if (!Number.isFinite(totalCny) || totalCny <= 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "订单金额必须大于0且有效" });
       }
+      const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
+      if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
       const usdtRateRaw = await getUsdtCnyRate();
       // 按订单表既有的四位小数精度固化汇率，实际U扣款和退款都能用同一快照复核。
-      const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
+      const usdtRate = payment ? Number(payment.usdtCnyRate) : Number(Number(usdtRateRaw).toFixed(4));
       if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -4790,7 +4773,7 @@ export const mibanLimitedProductRouter = router({
       }
 
       // 浏览器只提交人民币分配额；剩余应付金额始终由服务端以当前汇率换算为 U。
-      const deductCny = Number(input.cnyAmount.toFixed(2));
+      const deductCny = funding ? Number(funding.cnyAmount) : Number(input.cnyAmount.toFixed(2));
       if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
@@ -4798,7 +4781,7 @@ export const mibanLimitedProductRouter = router({
         });
       }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
-      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      const deductUsdt = funding ? Number(funding.usdtAmount) : Number((remainingCnyForUsdt / usdtRate).toFixed(8));
       if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
@@ -4879,7 +4862,8 @@ export const mibanLimitedProductRouter = router({
               transaction
             );
           }
-          await debitGlobalWallet({
+          if (payment) await debitMibanWalletPayment({ transaction, userId, payment, orders: [{ orderId: createdOrderId, deductions: payment.deductions }] });
+          else await debitGlobalWallet({
             transaction,
             userId,
             cnyAmount: deductCny,
@@ -4902,6 +4886,8 @@ export const mibanLimitedProductRouter = router({
           totalCny,
           deductCny,
           deductUsdt,
+          walletPayments: payment?.deductions ?? [],
+          usdtCnyRateAtOrder: payment?.usdtCnyRate ?? usdtRate,
           quantity: input.quantity,
           unitLabel: sku.unitLabel,
         };
@@ -4922,7 +4908,7 @@ export const mibanLimitedProductRouter = router({
       }
     }),
 
-  // 同系列多商品合单。旧 createOrder 保持不变，兼容已发布的单商品详情页。
+  // 全车统一支付、按精选结算组创建独立订单。旧单商品和普通订阅接口保持不变。
   createCartOrder: protectedProcedure
     .input(
       z.object({
@@ -4941,6 +4927,8 @@ export const mibanLimitedProductRouter = router({
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
         cnyAmount: z.number().finite().min(0),
+        paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36).optional(),
+        paymentQuoteToken: z.string().max(16000).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -4957,7 +4945,7 @@ export const mibanLimitedProductRouter = router({
           lineTotalCny: number;
         }
       > = [];
-      let checkoutGroupKey = "";
+      const groupedLines = new Map<string, typeof resolvedLines>();
       let totalCents = 0;
 
       for (const item of input.items) {
@@ -4989,14 +4977,6 @@ export const mibanLimitedProductRouter = router({
             message: `“${sku.name}”单笔最多购买 ${sku.maxPurchaseQty}${sku.unitLabel}`,
           });
         }
-        const currentGroupKey = product.checkoutGroupKey ?? product.key;
-        if (checkoutGroupKey && checkoutGroupKey !== currentGroupKey) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "一次订单仅支持同一精选系列商品，请分别结算",
-          });
-        }
-        checkoutGroupKey = currentGroupKey;
         const lineTotalCents =
           Math.round(Number(sku.priceCny) * 100) * item.quantity;
         if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
@@ -5011,6 +4991,10 @@ export const mibanLimitedProductRouter = router({
           sku,
           lineTotalCny: Number((lineTotalCents / 100).toFixed(2)),
         });
+        const checkoutGroupKey = product.checkoutGroupKey ?? product.key;
+        const group = groupedLines.get(checkoutGroupKey) ?? [];
+        group.push(resolvedLines[resolvedLines.length - 1]);
+        groupedLines.set(checkoutGroupKey, group);
       }
 
       const totalCny = Number((totalCents / 100).toFixed(2));
@@ -5018,25 +5002,37 @@ export const mibanLimitedProductRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "订单金额必须大于0且有效" });
       }
       const userId = ctx.user!.id;
+      const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
+      if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
-      const usdtRateRaw = await getUsdtCnyRate();
-      const usdtRate = Number(Number(usdtRateRaw).toFixed(4));
+      const usdtRateRaw = payment ? payment.usdtCnyRate : await getUsdtCnyRate();
+      const usdtRate = payment ? Number(payment.usdtCnyRate) : Number(Number(usdtRateRaw).toFixed(4));
       if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "当前汇率暂不可用，请稍后再试",
         });
       }
-      const deductCny = Number(input.cnyAmount.toFixed(2));
+      const deductCny = funding ? Number(funding.cnyAmount) : Number(input.cnyAmount.toFixed(2));
       if (deductCny > totalCny || (deductCny > 0 && deductCny > cnyBalance)) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
           message: `人民币钱包余额不足，本次最多可使用 ¥${Math.max(0, Math.min(totalCny, cnyBalance)).toFixed(2)}`,
         });
       }
+      if (!payment && groupedLines.size > 1 && paymentDecimalUnits(input.cnyAmount) !== paymentDecimalUnits(deductCny.toFixed(2))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "人民币支付金额最多支持两位小数" });
+      }
       const remainingCnyForUsdt = Number((totalCny - deductCny).toFixed(2));
-      const deductUsdt = Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      let deductUsdt = funding ? Number(funding.usdtAmount) : Number((remainingCnyForUsdt / usdtRate).toFixed(8));
+      if (!payment && groupedLines.size > 1 && remainingCnyForUsdt > 0) {
+        const step = 10n ** 10n;
+        const numerator = paymentDecimalUnits(remainingCnyForUsdt.toFixed(2)) * PAYMENT_SCALE;
+        const denominator = paymentDecimalUnits(usdtRate.toFixed(4)) * step;
+        deductUsdt = Number(paymentUnitsText((numerator + denominator - 1n) / denominator * step));
+      }
       if (deductUsdt > 0 && deductUsdt > usdtBalance) {
         throw new TRPCError({
           code: "PAYMENT_REQUIRED",
@@ -5044,7 +5040,44 @@ export const mibanLimitedProductRouter = router({
         });
       }
 
-      const orderNo = await createUniqueMibanOrderNo();
+      // 旧客户端跨组只使用真实 CNY/USDT 数量与本次服务器汇率，不虚构数字币报价。
+      const legacyDeductions: MibanPaymentDeduction[] = [];
+      if (!payment) {
+        const rateUnits = paymentDecimalUnits(usdtRate.toFixed(4));
+        if (deductCny > 0) legacyDeductions.push({
+          assetCode: "CNY", amount: paymentUnitsText(paymentDecimalUnits(deductCny.toFixed(2))),
+          priceCny: "1", priceUsdt: paymentUnitsText(PAYMENT_SCALE * PAYMENT_SCALE / rateUnits),
+          cnyValue: paymentUnitsText(paymentDecimalUnits(deductCny.toFixed(2))),
+        });
+        if (deductUsdt > 0) legacyDeductions.push({
+          assetCode: "USDT", amount: paymentUnitsText(paymentDecimalUnits(deductUsdt.toFixed(8))),
+          priceCny: usdtRate.toFixed(4), priceUsdt: "1",
+          cnyValue: paymentUnitsText(paymentDecimalUnits(deductUsdt.toFixed(8)) * rateUnits / PAYMENT_SCALE),
+        });
+      }
+      const walletPayments = payment?.deductions ?? legacyDeductions;
+      const allocatedOrderNos = new Set<string>();
+      const groups = [];
+      for (const [checkoutGroupKey, lines] of groupedLines) {
+        let orderNo = "";
+        for (let attempt = 0; attempt < 32; attempt++) {
+          const candidate = await createUniqueMibanOrderNo();
+          if (!allocatedOrderNos.has(candidate)) { orderNo = candidate; break; }
+        }
+        if (!orderNo) throw new Error("无法生成唯一子订单编号，请稍后重试");
+        allocatedOrderNos.add(orderNo);
+        groups.push({
+          checkoutGroupKey, orderNo, reservationOrderNo: orderNo, lines,
+          groupLabel: mibanLimitedBrands.find(brand => brand.brand === lines[0].product.brand)?.title ?? lines[0].product.brand,
+          totalCny: Number((lines.reduce((sum, line) => sum + Math.round(line.lineTotalCny * 100), 0) / 100).toFixed(2)),
+          totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+        });
+      }
+      if (!payment && groups.length > 1) await ensureMibanWalletPaymentInfrastructure(false);
+      const groupDeductions = !payment && groups.length === 1 ? [walletPayments]
+        : splitMibanPaymentDeductionsByTotals(walletPayments, groups.map(group => group.totalCny));
+      // 现有库存接口一次锁定全车。先用首单号预占；钱包事务内重标记各组预占号再关联。
+      const checkoutNo = groups[0].orderNo;
       const stockLines = resolvedLines.map(
         ({ productKey, skuId, quantity }) => ({
           productKey,
@@ -5056,7 +5089,7 @@ export const mibanLimitedProductRouter = router({
       const managedStockLines = await reserveLimitedSkuStocks(
         stockLines,
         userId,
-        orderNo
+        checkoutNo
       );
       let orderCreated = false;
       try {
@@ -5076,15 +5109,6 @@ export const mibanLimitedProductRouter = router({
             line,
           ])
         );
-        const commissionBaseCny = Number(
-          commissionLines
-            .reduce((sum, line) => sum + Number(line.commissionBaseCny ?? 0), 0)
-            .toFixed(2)
-        );
-        const commissionTrigger =
-          commissionBaseCny > 0
-            ? await getCommissionTriggerSnapshotForBuyer(userId)
-            : "not_eligible";
         const productLines = resolvedLines.map(line => {
           const commissionLine = commissionBySku.get(
             `${line.productKey}:${line.skuId}`
@@ -5107,60 +5131,92 @@ export const mibanLimitedProductRouter = router({
             colorHex: line.product.card.theme.accent,
           };
         });
-        const firstLine = resolvedLines[0];
+        const productLineBySku = new Map(productLines.map(line => [`${line.productKey}:${line.skuId}`, line]));
+        const preparedGroups = [];
+        for (let index = 0; index < groups.length; index++) {
+          const group = groups[index];
+          const lines = group.lines.map(line => productLineBySku.get(`${line.productKey}:${line.skuId}`)!);
+          const commissionBaseCny = Number(lines.reduce((sum, line) => sum + line.commissionBaseCny, 0).toFixed(2));
+          const commissionTrigger = commissionBaseCny > 0 ? await getCommissionTriggerSnapshotForBuyer(userId) : "not_eligible";
+          const deductions = groupDeductions[index];
+          const amounts = mibanFundingDeductionAmounts(deductions);
+          const groupKeys = new Set(group.lines.map(line => `${line.productKey}:${line.skuId}`));
+          preparedGroups.push({ ...group, productLines: lines, commissionTrigger, deductions,
+            deductCny: Number(amounts.cnyAmount), deductUsdt: Number(amounts.usdtAmount),
+            managedStockLines: managedStockLines.filter(line => groupKeys.has(`${line.productKey}:${line.skuId}`)),
+          });
+        }
         const totalQuantity = resolvedLines.reduce(
           (sum, line) => sum + line.quantity,
           0
         );
-        const orderId = await withGlobalWalletTransaction(userId, async transaction => {
-          const createdOrderId = await createOrder({
-            orderNo,
-            userId,
-            recipeName:
-              resolvedLines.length === 1
+        const orders = await withGlobalWalletTransaction(userId, async transaction => {
+          const createdOrders = [];
+          for (const group of preparedGroups) {
+            const firstLine = group.lines[0];
+            const orderId = await createOrder({
+              orderNo: group.orderNo, userId,
+              recipeName: group.lines.length === 1
                 ? `${firstLine.product.detail.title} · ${firstLine.sku.name}`
-                : `${firstLine.product.brand}精选 · ${firstLine.product.detail.title}等${resolvedLines.length}款`,
-            ingredients: JSON.stringify(productLines) as any,
-            // 旧表字段必须非空；限时商品以 ingredients 中的多行数量和单位为准。
-            totalWeightJin: String(totalQuantity) as any,
-            totalPrice: String(totalCny) as any,
-            receiverName: input.receiverName,
-            receiverPhone: input.receiverPhone,
-            receiverAddress: input.receiverAddress,
-            userNote: input.userNote || undefined,
-            productImg:
-              firstLine.sku.image || firstLine.product.detail.productImage,
-            walletDeductCny: String(deductCny) as any,
-            walletDeductUsdt: String(deductUsdt) as any,
-            usdtCnyRateAtOrder: String(usdtRate) as any,
-            commissionTrigger,
-          }, transaction);
-          await linkLimitedStockDeductionsToOrder(
-            managedStockLines,
-            orderNo,
-            createdOrderId,
-            transaction
-          );
-          await debitGlobalWallet({
+                : `${firstLine.product.brand}精选 · ${firstLine.product.detail.title}等${group.lines.length}款`,
+              ingredients: JSON.stringify(group.productLines) as any,
+              // 每单只包含本组数量、商品金额和奖金资格；取消沿用现有订单级链路。
+              totalWeightJin: String(group.totalQuantity) as any,
+              totalPrice: String(group.totalCny) as any,
+              receiverName: input.receiverName, receiverPhone: input.receiverPhone,
+              receiverAddress: input.receiverAddress, userNote: input.userNote || undefined,
+              productImg: firstLine.sku.image || firstLine.product.detail.productImage,
+              walletDeductCny: mibanFundingDeductionAmounts(group.deductions).cnyAmount as any,
+              walletDeductUsdt: mibanFundingDeductionAmounts(group.deductions).usdtAmount as any,
+              usdtCnyRateAtOrder: String(payment?.usdtCnyRate ?? usdtRate) as any,
+              commissionTrigger: group.commissionTrigger,
+            }, transaction);
+            if (group.reservationOrderNo !== checkoutNo) {
+              for (const line of group.managedStockLines) {
+                const [updated] = await transaction.execute(
+                  `UPDATE miban_limited_stock_movements SET note = ?
+                   WHERE product_key = ? AND sku_id = ? AND event_type = 'order_deduct'
+                     AND order_id IS NULL AND note = ?`,
+                  [`用户合单扣减库存 #${group.reservationOrderNo}`, line.productKey, line.skuId, `用户合单扣减库存 #${checkoutNo}`]
+                );
+                if (Number((updated as any)?.affectedRows ?? 0) !== 1) throw new Error(`子订单 ${group.orderNo} 的库存预占归属关联失败`);
+              }
+            }
+            await linkLimitedStockDeductionsToOrder(group.managedStockLines, group.reservationOrderNo, orderId, transaction);
+            createdOrders.push({ orderId, orderNo: group.orderNo,
+              checkoutGroupKey: group.checkoutGroupKey, groupLabel: group.groupLabel,
+              totalCny: group.totalCny, deductCny: group.deductCny, deductUsdt: group.deductUsdt,
+              walletPayments: group.deductions, itemCount: group.lines.length,
+              totalQuantity: group.totalQuantity, lines: group.productLines,
+            });
+          }
+          const snapshots = createdOrders.map(order => ({ orderId: order.orderId, deductions: order.walletPayments }));
+          if (payment) await debitMibanWalletPayment({ transaction, userId, payment, orders: snapshots });
+          else if (groups.length > 1) await debitMibanLegacyCartWalletPayment({ transaction, userId, deductions: legacyDeductions, orders: snapshots });
+          else await debitGlobalWallet({
             transaction,
             userId,
             cnyAmount: deductCny,
             usdtAmount: deductUsdt,
-            note: `米伴精选合单扣款 #${orderNo}`,
-            usdtDescription: `米伴精选合单扣款 #${orderNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
-            relatedId: createdOrderId,
+            note: `米伴精选合单扣款 #${checkoutNo}`,
+            usdtDescription: `米伴精选合单扣款 #${checkoutNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+            relatedId: createdOrders[0].orderId,
           });
-          return createdOrderId;
+          return createdOrders;
         });
         // 提交后才视为成功创建，失败时订单和扣款一起回滚并释放全部库存。
         orderCreated = true;
         return {
-          orderId,
-          orderNo,
+          orderId: orders[0].orderId,
+          orderNo: orders[0].orderNo,
+          checkoutNo,
+          orders,
           totalCny,
           deductCny,
           deductUsdt,
-          usdtCnyRateAtOrder: usdtRate,
+          usdtCnyRateAtOrder: payment?.usdtCnyRate ?? usdtRate,
+          signedRate: payment?.usdtCnyRate ?? usdtRate,
+          walletPayments,
           itemCount: resolvedLines.length,
           totalQuantity,
           lines: productLines,
@@ -6074,10 +6130,13 @@ export const mibanAdminCommissionRouter = router({
         const commCny = parseFloat(row.commission_amount ?? "0");
         const commUsdt = parseFloat((commCny / cnyRate).toFixed(6));
         const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-        await (conn as any).execute(
+        const [claimed] = await (conn as any).execute(
           `UPDATE miban_commissions SET status='settled', settled_at=? WHERE id=? AND status='pending'`,
           [now, row.id]
         );
+        // Cancellation may have atomically voided pending after the initial list read.
+        // Only the winner of the pending -> settled conditional update may credit it.
+        if (Number((claimed as any).affectedRows) !== 1) continue;
         await addUserBalance(
           Number(row.agent_id),
           commUsdt,

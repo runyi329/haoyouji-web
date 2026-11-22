@@ -1,9 +1,13 @@
 import { Link } from "wouter";
 import { ChevronRight, Sparkles } from "lucide-react";
+import { mtrpc } from "./mibanTrpc";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import {
   LINGCHUANG_THEME,
+  MIDANIANG_THEME,
   TUOQUETANG_THEME,
+  mibanLimitedBrands,
+  type MibanLimitedBrand,
 } from "../../../../shared/miban-limited-brand-config";
 
 const BRAND_CARD_COS_BASE =
@@ -15,191 +19,394 @@ const SEASONAL_FRUITS_CARD =
 const LINGCHUANG_DUO_CARD =
   "/miban-lingchuang-preview/v6/brand-card-red-white-duo.webp";
 
+const MIDANIANG_BRAND_CARD =
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/midaniang/v1/brand-card-rice-pantry-2e8d06304b9e.webp";
+const MIDANIANG_APPROVED_LOGO =
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/midaniang/v1/logo-red-gold-integrated-r1-36e01e489757.webp";
+
+const BRAND_ORDER = mibanLimitedBrands.map(brand => brand.slug);
+type BrandSlug = MibanLimitedBrand["slug"];
+type BrandAttention = { brandSlug: string; viewCount: number };
+
+function AttentionCount({
+  brandSlug,
+  viewCount,
+}: {
+  brandSlug: BrandSlug;
+  viewCount: number | undefined;
+}) {
+  return (
+    <span
+      data-testid={`${brandSlug}-attention`}
+      data-view-count={
+        viewCount === undefined ? "unavailable" : String(viewCount)
+      }
+      className="pointer-events-none absolute bottom-4 right-4 z-20 rounded-md bg-black/35 px-2 py-1 text-right text-[10px] font-normal leading-[14px] text-white/90 [overflow-wrap:anywhere]"
+      style={{ maxWidth: "calc(41% - 16px)" }}
+    >
+      关注 {viewCount === undefined ? "--" : `+${viewCount}`}
+    </span>
+  );
+}
+
 export default function LimitedSale() {
+  const utils = mtrpc.useUtils();
+  const { data: attentionData } = mtrpc.limitedProduct.brandAttention.useQuery(
+    undefined,
+    {
+      staleTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
+      refetchInterval: 30000,
+    }
+  );
+  const brandAttention = attentionData as BrandAttention[] | undefined;
+  const recordAttention = mtrpc.limitedProduct.recordBrandAttention.useMutation(
+    {
+      // TanStack retries the same input, including its eventId, after navigation.
+      retry: 2,
+    }
+  );
+
+  function recordBrandClick(brandSlug: BrandSlug) {
+    // Only an actual Link click creates an event; never count mounts or refetches.
+    // A Promise callback survives unmount, unlike mutate(input, { onSuccess }).
+    try {
+      const eventId = crypto.randomUUID();
+      void recordAttention
+        .mutateAsync({ brandSlug, eventId })
+        .then((result: BrandAttention & { counted: boolean }) => {
+          utils.limitedProduct.brandAttention.setData(
+            undefined,
+            (previous: BrandAttention[] | undefined) => {
+              // Without a completed GET, other brands' counts are still unknown.
+              if (previous === undefined) return previous;
+              const existing = previous.find(
+                item => item.brandSlug === result.brandSlug
+              );
+              const updated = {
+                brandSlug: result.brandSlug,
+                // Concurrent click responses can arrive out of order.
+                viewCount: Math.max(existing?.viewCount ?? 0, result.viewCount),
+              };
+              return existing
+                ? previous.map(item =>
+                    item.brandSlug === result.brandSlug ? updated : item
+                  )
+                : [...previous, updated];
+            }
+          );
+          return utils.limitedProduct.brandAttention.invalidate();
+        })
+        .catch(() => {
+          // Statistics failures must never interrupt normal Link navigation.
+        });
+    } catch {
+      // Even unavailable browser crypto must not block entering a brand.
+    }
+  }
+
+  const viewCountFor = (brandSlug: BrandSlug) =>
+    brandAttention === undefined
+      ? undefined
+      : (brandAttention.find(item => item.brandSlug === brandSlug)?.viewCount ??
+        0);
+  const sortedBrands = [...BRAND_ORDER].sort(
+    (a, b) =>
+      (viewCountFor(b) ?? 0) - (viewCountFor(a) ?? 0) ||
+      BRAND_ORDER.indexOf(a) - BRAND_ORDER.indexOf(b)
+  );
+
+  const brandCards = {
+    herbalife: (
+      <Link
+        key="herbalife"
+        data-brand-slug="herbalife"
+        data-testid="brand-card-herbalife"
+        href="/p/proj_hzxm2t/limited/herbalife"
+        onClick={() => recordBrandClick("herbalife")}
+        className="block active:scale-[0.985]"
+      >
+        <article
+          className="relative min-h-[208px] overflow-hidden rounded-[22px]"
+          style={{
+            background: "#F6F8F4",
+            boxShadow: "0 14px 32px rgba(59,128,37,0.22)",
+          }}
+        >
+          <img
+            src={HERBALIFE_NUTRITION_CARD}
+            alt="康宝莱营养精选产品与饮品场景"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(90deg,rgba(8,79,36,0.96) 0%,rgba(18,111,46,0.91) 43%,rgba(30,130,50,0.46) 61%,rgba(40,141,50,0.06) 79%,rgba(40,141,50,0) 100%)",
+            }}
+          />
+          <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
+            <div>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                营养精选
+              </div>
+              <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                康宝莱营养精选
+              </h3>
+              <p className="mt-2 text-[11px] leading-5 text-white/78">
+                营养饮品与日常产品，进入专区查看在售商品。
+              </p>
+            </div>
+            <span
+              className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-3 py-2 text-[11px] font-bold"
+              style={{ color: HERBALIFE_THEME.primary }}
+            >
+              查看营养精选
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          </div>
+          <AttentionCount
+            brandSlug="herbalife"
+            viewCount={viewCountFor("herbalife")}
+          />
+        </article>
+      </Link>
+    ),
+    tuoquetang: (
+      <Link
+        key="tuoquetang"
+        data-brand-slug="tuoquetang"
+        data-testid="brand-card-tuoquetang"
+        href="/p/proj_hzxm2t/limited/tuoquetang"
+        onClick={() => recordBrandClick("tuoquetang")}
+        className="block active:scale-[0.985]"
+      >
+        <article
+          className="relative min-h-[220px] overflow-hidden rounded-[22px]"
+          style={{
+            background: TUOQUETANG_THEME.primary,
+            boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
+          }}
+        >
+          <img
+            src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
+            alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,61,56,0.98)_0%,rgba(8,76,68,0.91)_47%,rgba(8,76,68,0.22)_77%,rgba(8,76,68,0.04)_100%)]" />
+          <div className="relative flex min-h-[220px] max-w-[59%] flex-col justify-between px-5 py-5 text-white">
+            <div>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                草本日用
+              </div>
+              <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                佗鹊堂精选
+              </h3>
+              <p className="mt-2 text-[11px] leading-5 text-white/78">
+                蓝布正植物牙膏与复生1号，进入专区查看在售商品。
+              </p>
+            </div>
+            <span
+              className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
+              style={{
+                background: "#FFF8E8",
+                color: TUOQUETANG_THEME.primary,
+              }}
+            >
+              查看佗鹊堂精选
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          </div>
+          <AttentionCount
+            brandSlug="tuoquetang"
+            viewCount={viewCountFor("tuoquetang")}
+          />
+        </article>
+      </Link>
+    ),
+    lingchuang: (
+      <Link
+        key="lingchuang"
+        data-brand-slug="lingchuang"
+        data-testid="brand-card-lingchuang"
+        href="/p/proj_hzxm2t/limited/lingchuang"
+        onClick={() => recordBrandClick("lingchuang")}
+        className="block active:scale-[0.985]"
+      >
+        <article
+          className="relative min-h-[208px] overflow-hidden rounded-[22px]"
+          style={{
+            background: "#8D2D3A",
+            boxShadow: "0 14px 32px rgba(106,45,51,0.18)",
+          }}
+        >
+          <img
+            src={LINGCHUANG_DUO_CARD}
+            alt="凌创PQQ透明质酸钠与氨糖透明质酸钠营养固体饮料"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(101,34,43,0.96)_0%,rgba(126,48,57,0.89)_43%,rgba(143,55,64,0.39)_63%,rgba(143,55,64,0.06)_80%,rgba(143,55,64,0)_100%)]" />
+          <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
+            <div>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                营养固体饮料
+              </div>
+              <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                凌创生物精选
+              </h3>
+              <p className="mt-2 text-[11px] leading-5 text-white/78">
+                两款独立条包，进入专区查看在售商品。
+              </p>
+            </div>
+            <span
+              className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
+              style={{
+                background: "#FFFDF9",
+                color: "#8D2D3A",
+              }}
+            >
+              查看凌创精选
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          </div>
+          <AttentionCount
+            brandSlug="lingchuang"
+            viewCount={viewCountFor("lingchuang")}
+          />
+        </article>
+      </Link>
+    ),
+    fruits: (
+      <Link
+        key="fruits"
+        data-brand-slug="fruits"
+        data-testid="brand-card-fruits"
+        href="/p/proj_hzxm2t/limited/fruits"
+        onClick={() => recordBrandClick("fruits")}
+        className="block active:scale-[0.985]"
+      >
+        <article
+          className="relative min-h-[208px] overflow-hidden rounded-[22px]"
+          style={{
+            background: "#F8F6EE",
+            boxShadow: "0 14px 32px rgba(131,111,61,0.16)",
+          }}
+        >
+          <img
+            src={SEASONAL_FRUITS_CARD}
+            alt="四季水果精选组合"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(90deg,rgba(83,91,52,0.95) 0%,rgba(114,121,69,0.86) 44%,rgba(145,148,91,0.43) 63%,rgba(150,151,94,0.06) 82%,rgba(150,151,94,0) 100%)",
+            }}
+          />
+          <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
+            <div>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
+                随季更新
+              </div>
+              <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
+                四季水果精选
+              </h3>
+              <p className="mt-2 text-[11px] leading-5 text-white/80">
+                汇集各地应季鲜果，进入专区查看当前精选。
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#FFFDF7] px-3 py-2 text-[11px] font-bold text-[#6A6B3C]">
+              查看水果精选
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          </div>
+          <AttentionCount
+            brandSlug="fruits"
+            viewCount={viewCountFor("fruits")}
+          />
+        </article>
+      </Link>
+    ),
+    midaniang: (
+      <Link
+        key="midaniang"
+        data-brand-slug="midaniang"
+        data-testid="brand-card-midaniang"
+        href="/p/proj_hzxm2t/limited/midaniang"
+        onClick={() => recordBrandClick("midaniang")}
+        className="block active:scale-[0.985]"
+      >
+        <article
+          className="relative min-h-[224px] overflow-hidden rounded-[22px]"
+          style={{
+            background: "#FFFDF9",
+            boxShadow: "0 14px 32px rgba(144,104,55,0.16)",
+          }}
+        >
+          <img
+            src={MIDANIANG_BRAND_CARD}
+            alt="米大娘五常大米礼盒为主，搭配亚麻籽油与大米年糕的米粮系列陈列"
+            data-testid="midaniang-stage"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right"
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(90deg,#FFFFFF 0%,rgba(255,255,255,0.98) 29%,rgba(255,255,255,0.88) 43%,rgba(255,255,255,0.28) 58%,rgba(255,255,255,0) 72%)",
+            }}
+          />
+          <div className="relative z-10 flex min-h-[224px] max-w-[58%] flex-col justify-between px-5 py-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <img
+                  src={MIDANIANG_APPROVED_LOGO}
+                  alt="米大娘红金交织Logo，右上角R1标签"
+                  data-testid="midaniang-approved-logo"
+                  className="h-[68px] w-[68px] shrink-0 object-contain"
+                />
+                <p className="text-[10px] font-medium leading-[18px] tracking-[0.04em]" style={{ color: MIDANIANG_THEME.muted }}>
+                  东北五常<br />龙凤山镇
+                </p>
+              </div>
+              <h3 className="mt-1.5 whitespace-nowrap text-[23px] font-extrabold leading-tight" style={{ color: MIDANIANG_THEME.primary }}>
+                米大娘精选
+              </h3>
+              <p className="mt-1.5 text-[11px] leading-[18px]" style={{ color: MIDANIANG_THEME.muted }}>
+                五常大米为主，<br />甄选米粮与食用油好物。
+              </p>
+            </div>
+            <span
+              className="mt-3 inline-flex w-fit items-center gap-1 rounded-full px-3 py-2 text-[11px] font-bold text-white"
+              style={{ background: MIDANIANG_THEME.primary }}
+            >
+              查看米大娘精选
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          </div>
+          <AttentionCount brandSlug="midaniang" viewCount={viewCountFor("midaniang")} />
+        </article>
+      </Link>
+    ),
+  };
+
   return (
     <div
       className="min-h-screen pb-8"
       style={{ background: HERBALIFE_THEME.canvas }}
     >
-      <section className="space-y-4 px-5 pt-6" aria-label="精选系列">
-        <Link
-          href="/p/proj_hzxm2t/limited/herbalife"
-          className="block active:scale-[0.985]"
-        >
-          <article
-            className="relative min-h-[208px] overflow-hidden rounded-[22px]"
-            style={{
-              background: "#F6F8F4",
-              boxShadow: "0 14px 32px rgba(59,128,37,0.22)",
-            }}
-          >
-            <img
-              src={HERBALIFE_NUTRITION_CARD}
-              alt="康宝莱营养精选产品与饮品场景"
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(90deg,rgba(8,79,36,0.96) 0%,rgba(18,111,46,0.91) 43%,rgba(30,130,50,0.46) 61%,rgba(40,141,50,0.06) 79%,rgba(40,141,50,0) 100%)",
-              }}
-            />
-            <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
-                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  营养精选
-                </div>
-                <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                  康宝莱营养精选
-                </h3>
-                <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  营养饮品与日常产品，进入专区查看在售商品。
-                </p>
-              </div>
-              <span
-                className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-3 py-2 text-[11px] font-bold"
-                style={{ color: HERBALIFE_THEME.primary }}
-              >
-                查看营养精选
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </span>
-            </div>
-          </article>
-        </Link>
-
-        <Link
-          href="/p/proj_hzxm2t/limited/tuoquetang"
-          className="block active:scale-[0.985]"
-        >
-          <article
-            className="relative min-h-[220px] overflow-hidden rounded-[22px]"
-            style={{
-              background: TUOQUETANG_THEME.primary,
-              boxShadow: "0 14px 32px rgba(14,90,80,0.24)",
-            }}
-          >
-            <img
-              src={`${BRAND_CARD_COS_BASE}/tuoquetang-product-stage.webp`}
-              alt="佗鹊堂蓝布正植物牙膏与复生1号产品静物图"
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,61,56,0.98)_0%,rgba(8,76,68,0.91)_47%,rgba(8,76,68,0.22)_77%,rgba(8,76,68,0.04)_100%)]" />
-            <div className="relative flex min-h-[220px] max-w-[59%] flex-col justify-between px-5 py-5 text-white">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-[#E9D5A5]">
-                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  草本日用
-                </div>
-                <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                  佗鹊堂精选
-                </h3>
-                <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  蓝布正植物牙膏与复生1号，进入专区查看在售商品。
-                </p>
-              </div>
-              <span
-                className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
-                style={{
-                  background: "#FFF8E8",
-                  color: TUOQUETANG_THEME.primary,
-                }}
-              >
-                查看佗鹊堂精选
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </span>
-            </div>
-          </article>
-        </Link>
-
-        <Link
-          href="/p/proj_hzxm2t/limited/lingchuang"
-          className="block active:scale-[0.985]"
-        >
-          <article
-            className="relative min-h-[208px] overflow-hidden rounded-[22px]"
-            style={{
-              background: "#8D2D3A",
-              boxShadow: "0 14px 32px rgba(106,45,51,0.18)",
-            }}
-          >
-            <img
-              src={LINGCHUANG_DUO_CARD}
-              alt="凌创PQQ透明质酸钠与氨糖透明质酸钠营养固体饮料"
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(101,34,43,0.96)_0%,rgba(126,48,57,0.89)_43%,rgba(143,55,64,0.39)_63%,rgba(143,55,64,0.06)_80%,rgba(143,55,64,0)_100%)]" />
-            <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
-                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  营养固体饮料
-                </div>
-                <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                  凌创生物精选
-                </h3>
-                <p className="mt-2 text-[11px] leading-5 text-white/78">
-                  两款独立条包，进入专区查看在售商品。
-                </p>
-              </div>
-              <span
-                className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold"
-                style={{
-                  background: "#FFFDF9",
-                  color: "#8D2D3A",
-                }}
-              >
-                查看凌创精选
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </span>
-            </div>
-          </article>
-        </Link>
-
-        <Link
-          href="/p/proj_hzxm2t/limited/fruits"
-          className="block active:scale-[0.985]"
-        >
-          <article
-            className="relative min-h-[208px] overflow-hidden rounded-[22px]"
-            style={{
-              background: "#F8F6EE",
-              boxShadow: "0 14px 32px rgba(131,111,61,0.16)",
-            }}
-          >
-            <img
-              src={SEASONAL_FRUITS_CARD}
-              alt="四季水果精选组合"
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(90deg,rgba(83,91,52,0.95) 0%,rgba(114,121,69,0.86) 44%,rgba(145,148,91,0.43) 63%,rgba(150,151,94,0.06) 82%,rgba(150,151,94,0) 100%)",
-              }}
-            />
-            <div className="relative z-10 flex min-h-[208px] max-w-[58%] flex-col justify-between px-5 py-5 text-white">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.11em] text-white/80">
-                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  随季更新
-                </div>
-                <h3 className="mt-2 text-[23px] font-extrabold leading-tight">
-                  四季水果精选
-                </h3>
-                <p className="mt-2 text-[11px] leading-5 text-white/80">
-                  汇集各地应季鲜果，进入专区查看当前精选。
-                </p>
-              </div>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#FFFDF7] px-3 py-2 text-[11px] font-bold text-[#6A6B3C]">
-                查看水果精选
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </span>
-            </div>
-          </article>
-        </Link>
+      <section
+        className="space-y-4 px-5 pt-6"
+        aria-label="精选系列"
+        data-testid="limited-brand-list"
+      >
+        {sortedBrands.map(brandSlug => brandCards[brandSlug])}
       </section>
 
       <p className="px-5 pt-7 text-center text-[11px] text-[#C6C0BE]">

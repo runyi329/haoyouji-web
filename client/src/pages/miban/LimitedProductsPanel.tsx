@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { toast } from "sonner";
+import { formatMibanPaymentSummary, getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import {
   AlertCircle,
   ArrowDownUp,
@@ -190,7 +191,8 @@ export default function LimitedProductsPanel() {
       ]
         .filter(Boolean)
         .join(" + ");
-      toast.success(refund ? `已取消并原路退款 ${refund}` : "订单已取消");
+      const originalAssetRefund = Array.isArray(result.refundAssets) && result.refundAssets.length ? formatMibanPaymentSummary(result.refundAssets) : refund;
+      toast.success(originalAssetRefund ? `已取消并原路退款 ${originalAssetRefund}` : "订单已取消");
       setCancelTarget(null);
       refreshAll();
     },
@@ -803,7 +805,7 @@ export default function LimitedProductsPanel() {
                         0,
                         Number(order.walletDeductUsdt ?? 0)
                       );
-                      const paymentSummary = [
+                      const paymentSummary = getMibanOrderWalletPaymentSummary(order) ?? [
                         paidCny > 0.001 ? moneyCny(paidCny) : "",
                         paidUsdt > 0.000001 ? moneyUsdt(paidUsdt) : "",
                       ]

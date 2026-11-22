@@ -39,6 +39,19 @@ export const LINGCHUANG_THEME = {
   subtle: "#96A2C3",
 } as const;
 
+export const MIDANIANG_THEME = {
+  primary: "#B51E29",
+  price: "#B51E29",
+  navy: "#4D382A",
+  canvas: "#FAF7F0",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F4EDE1",
+  border: "#E8DFD1",
+  text: "#4D382A",
+  muted: "#897664",
+  subtle: "#B3A391",
+} as const;
+
 export const TUOQUETANG_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/tuoquetang/v1";
 
@@ -86,6 +99,16 @@ export const mibanLimitedBrands = [
     description: "随季更新，从产地到餐桌的好水果",
     status: "on_sale" as const,
     theme: MAJIAYOU_THEME,
+  },
+  {
+    slug: "midaniang",
+    brand: "米大娘",
+    eyebrow: "东北五常 · 龙凤山镇",
+    title: "米大娘精选",
+    description: "以五常大米为主，延伸米粮与食用油系列",
+    // This opens the brand entrance only; there are no new sellable SKUs.
+    status: "on_sale" as const,
+    theme: MIDANIANG_THEME,
   },
 ] as const;
 

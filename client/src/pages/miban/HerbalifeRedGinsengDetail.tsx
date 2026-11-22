@@ -17,12 +17,15 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getMibanLimitedProduct } from "../../../../shared/miban-limited-products";
+import { midaniangSelectionCatalog } from "../../../../shared/midaniang-selection-catalog";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import { getMibanLimitedBrandByName } from "../../../../shared/miban-limited-brand-config";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
 import { getCities, getDistricts, provinces, withCurrentRegionOption } from "./regionData";
-import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
+import { cnyToU } from "./useMibanUsdtCnyRate";
+import { MibanMixedPaymentAllocation, MibanWalletAvailableSummary, useMibanMixedPayment } from "./MibanMixedPayment";
+import { formatMibanPaymentSummary, formatMibanUsdtAmount, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
 import { toast } from "sonner";
@@ -33,6 +36,7 @@ type LimitedOrderSuccess = {
   totalCny: number;
   deductCny: number;
   deductUsdt: number;
+  walletPayments: MibanPaymentDeduction[];
   quantity: number;
   unitLabel: string;
   createdAt: string;
@@ -72,7 +76,7 @@ function Price({
         }
         style={{ color }}
       >
-        {priceU.toFixed(2)}
+        {Number.isFinite(usdtCnyRate) && usdtCnyRate > 0 ? priceU.toFixed(2) : "--"}
         <span className={large ? "ml-1 text-[14px]" : "ml-0.5 text-[11px]"}>
           USDT
         </span>
@@ -100,11 +104,14 @@ export default function HerbalifeRedGinsengDetail() {
     checkoutRouteParams?.productKey ??
     routeParams?.productKey ??
     "herbalife-red-ginseng";
-  const detailPath = `/p/proj_hzxm2t/limited/${productKey}`;
+  const midaniangSelection = midaniangSelectionCatalog.find(item => item.productKey === productKey);
+  const detailPath = midaniangSelection
+    ? `/p/proj_hzxm2t/limited/midaniang/${midaniangSelection.key}`
+    : `/p/proj_hzxm2t/limited/${productKey}`;
   const queryString =
     typeof window === "undefined" ? "" : window.location.search;
   const checkoutSkuId = new URLSearchParams(queryString).get("sku");
-  const checkoutPathBase = `${detailPath}/buy`;
+  const checkoutPathBase = `/p/proj_hzxm2t/limited/${productKey}/buy`;
   const isCheckoutPage = location.split("?")[0] === checkoutPathBase;
   const currentProduct = getMibanLimitedProduct(productKey);
   const localPreviewMode = import.meta.env.DEV;
@@ -126,7 +133,6 @@ export default function HerbalifeRedGinsengDetail() {
     null
   );
   const [showWalletPayment, setShowWalletPayment] = useState(false);
-  const [cnyPaymentInput, setCnyPaymentInput] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [checkoutAttempted, setCheckoutAttempted] = useState(false);
@@ -165,7 +171,7 @@ export default function HerbalifeRedGinsengDetail() {
   const activeSkuId = selectedSkuId || defaultSku?.id || "";
   const checkoutPath = `${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}`;
   const selectedSku = currentProduct
-    ? (activeSkus.find(sku => sku.id === activeSkuId) ?? defaultSku)
+    ? activeSkus.find(sku => sku.id === activeSkuId)
     : undefined;
   const skuSelectionLabel =
     currentProduct?.detail.skuSelectionLabel ??
@@ -235,57 +241,15 @@ export default function HerbalifeRedGinsengDetail() {
     onSuccess: () => refetchFavorite(),
     onSettled: () => setFavoritePending(false),
   });
-  const cnyBalanceQuery = trpc.recharge.getCnyBalanceSummary.useQuery(undefined, {
-    enabled: isAuthenticated,
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
-  });
-  const usdtBalanceQuery = trpc.recharge.getUsdtBalanceSummary.useQuery(undefined, {
-    enabled: isAuthenticated,
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
-  });
-  const usdtCnyRate = useMibanUsdtCnyRate();
+  const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
+  const usdtCnyRate = walletPayment.usdtCnyRate;
   const trpcUtils = trpc.useUtils();
-  const cnyAvailable = Number(cnyBalanceQuery.data?.available);
-  const usdtAvailable = Number(usdtBalanceQuery.data?.available);
-  const cnyBalanceNum = Math.max(0, Number.isFinite(cnyAvailable) ? cnyAvailable : 0);
-  const usdtBalanceNum = Math.max(0, Number.isFinite(usdtAvailable) ? usdtAvailable : 0);
-  // 摘要未就绪、刷新中或请求失败时拒绝支付，绝不回退到总余额。
-  const balancesReady =
-    isAuthenticated &&
-    cnyBalanceQuery.isSuccess &&
-    usdtBalanceQuery.isSuccess &&
-    !cnyBalanceQuery.isFetching &&
-    !usdtBalanceQuery.isFetching &&
-    Number.isFinite(cnyAvailable) &&
-    Number.isFinite(usdtAvailable);
+  const mibanUtils = mtrpc.useUtils();
   const totalPriceU = cnyToU(totalPrice, usdtCnyRate);
-  const maxCnyPayment = Math.min(cnyBalanceNum, totalPrice);
-  const requestedCnyPayment = Number(cnyPaymentInput);
-  const cnyDeductAmount = Number(
-    Math.min(
-      Math.max(
-        Number.isFinite(requestedCnyPayment) ? requestedCnyPayment : 0,
-        0
-      ),
-      maxCnyPayment
-    ).toFixed(2)
-  );
-  const remainingCnyForUsdt = Number(
-    Math.max(0, totalPrice - cnyDeductAmount).toFixed(2)
-  );
-  const requiredUsdt = Number((remainingCnyForUsdt / usdtCnyRate).toFixed(8));
-  const cnyPartAvailable = cnyDeductAmount <= cnyBalanceNum;
-  const usdtPartAvailable = requiredUsdt <= usdtBalanceNum;
-  const combinedPaymentAvailable = balancesReady && cnyPartAvailable && usdtPartAvailable;
-  const hasAvailablePaymentWallet = combinedPaymentAvailable;
-  const paymentSummary =
-    cnyDeductAmount > 0 && requiredUsdt > 0
-      ? `¥${cnyDeductAmount.toFixed(2)} + ${requiredUsdt.toFixed(2)} USDT`
-      : cnyDeductAmount > 0
-        ? `¥${cnyDeductAmount.toFixed(2)}`
-        : `${requiredUsdt.toFixed(2)} USDT`;
+  const cnyDeductAmount = walletPayment.cnyAmount;
+  const combinedPaymentAvailable = walletPayment.canPay;
+  const hasAvailablePaymentWallet = walletPayment.ready && Number(walletPayment.availableValueCny) >= totalPrice;
+  const paymentSummary = walletPayment.paymentSummary;
 
   const createOrder = mtrpc.limitedProduct.createOrder.useMutation({
     onSuccess: (data: any) => {
@@ -295,6 +259,7 @@ export default function HerbalifeRedGinsengDetail() {
         totalCny: Number(data.totalCny),
         deductCny: Number(data.deductCny),
         deductUsdt: Number(data.deductUsdt),
+        walletPayments: data.walletPayments ?? [],
         quantity: Number(data.quantity),
         unitLabel: data.unitLabel,
         createdAt: new Date().toISOString(),
@@ -303,6 +268,8 @@ export default function HerbalifeRedGinsengDetail() {
       trpcUtils.recharge.getCnyBalance.invalidate();
       trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
+      trpcUtils.recharge.getMultiAssetBalances.invalidate();
+      mibanUtils.order.walletPaymentQuote.invalidate();
     },
     onError: (error: { message?: string }) => {
       const message = formatMibanCheckoutError(error);
@@ -425,14 +392,9 @@ export default function HerbalifeRedGinsengDetail() {
 
   const getOrderDetailText = () => {
     if (!orderSuccess) return "";
-    const paymentLines = [
-      orderSuccess.deductCny > 0.001
-        ? `人民币支付：¥${orderSuccess.deductCny.toFixed(2)}`
-        : null,
-      orderSuccess.deductUsdt > 0.000001
-        ? `USDT支付：${orderSuccess.deductUsdt.toFixed(2)} U`
-        : null,
-    ].filter(Boolean);
+    const paymentLines = orderSuccess.walletPayments.length
+      ? orderSuccess.walletPayments.map(row => `${row.assetCode}支付：${row.assetCode === "USDT" ? formatMibanUsdtAmount(row.amount) : row.amount}（折合 ¥${Number(row.cnyValue).toFixed(2)}）`)
+      : ["实际付款明细待核对，请查看订单；不以客户端分配代替实扣凭证"];
     return [
       "米伴精选订单详情",
       `订单编号：${orderSuccess.orderNo}`,
@@ -451,39 +413,14 @@ export default function HerbalifeRedGinsengDetail() {
       .join("\n");
   };
 
-  const setCnyPayment = (amount: number) => {
-    const normalized = Math.min(Math.max(amount, 0), maxCnyPayment);
-    setCnyPaymentInput(normalized.toFixed(2));
-  };
-
-  const handleCnyPaymentInput = (value: string) => {
-    if (value !== "" && !/^\d*(?:\.\d{0,2})?$/.test(value)) return;
-    if (value === "") {
-      setCnyPaymentInput("");
-      return;
-    }
-    const amount = Number(value);
-    if (!Number.isFinite(amount)) return;
-    if (amount > maxCnyPayment) {
-      setCnyPayment(maxCnyPayment);
-      return;
-    }
-    setCnyPaymentInput(value);
-  };
-
-  const useAvailableUsdtFirst = () => {
-    const cnyCoveredByUsdt = Math.min(totalPrice, usdtBalanceNum * usdtCnyRate);
-    setCnyPayment(totalPrice - cnyCoveredByUsdt);
-  };
-
   const handleOpenWalletPayment = () => {
     if (createOrder.isPending || !validateShipping()) return;
-    setCnyPayment(Math.min(cnyBalanceNum, totalPrice));
+    walletPayment.resetToCnyFirst();
     setShowWalletPayment(true);
   };
 
   const handleConfirmWalletPayment = () => {
-    if (createOrder.isPending || !combinedPaymentAvailable) return;
+    if (createOrder.isPending || !walletPayment.canPay) return;
     if (!validateShipping()) {
       setShowWalletPayment(false);
       return;
@@ -508,6 +445,8 @@ export default function HerbalifeRedGinsengDetail() {
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       cnyAmount: cnyDeductAmount,
+      paymentAssets: walletPayment.paymentAssets,
+      paymentQuoteToken: walletPayment.paymentQuoteToken,
     }, {
       onSuccess: () => {
         if (addressToSave) addAddressMutation.mutate(addressToSave);
@@ -1107,7 +1046,7 @@ export default function HerbalifeRedGinsengDetail() {
                         className="mt-0.5 whitespace-nowrap text-[14px] font-extrabold"
                         style={{ color: theme.price }}
                       >
-                        {totalPriceU.toFixed(2)} U
+                        {Number.isFinite(usdtCnyRate) ? totalPriceU.toFixed(2) : "--"} U
                       </div>
                     </div>
                     <div className="min-w-0 rounded-lg bg-white px-2.5 py-2 text-right">
@@ -1122,20 +1061,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <div className="mb-2 text-[12px] font-semibold text-gray-600">
                     钱包可用余额
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="min-w-0 rounded-lg bg-white px-2.5 py-2">
-                      <div className="text-[10px] text-gray-400">USDT</div>
-                      <div className="mt-0.5 whitespace-nowrap text-[14px] font-extrabold text-gray-800">
-                        {usdtBalanceNum.toFixed(2)} U
-                      </div>
-                    </div>
-                    <div className="min-w-0 rounded-lg bg-white px-2.5 py-2 text-right">
-                      <div className="text-[10px] text-gray-400">人民币</div>
-                      <div className="mt-0.5 whitespace-nowrap text-[14px] font-extrabold text-gray-800">
-                        ¥{cnyBalanceNum.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
+                  <MibanWalletAvailableSummary payment={walletPayment} />
                 </div>
               </div>
 
@@ -1330,7 +1256,7 @@ export default function HerbalifeRedGinsengDetail() {
         !isPreviewProduct && (
           <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45">
             <div
-              className="w-full rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
+              className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
               style={{
                 maxWidth: 480,
                 paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
@@ -1343,7 +1269,7 @@ export default function HerbalifeRedGinsengDetail() {
                     钱包支付
                   </h2>
                   <p className="mt-1 text-[12px] text-gray-400">
-                    人民币与 U 均可组合使用
+                    人民币、U 与持有数字币可单币或组合使用
                   </p>
                 </div>
                 <button
@@ -1371,99 +1297,14 @@ export default function HerbalifeRedGinsengDetail() {
                 </div>
               </div>
 
-              <div className="mt-5 text-[13px] font-bold text-gray-800">
-                支付分配
+              <div className="mt-5">
+                <MibanMixedPaymentAllocation payment={walletPayment} disabled={createOrder.isPending} accent={accent} />
               </div>
-              <div className="mt-2.5 space-y-2.5">
-                <div
-                  className="rounded-2xl border px-4 py-3.5"
-                  style={{
-                    borderColor: theme.border,
-                    background: theme.surfaceMuted,
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[14px] font-bold text-gray-900">
-                        人民币钱包
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-gray-500">
-                        可用 ¥{cnyBalanceNum.toFixed(2)}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCnyPayment(maxCnyPayment)}
-                      disabled={createOrder.isPending}
-                      className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
-                      style={{ color: accent, background: "#FFFFFF" }}
-                    >
-                      全部使用
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center rounded-xl border border-gray-200 bg-white px-3">
-                    <span className="text-[16px] font-bold text-gray-600">
-                      ¥
-                    </span>
-                    <input
-                      value={cnyPaymentInput}
-                      onChange={event =>
-                        handleCnyPaymentInput(event.target.value)
-                      }
-                      onBlur={() => setCnyPayment(cnyDeductAmount)}
-                      inputMode="decimal"
-                      disabled={createOrder.isPending}
-                      aria-label="本次使用的人民币金额"
-                      className="h-10 min-w-0 flex-1 bg-transparent px-2 text-right text-[16px] font-extrabold text-gray-900 outline-none disabled:opacity-40"
-                    />
-                    <span className="text-[12px] text-gray-400">本次使用</span>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[14px] font-bold text-gray-900">
-                        USDT 钱包
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-gray-500">
-                        可用 {usdtBalanceNum.toFixed(2)} U
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={useAvailableUsdtFirst}
-                      disabled={createOrder.isPending || usdtBalanceNum <= 0}
-                      className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40"
-                      style={{
-                        color: accent,
-                        background: theme.surfaceMuted,
-                      }}
-                    >
-                      优先使用 U
-                    </button>
-                  </div>
-                  <div className="mt-3 flex h-10 items-center justify-between rounded-xl bg-gray-50 px-3">
-                    <span className="text-[12px] text-gray-500">本次使用</span>
-                    <span
-                      className="text-[16px] font-extrabold"
-                      style={{ color: theme.price }}
-                    >
-                      {requiredUsdt.toFixed(2)} USDT
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="mt-3 text-[11px] leading-5 text-gray-400">
-                可直接输入本次要使用的人民币金额，剩余部分自动按实时汇率由 U
-                支付；点击“优先使用 U”可尽量使用 U 余额。
-              </p>
               <button
                 type="button"
                 onClick={handleConfirmWalletPayment}
                 disabled={!combinedPaymentAvailable || createOrder.isPending}
-                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
+                className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 break-all rounded-xl px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
                 style={{
                   background: combinedPaymentAvailable ? accent : undefined,
                 }}
@@ -1560,17 +1401,8 @@ export default function HerbalifeRedGinsengDetail() {
                     ¥{orderSuccess.totalCny.toFixed(2)}
                   </span>
                   <span className="text-gray-400">付款方式</span>
-                  <span className="text-right font-medium text-gray-700">
-                    {orderSuccess.deductCny > 0.001
-                      ? `人民币 ¥${orderSuccess.deductCny.toFixed(2)}`
-                      : ""}
-                    {orderSuccess.deductCny > 0.001 &&
-                    orderSuccess.deductUsdt > 0.000001
-                      ? " + "
-                      : ""}
-                    {orderSuccess.deductUsdt > 0.000001
-                      ? `USDT ${orderSuccess.deductUsdt.toFixed(2)}`
-                      : ""}
+                  <span className="min-w-0 break-all text-right font-medium text-gray-700">
+                    {orderSuccess.walletPayments.length ? formatMibanPaymentSummary(orderSuccess.walletPayments) : "实际付款明细待核对，请查看订单"}
                   </span>
                 </div>
                 <div className="border-t border-dashed border-gray-200 pt-3">

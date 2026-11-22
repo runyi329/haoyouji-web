@@ -79,6 +79,11 @@ function properties(root: ts.Node) {
 const dbAst = parse('./db-recharge.ts');
 const routerAst = parse('./routers.ts');
 const rechargeAst = parse('../client/src/pages/Recharge.tsx');
+const readGuardFn = declaration(parse('./ledger37-calendar-recorder.ts'), 'assertLedger37SelfRead');
+const readGuard = evaluate(`${readGuardFn.getText().replace(/^export\s+/, '')}\nassertLedger37SelfRead;`, {
+  assertLedger37Owner: () => { throw new Error('Unexpected ledger37 owner read in global-wallet fixture'); },
+  getLedger37Access: () => { throw new Error('Unexpected ledger37 access read in global-wallet fixture'); },
+});
 const snapshotAst = parse('../client/src/components/ReadonlyWalletSnapshot.tsx');
 const yabanAst = parse('../client/src/pages/yaban/YabanWallet.tsx');
 const historyFn = declaration(dbAst, 'getUserBalanceHistory');
@@ -138,6 +143,7 @@ async function runAf(bh: readonly Flow[], manual: readonly Flow[]) {
   const calls: string[] = [];
   const fn = value<(arg: { ctx: { user: { id: number } }; input: Record<string, unknown> }) => Promise<Flow[]>>(afFn, {
     ...helpers,
+    assertLedger37SelfRead: readGuard,
     listWalletManualFundingFreezeEvents: async (userId: number) => {
       expect(userId).toBe(77);
       return [];

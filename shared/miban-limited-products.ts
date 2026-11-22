@@ -9,10 +9,12 @@ import { HERBALIFE_THEME } from "./herbalife-theme";
 import {
   LINGCHUANG_THEME,
   MAJIAYOU_THEME,
+  MIDANIANG_THEME,
   TUOQUETANG_THEME,
   majiayouImage,
   tuoquetangImage,
 } from "./miban-limited-brand-config";
+import { midaniangSelectionAssets } from "./midaniang-selection-assets";
 
 export type LimitedProductSku = {
   id: string;
@@ -234,6 +236,123 @@ const lingchuangLogistics: LimitedProduct["detail"]["logistics"] = [
     description: "请按商品销售包装标注的食用方法、食用量及注意事项使用。",
   },
 ];
+
+const midaniangLogistics: LimitedProduct["detail"]["logistics"] = [
+  {
+    title: "订单处理",
+    description: "付款后由工作人员核对订单并安排后续发货。",
+  },
+  {
+    title: "售后咨询",
+    description: "如有订单、物流或售后问题，请通过米伴订单页提交申请。",
+  },
+];
+const midaniangImageNotice = "页面图片为设计展示，实际商品包装以到货实物为准。";
+const midaniangOrganicNote = "商家已确认获有机认证，具体认证信息以实物包装及商家提供资料为准。";
+
+type MidaniangRiceGiftConfig = {
+  key: string;
+  skuId: string;
+  title: string;
+  packagingText: string;
+  netContentText: string;
+  image: string;
+  detailImages: string[];
+};
+
+function createMidaniangRiceGift(config: MidaniangRiceGiftConfig): LimitedProduct {
+  const heroImages = [config.detailImages[0]];
+  return {
+    key: config.key,
+    status: "on_sale",
+    brand: "米大娘",
+    checkoutGroupKey: "midaniang-limited",
+    category: "大米礼盒",
+    card: {
+      badge: "有机认证",
+      title: config.title,
+      subtitle: config.netContentText,
+      highlights: ["有机认证", config.packagingText, "1盒装"],
+      image: config.image,
+      theme: {
+        accent: MIDANIANG_THEME.primary,
+        background: MIDANIANG_THEME.surfaceMuted,
+      },
+    },
+    detail: {
+      title: config.title,
+      subtitle: config.netContentText,
+      tags: ["有机认证", "大米礼盒", config.packagingText],
+      skuSelectionLabel: "规格",
+      heroImages,
+      detailImages: config.detailImages,
+      detailImagesCaption: midaniangImageNotice,
+      productImage: config.image,
+      sourceNote: `${midaniangOrganicNote}${midaniangImageNotice}`,
+      description: `米大娘${config.title}，每盒${config.netContentText}。${midaniangOrganicNote}`,
+      usage: "请按实物包装标注的食用方法烹煮食用。",
+      logistics: midaniangLogistics,
+      notices: [
+        { label: "包装规格", text: `${config.netContentText}，按1盒为一个售卖单位。` },
+        { label: "有机认证", text: midaniangOrganicNote },
+        { label: "图片说明", text: midaniangImageNotice },
+      ],
+    },
+    skus: [
+      {
+        id: config.skuId,
+        name: config.packagingText,
+        subtitle: `${config.netContentText} · 1盒装`,
+        priceCny: 228,
+        featured: true,
+        quantityPerOrder: 1,
+        unitLabel: "盒",
+        netContentText: config.netContentText,
+        // 沿用现有商城SKU的单笔数量上限；此值不表示实际库存。
+        maxPurchaseQty: 10,
+        active: true,
+        image: config.image,
+        heroImages,
+        detailImages: config.detailImages,
+      },
+    ],
+    orderPolicy: domesticOrderPolicy,
+  };
+}
+
+const midaniangRiceGiftProducts: LimitedProduct[] = [
+  createMidaniangRiceGift({
+    key: "midaniang-classic-rice-gift",
+    skuId: "classic-500g-6",
+    title: "经典大米礼盒",
+    packagingText: "500g × 6包",
+    netContentText: "500g × 6包 · 3000g（6斤）",
+    image: midaniangSelectionAssets.grid["classic-rice-gift"],
+    detailImages: [
+      midaniangSelectionAssets.posters.classicHero,
+      midaniangSelectionAssets.posters.organicStory,
+      midaniangSelectionAssets.posters.classicPackaging,
+      midaniangSelectionAssets.posters.classicGift,
+      midaniangSelectionAssets.posters.cookingStory,
+    ],
+  }),
+  createMidaniangRiceGift({
+    key: "midaniang-family-rice-gift",
+    skuId: "family-300g-9",
+    title: "给孩子的一份礼物",
+    packagingText: "300g × 9包",
+    netContentText: "300g × 9包 · 2700g（5.4斤）",
+    image: midaniangSelectionAssets.grid["family-rice-gift"],
+    detailImages: [
+      midaniangSelectionAssets.posters.familyHero,
+      midaniangSelectionAssets.posters.organicStory,
+      midaniangSelectionAssets.posters.familyPackaging,
+      midaniangSelectionAssets.posters.familyMeal,
+      midaniangSelectionAssets.posters.cookingStory,
+    ],
+  }),
+];
+
 export const mibanLimitedProducts: LimitedProduct[] = [
   {
     key: "herbalife-red-ginseng",
@@ -406,9 +525,9 @@ export const mibanLimitedProducts: LimitedProduct[] = [
         herbalifeAloeDetailImage("detail-05-product-pack.jpg"),
         herbalifeAloeDetailImage("detail-06-material-formula-taste.jpg"),
         herbalifeAloeDetailImage("detail-07-usage-and-lifestyles.jpg"),
+        herbalifeAloeDetailImage("detail-08-product-information-b28bbec7fdc5.jpg"),
+        herbalifeAloeDetailImage("detail-09-product-label-and-qa-61873cd660ba.jpg"),
       ],
-      introImage: herbalifeAloeDetailImage("intro-usage-guide-crop.jpg"),
-      introImageAlt: "芦荟营养粉易享装食用方法：每次一条，每日一次",
       productImage: herbalifeImage("aloe-nutrition", "product-main.png"),
       description:
         "本品以库拉索芦荟凝胶粉及益生元为主要原料精制而成，富含膳食纤维。",
@@ -1213,6 +1332,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     ],
     orderPolicy: domesticOrderPolicy,
   },
+  ...midaniangRiceGiftProducts,
 ];
 
 export function getMibanLimitedProduct(

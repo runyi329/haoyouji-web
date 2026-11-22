@@ -236,6 +236,10 @@ function getDigitalFlowPresentation(item: { eventType?: string; amount?: number;
     if (item.eventType === "collateral_release") return { label: "手动解冻", detail: item.note, status: "已恢复可用", isIn: true };
   }
   switch (item.eventType) {
+    case "miban_payment":
+      return { label: "米伴订单扣款", detail: item.note, status: "已扣款", isIn: false };
+    case "miban_refund":
+      return { label: "米伴原币退款", detail: item.note, status: "已原路退款", isIn: true };
     case "collateral_lock":
       return { label: "担保冻结", status: "已参与联合担保", isIn: false };
     case "collateral_release":

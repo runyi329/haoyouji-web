@@ -25,14 +25,61 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
-import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
-import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
+import { cnyToU } from "./useMibanUsdtCnyRate";
+import {
+  normalizeMibanReceiverPhone,
+  getMibanReceiverPhoneError,
+  formatMibanCheckoutError,
+} from "../../../../shared/miban-shipping";
 import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
 } from "./MibanMixedPayment";
+import {
+  PAYMENT_SCALE,
+  formatMibanPaymentSummary,
+  paymentDecimalUnits,
+  paymentUnitsText,
+} from "../../../../shared/miban-wallet-payment";
+import {
+  getMibanLimitedProduct,
+  getMibanLimitedProductSku,
+} from "../../../../shared/miban-limited-products";
 
 const STORAGE_KEY = "miban-limited-product-cart-v1";
+
+type CartOrderReceipt = {
+  orderId?: number;
+  orderNo?: string;
+  checkoutGroupKey?: string;
+  groupLabel?: string;
+  totalCny?: number | string;
+  deductCny?: number | string;
+  deductUsdt?: number | string;
+  walletPayments?: { assetCode: string; amount: string }[];
+};
+
+type CartCheckoutReceipt = CartOrderReceipt & {
+  checkoutNo?: string;
+  orders?: CartOrderReceipt[];
+};
+
+function receiptCny(value: number | string | undefined) {
+  return value != null &&
+    String(value).trim() !== "" &&
+    Number.isFinite(Number(value))
+    ? `¥${Number(value).toFixed(2)}`
+    : "金额待核对";
+}
+
+function receiptPaymentSummary(payments: CartOrderReceipt["walletPayments"]) {
+  if (!payments?.length) return "实际付款明细待核对，请查看订单";
+  try {
+    return formatMibanPaymentSummary(payments);
+  } catch {
+    return "实际付款明细待核对，请查看订单";
+  }
+}
 
 export type LimitedCartItem = {
   checkoutGroupKey: string;
@@ -71,20 +118,58 @@ function cartKey(item: Pick<LimitedCartItem, "productKey" | "skuId">) {
   return `${item.productKey}:${item.skuId}`;
 }
 
+function cartTotalCny(items: LimitedCartItem[]) {
+  const cent = PAYMENT_SCALE / 100n;
+  const cents = items.reduce(
+    (sum, item) =>
+      sum + (paymentDecimalUnits(item.priceCny) / cent) * BigInt(item.quantity),
+    0n
+  );
+  return Number(paymentUnitsText(cents * cent));
+}
+
 function readStoredCart(): LimitedCartItem[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item: any) =>
-        item &&
-        typeof item.productKey === "string" &&
-        typeof item.skuId === "string" &&
-        Number.isInteger(Number(item.quantity)) &&
-        Number(item.quantity) > 0 &&
-        Number(item.priceCny) >= 0
-    );
+    return parsed
+      .filter(
+        (item: any) =>
+          item &&
+          typeof item.productKey === "string" &&
+          typeof item.skuId === "string" &&
+          Number.isSafeInteger(Number(item.quantity)) &&
+          Number(item.quantity) > 0 &&
+          Number.isFinite(Number(item.priceCny)) &&
+          Number(item.priceCny) >= 0
+      )
+      .map((item: LimitedCartItem) => {
+        const product = getMibanLimitedProduct(item.productKey);
+        const sku = product
+          ? getMibanLimitedProductSku(product, item.skuId)
+          : undefined;
+        return {
+          ...item,
+          quantity: Number(item.quantity),
+          priceCny: Number(item.priceCny),
+          checkoutGroupKey:
+            item.checkoutGroupKey ||
+            product?.checkoutGroupKey ||
+            item.productKey,
+          groupLabel:
+            item.groupLabel || (product ? `${product.brand}精选` : "精选商品"),
+          accent: item.accent || product?.card.theme.accent || "#0D7A3E",
+          productName:
+            item.productName || product?.detail.title || item.productKey,
+          skuName: item.skuName || sku?.name || item.skuId,
+          image: item.image || sku?.image || product?.detail.productImage || "",
+          unitLabel: item.unitLabel || sku?.unitLabel || "",
+          netContentText: item.netContentText || sku?.netContentText || "",
+          maxPurchaseQty:
+            item.maxPurchaseQty || sku?.maxPurchaseQty || Number(item.quantity),
+        };
+      });
   } catch {
     return [];
   }
@@ -120,61 +205,41 @@ export function LimitedProductCartProvider({
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
   );
-  const totalCny = useMemo(
-    () =>
-      Number(
-        items
-          .reduce((sum, item) => sum + item.priceCny * item.quantity, 0)
-          .toFixed(2)
-      ),
-    [items]
-  );
+  const totalCny = useMemo(() => cartTotalCny(items), [items]);
 
-  const addItem = useCallback(
-    (nextItem: AddCartItem) => {
-      const quantity = Math.max(
-        1,
-        Math.min(nextItem.quantity ?? 1, nextItem.maxPurchaseQty)
-      );
-      if (
-        items.length > 0 &&
-        items[0].checkoutGroupKey !== nextItem.checkoutGroupKey
-      ) {
-        toast.error(
-          `购物车已有${items[0].groupLabel}商品，请先结算或清空后再切换系列`
-        );
-        return false;
-      }
-      const key = cartKey(nextItem);
-      let capped = false;
-      setItems(current =>
-        current.map(cartKey).includes(key)
-          ? current.map(item => {
-              if (cartKey(item) !== key) return item;
-              const nextQuantity = Math.min(
-                item.quantity + quantity,
-                item.maxPurchaseQty
-              );
-              capped = nextQuantity < item.quantity + quantity;
-              return { ...item, quantity: nextQuantity };
-            })
-          : [
-              ...current,
-              {
-                ...nextItem,
-                quantity,
-              },
-            ]
-      );
-      toast.success(
-        capped
-          ? `已达到“${nextItem.skuName}”单笔购买上限`
-          : `${nextItem.skuName} 已加入购物车`
-      );
-      return true;
-    },
-    [items]
-  );
+  const addItem = useCallback((nextItem: AddCartItem) => {
+    const quantity = Math.max(
+      1,
+      Math.min(nextItem.quantity ?? 1, nextItem.maxPurchaseQty)
+    );
+    const key = cartKey(nextItem);
+    let capped = false;
+    setItems(current =>
+      current.map(cartKey).includes(key)
+        ? current.map(item => {
+            if (cartKey(item) !== key) return item;
+            const nextQuantity = Math.min(
+              item.quantity + quantity,
+              item.maxPurchaseQty
+            );
+            capped = nextQuantity < item.quantity + quantity;
+            return { ...item, quantity: nextQuantity };
+          })
+        : [
+            ...current,
+            {
+              ...nextItem,
+              quantity,
+            },
+          ]
+    );
+    toast.success(
+      capped
+        ? `已达到“${nextItem.skuName}”单笔购买上限`
+        : `${nextItem.skuName} 已加入购物车`
+    );
+    return true;
+  }, []);
 
   const setQuantity = useCallback((key: string, quantity: number) => {
     setItems(current =>
@@ -286,9 +351,11 @@ function UsdtPrimaryPrice({
   mainClassName?: string;
 }) {
   return (
-    <span className="flex flex-col items-end leading-none tabular-nums">
+    <span className="flex min-w-0 max-w-full flex-col items-end break-all leading-none tabular-nums">
       <span className={mainClassName} style={{ color }}>
-        {cnyToU(cnyAmount, usdtCnyRate).toFixed(2)}
+        {Number.isFinite(usdtCnyRate) && usdtCnyRate > 0
+          ? cnyToU(cnyAmount, usdtCnyRate).toFixed(2)
+          : "--"}
         <span className="ml-0.5 text-[9px] font-bold">USDT</span>
       </span>
       <span className="mt-1 text-[10px] font-medium text-gray-400">
@@ -314,18 +381,62 @@ function LimitedProductCartOverlay() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [showAddressBook, setShowAddressBook] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
-  const receiverPhoneError = selectedAddress ? getMibanReceiverPhoneError(selectedAddress.phone ?? "") : null;
+  const receiverPhoneError = selectedAddress
+    ? getMibanReceiverPhoneError(selectedAddress.phone ?? "")
+    : null;
   const [userNote, setUserNote] = useState("");
-  const [success, setSuccess] = useState<any>(null);
-  const usdtCnyRate = useMibanUsdtCnyRate();
-  const payment = useMibanMixedPayment(
-    totalCny,
-    open && checkoutOpen && isAuthenticated
-  );
+  const [success, setSuccess] = useState<CartCheckoutReceipt | null>(null);
+  // 分组仅用于展示；提交仍发送整车原始商品，由服务端按精选生成独立订单。
+  const groups = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        checkoutGroupKey: string;
+        groupLabel: string;
+        accent: string;
+        items: LimitedCartItem[];
+        totalCny: number;
+        itemCount: number;
+      }
+    >();
+    for (const item of items) {
+      const key = item.checkoutGroupKey || item.productKey;
+      let group = grouped.get(key);
+      if (!group) {
+        group = {
+          checkoutGroupKey: key,
+          groupLabel: item.groupLabel || "精选商品",
+          accent: item.accent || "#0D7A3E",
+          items: [],
+          totalCny: 0,
+          itemCount: 0,
+        };
+        grouped.set(key, group);
+      }
+      group.items.push(item);
+      group.itemCount += item.quantity;
+    }
+    return [...grouped.values()].map(group => ({
+      ...group,
+      totalCny: cartTotalCny(group.items),
+    }));
+  }, [items]);
+  // 只保存精选名/配色供旧回执展示；绝不由本地商品生成成功订单或支付金额。
+  const submittedGroups = useRef(groups);
+  const receiptOrders = useMemo(() => {
+    if (!success) return [];
+    if (Array.isArray(success.orders)) {
+      return success.orders.filter(order => Boolean(order?.orderNo));
+    }
+    return success.orderNo ? [success] : [];
+  }, [success]);
+  const payment = useMibanMixedPayment(totalCny, open && isAuthenticated);
+  const usdtCnyRate = payment.usdtCnyRate;
   const { data: addresses } = mtrpc.address.list.useQuery(undefined, {
     enabled: open && checkoutOpen && isAuthenticated,
   });
   const utils = trpc.useUtils();
+  const mibanUtils = mtrpc.useUtils();
   const paymentInitialized = useRef(false);
 
   useEffect(() => {
@@ -346,16 +457,18 @@ function LimitedProductCartOverlay() {
 
   useEffect(() => {
     if (!addresses || !selectedAddress) return;
-    const latest = addresses.find((address: any) => address.id === selectedAddress.id);
+    const latest = addresses.find(
+      (address: any) => address.id === selectedAddress.id
+    );
     if (latest !== selectedAddress) setSelectedAddress(latest ?? null);
   }, [addresses, selectedAddress]);
 
   useEffect(() => {
-    if (checkoutOpen && !paymentInitialized.current && payment.cnyBalance > 0) {
+    if (checkoutOpen && !paymentInitialized.current && payment.ready) {
       payment.resetToCnyFirst();
       paymentInitialized.current = true;
     }
-  }, [checkoutOpen, payment]);
+  }, [checkoutOpen, payment.ready, payment.resetToCnyFirst]);
 
   useEffect(() => {
     if (items.length === 0 && checkoutOpen && !success) {
@@ -370,6 +483,8 @@ function LimitedProductCartOverlay() {
       utils.recharge.getCnyBalance.invalidate();
       utils.recharge.getUsdtBalanceSummary.invalidate();
       utils.recharge.getCnyBalanceSummary.invalidate();
+      utils.recharge.getMultiAssetBalances.invalidate();
+      mibanUtils.order.walletPaymentQuote.invalidate();
       setSuccess(data);
     },
     onError: (error: { message?: string }) => {
@@ -400,9 +515,10 @@ function LimitedProductCartOverlay() {
       return;
     }
     if (!payment.canPay) {
-      toast.error("钱包余额不足，请调整支付金额或充值后重试");
+      toast.error(payment.statusMessage);
       return;
     }
+    submittedGroups.current = groups;
     createOrder.mutate({
       items: items.map(item => ({
         productKey: item.productKey,
@@ -414,6 +530,8 @@ function LimitedProductCartOverlay() {
       receiverAddress: formatAddress(selectedAddress),
       userNote: userNote.trim() || undefined,
       cnyAmount: payment.cnyAmount,
+      paymentAssets: payment.paymentAssets,
+      paymentQuoteToken: payment.paymentQuoteToken,
     });
   };
 
@@ -422,8 +540,8 @@ function LimitedProductCartOverlay() {
   if (checkoutOpen) {
     return (
       <div className="fixed inset-0 z-[90] bg-white">
-        <div className="mx-auto flex h-full w-full max-w-[480px] flex-col bg-white">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+        <div className="mx-auto flex h-full w-full min-w-0 max-w-[480px] flex-col bg-white">
+          <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3.5">
             <button
               type="button"
               onClick={() => {
@@ -440,50 +558,100 @@ function LimitedProductCartOverlay() {
               <ChevronLeft size={21} />
             </button>
             <div className="text-[17px] font-extrabold text-gray-900">
-              {success ? "订单已确认" : "确认订单"}
+              {success
+                ? receiptOrders.length
+                  ? "付款成功"
+                  : "付款结果待核对"
+                : "确认订单"}
             </div>
             <div className="w-9" />
           </div>
 
           {success ? (
-            <div className="flex flex-1 flex-col items-center px-5 pt-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
-                <CheckCircle2 size={34} />
-              </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-8 pt-8 text-center">
+              {receiptOrders.length > 0 && (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+                  <CheckCircle2 size={34} />
+                </div>
+              )}
               <h2 className="mt-5 text-[21px] font-extrabold text-gray-900">
-                订单提交成功
+                {receiptOrders.length ? "统一付款成功" : "订单结果待核对"}
               </h2>
-              <p className="mt-2 text-[13px] text-gray-500">
-                工作人员将核对订单并安排后续发货
+              <p className="mt-2 break-words text-[13px] leading-5 text-gray-500">
+                {receiptOrders.length
+                  ? `已生成 ${receiptOrders.length} 张订单，各精选订单分开发货，退款按各订单实际原币支付记录独立处理。`
+                  : "服务端尚未返回有效订单编号，请在我的订单中核对，勿重复付款。"}
               </p>
-              <div className="mt-7 w-full rounded-2xl bg-gray-50 p-4 text-left">
-                <div className="flex items-center justify-between gap-3 text-[13px]">
-                  <span className="text-gray-400">订单编号</span>
-                  <span className="font-mono font-bold text-gray-900">
-                    {success.orderNo}
+              <div className="mt-5 w-full min-w-0 rounded-2xl bg-gray-50 p-4 text-left">
+                {success.checkoutNo && (
+                  <div className="flex min-w-0 items-start justify-between gap-3 text-[13px]">
+                    <span className="shrink-0 text-gray-400">统一付款编号</span>
+                    <span className="min-w-0 break-all text-right font-mono font-bold text-gray-900">
+                      {success.checkoutNo}
+                    </span>
+                  </div>
+                )}
+                <div className="mt-3 flex min-w-0 items-start justify-between gap-3 text-[13px]">
+                  <span className="shrink-0 text-gray-400">统一商品合计</span>
+                  <span className="min-w-0 break-all text-right font-bold text-gray-900">
+                    {receiptCny(success.totalCny)}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-3 text-[13px]">
-                  <span className="text-gray-400">商品合计</span>
-                  <span className="font-bold text-gray-900">
-                    ¥{Number(success.totalCny).toFixed(2)}
+                <div className="mt-3 flex min-w-0 items-start justify-between gap-3 text-[13px]">
+                  <span className="shrink-0 text-gray-400">统一实际支付</span>
+                  <span className="min-w-0 break-all text-right font-bold text-[#0D7A3E]">
+                    {receiptPaymentSummary(success.walletPayments)}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-3 text-[13px]">
-                  <span className="text-gray-400">实际支付</span>
-                  <span className="font-bold text-[#0D7A3E]">
-                    {Number(success.deductCny) > 0
-                      ? `¥${Number(success.deductCny).toFixed(2)}`
-                      : ""}
-                    {Number(success.deductCny) > 0 &&
-                    Number(success.deductUsdt) > 0
-                      ? " + "
-                      : ""}
-                    {Number(success.deductUsdt) > 0
-                      ? `${Number(success.deductUsdt).toFixed(2)} USDT`
-                      : ""}
-                  </span>
-                </div>
+              </div>
+              <div className="mt-3 w-full min-w-0 space-y-3 text-left">
+                {receiptOrders.map(order => {
+                  const group =
+                    submittedGroups.current.find(
+                      item => item.checkoutGroupKey === order.checkoutGroupKey
+                    ) ??
+                    (receiptOrders.length === 1 &&
+                    submittedGroups.current.length === 1
+                      ? submittedGroups.current[0]
+                      : undefined);
+                  return (
+                    <section
+                      key={order.orderNo}
+                      aria-label={`子订单 ${order.orderNo}`}
+                      className="min-w-0 rounded-2xl border border-gray-100 p-4"
+                    >
+                      <h3
+                        className="break-words text-[14px] font-extrabold"
+                        style={{ color: group?.accent || "#0D7A3E" }}
+                      >
+                        {order.groupLabel || group?.groupLabel || "精选订单"}
+                      </h3>
+                      <div className="mt-3 flex min-w-0 items-start justify-between gap-3 text-[12px]">
+                        <span className="shrink-0 text-gray-400">订单编号</span>
+                        <span className="min-w-0 break-all text-right font-mono font-bold text-gray-900">
+                          {order.orderNo}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex min-w-0 items-start justify-between gap-3 text-[12px]">
+                        <span className="shrink-0 text-gray-400">本组金额</span>
+                        <span className="min-w-0 break-all text-right font-bold text-gray-900">
+                          {receiptCny(order.totalCny)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex min-w-0 items-start justify-between gap-3 text-[12px]">
+                        <span className="shrink-0 text-gray-400">
+                          实际原币支付
+                        </span>
+                        <span
+                          className="min-w-0 break-all text-right font-bold"
+                          style={{ color: group?.accent || "#0D7A3E" }}
+                        >
+                          {receiptPaymentSummary(order.walletPayments)}
+                        </span>
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
               <button
                 type="button"
@@ -491,7 +659,7 @@ function LimitedProductCartOverlay() {
                   closeCart();
                   navigate("/p/proj_hzxm2t/my-orders");
                 }}
-                className="mt-7 h-13 w-full rounded-xl bg-[#0D7A3E] text-[15px] font-extrabold text-white"
+                className="mt-6 min-h-13 w-full shrink-0 rounded-xl bg-[#0D7A3E] text-[15px] font-extrabold text-white"
               >
                 查看我的订单
               </button>
@@ -499,7 +667,7 @@ function LimitedProductCartOverlay() {
                 type="button"
                 onClick={() => {
                   closeCart();
-                  navigate("/p/proj_hzxm2t/limited/herbalife");
+                  navigate("/p/proj_hzxm2t/limited");
                 }}
                 className="mt-3 text-[13px] font-semibold text-gray-500"
               >
@@ -507,42 +675,82 @@ function LimitedProductCartOverlay() {
               </button>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto bg-[#F8F9F8] px-4 py-4 pb-32">
-              <section className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#F8F9F8] px-3 py-4 min-[375px]:px-4">
+              <section className="min-w-0 rounded-2xl bg-white p-3 shadow-sm min-[375px]:p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-[14px] font-extrabold text-gray-900">
                     商品清单
                   </div>
-                  <span className="text-[11px] text-gray-400">
+                  <span className="shrink-0 text-[11px] text-gray-400">
                     共 {itemCount} 件
                   </span>
                 </div>
-                <div className="space-y-3">
-                  {items.map(item => (
-                    <div
-                      key={cartKey(item)}
-                      className="flex items-center gap-3"
+                <p
+                  data-testid="confirmation-split-order-notice"
+                  className="mb-3 break-words text-[11px] leading-5 text-gray-500"
+                >
+                  统一付款，按精选生成{groups.length}
+                  张订单；共用一个收货地址，分开发货。
+                </p>
+                <div className="space-y-4">
+                  {groups.map(group => (
+                    <section
+                      key={group.checkoutGroupKey}
+                      data-testid={`confirmation-group-${group.checkoutGroupKey}`}
+                      aria-label={`确认精选 ${group.groupLabel}`}
+                      className="min-w-0 border-t border-gray-100 pt-3"
                     >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className="h-12 w-12 rounded-lg border border-gray-100 object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-bold text-gray-800">
-                          {item.productName}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-gray-400">
-                          {item.skuName} · ×{item.quantity}
-                          {item.unitLabel}
-                        </p>
+                      <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-2">
+                        <h3
+                          className="min-w-0 flex-1 break-words text-[13px] font-extrabold"
+                          style={{ color: group.accent }}
+                        >
+                          {group.groupLabel}
+                        </h3>
+                        <div className="flex min-w-0 max-w-full items-start gap-1.5 text-[10px] text-gray-400">
+                          <span className="shrink-0">
+                            小计 · {group.itemCount}件
+                          </span>
+                          <UsdtPrimaryPrice
+                            cnyAmount={group.totalCny}
+                            usdtCnyRate={usdtCnyRate}
+                            color={group.accent}
+                            mainClassName="text-[13px] font-extrabold"
+                          />
+                        </div>
                       </div>
-                      <UsdtPrimaryPrice
-                        cnyAmount={item.priceCny * item.quantity}
-                        usdtCnyRate={usdtCnyRate}
-                        mainClassName="text-[13px] font-extrabold"
-                      />
-                    </div>
+                      <div className="space-y-3">
+                        {group.items.map(item => (
+                          <div
+                            key={cartKey(item)}
+                            className="flex min-w-0 items-start gap-2"
+                          >
+                            <img
+                              src={item.image}
+                              alt=""
+                              className="h-11 w-11 shrink-0 rounded-lg border border-gray-100 object-cover"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-[12px] font-bold text-gray-800">
+                                {item.productName}
+                              </p>
+                              <p className="mt-0.5 break-words text-[11px] text-gray-400">
+                                {item.skuName} · ×{item.quantity}
+                                {item.unitLabel}
+                              </p>
+                              <div className="mt-2 flex justify-end">
+                                <UsdtPrimaryPrice
+                                  cnyAmount={item.priceCny * item.quantity}
+                                  usdtCnyRate={usdtCnyRate}
+                                  color={item.accent}
+                                  mainClassName="text-[13px] font-extrabold"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </section>
@@ -568,14 +776,14 @@ function LimitedProductCartOverlay() {
                   >
                     <div className="flex items-start gap-2">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#0D7A3E]" />
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-bold text-gray-800">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-all text-[13px] font-bold text-gray-800">
                           {selectedAddress.name}{" "}
                           <span className="ml-1 font-normal text-gray-500">
                             {selectedAddress.phone}
                           </span>
                         </p>
-                        <p className="mt-1 text-[12px] leading-5 text-gray-500">
+                        <p className="mt-1 break-words text-[12px] leading-5 text-gray-500">
                           {formatAddress(selectedAddress)}
                         </p>
                       </div>
@@ -594,7 +802,13 @@ function LimitedProductCartOverlay() {
                 {receiverPhoneError && (
                   <div role="alert" className="mt-2 text-[12px] text-red-500">
                     <p>{receiverPhoneError}</p>
-                    <button type="button" onClick={() => setShowAddressBook(true)} className="mt-1 font-semibold underline">编辑收货地址</button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressBook(true)}
+                      className="mt-1 font-semibold underline"
+                    >
+                      编辑收货地址
+                    </button>
                   </div>
                 )}
                 <div className="mt-4 border-t border-gray-100 pt-3">
@@ -626,15 +840,15 @@ function LimitedProductCartOverlay() {
 
           {!success && (
             <div
-              className="border-t border-gray-100 bg-white px-4 py-3"
+              className="min-w-0 shrink-0 border-t border-gray-100 bg-white px-4 py-3"
               style={{
                 paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
               }}
             >
-              <div className="mb-2 flex items-center justify-between text-[12px] text-gray-500">
-                <span>合计 {itemCount} 件</span>
-                <span className="flex items-center gap-1">
-                  <span>应付</span>
+              <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-[12px] text-gray-500">
+                <span className="shrink-0">合计 {itemCount} 件</span>
+                <span className="flex min-w-0 max-w-full items-center gap-1">
+                  <span className="shrink-0">统一应付</span>
                   <UsdtPrimaryPrice
                     cnyAmount={totalCny}
                     usdtCnyRate={usdtCnyRate}
@@ -645,10 +859,8 @@ function LimitedProductCartOverlay() {
               <button
                 type="button"
                 onClick={handlePay}
-                disabled={
-                  !payment.canPay || createOrder.isPending
-                }
-                className="flex h-13 w-full items-center justify-center rounded-xl bg-[#0D7A3E] text-[15px] font-extrabold text-white disabled:bg-gray-300"
+                disabled={!payment.canPay || createOrder.isPending}
+                className="flex min-h-13 w-full items-center justify-center break-all rounded-xl bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
               >
                 {createOrder.isPending ? (
                   <>
@@ -699,22 +911,25 @@ function LimitedProductCartOverlay() {
       onClick={closeCart}
     >
       <section
-        className="max-h-[82vh] w-full max-w-[480px] rounded-t-3xl bg-white shadow-2xl"
+        className="max-h-[82vh] w-full min-w-0 max-w-[480px] rounded-t-3xl bg-white shadow-2xl"
         onClick={event => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div>
+        <div className="flex min-w-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
+          <div className="min-w-0 flex-1">
             <h2 className="text-[18px] font-extrabold text-gray-900">
               精选购物车
             </h2>
-            <p className="mt-0.5 text-[11px] text-gray-400">
-              同一精选系列商品可合并为一张订单
+            <p
+              data-testid="cart-split-order-notice"
+              className="mt-0.5 break-words text-[11px] leading-5 text-gray-400"
+            >
+              不同精选可一起买单，统一付款后按精选生成独立订单、分开发货。
             </p>
           </div>
           <button
             type="button"
             onClick={closeCart}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500"
             aria-label="关闭购物车"
           >
             <X size={18} />
@@ -732,68 +947,100 @@ function LimitedProductCartOverlay() {
           </div>
         ) : (
           <>
-            <div className="max-h-[50vh] space-y-3 overflow-y-auto px-4 py-4">
-              {items.map(item => (
-                <div
-                  key={cartKey(item)}
-                  className="flex gap-3 rounded-2xl border border-gray-100 p-3"
+            <div className="max-h-[50vh] min-w-0 space-y-4 overflow-y-auto px-3 py-4 min-[375px]:px-4">
+              {groups.map(group => (
+                <section
+                  key={group.checkoutGroupKey}
+                  data-testid={`cart-group-${group.checkoutGroupKey}`}
+                  aria-label={`购物车精选 ${group.groupLabel}`}
+                  className="min-w-0 space-y-2"
                 >
-                  <img
-                    src={item.image}
-                    alt={item.productName}
-                    className="h-18 w-18 shrink-0 rounded-xl bg-gray-50 object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-bold text-gray-800">
-                          {item.productName}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11px] text-gray-400">
-                          {item.skuName} · {item.netContentText}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(cartKey(item))}
-                        className="p-1 text-gray-300"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="mt-3 flex items-end justify-between">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-2 px-1">
+                    <h3
+                      className="min-w-0 flex-1 break-words text-[13px] font-extrabold"
+                      style={{ color: group.accent }}
+                    >
+                      {group.groupLabel}
+                    </h3>
+                    <div className="flex min-w-0 max-w-full items-start gap-1.5 text-[10px] text-gray-400">
+                      <span className="shrink-0">
+                        小计 · {group.itemCount}件
+                      </span>
                       <UsdtPrimaryPrice
-                        cnyAmount={item.priceCny}
+                        cnyAmount={group.totalCny}
                         usdtCnyRate={usdtCnyRate}
-                        color={item.accent}
+                        color={group.accent}
+                        mainClassName="text-[13px] font-extrabold"
                       />
-                      <div className="flex h-8 items-center rounded-lg border border-gray-200">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setQuantity(cartKey(item), item.quantity - 1)
-                          }
-                          className="flex h-full w-8 items-center justify-center text-gray-500"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="w-8 text-center text-[13px] font-bold text-gray-800">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={item.quantity >= item.maxPurchaseQty}
-                          onClick={() =>
-                            setQuantity(cartKey(item), item.quantity + 1)
-                          }
-                          className="flex h-full w-8 items-center justify-center text-gray-700 disabled:text-gray-200"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
                     </div>
                   </div>
-                </div>
+                  {group.items.map(item => (
+                    <div
+                      key={cartKey(item)}
+                      className="flex min-w-0 gap-2 rounded-2xl border border-gray-100 p-2.5 min-[375px]:gap-3 min-[375px]:p-3"
+                    >
+                      <img
+                        src={item.image}
+                        alt={item.productName}
+                        className="h-14 w-14 shrink-0 rounded-xl bg-gray-50 object-cover min-[390px]:h-18 min-[390px]:w-18"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words text-[13px] font-bold text-gray-800">
+                              {item.productName}
+                            </p>
+                            <p className="mt-0.5 break-words text-[11px] text-gray-400">
+                              {item.skuName} · {item.netContentText}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`移除 ${item.productName} ${item.skuName}`}
+                            onClick={() => removeItem(cartKey(item))}
+                            className="shrink-0 p-1 text-gray-300"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="mt-3 flex min-w-0 flex-wrap items-end justify-between gap-2">
+                          <UsdtPrimaryPrice
+                            cnyAmount={item.priceCny}
+                            usdtCnyRate={usdtCnyRate}
+                            color={item.accent}
+                            mainClassName="text-[14px] font-extrabold"
+                          />
+                          <div className="ml-auto flex h-8 shrink-0 items-center rounded-lg border border-gray-200">
+                            <button
+                              type="button"
+                              aria-label={`减少 ${item.skuName} 数量`}
+                              onClick={() =>
+                                setQuantity(cartKey(item), item.quantity - 1)
+                              }
+                              className="flex h-full w-8 items-center justify-center text-gray-500"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="w-8 text-center text-[13px] font-bold text-gray-800">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`增加 ${item.skuName} 数量`}
+                              disabled={item.quantity >= item.maxPurchaseQty}
+                              onClick={() =>
+                                setQuantity(cartKey(item), item.quantity + 1)
+                              }
+                              className="flex h-full w-8 items-center justify-center text-gray-700 disabled:text-gray-200"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </section>
               ))}
             </div>
             <div
@@ -802,7 +1049,7 @@ function LimitedProductCartOverlay() {
                 paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
               }}
             >
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -813,8 +1060,8 @@ function LimitedProductCartOverlay() {
                 >
                   清空购物车
                 </button>
-                <span className="flex items-center gap-1 text-[12px] text-gray-500">
-                  <span>共 {itemCount} 件 · 合计</span>
+                <span className="flex min-w-0 max-w-full items-center gap-1 text-[12px] text-gray-500">
+                  <span className="shrink-0">共 {itemCount} 件 · 合计</span>
                   <UsdtPrimaryPrice
                     cnyAmount={totalCny}
                     usdtCnyRate={usdtCnyRate}
@@ -827,7 +1074,7 @@ function LimitedProductCartOverlay() {
                 onClick={handleCheckout}
                 className="h-13 w-full rounded-xl bg-[#0D7A3E] text-[15px] font-extrabold text-white"
               >
-                一键买单
+                统一买单
               </button>
             </div>
           </>

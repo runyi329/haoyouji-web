@@ -28,7 +28,7 @@ export type MultiAssetHistoryItem = {
   assetName: string;
   amount: string;
   balanceAfter: string;
-  eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release" | "ledger_dividend" | "ledger_dividend_reversal";
+  eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release" | "ledger_dividend" | "ledger_dividend_reversal" | "miban_payment" | "miban_refund";
   note: string;
   sourceLedgerId: number | null;
   /** 对手方仅在站内转账流水中返回，用于把“转给谁/谁转入”放在预览首行。 */
@@ -131,7 +131,7 @@ function entryResult(row: any): MultiAssetHistoryItem {
     assetName: getAssetName(assetCode),
     amount: String(row.amount),
     balanceAfter: String(row.balance_after),
-    eventType: eventType === "transfer_in" || eventType === "transfer_out" || eventType === "collateral_lock" || eventType === "collateral_release" || eventType === "ledger_dividend" || eventType === "ledger_dividend_reversal"
+    eventType: eventType === "transfer_in" || eventType === "transfer_out" || eventType === "collateral_lock" || eventType === "collateral_release" || eventType === "ledger_dividend" || eventType === "ledger_dividend_reversal" || eventType === "miban_payment" || eventType === "miban_refund"
       ? eventType
       : "admin_adjustment",
     note: String(row.note || ""),

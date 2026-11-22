@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import AddressBook from "./AddressBook";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 
 function dedupeAddress(addr: string): string {
   return (addr ?? "").replace(/(北京市|上海市|天津市|重庆市)\1/, "$1");
@@ -395,12 +396,13 @@ function OrdersTab() {
         ? `${(orderTotalUsdt / singleQuantity).toFixed(2)}U/${singleUnit} × ${singleQuantity}${singleUnit} = ${orderTotalUsdt.toFixed(2)}U`
         : `= ${orderTotalUsdt.toFixed(2)}U`
       : `¥${orderTotalCny.toFixed(2)}`;
-    const hasWalletPaymentRecord = paidCny > 0.001 || paidUsdt > 0.000001;
+    const originalAssetPayment = getMibanOrderWalletPaymentSummary(order);
+    const hasWalletPaymentRecord = Boolean(originalAssetPayment) || paidCny > 0.001 || paidUsdt > 0.000001;
     const walletEquivalent = displayOrderRate > 0
       ? paidUsdt + paidCny / displayOrderRate
       : paidCny <= 0.001 && paidUsdt > 0 ? paidUsdt : null;
-    const walletPaymentSummary = walletEquivalent !== null ? `${walletEquivalent.toFixed(2)}U`
-      : paidCny > 0 && paidUsdt <= 0 ? `¥${paidCny.toFixed(2)}` : "待核实";
+    const walletPaymentSummary = originalAssetPayment ?? (walletEquivalent !== null ? `${walletEquivalent.toFixed(2)}U`
+      : paidCny > 0 && paidUsdt <= 0 ? `¥${paidCny.toFixed(2)}` : "待核实");
     const ordererName = String(order.userName || user?.name || user?.username || "本人");
     const ordererUsername = String(order.userUsername || user?.username || "");
     const ordererAvatar = order.userAvatar || user?.avatar;

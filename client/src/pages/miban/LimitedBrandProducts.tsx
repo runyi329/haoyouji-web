@@ -233,8 +233,15 @@ export default function LimitedBrandProducts() {
               strokeWidth={1.6}
             />
             <p className="mt-2 text-[12px]" style={{ color: theme.subtle }}>
-              该系列商品正在上新
+              {brandSlug === "midaniang"
+                ? "首批两款大米资料整理中"
+                : "该系列商品正在上新"}
             </p>
+            {brandSlug === "midaniang" && (
+              <p className="mt-2 px-5 text-[11px] leading-5" style={{ color: theme.muted }}>
+                先看品牌新形象，商品与规格确认后再开放购买。
+              </p>
+            )}
           </div>
         )}
       </section>

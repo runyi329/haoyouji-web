@@ -28,6 +28,7 @@ import {
   MibanMixedPaymentAllocation,
   useMibanMixedPayment,
 } from "./MibanMixedPayment";
+import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 
 const IMGS = {
   hero: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -219,6 +220,7 @@ export default function TianguiPearDetail() {
     orderNo: string;
     deductCny: number;
     deductUsdt: number;
+    walletPayments: MibanPaymentDeduction[];
   } | null>(null);
 
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -262,6 +264,7 @@ export default function TianguiPearDetail() {
   });
 
   const trpcUtils = trpc.useUtils();
+  const mibanUtils = mtrpc.useUtils();
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (data: any) => {
       setShowOrderDialog(false);
@@ -269,12 +272,15 @@ export default function TianguiPearDetail() {
         orderNo: data.orderNo,
         deductCny: Number(data.deductCny ?? 0),
         deductUsdt: Number(data.deductUsdt ?? 0),
+        walletPayments: data.walletPayments ?? [],
       });
       // 下单扣款后立即刷新余额显示
       trpcUtils.recharge.getBalance.invalidate();
       trpcUtils.recharge.getCnyBalance.invalidate();
       trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
+      trpcUtils.recharge.getMultiAssetBalances.invalidate();
+      mibanUtils.order.walletPaymentQuote.invalidate();
     },
     onError: (err: any) => {
       toast.error(formatMibanCheckoutError(err, "下单失败，请稍后再试"));
@@ -316,7 +322,7 @@ export default function TianguiPearDetail() {
   };
 
   const handleSubmitOrder = () => {
-    if (createOrder.isPending || !balanceOk) return;
+    if (createOrder.isPending || !walletPayment.canPay) return;
     setCheckoutAttempted(true);
     const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" :
       !receiverProvince || (!isMunicipality && !receiverCity) || !receiverDetail.trim() ? "请补全收货地址后再付款" : null);
@@ -350,6 +356,8 @@ export default function TianguiPearDetail() {
       userNote: userNote.trim() || undefined,
       productImg: IMGS.hero,
       cnyAmount: walletPayment.cnyAmount,
+      paymentAssets: walletPayment.paymentAssets,
+      paymentQuoteToken: walletPayment.paymentQuoteToken,
     }, {
       onSuccess: () => {
         if (addressToSave) addAddressMut.mutate(addressToSave);
@@ -1373,7 +1381,7 @@ export default function TianguiPearDetail() {
               <button
                 disabled={createOrder.isPending || !balanceOk}
                 onClick={handleSubmitOrder}
-                className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform mt-5"
+                className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform mt-5"
                 style={{ background: "#FF6900" }}
               >
                 {createOrder.isPending ? (
@@ -1382,7 +1390,7 @@ export default function TianguiPearDetail() {
                     提交中…
                   </>
                 ) : !balanceOk ? (
-                  "余额不足，请先充值"
+                  walletPayment.statusMessage
                 ) : (
                   `确认下单 · ${walletPayment.paymentSummary}`
                 )}
@@ -1415,16 +1423,7 @@ export default function TianguiPearDetail() {
             </div>
             <div className="mb-6 rounded-2xl bg-orange-50 px-4 py-3 text-left">
               <div className="text-[11px] text-gray-500">已从钱包扣除</div>
-              {orderSuccess.deductCny > 0 && (
-                <div className="mt-1 text-[17px] font-extrabold text-[#FF6900]">
-                  ¥{orderSuccess.deductCny.toFixed(2)}
-                </div>
-              )}
-              {orderSuccess.deductUsdt > 0 && (
-                <div className="mt-0.5 text-[13px] font-bold text-[#FF6900]">
-                  {orderSuccess.deductUsdt.toFixed(4)} U
-                </div>
-              )}
+              <div className="mt-1 break-all text-[13px] font-bold text-[#FF6900]">{orderSuccess.walletPayments.length ? formatMibanPaymentSummary(orderSuccess.walletPayments) : "实际付款明细待核对，请查看订单"}</div>
             </div>
             <div className="flex gap-3">
               <button

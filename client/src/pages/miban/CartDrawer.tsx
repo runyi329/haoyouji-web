@@ -7,6 +7,7 @@ import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
+import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 
 function getSessionId() {
   const key = "miban_session_id";
@@ -47,7 +48,7 @@ export default function CartDrawer() {
   const { isAuthenticated } = useAuth();
   // 下单弹窗相关状态
   const [showOrderDialog, setShowOrderDialog] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; price: number; deductCny: number; deductUsdt: number } | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; price: number; deductCny: number; deductUsdt: number; walletPayments: MibanPaymentDeduction[] } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [checkoutAttempted, setCheckoutAttempted] = useState(false);
@@ -57,10 +58,11 @@ export default function CartDrawer() {
   const [pendingPrice, setPendingPrice] = useState(0);
 
   const trpcUtils = trpc.useUtils();
+  const mibanUtils = mtrpc.useUtils();
   // 下单 mutation
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (result: any) => {
-      setOrderSuccess({ orderId: Number(result?.orderId ?? result), price: pendingPrice, deductCny: Number(result?.deductCny ?? 0), deductUsdt: Number(result?.deductUsdt ?? 0) });
+      setOrderSuccess({ orderId: Number(result?.orderId ?? result), price: pendingPrice, deductCny: Number(result?.deductCny ?? 0), deductUsdt: Number(result?.deductUsdt ?? 0), walletPayments: result?.walletPayments ?? [] });
       setShowOrderDialog(false);
       cartList.refetch();
       // 下单扣款后立即刷新余额显示
@@ -68,6 +70,8 @@ export default function CartDrawer() {
       trpcUtils.recharge.getCnyBalance.invalidate();
       trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
       trpcUtils.recharge.getCnyBalanceSummary.invalidate();
+      trpcUtils.recharge.getMultiAssetBalances.invalidate();
+      mibanUtils.order.walletPaymentQuote.invalidate();
     },
     onError: (err: any) => {
       const msg = formatMibanCheckoutError(err, "下单失败，请稍后再试");
@@ -377,12 +381,14 @@ export default function CartDrawer() {
                   receiverAddress: receiverAddress.trim(),
                   userNote: userNote.trim() || undefined,
                   cnyAmount: walletPayment.cnyAmount,
+                  paymentAssets: walletPayment.paymentAssets,
+                  paymentQuoteToken: walletPayment.paymentQuoteToken,
                 });
               }}
-              className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
+              className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
               style={{ background: "#FF6900" }}
             >
-              {createOrder.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />提交中…</> : !walletPayment.canPay ? "余额不足，请先充值" : `确认下单 · ${walletPayment.paymentSummary}`}
+              {createOrder.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />提交中…</> : !walletPayment.canPay ? walletPayment.statusMessage : `确认下单 · ${walletPayment.paymentSummary}`}
             </button>
           </div>
         </div>
@@ -399,8 +405,7 @@ export default function CartDrawer() {
             <p className="text-[13px] text-gray-400 mb-4">订单号 #{orderSuccess.orderId}</p>
             <div className="bg-orange-50 rounded-2xl px-5 py-4 mb-5">
               <p className="text-[12px] text-gray-500 mb-1">已从钱包扣除</p>
-              {orderSuccess.deductCny > 0 && <p className="text-[22px] font-bold text-[#FF6900]">¥{orderSuccess.deductCny.toFixed(2)}</p>}
-              {orderSuccess.deductUsdt > 0 && <p className="text-[14px] font-bold text-[#FF6900] mt-1">{orderSuccess.deductUsdt.toFixed(4)} U</p>}
+              <p className="break-all text-[14px] font-bold text-[#FF6900]">{orderSuccess.walletPayments.length ? formatMibanPaymentSummary(orderSuccess.walletPayments) : "实际付款明细待核对，请查看订单"}</p>
               <p className="text-[11px] text-gray-400 mt-1">已按下单时的实时汇率完成组合扣款</p>
             </div>
             <div className="flex gap-3">
