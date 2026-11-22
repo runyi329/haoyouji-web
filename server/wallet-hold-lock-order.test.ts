@@ -75,7 +75,7 @@ class IsolatedSql {
     visit(routers);
     if (!callback) throw new Error("Missing legacy37 route mutation");
     this.route = runInNewContext(ts.transpileModule("const callback = " + callback.getText(routers) + "; callback;", { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText,
-      { process: { env: {} }, TRPCError, getDbTransactionConnection: base.getDbTransactionConnection, requireLedger37MarginActor: () => ({ id: 99 }), releaseLedger37WalletHold: this.api.releaseLedger37WalletHold, appendLedger37WalletMarginRecord: async () => {} });
+      { process: { env: {} }, TRPCError, assertLedger37Owner: async () => {}, getDbTransactionConnection: base.getDbTransactionConnection, requireLedger37MarginActor: () => ({ id: 99 }), releaseLedger37WalletHold: this.api.releaseLedger37WalletHold, appendLedger37WalletMarginRecord: async () => {} });
   }
   connection() {
     const tx = ++this.nextId;
@@ -111,7 +111,7 @@ class IsolatedSql {
           if (["CNY", "USDT"].includes(selected[0]?.asset_code) && owned.size === 0) throw new Error("LOCK INVERSION: holds before users");
           hasHoldLock = true;
           if (sql.includes("SUM(")) return [[{ frozen: selected.reduce((n, r) => n + Number(r.amount) - Number(r.released_amount), 0) }]];
-          return [selected.map(r => ({ ...r }))];
+          return [selected.map(r => ({ ...r, remaining_amount: String(Number(r.amount) - Number(r.released_amount)) }))];
         }
         if (sql.startsWith("SELECT amount FROM af_manual_balances")) { if (!owned.has(values[0])) throw new Error("manual before user"); return [[]]; }
         if (sql.includes("FROM ai_wallet_manual_freeze_actions")) return [[]];
@@ -142,7 +142,7 @@ class IsolatedSql {
     if (sql.includes("request_id = ?")) return this.holds.filter(r => r.request_id === v[0]);
     if (sql.includes("WHERE id = ?")) return this.holds.filter(r => r.id === v[0] && (!sql.includes("ledger_id = ?") || r.ledger_id === v[1]));
     if (sql.includes("WHERE user_id = ?")) return this.holds.filter(r => r.user_id === v[0] && r.asset_code === v[1] && r.status === "active");
-    if (sql.includes("WHERE ledger_id = ?")) return this.holds.filter(r => r.ledger_id === v[0] && r.status === "active" && (sql.includes("tag_name LIKE") ? r.tag_name.startsWith("52号融资订单 #7") : r.tag_name === v[1]) && (!sql.includes("AND user_id = ?") || r.user_id === v[2]) && (!sql.includes("amount >") || Number(r.amount) > Number(r.released_amount)));
+    if (sql.includes("WHERE ledger_id = ?")) return this.holds.filter(r => r.ledger_id === v[0] && r.status === "active" && (sql.includes("tag_name LIKE") ? r.tag_name === v[1] || r.tag_name.startsWith("52号融资订单 #7 · 联合段 ") : r.tag_name === v[1]) && (!sql.includes("AND user_id = ?") || r.user_id === v[sql.includes("tag_name LIKE") ? 3 : 2]) && (!sql.includes("amount >") || Number(r.amount) > Number(r.released_amount)));
     throw new Error("Unsupported hold selection: " + sql);
   }
 }
@@ -208,6 +208,19 @@ describe("legacy and manual wallet lock order: real production functions, isolat
     for (const jointSegmentId of ["s1", "s2"]) await h.api.releaseLedger52FundingCollateralHoldsForOrder({ orderId: 7, jointSegmentId, reason: "order_settled", actorUserId: 99, transaction: tx, prelockedUserIds });
     await tx.commit(); expect(h.releaseActions).toBe(2);
     expect(h.trace.filter(t => t.sql.includes("FROM users")).slice(0, 2).map(t => t.values[0])).toEqual([1, 3]);
+  });
+  it("personal multi-segment prelock/filter never locks or releases another same-order owner", async () => {
+    const h = new IsolatedSql(); h.holds = [hold(1, 3, "USDT", 52, "52号融资订单 #7 · 联合段 s1 钱包担保"), hold(2, 1, "CNY", 52, "52号融资订单 #7 · 联合段 s2 钱包担保"), hold(3, 3, "CNY", 52, "52号融资订单 #7 · 联合段 s2 钱包担保")];
+    const tx = h.connection(); const prelockedUserIds = await h.api.lockLedger52FundingCollateralUsersForOrder(tx, 7, 3);
+    expect(prelockedUserIds).toEqual([3]);
+    for (const jointSegmentId of ["s1", "s2"]) await h.api.releaseLedger52FundingCollateralHoldsForOrder({ orderId: 7, userId: 3, jointSegmentId, reason: "order_settled", actorUserId: 99, transaction: tx, prelockedUserIds });
+    await tx.commit(); expect(h.releaseActions).toBe(2); expect(h.holds[1].status).toBe("active");
+    expect(h.trace.filter(t => t.sql.includes("FROM users")).every(t => t.values[0] === 3)).toBe(true);
+  });
+  it("personal omitted-segment filter uses the last SQL parameter and retains other-order prefix isolation", async () => {
+    const h = new IsolatedSql(); h.holds = [hold(1, 3, "USDT", 52, "52号融资订单 #7 钱包担保"), hold(2, 1, "CNY", 52, "52号融资订单 #7 钱包担保"), hold(3, 3, "CNY", 52, "52号融资订单 #70 钱包担保")];
+    const result = await h.api.releaseLedger52FundingCollateralHoldsForOrder({ orderId: 7, userId: 3, reason: "order_settled", actorUserId: 99 });
+    expect(result.releasedCount).toBe(1); expect(h.holds.map(r => r.status)).toEqual(["released", "active", "active"]);
   });
   it("prelocked multi-segment owner set rejects unexpected owners BEFORE acquiring another user", async () => {
     const h = new IsolatedSql(); h.holds = [hold(1, 2, "USDT", 52, "52号融资订单 #7 钱包担保")]; const tx = h.connection();

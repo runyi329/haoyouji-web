@@ -8,6 +8,7 @@ import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
 import { captureFunderOptionEvidence, getFunderOptionSettlementEvidenceError, buildFunderRegisteredSettlementEvidence, readFunderEvidenceNumber, type FunderSettlementEvidenceScope } from "./shared/funder-settlement-evidence";
+import { assertFunderPersonalCollateralReleaseScope, assertFunderJointCollateralReleaseScope } from "./funder-personal-collateral-scope";
 import { getDeribitOptionOrderBook, getDeribitOptionInstruments } from "./deribit-public-transport";
 import { getStockChipDistribution } from "./stock-chip-distribution";
 import { afEffectiveOrderStatusSql, getAfGiftActivationError } from "@shared/af-gift-order-state";
@@ -24675,6 +24676,17 @@ ${klinesSummary}
         // 52号同一融资订单允许多位拥有者分别冻结钱包资产；列表必须合并这些真实冻结台账，
         // 以确保每个拥有者视角看到的担保总值和缺口完全一致。
         let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }> }>> = {};
+        let walletCollateralContributorsLoaded = input.ledgerId !== 52;
+        // mysql2 的 [rows, fields] / 测试的 [rows] 或直接 rows 都可接受；结果头、
+        // 标量、含 null 的损坏数组不等于成功空台账，不能据此宣告冻结已解除。
+        const walletContributorRows = (result: any): any[] | null => {
+          if (!Array.isArray(result)) return null;
+          const rows = Array.isArray(result[0])
+            ? (result.length <= 2 && (result[1] === undefined || Array.isArray(result[1])) ? result[0] : null)
+            : result;
+          return rows && Array.from(rows).every((row: any) => row !== null && typeof row === 'object' && !Array.isArray(row)
+            && 'user_id' in row && 'asset_code' in row && 'amount' in row && ('order_id' in row || 'tag_name' in row)) ? rows : null;
+        };
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
               const placeholders = orderIds.map(() => '?').join(',');
@@ -24723,6 +24735,9 @@ ${klinesSummary}
               [input.ledgerId, ...walletHoldTagParams]
             ).catch(() => null) as Promise<any> : Promise.resolve(null)
           ]);
+          const walletLockRows = walletContributorRows(walletLockRowsResult);
+          const walletHoldRows = walletContributorRows(walletHoldRowsResult);
+          if (input.ledgerId === 52) walletCollateralContributorsLoaded = walletLockRows !== null && walletHoldRows !== null;
           if (pcRowsResult) {
             const pcArr = Array.isArray(pcRowsResult[0]) ? pcRowsResult[0] : (Array.isArray(pcRowsResult) ? pcRowsResult : []);
             for (const row of pcArr) {
@@ -24811,14 +24826,11 @@ ${klinesSummary}
             }
             contributor.assets.push({ coin: coin.toUpperCase(), qty: String(qty), source: 'wallet', note: `钱包担保冻结 · ${contributor.name}`, jointSegmentId });
           };
-          if (walletLockRowsResult) {
-            const walletLockRows = Array.isArray(walletLockRowsResult[0]) ? walletLockRowsResult[0] : (Array.isArray(walletLockRowsResult) ? walletLockRowsResult : []);
+          if (input.ledgerId === 52 && walletCollateralContributorsLoaded && walletLockRows) {
             for (const row of walletLockRows) appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
           }
-          if (walletHoldRowsResult) {
-            // 资金钱包冻结是可选补充数据；先统一解包 mysql2 的 [rows, fields] 结果，
-            // 不能让归集异常阻断订单主体与成员列表。
-            const walletHoldRows = Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []);
+          if (input.ledgerId === 52 && walletCollateralContributorsLoaded && walletHoldRows) {
+            // 两类钱包都成功后才投影完整冻结，禁止部分成功伪装成完整台账。
             for (const row of walletHoldRows) {
               const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
               appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
@@ -24846,7 +24858,11 @@ ${klinesSummary}
             // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
             owner_display_names: ownerNamesMap[Number(o.id)] || [],
             // 钱包担保只来自已冻结台账；卡片以此合并全体拥有者的钱包担保，不读取任何可用余额。
-            wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
+            ...(input.ledgerId === 52 ? {
+              wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
+              wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+              wallet_collateral_contributors_status: walletCollateralContributorsLoaded ? 'loaded' : 'error',
+            } : {}),
           };
         });
         // 资方与借方共用同一接口排序：持有中在前，已结清按结清时点倒序，已取消单独置底。
@@ -25008,6 +25024,15 @@ ${klinesSummary}
             name: string;
             assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }>;
           }>> = {};
+          let walletCollateralContributorsLoaded = input.ledgerId !== 52;
+          const walletContributorRows = (result: any): any[] | null => {
+            if (!Array.isArray(result)) return null;
+            const rows = Array.isArray(result[0])
+              ? (result.length <= 2 && (result[1] === undefined || Array.isArray(result[1])) ? result[0] : null)
+              : result;
+            return rows && Array.from(rows).every((row: any) => row !== null && typeof row === 'object' && !Array.isArray(row)
+              && 'user_id' in row && 'asset_code' in row && 'amount' in row && ('order_id' in row || 'tag_name' in row)) ? rows : null;
+          };
           const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
             if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
             if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
@@ -25053,12 +25078,13 @@ ${klinesSummary}
                   [input.ledgerId, ...walletHoldTagParams],
               ).catch(() => null) as Promise<any>,
             ]);
-            const lockRows = Array.isArray(walletLockResult?.[0]) ? walletLockResult[0] : (Array.isArray(walletLockResult) ? walletLockResult : []);
-            for (const row of lockRows) {
+            const lockRows = walletContributorRows(walletLockResult);
+            const holdRows = walletContributorRows(walletHoldResult);
+            walletCollateralContributorsLoaded = lockRows !== null && holdRows !== null;
+            for (const row of (walletCollateralContributorsLoaded ? lockRows! : [])) {
               appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
             }
-            const holdRows = Array.isArray(walletHoldResult?.[0]) ? walletHoldResult[0] : (Array.isArray(walletHoldResult) ? walletHoldResult : []);
-            for (const row of holdRows) {
+            for (const row of (walletCollateralContributorsLoaded ? holdRows! : [])) {
               const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
               appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
             }
@@ -25513,12 +25539,12 @@ ${klinesSummary}
                 assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === sharedPoolSegmentId),
               }))
               .filter((contributor) => contributor.assets.length > 0);
-            // 有冻结台账时，先剔除历史快照里的钱包资产，再加入全部拥有者的真实冻结数额。
-            // 这样共同担保既不会漏算，也不会把同一笔冻结重复计值。
-            const collateralAssets = walletContributors.length > 0
+            // 52号的历史钱包条目只作原登记证据：真实 empty 和读取失败都不能回退为 current。
+            // 非52没有执行这两类冻结查询，保留其原有历史担保估值，不受默认 loaded 影响。
+            const collateralAssets = input.ledgerId === 52
               ? [
                   ...storedCollateralAssets.filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结')),
-                  ...walletContributors.flatMap((contributor) => contributor.assets),
+                  ...(walletCollateralContributorsLoaded ? walletContributors.flatMap((contributor) => contributor.assets) : []),
                 ]
               : storedCollateralAssets;
             const linked37Collateral = calculateLinked37Collateral(o.collateral_source);
@@ -25541,7 +25567,10 @@ ${klinesSummary}
               }
               return total;
             };
-            const manualWalletCollateralValue = calculateAssetsValueU(collateralAssets);
+            // 复用既有未知价格 null 链：冻结读取失败时担保合计及依赖担保的缺口都未知。
+            const manualWalletCollateralValue = input.ledgerId === 52 && !walletCollateralContributorsLoaded
+              ? null
+              : calculateAssetsValueU(collateralAssets);
             const externalCollateralValue = linked37Collateral?.useCollateral
               ? linked37Collateral.collateralValue
               : 0;
@@ -25698,6 +25727,8 @@ ${klinesSummary}
               externalCollateralAssets: linked37Collateral?.useCollateral ? linked37Collateral.collateralAssets : [],
               externalCollateralTagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
               walletCollateralContributors: walletContributors,
+              wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+              wallet_collateral_contributors_status: walletCollateralContributorsLoaded ? 'loaded' : 'error',
               // linked37TagName专指实际引用的37号担保物，供担保池去重。
               linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
               // 浮盈可单独引用37号标签，手工担保订单也应使用这个净值盈亏。
@@ -25782,12 +25813,16 @@ ${klinesSummary}
             joint_order_segments: [],
             // 共享区的隐藏订单卡也读取同一份多人冻结台账；联合订单只能读取当前段，
             // 不能因为物理订单号相同而把第1段的冻结重复带到第2至第N段。
-            wallet_collateral_contributors: (walletCollateralContributorsMap[Number(raw.id)] || [])
-              .map((contributor) => ({
-                ...contributor,
-                assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === String(raw._sharedPoolSegmentId || '__primary__')),
-              }))
-              .filter((contributor) => contributor.assets.length > 0),
+            ...(input.ledgerId === 52 ? {
+              wallet_collateral_contributors: (walletCollateralContributorsMap[Number(raw.id)] || [])
+                .map((contributor) => ({
+                  ...contributor,
+                  assets: contributor.assets.filter((asset) => String(asset.jointSegmentId || '__primary__') === String(raw._sharedPoolSegmentId || '__primary__')),
+                }))
+                .filter((contributor) => contributor.assets.length > 0),
+              wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+              wallet_collateral_contributors_status: walletCollateralContributorsLoaded ? 'loaded' : 'error',
+            } : {}),
           });
           const nonSharedOrderCardSources = nonSharedOrderDetails
             .map((detail: any) => rawNonSharedByMemberKey.get(String(detail.memberKey)))
@@ -25846,6 +25881,8 @@ ${klinesSummary}
             nonSharedOrderCardSources,
             sharedOrderCardSources,
             livePrices,
+            wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+            wallet_collateral_contributors_status: walletCollateralContributorsLoaded ? 'loaded' : 'error',
             totalCollateralValue,
             totalCollateralRequired,
             totalGap,
@@ -26129,6 +26166,88 @@ ${klinesSummary}
             hasPayment = true;
           }
           view.paidTotal = hasPayment ? { amount: String(total), currency: targetCurrency } : null;
+        }
+
+        // 统一订单台不能信任个人快照里缓存的 [] 或 loaded 标记；52号当前担保只读
+        // 两类 active 冻结台账。连接不可用/任一查询失败时显式覆盖成 loaded=false。
+        const walletCollateralContributorsMap: Record<number, Array<{
+          userId: number;
+          name: string;
+          assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }>;
+        }>> = {};
+        let walletCollateralContributorsLoaded = input.ledgerId !== 52;
+        const walletContributorRows = (result: any): any[] | null => {
+          if (!Array.isArray(result)) return null;
+          const rows = Array.isArray(result[0])
+            ? (result.length <= 2 && (result[1] === undefined || Array.isArray(result[1])) ? result[0] : null)
+            : result;
+          return rows && Array.from(rows).every((row: any) => row !== null && typeof row === 'object' && !Array.isArray(row)
+            && 'user_id' in row && 'asset_code' in row && 'amount' in row && ('order_id' in row || 'tag_name' in row)) ? rows : null;
+        };
+        if (input.ledgerId === 52 && orderViews.length > 0) {
+          const conn = await getDbConnection().catch(() => null);
+          const orderIds = Array.from(new Set(orderViews.map((order: any) => Number(order.id)).filter((id) => id > 0)));
+          if (conn && orderIds.length > 0) {
+            const placeholders = orderIds.map(() => '?').join(',');
+            const walletHoldTagParams = orderIds.flatMap((id) => [`52号融资订单 #${id} 钱包担保`, `52号融资订单 #${id} · 联合段 % 钱包担保`]);
+            const walletHoldCondition = orderIds.map(() => '(h.tag_name = ? OR h.tag_name LIKE ?)').join(' OR ');
+            const [walletLockRowsResult, walletHoldRowsResult] = await Promise.all([
+              conn.execute(
+                `SELECT l.order_id, l.joint_segment_id, l.user_id, l.asset_code, l.amount,
+                        COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', l.user_id)) AS display_name
+                   FROM ai_wallet_asset_collateral_locks l
+                   LEFT JOIN users u ON u.id = l.user_id
+                   LEFT JOIN ledger_members lm ON lm.ledgerId = l.ledger_id AND lm.userId = l.user_id
+                  WHERE l.ledger_id = ? AND l.status = 'active' AND l.order_id IN (${placeholders})
+                  ORDER BY l.order_id ASC, l.user_id ASC, l.asset_code ASC`,
+                [input.ledgerId, ...orderIds],
+              ).catch(() => null) as Promise<any>,
+              conn.execute(
+                `SELECT h.tag_name, h.user_id, h.asset_code,
+                        GREATEST(0, h.amount - COALESCE(h.released_amount, 0)) AS amount,
+                        COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', h.user_id)) AS display_name
+                   FROM ai_wallet_project_holds h
+                   LEFT JOIN users u ON u.id = h.user_id
+                   LEFT JOIN ledger_members lm ON lm.ledgerId = h.ledger_id AND lm.userId = h.user_id
+                  WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
+                    AND (${walletHoldCondition})
+                  ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
+                [input.ledgerId, ...walletHoldTagParams],
+              ).catch(() => null) as Promise<any>,
+            ]);
+            const lockRows = walletContributorRows(walletLockRowsResult);
+            const holdRows = walletContributorRows(walletHoldRowsResult);
+            walletCollateralContributorsLoaded = lockRows !== null && holdRows !== null;
+            const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
+              if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
+              const contributors = walletCollateralContributorsMap[orderId] ||= [];
+              let contributor = contributors.find((item) => item.userId === userId);
+              if (!contributor) {
+                contributor = { userId, name: name || `用户${userId}`, assets: [] };
+                contributors.push(contributor);
+              }
+              contributor.assets.push({ coin: coin.toUpperCase(), qty, source: 'wallet', note: `钱包担保冻结 · ${contributor.name}`, jointSegmentId });
+            };
+            for (const row of (walletCollateralContributorsLoaded ? lockRows! : [])) {
+              appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
+            }
+            for (const row of (walletCollateralContributorsLoaded ? holdRows! : [])) {
+              const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
+              appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
+            }
+          }
+        }
+        for (const view of orderViews) {
+          if (input.ledgerId !== 52) continue; // 非52没有钱包查询，原投影不变。
+          view.wallet_collateral_contributors = walletCollateralContributorsMap[Number(view.id)] || [];
+          view.wallet_collateral_contributors_loaded = walletCollateralContributorsLoaded;
+          view.wallet_collateral_contributors_status = walletCollateralContributorsLoaded ? 'loaded' : 'error';
+          if (view._rootOrder) view._rootOrder = {
+            ...view._rootOrder,
+            wallet_collateral_contributors: view.wallet_collateral_contributors,
+            wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+            wallet_collateral_contributors_status: view.wallet_collateral_contributors_status,
+          };
         }
 
         // 统一订单台也使用订单卡片的实时估值；仅采集当前实际出现的标的与担保币种，避免无关行情扫描。
@@ -27727,6 +27846,15 @@ ${klinesSummary}
           name: string;
           assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string; jointSegmentId: string }>;
         }>> = {};
+        let walletCollateralContributorsLoaded = input.ledgerId !== 52;
+        const walletContributorRows = (result: any): any[] | null => {
+          if (!Array.isArray(result)) return null;
+          const rows = Array.isArray(result[0])
+            ? (result.length <= 2 && (result[1] === undefined || Array.isArray(result[1])) ? result[0] : null)
+            : result;
+          return rows && Array.from(rows).every((row: any) => row !== null && typeof row === 'object' && !Array.isArray(row)
+            && 'user_id' in row && 'asset_code' in row && 'amount' in row && ('order_id' in row || 'tag_name' in row)) ? rows : null;
+        };
         if (input.ledgerId === 52 && allOrders.length > 0) {
           const conn = await getDbConnection();
           if (conn) {
@@ -27760,6 +27888,9 @@ ${klinesSummary}
                   [input.ledgerId, ...walletHoldTagParams],
                 ).catch(() => null) as Promise<any>,
               ]);
+              const lockRows = walletContributorRows(walletLockRowsResult);
+              const holdRows = walletContributorRows(walletHoldRowsResult);
+              walletCollateralContributorsLoaded = lockRows !== null && holdRows !== null;
               const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string, jointSegmentId = '__primary__') => {
                 if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
                 if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
@@ -27776,16 +27907,10 @@ ${klinesSummary}
                   jointSegmentId,
                 });
               };
-              const lockRows = walletLockRowsResult
-                ? (Array.isArray(walletLockRowsResult[0]) ? walletLockRowsResult[0] : (Array.isArray(walletLockRowsResult) ? walletLockRowsResult : []))
-                : [];
-              for (const row of lockRows) {
+              for (const row of (walletCollateralContributorsLoaded ? lockRows! : [])) {
                 appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), String(row.joint_segment_id || '__primary__'));
               }
-              const holdRows = walletHoldRowsResult
-                ? (Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []))
-                : [];
-              for (const row of holdRows) {
+              for (const row of (walletCollateralContributorsLoaded ? holdRows! : [])) {
                 const tagMatch = String(row.tag_name || '').match(/^52号融资订单 #(\d+)(?: · 联合段 ([A-Za-z0-9_-]{1,48}))? 钱包担保$/);
                 appendWalletContributorAsset(Number(tagMatch?.[1] || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'), tagMatch?.[2] || '__primary__');
               }
@@ -27796,7 +27921,11 @@ ${klinesSummary}
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
           // 卡片会以该冻结台账替换个人快照中的钱包条目，统一展示全部拥有者的担保物。
-          wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
+          ...(input.ledgerId === 52 ? {
+            wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
+            wallet_collateral_contributors_loaded: walletCollateralContributorsLoaded,
+            wallet_collateral_contributors_status: walletCollateralContributorsLoaded ? 'loaded' : 'error',
+          } : {}),
           // 本人 / 他人决定列表位置；参与者身份通过 participantInfo / _isParticipant 独立传给前端控制绿色主题。
           order_perspective: o.order_perspective || 'self',
         }));
@@ -28577,7 +28706,7 @@ ${klinesSummary}
         };
       }),
     // 协作订单可只结清某一位拥有者／参与者的个人订单视图。
-    // 不改主订单状态、不释放主订单担保，因此其他人的持有状态与担保保持不变。
+    // 不改存储主订单状态；只释放所选用户的真实钱包担保，其他人和其他订单保持不变。
     funderSettleIndividualOrder: protectedProcedure
       .input(z.object({
         orderId: z.number().int().positive(),
@@ -28622,6 +28751,13 @@ ${klinesSummary}
           if (parentOrder.status === 'settled' || parentOrder.status === 'completed') {
             throw new TRPCError({ code: 'CONFLICT', message: '该订单已统一结清，无需再单独结清' });
           }
+          const [actorRows] = await conn.execute(
+            'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [input.ledgerId, ctx.user.id],
+          ) as any;
+          if (!['owner', 'admin'].includes(String(asRows(actorRows)[0]?.role || ''))) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '管理员权限已变化，不能结清或解除担保' });
+          }
 
           const [participantRows] = await conn.execute(
             `SELECT id, user_id, role, interest_start_date, order_snapshot
@@ -28635,7 +28771,8 @@ ${klinesSummary}
               .map((participant: any) => [Number(participant.user_id), participant]),
           );
           const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-          const snapshotsToSave: Array<{ participantId: number; snapshot: Record<string, any> }> = [];
+          const snapshotsToSave: Array<{ participantId: number; userId: number; snapshot: Record<string, any> }> = [];
+          const collateralUserIds = new Set<number>();
 
           for (const targetUserId of targetUserIds) {
             let participant = participantMap.get(targetUserId) || null;
@@ -28671,7 +28808,17 @@ ${klinesSummary}
               parentOrder,
             );
             // 个人已结清记录（含无证据旧记录）不由正常结清入口重建。
-            if (personalSnapshot.status === 'settled' || personalSnapshot.status === 'completed' || personalSnapshot.settlement_snapshot != null) continue;
+            // 有可核对归属的结清证据时，仅幂等补释放本人的遗留冻结，不重算结清价或付钱。
+            if (personalSnapshot.status === 'settled' || personalSnapshot.status === 'completed' || personalSnapshot.settlement_snapshot != null) {
+              if (input.ledgerId === 52) {
+                assertFunderPersonalCollateralReleaseScope(personalSnapshot, { ledgerId: input.ledgerId, orderId: input.orderId, userId: targetUserId });
+                collateralUserIds.add(targetUserId);
+              }
+              continue;
+            }
+            if (Array.isArray(personalSnapshot.joint_order_segments) && personalSnapshot.joint_order_segments.length > 0) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '联合订单请使用分段结清，不能用个人结清解除未结分段担保' });
+            }
             // 计算结清价可读取主订单作为缺字段的显示默认值，但绝不把这些默认值写回个人快照。
             const settlementSource = { ...buildFunderParticipantSnapshot(parentOrder), ...personalSnapshot };
             const interestStartDate = String(
@@ -28693,6 +28840,7 @@ ${klinesSummary}
             );
             snapshotsToSave.push({
               participantId: Number(participant.id),
+              userId: targetUserId,
               snapshot: {
                 ...personalSnapshot,
                 status: 'settled',
@@ -28701,16 +28849,36 @@ ${klinesSummary}
                 settlement_snapshot: settlementSnapshot,
               },
             });
+            if (input.ledgerId === 52) {
+              assertFunderPersonalCollateralReleaseScope(snapshotsToSave[snapshotsToSave.length - 1].snapshot, { ledgerId: input.ledgerId, orderId: input.orderId, userId: targetUserId });
+              collateralUserIds.add(targetUserId);
+            }
           }
 
+          // 全部所选用户先按升序锁定，随后才进入任何余额/担保行锁，避免批量释放锁序倒置。
+          const prelockedUserIds = Array.from(collateralUserIds).sort((a, b) => a - b);
+          if (prelockedUserIds.length > 0) await lockLedgerWalletUsersForUpdate(conn, prelockedUserIds);
+          let releasedCollateralCount = 0;
+          for (const userId of prelockedUserIds) {
+            const market = await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52, orderId: input.orderId, userId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+            });
+            const funding = await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.orderId, userId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
+            });
+            releasedCollateralCount += market.releasedCount + funding.releasedCount;
+          }
           for (const item of snapshotsToSave) {
-            await conn.execute(
-              'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
-              [JSON.stringify(item.snapshot), item.participantId],
+            const [updated] = await conn.execute(
+              'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ?',
+              [JSON.stringify(item.snapshot), item.participantId, input.orderId, input.ledgerId, item.userId],
             );
+            if (Number((updated as any)?.affectedRows || 0) !== 1) {
+              throw new TRPCError({ code: 'CONFLICT', message: '个人订单归属已变化，结清和解锁均已回滚' });
+            }
           }
           await conn.commit();
-          return { success: true, orderId: input.orderId, userIds: targetUserIds, settledAt, interestEndDate: input.interestEndDate };
+          return { success: true, orderId: input.orderId, userIds: targetUserIds, settledAt, interestEndDate: input.interestEndDate, releasedCollateralCount };
         } catch (error: any) {
           try { await conn.rollback(); } catch {}
           if (error instanceof TRPCError) throw error;
@@ -28772,6 +28940,13 @@ ${klinesSummary}
 
           if (row.status === 'settled' || row.status === 'completed') {
             throw new TRPCError({ code: 'CONFLICT', message: '该订单已统一结清，不可重建历史分段快照' });
+          }
+          const [actorRows] = await conn.execute(
+            'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [input.ledgerId, ctx.user.id],
+          ) as any;
+          if (!['owner', 'admin'].includes(String(asRows(actorRows)[0]?.role || ''))) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '管理员权限已变化，不能结清或解除担保' });
           }
           const persistedSnapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
           const snapshot = syncFunderParticipantSharedAssetSnapshot(
@@ -28854,8 +29029,8 @@ ${klinesSummary}
             nextSegments.push(nextSegment);
           }
 
-          const everyPartSettled = primaryState.status === 'settled'
-            && nextSegments.every((segment: any) => segment?.status === 'settled');
+          const everyPartSettled = ['settled', 'completed'].includes(String(primaryState.status || ''))
+            && nextSegments.every((segment: any) => ['settled', 'completed'].includes(String(segment?.status || '')));
           const nextSnapshot: Record<string, any> = {
             ...snapshot,
             joint_order_primary_settlement: primaryState,
@@ -28877,29 +29052,42 @@ ${klinesSummary}
             delete nextSnapshot.settlement_snapshot;
           }
           // 段结清只解除自己名下的两类钱包冻结；未结清的其他段继续受担保限制。
-          const prelockedUserIds = newlySettledSegmentIds.length > 0 || everyPartSettled
-            ? await lockLedger52FundingCollateralUsersForOrder(conn, input.orderId) : [];
-          for (const jointSegmentId of newlySettledSegmentIds) {
+          const collateralSegmentIds = input.ledgerId === 52 ? Array.from(suppliedById.keys()) : [];
+          for (const jointSegmentId of collateralSegmentIds) {
+            const part = jointSegmentId === '__primary__' ? primaryState
+              : nextSegments.find((segment: any) => String(segment?.id || '') === jointSegmentId);
+            assertFunderJointCollateralReleaseScope(part || {}, { ledgerId: input.ledgerId, orderId: input.orderId, userId: input.userId, jointSegmentId });
+          }
+          if (input.ledgerId === 52 && everyPartSettled) {
+            assertFunderPersonalCollateralReleaseScope(nextSnapshot, { ledgerId: input.ledgerId, orderId: input.orderId, userId: input.userId });
+          }
+          const prelockedUserIds = input.ledgerId === 52 && (collateralSegmentIds.length > 0 || everyPartSettled)
+            ? [input.userId] : [];
+          if (prelockedUserIds.length > 0) await lockLedgerWalletUsersForUpdate(conn, prelockedUserIds);
+          for (const jointSegmentId of collateralSegmentIds) {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
-              ledgerId: 52, orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+              ledgerId: 52, orderId: input.orderId, userId: input.userId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.orderId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
+              orderId: input.orderId, userId: input.userId, jointSegmentId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
             });
           }
-          // 全部段结清时清扫可能来自历史订单级台账的遗留冻结，避免永久占用用户余额。
-          if (everyPartSettled) {
+          // 只清扫当前用户在本订单的遗留冻结，绝不解除其他拥有者的同名分段。
+          if (input.ledgerId === 52 && everyPartSettled) {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
-              ledgerId: 52, orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
+              ledgerId: 52, orderId: input.orderId, userId: input.userId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn,
             });
             await releaseLedger52FundingCollateralHoldsForOrder({
-              orderId: input.orderId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
+              orderId: input.orderId, userId: input.userId, actorUserId: ctx.user.id, reason: 'order_settled', transaction: conn, prelockedUserIds,
             });
           }
-          await conn.execute(
+          const [updated] = await conn.execute(
             'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ?',
             [JSON.stringify(nextSnapshot), Number(row.participant_id), input.orderId, input.ledgerId, input.userId],
           );
+          if (Number((updated as any)?.affectedRows || 0) !== 1) {
+            throw new TRPCError({ code: 'CONFLICT', message: '联合订单归属已变化，结清和解锁均已回滚' });
+          }
           await conn.commit();
           return {
             success: true,

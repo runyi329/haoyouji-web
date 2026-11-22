@@ -979,15 +979,20 @@ export async function syncWalletCollateralLocks(params: {
   }
 }
 
-/** 订单结清或移入回收站时释放钱包担保；传入段号时只释放该段，不会改变总持币。 */
+/** 订单结清或移入回收站时释放钱包担保；可按用户/段精确释放，不会改变总持币。 */
 export async function releaseWalletCollateralLocksForOrder(params: {
   ledgerId: number;
   orderId: number;
   jointSegmentId?: string;
+  /** 个人结清必须传实际担保用户；省略时保留整单释放契约。 */
+  userId?: number;
   actorUserId: number;
   reason: "order_settled" | "order_deleted";
   transaction?: any;
 }): Promise<{ releasedCount: number }> {
+  if (params.userId !== undefined && (!Number.isSafeInteger(params.userId) || params.userId <= 0)) {
+    throw new Error("钱包用户无效");
+  }
   if (params.ledgerId !== 52) return { releasedCount: 0 };
   await ensureMultiAssetWalletInfrastructure();
   const ownConnection = !params.transaction;
@@ -997,13 +1002,22 @@ export async function releaseWalletCollateralLocksForOrder(params: {
   const jointSegmentId = params.jointSegmentId === undefined ? null : normalizeJointCollateralSegmentId(params.jointSegmentId);
   try {
     if (ownConnection) await transaction.beginTransaction();
+    // 个人分支先锁 owner，避免与资金担保/转账产生 user→asset 的锁序反转。
+    // 多用户/多段外部事务仍须由调用方在任何 hold/asset 锁前一次性预锁全部 owner。
+    if (params.userId !== undefined) {
+      const [userRows] = await transaction.execute("SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [params.userId]);
+      if (!asRows(userRows)[0]) throw new Error("钱包用户不存在");
+    }
+    const values: Array<number | string> = [params.ledgerId, params.orderId];
+    if (jointSegmentId !== null) values.push(jointSegmentId);
+    if (params.userId !== undefined) values.push(params.userId);
     const [lockRows] = await transaction.execute(
       `SELECT id, user_id, asset_code, amount, joint_segment_id
          FROM ai_wallet_asset_collateral_locks
-        WHERE ledger_id = ? AND order_id = ? AND status = 'active'${jointSegmentId ? ' AND joint_segment_id = ?' : ''}
+        WHERE ledger_id = ? AND order_id = ? AND status = 'active'${jointSegmentId ? ' AND joint_segment_id = ?' : ''}${params.userId === undefined ? '' : ' AND user_id = ?'}
         ORDER BY user_id ASC, asset_code ASC
         FOR UPDATE`,
-      jointSegmentId ? [params.ledgerId, params.orderId, jointSegmentId] : [params.ledgerId, params.orderId],
+      values,
     );
     const locks = asRows(lockRows);
     for (const lock of locks) {
@@ -1029,12 +1043,17 @@ export async function releaseWalletCollateralLocksForOrder(params: {
         jointSegmentId: normalizeJointCollateralSegmentId(lock.joint_segment_id),
         requestId: `${buildCollateralRequestId()}_settled_${Number(lock.id)}`,
       });
-      await transaction.execute(
+      const [lockResult] = await transaction.execute(
         `UPDATE ai_wallet_asset_collateral_locks
             SET status = 'released', released_by = ?, released_reason = ?, released_at = NOW(), updated_at = NOW()
-          WHERE id = ?`,
-        [params.actorUserId, params.reason, Number(lock.id)],
+          WHERE id = ?${params.userId === undefined ? '' : " AND ledger_id = ? AND order_id = ? AND user_id = ? AND joint_segment_id = ? AND asset_code = ? AND status = 'active' AND amount = CAST(? AS DECIMAL(36,18))"}`,
+        params.userId === undefined
+          ? [params.actorUserId, params.reason, Number(lock.id)]
+          : [params.actorUserId, params.reason, Number(lock.id), params.ledgerId, params.orderId, params.userId, normalizeJointCollateralSegmentId(lock.joint_segment_id), assetCode, amount],
       );
+      if (params.userId !== undefined && Number((lockResult as any).affectedRows || 0) !== 1) {
+        throw new Error("钱包担保冻结状态已变化，请刷新后重试");
+      }
     }
     if (ownConnection) await transaction.commit();
     return { releasedCount: locks.length };

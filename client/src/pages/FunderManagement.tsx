@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search, Pin, PinOff } from "lucide-react";
 import { toast } from "sonner";
-import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
+import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, refreshFunderSettlementQueries, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
@@ -2667,7 +2667,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       }
       const syncedCount = Number((result as any)?.participantCount || 0);
       if (vars.status === 'settled') {
-        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步结清` : '订单已结清');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员的结清记录已保存` : '订单结清记录已保存');
       } else if (vars.status === 'active') {
         toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步恢复` : '订单已恢复为持有中');
       } else {
@@ -2675,12 +2675,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       }
       // 统一订单台、管理员列表和用户端各自使用不同的查询键。保存后必须全部失效并
       // 等待当前列表重新取数，不能靠浏览器手动刷新才能看到刚保存的担保口径。
-      await Promise.all([
-        trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }),
-        trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }),
-        trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId }),
-      ]);
-      await refetchOrders();
+      if (vars.status === 'settled') {
+        await refreshFunderSettlementQueries(trpcUtils, vars.ledgerId, Number(vars.id));
+      } else {
+        const results = await Promise.allSettled([
+          trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }, undefined, { throwOnError: true }),
+          trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }, undefined, { throwOnError: true }),
+          trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId }, undefined, { throwOnError: true }),
+        ]);
+        if (results.some(result => result.status === 'rejected')) toast.warning('订单已保存，列表刷新失败；请更新页面，不要重复保存');
+      }
       setShowForm(false);
       setEditingOrder(null);
       editorRootOrderRef.current = null;
@@ -2691,21 +2695,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     onError: (err) => toast.error(err.message),
   });
   const settleIndividualMutation = trpc.ledger.funderSettleIndividualOrder.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result, vars) => {
       const settledCount = Array.isArray((result as any)?.userIds) ? (result as any).userIds.length : 1;
-      toast.success(settledCount > 1 ? `已结清 ${settledCount} 个订单视图` : '订单视图已结清');
-      refetchOrders();
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      toast.success(settledCount > 1 ? `${settledCount} 个订单视图的结清记录已保存` : '订单视图结清记录已保存');
+      void refreshFunderSettlementQueries(trpcUtils, vars.ledgerId, vars.orderId);
     },
     onError: (err) => toast.error(err.message),
   });
   const settleJointSegmentsMutation = trpc.ledger.funderSettleJointOrderSegments.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result, vars) => {
       const count = Array.isArray((result as any)?.settledSegmentIds) ? (result as any).settledSegmentIds.length : 1;
-      toast.success((result as any)?.allSegmentsSettled ? '关联订单已全部结清' : `已结清 ${count} 个关联订单分段`);
-      refetchOrders();
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
-      trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+      toast.success((result as any)?.allSegmentsSettled ? '全部关联分段的结清记录已保存' : `${count} 个关联分段的结清记录已保存`);
+      void refreshFunderSettlementQueries(trpcUtils, vars.ledgerId, vars.orderId);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -4250,7 +4251,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
                   collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
                   // 编辑任一拥有者时，预览统一读取该订单所有已冻结的钱包担保；手工草稿仍只展示当前编辑内容。
-                  wallet_collateral_contributors: (editingOrder as any)?.wallet_collateral_contributors || [],
+                  wallet_collateral_contributors: walletCollateralContributorsQuery.isSuccess && !walletCollateralContributorsQuery.isError
+                    ? walletCollateralContributorsQuery.data : undefined,
+                  wallet_collateral_contributors_loaded: walletCollateralContributorsQuery.isSuccess && !walletCollateralContributorsQuery.isError,
                   option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                     coin: optionFormData.optionCurrency,
                     direction: optionFormData.direction,
@@ -7543,7 +7546,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               ) : (
                 <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
               )}
-              <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              <p className="mb-3 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-500">{ledgerId === 52 ? '结清将按所选用户／分段解除对应钱包担保冻结；解除记录以真实流水为准，总持币数量不因解冻减少。结清记录不代表本金或利息现金已支付，请核对最新可用余额。' : '本功能只改变融资付息的记账状态和页面显示，不代表本金或利息现金已支付。'}</p>
               {hasJointSegments ? (
                 <div className="mb-3 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/50">
                   <button

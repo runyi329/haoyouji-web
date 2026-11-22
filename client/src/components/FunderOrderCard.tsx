@@ -1,6 +1,7 @@
 import { finitePositive, getUsdtCnyRate, getUsdCnyRate, getUsdtCnyRateFromPrices, getOrderUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, isFunderSettledStatus, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
+import { selectFunderWalletCollateralDisplay } from '@shared/funder-wallet-collateral-display';
 // ===== FunderOrderCard 共享组件 =====
 // @refresh reset
 // 此文件由 FunderManagement.tsx 抽取，前后端统一使用此组件
@@ -60,6 +61,37 @@ const SOFT_BLUE_INDICATOR_STYLE = {
   color: '#2563EB',
   border: '1px solid #DBEAFE',
 } as const;
+
+// 复用 AfRechargeManage 的只读刷新约定：保存结果与缓存刷新结果分离，绝不重放资金 mutation。
+// 钱包是全局口径，失效真实 query family，覆盖本人/viewAs、分页及37/52入口的缓存。
+export async function refreshFunderSettlementQueries(utils: any, ledgerId: number, orderId: number): Promise<void> {
+  const options = { cancelRefetch: true, throwOnError: true };
+  const ledgerReads = ['funderGetAssetOrders', 'funderAdminGetOrderViews', 'financeGetOrders', 'funderGetSharedCollateralPool'];
+  const walletReads = [
+    'getMultiAssetBalances', 'getMultiAssetHistory', 'getBalance', 'getUsdtBalanceSummary',
+    'getCnyBalance', 'getCnyBalanceSummary', 'getCnyHistory', 'getCnyHistoryPage',
+    'getMyManualBalances', 'getBalanceHistory', 'getMyOrders', 'getMyWithdrawHistory',
+    'getMembersBalance', 'getMembersBalanceSummary', 'adminGetAllUsersCnyBalance', 'adminGetUserCnyHistory',
+  ];
+  const adminReads = ['walletSnapshot', 'walletHistory', 'walletGlobalHistory', 'walletBalanceTrend',
+    'multiAssetWalletHistory', 'multiAssetWalletHistoryPage', 'walletManualFreezeState', 'list'];
+  const reads: Array<() => Promise<unknown>> = [
+    ...ledgerReads.map(key => () => utils.ledger[key].invalidate({ ledgerId }, undefined, options)),
+    () => utils.ledger.funderGetOrderParticipants.invalidate({ ledgerId, orderId }, undefined, options),
+    () => utils.ledger.financeGetOrderLogs.invalidate({ ledgerId, orderId }, undefined, options),
+  ];
+  if (ledgerId === 52) reads.push(
+    () => utils.ledger.funderGetOrderWalletCollateralContributors.invalidate({ ledgerId, orderId }, undefined, options),
+    () => utils.ledger.funderGetWalletCollateralBalances.invalidate({ ledgerId }, undefined, options),
+    () => utils.ledger.afGetMyRechargeHistory.invalidate(undefined, undefined, options),
+    ...walletReads.map(key => () => utils.recharge[key].invalidate(undefined, undefined, options)),
+    ...adminReads.map(key => () => utils.adminUser[key].invalidate(undefined, undefined, options)),
+  );
+  const results = await Promise.allSettled(reads.map(read => Promise.resolve().then(read)));
+  if (results.some(result => result.status === 'rejected')) {
+    toast.warning('结清记录已保存，部分订单、冻结余额或流水刷新失败；请更新页面核对，不要重复结清');
+  }
+}
 
 // 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK'] as const;
@@ -1216,7 +1248,9 @@ export function FunderOrderCard({
     onSuccess: (result, vars) => {
       const syncedCount = Number((result as any)?.participantCount || 0);
       if (vars.status === 'settled') {
-        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步结清` : '订单已结清');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员的结清记录已保存` : '订单结清记录已保存');
+        void refreshFunderSettlementQueries(trpcUtils, vars.ledgerId, Number(vars.id));
+        return;
       } else if (vars.status === 'active') {
         toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步恢复` : '订单已恢复为持有中');
       } else {
@@ -1862,9 +1896,10 @@ export function FunderOrderCard({
     const initialManualItems = allItems.filter((item) => !isQuickWalletCollateral(item));
     const mirrorWalletItems = allItems.filter(isQuickWalletCollateral)
       .map((item) => ({ ...item, source: 'wallet' as const, note: '钱包担保冻结' }));
-    // 段级台账是唯一真相；旧订单未升级时才回退其历史镜像字段。
+    // 成功加载的空台账不得复活历史镜像；未知时也不把原登记当作当前冻结草稿。
     const lockedWalletItems = getSegmentWalletCollateralItems(segmentId, source?.owner_user_id);
-    const initialWalletItems = lockedWalletItems.length > 0 ? lockedWalletItems : mirrorWalletItems;
+    // 历史显示配置保存仍携带原登记证据；下方禁止已结清卡重新冻结，不把它当成活跃冻结。
+    const initialWalletItems = isSettlementFinal ? mirrorWalletItems : selectFunderWalletCollateralDisplay(order, mirrorWalletItems).state === 'loaded' ? lockedWalletItems : [];
     setCollateralEditItems(initialManualItems);
     setWalletCollateralEditItems(initialWalletItems);
     setInitialCollateralSignature(JSON.stringify(normalizeQuickCollateralAssets(initialManualItems)));
@@ -2001,6 +2036,10 @@ export function FunderOrderCard({
     _intSaveCollateralMutation.mutate({ id: Number(order.id), ledgerId, collateralAssets: valid, displayConfig: newDC });
   };
   const handleSaveWalletCollateral = () => {
+    if (isSettlementFinal || selectFunderWalletCollateralDisplay(order, []).state !== 'loaded') {
+      toast.error(isSettlementFinal ? '已结清订单不能重新冻结钱包担保' : '当前冻结尚未确认，请更新后再保存钱包担保');
+      return;
+    }
     if (ledgerId !== 52 || quickWalletCollateralUserId <= 0) {
       toast.error('未找到该订单拥有者，无法读取钱包担保资产');
       return;
@@ -2590,25 +2629,17 @@ export function FunderOrderCard({
     : 'unpaid') as 'unpaid' | 'half_paid' | 'paid';
   const tradingFeeStatusLabel = ({ unpaid: '已付0%', half_paid: '已付50%', paid: '已付100%' } as const)[tradingFeeStatus];
 
-  // 同一融资订单允许多位拥有者分别冻结钱包资产。展示与担保计算只信任冻结台账，
-// 因此先剔除个人快照中的钱包条目，再合并订单返回的全体拥有者冻结明细，避免重复计入。
+  // 当前冻结与原登记分开：已加载 [] 是没有冻结，不是历史钱包18 ETH的回退信号。
 function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
-  const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
-  if (contributors.length === 0) return assets;
-  const expectedSegmentId = String(order?.joint_segment_id || '__primary__');
-  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'));
-  const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : [])
-    .filter((asset: any) => String(asset?.jointSegmentId || '__primary__') === expectedSegmentId)
-    .flatMap((asset: any) => {
-    const coin = String(asset?.coin || '').trim().toUpperCase();
-    const qty = String(asset?.qty ?? '').trim();
-    return coin && Number(qty) > 0 ? [{ coin, qty, source: 'wallet', note: `钱包担保冻结 · ${String(contributor?.name || '拥有者')}` }] : [];
-  }));
-  return [...manualAssets, ...walletAssets];
+  if (Number(order?.ledger_id ?? ledgerId) !== 52) return assets;
+  const selected = selectFunderWalletCollateralDisplay(order, assets);
+  // 历史估值只基于原登记和结清快照，不混用其他用户今天仍冻结的资产，不改登记证据。
+  return isSettlementFinal ? assets : selected.currentAssets;
 }
 
 // 担保物
   let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
+  let registeredWalletCollateralAssets: { coin: string; qty: string; note?: string }[] = [];
   if (primaryJointInternalShareEnabled) {
     // 父卡为内部池唯一的资产估值点；所有显式参加段的手工担保物只加一次。
     collateralAssets = jointSharedCollateralAssets;
@@ -2620,10 +2651,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         if (Array.isArray(parsed)) collateralAssets = parsed;
       }
     } catch {}
+    registeredWalletCollateralAssets = selectFunderWalletCollateralDisplay(order, collateralAssets).registeredWalletAssets;
     collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
   }
+  const walletCollateralDisplay = selectFunderWalletCollateralDisplay(order, collateralAssets);
   let collateralValue = 0;
-  let collateralValueKnown = true;
+  let collateralValueKnown = isSettlementFinal || Number(ledgerId) !== 52 || walletCollateralDisplay.state === 'loaded';
   const collateralItemValues: (number | null)[] = [];
   const collateralItemPrices: (number | null)[] = [];
   for (const item of collateralAssets) {
@@ -3199,6 +3232,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       {!jointSegmentMode && !isSettled && isPrimaryJointSegmentSettled && (
         <div className="border-b px-4 py-1.5 text-center text-xs font-semibold" style={{ borderColor: '#FECACA', color: '#B91C1C', backgroundColor: '#FFF1F2' }}>
           订单主体段已结清{settledTimestamp ? ` · 结算日 ${settledTimestamp}` : ''}，其余关联分段继续持有
+        </div>
+      )}
+      {Number(ledgerId) === 52 && (isSettlementFinal || walletCollateralDisplay.state !== 'loaded') && (
+        <div data-wallet-collateral-state className="relative z-20 border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] leading-4 break-words">
+          <p className={walletCollateralDisplay.state === 'loaded' && walletCollateralDisplay.currentWalletAssets.length === 0 ? 'text-emerald-700' : 'text-amber-700'}>
+            {walletCollateralDisplay.state !== 'loaded' ? '当前钱包冻结尚未确认，请更新后核对' : walletCollateralDisplay.currentWalletAssets.length === 0 ? '当前钱包冻结已解除（本段无冻结）' : '当前仍有钱包冻结，请核对关联用户/分段'}
+          </p>
+          {isSettlementFinal ? <p className="mt-1 text-slate-500">下方担保为历史原登记及结清时估值，不代表当前冻结，也不代表现金已支付。</p> : registeredWalletCollateralAssets.length > 0 && <p className="mt-1 text-slate-500">原登记钱包担保：{registeredWalletCollateralAssets.map(asset => `${formatWalletStyleAssetAmount(asset.coin, asset.qty)} ${asset.coin}`).join('、')}；当前冻结待确认。</p>}
         </div>
       )}
       {!jointSegmentMode && <>
@@ -4135,7 +4176,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               const itemValue = collateralItemValues[index];
               return (
                 <div key={`local-collateral-${index}`} className="flex items-start justify-between gap-2 text-xs mt-0.5">
-                  <span className="text-gray-400 whitespace-nowrap">{isWalletAsset ? '钱包冻结担保' : '手工担保'}</span>
+                  <span className="text-gray-400 shrink-0">{isSettlementFinal ? '原登记担保' : isWalletAsset ? '钱包冻结担保' : '手工担保'}</span>
                   <span className="min-w-0 text-right font-medium tabular-nums" style={{ color: '#4B5563' }}>
                     {formatWalletStyleAssetAmount(asset.coin, asset.qty)} {asset.coin === 'CNY' ? '元' : asset.coin}
                     {itemValue !== null && itemValue !== undefined && <span className="ml-1 text-gray-400">（≈{itemValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}
@@ -4157,7 +4198,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     : collateralAssets.map((a, idx) => (
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
-                          <span className="font-semibold" style={{ color: '#DC2626' }}>{collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
+                          <span className="font-semibold" style={{ color: '#DC2626' }}>{isSettlementFinal ? '原登记共享担保' : collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
                           <span className="font-medium" style={{ color: '#4B5563' }}>{formatWalletStyleAssetAmount(a.coin, a.qty)} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
                         {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
@@ -4179,15 +4220,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   collateralAssets.length === 0
                     ? (
                       <div className="flex items-center justify-between text-xs mt-0.5">
-                        <span className="text-gray-400">担保货币</span>
-                        <span className="font-medium" style={{ color: '#4B5563' }}>0</span>
+                        <span className="text-gray-400">{isSettlementFinal ? '原登记担保' : '担保货币'}</span>
+                        <span className="font-medium" style={{ color: '#4B5563' }}>{Number(ledgerId) === 52 && walletCollateralDisplay.state !== 'loaded' && !isSettlementFinal ? '待确认' : '0'}</span>
                       </div>
                     )
                     : collateralAssets.map((a, idx) => (
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
                           <span className="flex items-center gap-1">
-                            <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                            <span className="text-gray-400">{isSettlementFinal ? `原登记担保${collateralAssets.length > 1 ? idx + 1 : ''}` : collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
                             {hasExternalCollateral && idx === 0 && (
                               <button
                                 type="button"
@@ -4550,7 +4591,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           {/* ①② 总计风险敎口 + 保证金比例（移到最上面） */}
                           {sharedPoolInfo && (() => {
                             const orders = (sharedPoolInfo as any).orders ?? [];
-                            const totalColl = Number((sharedPoolInfo as any).totalCollateralValue);
+                            const totalColl = readConfirmedExposureGap((sharedPoolInfo as any).totalCollateralValue) ?? Number.NaN;
                             // ①②③共用原订单卡的最终缺口。报价未到齐时等待，绝不把期权张数
                             // 乘ETH/BTC现货价的服务端简化摘要当作合约持仓差额。
                             const allHaveGap = sharedHoldingGapReady && Number.isFinite(totalColl);
@@ -4791,7 +4832,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                             : null}
                                         </div>
                                         <span className="font-mono font-semibold shrink-0" style={{ color: '#DC2626' }}>
-                                          {collateralAssets.length > 0 && o.collateralValue > 0 ? `+${formatFunderCollateralPopupAmount(o.collateralValue)} u` : '0 u'}
+                                          {o.collateralValue == null ? '待确认' : o.collateralValue > 0 ? `+${formatFunderCollateralPopupAmount(o.collateralValue)} u` : '0 u'}
                                         </span>
                                       </div>
                                     );
@@ -4799,7 +4840,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 </div>
                                 <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计担保物价值</span>
-                                  <span className="font-mono" style={{ color: '#DC2626' }}>+{formatFunderCollateralPopupAmount(((sharedPoolInfo as any).totalCollateralValue ?? 0))} u</span>
+                                  <span className="font-mono" style={{ color: '#DC2626' }}>{(sharedPoolInfo as any).totalCollateralValue == null ? '待确认' : `+${formatFunderCollateralPopupAmount((sharedPoolInfo as any).totalCollateralValue)} u`}</span>
                                 </div>
                               </>
                             ) : (
@@ -5554,7 +5595,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           ? JSON.stringify(segment.collateral_assets)
           : null,
         // 仅附加当前拥有者在本段实际冻结的资产，绝不继承其他段或其他拥有者的钱包冻结。
-        wallet_collateral_contributors: segmentWalletContributors,
+        wallet_collateral_contributors: Array.isArray(order.wallet_collateral_contributors) ? segmentWalletContributors : undefined,
         collateral_source: null,
         collateral_share_mode: segmentSelectedCrossOrderCollateral ? 'self' : 'none',
         principal_lent_out: segment.principal_lent_out ? 1 : 0,
@@ -5745,7 +5786,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   <span key={`quick-manual-${index}`} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">手工 · {asset.qty} {asset.coin}</span>
                 ))}
                 {walletCollateralEditItems.filter((asset) => asset.coin && asset.qty !== '').map((asset, index) => (
-                  <span key={`quick-wallet-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包冻结 · {asset.qty} {asset.coin}</span>
+                  <span key={`quick-wallet-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{isSettlementFinal ? '原登记钱包担保' : '钱包冻结'} · {asset.qty} {asset.coin}</span>
                 ))}
                 {collateralEditItems.filter((asset) => asset.coin && asset.qty !== '').length === 0 && walletCollateralEditItems.filter((asset) => asset.coin && asset.qty !== '').length === 0 && (
                   <span className="text-[11px] text-slate-400">暂无担保物</span>
@@ -6414,7 +6455,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             ) : (
               <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
             )}
-            <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+            <p className="mb-3 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-500">{ledgerId === 52 ? '结清将解除对应钱包担保冻结，解除记录以真实流水为准，总持币数量不因解冻减少；结清记录不代表本金或利息现金已支付。' : '本功能只改变记账状态，不代表本金或利息现金已支付。'}</p>
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
               <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
               <p className="text-xs text-amber-800 mt-1">按北京时间自然日计息至该日；默认当天，可按实际约定日期修改。</p>

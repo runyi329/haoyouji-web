@@ -180,7 +180,13 @@ describe('真实结算源码离线回归：必需字段门槛及所有接线', (
   });
   it('已有历史主/个人/联合快照不重建，错误BAD_REQUEST不被主更新包装成500', () => {
     expect(source).toContain("sourceOrder.status === 'settled' || sourceOrder.status === 'completed' || sourceOrder.settlement_snapshot != null");
-    expect(source).toContain("personalSnapshot.status === 'settled' || personalSnapshot.status === 'completed' || personalSnapshot.settlement_snapshot != null) continue");
+    const existingPersonalStart = source.indexOf("if (personalSnapshot.status === 'settled' || personalSnapshot.status === 'completed' || personalSnapshot.settlement_snapshot != null) {");
+    const existingPersonal = source.slice(existingPersonalStart, source.indexOf('if (Array.isArray(personalSnapshot.joint_order_segments)', existingPersonalStart));
+    expect(existingPersonal).toContain('assertFunderPersonalCollateralReleaseScope(personalSnapshot');
+    expect(existingPersonal).toContain('collateralUserIds.add(targetUserId)');
+    expect(existingPersonal).toContain('continue;');
+    expect(existingPersonal).not.toContain('buildFunderSettlementSnapshot');
+    expect(existingPersonal).not.toContain('snapshotsToSave.push');
     expect(source).toContain('primaryState.settlement_snapshot == null'); expect(source).toContain('nextSegment.settlement_snapshot == null');
     expect(source).toContain('persistedSnapshot.settlement_snapshot ?? null'); expect(source).toContain('if (e instanceof TRPCError) throw e;');
     expect(source).toContain('p.user_id AS participant_user_id'); expect(source).toContain('Number(segment.owner_user_id) !== input.userId');
