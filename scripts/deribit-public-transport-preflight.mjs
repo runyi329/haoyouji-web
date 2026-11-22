@@ -41,7 +41,8 @@ function dnsName(value) {
   return name;
 }
 function parseDNS(json) {
-  if (!json || json.Status !== 0 || !Array.isArray(json.Question) || json.Question.length !== 1 || json.Question[0]?.type !== 1 || dnsName(json.Question[0]?.name) !== HOST || !Array.isArray(json.Answer) || !json.Answer.length || json.Answer.length > 64) {
+  const question = Array.isArray(json?.Question) ? json.Question : [json?.Question];
+  if (!json || json.Status !== 0 || question.length !== 1 || question[0]?.type !== 1 || dnsName(question[0]?.name) !== HOST || !Array.isArray(json.Answer) || !json.Answer.length || json.Answer.length > 64) {
     throw error("DERIBIT_DNS_INVALID");
   }
   const aliases = /* @__PURE__ */ new Map();
