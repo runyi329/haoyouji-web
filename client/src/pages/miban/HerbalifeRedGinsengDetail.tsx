@@ -415,7 +415,7 @@ export default function HerbalifeRedGinsengDetail() {
 
   const handleOpenWalletPayment = () => {
     if (createOrder.isPending || !validateShipping()) return;
-    walletPayment.resetToCnyFirst();
+    walletPayment.confirmPaymentReview(false);
     setShowWalletPayment(true);
   };
 

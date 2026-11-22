@@ -165,19 +165,86 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     expect(text).toContain("buildMibanPaymentPlan");
     expect(text).not.toMatch(/FALLBACK|useMibanUsdtCnyRate|getCnyBalanceSummary\.useQuery|getUsdtBalanceSummary\.useQuery/);
   });
-  it("defaults to CNY, U, then real available valuation descending and requires visible deduction review", () => {
+  it("defaults to available CNY plus the highest available-value digital coin, without silently selecting USDT or every coin", () => {
     const harness = paymentHarness();
     let payment = harness.render();
-    expect(payment.deductions.map(item => item.assetCode)).toEqual(["CNY", "USDT", "SOL"]);
-    expect(payment.selectedCodes).toEqual(["CNY", "USDT", "SOL", "ETH"]);
+    expect(payment.deductions.map(item => item.assetCode)).toEqual(["CNY", "SOL"]);
+    expect(payment.selectedCodes).toEqual(["CNY", "SOL"]);
+    expect(payment.selectedDigitalCode).toBe("SOL");
+    expect(payment.paymentAssets).toEqual([{ assetCode: "CNY", amount: "14" }, { assetCode: "SOL", amount: "0.08" }]);
     expect(payment.canPay).toBe(false);
     payment.confirmPaymentReview(true);
     payment = harness.render();
     expect(payment.canPay).toBe(true);
-    expect(payment.paymentAssets).toEqual(buildMibanPaymentPlan(70, fixture(), ["CNY", "USDT", "SOL", "ETH"], undefined, NOW).paymentAssets);
+    expect(payment.paymentAssets).toEqual(buildMibanPaymentPlan(70, fixture(), ["CNY", "SOL"], undefined, NOW).paymentAssets);
     expect(payment.assetRows.find(item => item.assetCode === "CNY")?.frozen).toBe("900");
     expect(payment.assetRows.some(item => item.assetCode === "NVDA")).toBe(false);
     expect(payment.assetRows.some(item => item.assetCode === "BNB")).toBe(false);
+  });
+  it.each([
+    ["10", "0.003", "USDT", "10"],
+    ["2", "0.02", "ETH", "0.005"],
+  ])("selects the highest available CNY value, not USDT hard priority (USDT %s, ETH %s)", (usdt, eth, chosen, amount) => {
+    setQuote(quote([row("CNY", "0", "1", "900"), row("USDT", usdt, "7", "999999"), row("ETH", eth, "14000", "1")]));
+    const payment = paymentHarness().render();
+    expect(payment.selectedCodes).toEqual([chosen]);
+    expect(payment.selectedDigitalCode).toBe(chosen);
+    expect(payment.paymentAssets).toEqual([{ assetCode: chosen, amount }]);
+    expect(payment.canPay).toBe(false);
+  });
+  it("uses partially frozen holdings' available amount exactly once, never gross holdings or available minus frozen", () => {
+    setQuote(quote([row("CNY", "14", "1", "900"), row("SOL", "0.08", "700", "100"), row("USDT", "2", "7", "9999")]));
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    expect(payment.selectedCodes).toEqual(["CNY", "SOL"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "CNY", amount: "14" }, { assetCode: "SOL", amount: "0.08" }]);
+    expect(payment.totalValueCny).toBe("70");
+    expect(payment.remainingCny).toBe("0");
+    expect(payment.assetRows.find(item => item.assetCode === "SOL")?.availableValueCny).toBe("56");
+    expect(payment.assetRows.find(item => item.assetCode === "SOL")?.frozen).toBe("100");
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
+  });
+  it("never adds other coins to an insufficient default or single coin until explicit combined selection, then requires review", () => {
+    const data = quote([
+      row("CNY", "14", "1", "900"), row("SOL", "0.04", "700", "100"),
+      row("ETH", "0.0015", "14000", "20"), row("USDT", "1", "7", "800"),
+      row("BTC", "0", "700000", "2"), row("DOGE", "15", null), row("BNB", "0", "1400"), row("NVDA", "100", "700"),
+    ]);
+    setQuote(data);
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    expect(payment.selectedCodes).toEqual(["CNY", "SOL"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "CNY", amount: "14" }, { assetCode: "SOL", amount: "0.04" }]);
+    expect(payment.remainingCny).toBe("28");
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    payment.useOnlyAsset("SOL");
+    payment = wallet.render();
+    expect(payment.selectedCodes).toEqual(["SOL"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "SOL", amount: "0.04" }]);
+    expect(payment.remainingCny).toBe("42");
+    vi.advanceTimersByTime(1_000);
+    expect(wallet.render().selectedCodes).toEqual(["SOL"]);
+    payment.useCombinedAssets();
+    payment = wallet.render();
+    expect([...payment.selectedCodes].sort()).toEqual(["CNY", "ETH", "SOL", "USDT"]);
+    expect(payment.selectedDigitalCode).toBe("SOL");
+    expect(payment.deductions[0].assetCode).toBe("SOL");
+    expect([...payment.paymentAssets].sort((a, b) => a.assetCode.localeCompare(b.assetCode))).toEqual([
+      { assetCode: "CNY", amount: "14" }, { assetCode: "ETH", amount: "0.0015" },
+      { assetCode: "SOL", amount: "0.04" }, { assetCode: "USDT", amount: "1" },
+    ]);
+    expect(payment.paymentAssets).toEqual(buildMibanPaymentPlan(70, data, payment.deductions.map(item => item.assetCode), undefined, NOW).paymentAssets);
+    expect(payment.totalValueCny).toBe("70");
+    expect(payment.remainingCny).toBe("0");
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    payment.confirmPaymentReview(true);
+    expect(wallet.render().canPay).toBe(true);
   });
   it.each([["ETH", "0.005"], ["SOL", "0.1"]])("supports %s-only and sends the shared plan's raw decimal strings", (code, amount) => {
     const harness = paymentHarness();
@@ -199,6 +266,9 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     setQuote(quote([row("ETH", "0.002", "14000"), row("SOL", "0.1", "700")]));
     const harness = paymentHarness();
     let payment = harness.render();
+    expect(payment.selectedCodes).toEqual(["SOL"]);
+    payment.useCombinedAssets();
+    payment = harness.render();
     payment.prioritizeAsset("ETH");
     payment = harness.render();
     expect(payment.deductions.map(item => item.assetCode)).toEqual(["ETH", "SOL"]);
@@ -217,7 +287,7 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     expect(payment.deductions).toEqual([{ assetCode: "SOL", amount: "0.1", priceCny: "700", priceUsdt: "100", cnyValue: "70" }]);
     expect(payment.reviewed).toBe(false);
   });
-  it("skips missing prices, stale crypto and all-frozen assets; zero-held assets remain available only in expanded catalog", () => {
+  it("skips missing prices, stale crypto and all-frozen assets while retaining true zero-held rows only in the underlying catalog", () => {
     setQuote(quote([row("ETH", "1", null), row("SOL", "0", "700", "10"), row("BTC", "1", "700000", "0", { priceUpdatedAt: new Date(NOW - 120_001).toISOString() }), row("BNB", "0", "1400")]));
     const payment = paymentHarness().render();
     expect(payment.paymentAssets).toEqual([]);
@@ -226,6 +296,8 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     expect(payment.assetRows.find(item => item.assetCode === "SOL")?.disabledReason).toMatch(/全部冻结/);
     expect(payment.assetRows.find(item => item.assetCode === "BTC")?.disabledReason).toMatch(/过时/);
     expect(payment.allAssetRows.find(item => item.assetCode === "BNB")?.disabledReason).toMatch(/暂无可用/);
+    expect(payment.selectedCodes).toEqual([]);
+    expect(payment.selectedDigitalCode).toBeNull();
   });
   it("historical negative CNY displays zero without blocking other coins and never subtracts frozen twice", () => {
     setQuote(quote([row("CNY", "-957", "1", "626000"), row("ETH", "0.005", "14000", "99")]));
@@ -245,8 +317,11 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     setQuote(data, { isError: state === "error", isFetching: state === "fetching" });
     const harness = paymentHarness();
     let payment = harness.render();
+    const previousSelection = payment.selectedCodes;
+    payment.useCombinedAssets();
     payment.confirmPaymentReview(true);
     payment = harness.render();
+    expect(payment.selectedCodes).toEqual(previousSelection);
     expect(payment.ready).toBe(false);
     expect(payment.canPay).toBe(false);
     expect(payment.paymentQuoteToken).toBe("");
@@ -289,6 +364,51 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
     expect(payment.canPay).toBe(false);
     expect(harness.render().quoteExpired).toBe(true);
   });
+  it("clears the visible review on natural expiry without fetching and never restores old approval", () => {
+    const harness = paymentHarness();
+    let payment = harness.render();
+    payment.confirmPaymentReview(true);
+    payment = harness.render();
+    expect(payment.reviewed).toBe(true);
+    const previousAssets = payment.paymentAssets;
+    vi.setSystemTime(NOW + 60_001);
+    const expired = harness.render();
+    expect(expired.quoteExpired).toBe(true);
+    expect(expired.ready).toBe(false);
+    expect(expired.reviewed).toBe(false);
+    expect(expired.canPay).toBe(false);
+    expect(expired.paymentQuoteToken).toBe("");
+    expect(expired.paymentAssets).toBe(previousAssets);
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment: expired }));
+    harnesses.push(allocation);
+    const checkbox = findElement(allocation.render(), node => node.props["aria-label"] === "确认本次实际扣币明细");
+    expect(checkbox.props.checked).toBe(false);
+    expect(checkbox.props.disabled).toBe(true);
+    vi.setSystemTime(NOW + 10_000);
+    expect(harness.render().reviewed).toBe(false);
+  });
+  it("moves the current digital choice to a selected coin after cancelling the priority coin in joint payment", () => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.useCombinedAssets();
+    payment = wallet.render();
+    expect(payment.priorityCode).toBe("SOL");
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    payment.toggleAsset("SOL");
+    payment = wallet.render();
+    expect(payment.selectedCodes).not.toContain("SOL");
+    expect(payment.priorityCode).toBe("ETH");
+    expect(payment.selectedDigitalCode).toBe("ETH");
+    expect(payment.selectedCodes).toContain(payment.selectedDigitalCode);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "ETH", amount: "0.005" }]);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    expect(findElement(allocation.render(), node => node.type === "select").props.value).toBe("ETH");
+    expect(findElement(MibanWalletAvailableSummary({ payment }), node => node.type === "select").props.value).toBe("ETH");
+  });
   it("keeps plan references stable across countdown ticks and rejects future-dated crypto prices", () => {
     const harness = paymentHarness();
     const first = harness.render();
@@ -325,7 +445,7 @@ describe("all-assets payment hook (unit quote fixtures only)", () => {
 });
 
 describe("mobile allocation and truthful visible balances", () => {
-  it("shows available, frozen, per-coin price, debit, remainder, quote status and explicit review", () => {
+  it("shows available selected balances, per-coin price, debit, remainder, quote status and explicit review in two summary categories", () => {
     const payment = paymentHarness().render();
     const html = renderToStaticMarkup(React.createElement(MibanMixedPaymentAllocation, { payment, accent: "#8d292c" }));
     expect(html).toContain("本次扣币");
@@ -338,11 +458,17 @@ describe("mobile allocation and truthful visible balances", () => {
     expect(html).toContain("min-w-0");
     expect(html).toContain("#8d292c");
     expect(html).not.toContain("参与支付 NVDA");
+    expect(html).toContain("本次扣币 0.08 SOL");
     const summary = renderToStaticMarkup(React.createElement(MibanWalletAvailableSummary, { payment }));
-    expect(summary).toContain("ETH");
-    expect(summary).toContain("可用 0.02 · 冻结 20");
+    expect((summary.match(/data-payment-asset=/g) ?? [])).toHaveLength(2);
+    expect(summary).toContain("人民币");
+    expect(summary).toContain("数字币");
+    expect(summary).toContain('aria-label="选择支付数字币"');
     expect(summary).toContain("SOL");
-    expect(summary).toContain("冻结数量不参与支付");
+    expect(summary).not.toContain("冻结 900");
+    expect(summary).not.toContain("BTC");
+    expect(summary).not.toContain("DOGE");
+    expect(summary).toContain("冻结、无余额或无有效行情的数字币已过滤");
   });
   it.each([["ETH", "0.005"], ["SOL", "0.1"]])("dropdown selects held %s for purchase and resets review without rounding raw quantity", (code, amount) => {
     const wallet = paymentHarness();
@@ -354,7 +480,7 @@ describe("mobile allocation and truthful visible balances", () => {
     harnesses.push(allocation);
     let element = allocation.render();
     const select = findElement(element, node => node.type === "select" && node.props["aria-label"] === "选择支付数字币");
-    expect(select.props.value).toBe("USDT");
+    expect(select.props.value).toBe("SOL");
     select.props.onChange({ target: { value: code } });
     payment = wallet.render();
     element = allocation.render();
@@ -368,22 +494,24 @@ describe("mobile allocation and truthful visible balances", () => {
     payment.confirmPaymentReview(true);
     expect(wallet.render().canPay).toBe(true);
   });
-  it("dropdown offers only held coins plus USDT and rejects frozen-only, missing-price or zero-unheld assets", () => {
+  it("both dropdowns offer only genuine positive available, valid-price digital coins and reject hidden invalid selections", () => {
     const wallet = paymentHarness();
     let payment = wallet.render();
     const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
     harnesses.push(allocation);
-    const element = allocation.render();
-    const select = findElement(element, node => node.type === "select");
-    const options = select.props.children;
-    expect(options.map((option: any) => option.props.value)).toEqual(["USDT", "SOL", "ETH", "BTC", "DOGE"]);
-    expect(options.find((option: any) => option.props.value === "BTC").props.disabled).toBe(true);
-    expect(options.find((option: any) => option.props.value === "DOGE").props.disabled).toBe(true);
     const previousAssets = payment.paymentAssets;
-    for (const code of ["BTC", "DOGE", "BNB", "NVDA"]) {
-      select.props.onChange({ target: { value: code } });
-      payment = wallet.render();
-      expect(payment.paymentAssets).toEqual(previousAssets);
+    for (const element of [allocation.render(), MibanWalletAvailableSummary({ payment })]) {
+      const select = findElement(element, node => node.type === "select" && node.props["aria-label"] === "选择支付数字币");
+      expect(select).toBeDefined();
+      const options = React.Children.toArray(select.props.children) as any[];
+      expect(options.map(option => option.props.value).sort()).toEqual(["ETH", "SOL", "USDT"]);
+      expect(options.every(option => !option.props.disabled)).toBe(true);
+      for (const code of ["BTC", "DOGE", "BNB", "NVDA", "NOT-IN-WALLET"]) {
+        select.props.onChange({ target: { value: code } });
+        payment = wallet.render();
+        expect(payment.paymentAssets).toEqual(previousAssets);
+        expect(payment.selectedDigitalCode).toBe("SOL");
+      }
     }
   });
   it("formats all visible USDT quantities to two decimals while submitted raw amounts remain eight-decimal", () => {
@@ -400,10 +528,16 @@ describe("mobile allocation and truthful visible balances", () => {
     expect(html).not.toContain("34.17573523");
     expect(payment.paymentAssets[0].amount).toBe(raw);
     const summary = renderToStaticMarkup(React.createElement(MibanWalletAvailableSummary, { payment }));
-    expect(summary).toContain("可用 594.95 · 冻结 1.12");
+    expect(summary).toContain("可用 594.95");
+    expect(summary).not.toContain("594.9506102699997");
+    expect(summary).not.toContain("冻结 1.12");
   });
-  it("expands genuine zero-held quote rows with price and disabled checkboxes; defaults to held only", () => {
-    const payment = paymentHarness().render();
+  it("explicitly enables only usable coins with the multi-coin button, never zero-held, frozen-only or price-invalid catalog rows", () => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
     const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
     harnesses.push(allocation);
     let element = allocation.render();
@@ -411,16 +545,168 @@ describe("mobile allocation and truthful visible balances", () => {
     const button = findElement(element, node => node.type === "button" && node.props["aria-expanded"] === false);
     expect(button).toBeDefined();
     button.props.onClick();
+    payment = wallet.render();
+    expect([...payment.selectedCodes].sort()).toEqual(["CNY", "ETH", "SOL", "USDT"]);
+    expect(payment.selectedDigitalCode).toBe("SOL");
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
     element = allocation.render();
     const html = renderToStaticMarkup(element);
-    expect(html).toContain("收起未持有币种");
-    expect(html).toContain("参与支付 BNB");
-    expect(html).toContain("1400");
-    expect(html).toContain("暂无可用数量");
-    const checkbox = findElement(element, node => node.props["aria-label"] === "参与支付 BNB");
-    expect(checkbox.props.disabled).toBe(true);
-    expect(checkbox.props.checked).toBe(false);
-    expect(html).not.toContain("参与支付 NVDA");
+    expect(html).toContain("收起联合币种");
+    expect(html).toContain("参与支付 ETH");
+    expect(html).toContain("参与支付 SOL");
+    expect(html).toContain("参与支付 USDT");
+    for (const code of ["BNB", "BTC", "DOGE", "NVDA"]) expect(html).not.toContain(`参与支付 ${code}`);
+    expect(html).not.toContain("查看全部数字币");
+    expect(html).not.toContain("收起未持有币种");
+  });
+  it.each(["missing", "zero", "negative", "allFrozen"])("always keeps CNY and digital summary categories with truthful zero CNY (%s)", state => {
+    const assets = [row("SOL", "0.1", "700", "99")];
+    if (state !== "missing") assets.unshift(row("CNY", state === "negative" ? "-957" : "0", "1", state === "allFrozen" ? "626000" : "0"));
+    setQuote(quote(assets));
+    const payment = paymentHarness().render();
+    const summary = MibanWalletAvailableSummary({ payment });
+    const html = renderToStaticMarkup(summary);
+    const categories = findElement(summary, node => node.type === "div" && /\bgrid-cols-2\b/.test(node.props.className ?? ""));
+    expect(React.Children.toArray(categories.props.children)).toHaveLength(2);
+    expect((html.match(/data-payment-asset=/g) ?? [])).toHaveLength(1);
+    expect(html).toContain("人民币");
+    expect(html).toContain("数字币");
+    expect(html).toContain("暂无可用人民币");
+    expect(html).toContain("可用 ¥0.00");
+    expect(html).not.toContain("-957");
+    expect(html).not.toContain("626000");
+    expect(html).not.toContain("冻结 99");
+    expect(payment.selectedCodes).toEqual(["SOL"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "SOL", amount: "0.1" }]);
+  });
+  it("never invents USDT or exposes missing-price, stale, unavailable or frozen-only digital options even after expansion", () => {
+    setQuote(quote([
+      row("SOL", "0.1", "700", "9"), row("USDT", "0", "7", "800"),
+      row("ETH", "1", null), row("BTC", "1", "700000", "0", { priceUpdatedAt: new Date(NOW - 120_001).toISOString() }),
+      row("DOGE", "15", "7", "0", { unavailableReason: "行情暂不可用" }), row("BNB", "0", "1400"), row("NVDA", "100", "700"),
+    ]));
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    for (const element of [MibanWalletAvailableSummary({ payment }), allocation.render()]) {
+      const select = findElement(element, node => node.type === "select");
+      expect((React.Children.toArray(select.props.children) as any[]).map(option => option.props.value)).toEqual(["SOL"]);
+    }
+    const button = findElement(allocation.render(), node => node.type === "button" && node.props["aria-expanded"] === false);
+    button.props.onClick();
+    payment = wallet.render();
+    const html = renderToStaticMarkup(allocation.render());
+    expect(payment.selectedCodes).toEqual(["SOL"]);
+    for (const code of ["USDT", "ETH", "BTC", "DOGE", "BNB", "NVDA"]) expect(html).not.toContain(`参与支付 ${code}`);
+  });
+  it("all-frozen wallets retain two category cards but no payable digital choice or synthetic balance", () => {
+    setQuote(quote([row("CNY", "0", "1", "900"), row("USDT", "0", "7", "800"), row("SOL", "0", "700", "10")]));
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.useCombinedAssets();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.selectedCodes).toEqual([]);
+    expect(payment.selectedDigitalCode).toBeNull();
+    expect(payment.paymentAssets).toEqual([]);
+    expect(payment.canPay).toBe(false);
+    const summary = MibanWalletAvailableSummary({ payment });
+    const html = renderToStaticMarkup(summary);
+    const categories = findElement(summary, node => node.type === "div" && /\bgrid-cols-2\b/.test(node.props.className ?? ""));
+    expect(React.Children.toArray(categories.props.children)).toHaveLength(2);
+    expect(html).not.toContain("data-payment-asset=");
+    expect(html).toContain("暂无可用人民币");
+    expect(findElement(summary, node => node.type === "option" && ["USDT", "SOL"].includes(node.props.value))).toBeUndefined();
+    for (const frozen of ["900", "800", "10"]) expect(html).not.toContain(`冻结 ${frozen}`);
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    const element = allocation.render();
+    expect(findElement(element, node => node.props["aria-label"] === "确认本次实际扣币明细").props.disabled).toBe(true);
+    for (const code of ["CNY", "USDT", "SOL"]) expect(renderToStaticMarkup(element)).not.toContain(`参与支付 ${code}`);
+  });
+  it("shows the insufficient single-coin hint and button, debits no extra coin before clicking, then precisely combines and demands review", () => {
+    setQuote(quote([row("SOL", "0.06", "700", "100"), row("ETH", "0.002", "14000", "99"), row("USDT", "0", "7", "800")]));
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    let element = allocation.render();
+    expect(payment.selectedCodes).toEqual(["SOL"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "SOL", amount: "0.06" }]);
+    expect(payment.remainingCny).toBe("28");
+    const hint = findElement(element, node => node.props["data-payment-combination-hint"] !== undefined);
+    expect(hint).toBeDefined();
+    expect(renderToStaticMarkup(hint)).toContain("多币种联合支付");
+    const button = findElement(element, node => node.type === "button" && node.props["aria-expanded"] === false);
+    expect(renderToStaticMarkup(button)).toContain("多币种联合支付");
+    expect(button.props.disabled).toBeFalsy();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.reviewed).toBe(false);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "SOL", amount: "0.06" }]);
+    button.props.onClick();
+    payment = wallet.render();
+    element = allocation.render();
+    expect(payment.selectedDigitalCode).toBe("SOL");
+    expect(payment.paymentAssets).toEqual([{ assetCode: "SOL", amount: "0.06" }, { assetCode: "ETH", amount: "0.002" }]);
+    expect(payment.totalValueCny).toBe("70");
+    expect(payment.remainingCny).toBe("0");
+    expect(payment.canPay).toBe(false);
+    expect(payment.reviewed).toBe(false);
+    expect(renderToStaticMarkup(element)).toContain("收起联合币种");
+    expect(renderToStaticMarkup(element)).not.toContain("参与支付 USDT");
+    const review = findElement(element, node => node.props["aria-label"] === "确认本次实际扣币明细");
+    expect(review.props.disabled).toBe(false);
+    review.props.onChange({ target: { checked: true } });
+    expect(wallet.render().canPay).toBe(true);
+  });
+  it("summary dropdown stores the choice in the same hook for later/new allocation dialogs and clears previous review", () => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
+    const summary = MibanWalletAvailableSummary({ payment });
+    const select = findElement(summary, node => node.type === "select" && node.props["aria-label"] === "选择支付数字币");
+    expect(select.props.value).toBe("SOL");
+    select.props.onChange({ target: { value: "ETH" } });
+    payment = wallet.render();
+    expect(payment.selectedDigitalCode).toBe("ETH");
+    expect(payment.selectedCodes).toEqual(["ETH"]);
+    expect(payment.paymentAssets).toEqual([{ assetCode: "ETH", amount: "0.005" }]);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    const firstDialog = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(firstDialog);
+    expect(findElement(firstDialog.render(), node => node.type === "select").props.value).toBe("ETH");
+    firstDialog.cleanup();
+    const nextDialog = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(nextDialog);
+    expect(findElement(nextDialog.render(), node => node.type === "select").props.value).toBe("ETH");
+    expect(findElement(MibanWalletAvailableSummary({ payment }), node => node.type === "select").props.value).toBe("ETH");
+    payment.confirmPaymentReview(true);
+    expect(wallet.render().canPay).toBe(true);
+  });
+  it("summary's explicit multi-coin button enables usable funding and clears a reviewed single-coin plan", () => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.useOnlyAsset("ETH");
+    payment = wallet.render();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
+    const summary = MibanWalletAvailableSummary({ payment });
+    const button = findElement(summary, node => node.type === "button" && renderToStaticMarkup(node).includes("多币种联合支付"));
+    expect(button.props.disabled).toBe(false);
+    button.props.onClick();
+    payment = wallet.render();
+    expect([...payment.selectedCodes].sort()).toEqual(["CNY", "ETH", "SOL", "USDT"]);
+    expect(payment.selectedDigitalCode).toBe("ETH");
+    expect(payment.paymentAssets).toEqual([{ assetCode: "ETH", amount: "0.005" }]);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
   });
 });
 
@@ -447,10 +733,21 @@ describe("all six authorized files: real payload references and regression prote
   });
   it("common sixth file retains original exports/fields/callbacks plus exact payment DTOs", () => {
     const text = source("MibanMixedPayment");
-    for (const member of ["cnyBalance", "usdtBalance", "usdtCnyRate", "cnyInput", "cnyAmount", "usdtAmount", "paymentSummary", "setCnyInput", "normalizeCnyInput", "useAllCny", "useUsdtFirst", "resetToCnyFirst", "paymentAssets", "paymentQuoteToken", "deductions", "assetRows", "ready", "refresh", "quoteExpiresAt", "quoteExpired"]) expect(text).toContain(member);
+    for (const member of ["cnyBalance", "usdtBalance", "usdtCnyRate", "cnyInput", "cnyAmount", "usdtAmount", "paymentSummary", "setCnyInput", "normalizeCnyInput", "useAllCny", "useUsdtFirst", "resetToCnyFirst", "paymentAssets", "paymentQuoteToken", "deductions", "assetRows", "ready", "refresh", "quoteExpiresAt", "quoteExpired", "selectedDigitalCode", "useCombinedAssets"]) expect(text).toContain(member);
     expect(text).toContain("export type MibanMixedPayment");
     expect(text).toContain("export function useMibanMixedPayment");
     expect(text).toContain("export function MibanMixedPaymentAllocation");
+  });
+  it("opening the Herbalife payment dialog clears only review, preserving the summary-selected hook choice", () => {
+    const text = source("HerbalifeRedGinsengDetail");
+    const file = ts.createSourceFile("HerbalifeRedGinsengDetail.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const declarations = walk(file, node => ts.isVariableDeclaration(node) && node.name.getText(file) === "handleOpenWalletPayment") as ts.VariableDeclaration[];
+    expect(declarations).toHaveLength(1);
+    const handler = declarations[0].initializer!.getText(file);
+    expect(handler).toContain("walletPayment.confirmPaymentReview(false)");
+    expect(handler).not.toContain("resetToCnyFirst");
+    expect(handler).not.toContain("useOnlyAsset");
+    expect(handler).not.toContain("useCombinedAssets");
   });
   it("never substitutes a fallback SKU for an invalid explicitly requested checkout SKU", () => {
     const text = source("HerbalifeRedGinsengDetail");
@@ -496,5 +793,195 @@ describe("all six authorized files: real payload references and regression prote
     expect(text).toContain("实际付款明细待核对");
     expect(text).not.toContain("requiredUsdt");
     expect(text).not.toContain("cnyBalanceQuery");
+  });
+});
+
+describe("stable wallet layout while real quote refresh remains fail-closed", () => {
+  // Inspect actual component output rather than JSX spelling or status copy.
+  function elements(node: any, predicate: (node: any) => boolean): any[] {
+    if (Array.isArray(node)) return node.flatMap(item => elements(item, predicate));
+    if (!React.isValidElement(node)) return [];
+    return [...(predicate(node) ? [node] : []), ...elements((node.props as any).children, predicate)];
+  }
+  function text(node: any): string {
+    if (Array.isArray(node)) return node.map(text).join("");
+    if (React.isValidElement(node)) return text((node.props as any).children);
+    return typeof node === "string" || typeof node === "number" ? String(node) : "";
+  }
+  function shape(node: any): any {
+    if (Array.isArray(node)) return node.filter(React.isValidElement).map(shape);
+    if (!React.isValidElement(node)) return null;
+    const props = node.props as any;
+    return { tag: node.type, asset: props["data-payment-asset"], children: React.Children.toArray(props.children).filter(React.isValidElement).map(shape) };
+  }
+  function marked(node: any, attribute: string): any[] {
+    return elements(node, element => element.props[attribute] !== undefined);
+  }
+  function assertStableSlots(summary: any, allocation: any, payment: MibanMixedPayment) {
+    expect(marked(summary, "data-payment-summary")).toHaveLength(1);
+    expect(marked(allocation, "data-payment-allocation")).toHaveLength(1);
+    const summarySlots = marked(summary, "data-payment-summary-status");
+    const allocationSlots = marked(allocation, "data-payment-allocation-status");
+    expect(summarySlots).toHaveLength(1);
+    expect(allocationSlots).toHaveLength(1);
+    const summarySlot = summarySlots[0];
+    const allocationSlot = allocationSlots[0];
+    expect(summarySlot.props.role).toBe("status");
+    expect(summarySlot.props.className.split(/\s+/)).toEqual(expect.arrayContaining(["h-4", "leading-4"]));
+    expect(summarySlot.props.className).toMatch(/\b(?:truncate|whitespace-nowrap)\b/);
+    expect(summarySlot.props.title).toContain(payment.statusMessage);
+    expect(text(summarySlot)).not.toBe("");
+    expect(elements(summarySlot, element => element.type === "br")).toHaveLength(0);
+    expect(allocationSlot.props.role).toBe("status");
+    expect(allocationSlot.props.className).toMatch(/\b(?:h-10|min-h-10)\b/);
+    expect(allocationSlot.props.className.split(/\s+/)).toContain("leading-5");
+    expect(allocationSlot.props.title).toContain(payment.statusMessage);
+    const statusLines = elements(allocationSlot, element => element.type === "p");
+    expect(statusLines).toHaveLength(2);
+    for (const line of statusLines) {
+      expect(line.props.className ?? "").toMatch(/\b(?:truncate|whitespace-nowrap)\b/);
+      expect(text(line)).not.toBe("");
+    }
+    expect(elements(allocationSlot, element => /\btabular-nums\b/.test(element.props.className ?? ""))).not.toHaveLength(0);
+    expect(text(allocationSlot)).toContain("1 U ≈ ¥7.0000");
+    expect(text(allocationSlot)).toContain(`${payment.quoteSecondsLeft} 秒`);
+    // SSR must expose the same measurement targets used by the real browser.
+    expect(renderToStaticMarkup(summary)).toContain("data-payment-summary-status");
+    expect(renderToStaticMarkup(allocation)).toContain("data-payment-allocation-status");
+    for (const component of [summary, allocation]) {
+      const hint = marked(component, "data-payment-combination-hint");
+      expect(hint).toHaveLength(1);
+      expect(hint[0].props.className.split(/\s+/)).toContain("min-h-10");
+      expect(text(hint[0])).not.toBe("");
+    }
+  }
+
+  it.each(["ready", "refresh", "error", "expired"] as const)("keeps the single-line summary and two-line allocation slots, positions and genuine asset cards in %s", state => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    const previousSummary = MibanWalletAvailableSummary({ payment });
+    const previousAllocation = allocation.render();
+    assertStableSlots(previousSummary, previousAllocation, payment);
+
+    if (state === "refresh") setQuote(fixture(), { isFetching: true });
+    if (state === "error") setQuote(undefined, { isError: true });
+    if (state === "expired") vi.advanceTimersByTime(60_000);
+    payment = wallet.render();
+    payment = wallet.render(); // flush the isolated useEffect clearing review on fetching
+    expect(payment.ready).toBe(state === "ready");
+    expect(payment.canPay).toBe(state === "ready");
+    if (state !== "ready") expect(payment.paymentQuoteToken).toBe("");
+    const summary = MibanWalletAvailableSummary({ payment });
+    const element = allocation.render();
+    assertStableSlots(summary, element, payment);
+    // Includes slot positions: removing/reinserting a status paragraph changes shape.
+    expect(shape(summary)).toEqual(shape(previousSummary));
+    expect(shape(element)).toEqual(shape(previousAllocation));
+    expect(marked(summary, "data-payment-asset").map(card => card.props["data-payment-asset"])).toEqual(["CNY", "SOL"]);
+    expect(marked(element, "data-payment-asset").map(card => card.props["data-payment-asset"])).toEqual(["CNY", "SOL"]);
+    expect(renderToStaticMarkup(summary)).toContain("可用 1");
+    expect(renderToStaticMarkup(summary)).not.toContain("冻结 900");
+    expect(renderToStaticMarkup(element)).toContain("本次扣币 0.08 SOL");
+    expect(renderToStaticMarkup(element)).not.toContain("参与支付 NVDA");
+  });
+
+  it.each([true, false])("retains undimmed old balances/debits but clears review, locks controls and exposes no token during background refresh (cached live data: %s)", keepLiveData => {
+    const wallet = paymentHarness();
+    let payment = wallet.render();
+    payment.useOnlyAsset("ETH");
+    payment = wallet.render();
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
+    const previous = payment;
+    const allocation = hookHarness(() => MibanMixedPaymentAllocation({ payment }));
+    harnesses.push(allocation);
+    const previousElement = allocation.render();
+    vi.advanceTimersByTime(15_000);
+    setQuote(keepLiveData ? fixture() : undefined, { isFetching: true });
+    payment = wallet.render();
+    payment = wallet.render();
+    expect(payment.refreshing).toBe(true);
+    expect(payment.quoteExpired).toBe(false);
+    expect(payment.quoteSecondsLeft).toBe(45);
+    expect(payment.ready).toBe(false);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    expect(payment.paymentQuoteToken).toBe("");
+    expect(payment.paymentAssets).toBe(previous.paymentAssets);
+    expect(payment.deductions).toBe(previous.deductions);
+    expect(payment.cnyBalance).toBe(previous.cnyBalance);
+    expect(payment.usdtBalance).toBe(previous.usdtBalance);
+    expect(payment.paymentSummary).toBe("0.005 ETH");
+    const element = allocation.render();
+    expect(shape(element)).toEqual(shape(previousElement));
+    const isPaymentControl = (node: any) => node.type === "input" || node.type === "select" || (node.type === "button" && (["优先使用", "已优先", "仅用此币"].includes(text(node)) || node.props["aria-expanded"] !== undefined));
+    const controls = elements(element, isPaymentControl);
+    const previousControls = elements(previousElement, isPaymentControl);
+    const activeOpacity = (node: any) => (node.props.className ?? "").split(/\s+/)
+      .filter((token: string) => /^opacity-/.test(token) || (node.props.disabled && /^disabled:opacity-/.test(token)))
+      .map((token: string) => token.replace(/^disabled:/, ""));
+    expect(controls.length).toBeGreaterThan(4);
+    expect(controls).toHaveLength(previousControls.length);
+    for (const [index, control] of controls.entries()) {
+      expect(control.props.disabled).toBe(true);
+      // Layout stability must not be implemented by unlocking stale-quote inputs.
+      // A genuinely unselected CNY input may stay dim; refreshing must not add dimming.
+      expect(activeOpacity(control)).toEqual(activeOpacity(previousControls[index]));
+    }
+    for (const attribute of ["data-payment-allocation", "data-payment-asset"]) {
+      expect(marked(element, attribute).map(activeOpacity)).toEqual(marked(previousElement, attribute).map(activeOpacity));
+    }
+    const review = findElement(element, node => node.props["aria-label"] === "确认本次实际扣币明细");
+    expect(review.props.checked).toBe(false);
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("可用 0.02 · 冻结 20");
+    expect(html).toContain("本次扣币 0.005 ETH");
+    expect(html).toContain("实际付款：0.005 ETH");
+    const summary = MibanWalletAvailableSummary({ payment });
+    expect(renderToStaticMarkup(summary)).toContain("可用 0.02");
+    expect(renderToStaticMarkup(summary)).not.toContain("冻结 800.00");
+    const summarySelect = findElement(summary, node => node.type === "select");
+    expect(summarySelect.props.disabled).toBe(true);
+    const summaryPaymentControls = elements(summary, node => node.type === "button" || node.type === "select");
+    expect(summaryPaymentControls.length).toBeGreaterThan(1);
+    for (const control of summaryPaymentControls) expect(control.props.disabled).toBe(true);
+
+    const previousSelection = payment.selectedCodes;
+    const select = findElement(element, node => node.type === "select");
+    select.props.onChange({ target: { value: "SOL" } });
+    summarySelect.props.onChange({ target: { value: "SOL" } });
+    payment.useOnlyAsset("SOL");
+    payment.useCombinedAssets();
+    payment.prioritizeAsset("SOL");
+    payment.toggleAsset("ETH");
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.selectedCodes).toEqual(previousSelection);
+    expect(payment.selectedDigitalCode).toBe("ETH");
+    expect(payment.paymentAssets).toBe(previous.paymentAssets);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    expect(payment.paymentQuoteToken).toBe("");
+
+    setQuote(quote(fixture().assets, { quoteToken: "refreshed-unit-signature", quotedAt: new Date(NOW + 15_000).toISOString(), expiresAt: new Date(NOW + 75_000).toISOString() }));
+    payment = wallet.render();
+    expect(payment.ready).toBe(true);
+    expect(payment.paymentQuoteToken).toBe("refreshed-unit-signature");
+    expect(payment.quoteSecondsLeft).toBe(60);
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
+    payment.confirmPaymentReview(true);
+    payment = wallet.render();
+    expect(payment.canPay).toBe(true);
+    payment.refresh();
+    expect(boundary.query.refetch).toHaveBeenCalledOnce();
+    payment = wallet.render();
+    expect(payment.reviewed).toBe(false);
+    expect(payment.canPay).toBe(false);
   });
 });

@@ -3,7 +3,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
-import { saveToken } from "@/lib/tokenStorage";
 import { toast } from "sonner";
 import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet } from "lucide-react";
 import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
@@ -101,77 +100,6 @@ const VERSION_ICONS: Record<string, string> = {
   yaban: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
   proj_hzxm2t: MIBAN_LOGO,
 };
-
-// 三个测试账号的颜色
-const IDENTITY_COLORS: Record<string, string> = {
-  jiang: "#FF6900",
-  hyy329: "#22C55E",
-  yunting: "#3B82F6",
-};
-const ALLOWED_IDENTITIES = ["jiang", "hyy329", "yunting"];
-
-// ─── 身份切换器（Logo 右边，仅三个测试账号可见）────────────────────────────────
-function IdentitySwitcherNav() {
-  const { user } = useAuth();
-  const currentUsername = (user as any)?.username as string | undefined;
-  const isAllowed = ALLOWED_IDENTITIES.includes(currentUsername ?? "");
-
-  // 测试身份固定且仅用于展示，不应在每次普通页面跳转时请求受保护接口。
-  // 米伴过去会因路由重挂载而预读取 fullSwitchList，移动端偶发 401 会被全局逻辑误判为登录失效。
-  const list = [
-    { username: "jiang", name: "胡", label: "管理员" },
-    { username: "hyy329", name: "h", label: "米商" },
-    { username: "yunting", name: "Y", label: "顾客" },
-  ];
-  const switchToAny = (mtrpc as any).mibanImpersonate.switchToAny.useMutation();
-  const [switching, setSwitching] = useState<string | null>(null);
-
-  if (!isAllowed) return null;
-
-  async function handleSwitch(username: string) {
-    if (switching || username === currentUsername) return;
-    setSwitching(username);
-    try {
-      const res = await switchToAny.mutateAsync({ username });
-      await saveToken(res.token);
-      toast.success(`已切换到 ${res.name || username}`);
-      setTimeout(() => window.location.reload(), 300);
-    } catch (e: any) {
-      toast.error(e?.message || "切换失败");
-      setSwitching(null);
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 ml-2">
-      {list.map((acct: any) => {
-        const isCurrent = acct.username === currentUsername;
-        const color = IDENTITY_COLORS[acct.username] ?? "#999";
-        return (
-          <button
-            key={acct.username}
-            onClick={() => handleSwitch(acct.username)}
-            disabled={isCurrent || !!switching}
-            title={`切换到 ${acct.label}（${acct.username}）`}
-            style={{ opacity: isCurrent ? 1 : 0.4 }}
-            className="transition-opacity active:scale-95"
-          >
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-              style={{
-                background: color,
-                outline: isCurrent ? `2px solid ${color}` : "none",
-                outlineOffset: "1.5px",
-              }}
-            >
-              {switching === acct.username ? "…" : (acct.name || acct.username).slice(0, 1)}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Logo + 版本切换 ─────────────────────────────────────────────────────────
 function LogoWithVersionSwitch() {
@@ -459,10 +387,9 @@ export default function NavBar() {
         style={{ borderBottom: "1px solid #E8E8E8", height: "52px" }}
       >
         <div className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full gap-1 max-[350px]:px-3">
-          {/* Logo + 版本切换 + 身份切换器 */}
+          {/* Logo + 版本切换 */}
           <div className="flex min-w-0 items-center">
             <LogoWithVersionSwitch />
-            <IdentitySwitcherNav />
           </div>
 
           {/* 所有米伴页面统一显示钱包与头像，内部仍分别打开钱包和用户菜单 */}
