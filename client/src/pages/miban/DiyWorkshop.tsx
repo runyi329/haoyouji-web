@@ -1255,11 +1255,19 @@ export default function DiyWorkshop() {
 
       {/* ─── 下单弹窗 ─────────────────────────────────────────── */}
       {showOrderDialog && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={() => setShowOrderDialog(false)}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={() => {
+          if (createOrder.isPending) return;
+          walletPayment.cancelPendingPayment();
+          setShowOrderDialog(false);
+        }}>
           <div className="w-full bg-white rounded-t-3xl p-6 pb-10 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <span className="text-[17px] font-bold text-black">确认下单</span>
-              <button onClick={() => setShowOrderDialog(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <button onClick={() => {
+                if (createOrder.isPending) return;
+                walletPayment.cancelPendingPayment();
+                setShowOrderDialog(false);
+              }} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                 <X size={16} className="text-gray-500" />
               </button>
             </div>
@@ -1385,11 +1393,13 @@ export default function DiyWorkshop() {
               return (
                 <button
                   disabled={createOrder.isPending || isInsufficient}
-                  onClick={() => {
+                  onClick={async () => {
                     if (createOrder.isPending || !walletPayment.canPay) return;
                     setCheckoutAttempted(true);
                     const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : null);
                     if (message) { toast.error(message); return; }
+                    const preparedPayment = await walletPayment.preparePayment();
+                    if (!preparedPayment) return;
                     const singlePrice = totalPrice();
                     const ingredients = selected.map((id) => {
                       const rice = allRiceList.find(r => r.id === id)!;
@@ -1418,9 +1428,9 @@ export default function DiyWorkshop() {
                       receiverAddress: receiverAddress.trim(),
                       userNote: userNote.trim() || undefined,
                       subscriptionMonths: subscriptionPlan ?? undefined,
-                      cnyAmount: walletPayment.cnyAmount,
-                      paymentAssets: walletPayment.paymentAssets,
-                      paymentQuoteToken: walletPayment.paymentQuoteToken,
+                      cnyAmount: preparedPayment.cnyAmount,
+                      paymentAssets: preparedPayment.paymentAssets,
+                      paymentQuoteToken: preparedPayment.paymentQuoteToken,
                     }, {
                       onSuccess: () => {
                         if (addressToSave) addAddressMut.mutate(addressToSave);

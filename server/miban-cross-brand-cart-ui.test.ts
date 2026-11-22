@@ -23,6 +23,8 @@ const boundary = vi.hoisted(() => ({
   authenticated: true,
   addresses: [] as any[],
   quote: null as any,
+  freshQuote: null as any,
+  refetch: vi.fn(),
   mutate: vi.fn(),
   quoteQuery: vi.fn(),
   invalidate: vi.fn(),
@@ -115,12 +117,15 @@ import {
 
 const STORAGE_KEY = "miban-limited-product-cart-v1";
 const NOW = Date.parse("2026-11-22T04:00:00.000Z");
-function fixtureQuote(): MibanWalletPaymentQuote {
-  const at = new Date(NOW).toISOString();
+function fixtureQuote(
+  quoteToken = "isolated-snapshot-signature",
+  quotedAt = NOW
+): MibanWalletPaymentQuote {
+  const at = new Date(quotedAt).toISOString();
   return {
-    quoteToken: "isolated-unit-signature",
+    quoteToken,
     quotedAt: at,
-    expiresAt: new Date(NOW + 60_000).toISOString(),
+    expiresAt: new Date(quotedAt + 60_000).toISOString(),
     usdtCnyRate: "7",
     assets: [
       {
@@ -279,16 +284,20 @@ function setupCart() {
   };
   return { render, open, confirm, context: () => boundary.context };
 }
-function clickPay(cart: ReturnType<typeof setupCart>) {
-  let element = cart.render();
-  const allocation = findElement(
+function cartPayment(
+  cart: ReturnType<typeof setupCart>,
+  element = cart.render()
+) {
+  return findElement(
     element,
     node =>
       typeof node.type === "function" &&
       node.type.name === "MibanMixedPaymentAllocation"
-  );
-  allocation.props.payment.confirmPaymentReview(true);
-  element = cart.render();
+  ).props.payment;
+}
+function reviewedPayButton(cart: ReturnType<typeof setupCart>) {
+  cartPayment(cart).confirmPaymentReview(true);
+  const element = cart.render();
   const pay = findElement(
     element,
     node =>
@@ -296,7 +305,26 @@ function clickPay(cart: ReturnType<typeof setupCart>) {
       String(node.props.children).startsWith("确认支付")
   );
   expect(pay.props.disabled).toBe(false);
-  pay.props.onClick();
+  return { pay, payment: cartPayment(cart, element) };
+}
+async function clickPay(cart: ReturnType<typeof setupCart>) {
+  const { pay } = reviewedPayButton(cart);
+  await pay.props.onClick();
+  cart.render();
+}
+function delayedRefetch() {
+  let resolve!: (result: {
+    data: MibanWalletPaymentQuote;
+    isError: false;
+  }) => void;
+  const promise = new Promise<{
+    data: MibanWalletPaymentQuote;
+    isError: false;
+  }>(done => {
+    resolve = done;
+  });
+  boundary.refetch.mockImplementationOnce(() => promise);
+  return (data = boundary.freshQuote) => resolve({ data, isError: false });
 }
 function html(element: any) {
   return renderToStaticMarkup(element);
@@ -322,6 +350,77 @@ function walk(node: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
   return found;
 }
 
+function expectPreparedPaymentContract(
+  page: ts.SourceFile,
+  mutation: ts.CallExpression,
+  paymentName: string
+) {
+  const payload = mutation.arguments[0] as ts.ObjectLiteralExpression;
+  expect(ts.isObjectLiteralExpression(payload)).toBe(true);
+  const fields = payload.properties.filter(ts.isPropertyAssignment);
+  for (const key of ["cnyAmount", "paymentAssets", "paymentQuoteToken"]) {
+    expect(
+      fields
+        .find(field => field.name.getText(page) === key)
+        ?.initializer.getText(page)
+    ).toBe(`preparedPayment.${key}`);
+  }
+  let handler: ts.Node | undefined = mutation.parent;
+  while (
+    handler &&
+    !ts.isArrowFunction(handler) &&
+    !ts.isFunctionExpression(handler) &&
+    !ts.isFunctionDeclaration(handler)
+  ) {
+    handler = handler.parent;
+  }
+  expect(handler).toBeDefined();
+  const paymentHandler = handler as ts.ArrowFunction;
+  expect(
+    paymentHandler.modifiers?.some(
+      modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword
+    )
+  ).toBe(true);
+  expect(ts.isBlock(paymentHandler.body)).toBe(true);
+  const statements = (paymentHandler.body as ts.Block).statements;
+  const prepareIndex = statements.findIndex(
+    statement =>
+      ts.isVariableStatement(statement) &&
+      statement.declarationList.declarations.some(
+        declaration =>
+          declaration.name.getText(page) === "preparedPayment" &&
+          declaration.initializer &&
+          ts.isAwaitExpression(declaration.initializer) &&
+          ts.isCallExpression(declaration.initializer.expression) &&
+          declaration.initializer.expression.expression.getText(page) ===
+            `${paymentName}.preparePayment` &&
+          declaration.initializer.expression.arguments.length === 0
+      )
+  );
+  const guardIndex = statements.findIndex(
+    statement =>
+      ts.isIfStatement(statement) &&
+      ts.isPrefixUnaryExpression(statement.expression) &&
+      statement.expression.operator === ts.SyntaxKind.ExclamationToken &&
+      statement.expression.operand.getText(page) === "preparedPayment" &&
+      !statement.elseStatement &&
+      ((ts.isReturnStatement(statement.thenStatement) &&
+        !statement.thenStatement.expression) ||
+        (ts.isBlock(statement.thenStatement) &&
+          statement.thenStatement.statements.length === 1 &&
+          ts.isReturnStatement(statement.thenStatement.statements[0]) &&
+          !statement.thenStatement.statements[0].expression))
+  );
+  const mutationIndex = statements.findIndex(
+    statement =>
+      statement.getStart(page) <= mutation.getStart(page) &&
+      statement.end >= mutation.end
+  );
+  expect(prepareIndex).toBeGreaterThanOrEqual(0);
+  expect(guardIndex).toBeGreaterThan(prepareIndex);
+  expect(mutationIndex).toBeGreaterThan(guardIndex);
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
@@ -342,6 +441,7 @@ beforeEach(() => {
   boundary.pending = false;
   boundary.authenticated = true;
   boundary.quote = fixtureQuote();
+  boundary.freshQuote = fixtureQuote("isolated-fresh-signature");
   boundary.addresses = [
     {
       id: 1,
@@ -359,12 +459,16 @@ beforeEach(() => {
   boundary.navigate.mockReset();
   boundary.toastError.mockReset();
   boundary.toastSuccess.mockReset();
+  boundary.refetch.mockReset().mockImplementation(async () => ({
+    data: boundary.freshQuote,
+    isError: false,
+  }));
   boundary.quoteQuery.mockReset().mockImplementation(() => ({
     data: boundary.quote,
     isSuccess: true,
     isError: false,
     isFetching: false,
-    refetch: vi.fn(),
+    refetch: boundary.refetch,
   }));
 });
 afterEach(() => {
@@ -466,8 +570,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     }
     expect(cartMarkup).toContain('data-testid="cart-split-order-notice"');
     const confirmation = cart.confirm();
-    const allocation = findElement(confirmation, node =>
-      typeof node.type === "function" && node.type.name === "MibanMixedPaymentAllocation"
+    const allocation = findElement(
+      confirmation,
+      node =>
+        typeof node.type === "function" &&
+        node.type.name === "MibanMixedPaymentAllocation"
     );
     expect(allocation.props.payment.selectedDigitalCode).toBe("ETH");
     allocation.props.payment.useOnlyAsset("USDT");
@@ -489,17 +596,22 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(markup).toContain("可用 594.95 · 冻结 1.12");
     expect(boundary.mutate).not.toHaveBeenCalled();
   });
-  it("captures one unchanged signed payment input for all groups and never clears before success", () => {
+  it("captures one fresh signed payment input for all groups and never clears before success", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     const confirmation = cart.confirm();
-    findElement(confirmation, node =>
-      typeof node.type === "function" && node.type.name === "MibanMixedPaymentAllocation"
+    findElement(
+      confirmation,
+      node =>
+        typeof node.type === "function" &&
+        node.type.name === "MibanMixedPaymentAllocation"
     ).props.payment.useOnlyAsset("USDT");
     cart.render();
-    clickPay(cart);
+    await clickPay(cart);
     expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
     const input = boundary.mutate.mock.calls[0][0];
     expect(input.items).toEqual(
       [rice(), aloe()].map(({ productKey, skuId, quantity }) => ({
@@ -509,7 +621,9 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       }))
     );
     expect(input.paymentAssets).toEqual([{ assetCode: "USDT", amount: "53" }]);
-    expect(input.paymentQuoteToken).toBe(boundary.quote.quoteToken);
+    expect(input.cnyAmount).toBe(0);
+    expect(input.paymentQuoteToken).toBe(boundary.freshQuote.quoteToken);
+    expect(input.paymentQuoteToken).not.toBe(boundary.quote.quoteToken);
     expect(Object.keys(input).sort()).toEqual(
       [
         "items",
@@ -536,7 +650,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     );
     expect(boundary.toastError).toHaveBeenCalled();
   });
-  it("preserves the digital-coin dropdown and raw ETH/token across two-group checkout", () => {
+  it("preserves the digital-coin dropdown and raw ETH/fresh token across two-group checkout", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
@@ -571,23 +685,24 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       findElement(allocation.render(), node => node.type === "select").props
         .value
     ).toBe("ETH");
-    clickPay(cart);
+    await clickPay(cart);
     expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
     expect(boundary.mutate.mock.calls[0][0].paymentAssets).toEqual([
       { assetCode: "ETH", amount: "0.0265" },
     ]);
     expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).toBe(
-      boundary.quote.quoteToken
+      boundary.freshQuote.quoteToken
     );
     expect(cart.context().items).toHaveLength(2);
   });
-  it("blocks missing address, invalid phone, stale quote and pending duplicate clicks", () => {
+  it("blocks missing address, invalid phone and pending duplicate clicks before refetch", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     boundary.addresses = [];
     cart.confirm();
-    clickPay(cart);
+    await clickPay(cart);
     expect(boundary.mutate).not.toHaveBeenCalled();
     expect(boundary.toastError).toHaveBeenLastCalledWith("请先选择收货地址");
     boundary.addresses = [
@@ -595,7 +710,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     ];
     cart.render();
     cart.render();
-    clickPay(cart);
+    await clickPay(cart);
     expect(boundary.mutate).not.toHaveBeenCalled();
     boundary.addresses = [
       { id: 1, name: "单元测试", phone: "13800138000", is_default: 1 },
@@ -611,34 +726,285 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
         node.props.disabled === true &&
         String(node.props.className).includes("disabled:bg-gray-300")
     );
-    pay.props.onClick();
+    await pay.props.onClick();
     expect(boundary.mutate).not.toHaveBeenCalled();
-    boundary.pending = false;
-    vi.setSystemTime(NOW + 60_001);
-    const expired = cart.render();
-    expect(
-      findElement(
-        expired,
-        node =>
-          node.type === "button" &&
-          String(node.props.className).includes("disabled:bg-gray-300")
-      ).props.disabled
-    ).toBe(true);
+    expect(boundary.refetch).not.toHaveBeenCalled();
     expect(cart.context().items).toHaveLength(2);
   });
-});
-
-describe("truthful aggregate success / native per-order snapshots", () => {
-  function paidCart() {
+  it("keeps the reviewed snapshot fixed without polling or adopting shared query updates", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     cart.confirm();
-    clickPay(cart);
+    reviewedPayButton(cart);
+    const original = cartPayment(cart);
+    boundary.quote = fixtureQuote("unreviewed-cache-signature", NOW + 60_001);
+    boundary.quote.assets.find((row: any) => row.assetCode === "ETH").priceCny =
+      "14001";
+    await vi.advanceTimersByTimeAsync(60_001);
+    const payment = cartPayment(cart);
+    expect(payment.paymentAssets).toEqual(original.paymentAssets);
+    expect(payment.quotedAt).toBe(original.quotedAt);
+    expect(payment.reviewed).toBe(true);
+    expect(payment.quoteExpired).toBe(true);
+    expect(payment.paymentQuoteToken).toBe("");
+    expect(payment.canPay).toBe(true); // only permission to start verification
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    for (const [, options] of boundary.quoteQuery.mock.calls) {
+      expect(options).toMatchObject({
+        refetchInterval: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: false,
+      });
+    }
+  });
+  it("allows an expired old snapshot to obtain fresh payment but never returns the old DTO", async () => {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    reviewedPayButton(cart);
+    vi.setSystemTime(NOW + 60_001);
+    boundary.freshQuote = fixtureQuote(
+      "isolated-post-expiry-signature",
+      Date.now()
+    );
+    const { pay, payment } = reviewedPayButton(cart);
+    expect(payment.quoteExpired).toBe(true);
+    expect(payment.paymentQuoteToken).toBe("");
+    expect(payment.canPay).toBe(true);
+    const prepare = vi.spyOn(payment, "preparePayment");
+    await pay.props.onClick();
+    await expect(prepare.mock.results[0].value).resolves.toEqual({
+      cnyAmount: 0,
+      paymentAssets: [{ assetCode: "ETH", amount: "0.0265" }],
+      paymentQuoteToken: boundary.freshQuote.quoteToken,
+    });
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).toBe(
+      boundary.freshQuote.quoteToken
+    );
+    expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).not.toBe(
+      boundary.quote.quoteToken
+    );
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it("returns null without mutation when the fresh response expires during delayed refetch", async () => {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    const finishRefetch = delayedRefetch();
+    const { pay, payment } = reviewedPayButton(cart);
+    const prepare = vi.spyOn(payment, "preparePayment");
+    const request = pay.props.onClick();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    vi.setSystemTime(NOW + 60_001);
+    finishRefetch();
+    await request;
+    await expect(prepare.mock.results[0].value).resolves.toBeNull();
+    const latest = cartPayment(cart);
+    expect(latest.reviewed).toBe(false);
+    expect(latest.canPay).toBe(false);
+    expect(latest.paymentQuoteToken).toBe("");
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(cart.context().items).toHaveLength(2);
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toHaveLength(
+      2
+    );
+  });
+  it.each(["ETH", "USDT"])(
+    "does not mutate or silently use another coin when latest %s available balance is insufficient",
+    async code => {
+      const cart = setupCart();
+      cart.context().addItem(rice());
+      cart.context().addItem(aloe());
+      cart.confirm();
+      cartPayment(cart).useOnlyAsset(code);
+      boundary.freshQuote.assets.find(
+        (row: any) => row.assetCode === code
+      ).available = code === "ETH" ? "0.001" : "1";
+      const { pay, payment } = reviewedPayButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      await pay.props.onClick();
+      await expect(prepare.mock.results[0].value).resolves.toBeNull();
+      const latest = cartPayment(cart);
+      expect(latest.selectedCodes).toEqual([code]);
+      expect(latest.reviewed).toBe(false);
+      expect(latest.canPay).toBe(false);
+      expect(Number(latest.remainingCny)).toBeGreaterThan(0);
+      expect(latest.statusMessage).toContain("最新可用余额或行情不足");
+      expect(latest.paymentAssets.map((row: any) => row.assetCode)).toEqual([
+        code,
+      ]);
+      expect(boundary.refetch).toHaveBeenCalledOnce();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it("requires re-review when raw USDT changes despite unchanged two-decimal display, then uses the same quote without a refresh loop", async () => {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    cartPayment(cart).useOnlyAsset("USDT");
+    const original = cartPayment(cart);
+    expect(original.paymentAssets).toEqual([
+      { assetCode: "USDT", amount: "53" },
+    ]);
+    expect(original.paymentSummary).toBe("53.00 U");
+    boundary.freshQuote.usdtCnyRate = "7.0001";
+    boundary.freshQuote.assets.find(
+      (row: any) => row.assetCode === "USDT"
+    ).priceCny = "7.0001";
+    const { pay, payment } = reviewedPayButton(cart);
+    const prepare = vi.spyOn(payment, "preparePayment");
+    await pay.props.onClick();
+    await expect(prepare.mock.results[0].value).resolves.toBeNull();
+    const changed = cartPayment(cart);
+    const freshAssets = [{ assetCode: "USDT", amount: "52.99924287" }];
+    expect(changed.paymentAssets).toEqual(freshAssets);
+    expect(changed.paymentAssets).not.toEqual(original.paymentAssets);
+    expect(changed.paymentSummary).toBe(original.paymentSummary);
+    expect(changed.paymentQuoteToken).toBe(boundary.freshQuote.quoteToken);
+    expect(changed.reviewed).toBe(false);
+    expect(changed.canPay).toBe(false);
+    expect(changed.statusMessage).toContain("实际扣币有变化，请重新核对");
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(html(cart.render())).toContain("本次扣币 53.00 U");
+    // A newly issued but unreviewed cache response must not replace the staged quote.
+    boundary.quote = fixtureQuote("must-not-replace-reviewed-fresh-signature");
+    await clickPay(cart);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0].paymentAssets).toEqual(freshAssets);
+    expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).toBe(
+      boundary.freshQuote.quoteToken
+    );
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it("retains all 18 native ETH decimals after changed-quote re-review and submits just once", async () => {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    expect(cartPayment(cart).selectedDigitalCode).toBe("ETH");
+    boundary.freshQuote.assets.find(
+      (row: any) => row.assetCode === "ETH"
+    ).priceCny = "14001";
+    await clickPay(cart);
+    const native = "0.026498107278051568";
+    const changed = cartPayment(cart);
+    expect(changed.paymentAssets).toEqual([
+      { assetCode: "ETH", amount: native },
+    ]);
+    expect(changed.paymentSummary).toBe(`${native} ETH`);
+    expect(changed.reviewed).toBe(false);
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    await clickPay(cart);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0].paymentAssets).toEqual([
+      { assetCode: "ETH", amount: native },
+    ]);
+    expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).toBe(
+      boundary.freshQuote.quoteToken
+    );
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it.each(["cancel", "back", "close"])(
+    "never mutates after %s during delayed fresh refetch, including late response after reopening",
+    async action => {
+      const cart = setupCart();
+      cart.context().addItem(rice());
+      cart.context().addItem(aloe());
+      cart.confirm();
+      const finishRefetch = delayedRefetch();
+      const { pay, payment } = reviewedPayButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      const request = pay.props.onClick();
+      const busyElement = cart.render();
+      expect(cartPayment(cart, busyElement).refreshing).toBe(true);
+      expect(cartPayment(cart, busyElement).canPay).toBe(false);
+      expect(boundary.refetch).toHaveBeenCalledOnce();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      if (action === "cancel") {
+        cartPayment(cart, busyElement).cancelPendingPayment();
+        cart.render();
+      } else if (action === "back") {
+        await findElement(
+          busyElement,
+          node =>
+            node.type === "button" && node.props["aria-label"] === "返回购物车"
+        ).props.onClick();
+        expect(html(cart.render())).toContain("精选购物车");
+      } else {
+        cart.context().closeCart();
+        expect(cart.render()).toBeNull();
+        cart.open(); // returning cannot resurrect the cancelled request
+      }
+      finishRefetch();
+      await request;
+      await expect(prepare.mock.results[0].value).resolves.toBeNull();
+      cart.render();
+      expect(boundary.refetch).toHaveBeenCalledOnce();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(cart.context().items).toHaveLength(2);
+      expect(
+        JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)
+      ).toHaveLength(2);
+    }
+  );
+  it("blocks duplicate confirmation clicks while fresh refetch is delayed and does not clear cart", async () => {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    const finishRefetch = delayedRefetch();
+    const { pay } = reviewedPayButton(cart);
+    const request = pay.props.onClick();
+    await pay.props.onClick(); // same render closure must also be safe
+    const busyElement = cart.render();
+    const busyPay = findElement(
+      busyElement,
+      node =>
+        node.type === "button" &&
+        String(node.props.children).startsWith("确认支付")
+    );
+    expect(busyPay.props.disabled).toBe(true);
+    await busyPay.props.onClick();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(cart.context().items).toHaveLength(2);
+    finishRefetch();
+    await request;
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0].paymentQuoteToken).toBe(
+      boundary.freshQuote.quoteToken
+    );
+    expect(cart.context().items).toHaveLength(2);
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toHaveLength(
+      2
+    );
+  });
+});
+
+describe("truthful aggregate success / native per-order snapshots", () => {
+  async function paidCart() {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    await clickPay(cart);
     return cart;
   }
-  it("renders only response child orders and actual snapshot amounts; clears once only after aggregate success", () => {
-    const cart = paidCart();
+  it("renders only response child orders and actual snapshot amounts; clears once only after aggregate success", async () => {
+    const cart = await paidCart();
     const native = "0.010214285714285715";
     const response = {
       checkoutNo: "UNIT-CHECKOUT-LONG-12345678901234567890",
@@ -689,8 +1055,8 @@ describe("truthful aggregate success / native per-order snapshots", () => {
     expect(markup).not.toContain("53.00 U"); // never substitutes the pre-submit wallet plan
     expect(boundary.mutate).toHaveBeenCalledOnce();
   });
-  it("continues shopping in the shared selections mall rather than one fixed brand", () => {
-    const cart = paidCart();
+  it("continues shopping in the shared selections mall rather than one fixed brand", async () => {
+    const cart = await paidCart();
     boundary.mutationOptions.onSuccess({
       totalCny: 371,
       orders: [{ orderNo: "UNIT-PAID-ONE" }, { orderNo: "UNIT-PAID-TWO" }],
@@ -704,8 +1070,8 @@ describe("truthful aggregate success / native per-order snapshots", () => {
     continueShopping.props.onClick();
     expect(boundary.navigate).toHaveBeenCalledWith("/p/proj_hzxm2t/limited");
   });
-  it("uses response child totals rather than reconstructing them from submitted cart", () => {
-    const cart = paidCart();
+  it("uses response child totals rather than reconstructing them from submitted cart", async () => {
+    const cart = await paidCart();
     boundary.mutationOptions.onSuccess({
       totalCny: 370,
       orders: [
@@ -727,8 +1093,8 @@ describe("truthful aggregate success / native per-order snapshots", () => {
     expect(markup).toContain("实际付款明细待核对");
     expect(markup).not.toContain("0.00 U");
   });
-  it("supports legacy orderNo-only response as one order without invented totals/payment", () => {
-    const cart = paidCart();
+  it("supports legacy orderNo-only response as one order without invented totals/payment", async () => {
+    const cart = await paidCart();
     boundary.mutationOptions.onSuccess({ orderNo: "UNIT-LEGACY" });
     const markup = html(cart.render());
     expect(markup).toContain("已生成 1 张订单");
@@ -741,8 +1107,8 @@ describe("truthful aggregate success / native per-order snapshots", () => {
   });
   it.each([{ orders: [] }, { orders: [{}], orderNo: "UNIT-FIRST-COMPAT" }, {}])(
     "does not fabricate successful orders from incomplete response %j",
-    response => {
-      const cart = paidCart();
+    async response => {
+      const cart = await paidCart();
       boundary.mutationOptions.onSuccess(response);
       const markup = html(cart.render());
       expect(markup).toContain("订单结果待核对");
@@ -751,8 +1117,8 @@ describe("truthful aggregate success / native per-order snapshots", () => {
       expect(markup).not.toContain('aria-label="子订单');
     }
   );
-  it("formats USDT response snapshots at two decimals without changing raw amounts", () => {
-    const cart = paidCart();
+  it("formats USDT response snapshots at two decimals without changing raw amounts", async () => {
+    const cart = await paidCart();
     const response = {
       orderNo: "UNIT-USDT",
       totalCny: 371,
@@ -796,12 +1162,13 @@ describe("AST contract / mobile layout guardrails", () => {
         "paymentQuoteToken",
       ].sort()
     );
-    for (const key of ["paymentAssets", "paymentQuoteToken"])
+    for (const key of ["cnyAmount", "paymentAssets", "paymentQuoteToken"])
       expect(
         fields
           .find(field => field.name.getText(file) === key)!
           .initializer.getText(file)
-      ).toBe(`payment.${key}`);
+      ).toBe(`preparedPayment.${key}`);
+    expectPreparedPaymentContract(file, mutationCalls[0], "payment");
     const options = mutationHooks[0].arguments[0] as ts.ObjectLiteralExpression;
     const onSuccess = options.properties.find(
       node =>
@@ -831,6 +1198,36 @@ describe("AST contract / mobile layout guardrails", () => {
       /fetch\(|axios\.|quoteAPI|setSuccess\(\{|items\[0\]\.checkoutGroupKey\s*!==/
     );
   });
+  it.each([
+    ["LimitedProductCart.tsx", "payment"],
+    ["CartDrawer.tsx", "walletPayment"],
+    ["DiyWorkshop.tsx", "walletPayment"],
+    ["HerbalifeRedGinsengDetail.tsx", "walletPayment"],
+    ["TianguiPearDetail.tsx", "walletPayment"],
+  ])(
+    "requires awaited prepared DTO and null guard before creating orders in %s",
+    (name, paymentName) => {
+      const pageSource = readFileSync(
+        new URL(`../client/src/pages/miban/${name}`, import.meta.url),
+        "utf8"
+      );
+      const page = ts.createSourceFile(
+        name,
+        pageSource,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX
+      );
+      const calls = walk(
+        page,
+        node =>
+          ts.isCallExpression(node) &&
+          node.expression.getText(page) === "createOrder.mutate"
+      ) as ts.CallExpression[];
+      expect(calls).toHaveLength(1);
+      expectPreparedPaymentContract(page, calls[0], paymentName);
+    }
+  );
   it("keeps a single real signed quote wallet integration and no frontend order/amount fabrication", () => {
     expect(
       walk(

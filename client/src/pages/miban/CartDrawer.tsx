@@ -319,11 +319,19 @@ export default function CartDrawer() {
 
       {/* ─── 下单弹窗 ─────────────────────────────────────────── */}
       {showOrderDialog && (
-        <div className="fixed inset-0 bg-black/60 z-[80] flex items-end" onClick={() => setShowOrderDialog(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[80] flex items-end" onClick={() => {
+          if (createOrder.isPending) return;
+          walletPayment.cancelPendingPayment();
+          setShowOrderDialog(false);
+        }}>
           <div className="w-full bg-white rounded-t-3xl p-6 pb-10 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <span className="text-[17px] font-bold text-black">确认下单</span>
-              <button onClick={() => setShowOrderDialog(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <button onClick={() => {
+                if (createOrder.isPending) return;
+                walletPayment.cancelPendingPayment();
+                setShowOrderDialog(false);
+              }} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
@@ -360,11 +368,13 @@ export default function CartDrawer() {
             {/* 下单按钮 */}
             <button
               disabled={createOrder.isPending || !walletPayment.canPay}
-              onClick={() => {
+              onClick={async () => {
                 if (createOrder.isPending || !walletPayment.canPay) return;
                 setCheckoutAttempted(true);
                 const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : null);
                 if (message) { toast.error(message); return; }
+                const preparedPayment = await walletPayment.preparePayment();
+                if (!preparedPayment) return;
                 setPendingPrice(totalPrice);
                 // 将购物车所有商品合并为一个订单
                 const allIngredients = items.map((item) => {
@@ -380,9 +390,9 @@ export default function CartDrawer() {
                   receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
                   receiverAddress: receiverAddress.trim(),
                   userNote: userNote.trim() || undefined,
-                  cnyAmount: walletPayment.cnyAmount,
-                  paymentAssets: walletPayment.paymentAssets,
-                  paymentQuoteToken: walletPayment.paymentQuoteToken,
+                  cnyAmount: preparedPayment.cnyAmount,
+                  paymentAssets: preparedPayment.paymentAssets,
+                  paymentQuoteToken: preparedPayment.paymentQuoteToken,
                 });
               }}
               className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"

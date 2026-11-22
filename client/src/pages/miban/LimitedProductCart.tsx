@@ -505,7 +505,7 @@ function LimitedProductCartOverlay() {
     setCheckoutOpen(true);
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (createOrder.isPending) return;
     if (!selectedAddress) {
       toast.error("请先选择收货地址");
@@ -519,6 +519,8 @@ function LimitedProductCartOverlay() {
       toast.error(payment.statusMessage);
       return;
     }
+    const preparedPayment = await payment.preparePayment();
+    if (!preparedPayment) return;
     submittedGroups.current = groups;
     createOrder.mutate({
       items: items.map(item => ({
@@ -530,9 +532,9 @@ function LimitedProductCartOverlay() {
       receiverPhone: normalizeMibanReceiverPhone(selectedAddress.phone),
       receiverAddress: formatAddress(selectedAddress),
       userNote: userNote.trim() || undefined,
-      cnyAmount: payment.cnyAmount,
-      paymentAssets: payment.paymentAssets,
-      paymentQuoteToken: payment.paymentQuoteToken,
+      cnyAmount: preparedPayment.cnyAmount,
+      paymentAssets: preparedPayment.paymentAssets,
+      paymentQuoteToken: preparedPayment.paymentQuoteToken,
     });
   };
 
@@ -546,6 +548,8 @@ function LimitedProductCartOverlay() {
             <button
               type="button"
               onClick={() => {
+                if (createOrder.isPending) return;
+                payment.cancelPendingPayment();
                 if (success) {
                   setSuccess(null);
                   setCheckoutOpen(false);

@@ -421,12 +421,14 @@ export default function HerbalifeRedGinsengDetail() {
     setShowWalletPayment(true);
   };
 
-  const handleConfirmWalletPayment = () => {
+  const handleConfirmWalletPayment = async () => {
     if (createOrder.isPending || !walletPayment.canPay) return;
     if (!validateShipping()) {
       setShowWalletPayment(false);
       return;
     }
+    const preparedPayment = await walletPayment.preparePayment();
+    if (!preparedPayment) return;
     // 可选地址保存与付款分离：只有订单成功后才保存，失败重试不新增重复地址。
     const addressToSave = saveToBook && currentProduct.orderPolicy.allowAddressBook ? {
         name: receiverName.trim(),
@@ -446,9 +448,9 @@ export default function HerbalifeRedGinsengDetail() {
       receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
-      cnyAmount: cnyDeductAmount,
-      paymentAssets: walletPayment.paymentAssets,
-      paymentQuoteToken: walletPayment.paymentQuoteToken,
+      cnyAmount: preparedPayment.cnyAmount,
+      paymentAssets: preparedPayment.paymentAssets,
+      paymentQuoteToken: preparedPayment.paymentQuoteToken,
     }, {
       onSuccess: () => {
         if (addressToSave) addAddressMutation.mutate(addressToSave);
@@ -1091,7 +1093,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <div className="mb-2 text-[12px] font-semibold text-gray-600">
                     钱包可用余额
                   </div>
-                  <MibanWalletAvailableSummary payment={walletPayment} />
+                  <MibanWalletAvailableSummary payment={walletPayment} disabled={createOrder.isPending} accent={accent} />
                 </div>
               </div>
 
@@ -1273,7 +1275,7 @@ export default function HerbalifeRedGinsengDetail() {
               >
                 {!hasAvailablePaymentWallet
                   ? "查看钱包余额"
-                  : `去支付 · ${totalPriceU.toFixed(2)} USDT`}
+                  : `去支付 · ${paymentSummary}`}
               </button>
             </div>
           </div>
@@ -1284,13 +1286,21 @@ export default function HerbalifeRedGinsengDetail() {
         isCheckoutPage &&
         !orderSuccess &&
         !isPreviewProduct && (
-          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45">
+          <div
+            className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45"
+            onClick={() => {
+              if (createOrder.isPending) return;
+              walletPayment.cancelPendingPayment();
+              setShowWalletPayment(false);
+            }}
+          >
             <div
               className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
               style={{
                 maxWidth: 480,
                 paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
               }}
+              onClick={event => event.stopPropagation()}
             >
               <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200" />
               <div className="flex items-start justify-between gap-4">
@@ -1304,7 +1314,11 @@ export default function HerbalifeRedGinsengDetail() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowWalletPayment(false)}
+                  onClick={() => {
+                    if (createOrder.isPending) return;
+                    walletPayment.cancelPendingPayment();
+                    setShowWalletPayment(false);
+                  }}
                   disabled={createOrder.isPending}
                   className="rounded-lg px-2 py-1 text-[13px] text-gray-500 disabled:opacity-40"
                 >

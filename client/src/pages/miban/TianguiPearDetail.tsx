@@ -324,12 +324,14 @@ export default function TianguiPearDetail() {
     setShowOrderDialog(true);
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (createOrder.isPending || !walletPayment.canPay) return;
     setCheckoutAttempted(true);
     const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" :
       !receiverProvince || (!isMunicipality && !receiverCity) || !receiverDetail.trim() ? "请补全收货地址后再付款" : null);
     if (message) { toast.error(message); return; }
+    const preparedPayment = await walletPayment.preparePayment();
+    if (!preparedPayment) return;
     const addressToSave = saveToBook ? {
         name: receiverName.trim(),
         phone: normalizeMibanReceiverPhone(receiverPhone),
@@ -358,9 +360,9 @@ export default function TianguiPearDetail() {
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       productImg: IMGS.hero,
-      cnyAmount: walletPayment.cnyAmount,
-      paymentAssets: walletPayment.paymentAssets,
-      paymentQuoteToken: walletPayment.paymentQuoteToken,
+      cnyAmount: preparedPayment.cnyAmount,
+      paymentAssets: preparedPayment.paymentAssets,
+      paymentQuoteToken: preparedPayment.paymentQuoteToken,
     }, {
       onSuccess: () => {
         if (addressToSave) addAddressMut.mutate(addressToSave);
@@ -1063,7 +1065,11 @@ export default function TianguiPearDetail() {
       {showOrderDialog && (
         <div
           className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center"
-          onClick={() => setShowOrderDialog(false)}
+          onClick={() => {
+            if (createOrder.isPending) return;
+            walletPayment.cancelPendingPayment();
+            setShowOrderDialog(false);
+          }}
         >
           <div
             className="w-full bg-white rounded-t-3xl overflow-hidden flex flex-col"
@@ -1077,7 +1083,11 @@ export default function TianguiPearDetail() {
                   确认订单
                 </div>
                 <button
-                  onClick={() => setShowOrderDialog(false)}
+                  onClick={() => {
+                    if (createOrder.isPending) return;
+                    walletPayment.cancelPendingPayment();
+                    setShowOrderDialog(false);
+                  }}
                   className="w-8 h-8 rounded-full flex items-center justify-center border-none"
                   style={{ background: "#f5f5f5" }}
                 >

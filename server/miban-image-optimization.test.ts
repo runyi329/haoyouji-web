@@ -527,10 +527,14 @@ describe("lazy routes keep identity, wallet and cart business protections", () =
     const fields = payload.properties.filter(ts.isPropertyAssignment);
     expect(fields.map(node => node.name.getText(file)).sort()).toEqual(["items", "receiverName", "receiverPhone", "receiverAddress", "userNote", "cnyAmount", "paymentAssets", "paymentQuoteToken"].sort());
     for (const name of ["cnyAmount", "paymentAssets", "paymentQuoteToken"]) {
-      expect(fields.find(node => node.name.getText(file) === name)?.initializer.getText(file)).toBe(`payment.${name}`);
+      expect(fields.find(node => node.name.getText(file) === name)?.initializer.getText(file)).toBe(`preparedPayment.${name}`);
     }
     const handlePay = walk(file, node => ts.isVariableDeclaration(node) && node.name.getText(file) === "handlePay")[0];
     const pay = handlePay.getText(file);
+    expect(pay).toContain("await payment.preparePayment()");
+    expect(pay).toContain("if (!preparedPayment) return");
+    expect(pay.indexOf("await payment.preparePayment()")).toBeLessThan(pay.indexOf("if (!preparedPayment) return"));
+    expect(pay.indexOf("if (!preparedPayment) return")).toBeLessThan(pay.indexOf("createOrder.mutate"));
     for (const guard of ["if (createOrder.isPending) return", "if (!selectedAddress)", "if (receiverPhoneError)", "if (!payment.canPay)"]) {
       expect(pay).toContain(guard);
       expect(pay.indexOf(guard)).toBeLessThan(pay.indexOf("createOrder.mutate"));
@@ -548,8 +552,11 @@ describe("lazy routes keep identity, wallet and cart business protections", () =
     expect(source).toContain("setSuccess(data)");
     const payment = pageSource("MibanMixedPayment");
     expect(payment).toContain("const canPay = ready && plan.canPay && reviewed");
-    expect(payment).toContain("Date.now() < expires");
-    expect(payment).toContain('paymentQuoteToken: ready ? liveQuote!.quoteToken : ""');
+    expect(payment).toContain("at < Date.parse(candidate.expiresAt)");
+    expect(payment).toContain('paymentQuoteToken: ready && quote && Date.now() < Date.parse(quote.expiresAt) ? quote.quoteToken : ""');
+    expect(payment).toContain("quoteQuery.refetch({ cancelRefetch: false })");
+    expect(payment).toContain("JSON.stringify(next.paymentAssets) === approvedAssets");
+    expect(payment).toContain("version !== inputVersion.current");
   });
 });
 
