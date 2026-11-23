@@ -19,7 +19,7 @@ import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resol
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
 import { listWalletManualFundingFreezeEvents } from "./db-wallet-manual-freezes";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
-import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
+import { mibanSupplierRouter, mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHash, createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -41011,6 +41011,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       await dbConn.execute(`DELETE FROM grid_sim_logs WHERE id = ?`, [input.id]);
       return { success: true };
     }),
+  supplier: mibanSupplierRouter,
   rice: mibanRiceRouter,
   preset: mibanPresetRouter,
   health: mibanHealthRouter,

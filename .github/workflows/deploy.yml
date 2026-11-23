@@ -131,6 +131,7 @@ jobs:
           rsync -az -e "${SSH_CMD}" server/git-log.json "${REMOTE}:${APP_DIR}/server/git-log.json"
           rsync -az -e "${SSH_CMD}" nginx.conf "${REMOTE}:${APP_DIR}/nginx.conf"
           rsync -az -e "${SSH_CMD}" scripts/configure-tushare-env.py "${REMOTE}:${RELEASE_DIR}/configure-tushare-env.py"
+          rsync -az -e "${SSH_CMD}" scripts/prepare-miban-supplier-deploy.cjs "${REMOTE}:${RELEASE_DIR}/prepare-miban-supplier-deploy.cjs"
           # Secret只经标准输入进入配置器；不进入命令行、源码或部署日志。
           test -n "${TUSHARE_TOKEN}"
           printf '%s' "${TUSHARE_TOKEN}" | ${SSH_CMD} "${REMOTE}" "python3 '${RELEASE_DIR}/configure-tushare-env.py' '${APP_DIR}/.env'"
@@ -156,6 +157,9 @@ jobs:
           test -f "$RELEASE_DIR/public/index.html"
           # rsync 由ubuntu用户直接写入发布目录，无需对整个构建目录重复递归chown。
           chown ubuntu:ubuntu "$RELEASE_DIR" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml" "$APP_DIR/nginx.conf"
+          # 五表结构、实际PM2配置和共享物流密钥须在版本切换前就绪。
+          # 不导入预览授权、历史归属或试验物流，也不改钱包或用户数据。
+          sudo -u ubuntu env HOME=/home/ubuntu node "$RELEASE_DIR/prepare-miban-supplier-deploy.cjs" "$APP_DIR" "$RELEASE_DIR"
           printf '%s\n' "$EXPECTED_SHA" > "$RELEASE_DIR/.deployed-commit"
           chown ubuntu:ubuntu "$RELEASE_DIR/.deployed-commit"
 
@@ -210,6 +214,7 @@ jobs:
           ln -s "$RELEASE_DIR" "$APP_DIR/.dist-next"
           mv -Tf "$APP_DIR/.dist-next" "$APP_DIR/dist"
 
+          cd "$APP_DIR"
           echo "重启 PM2…"
           if sudo -u ubuntu env HOME=/home/ubuntu pm2 describe haoyouji-web >/dev/null 2>&1; then
             sudo -u ubuntu env HOME=/home/ubuntu pm2 restart "$APP_DIR/ecosystem.config.cjs" --update-env

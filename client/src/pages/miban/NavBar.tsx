@@ -5,7 +5,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { toast } from "sonner";
-import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet } from "lucide-react";
+import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet, Store } from "lucide-react";
 import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
 import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { QRCodeSVG } from "qrcode.react";
@@ -223,11 +223,13 @@ function LogoWithVersionSwitch() {
 }
 
 // ─── 用户菜单（角色感知） ─────────────────────────────────────────────────────
-function UserMenu({ user, isAuthenticated, onLogout }: {
+function UserMenu({ user, isAuthenticated, onLogout, supplierAdmin, hasSupplierAccess }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user: any;
   isAuthenticated: boolean;
   onLogout: () => void;
+  supplierAdmin: boolean;
+  hasSupplierAccess: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -287,6 +289,19 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
               {isMibanAdmin ? "管理员" : rankName}
             </p>
           </div>
+
+          {hasSupplierAccess && (
+            <Link href="/p/proj_hzxm2t/supplier" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
+              <Store className="w-4 h-4 text-[#FF6900]" />
+              供货商中心
+            </Link>
+          )}
+          {supplierAdmin && (
+            <Link href="/p/proj_hzxm2t/admin?tab=suppliers" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
+              <Settings className="w-4 h-4 text-[#FF6900]" />
+              供货商管理
+            </Link>
+          )}
 
           {/* 米商入口（仅普通米商显示） */}
           {isMibanAgent && !isMibanAdmin && (
@@ -368,6 +383,15 @@ function PersonalWalletEntry() {
 export default function NavBar() {
   const [location] = useLocation();
   const { user, isAuthenticated } = useAuth();
+  const identity = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const validIdentity = identity.isSuccess && !!identity.data?.id && !identity.error;
+  const supplierAccess = trpc.supplier.access.useQuery(undefined, {
+    enabled: validIdentity,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const supplierAdmin = validIdentity && !supplierAccess.error && supplierAccess.data?.isAdmin === true;
+  const hasSupplierAccess = validIdentity && !supplierAccess.error && (supplierAdmin || (supplierAccess.data?.suppliers.length ?? 0) > 0);
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => { window.location.href = "/p/proj_hzxm2t/"; },
     onError: () => toast.error("退出失败，请重试"),
@@ -400,7 +424,7 @@ export default function NavBar() {
           >
             <PersonalWalletEntry />
             <span aria-hidden="true" className="h-5 w-px shrink-0 bg-orange-100" />
-            <UserMenu user={user} isAuthenticated={isAuthenticated} onLogout={() => logout.mutate()} />
+            <UserMenu user={user} isAuthenticated={isAuthenticated} supplierAdmin={supplierAdmin} hasSupplierAccess={hasSupplierAccess} onLogout={() => logout.mutate()} />
           </div>
         </div>
       </header>

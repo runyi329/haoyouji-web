@@ -2654,3 +2654,48 @@ export const qibanInvoiceSuggestions = mysqlTable("invoice_suggestions", {
   reason: text("reason"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ─── 米伴独立供货商：不复用用户角色/团队；部署仅由 db-init 显式初始化 ───
+export const mibanSuppliers = mysqlTable("miban_suppliers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+}, table => ({ activeIdx: index("miban_suppliers_active_idx").on(table.active) }));
+export const mibanSupplierMembers = mysqlTable("miban_supplier_members", {
+  id: int("id").autoincrement().primaryKey(),
+  supplierId: int("supplier_id").notNull(),
+  userId: int("user_id").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+}, table => ({ supplierUserIdx: uniqueIndex("miban_supplier_member_unique").on(table.supplierId, table.userId),
+  userActiveIdx: index("miban_supplier_member_user_idx").on(table.userId, table.active) }));
+export const mibanSupplierSeries = mysqlTable("miban_supplier_series", {
+  seriesKey: varchar("series_key", { length: 64 }).primaryKey(),
+  supplierId: int("supplier_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+}, table => ({ supplierIdx: index("miban_supplier_series_supplier_idx").on(table.supplierId) }));
+export const mibanSupplierOrderScope = mysqlTable("miban_supplier_order_scope", {
+  orderId: int("order_id").primaryKey(),
+  seriesKey: varchar("series_key", { length: 64 }).notNull(),
+  supplierId: int("supplier_id"),
+  source: varchar("source", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+}, table => ({ supplierOrderIdx: index("miban_supplier_scope_supplier_idx").on(table.supplierId, table.orderId),
+  seriesSupplierIdx: index("miban_supplier_scope_series_idx").on(table.seriesKey, table.supplierId) }));
+export const mibanSupplierAudit = mysqlTable("miban_supplier_audit", {
+  id: int("id").autoincrement().primaryKey(),
+  actorId: int("actor_id").notNull(),
+  supplierId: int("supplier_id"),
+  orderId: int("order_id"),
+  action: varchar("action", { length: 64 }).notNull(),
+  beforeJson: json("before_json").$type<unknown>(),
+  afterJson: json("after_json").$type<unknown>(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, table => ({ supplierTimeIdx: index("miban_supplier_audit_supplier_idx").on(table.supplierId, table.createdAt),
+  orderIdx: index("miban_supplier_audit_order_idx").on(table.orderId),
+  actorTimeIdx: index("miban_supplier_audit_actor_idx").on(table.actorId, table.createdAt) }));

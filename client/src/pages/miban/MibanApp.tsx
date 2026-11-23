@@ -22,6 +22,7 @@ const PresetRecipes = lazy(() => import("./PresetRecipes"));
 const MyRecipes = lazy(() => import("./MyRecipes"));
 const MyOrders = lazy(() => import("./MyOrders"));
 const UnifiedAdmin = lazy(() => import("./UnifiedAdmin"));
+const SupplierCenter = lazy(() => import("./SupplierCenter"));
 const MibanWallet = lazy(() => import("./MibanWallet"));
 const JoinPage = lazy(() => import("./JoinPage"));
 const BrandAssets = lazy(() => import("./BrandAssets"));
@@ -48,7 +49,17 @@ export default function MibanApp() {
     let mounted = true;
     setReady(false);
     setIdentityError(false);
-    void prepareMibanPersonalQueries(queryClient, fetchCurrentUser.current)
+    // Supplier is a root router; the existing miban-prefix personal scope does
+    // not match it. Clear its actual keys before exposing the next identity.
+    const isSupplierQuery = ({ queryKey }: { queryKey: readonly unknown[] }) => {
+      const route = queryKey[0];
+      return Array.isArray(route) && route[0] === "supplier";
+    };
+    void (async () => {
+      await queryClient.cancelQueries({ predicate: isSupplierQuery });
+      queryClient.removeQueries({ predicate: isSupplierQuery });
+      await prepareMibanPersonalQueries(queryClient, fetchCurrentUser.current);
+    })()
       .then(() => { if (mounted) setReady(true); })
       .catch(() => { if (mounted) setIdentityError(true); });
     return () => { mounted = false; };
@@ -122,6 +133,7 @@ export default function MibanApp() {
             <Route path={`${BASE}/my-recipes`} component={MyRecipes} />
             <Route path={`${BASE}/my-orders`} component={MyOrders} />
             <Route path={`${BASE}/wallet`} component={MibanWallet} />
+            <Route path={`${BASE}/supplier`} component={SupplierCenter} />
             <Route path={`${BASE}/admin/panel`} component={UnifiedAdmin} />
             <Route path={`${BASE}/admin`} component={UnifiedAdmin} />
             <Route path={`${BASE}/agent`} component={UnifiedAdmin} />

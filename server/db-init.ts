@@ -108,6 +108,7 @@ export async function initDatabase() {
     const dbConn = await getDbConnection();
     if (dbConn) {
       await ensureOpinionBookColumns(dbConn);
+      await ensureMibanSupplierTables(dbConn);
     }
 
     // ─── 抽奖模块：确保四张表存在 ────────────────────────────────────────────
@@ -1262,4 +1263,50 @@ export async function initMibanCommissionV2(dbConn: any) {
   // 6. 佣金记录表加 payout_multiplier_snapshot 快照字段（记录下单时的团队系数）
   await safeAddColumn(dbConn, 'miban_commissions', 'payout_multiplier_snapshot',
     `DECIMAL(5,4) DEFAULT NULL COMMENT '下单时团队系数快照'`);
+}
+
+/** Explicit deployment initialization only. Never imported/executed by supplier procedures or order hooks. */
+export async function ensureMibanSupplierTables(dbConn: { execute(sql: string): Promise<unknown> }): Promise<void> {
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS miban_suppliers (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX miban_suppliers_active_idx (active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS miban_supplier_members (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, supplier_id INT NOT NULL, user_id INT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY miban_supplier_member_unique (supplier_id,user_id),
+      INDEX miban_supplier_member_user_idx (user_id,active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS miban_supplier_series (
+      series_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+      supplier_id INT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX miban_supplier_series_supplier_idx (supplier_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS miban_supplier_order_scope (
+      order_id INT NOT NULL PRIMARY KEY,
+      series_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+      supplier_id INT NULL, source VARCHAR(32) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX miban_supplier_scope_supplier_idx (supplier_id,order_id),
+      INDEX miban_supplier_scope_series_idx (series_key,supplier_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS miban_supplier_audit (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, actor_id INT NOT NULL, supplier_id INT NULL,
+      order_id INT NULL, action VARCHAR(64) NOT NULL, before_json JSON NULL, after_json JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX miban_supplier_audit_supplier_idx (supplier_id,created_at),
+      INDEX miban_supplier_audit_order_idx (order_id),
+      INDEX miban_supplier_audit_actor_idx (actor_id,created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  ];
+  for (const statement of tables) await dbConn.execute(statement);
 }

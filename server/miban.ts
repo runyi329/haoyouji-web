@@ -60,6 +60,10 @@ import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checko
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
 import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
+import { resolveSupplierOrderScope } from "../shared/miban-supplier";
+import { snapshotMibanSupplierOrderScope } from "./miban-supplier";
+import { rejectLegacyFulfillment } from "./miban-fulfillment";
+export { mibanSupplierRouter } from "./miban-supplier";
 import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
@@ -197,8 +201,19 @@ async function createOrder(
   if (!db) throw new Error("DB not available");
   try {
     console.log("[Miban] createOrder data:", JSON.stringify(data));
+    const scope = resolveSupplierOrderScope(data.ingredients);
+    if (scope.kind === "denied") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "订单商品无法安全确定供货系列" });
+    }
+    if (scope.kind === "series" && !transaction) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "精选订单必须在原下单事务中创建" });
+    }
     const result = await db.insert(mibanOrders).values(data);
-    return (result[0] as any).insertId as number;
+    const orderId = (result[0] as any).insertId as number;
+    if (scope.kind === "series") {
+      await snapshotMibanSupplierOrderScope(transaction, orderId, data.ingredients, data.userId);
+    }
+    return orderId;
   } catch (e: any) {
     console.error("[Miban] createOrder ERROR:", e?.message);
     throw e;
@@ -1081,19 +1096,12 @@ async function updateOrderStatus(
   trackingCompany?: string,
   adminNote?: string
 ) {
+  if (status === "shipped" || trackingNo !== undefined || trackingCompany !== undefined) rejectLegacyFulfillment();
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const now = new Date();
-  const extra: Record<string, any> = {};
-  // 发货时自动记录shippedAt和autoConfirmAt（30天后）
-  if (status === "shipped") {
-    const autoConfirm = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    extra.shippedAt = now;
-    extra.autoConfirmAt = autoConfirm;
-  }
   const [updated] = await db
     .update(mibanOrders)
-    .set({ status, trackingNo, trackingCompany, adminNote, ...extra })
+    .set({ status, adminNote })
     // Cancelled is a financial terminal state. Never reopen it and permit another legacy refund.
     .where(and(eq(mibanOrders.id, id), sql`${mibanOrders.status} <> 'cancelled'`));
   if (Number((updated as any).affectedRows) !== 1) throw new Error("订单已取消、已删除或状态已变动，请刷新后重试");
@@ -3398,6 +3406,7 @@ export const mibanOrderRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      if (input.status === "shipped" || input.trackingNo !== undefined || input.trackingCompany !== undefined) rejectLegacyFulfillment();
       const db = await getDb();
       if (!db)
         throw new TRPCError({
@@ -4115,57 +4124,7 @@ export const mibanOrderRouter = router({
         ),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "DB not available",
-        });
-      let success = 0,
-        notFound = 0,
-        skipped = 0;
-      const results: Array<{
-        orderNo: string;
-        status: "updated" | "not_found" | "skipped";
-      }> = [];
-      const now = new Date();
-      const nowStr = now.toISOString().slice(0, 19).replace("T", " ");
-      const autoConfirmStr = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-      for (const row of input.rows) {
-        if (!row.orderNo || !row.trackingNo.trim()) {
-          skipped++;
-          results.push({ orderNo: row.orderNo ?? "", status: "skipped" });
-          continue;
-        }
-        const existing = await db
-          .select({ id: mibanOrders.id })
-          .from(mibanOrders)
-          .where(eq(mibanOrders.orderNo, row.orderNo.trim()))
-          .limit(1);
-        if (!existing.length) {
-          notFound++;
-          results.push({ orderNo: row.orderNo, status: "not_found" });
-          continue;
-        }
-        await db
-          .update(mibanOrders)
-          .set({
-            trackingNo: row.trackingNo.trim(),
-            trackingCompany: row.trackingCompany?.trim() || null,
-            status: "shipped",
-            shippedAt: nowStr,
-            autoConfirmAt: autoConfirmStr,
-          })
-          .where(eq(mibanOrders.orderNo, row.orderNo.trim()));
-        success++;
-        results.push({ orderNo: row.orderNo, status: "updated" });
-      }
-      return { success, notFound, skipped, results };
-    }),
+    .mutation(() => rejectLegacyFulfillment()),
 
   // 更新管理员备注
   updateAdminNote: mibanAdminProcedure
@@ -4824,6 +4783,7 @@ export const mibanLimitedProductRouter = router({
           name: product.detail.title,
           skuName: sku.name,
           quantity: input.quantity,
+          quantityPerOrder: sku.quantityPerOrder,
           unitLabel: sku.unitLabel,
           netContentText: sku.netContentText,
           ...(sku.fruitCountPerUnit ? { fruitCountPerUnit: sku.fruitCountPerUnit } : {}),
@@ -5122,6 +5082,7 @@ export const mibanLimitedProductRouter = router({
             skuName: line.sku.name,
             image: line.sku.image || line.product.detail.productImage,
             quantity: line.quantity,
+            quantityPerOrder: line.sku.quantityPerOrder,
             unitLabel: line.sku.unitLabel,
             netContentText: line.sku.netContentText,
             ...(line.sku.fruitCountPerUnit ? { fruitCountPerUnit: line.sku.fruitCountPerUnit } : {}),

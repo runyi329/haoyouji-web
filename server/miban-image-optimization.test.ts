@@ -474,10 +474,10 @@ describe("page image migration and first-screen policy", () => {
 });
 
 describe("lazy routes keep identity, wallet and cart business protections", () => {
-  it("declares exactly 20 lazy page modules, with no eager imports for those pages", () => {
+  it("declares exactly 21 lazy page modules, including supplier center, with no eager imports for those pages", () => {
     const file = parse("MibanApp");
     const declarations = walk(file, node => ts.isVariableDeclaration(node) && Boolean(node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(file) === "lazy")) as ts.VariableDeclaration[];
-    const expected = ["Home", "RiceEncyclopedia", "RiceDetail", "DiyWorkshop", "LimitedSale", "AiHealth", "PresetRecipes", "MyRecipes", "MyOrders", "UnifiedAdmin", "MibanWallet", "JoinPage", "BrandAssets", "TianguiPearDetail", "ReviewPage", "HerbalifeRedGinsengDetail", "LimitedBrandProducts", "SeasonalFruitSelection", "MidaniangSelection", "MidaniangSelectionDetail"];
+    const expected = ["Home", "RiceEncyclopedia", "RiceDetail", "DiyWorkshop", "LimitedSale", "AiHealth", "PresetRecipes", "MyRecipes", "MyOrders", "UnifiedAdmin", "MibanWallet", "JoinPage", "BrandAssets", "TianguiPearDetail", "ReviewPage", "HerbalifeRedGinsengDetail", "LimitedBrandProducts", "SeasonalFruitSelection", "MidaniangSelection", "MidaniangSelectionDetail", "SupplierCenter"];
     expect(declarations.map(node => node.name.getText(file)).sort()).toEqual([...expected].sort());
     for (const declaration of declarations) {
       const calls = walk(declaration, node => ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) as ts.CallExpression[];

@@ -1,14 +1,17 @@
 import { MibanImage } from "./MibanImage";
 // @ts-nocheck
-import { useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import InventoryPanel from "./InventoryPanel";
 import LimitedProductsPanel from "./LimitedProductsPanel";
+import SupplierAdminPanel from "./SupplierAdminPanel";
+import FulfillmentPanel from "./FulfillmentPanel";
+import { fulfillmentCandidateFromOrder, type FulfillmentCandidate } from "./fulfillmentModel";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { formatMibanPaymentSummary, getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import {
@@ -45,6 +48,8 @@ import {
   Check,
   Upload,
 } from "lucide-react";
+
+const AdminFulfillmentCenter = lazy(() => import("./AdminFulfillmentCenter"));
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
 function CommissionPreviewBadge({ orderId }: { orderId: number }) {
@@ -181,28 +186,26 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: "text-gray-500 bg-gray-100",
   cancelled: "text-red-500 bg-red-50",
 };
-const COURIER_OPTIONS = [
-  "顺丰速运",
-  "中通快递",
-  "圆通速递",
-  "韵达快递",
-  "申通快递",
-  "极兔速递",
-  "京东快递",
-  "邮政EMS",
-  "德邦快递",
-  "丰网速运",
-  "其他",
-];
 
 function OrdersPanel() {
-  const { data: orders, isLoading, refetch } = mtrpc.order.allOrders.useQuery();
+  const { data: orders, isLoading, refetch } = mtrpc.order.allOrders.useQuery(undefined, {
+    refetchOnWindowFocus: true, refetchInterval: 60_000,
+    refetchIntervalInBackground: false, staleTime: 15_000,
+  });
   const updateMutation = mtrpc.order.updateStatus.useMutation({
     onSuccess: () => {
       toast.success("状态已更新");
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
+  });
+  const noteMutation = mtrpc.order.updateAdminNote.useMutation({
+    onSuccess: () => {
+      setEditingNoteId(null);
+      toast.success("备注已保存");
+      void refetch();
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
   const cancelMutation = mtrpc.order.adminCancel.useMutation({
     onSuccess: (res: any) => {
@@ -225,12 +228,7 @@ function OrdersPanel() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const [trackingInputs, setTrackingInputs] = useState<Record<number, string>>(
-    {}
-  );
-  const [courierInputs, setCourierInputs] = useState<Record<number, string>>(
-    {}
-  );
+  const [shippingOrderId, setShippingOrderId] = useState<number | null>(null);
   const [adminNoteInputs, setAdminNoteInputs] = useState<
     Record<number, string>
   >({});
@@ -273,68 +271,6 @@ function OrdersPanel() {
     return orderCardRefs.current[orderId];
   };
 
-  // 上传回传CSV快递单号
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
-  const [importResult, setImportResult] = useState<{
-    success: number;
-    notFound: number;
-    skipped: number;
-    results: any[];
-  } | null>(null);
-  const importMutation = mtrpc.order.importTrackingNumbers.useMutation({
-    onSuccess: (res: any) => {
-      setImportResult(res);
-      setImportLoading(false);
-      refetch();
-    },
-    onError: (e: any) => {
-      toast.error(e.message ?? "导入失败");
-      setImportLoading(false);
-    },
-  });
-  async function handleImportFile(file: File) {
-    setImportLoading(true);
-    setImportResult(null);
-    const text = await file.text();
-    const lines = text
-      .split("\n")
-      .map((l: string) => l.trim())
-      .filter(Boolean);
-    if (!lines.length) {
-      toast.error("文件为空");
-      setImportLoading(false);
-      return;
-    }
-    let dataStart = 0;
-    if (lines[0].includes("订单号") || lines[0].includes("orderNo"))
-      dataStart = 1;
-    const rows: {
-      orderNo: string;
-      trackingCompany?: string;
-      trackingNo: string;
-    }[] = [];
-    for (let i = dataStart; i < lines.length; i++) {
-      const cols = lines[i]
-        .split(",")
-        .map((c: string) => c.replace(/^"|"$/g, "").trim());
-      const orderNo = cols[1];
-      const trackingCompany = cols[10];
-      const trackingNo = cols[11];
-      if (!orderNo || !trackingNo) continue;
-      rows.push({
-        orderNo,
-        trackingCompany: trackingCompany || undefined,
-        trackingNo,
-      });
-    }
-    if (!rows.length) {
-      toast.error("未找到有效数据（快递单号列为空）");
-      setImportLoading(false);
-      return;
-    }
-    importMutation.mutate({ rows });
-  }
 
   // 导出CSV
   const utils = mtrpc.useUtils();
@@ -376,20 +312,7 @@ function OrdersPanel() {
   // 保存管理员备注
   function saveAdminNote(orderId: number, currentNote: string) {
     const note = adminNoteInputs[orderId] ?? currentNote ?? "";
-    updateMutation.mutate(
-      {
-        id: orderId,
-        status: orders?.find((o: any) => o.id === orderId)?.status ?? "pending",
-        adminNote: note,
-      },
-      {
-        onSuccess: () => {
-          setEditingNoteId(null);
-          toast.success("备注已保存");
-          refetch();
-        },
-      }
-    );
+    noteMutation.mutate({ id: orderId, adminNote: note });
   }
   function toggleSelect(id: number) {
     setSelectedIds(prev => {
@@ -434,6 +357,7 @@ function OrdersPanel() {
     );
   }
 
+  useEffect(() => { setShippingOrderId(null); }, [filterStatus, searchText, filterStartDate, filterEndDate, filterRice, filterMinPrice, filterMaxPrice, filterUser]);
   if (isLoading)
     return (
       <div className="space-y-3">
@@ -627,6 +551,11 @@ function OrdersPanel() {
       ? matchingOrders
       : matchingOrders.filter((o: any) => o.status === filterStatus);
 
+  const fulfillmentScope = JSON.stringify([filterStatus, searchText, filterStartDate, filterEndDate, filterRice, filterMinPrice, filterMaxPrice, filterUser]);
+  const fulfillmentCandidates: FulfillmentCandidate[] = filteredOrders
+    .map((order: unknown) => fulfillmentCandidateFromOrder(order))
+    .filter((order: FulfillmentCandidate | null): order is FulfillmentCandidate => order !== null);
+
   const hasAdvFilter = !!(
     filterStartDate ||
     filterEndDate ||
@@ -637,7 +566,13 @@ function OrdersPanel() {
   );
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
+      <div id="admin-fulfillment" className="min-w-0"><FulfillmentPanel
+        key={fulfillmentScope}
+        orders={fulfillmentCandidates}
+        scopeKey={fulfillmentScope}
+        onChanged={() => void refetch()}
+      /></div>
       {/* 统计栏 - 紧凑单行 */}
       <div className="bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
         {/* 总金额小行 */}
@@ -686,8 +621,8 @@ function OrdersPanel() {
       </div>
 
       {/* 搜索框 + 高级筛选 + 导出 + 批量 */}
-      <div className="flex gap-2 items-center">
-        <div className="relative flex-1">
+      <div className="flex min-w-0 flex-wrap gap-2 items-center">
+        <div className="relative min-w-0 flex-1 basis-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
           <input
             value={searchText}
@@ -732,10 +667,7 @@ function OrdersPanel() {
         </button>
         {/* 上传快递单号按鈕 */}
         <button
-          onClick={() => {
-            setShowImportModal(true);
-            setImportResult(null);
-          }}
+          onClick={() => document.getElementById("admin-fulfillment")?.scrollIntoView({ behavior: "smooth", block: "start" })}
           className="flex-shrink-0 p-2.5 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
           title="上传快递单号"
         >
@@ -1267,10 +1199,7 @@ function OrdersPanel() {
                           type="button"
                           onClick={() => {
                             setStatusMenuOrderId(null);
-                            updateMutation.mutate({
-                              id: order.id,
-                              status: "shipped",
-                            });
+                            setShippingOrderId(order.id);
                           }}
                           className="flex w-full items-center px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-sky-50"
                         >
@@ -1303,55 +1232,17 @@ function OrdersPanel() {
               </div>
             </div>
 
-            {order.status === "confirmed" && (
-              <div data-card-export-hide="true" className="mt-2 space-y-1.5">
-                {/* 快递公司下拉 */}
-                <select
-                  value={courierInputs[order.id] ?? ""}
-                  onChange={e =>
-                    setCourierInputs(p => ({
-                      ...p,
-                      [order.id]: e.target.value,
-                    }))
-                  }
-                  className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300 text-gray-600"
-                >
-                  <option value="">选择快递公司（可选）</option>
-                  {COURIER_OPTIONS.map(c => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                {/* 单号输入 + 发货按鈕 */}
-                <div className="flex items-center gap-2">
-                  <input
-                    value={trackingInputs[order.id] ?? ""}
-                    onChange={e =>
-                      setTrackingInputs(p => ({
-                        ...p,
-                        [order.id]: e.target.value,
-                      }))
-                    }
-                    placeholder="填写快递单号（可选）"
-                    className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
-                  />
-                  <button
-                    onClick={() =>
-                      updateMutation.mutate({
-                        id: order.id,
-                        status: "shipped",
-                        trackingNo: trackingInputs[order.id],
-                        trackingCompany: courierInputs[order.id] || undefined,
-                      })
-                    }
-                    className="text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 text-white flex-shrink-0"
-                    style={{ background: "#FF6900" }}
-                  >
-                    <Truck className="w-3 h-3" />
-                    发货
-                  </button>
-                </div>
+            {["pending", "confirmed", "packing", "shipped"].includes(order.status) && (
+              <div data-card-export-hide="true" className="mt-2 min-w-0 space-y-2">
+                <button type="button" onClick={() => setShippingOrderId(value => value === order.id ? null : order.id)} className="flex min-h-10 items-center gap-1 rounded-xl border border-orange-200 px-3 py-2 text-xs font-semibold text-orange-600">
+                  <Truck className="h-3.5 w-3.5" />{order.status === "shipped" ? "更正物流（先核验）" : "发货（先核验）"}
+                </button>
+                {shippingOrderId === order.id && <FulfillmentPanel
+                  orders={[fulfillmentCandidateFromOrder(order)!]}
+                  scopeKey={`admin-single:${order.id}`}
+                  initialMode={order.status === "shipped" ? "correct" : "ship"}
+                  single onChanged={() => void refetch()} onClose={() => setShippingOrderId(null)}
+                />}
               </div>
             )}
             {/* 已发货时显示快递公司 */}
@@ -1382,6 +1273,7 @@ function OrdersPanel() {
                     className="flex-1 text-[11px] border border-orange-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
                   />
                   <button
+                    disabled={noteMutation.isPending}
                     onClick={() =>
                       saveAdminNote(order.id, order.adminNote ?? "")
                     }
@@ -1572,197 +1464,7 @@ function OrdersPanel() {
         </div>
       )}
 
-      {/* 上传快递单号弹窗 */}
-      {showImportModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.45)" }}
-          onClick={e => {
-            if (e.target === e.currentTarget && !importLoading) {
-              setShowImportModal(false);
-              setImportResult(null);
-            }
-          }}
-        >
-          <div className="bg-white w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden">
-            {/* 弹窗标题 */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center"
-                  style={{ background: "#FFF5EE" }}
-                >
-                  <Upload className="w-4 h-4" style={{ color: "#FF6900" }} />
-                </div>
-                <div>
-                  <p className="text-[14px] font-bold text-gray-800">
-                    上传快递单号
-                  </p>
-                  <p className="text-[11px] text-gray-400">
-                    回传填写完快递信息的 CSV 文件
-                  </p>
-                </div>
-              </div>
-              {!importLoading && (
-                <button
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportResult(null);
-                  }}
-                  className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors"
-                >
-                  <X className="w-3.5 h-3.5 text-gray-500" />
-                </button>
-              )}
-            </div>
 
-            <div className="px-5 py-4 space-y-4">
-              {/* 说明文字 */}
-              {!importResult && !importLoading && (
-                <div className="rounded-xl bg-orange-50 border border-orange-100 px-3.5 py-3 space-y-1">
-                  <p className="text-[12px] font-medium text-orange-700">
-                    操作说明
-                  </p>
-                  <p className="text-[11px] text-orange-600 leading-relaxed">
-                    导出 CSV
-                    后，填写「快递公司（请填写）」和「快递单号（请填写）」两列，回传此文件即可批量更新快递信息并自动标记「已发货」。
-                  </p>
-                </div>
-              )}
-
-              {/* 上传中状态 */}
-              {importLoading && (
-                <div className="flex flex-col items-center justify-center py-8 gap-3">
-                  <Loader2
-                    className="w-8 h-8 animate-spin"
-                    style={{ color: "#FF6900" }}
-                  />
-                  <p className="text-[13px] text-gray-500">
-                    正在处理中，请稍候…
-                  </p>
-                </div>
-              )}
-
-              {/* 上传结果 */}
-              {importResult && (
-                <div className="space-y-3">
-                  {/* 汇总卡片 */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-green-50 border border-green-100 px-2 py-2.5 text-center">
-                      <p className="text-[18px] font-bold text-green-600">
-                        {importResult.success}
-                      </p>
-                      <p className="text-[10px] text-green-500 mt-0.5">
-                        成功更新
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-orange-50 border border-orange-100 px-2 py-2.5 text-center">
-                      <p
-                        className="text-[18px] font-bold"
-                        style={{ color: "#FF6900" }}
-                      >
-                        {importResult.notFound}
-                      </p>
-                      <p className="text-[10px] text-orange-400 mt-0.5">
-                        未找到
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-gray-50 border border-gray-100 px-2 py-2.5 text-center">
-                      <p className="text-[18px] font-bold text-gray-400">
-                        {importResult.skipped}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">跳过</p>
-                    </div>
-                  </div>
-
-                  {/* 未找到订单号列表 */}
-                  {importResult.results.filter(
-                    (r: any) => r.status === "not_found"
-                  ).length > 0 && (
-                    <div className="rounded-xl border border-orange-100 overflow-hidden">
-                      <div className="px-3 py-2 bg-orange-50 border-b border-orange-100">
-                        <p
-                          className="text-[11px] font-semibold"
-                          style={{ color: "#FF6900" }}
-                        >
-                          未找到的订单号
-                        </p>
-                      </div>
-                      <div className="max-h-32 overflow-y-auto divide-y divide-gray-50">
-                        {importResult.results
-                          .filter((r: any) => r.status === "not_found")
-                          .map((r: any, i: number) => (
-                            <div
-                              key={i}
-                              className="px-3 py-1.5 flex items-center justify-between"
-                            >
-                              <span className="text-[11px] text-gray-600 font-mono">
-                                {r.orderNo}
-                              </span>
-                              <span className="text-[10px] text-orange-400 bg-orange-50 px-1.5 py-0.5 rounded-full">
-                                未找到
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <p className="text-[11px] text-gray-400 text-center">
-                    订单列表已自动刷新
-                  </p>
-                </div>
-              )}
-
-              {/* 文件选择区域 */}
-              {!importLoading && (
-                <label
-                  className="flex flex-col items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed cursor-pointer transition-colors py-6"
-                  style={{ borderColor: "#FF6900", background: "#FFFAF7" }}
-                >
-                  <input
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImportFile(file);
-                      e.target.value = "";
-                    }}
-                  />
-                  <Upload className="w-6 h-6" style={{ color: "#FF6900" }} />
-                  <div className="text-center">
-                    <p
-                      className="text-[13px] font-medium"
-                      style={{ color: "#FF6900" }}
-                    >
-                      {importResult ? "重新上传" : "点击选择 CSV 文件"}
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      仅支持 .csv 格式
-                    </p>
-                  </div>
-                </label>
-              )}
-            </div>
-
-            {/* 底部按鈕 */}
-            {!importLoading && (
-              <div className="px-5 pb-5">
-                <button
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportResult(null);
-                  }}
-                  className="w-full py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
-                >
-                  {importResult ? "关闭" : "取消"}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -5254,6 +4956,7 @@ function AgentTeamPanel() {
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 type AdminTabKey =
+  | "fulfillment"
   | "orders"
   | "rice"
   | "inventory"
@@ -5266,7 +4969,8 @@ type AdminTabKey =
   | "referrals"
   | "pending"
   | "aftersale"
-  | "teamOrders";
+  | "teamOrders"
+  | "suppliers";
 
 // ─── 待结算佣金面板 ─────────────────────────────────────────────────────
 function PendingCommissionsPanel() {
@@ -5807,55 +5511,18 @@ function TeamOrdersPanel() {
 
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
+  const identity = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const validIdentity = identity.isSuccess && !!identity.data?.id && !identity.error;
+  const supplierAccess = trpc.supplier.access.useQuery(undefined, { enabled: validIdentity, retry: false, refetchOnWindowFocus: false });
+  const isSupplierAdmin = validIdentity && !supplierAccess.error && supplierAccess.data?.isAdmin === true;
   const username = ((user as any)?.username as string) ?? "";
   const mibanRole = ((user as any)?.mibanRole as string) ?? "baby";
   const isMibanAdmin = username === "jiang";
   const isMibanAgent = mibanRole === "parent";
-
-  // 权限检查
-  if (!isAuthenticated) {
-    return (
-      <div className="bg-white min-h-screen flex items-center justify-center">
-        <div className="text-center px-6">
-          <ShieldCheck className="w-12 h-12 mx-auto mb-4 text-gray-200" />
-          <p className="text-[14px] text-gray-400 mb-4">请先登录</p>
-          <button
-            onClick={() => setLocation("/p/proj_hzxm2t")}
-            className="text-[13px] font-semibold"
-            style={{ color: "#FF6900" }}
-          >
-            返回首页
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isMibanAdmin && !isMibanAgent) {
-    return (
-      <div className="bg-white min-h-screen flex items-center justify-center">
-        <div className="text-center px-6">
-          <ShieldCheck className="w-12 h-12 mx-auto mb-4 text-gray-200" />
-          <p className="text-[14px] text-gray-400 mb-4">
-            此页面仅限管理员或销售团队访问
-          </p>
-          <button
-            onClick={() => setLocation("/p/proj_hzxm2t")}
-            className="text-[13px] font-semibold"
-            style={{ color: "#FF6900" }}
-          >
-            返回首页
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const isAdmin = isMibanAdmin;
-
-  // 管理员标签
-  const adminTabs: Array<{ key: AdminTabKey; label: string }> = isAdmin
+  // Supplier capability must never grant access to unrelated legacy administration.
+  const adminTabs: Array<{ key: AdminTabKey; label: string }> = isMibanAdmin
     ? [
         { key: "orders", label: "订单管理" },
         { key: "pending", label: "待结算" },
@@ -5865,66 +5532,56 @@ export default function UnifiedAdmin() {
         { key: "limitedProducts", label: "限时商品" },
         { key: "users", label: "用户管理" },
         { key: "teamManage", label: "团队管理" },
+        ...(isSupplierAdmin ? [{ key: "fulfillment" as const, label: "全订单物流" }, { key: "suppliers" as const, label: "供货商管理" }] : []),
       ]
     : [
-        // 业务员/团队长标签
-        { key: "team", label: "团队业绩" },
-        { key: "teamOrders", label: "团队订单" },
-        { key: "commission", label: "我的佣金" },
-        { key: "referrals", label: "我的推荐" },
+        ...(isMibanAgent ? [
+          { key: "team" as const, label: "团队业绩" },
+          { key: "teamOrders" as const, label: "团队订单" },
+          { key: "commission" as const, label: "我的佣金" },
+          { key: "referrals" as const, label: "我的推荐" },
+        ] : []),
+        ...(isSupplierAdmin ? [{ key: "fulfillment" as const, label: "全订单物流" }, { key: "suppliers" as const, label: "供货商管理" }] : []),
       ];
+  const [requestedTab, setRequestedTab] = useState<string>(() => new URLSearchParams(search).get("tab") ?? "");
+  useEffect(() => { setRequestedTab(new URLSearchParams(search).get("tab") ?? ""); }, [search]);
+  const activeTab = requestedTab === "suppliers" ? "suppliers" : adminTabs.find(tab => tab.key === requestedTab)?.key ?? adminTabs[0]?.key;
+  const isAdmin = isMibanAdmin || isSupplierAdmin;
+  function changeTab(tab: AdminTabKey) {
+    setRequestedTab(tab);
+    const params = new URLSearchParams(search);
+    params.set("tab", tab);
+    setLocation(`${location.split("?")[0]}?${params.toString()}`, { replace: true });
+  }
 
-  const defaultTab = adminTabs[0].key;
-  const [activeTab, setActiveTab] = useState<AdminTabKey>(defaultTab);
+  if (!isAuthenticated) {
+    return <div className="bg-white min-h-screen flex items-center justify-center"><div className="text-center px-6"><ShieldCheck className="w-12 h-12 mx-auto mb-4 text-gray-200" /><p className="text-[14px] text-gray-400 mb-4">请先登录</p><button onClick={() => setLocation("/p/proj_hzxm2t")} className="text-[13px] font-semibold text-[#FF6900]">返回首页</button></div></div>;
+  }
+  if (!isMibanAdmin && !isMibanAgent && (identity.isLoading || supplierAccess.isLoading)) {
+    return <div role="status" className="py-12 text-center text-sm text-gray-400">正在读取管理权限…</div>;
+  }
+  if (!isMibanAdmin && !isMibanAgent && !isSupplierAdmin) {
+    return <div className="bg-white min-h-screen flex items-center justify-center"><div className="text-center px-6"><ShieldCheck className="w-12 h-12 mx-auto mb-4 text-gray-200" /><p className="text-[14px] text-gray-400 mb-4">{supplierAccess.error ? "供货商管理权限读取失败，请重试" : "此页面仅限管理员或销售团队访问"}</p>{supplierAccess.error && <button type="button" onClick={() => void supplierAccess.refetch()} className="mb-4 block w-full text-sm text-orange-600">重新读取授权</button>}<button onClick={() => setLocation("/p/proj_hzxm2t")} className="text-[13px] font-semibold text-[#FF6900]">返回首页</button></div></div>;
+  }
 
   return (
-    <div className="bg-[#F8F6F3] min-h-screen">
-      {/* 顶部导航 */}
+    <div className="bg-[#F8F6F3] min-h-screen mx-auto w-full max-w-[480px] min-w-0">
       <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-0">
         <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setLocation("/p/proj_hzxm2t")}
-            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:scale-95 transition-transform flex-shrink-0"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[17px] font-bold text-black">
-              {isAdmin ? "管理中心" : "销售中心"}
-            </h1>
-            <p className="text-[11px] text-gray-400">
-              {isAdmin ? "米伴平台运营管理" : "我的销售数据"}
-            </p>
-          </div>
-          <span
-            className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${isAdmin ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"}`}
-          >
-            {isAdmin ? "管理员" : "销售"}
-          </span>
+          <button onClick={() => setLocation("/p/proj_hzxm2t")} aria-label="返回米伴首页" className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:scale-95 transition-transform flex-shrink-0"><ChevronLeft className="w-4 h-4" /></button>
+          <div className="flex-1 min-w-0"><h1 className="text-[17px] font-bold text-black">{isAdmin ? "管理中心" : "销售中心"}</h1><p className="text-[11px] text-gray-400">{isAdmin ? "米伴平台运营管理" : "我的销售数据"}</p></div>
+          <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${isAdmin ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"}`}>{isAdmin ? "管理员" : "销售"}</span>
         </div>
-
-        {/* 管理标签可横向浏览，避免窄屏压缩功能名称。 */}
         <div className="flex gap-0 -mx-4 overflow-x-auto scrollbar-none">
-          {adminTabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2"
-              style={{
-                color: activeTab === tab.key ? "#FF6900" : "#888",
-                borderBottomColor:
-                  activeTab === tab.key ? "#FF6900" : "transparent",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {adminTabs.map(tab => <button key={tab.key} onClick={() => changeTab(tab.key)} className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2" style={{ color: activeTab === tab.key ? "#FF6900" : "#888", borderBottomColor: activeTab === tab.key ? "#FF6900" : "transparent" }}>{tab.label}</button>)}
         </div>
       </div>
-
-      {/* 内容区域 */}
-      <div className="px-4 py-4 pb-24">
-        {activeTab === "orders" && <OrdersPanel />}
+      <div className="px-4 py-4 pb-24 min-w-0">
+        {requestedTab === "suppliers" && !isSupplierAdmin && supplierAccess.isLoading && <p role="status" className="mb-4 text-xs text-gray-400">正在确认供货商管理权限…</p>}
+        {requestedTab === "suppliers" && supplierAccess.error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">供货商管理权限读取失败：{supplierAccess.error.message}</p>}
+        {requestedTab === "suppliers" && !supplierAccess.isLoading && !supplierAccess.error && !isSupplierAdmin && <p role="alert" className="mb-4 rounded-xl bg-orange-50 p-3 text-xs text-orange-700">当前身份没有供货商管理权限，请联系管理员或切换到本人已授权的供货商中心。</p>}
+        {activeTab === "fulfillment" && isSupplierAdmin && validIdentity && <Suspense fallback={<p role="status" className="py-6 text-xs text-gray-400">加载物流中心…</p>}><AdminFulfillmentCenter key={`fulfillment:${identity.data?.id}`} actorId={identity.data!.id} /></Suspense>}
+        {activeTab === "orders" && validIdentity && <OrdersPanel key={`orders:${identity.data?.id}`} />}
         {activeTab === "pending" && <PendingCommissionsPanel />}
         {activeTab === "aftersale" && <AftersalePanel />}
         {activeTab === "rice" && <RicePanel />}
@@ -5933,10 +5590,8 @@ export default function UnifiedAdmin() {
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users" && <UsersPanel />}
         {activeTab === "teamManage" && <SalesPanel />}
-        {/* 业务员视图 */}
-        {(activeTab === "team" ||
-          activeTab === "commission" ||
-          activeTab === "referrals") && <AgentTeamPanel />}
+        {activeTab === "suppliers" && isSupplierAdmin && <SupplierAdminPanel />}
+        {(activeTab === "team" || activeTab === "commission" || activeTab === "referrals") && <AgentTeamPanel />}
         {activeTab === "teamOrders" && <TeamOrdersPanel />}
       </div>
     </div>
