@@ -29,7 +29,28 @@ function find(tree: any, type: string): any {
   for (const child of React.Children.toArray(tree.props?.children)) { const value = find(child, type); if (value) return value; }
 }
 
-describe('普通管理员与普通用户同版，只多双击日历数字登记：真实前端执行', () => {
+function calendarSaveHarness(overrides: Record<string, any> = {}) {
+  const bindings = {
+    operation: { current: false },
+    canSave: true,
+    checkReady: vi.fn(() => true),
+    snapshot: { amount: 1, exists: true, categoryName: '余额', version: 'snapshot-version', images: [] },
+    setError: vi.fn(),
+    scope: actual(dialog, 'scope', { categoryId: 7, date: '2026-11-01' }),
+    amountText: '55.5',
+    overwriteExisting: true,
+    images: [{ imageUrl: 'existing-image.jpg' }, { imageUrl: 'uploaded-image.jpg', uploadToken: 'test-upload-token' }],
+    save: { mutateAsync: vi.fn().mockResolvedValue({ success: true }) },
+    onSaved: vi.fn(),
+    onClose: vi.fn(),
+    setConflict: vi.fn(),
+    safeMessage: actual(dialog, 'safeMessage', {}),
+    ...overrides,
+  };
+  return { bindings, handleSave: actual(dialog, 'handleSave', bindings) };
+}
+
+describe('普通管理员与普通用户同版，只多双击日历余额与照片登记：真实前端执行', () => {
   it.each(['admin', 'member', 'owner', 'super_admin'])('非账本owner即使角色%s，首页不开放管理能力', (userRole) => {
     const permission = { ledgerId: 37, userId: 510025, ownerId: 870413, memberRole: userRole };
     const canManageLedger37 = actual(aa, 'canManageLedger37', { isLedger37FullManager, ledger37Permission: permission });
@@ -47,7 +68,7 @@ describe('普通管理员与普通用户同版，只多双击日历数字登记�
   it.each([36, 52, 59])('非37账本%s仍保留原admin编辑权限', (ledgerId) => {
     expect(actual(aa, 'canEdit', { ledgerId, canManageLedger37: false, userRole: 'admin' })).toBe(true);
   });
-  it('双击录入只打开数字弹窗，不打开股票管理或通用add', () => {
+  it('双击录入只打开余额与照片登记页，不打开股票管理或通用add', () => {
     const setCalendarNumberEditor = vi.fn();
     const setCalendarDateDetail = vi.fn();
     const base = { getDateStr: () => '2020-01-01', canRecordCalendarNumber: true, selectedTagId: 7, isSelectedStockPortfolio: false, calendarNumberTapRef: { current: {} }, setCalendarDateDetail, setCalendarNumberEditor };
@@ -71,27 +92,88 @@ describe('普通管理员与普通用户同版，只多双击日历数字登记�
     const component = actual(add, 'Ledger37AddTransactionEntry', { useAuth: () => ({ user: { id: 870413 } }), useSearch: () => '', useLedger37PresentationContext: () => ({ context: { canManage: true } }), Ledger37PresentationGate: 'gate', AddTransaction: 'manager-form' });
     expect(find(component(), 'manager-form')).toBeTruthy();
   });
-  it.each([false, true])('AI用户登记能力%s不改变AI-only模式，只传单一数字权限', (canRecordCalendar) => {
+  it.each([false, true])('AI用户登记能力%s不改变AI-only模式，只传日历登记权限', (canRecordCalendar) => {
     const component = actual(home, 'Ledger37PresentationGate', { Ledger37AiHome: 'ai-home', Ledger37PresentationPending: 'pending' });
     const tree = component({ ledgerId: 37, presentation: { context: { canManage: false, aiEnabled: true, canRecordCalendar }, viewerUserId: 510025, knownSelfAIgate: true }, children: React.createElement('raw-manager'), onBack: vi.fn() });
     expect(tree.type).toBe('ai-home'); expect(tree.props.canRecordCalendar).toBe(canRecordCalendar); expect(find(tree, 'raw-manager')).toBeUndefined();
   });
-  it('真实数字提交只有受限字段，不包含备注、图片、成员、转账或原记录ID', () => {
-    let index = 0; const states = ['55.5', true, '']; const mutate = vi.fn();
-    const component = actual(dialog, 'Ledger37CalendarNumberDialog', { useState: () => [states[index++], vi.fn()], useEffect: vi.fn(), X: 'icon', trpc: { ledger: {
-      getCalendarNumber: { useQuery: () => ({ isFetchedAfterMount: true, data: { amount: 1, exists: true } }) },
-      saveCalendarNumber: { useMutation: () => ({ isPending: false, mutate }) },
-    } } });
-    const tree = component({ categoryId: 7, date: '2026-11-01', onClose: vi.fn(), onSaved: vi.fn() });
-    find(tree, 'form').props.onSubmit({ preventDefault: vi.fn() });
-    expect(mutate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 7, date: '2026-11-01', amount: 55.5, overwriteExisting: true });
+  it('真实余额照片提交仅包含受限字段和快照版本，成功后刷新并关闭', async () => {
+    const { bindings, handleSave } = calendarSaveHarness();
+    await handleSave();
+    expect(bindings.save.mutateAsync).toHaveBeenCalledTimes(1);
+    const payload = bindings.save.mutateAsync.mock.calls[0][0];
+    expect(Object.keys(payload).sort()).toEqual(['ledgerId', 'categoryId', 'date', 'amount', 'overwriteExisting', 'version', 'images'].sort());
+    expect(payload).toEqual({
+      ledgerId: 37, categoryId: 7, date: '2026-11-01', amount: 55.5,
+      overwriteExisting: true, version: 'snapshot-version',
+      images: [{ imageUrl: 'existing-image.jpg' }, { imageUrl: 'uploaded-image.jpg', uploadToken: 'test-upload-token' }],
+    });
+    expect(bindings.checkReady).toHaveBeenCalledTimes(1);
+    expect(bindings.onSaved).toHaveBeenCalledTimes(1);
+    expect(bindings.onClose).toHaveBeenCalledTimes(1);
+    expect(bindings.onSaved.mock.invocationCallOrder[0]).toBeLessThan(bindings.onClose.mock.invocationCallOrder[0]);
+    expect(bindings.setConflict).not.toHaveBeenCalled();
+    expect(bindings.operation.current).toBe(false);
+  });
+  it.each([
+    ['canSave不满足', { canSave: false }],
+    ['已有操作进行中', { operation: { current: true } }],
+    ['读取检查失败', { checkReady: () => false }],
+    ['缺少快照', { snapshot: null }],
+  ])('%s时真实保存函数不提交', async (_reason, overrides) => {
+    const { bindings, handleSave } = calendarSaveHarness(overrides as Record<string, any>);
+    await handleSave();
+    expect(bindings.save.mutateAsync).not.toHaveBeenCalled();
+    expect(bindings.onSaved).not.toHaveBeenCalled();
+    expect(bindings.onClose).not.toHaveBeenCalled();
+    expect(bindings.setError).not.toHaveBeenCalled();
+  });
+  it('CONFLICT保留登记页并禁止再次保存，必须返回刷新', async () => {
+    const { bindings, handleSave } = calendarSaveHarness();
+    bindings.save.mutateAsync.mockRejectedValueOnce({ data: { code: 'CONFLICT' } });
+    await handleSave();
+    expect(bindings.setConflict).toHaveBeenCalledTimes(1);
+    expect(bindings.setConflict).toHaveBeenCalledWith(true);
+    expect(bindings.setError).toHaveBeenLastCalledWith('记录已变化，请返回日历刷新后核对，再重新打开登记');
+    expect(bindings.onSaved).not.toHaveBeenCalled();
+    expect(bindings.onClose).not.toHaveBeenCalled();
+    expect(bindings.operation.current).toBe(false);
+    const canSave = actual(dialog, 'canSave', {
+      ready: true, validNumber: true, images: bindings.images, busy: false, pending: [],
+      conflict: bindings.setConflict.mock.calls[0][0], snapshot: bindings.snapshot, overwriteExisting: true,
+    });
+    expect(canSave).toBe(false);
+    await actual(dialog, 'handleSave', { ...bindings, canSave })();
+    expect(bindings.save.mutateAsync).toHaveBeenCalledTimes(1);
+  });
+  it('保存结果未成功时不触发刷新或关闭', async () => {
+    const { bindings, handleSave } = calendarSaveHarness();
+    bindings.save.mutateAsync.mockResolvedValueOnce({ success: false });
+    await handleSave();
+    expect(bindings.onSaved).not.toHaveBeenCalled();
+    expect(bindings.onClose).not.toHaveBeenCalled();
+    expect(bindings.operation.current).toBe(false);
   });
   it('手机双点和桌面双击都存在，不把数字日历变成顶部设置或维护按钮', () => {
     expect(aa).toContain('onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}');
     expect(aa).toContain("event.pointerType !== 'touch'");
     expect(calendar).toContain("touchAction: 'manipulation'");
     expect(calendar).not.toMatch(/getTransactions|getTransactionDetail|getCalendarData|StockTagPortfolio|adminGetAllInitialBalances|Settings/);
-    expect(dialog).not.toMatch(/getTransactionDetail|addTransaction|updateTransaction|stockCodes|images|memberId|recordId/);
+    expect(dialog).toContain('trpc.ledger.getCalendarEntry.useQuery');
+    expect(dialog).toContain('trpc.ledger.saveCalendarEntry.useMutation');
+    expect(dialog).toContain('trpc.ledger.uploadCalendarEntryImage.useMutation');
+    expect(dialog).not.toMatch(/getTransactionDetail|addTransaction|updateTransaction|stockCodes|memberId|recordId/);
+  });
+  it('全屏登记不靠背景关闭，拦截打开来源的兼容click', () => {
+    const rootHandlers = dialog.slice(dialog.indexOf('return createPortal('), dialog.indexOf('<section role="dialog"'));
+    expect(rootHandlers).toContain('fixed inset-0');
+    expect(dialog).toContain('h-[100dvh]');
+    expect(rootHandlers).toContain('onPointerDown={event => event.stopPropagation()}');
+    expect(rootHandlers).toContain('onClick={event => event.stopPropagation()}');
+    expect(rootHandlers).not.toContain('onClose');
+    expect(rootHandlers).toContain('if (event.button === 0) freshPointer.current = true;');
+    expect(rootHandlers).toContain('if (!freshPointer.current && event.detail > 0)');
+    expect(rootHandlers).toContain('event.preventDefault(); event.stopPropagation();');
   });
   it('37号所有设置和管理深链集中保护，但本人钱包/正常页面及非37不受影响', () => {
     const MANAGEMENT_PAGES = actual(managementGate, 'MANAGEMENT_PAGES', {});

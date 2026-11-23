@@ -15,7 +15,7 @@ export function isLedger37FullManager(input: Ledger37PermissionInput): boolean {
     && input.userId === ownerId;
 }
 
-/** 普通管理员的唯一额外能力。不能用于股票、设置、钱包、分红或通用交易管理。 */
+/** 普通管理员仅可通过受限接口登记日历余额与照片，不能用于股票、设置、钱包、分红或通用交易管理。 */
 export function canRecordLedger37Calendar(input: Ledger37PermissionInput): boolean {
   return input.ledgerId === 37 && !input.isViewingAs
     && Number.isInteger(input.userId) && input.userId > 0

@@ -97,11 +97,16 @@ async function categoryScope(ctx: Ledger37Actor, input: z.infer<typeof calendarN
   const cutoff = config?.margin_pause_date ?? config?.pause_date ?? config?.end_date;
   const cutoffText = cutoff instanceof Date ? cutoff.toISOString().slice(0, 10) : cutoff == null ? null : String(cutoff).slice(0, 10);
   if (cutoffText && input.date > cutoffText) return fail('该日期的标签已暂停或结束，不可登记');
-  return scope;
+  return { ...scope, category };
 }
+export type Ledger37CalendarRecord = {
+  id: number; amount: string; type: string; description: string | null; stock_codes: string | null;
+  reimbursement_status: string; pending_type: string | null; aj_status: string | null;
+  createdBy: number; images: string | string[] | null; imageUrl: string | null; updatedAt: Date | string | null;
+};
 async function numberRows(connection: any, input: z.infer<typeof calendarNumberSchema>) {
   // Read metadata solely to reject special flows; never include it in the response.
-  const [rows] = await connection.execute(`SELECT id, amount, type, description, reimbursement_status,
+  const [rows] = await connection.execute(`SELECT id, amount, type, description, reimbursement_status, createdBy, images, imageUrl, updatedAt,
     pending_type, aj_status, stock_codes FROM ledger_records WHERE ledgerId = 37 AND categoryId = ?
     AND recordDate = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 2`, [input.categoryId, input.date]);
   if (rows.length > 1) throw new TRPCError({ code: 'CONFLICT', message: '该日标签存在多条或特殊账务记录，请所有者先核对' });
@@ -114,7 +119,14 @@ async function numberRows(connection: any, input: z.infer<typeof calendarNumberS
       throw new TRPCError({ code: 'CONFLICT', message: '该日记录不是普通日历余额，不可通过数字入口读取或覆盖' });
     }
   }
-  return rows as Array<{ id: number; amount: string; description: string | null; stock_codes: string | null }>;
+  return rows as Ledger37CalendarRecord[];
+}
+/** Only server-side narrow entry handlers consume this access result; never expose its scope metadata. */
+export async function getCalendarRecordAccess(ctx: Ledger37Actor, input: z.infer<typeof calendarNumberSchema>) {
+  const parsed = calendarNumberSchema.parse(input);
+  const scope = await categoryScope(ctx, parsed);
+  const rows = await numberRows(scope.connection, parsed);
+  return { ...scope, record: rows[0] ?? null };
 }
 export async function getCalendarNumberCategories(ctx: Ledger37Actor, raw: unknown): Promise<Array<{ categoryId: number; name: string }>> {
   calendarNumberCategoriesSchema.parse(raw);

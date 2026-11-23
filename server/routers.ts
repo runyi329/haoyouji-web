@@ -52,6 +52,8 @@ import * as dbLedger from "./db-ledger";
 import { assertLedger37Owner, assertLedger37ResourceOwner, assertLedger37SelfRead,
   getLedger37Access, calendarNumberCategoriesSchema, calendarNumberSchema, saveCalendarNumberSchema,
   getCalendarNumberCategories, getCalendarNumber, saveCalendarNumber, prepareLedger37PersonalConfigPatch } from './ledger37-calendar-recorder';
+import { calendarEntrySchema, uploadCalendarEntryImageSchema, saveCalendarEntrySchema,
+  getCalendarEntry, uploadCalendarEntryImage, saveCalendarEntry } from './ledger37-calendar-entry';
 import { reviewAJInvoice, resubmitAJInvoice, withdrawAJInvoice, assertAJLedgerAccess, assertAJCompanyAccess, getAJUsdCnyRate } from './aj-invoice-review';
 import { getAJPendingInvoiceChecks, assertAJBatchInvoiceChecks, createAJBatchApprovalGuard } from './aj-invoice-checks';
 import { runAJBatchApproval } from './aj-batch-approval';
@@ -14799,6 +14801,17 @@ ${klinesSummary}
     saveCalendarNumber: protectedProcedure
       .input(saveCalendarNumberSchema)
       .mutation(({ ctx, input }) => saveCalendarNumber(ctx, input)),
+
+    // 普通管理员仅可维护获授权标签/日期的余额和照片；通用管理仍只允许真实owner。
+    getCalendarEntry: protectedProcedure
+      .input(calendarEntrySchema)
+      .query(({ ctx, input }) => getCalendarEntry(ctx, input)),
+    uploadCalendarEntryImage: protectedProcedure
+      .input(uploadCalendarEntryImageSchema)
+      .mutation(({ ctx, input }) => uploadCalendarEntryImage(ctx, input)),
+    saveCalendarEntry: protectedProcedure
+      .input(saveCalendarEntrySchema)
+      .mutation(({ ctx, input }) => saveCalendarEntry(ctx, input)),
 
     // 添加记账记录
     addTransaction: protectedProcedure
