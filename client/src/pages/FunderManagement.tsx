@@ -9,6 +9,7 @@ import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PA
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { calculateFunderInterestDays, formatFunderPendingInterest as formatOriginalFunderPendingInterest, getFunderJointSegmentDisplayOrder, isValidFunderContractInterestPeriod, resolveFunderInterestPresetEndDate, type FunderJointSegmentDisplayOrderMode } from "@shared/funder-interest-period";
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
+import { getWalletCollateralDraftError, getWalletCollateralMaximum } from '@shared/funder-wallet-collateral-input';
 function formatFunderPendingInterest(value: number, contract: boolean): string {
   return Number.isFinite(value) ? formatOriginalFunderPendingInterest(value, contract) : '汇率/估值待更新';
 }
@@ -165,16 +166,8 @@ const formatWalletAssetAmount = (assetCode: string, value: unknown) => {
   });
 };
 
-const formatWalletAssetInput = (assetCode: string, value: unknown) => {
-  const amount = Number(value ?? 0);
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
-  const code = String(assetCode || '').toUpperCase();
-  return safeAmount.toLocaleString('en-US', {
-    useGrouping: false,
-    minimumFractionDigits: ['USDT', 'CNY'].includes(code) ? 2 : 0,
-    maximumFractionDigits: getWalletAssetDisplayDigits(code, safeAmount),
-  });
-};
+// 输入值不是金额展示：水合和失焦都保留原字符串，避免所见数量与实际保存数量不一致。
+const formatWalletAssetInput = (_assetCode: string, value: unknown) => String(value ?? '');
 
 function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
   let raw: unknown = value;
@@ -419,6 +412,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [orderSearchText, setOrderSearchText] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  // 创建主体和冻结分属两次请求；主体已成功时禁止把失败重试变成第二张订单。
+  const newOrderEditorScopeRef = useRef(0);
+  const newOrderCreateContextRef = useRef<{ scope: number; ledgerId: number; userId: number; assets: { coin: string; qty: string; note?: string; source?: 'wallet' }[] } | null>(null);
+  const [createdOrderRecovery, setCreatedOrderRecovery] = useState<{ orderId: number; userId: number } | null>(null);
   // 在同一编辑框中切换拥有者／参与者时，始终保留主订单视图以支持切回。
   const editorRootOrderRef = useRef<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1593,6 +1590,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const currentWalletCollateralOwnerName = currentWalletCollateralContributor?.name
     || getUserDisplayName((funderUsers || []).find((user: any) => Number(user.id ?? user.userId) === walletCollateralUserId) as any)
     || '当前拥有者';
+  // 新建态没有已冻结基线；编辑态只复用本用户、本订单、本段真实台账，绝不加输入草稿。
+  const confirmedWalletCollateralAssets = editingOrder?.id && walletCollateralContributorsQuery.isSuccess && !walletCollateralContributorsQuery.isError
+    ? (currentWalletCollateralContributor?.assets ?? []).filter((asset) => String(asset.jointSegmentId || '__primary__') === activeWalletCollateralSegmentId)
+    : [];
+  const walletCollateralAmountsReady = walletCollateralBalancesQuery.isSuccess && !walletCollateralBalancesQuery.isError
+    && (!editingOrder?.id || (walletCollateralContributorsQuery.isSuccess && !walletCollateralContributorsQuery.isError));
   const walletCollateralHydrationRef = useRef('');
   useEffect(() => {
     const orderId = Number(editingOrder?.id || 0);
@@ -2610,44 +2613,52 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 预览卡片风险敞口直接复用上方的同一公式，避免编辑页两处展示出现不同结果。
   const previewExposure = computedCollateralGap;
 
-  const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
-    onSuccess: async (result) => {
-      try {
-        const orderId = Number((result as any)?.orderId || 0);
-        if (orderId > 0 && collateralAssets.some(isWalletCollateralAsset)) {
-          await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
-        }
-        if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
-      } catch {
-        // 冻结或子视图保存失败时保持表单，避免管理员误以为担保已受控。
-        return;
-      }
-      toast.success('创建成功');
-      setShowForm(false);
+  const completeNewOrderCreation = async (result: unknown) => {
+    const context = newOrderCreateContextRef.current;
+    const orderId = Number((result as any)?.orderId || 0);
+    if (!context || context.scope !== newOrderEditorScopeRef.current || context.ledgerId !== ledgerId) {
+      // 旧响应不能冻结新表单的钱包，也不能关闭另一订单的编辑器。
+      toast.warning(`订单${orderId > 0 ? ` #${orderId}` : ''}主体已创建，请在订单列表确认并继续保存担保`);
       refetchOrders();
-      // 使 LedgerDetail 中的担保缺口数据同步更新
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
-    },
-    onError: (err) => toast.error(err.message),
+      newOrderCreateContextRef.current = null;
+      return;
+    }
+    setCreatedOrderRecovery({ orderId, userId: context.userId });
+    try {
+      if (orderId <= 0) throw new Error('创建结果未返回订单编号，请更新列表核对');
+      if (context.assets.some(isWalletCollateralAsset)) {
+        await persistWalletCollateral(orderId, context.userId, context.assets);
+      }
+      if (context.scope !== newOrderEditorScopeRef.current) return;
+      if (participants.length > 0) await persistParticipantViews(orderId);
+    } catch {
+      if (context.scope === newOrderEditorScopeRef.current) {
+        toast.error(`订单${orderId > 0 ? ` #${orderId}` : ''}主体已创建，但担保或成员设置未全部保存。请返回列表编辑该订单继续，不要重复添加。`);
+      }
+      refetchOrders();
+      return;
+    } finally {
+      newOrderCreateContextRef.current = null;
+    }
+    if (context.scope !== newOrderEditorScopeRef.current) return;
+    setCreatedOrderRecovery(null);
+    toast.success('创建成功');
+    setShowForm(false);
+    refetchOrders();
+    trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+  };
+  const handleNewOrderCreateError = (err: { message: string }) => {
+    newOrderCreateContextRef.current = null;
+    toast.error(err.message);
+  };
+  const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
+    onSuccess: completeNewOrderCreation,
+    onError: handleNewOrderCreateError,
   });
   // 借方创建：当所选用户是账本普通成员时，订单归属右侧（借方）
   const financeCreateMutation = trpc.ledger.financeCreateOrder.useMutation({
-    onSuccess: async (result) => {
-      try {
-        const orderId = Number((result as any)?.orderId || 0);
-        if (orderId > 0 && collateralAssets.some(isWalletCollateralAsset)) {
-          await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
-        }
-        if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
-      } catch {
-        return;
-      }
-      toast.success('创建成功');
-      setShowForm(false);
-      refetchOrders();
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
-    },
-    onError: (err) => toast.error(err.message),
+    onSuccess: completeNewOrderCreation,
+    onError: handleNewOrderCreateError,
   });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: async (result, vars) => {
@@ -2891,6 +2902,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     if (targetSegment && ['settled', 'completed'].includes(String(targetSegment.status || '').toLowerCase())) {
       toast.error('该联合订单段已结清，不能再冻结钱包担保物');
       return;
+    }
+    const draftError = getWalletCollateralDraftError(assets, walletCollateralBalancesQuery.data ?? [], confirmedWalletCollateralAssets, walletCollateralAmountsReady);
+    if (draftError) {
+      toast.error(draftError);
+      throw new Error(draftError);
     }
     const walletAssets = assets
       .filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
@@ -3233,6 +3249,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [formUserSearch, setFormUserSearch] = useState('');
 
   const handleOpenCreate = () => {
+    newOrderEditorScopeRef.current += 1;
+    setCreatedOrderRecovery(null);
     setActiveJointEditorSegmentId('__primary__');
     primaryEditorDraftRef.current = null;
     setParticipants([]);
@@ -3328,6 +3346,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
   const handleOpenEdit = (order: any, scrollTo?: string, preserveEditorRoot = false) => {
+    newOrderEditorScopeRef.current += 1;
+    setCreatedOrderRecovery(null);
     primaryOrderDirtyRef.current = false;
     setActiveJointEditorSegmentId('__primary__');
     primaryEditorDraftRef.current = null;
@@ -3773,6 +3793,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
 
   const handleSubmit = () => {
+    if (createMutation.isPending || financeCreateMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending || saveJointOrderSegmentsMutation.isPending || saveWalletCollateralMutation.isPending) return;
+    if (!editingOrder?.id && (createdOrderRecovery || newOrderCreateContextRef.current)) {
+      toast.error('该订单主体已提交，请返回列表编辑已有订单继续，不要重复添加');
+      return;
+    }
+    // 新增订单先校验担保草稿，避免明知超额还先创建订单，再在冻结步骤失败。
+    if (ledgerId === 52 && !editingOrder?.id) {
+      const draftError = getWalletCollateralDraftError(collateralAssets, walletCollateralBalancesQuery.data ?? [], [], walletCollateralAmountsReady);
+      if (draftError) { toast.error(draftError); return; }
+    }
     if (finitePositive(cnyRate) === null && ((formData.assetType !== 'stock' && formData.amountCurrency === 'CNY') || (formData.assetType === 'crypto_option' && optionFormData.premiumDenomination === 'CNY'))) { toast.error('汇率待更新，不能保存需要换汇的金额'); return; }
     if (isActiveJointEditorSegmentSettled) {
       toast.error('该联合订单段已结清，历史数据已锁定；如需更正请使用结清更正流程');
@@ -4143,6 +4173,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       const selMember = allMembers.find((m: any) => m.userId === formData.userId);
       const selRole = String(selMember?.role || '').toLowerCase();
       const isFunderSide = selRole === 'owner' || selRole === 'admin';
+      newOrderCreateContextRef.current = { scope: newOrderEditorScopeRef.current, ledgerId, userId: formData.userId, assets: collateralAssets.map(asset => ({ ...asset })) };
       if (isFunderSide) {
         createMutation.mutate({ userId: formData.userId, ...payload });
       } else {
@@ -4163,6 +4194,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   const closeOrderEditor = () => {
+    newOrderEditorScopeRef.current += 1;
+    setCreatedOrderRecovery(null);
     primaryOrderDirtyRef.current = false;
     setActiveJointEditorSegmentId('__primary__');
     primaryEditorDraftRef.current = null;
@@ -4667,6 +4700,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               </div>
             )}
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+              {createdOrderRecovery && !editingOrder?.id && (
+                <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                  <p>订单{createdOrderRecovery.orderId > 0 ? ` #${createdOrderRecovery.orderId}` : ''}主体已创建。担保或成员设置尚未全部完成，本表单已阻止重复添加。</p>
+                  <button type="button" onClick={closeOrderEditor} className="mt-2 font-semibold underline">返回订单列表，编辑已有订单继续保存</button>
+                </div>
+              )}
               {isCollaborativeOrderEdit && editorViewTargets.length > 0 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
                   <div className="mb-1 flex items-center justify-between gap-3">
@@ -6356,6 +6395,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-xs text-amber-700">请先选择订单拥有者，才能读取其钱包资产。</div>
                   ) : walletCollateralBalancesQuery.isLoading ? (
                     <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">正在读取钱包可用余额…</div>
+                  ) : walletCollateralBalancesQuery.isError || (editingOrder?.id && walletCollateralContributorsQuery.isError) ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-600">钱包余额或当前冻结读取失败，请更新后再配置担保，原有冻结不会被修改。</div>
                   ) : (walletCollateralBalancesQuery.data ?? []).length === 0 ? (
                     <div className="rounded-lg border border-dashed border-amber-300 bg-white px-3 py-4 text-center text-xs text-amber-700">该用户暂无可用于担保的钱包资产。</div>
                   ) : (
@@ -6365,8 +6406,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         const selected = collateralAssets.find((item) => isWalletCollateralAsset(item) && item.coin === assetCode);
                         const available = Number(asset.availableBalance ?? 0);
                         const frozen = Number(asset.frozenBalance ?? 0);
-                        const selectedAmount = Number(selected?.qty ?? 0);
-                        const maximum = Math.max(0, available + selectedAmount);
+                        const maximum = getWalletCollateralMaximum(asset.availableBalance, assetCode, confirmedWalletCollateralAssets);
                         const selectedInputValue = selected
                           ? (walletCollateralInputDrafts[assetCode] ?? formatWalletAssetInput(assetCode, selected.qty))
                           : '';
@@ -6394,7 +6434,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                               ) : (
                                 <button
                                   type="button"
-                                  disabled={available <= 0 || (!walletCollateralEditMode && !!editingOrder?.id)}
+                                  disabled={!walletCollateralAmountsReady || maximum === null || Number(maximum) <= 0 || (!walletCollateralEditMode && !!editingOrder?.id)}
                                   onClick={() => {
                                     setCollateralAssets((previous) => [...previous, { coin: assetCode, qty: '', note: '钱包担保冻结', source: 'wallet' }]);
                                     setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: '' }));
@@ -6408,7 +6448,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                 <input
                                   type="number"
                                   min="0"
-                                  max={maximum > 0 ? maximum : undefined}
+                                  max={maximum ?? undefined}
                                   step={inputStep}
                                   value={selectedInputValue}
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
@@ -6422,9 +6462,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500 disabled:bg-gray-50"
                                 />
                                 <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
-                                <button type="button" disabled={!walletCollateralEditMode && !!editingOrder?.id} onClick={() => {
+                                <button type="button" disabled={!walletCollateralAmountsReady || maximum === null || Number(maximum) <= 0 || (!walletCollateralEditMode && !!editingOrder?.id)} onClick={() => {
+                                  if (!walletCollateralAmountsReady || maximum === null) return;
                                   setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: String(maximum), source: 'wallet' } : item));
-                                  setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: formatWalletAssetInput(assetCode, maximum) }));
+                                  setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: maximum }));
                                 }} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
                               </div>
                             )}
@@ -6440,12 +6481,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       {editingOrder?.id && (
                         <button
                           type="button"
-                          onClick={() => void persistWalletCollateral(Number(editingOrder.id), walletCollateralUserId, collateralAssets, activeWalletCollateralSegmentId)}
-                          disabled={saveWalletCollateralMutation.isPending || walletCollateralUserId <= 0}
+                          onClick={() => void persistWalletCollateral(Number(editingOrder.id), walletCollateralUserId, collateralAssets, activeWalletCollateralSegmentId).catch(() => undefined)}
+                          disabled={saveWalletCollateralMutation.isPending || walletCollateralUserId <= 0 || !walletCollateralAmountsReady}
                           className="w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                         >{saveWalletCollateralMutation.isPending ? '冻结保存中…' : `保存并冻结${activeWalletCollateralSegmentLabel}的钱包担保`}</button>
                       )}
-                      {!editingOrder?.id && <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-amber-700">新建订单保存成功后，所选资产会立即进入冻结担保；余额不足将不会创建担保冻结。</div>}
+                      {!editingOrder?.id && <>
+                        <button type="button" onClick={handleSubmit}
+                          disabled={!!createdOrderRecovery || createMutation.isPending || financeCreateMutation.isPending || saveWalletCollateralMutation.isPending || walletCollateralUserId <= 0 || !walletCollateralAmountsReady}
+                          className="w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                        >{createMutation.isPending || financeCreateMutation.isPending || saveWalletCollateralMutation.isPending ? '保存并冻结中…' : '保存订单并冻结钱包担保物'}</button>
+                        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-amber-700">此按钮与底部“确认添加”是同一次保存：先保存完整订单，再冻结所选钱包担保，不会额外新增一张订单。超额数量会被拦截；冻结未成功时不会显示保存成功。</div>
+                      </>}
                     </>
                   )}
                 </div>
@@ -7411,11 +7458,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               <button
                 data-editor-save
                 onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending || saveJointOrderSegmentsMutation.isPending}
+                disabled={(!editingOrder?.id && !!createdOrderRecovery) || createMutation.isPending || financeCreateMutation.isPending || saveWalletCollateralMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending || saveJointOrderSegmentsMutation.isPending}
                 className="w-full py-3.5 rounded-xl text-white font-semibold text-base disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
               >
-                {(createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending || saveJointOrderSegmentsMutation.isPending)
+                {(createMutation.isPending || financeCreateMutation.isPending || saveWalletCollateralMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending || saveJointOrderSegmentsMutation.isPending)
                   ? (saveJointOrderSegmentsMutation.isPending ? '保存联合分段中...' : '提交中...')
                   : editingOrder && !isSnapshotScopedEdit
                     ? `保存订单与 ${participants.length} 位参与者`

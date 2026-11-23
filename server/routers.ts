@@ -26621,6 +26621,12 @@ ${klinesSummary}
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const transaction = conn as any;
         try {
+          // MySQL普通DDL会隐式提交；必须在资金事务开始前初始化日志表。
+          await transaction.execute(`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, order_id INT NOT NULL, operator_id INT NOT NULL,
+            action VARCHAR(50) NOT NULL, before_data TEXT DEFAULT NULL, after_data TEXT DEFAULT NULL, note TEXT DEFAULT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_order_id (order_id), INDEX idx_ledger_id (ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
           await transaction.beginTransaction();
           const [roleRows] = await transaction.execute(
             `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
@@ -26797,11 +26803,6 @@ ${klinesSummary}
               [JSON.stringify(snapshot), Number(participantRow.id)],
             );
           }
-          await transaction.execute(`CREATE TABLE IF NOT EXISTS ledger_order_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, order_id INT NOT NULL, operator_id INT NOT NULL,
-            action VARCHAR(50) NOT NULL, before_data TEXT DEFAULT NULL, after_data TEXT DEFAULT NULL, note TEXT DEFAULT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_order_id (order_id), INDEX idx_ledger_id (ledger_id)
-          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
           await transaction.execute(
             `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, before_data, after_data, note)
              VALUES (?, ?, ?, 'wallet_collateral_sync', ?, ?, ?)`,

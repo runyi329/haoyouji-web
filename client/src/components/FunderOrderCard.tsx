@@ -2,6 +2,7 @@ import { finitePositive, getUsdtCnyRate, getUsdCnyRate, getUsdtCnyRateFromPrices
 import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, isFunderSettledStatus, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
 import { selectFunderWalletCollateralDisplay } from '@shared/funder-wallet-collateral-display';
+import { getWalletCollateralDraftError, getWalletCollateralMaximum } from '@shared/funder-wallet-collateral-input';
 // ===== FunderOrderCard 共享组件 =====
 // @refresh reset
 // 此文件由 FunderManagement.tsx 抽取，前后端统一使用此组件
@@ -1849,6 +1850,8 @@ export function FunderOrderCard({
       staleTime: 0,
     },
   );
+  const quickWalletCollateralAmountsReady = quickWalletCollateralBalancesQuery.isSuccess && !quickWalletCollateralBalancesQuery.isError
+    && !isSettlementFinal && selectFunderWalletCollateralDisplay(order, []).state === 'loaded';
   const _intSaveWalletCollateralMutation = trpc.ledger.funderSaveWalletCollateral.useMutation({
     onSuccess: () => {
       toast.success('钱包担保已冻结保存');
@@ -2047,8 +2050,11 @@ export function FunderOrderCard({
     const assets = walletCollateralEditItems
       .filter((asset) => asset.coin && asset.qty.trim() !== '')
       .map((asset) => ({ coin: asset.coin, qty: asset.qty.trim() }));
-    if (assets.some((asset) => !/^([1-9]\d{0,17})(?:\.\d{1,18})?$/.test(asset.qty))) {
-      toast.error('钱包担保数量必须大于 0，且最多支持 18 位小数');
+    const draftError = getWalletCollateralDraftError(walletCollateralEditItems, quickWalletCollateralBalancesQuery.data ?? [],
+      getSegmentWalletCollateralItems(selectedJointCollateralSegmentId || '__primary__', quickWalletCollateralUserId),
+      quickWalletCollateralAmountsReady);
+    if (draftError) {
+      toast.error(draftError);
       return;
     }
     _intSaveWalletCollateralMutation.mutate({
@@ -5972,6 +5978,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">正在读取钱包可用余额…</div>
               ) : quickWalletCollateralBalancesQuery.isError ? (
                 <div className="rounded-lg border border-red-200 bg-white px-3 py-3 text-center text-xs text-red-500">钱包资产读取失败，请刷新后重试。</div>
+              ) : selectFunderWalletCollateralDisplay(order, []).state !== 'loaded' ? (
+                <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-center text-xs text-amber-700">当前订单钱包冻结尚未确认，请更新后再保存。</div>
               ) : (quickWalletCollateralBalancesQuery.data ?? []).length === 0 ? (
                 <div className="rounded-lg border border-dashed border-amber-300 bg-white px-3 py-4 text-center text-xs text-amber-700">该用户暂无可用于担保的数字资产。</div>
               ) : (
@@ -5981,8 +5989,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     const selected = walletCollateralEditItems.find((item) => item.coin === assetCode);
                     const available = Number(asset.availableBalance ?? 0);
                     const frozen = Number(asset.frozenBalance ?? 0);
-                    // 已为本订单选定的数量允许回填；其它订单冻结部分绝不被当作可用额度。
-                    const maximum = Math.max(0, available + Number(selected?.qty ?? 0));
+                    // 仅复用本用户当前段真实已冻结量；输入草稿和其他段不能扩大上限。
+                    const maximum = getWalletCollateralMaximum(asset.availableBalance, assetCode,
+                      getSegmentWalletCollateralItems(selectedJointCollateralSegmentId || '__primary__', quickWalletCollateralUserId));
                     return (
                       <div key={assetCode} className="rounded-lg border border-amber-100 bg-white px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2">
@@ -5999,7 +6008,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           ) : (
                             <button
                               type="button"
-                              disabled={available <= 0}
+                              disabled={!quickWalletCollateralAmountsReady || maximum === null || Number(maximum) <= 0}
                               onClick={() => setWalletCollateralEditItems((previous) => [...previous, { coin: assetCode, qty: '', note: '钱包担保冻结', source: 'wallet' }])}
                               className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
                             >选择</button>
@@ -6011,7 +6020,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               type="number"
                               inputMode="decimal"
                               min="0"
-                              max={maximum > 0 ? maximum : undefined}
+                              max={maximum ?? undefined}
                               step="0.00000001"
                               value={selected.qty}
                               onChange={(event) => setWalletCollateralEditItems((previous) => previous.map((item) => item.coin === assetCode ? { ...item, qty: event.target.value, note: '钱包担保冻结', source: 'wallet' } : item))}
@@ -6019,7 +6028,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500"
                             />
                             <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
-                            <button type="button" onClick={() => setWalletCollateralEditItems((previous) => previous.map((item) => item.coin === assetCode ? { ...item, qty: String(maximum), note: '钱包担保冻结', source: 'wallet' } : item))} className="text-xs font-semibold text-amber-700">全部</button>
+                            <button type="button" disabled={!quickWalletCollateralAmountsReady || maximum === null || Number(maximum) <= 0}
+                              onClick={() => {
+                                if (!quickWalletCollateralAmountsReady || maximum === null) return;
+                                setWalletCollateralEditItems((previous) => previous.map((item) => item.coin === assetCode ? { ...item, qty: maximum, note: '钱包担保冻结', source: 'wallet' } : item));
+                              }} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
                           </div>
                         )}
                       </div>
@@ -6030,7 +6043,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               <button
                 type="button"
                 onClick={handleSaveWalletCollateral}
-                disabled={_intSaveWalletCollateralMutation.isPending || quickWalletCollateralUserId <= 0}
+                disabled={_intSaveWalletCollateralMutation.isPending || quickWalletCollateralUserId <= 0 || !quickWalletCollateralAmountsReady}
                 className="w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               >{_intSaveWalletCollateralMutation.isPending ? '冻结保存中…' : '保存并冻结钱包担保'}</button>
             </div>

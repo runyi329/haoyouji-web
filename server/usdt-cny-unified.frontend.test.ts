@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import * as fx from '../shared/usdt-cny-display';
 import { buildWalletDigitalAssets, formatDigitalAssetAmount } from '../client/src/lib/walletDigitalAssets';
+import { getWalletCollateralDraftError } from '../shared/funder-wallet-collateral-input';
 
 const paths = ['pages/FunderManagement', 'pages/LedgerDetail', 'pages/PositionCalc', 'pages/AfFeeDetail',
   'pages/FinanceManagement', 'pages/Wallet', 'components/FunderOrderCard', 'components/FunderOrderDetailModal', 'pages/OrderFlowPage'];
@@ -182,7 +183,12 @@ describe('actual production TSX/AST input, wiring and execution', () => {
     const mutate = vi.fn(), toast = { error: vi.fn() };
     const fn = expression<() => void>('handleSubmit', 'pages/FunderManagement', { cnyRate: NaN,
       formData: { assetType: 'crypto', amountCurrency: 'CNY' }, optionFormData: {}, toast,
-      createMutation: { mutate }, updateMutation: { mutate } });
+      ledgerId: 52, editingOrder: null, collateralAssets: [], walletCollateralAmountsReady: false,
+      createdOrderRecovery: null, newOrderCreateContextRef: { current: null }, newOrderEditorScopeRef: { current: 1 },
+      walletCollateralBalancesQuery: { data: undefined }, getWalletCollateralDraftError,
+      createMutation: { mutate, isPending: false }, financeCreateMutation: { mutate, isPending: false },
+      updateMutation: { mutate, isPending: false }, updateParticipantOrderMutation: { mutate, isPending: false },
+      saveJointOrderSegmentsMutation: { mutate, isPending: false }, saveWalletCollateralMutation: { mutate, isPending: false } });
     fn(); expect(mutate).not.toHaveBeenCalled(); expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('汇率待更新'));
   });
   it('52 wallet absent FX is unknown but keeps original CNY/USDT totals and independent frozen-only coin quantities', () => {
