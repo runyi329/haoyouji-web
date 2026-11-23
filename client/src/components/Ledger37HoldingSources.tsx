@@ -222,7 +222,7 @@ function HoldingCompactRow({ row, detail = false, showQuote = false }: { row: Le
   const quote = showQuote ? ledger37HoldingQuoteLabel(row.quote, row.currency) : null;
   return <li data-holding-compact="true" data-inline-holding-row={detail ? undefined : row.symbol} data-holding-row={detail ? "true" : undefined} className="flex min-h-9 min-w-0 flex-wrap items-center gap-3 gap-y-0 py-2">
     <span title={name} className="min-w-0 flex-[1.3] truncate text-[12px] font-medium leading-5 text-[#142A3F]">{name}</span>
-    {showQuote && <span data-holding-quote={quote ? "available" : "unavailable"} title={quote ? `股价 ${row.quote!.amount} ${row.quote!.currency} · 行情日期 ${row.quote!.asOf}` : "股价待更新"} aria-label={`股价 ${quote || "待更新"}`} className="w-[76px] min-w-0 shrink-0 break-words text-right text-[11px] font-medium leading-5 tabular-nums text-[#61758A]"><span className="inline-flex max-w-full flex-wrap items-baseline justify-end gap-x-0.5 rounded-[5px] bg-[#EAF2F7] px-1.5 py-0.5 leading-4 text-[#142A3F]">{quote ? <><span className="min-w-0 break-all">{quote.slice(0, -2)}</span><sup aria-hidden="true" data-holding-quote-unit={row.currency === "CNY" ? "CNY" : "USD"} className="relative -top-[3px] shrink-0 text-[8px] font-medium leading-none">{quote.slice(-1)}</sup></> : "待更新"}</span></span>}
+    {showQuote && <span data-holding-quote={quote ? "available" : "unavailable"} title={quote ? `股价 ${row.quote!.amount} ${row.quote!.currency} · 行情日期 ${row.quote!.asOf}` : "股价待更新"} aria-label={`股价 ${quote || "待更新"}`} className="w-[76px] min-w-0 shrink-0 break-words text-right text-[11px] font-medium leading-5 tabular-nums text-[#61758A]"><span className="inline-flex max-w-full flex-wrap items-baseline justify-end gap-x-0.5 rounded-[5px] bg-[#EAF2F7] px-1.5 py-0.5 leading-4 text-[#142A3F]">{quote ? <><span className="min-w-0 break-all">{quote.slice(0, -2)}</span><span aria-hidden="true" data-holding-quote-unit={row.currency === "CNY" ? "CNY" : "USD"} className="shrink-0 text-[8px] font-medium leading-none">{quote.slice(-1)}</span></> : "待更新"}</span></span>}
     <div aria-hidden="true" data-holding-bar={weight === null ? "neutral" : "disclosed"} className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[#EAF2F7]">{weight !== null && <div className="h-full rounded-full" style={{ width: `${weight}%`, backgroundColor: ledger37HoldingColor(row) }} />}</div>
     <span className={`w-14 shrink-0 text-right text-[11px] font-semibold leading-5 tabular-nums ${weight === null ? "text-[#61758A]" : "text-[#142A3F]"}`}>{ledger37HoldingWeightLabel(weight)}</span>
   </li>;
@@ -292,6 +292,12 @@ export function ledger37HoldingTradeDate(value: string | null | undefined): stri
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
 }
 
+/** Only the verified calendar month is shown; never infer a month from today. */
+export function ledger37HoldingChangeMonthLabel(value: string | null | undefined): string | null {
+  if (typeof value !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return null;
+  return `${Number(value.slice(5))}月`;
+}
+
 function HoldingPositionChangeList({ changes, trades }: { changes?: Ledger37HoldingPositionChange[]; trades?: Ledger37HoldingClosedTrade[] }) {
   const [page, setPage] = useState(0);
   // New safe records are authoritative, including an empty array. Legacy cached
@@ -300,7 +306,7 @@ function HoldingPositionChangeList({ changes, trades }: { changes?: Ledger37Hold
   const records: Ledger37HoldingPositionChange[] = changes === undefined
     ? (Array.isArray(trades) ? trades : []).filter(row => row && typeof row.symbol === "string" && typeof row.stockName === "string")
       .slice().sort((a, b) => (ledger37HoldingTradeDate(b.closedDate) || "").localeCompare(ledger37HoldingTradeDate(a.closedDate) || ""))
-      .map(row => ({ symbol: row.symbol, stockName: row.stockName, action: "decrease" }))
+      .map(row => ({ symbol: row.symbol, stockName: row.stockName, action: "decrease", month: ledger37HoldingTradeDate(row.closedDate)?.slice(0, 7) ?? null }))
     : Array.isArray(changes) ? changes : [];
   const rows = records.filter(row => row && typeof row.symbol === "string" && row.symbol.trim() && typeof row.stockName === "string"
     && ["new", "increase", "decrease"].includes(row.action));
@@ -310,7 +316,10 @@ function HoldingPositionChangeList({ changes, trades }: { changes?: Ledger37Hold
     <p className="border-b border-[#EAF2F7] px-3 py-3 text-[11px] text-[#61758A]">我的仓位变动</p>
     {rows.length ? <ul aria-label="仓位变动记录" className="divide-y divide-[#EAF2F7] px-3">{rows.slice(currentPage * 20, (currentPage + 1) * 20).map((row, index) => <li key={`${row.symbol}:${row.action}:${currentPage}:${index}`} data-holding-position-change={row.action} className="flex min-w-0 items-center justify-between gap-3 py-3">
       <span title={row.stockName || row.symbol} className="min-w-0 truncate text-[12px] font-medium text-[#142A3F]">{row.stockName || row.symbol}</span>
-      <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] ${row.action === "decrease" ? "bg-[#EAF5EF] text-[#2E7D32]" : "bg-[#E4F4F6] text-[#087987]"}`}>{row.action === "new" ? "新增" : row.action === "increase" ? "增持" : "减持"}</span>
+      <span className="inline-flex shrink-0 items-center gap-1.5">
+        {ledger37HoldingChangeMonthLabel(row.month) && <span data-holding-position-month="true" className="text-[10px] tabular-nums text-[#61758A]">{ledger37HoldingChangeMonthLabel(row.month)}</span>}
+        <span className={`rounded px-2 py-0.5 text-[10px] ${row.action === "decrease" ? "bg-[#EAF5EF] text-[#2E7D32]" : "bg-[#E4F4F6] text-[#087987]"}`}>{row.action === "new" ? "新增" : row.action === "increase" ? "增持" : "减持"}</span>
+      </span>
     </li>)}</ul> : <p className="px-4 py-6 text-center text-xs text-[#61758A]">{known ? "暂无仓位变动记录" : "交易记录待更新"}</p>}
     {pages > 1 && <nav aria-label="交易变动分页" className="flex items-center justify-between border-t border-[#EAF2F7] px-3 text-[11px] text-[#61758A]"><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} className="min-h-[44px] px-2 disabled:opacity-40">上一页</button><span>{currentPage + 1} / {pages}</span><button type="button" disabled={currentPage === pages - 1} onClick={() => setPage(currentPage + 1)} className="min-h-[44px] px-2 disabled:opacity-40">下一页</button></nav>}
   </div>;

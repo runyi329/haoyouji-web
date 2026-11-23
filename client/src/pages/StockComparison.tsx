@@ -20,6 +20,7 @@ import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 import { getAShareCompletedCutoff } from "../../../shared/a-share-completed-days";
 import { StockLifecyclePanel } from "./StockLifecycle";
 import { aiStockDisplayName, aiStockNeedsDelistedBadge } from "@/lib/ai-stock-display-name";
+import { preserveLedger37AiResearchScope } from "@/lib/ledger37-ai-research-navigation";
 
 type Period = "30" | "60" | "90" | "180" | "365" | "lifetime";
 type StreakPeriod = Exclude<Period, "lifetime">;
@@ -405,7 +406,7 @@ function StockHorizontalComparison({
     windowDays < Number(period);
   const historical = data?.source === "lifecycle";
   const openStock = (stock: Pick<ComparisonItem, "tsCode">) =>
-    setLocation(`/stock/${stock.tsCode.replace(/\./g, "-")}`);
+    setLocation(preserveLedger37AiResearchScope(`/stock/${stock.tsCode.replace(/\./g, "-")}`, window.location.search));
   const retry = () => {
     if (isReturns) returnQueryRef.current?.refetch();
     else if (isStreaks) streakQueryRef.current?.refetch();

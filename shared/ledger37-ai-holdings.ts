@@ -32,11 +32,13 @@ export type Ledger37HoldingClosedTrade = {
   openedDate: string | null;
   closedDate: string | null;
 };
-/** Proven member allocations/sales only; no dates, quantities or project/order identifiers. */
+/** Proven member allocations/sales only; only month precision, never days/time/quantities/private ids. */
 export type Ledger37HoldingPositionChange = {
   symbol: string;
   stockName: string;
   action: 'new' | 'increase' | 'decrease';
+  /** Beijing month precision only (YYYY-MM); unknown months remain null. */
+  month?: string | null;
 };
 export type Ledger37HoldingSource = {
   id: Ledger37HoldingSourceId;

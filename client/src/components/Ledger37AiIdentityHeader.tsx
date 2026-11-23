@@ -2,6 +2,8 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
+import AnimatedStockAILogo from "@/components/AnimatedStockAILogo";
+import { ledger37AiResearchEntryHref } from "@/lib/ledger37-ai-research-navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Ledger37PresentationContext, Ledger37AiViewer } from "@shared/ledger37-ai-presentation";
 
@@ -48,6 +50,10 @@ export function Ledger37AiIdentityHeaderRenderer({ context, viewerUserId, onBack
 }) {
   const viewer = resolveLedger37AiViewer(context, viewerUserId);
   const walletHref = ledger37AiWalletHref(context, viewerUserId);
+  const aiResearchHref = viewer && context && (context.aiEnabled || context.canManage)
+    ? ledger37AiResearchEntryHref(context.isViewingAs ? viewerUserId : undefined, typeof window === "undefined" ? "" : window.location.search)
+    : null;
+  const researchOpen = typeof window !== "undefined" && /^\/ledger\/37\/(ai-database|stock-compare|stock-monitor|stock-lifecycle)\/?$/.test(window.location.pathname);
   const ownWallet = walletHref && viewer && wallet?.viewerUserId === viewerUserId ? wallet : undefined;
   const value = typeof ownWallet?.availableCny === "number" && Number.isFinite(ownWallet.availableCny) ? ownWallet.availableCny : null;
   const amount = value !== null ? `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -62,12 +68,13 @@ export function Ledger37AiIdentityHeaderRenderer({ context, viewerUserId, onBack
       <span className="sr-only">可用余额{viewer?.username ? ` · @${viewer.username}` : ""}{walletError && value !== null ? "，最近成功值" : ""}</span>
     </div>
   </>;
-  return <header aria-label="用户与钱包" className="border-b border-[#DCE7F0] bg-[#F2F6FA] text-[#61758A]" style={{ background: "#F2F6FA" }}>
-    <div className="mx-auto flex max-w-[480px] items-center gap-2 px-3 py-3">
-      <div data-wallet-avatar-group="true" className="inline-flex min-h-[52px] min-w-0 max-w-full flex-1 items-center gap-2 rounded-lg border border-[#DCE7F0] bg-white py-1.5 pl-2 pr-2.5 shadow-none">
+  return <header aria-label="用户、钱包与AI" data-ledger37-ai-identity-header="true" className="bg-[#F2F6FA] text-[#61758A]" style={{ background: "#F2F6FA" }}>
+    <div className="mx-auto flex max-w-[480px] items-center px-3 pb-2 pt-3">
+      <div data-wallet-avatar-group="true" className="inline-flex min-h-[60px] min-w-0 max-w-full flex-1 items-center gap-2 overflow-hidden rounded-xl border border-[#DCE7F0] bg-white py-1 pl-2 pr-1 shadow-none">
         <Ledger37AiAvatarMenu key={viewerUserId} viewer={viewer} onBack={onBack} />
         {walletHref ? <a key={viewerUserId} href={walletHref} aria-label="查看此用户的钱包" title={title} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-md active:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087987]">{info}</a>
           : <button type="button" disabled aria-label="钱包身份待确认" className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-md opacity-60">{info}</button>}
+        {aiResearchHref && <a href={aiResearchHref} aria-label="打开AI股票研究" aria-current={researchOpen ? "page" : undefined} title="AI股票研究" data-ledger37-ai-research-entry="true" className={`flex min-h-[48px] w-[52px] shrink-0 items-center justify-center rounded-r-lg border-l border-[#DCE7F0] active:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087987] ${researchOpen ? "bg-[#E4F4F6]" : "bg-white hover:bg-[#E4F4F6]"}`}><span className="block h-10 w-10"><AnimatedStockAILogo /></span></a>}
       </div>
     </div>
   </header>;

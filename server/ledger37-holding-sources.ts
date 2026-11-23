@@ -88,8 +88,12 @@ export async function getMyLedger37HoldingSources(input: Ledger37PresentationInp
   for (const row of changes.positionChanges) {
     if (!row || typeof row.symbol !== 'string' || !row.symbol.trim() || typeof row.stockName !== 'string' || !row.stockName.trim()
       || !['new', 'increase', 'decrease'].includes(row.action)) throw new Error('个人仓位变动无效');
-    // No spreading raw participations or audit data; preserve every proven event.
-    positionChanges.push({ symbol: row.symbol, stockName: row.stockName, action: row.action });
+    const month = row.month == null ? null : row.month;
+    if (month !== null && (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
+      throw new Error('个人仓位变动月份无效');
+    }
+    // Explicit safe fields only: never spread raw participations or audit data.
+    positionChanges.push({ symbol: row.symbol, stockName: row.stockName, action: row.action, month });
   }
   const checkedAt = new Date().toISOString();
   return {

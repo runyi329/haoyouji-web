@@ -2685,7 +2685,8 @@ export async function getMyLedger37MemberClosedTrades(input: Ledger37Presentatio
  * A participation proves one allocation (new), even after remaining reaches zero.
  * Mutable allocated_quantity / updated_at cannot reconstruct interim deltas: do
  * not invent increase events. Internal evidence dates/IDs only order the events;
- * the public projection contains exactly symbol, stockName and action. Pure SELECT.
+ * the public projection contains symbol, stockName, action and coarse month only;
+ * it never exposes days/time/quantities/private IDs. Pure SELECT.
  */
 export async function getMyLedger37MemberPositionChanges(input: Ledger37PresentationInput): Promise<{
   viewerUserId: number; aiEnabled: boolean;
@@ -2811,7 +2812,12 @@ export async function getMyLedger37MemberPositionChanges(input: Ledger37Presenta
     || (a.change.action === b.change.action ? 0 : a.change.action === 'decrease' ? -1 : 1)
     || a.categoryId - b.categoryId || compareId(b.orderId, a.orderId)
     || compareId(b.eventId, a.eventId) || compareId(b.participationId, a.participationId));
-  result.positionChanges = events.map(event => event.change);
+  result.positionChanges = events.map(event => ({
+    ...event.change,
+    month: event.time === null
+      ? null
+      : new Date(event.time + 8 * 60 * 60 * 1000).toISOString().slice(0, 7),
+  }));
   return result;
 }
 

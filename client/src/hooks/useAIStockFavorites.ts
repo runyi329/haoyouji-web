@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { isLedger37AiResearchReadOnly } from "@/lib/ledger37-ai-research-navigation";
 
 const KEY_PREFIX = "ai-stock-favorites:v1:user:";
 const CHANGE_EVENT = "ai-stock-favorites:changed";
@@ -54,8 +55,9 @@ export function useAIStockFavorites(userId?: number | null): {
   toggleFavorite: (tsCode: string) => boolean;
   ready: boolean;
 } {
+  const readOnly = typeof window !== "undefined" && isLedger37AiResearchReadOnly(window.location.search);
   const key =
-    typeof userId === "number" && Number.isSafeInteger(userId) && userId > 0
+    !readOnly && typeof userId === "number" && Number.isSafeInteger(userId) && userId > 0
       ? `${KEY_PREFIX}${userId}`
       : null;
   const [snapshot, setSnapshot] = useState<Snapshot>(() => emptySnapshot(null));

@@ -15,6 +15,7 @@ import { aiStockDisplayName, aiStockNeedsDelistedBadge } from "@/lib/ai-stock-di
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useAIStockFavorites } from "@/hooks/useAIStockFavorites";
 import { useVisibleStockQuotes, type StockLatestQuote } from "@/hooks/useVisibleStockQuotes";
+import { preserveLedger37AiResearchScope } from "@/lib/ledger37-ai-research-navigation";
 
 // ─── 总天数筛选选项 ────────────────────────────────────────────────────────
 const MIN_DAYS_OPTIONS: { label: string; value: number }[] = [
@@ -329,7 +330,7 @@ export function StockLifecyclePanel({ keyword = "", market = "all", ref, onFetch
               <tr><td colSpan={COLUMN_COUNT} className="h-32 text-center text-sm" style={{ color: MUTED }}>暂无数据</td></tr>
             )}
             {allItems.map((stock, idx) => (
-              <StockRow key={stock.tsCode} stock={stock} quote={latestQuotes.quotes[stock.tsCode]} latestQuoteDate={headerQuote?.tradeDate ?? undefined} quoteFailed={latestQuotes.isError && latestQuotes.requested.has(stock.tsCode)} idx={idx} sortBy={sortBy} isFavorite={favoriteCodes.has(stock.tsCode)} canFavorite={canFavorite} onFavorite={handleFavorite} onOpen={(tsCode) => setLocation(`/stock/${tsCode.replace(/\./g, '-')}`)} />
+              <StockRow key={stock.tsCode} stock={stock} quote={latestQuotes.quotes[stock.tsCode]} latestQuoteDate={headerQuote?.tradeDate ?? undefined} quoteFailed={latestQuotes.isError && latestQuotes.requested.has(stock.tsCode)} idx={idx} sortBy={sortBy} isFavorite={favoriteCodes.has(stock.tsCode)} canFavorite={canFavorite} onFavorite={handleFavorite} onOpen={(tsCode) => setLocation(preserveLedger37AiResearchScope(`/stock/${tsCode.replace(/\./g, '-')}`, window.location.search))} />
             ))}
             {isFetching && !isError && allItems.length > 0 && (
               <tr><td colSpan={COLUMN_COUNT} className="py-4 text-center"><span aria-hidden="true" className="inline-block h-2 w-16 animate-pulse rounded-full" style={{ background: BORDER }} /></td></tr>

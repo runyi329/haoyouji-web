@@ -8,6 +8,9 @@ import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AIStockHeaderSearch from "@/components/AIStockHeaderSearch";
 import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
+import Ledger37AiIdentityHeader from "@/components/Ledger37AiIdentityHeader";
+import { Ledger37PresentationPending, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
+import { ledger37AiResearchEntryHref, preserveLedger37AiResearchScope } from "@/lib/ledger37-ai-research-navigation";
 
 type AIStockNavigationProps = {
   active: "overview" | "stocks" | "compare" | "monitor";
@@ -48,7 +51,48 @@ if (typeof window !== "undefined") {
   }
 }
 
-export default function AIStockNavigation({
+export default function AIStockNavigation(props: AIStockNavigationProps) {
+  return !props.homeMode && Number(props.ledgerId) === 37
+    ? <Ledger37AiResearchNavigation {...props} /> : <OriginalAIStockNavigation {...props} />;
+}
+
+/** Public market research reused as-is; the header never borrows the actor's wallet. */
+function Ledger37AiResearchNavigation({ active, searchValue, onSearchChange }: AIStockNavigationProps) {
+  const { user } = useAuth();
+  const search = typeof window === "undefined" ? "" : window.location.search;
+  const presentation = useLedger37PresentationContext({ ledgerId: 37, search, authUserId: user?.id });
+  const { context, viewerUserId } = presentation;
+  const confirmedViewAs = context?.isViewingAs ? viewerUserId : undefined;
+  const researchEntry = ledger37AiResearchEntryHref(confirmedViewAs, search);
+  const researchScope = new URL(researchEntry, "https://ledger37.invalid").search;
+  const scoped = (href: string) => preserveLedger37AiResearchScope(href, researchScope);
+  const onBack = () => {
+    const returnScope = new URLSearchParams(context ? researchScope : search);
+    returnScope.set("fromLedger37Ai", "1");
+    window.location.href = preserveLedger37AiResearchScope("/ledger/37", returnScope.toString());
+  };
+  if (!context || !viewerUserId) {
+    return <Ledger37PresentationPending presentation={presentation} onBack={onBack} />;
+  }
+  if (!(context.aiEnabled || context.canManage)) {
+    return <div role="alert" className="bg-[#F2F6FA] px-4 py-5 text-center text-sm text-[#61758A]">此用户尚未开启AI视角<button type="button" onClick={onBack} className="ml-3 text-[#087987]">返回账本</button></div>;
+  }
+  const paths = {
+    overview: researchEntry,
+    compare: scoped("/ledger/37/stock-compare?view=stocks&market=all"),
+    monitor: scoped("/ledger/37/stock-monitor"),
+  };
+  return <div className="flex-shrink-0">
+    <Ledger37AiIdentityHeader key={viewerUserId} viewerUserId={viewerUserId} onBack={onBack} />
+    <nav aria-label="A股AI导航" className="border-b border-[#DCE7F0] bg-[#F2F6FA] px-3 py-2"><div className="mx-auto grid max-w-[480px] grid-cols-3 gap-1 rounded-xl border border-[#DCE7F0] bg-white p-1">{NAV_ITEMS.map(item => {
+      const selected = (active === "stocks" ? "compare" : active) === item.key;
+      return <Link key={item.key} href={paths[item.key]} aria-current={selected ? "page" : undefined} className="flex min-w-0 items-center justify-center rounded-lg py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" style={{ background: selected ? AI_STOCK_THEME.accentGradient : "transparent", color: selected ? "#FFFFFF" : AI_STOCK_THEME.muted, outlineColor: AI_STOCK_THEME.accent }}>{item.label}</Link>;
+    })}</div></nav>
+    <div className="border-b border-[#DCE7F0] bg-[#F2F6FA] px-3 py-2"><div className="mx-auto max-w-[480px]"><AIStockHeaderSearch appearance="light" stocksPath={paths.compare} value={searchValue} onChange={onSearchChange} /></div></div>
+  </div>;
+}
+
+function OriginalAIStockNavigation({
   active,
   ledgerId,
   homeMode = false,

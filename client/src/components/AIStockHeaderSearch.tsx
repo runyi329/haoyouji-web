@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import AnimatedStockAILogo from "@/components/AnimatedStockAILogo";
 import { aiStockDisplayName, aiStockNeedsDelistedBadge } from "@/lib/ai-stock-display-name";
+import { preserveLedger37AiResearchScope } from "@/lib/ledger37-ai-research-navigation";
 
 function normalizeKeyword(value: string) {
   return value.trim().replace(/^(\d{6})[-.](SH|SZ|BJ)$/i, (_, code: string, exchange: string) => `${code}.${exchange.toUpperCase()}`);
@@ -13,12 +14,14 @@ export type AIStockHeaderSearchProps = {
   stocksPath: string;
   value?: string;
   onChange?: (value: string) => void;
+  appearance?: "dark" | "light";
 };
 
 export default function AIStockHeaderSearch({
   stocksPath,
   value,
   onChange,
+  appearance = "dark",
 }: AIStockHeaderSearchProps) {
   const [, setLocation] = useLocation();
   const [localValue, setLocalValue] = useState("");
@@ -30,6 +33,7 @@ export default function AIStockHeaderSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsId = useId();
   const [trimmedDebounced, setTrimmedDebounced] = useState("");
+  const light = appearance === "light";
 
   useEffect(() => {
     if (composing) return;
@@ -88,7 +92,7 @@ export default function AIStockHeaderSearch({
       if (value && !target.searchParams.has(key)) target.searchParams.set(key, value);
     }
     target.searchParams.set("q", inputValue.trim());
-    setLocation(`${target.pathname}?${target.searchParams.toString()}`);
+    setLocation(preserveLedger37AiResearchScope(`${target.pathname}?${target.searchParams.toString()}`, window.location.search));
   };
 
   return (
@@ -107,8 +111,9 @@ export default function AIStockHeaderSearch({
           event.preventDefault();
           showFullList();
         }}
-        className="flex h-[52px] min-w-0 items-center rounded-md border border-[#71C8D5]/30 bg-white/[0.07] px-2 text-white focus-within:border-[#7AE1EC]/70 focus-within:bg-white/10"
+        className={light ? "flex h-10 min-w-0 items-center gap-2 rounded-lg border border-[#DCE7F0] bg-white px-3 text-[#142A3F] focus-within:border-[#087987]" : "flex h-[52px] min-w-0 items-center rounded-md border border-[#71C8D5]/30 bg-white/[0.07] px-2 text-white focus-within:border-[#7AE1EC]/70 focus-within:bg-white/10"}
       >
+        {light && <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-[#61758A]" />}
         <input
           ref={inputRef}
           type="text"
@@ -148,7 +153,7 @@ export default function AIStockHeaderSearch({
               event.currentTarget.blur();
             }
           }}
-          className="h-full w-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/75"
+          className={`h-full w-full min-w-0 flex-1 bg-transparent text-[13px] outline-none ${light ? "text-[#142A3F] placeholder:text-[#74869A]" : "text-white placeholder:text-white/75"}`}
         />
         {inputValue && (
           <button
@@ -159,18 +164,18 @@ export default function AIStockHeaderSearch({
               updateValue("");
               inputRef.current?.focus();
             }}
-            className="-mr-1 ml-0.5 flex h-8 w-7 shrink-0 items-center justify-center rounded-md text-white/85 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            className={`-mr-1 ml-0.5 flex h-8 w-7 shrink-0 items-center justify-center rounded-md focus-visible:outline focus-visible:outline-2 ${light ? "text-[#61758A] hover:bg-[#EAF2F7] focus-visible:outline-[#087987]" : "text-white/85 hover:bg-white/15 focus-visible:outline-white"}`}
           >
             <X aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
         )}
-        <span
+        {!light && <span
           aria-hidden="true"
           data-ai-stock-search-animation="true"
           className="pointer-events-none ml-1 block h-9 w-8 shrink-0 drop-shadow-[0_0_5px_rgba(68,211,229,0.22)]"
         >
           <AnimatedStockAILogo />
-        </span>
+        </span>}
       </form>
 
       {showSuggestions && (
@@ -205,7 +210,7 @@ export default function AIStockHeaderSearch({
                     onClick={() => {
                       setFocused(false);
                       inputRef.current?.blur();
-                      setLocation(`/stock/${stock.tsCode.replace(/\./g, "-")}`);
+                      setLocation(preserveLedger37AiResearchScope(`/stock/${stock.tsCode.replace(/\./g, "-")}`, window.location.search));
                     }}
                     className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#EAF2F7] focus-visible:bg-[#EAF2F7] focus-visible:outline-none"
                   >
