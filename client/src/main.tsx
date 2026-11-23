@@ -12,6 +12,7 @@ import "./styles/red-white-dual-engine.css";
 import { restoreToken } from "@/lib/tokenStorage";
 import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { isAdminWalletRequest } from "@/lib/adminWalletRequests";
+import { isT0JournalRequest } from "@/lib/t0JournalRequests";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -235,6 +236,8 @@ const trpcClient = trpc.createClient({
       // 让网络异常能返回本次保存的明确错误，并由订单自身的幂等键安全重试。
       condition(op) {
         if (isAdminWalletRequest(op.path)) return true;
+        // 首屏订单独立返回，不等待同批行情、成员名单或重型统计。
+        if (isT0JournalRequest(op.path)) return true;
         // 纵向股票列表独立读取，不等待同批钱包/总览统计；减小移动WebView请求URL。
         return op.path === "aiStockLifecycle"
           // 关注点击独立提交，避免与导航时的访问日志混批或被慢请求拖延。

@@ -268,7 +268,8 @@ function pollingHarness(
   const invalidate = vi.fn(
     async (
       _input?: unknown,
-      _filters?: { predicate: (query: { queryKey: unknown[] }) => boolean }
+      _filters?: { type: string; refetchType: string; predicate: (query: { queryKey: unknown[]; state: { fetchStatus: string } }) => boolean },
+      _options?: { cancelRefetch: boolean }
     ) => undefined
   );
   const document = {
@@ -325,29 +326,31 @@ function pollingHarness(
   };
 }
 
-describe("T0 formal allocation is excluded only from the real two-second ledger polling", () => {
+describe("T0 formal allocation is excluded from non-cancelling active-ledger polling", () => {
   it.each(["/ledger/52/t0", "/ledger/37/orders?tab=active"])(
-    "keeps ledger polling active on %s and excludes the exact preview path only",
+    "refreshes only current-ledger idle queries on %s without interrupting requests",
     location => {
       const h = pollingHarness(location);
       expect(h.invalidate).toHaveBeenCalledOnce();
       expect(h.window.setInterval).toHaveBeenCalledWith(
         expect.any(Function),
-        2_000
+        15_000
       );
-      const [allLedgerInputs, filters] = h.invalidate.mock.calls[0];
+      const [allLedgerInputs, filters, options] = h.invalidate.mock.calls[0];
       expect(allLedgerInputs).toBeUndefined();
+      expect(filters).toMatchObject({ type: "active", refetchType: "active" });
+      expect(options).toEqual({ cancelRefetch: false });
       const predicate = required(
         filters,
         "actual invalidate predicate"
       ).predicate;
+      const ledgerId = location.includes("/ledger/37") ? 37 : 52;
+      const query = (path: string[], scope = ledgerId, fetchStatus = "idle") => ({
+        queryKey: [path, { input: { ledgerId: scope }, type: "query" }],
+        state: { fetchStatus },
+      });
       expect(
-        predicate({
-          queryKey: [
-            ["ledger", "t0PreviewSharedIncomeAllocation"],
-            { input: { ledgerId: 52 }, type: "query" },
-          ],
-        })
+        predicate(query(["ledger", "t0PreviewSharedIncomeAllocation"]))
       ).toBe(false);
       for (const path of [
         ["ledger", "t0GetJournal"],
@@ -357,12 +360,20 @@ describe("T0 formal allocation is excluded only from the real two-second ledger 
         ["ledger", "t0GetMarketContributionFacts"],
         ["ledger", "t0PreviewSharedIncomeAllocationExtra"],
         ["ledger", "t0PreviewSharedIncomeAllocation", "nested"],
+      ]) {
+        expect(predicate(query(path))).toBe(true);
+        expect(predicate(query(path, ledgerId === 37 ? 52 : 37))).toBe(false);
+        expect(predicate(query(path, ledgerId, "fetching"))).toBe(false);
+      }
+      for (const path of [
+        ["ledger", "getCalendarEntry"],
+        ["ledger", "getCalendarNumber"],
         ["other", "t0PreviewSharedIncomeAllocation"],
         ["getT0EthPerpetualMark"],
         ["getCryptoPrices"],
       ])
-        expect(predicate({ queryKey: [path] })).toBe(true);
-      expect(predicate({ queryKey: ["legacy-unstructured-key"] })).toBe(true);
+        expect(predicate(query(path))).toBe(false);
+      expect(predicate({ queryKey: ["legacy-unstructured-key"], state: { fetchStatus: "idle" } })).toBe(false);
       h.tick();
       expect(h.invalidate).toHaveBeenCalledTimes(2);
     }

@@ -4202,6 +4202,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
   const [relatedFunds, setRelatedFunds] = useState<PreviewRelatedFund[]>([]);
   const [trades, setTrades] = useState<PreviewTrade[]>([]);
+  // 首份真实回包还要完成下方Effect的订单/筛选投影，初始[]不能先被渲染为“暂无/0”。
+  const [hydratedJournalScopeKey, setHydratedJournalScopeKey] = useState<string | null>(null);
   // 管理员切换历史呈现时保留原始流水；用户呈现基于它重新走与成员端相同的投影。
   const [rawJournalTrades, setRawJournalTrades] = useState<PreviewTrade[]>([]);
   // 空数组代表“全部”；有选择时按同一维度的并集、不同维度的交集筛选。
@@ -4666,7 +4668,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     {
       enabled: canAccess,
       staleTime: T0_JOURNAL_STALE_TIME_MS,
-      // 统一由52号账本活动页面的两秒调度失效并重拉，后台页面不会请求。
+      // 统一由52号账本活动页面的15秒定向调度失效并重拉，后台页面不会请求。
       refetchOnWindowFocus: true,
     },
   );
@@ -4703,6 +4705,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? rawJournalData?.viewerMode !== "member" || Number(rawJournalData?.viewerRelatedUserId || 0) !== previewUserId
     : isViewAsSessionSwitching || (canUseMemberPreview && queriedViewerMode !== undefined && queriedViewerMode !== "admin");
   const activeJournalData = isPreviewSwitching ? undefined : rawJournalData;
+  // 仅是本地投影的就绪标记，不修改tRPC输入或查询键，也不借用其他用户的缓存。
+  const journalViewScopeKey = JSON.stringify([ledgerId, previewUserId || null, viewerScopeUserId || null]);
+  const isJournalInitialLoad = !activeJournalData || hydratedJournalScopeKey !== journalViewScopeKey;
   const isMemberView = isUserPreview || (!canUseMemberPreview && queriedViewerMode === "member");
   const canManage = canAccess && queriedViewerMode === "admin" && !isUserPreview && !isPreviewSwitching;
   const projectStatusQueryClient = useQueryClient();
@@ -5216,6 +5221,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 预览切换不能把上一位成员的分佣快照、订单投影或来源筛选带给下一位成员。
   // 新成员数据返回前保持“切换中”，返回后再统一投影，避免分佣偶发被旧筛选隐藏。
   const resetPreviewMemberDerivedView = () => {
+    setHydratedJournalScopeKey(null);
     setAccounts([]);
     setRecentRelatedUsers([]);
     setRawJournalTrades([]);
@@ -5921,7 +5927,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
     setHydratedTopFilterStorageKey(topFilterStorageKey);
-  }, [adminFilterMemberDirectoryLoaded, adminFilterMemberIds, memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds, activeJournalData, topFilterStorageKey]);
+    setHydratedJournalScopeKey(journalViewScopeKey);
+  }, [adminFilterMemberDirectoryLoaded, adminFilterMemberIds, memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds, activeJournalData, topFilterStorageKey, journalViewScopeKey]);
 
   useEffect(() => {
     if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
@@ -12028,6 +12035,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       </div>
     );
+  }
+
+  if (isJournalInitialLoad) {
+    const journalInitialError = t0JournalQuery.isError && !t0JournalQuery.isFetching;
+    return <div data-t0-responsive className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50`}>
+      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-4">
+        {!embedded && <button type="button" onClick={backToLedger} aria-label="返回52号账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>}
+        <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
+      </header>
+      <div role={journalInitialError ? "alert" : "status"} aria-live="polite" className="px-5 py-14 text-center">
+        <p className={`text-sm ${journalInitialError ? "text-rose-600" : "text-slate-500"}`}>{journalInitialError ? "订单加载失败，请重试" : isPreviewSwitching ? "正在加载当前用户的订单…" : "正在加载订单…"}</p>
+        <p className="mt-2 text-xs text-slate-400">{journalInitialError ? "未读取到订单结果，不代表没有订单。已保留当前选择。" : "读取完成后显示真实仓位、收益与历史记录。"}</p>
+        {journalInitialError && <button type="button" onClick={() => void t0JournalQuery.refetch({ cancelRefetch: false })} className="mt-4 h-9 rounded bg-slate-900 px-4 text-xs font-semibold text-white">重试加载</button>}
+        {isUserPreview && canUseMemberPreview && <button type="button" onClick={returnToAdminFromPreview} className="ml-3 mt-4 h-9 rounded border border-indigo-200 bg-white px-3 text-xs font-semibold text-indigo-700">返回管理员</button>}
+      </div>
+    </div>;
   }
 
   if (payoutEntryDirection) {

@@ -1,6 +1,7 @@
 import { finitePositive, getUsdtCnyRate, getUsdCnyRate, getUsdtCnyRateFromPrices, getOrderUsdtCnyRate, resolveUsdtCnyPaymentRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, isFunderSettledStatus, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
+import { readLedgerTagHoldingValue } from '@/lib/ledgerTagHoldingValue';
 import { selectFunderWalletCollateralDisplay } from '@shared/funder-wallet-collateral-display';
 import { getWalletCollateralDraftError, getWalletCollateralMaximum } from '@shared/funder-wallet-collateral-input';
 // ===== FunderOrderCard 共享组件 =====
@@ -1639,7 +1640,7 @@ export function FunderOrderCard({
     if (!hasExternalMarginRateReference) return { percent: null as number | null, denominator: 'base' as 'base' | 'balance' | null };
     const canonicalTotalCny = readConfirmedExposureGap((effectiveMarginRateValuation as any)?.totalCny) ?? Number.NaN;
     const valuationReady = effectiveMarginRateValuation !== undefined;
-    const latestBalance = readConfirmedExposureGap((effectiveMarginRateTagSummary as any)?.latestBalance?.balance) ?? Number.NaN;
+    const latestBalance = readLedgerTagHoldingValue(effectiveMarginRateTagSummary) ?? Number.NaN;
     if (!valuationReady || !Number.isFinite(canonicalTotalCny) || !Number.isFinite(latestBalance)) {
       return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
     }
@@ -1727,9 +1728,7 @@ export function FunderOrderCard({
       : locallyComputedMarginTotalCny;
     const floatingPnlCny = (() => {
       if (!linkedPnlTagName || !effectivePnlTagConfig) return null;
-      const latestBalance = (effectivePnlTagSummary as any)?.currentHoldingValue?.value
-        ?? (effectivePnlTagSummary as any)?.latestBalance?.balance;
-      const balanceNum = latestBalance === undefined || latestBalance === null || latestBalance === '' ? null : Number(latestBalance);
+      const balanceNum = readLedgerTagHoldingValue(effectivePnlTagSummary);
       if (balanceNum === null || !Number.isFinite(balanceNum)) return null;
       const initialNum = Number((effectivePnlTagConfig as any).initial_amount || 0) || 0;
       const multiplierNum = Number((effectivePnlTagConfig as any).account_multiplier || 1) || 1;
@@ -1739,15 +1738,7 @@ export function FunderOrderCard({
     })();
     const holdingValueCny = (() => {
       if (!linkedPnlTagName) return null;
-      const explicitValue = (effectivePnlTagSummary as any)?.currentHoldingValue?.value;
-      const explicitNumber = explicitValue === undefined || explicitValue === null || explicitValue === '' ? null : Number(explicitValue);
-      // 兼容尚未更新到新接口的服务端：旧summary的余额本身就是手工标签实际市值，
-      // 只允许直接使用，绝不能叠加初始金额或账号倍率。
-      const legacyBalance = (effectivePnlTagSummary as any)?.latestBalance?.balance;
-      const legacyNumber = legacyBalance === undefined || legacyBalance === null || legacyBalance === '' ? null : Number(legacyBalance);
-      return explicitNumber !== null && Number.isFinite(explicitNumber)
-        ? explicitNumber
-        : (legacyNumber !== null && Number.isFinite(legacyNumber) ? legacyNumber : null);
+      return readLedgerTagHoldingValue(effectivePnlTagSummary);
     })();
     return {
       extValuationCnyRate: _cnyR,
@@ -2120,11 +2111,8 @@ export function FunderOrderCard({
     && !!linkedPnlTagName;
   const externalStockFloatPnlCny = useMemo(() => {
     if (!isExternalStockPnlSource || !effectivePnlTagConfig) return null;
-    const rawBalance = (effectivePnlTagSummary as any)?.currentHoldingValue?.value
-      ?? (effectivePnlTagSummary as any)?.latestBalance?.balance;
-    if (rawBalance === undefined || rawBalance === null || rawBalance === '') return null;
-    const latestBalance = Number(rawBalance);
-    if (!Number.isFinite(latestBalance)) return null;
+    const latestBalance = readLedgerTagHoldingValue(effectivePnlTagSummary);
+    if (latestBalance === null) return null;
     const initialAmount = Number((effectivePnlTagConfig as any).initial_amount ?? 0) || 0;
     const accountMultiplier = Number((effectivePnlTagConfig as any).account_multiplier ?? 1) || 1;
     return floatingPnlCalculationMode === 'leveraged_net_pnl'

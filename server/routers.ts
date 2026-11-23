@@ -25,6 +25,7 @@ import { createHash, createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { compactT0JournalResponse } from "./t0-journal-response";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
@@ -12449,10 +12450,10 @@ ${klinesSummary}
           if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
             throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员进行预览' });
           }
-          return await journal.getLedger52T0Journal({
+          return compactT0JournalResponse(await journal.getLedger52T0Journal({
             mode: 'member',
             relatedUserId: input.previewUserId,
-          });
+          }));
         }
         if (ctx.isViewingAs) {
           const realUser = ctx.realUser;
@@ -12472,17 +12473,17 @@ ${klinesSummary}
           if (!targetMembership) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
           }
-          return await journal.getLedger52T0Journal({
+          return compactT0JournalResponse(await journal.getLedger52T0Journal({
             mode: 'member',
             relatedUserId: ctx.user.id,
-          });
+          }));
         }
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
-        return await journal.getLedger52T0Journal(scope);
+        return compactT0JournalResponse(await journal.getLedger52T0Journal(scope));
       }),
 
     // 周结算中心：成员只能读取本人实时周结算及已冻结周报；管理员全局读取或预览成员时沿用T+0既有边界。

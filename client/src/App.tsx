@@ -413,22 +413,23 @@ function LoadingFallback() {
   );
 }
 
-// 37号与52号账本仅在用户当前停留于对应页面、且页面处于前台时进行两秒同步。
-// 统一失效当前活动的 ledger 查询后，由各页面既有的权限接口重新读取可见范围；
-// 不广播订单内容，也不会为未打开页面的用户产生请求。
-const ACTIVE_LEDGER_PAGE_REFRESH_INTERVAL_MS = 2_000;
+// 仅补拉当前账本正在展示的查询；行情仍由各页面原有推送/定时器实时更新。
+// 避免两秒全量失效不断取消弱网重读，也不失效另一个账本的历史缓存。
+const ACTIVE_LEDGER_PAGE_REFRESH_INTERVAL_MS = 15_000;
 
 function ActiveLedgerPagePolling() {
   const [location] = useLocation();
   const trpcUtils = trpc.useUtils();
   const pathname = location.split("?")[0];
+  const ledgerRoute = pathname.match(/^\/ledger\/(37|52)(?:\/|$)/);
+  const activeLedgerId = ledgerRoute ? Number(ledgerRoute[1]) : null;
   // 分红管理属于人工核对、回填操作页，不展示实时行情；若也按两秒轮询会不断重拉
   // 全部成员和分红汇总，移动网络下反而可能让首屏长期停在加载状态。
   const isDividendManagementPage = /^\/ledger\/(?:37|52)\/aa-dividend-manage$/.test(pathname);
   // 融资复息管理页会读取完整订单、参与者、付款与担保台账；其自身已按15秒定向刷新，
   // 不应再被这里的两秒全量 invalidate 打断首屏或编辑器内的并行读取。
   const isFunderManagementPage = /^\/ledger\/(?:37|52)\/(?:finance-unified|funder-management)$/.test(pathname);
-  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname)
+  const isRealtimeLedgerPage = activeLedgerId !== null
     && !isDividendManagementPage
     && !isFunderManagementPage
     && !isAdminRechargeManagementPage(pathname);
@@ -438,14 +439,24 @@ function ActiveLedgerPagePolling() {
 
     const refreshActiveLedgerPage = () => {
       if (document.visibilityState !== "visible") return;
-      // 分配计划自行续期签名；两秒失效会反复清空人工核对中的金额并阻止确认。
-      // 仅排除可执行分配预览，不关闭行情、订单或资金台账的原有同步。
+      // 分配计划自行续期签名；日历登记只在打开/提交时读取，避免干扰未提交编辑。
+      // 先跳过在途读取，再用 cancelRefetch:false 防止匹配与发起之间的竞态取消。
       void trpcUtils.ledger.invalidate(undefined, {
+        type: "active",
+        refetchType: "active",
         predicate: (query) => {
           const path = query.queryKey[0];
-          return !Array.isArray(path) || path.join(".") !== "ledger.t0PreviewSharedIncomeAllocation";
+          if (!Array.isArray(path) || path[0] !== "ledger") return false;
+          const procedure = path.join(".");
+          if (procedure === "ledger.t0PreviewSharedIncomeAllocation"
+            || procedure === "ledger.getCalendarEntry"
+            || procedure === "ledger.getCalendarNumber") return false;
+          const key = query.queryKey[1] as { input?: { ledgerId?: unknown; id?: unknown } } | undefined;
+          const queryLedgerId = key?.input?.ledgerId
+            ?? (procedure === "ledger.getById" ? key?.input?.id : undefined);
+          return queryLedgerId === activeLedgerId && query.state.fetchStatus === "idle";
         },
-      }).catch(() => undefined);
+      }, { cancelRefetch: false }).catch(() => undefined);
     };
 
     // 进入37号或52号账本页面、以及从后台回到前台时均立即补拉，轮询仅覆盖前台页面。
@@ -460,7 +471,7 @@ function ActiveLedgerPagePolling() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isRealtimeLedgerPage, trpcUtils]);
+  }, [isRealtimeLedgerPage, activeLedgerId, trpcUtils]);
 
   return null;
 }

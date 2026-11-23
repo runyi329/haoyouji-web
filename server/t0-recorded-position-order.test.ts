@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
+import { isAdminRechargeManagementPage } from "../client/src/lib/adminWalletRequests";
 
 // 合成流水仅存在于本隔离测试：不用于 UI、不保存、不 runtime import 任何业务模块。
 // 只读生产源码，通过 AST 抽取实际声明/回调，require 被封锁；不连接 DB、不启动浏览器或真实 timer。
@@ -309,31 +310,40 @@ function pollingHarness(location = "/ledger/52/t0") {
     removeEventListener: vi.fn((name: string) => listeners.delete(name)) };
   let tick: (() => void) | undefined;
   let cleanup: (() => void) | undefined;
-  const invalidate = vi.fn(async (_input?: unknown, _filters?: { predicate: (query: { queryKey: unknown[] }) => boolean }) => undefined);
+  const invalidate = vi.fn(async (_input?: unknown, _filters?: { type: string; refetchType: string; predicate: (query: { queryKey: unknown[]; state: { fetchStatus: string } }) => boolean }, _options?: { cancelRefetch: boolean }) => undefined);
   const window = { setInterval: vi.fn((callback: () => void, _interval: number) => { tick = callback; return 71; }), clearInterval: vi.fn() };
   const poll = declaration(app, "ActiveLedgerPagePolling");
-  isolated(declarations(app, [poll]), { document, window, useLocation: () => [location],
+  isolated(declarations(app, [poll]), { document, window, isAdminRechargeManagementPage, useLocation: () => [location],
     trpc: { useUtils: () => ({ ledger: { invalidate } }) },
     useEffect: (effect: () => (() => void) | undefined) => { cleanup = effect(); },
   }, "ActiveLedgerPagePolling()");
   return { invalidate, window, document, listeners, tick: () => required(tick, "real polling tick")(),
     cleanup: () => required(cleanup, "real polling cleanup")() };
 }
-describe("原两秒轮询只排除可执行 plan 查询，其他同步与前台守卫保留", () => {
-  it.each(["/ledger/52/t0", "/ledger/37/orders?tab=active"])("%s 仍两秒轮询，精确排除 plan 而非其他 ledger 查询", (location) => {
+describe("当前账本15秒定向同步，不打断在途查询和可执行 plan", () => {
+  it.each(["/ledger/52/t0", "/ledger/37/orders?tab=active"])("%s 只刷新当前账本，保留前台同步及计划稳定性", (location) => {
     const h = pollingHarness(location);
     expect(h.invalidate).toHaveBeenCalledOnce();
-    expect(h.window.setInterval).toHaveBeenCalledWith(expect.any(Function), 2_000);
-    const [input, filters] = h.invalidate.mock.calls[0];
+    expect(h.window.setInterval).toHaveBeenCalledWith(expect.any(Function), 15_000);
+    const [input, filters, options] = h.invalidate.mock.calls[0];
     expect(input).toBeUndefined();
+    expect(filters).toMatchObject({ type: "active", refetchType: "active" });
+    expect(options).toEqual({ cancelRefetch: false });
     const predicate = required(filters, "production invalidate filter").predicate;
-    expect(predicate({ queryKey: [["ledger", "t0PreviewSharedIncomeAllocation"], { type: "query" }] })).toBe(false);
+    const ledgerId = location.includes("/ledger/37") ? 37 : 52;
+    const query = (path: string[], scope = ledgerId, fetchStatus = "idle") => ({ queryKey: [path, { input: { ledgerId: scope }, type: "query" }], state: { fetchStatus } });
+    expect(predicate(query(["ledger", "t0PreviewSharedIncomeAllocation"]))).toBe(false);
     for (const path of [["ledger", "t0GetJournal"], ["ledger", "t0GetTeamOverview"], ["ledger", "t0GetPayoutLogs"],
       ["ledger", "t0GetMarketContributionFacts"], ["ledger", "t0PreviewSharedIncomeAllocationExtra"],
-      ["ledger", "t0PreviewSharedIncomeAllocation", "nested"], ["other", "t0PreviewSharedIncomeAllocation"], ["getT0EthPerpetualMark"]]) {
-      expect(predicate({ queryKey: [path] })).toBe(true);
+      ["ledger", "t0PreviewSharedIncomeAllocation", "nested"]]) {
+      expect(predicate(query(path))).toBe(true);
+      expect(predicate(query(path, ledgerId === 37 ? 52 : 37))).toBe(false);
+      expect(predicate(query(path, ledgerId, "fetching"))).toBe(false);
     }
-    expect(predicate({ queryKey: ["legacy-key"] })).toBe(true);
+    for (const path of [["ledger", "getCalendarEntry"], ["ledger", "getCalendarNumber"], ["other", "t0PreviewSharedIncomeAllocation"], ["getT0EthPerpetualMark"]]) {
+      expect(predicate(query(path))).toBe(false);
+    }
+    expect(predicate({ queryKey: ["legacy-key"], state: { fetchStatus: "idle" } })).toBe(false);
     h.tick();
     expect(h.invalidate).toHaveBeenCalledTimes(2);
   });

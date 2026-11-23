@@ -1,5 +1,6 @@
 import { finitePositive, getUsdtCnyRateFromPrices, formatFxEstimate } from '@shared/usdt-cny-display';
 import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
+import { readLedgerTagHoldingValue } from '@/lib/ledgerTagHoldingValue';
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -1689,8 +1690,7 @@ export function FunderOrderCardV2Silver({
     if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null, fc2977CnyRate: null as number | null, fc2977CollateralValueU: null as number | null, fc2977FloatingPnlU: null as number | null };
     const _cnyR = displayInputs.frozen ? (finitePositive(_fc2977CollateralValuation?.usdtCnyRate) ?? finitePositive(cnyRate) ?? Number.NaN) : (getUsdtCnyRateFromPrices(_fc2977CryptoPricesRaw) ?? finitePositive(cnyRate) ?? Number.NaN);
     const rightTotalCNY = readConfirmedExposureGap(_fc2977CollateralValuation?.totalCny) ?? Number.NaN;
-    const latestBalance = (_fc2977TagSummary as any)?.latestBalance;
-    const balanceNum = readConfirmedExposureGap(latestBalance?.balance);
+    const balanceNum = readLedgerTagHoldingValue(_fc2977TagSummary);
     const initialNum = parseFloat((_fc2977TagConfig as any).initial_amount || '0') || 0;
     const multiplierNum = parseFloat((_fc2977TagConfig as any).account_multiplier || '1') || 1;
     if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null, fc2977CnyRate: _cnyR, fc2977CollateralValueU: readConfirmedExposureGap(_cnyR > 0 ? rightTotalCNY / _cnyR : null), fc2977FloatingPnlU: null };
@@ -1713,7 +1713,7 @@ export function FunderOrderCardV2Silver({
   const referencedMarginRatePct = useMemo(() => {
     if (!hasExternalMarginRateReference) return null;
     const totalCny = readConfirmedExposureGap((_canonicalMarginRateValuation as any)?.totalCny) ?? Number.NaN;
-    const latestBalance = readConfirmedExposureGap((_marginRateTagSummary as any)?.latestBalance?.balance) ?? Number.NaN;
+    const latestBalance = readLedgerTagHoldingValue(_marginRateTagSummary) ?? Number.NaN;
     if (_canonicalMarginRateValuation === undefined || !Number.isFinite(totalCny) || !Number.isFinite(latestBalance)) return null;
     const initialAmount = Number((_marginRateTagConfig as any)?.initial_amount ?? 0) || 0;
     const accountMultiplier = Number((_marginRateTagConfig as any)?.account_multiplier ?? 1) || 1;
@@ -3444,8 +3444,7 @@ export function FunderLenderCardSilver({
     }
     const extCnyRate = displayInputs.frozen ? (finitePositive(_lnExtCollateralValuation?.usdtCnyRate) ?? finitePositive(cnyRate) ?? Number.NaN) : (getUsdtCnyRateFromPrices(_lnExtPricesRaw) ?? finitePositive(cnyRate) ?? Number.NaN);
     const externalMarginCny = readConfirmedExposureGap(_lnExtCollateralValuation?.totalCny) ?? Number.NaN;
-    const latestBalance = (_lnExtTagSummary as any)?.latestBalance?.balance;
-    const balance = latestBalance === null || latestBalance === undefined ? null : Number(latestBalance);
+    const balance = readLedgerTagHoldingValue(_lnExtTagSummary);
     if (balance === null || !Number.isFinite(balance)) {
       return { lnExtRemainingMarginU: null, lnExtMarginBasePct: null, lnExtCollateralValueU: readConfirmedExposureGap(extCnyRate > 0 ? externalMarginCny / extCnyRate : null), lnExtFloatingPnlU: null };
     }

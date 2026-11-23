@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { finitePositive, getOrderUsdtCnyRate, getUsdtCnyRateFromPrices, formatFxEstimate } from '../shared/usdt-cny-display';
 import * as settledDisplay from '../shared/funder-settled-display';
+import { readLedgerTagHoldingValue } from '../client/src/lib/ledgerTagHoldingValue';
 
 // Execute the actual production helpers/expressions/JSX offline, without importing React/tRPC/DB.
 function parse(file: string) {
@@ -43,6 +44,7 @@ function run(expression: string, bindings: Record<string, any> = {}, code = base
   const forbidden = vi.fn(() => { throw Error('Network/DB forbidden in regression'); });
   const context = createContext({ finitePositive, getOrderUsdtCnyRate, getUsdtCnyRateFromPrices, formatFxEstimate,
     ...settledDisplay,
+    readLedgerTagHoldingValue,
     useMemo: (factory: () => unknown) => factory(), __element: elements, __fragment: 'fragment',
     fetch: forbidden, trpc: new Proxy({}, { get: forbidden }), ...bindings });
   const compiled = ts.transpileModule(`${code}\n(${expression});`, { compilerOptions: {
