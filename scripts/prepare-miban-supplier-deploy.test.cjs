@@ -34,6 +34,14 @@ test('custom dotenv modes fail closed and database fallback preserves explicit e
  assert.equal(gate.mainDatabaseUrl({ORIGINAL_DATABASE_URL:'',DATABASE_URL:'actual-db'},'fallback'),'actual-db');
  assert.equal(gate.mainDatabaseUrl({ORIGINAL_DATABASE_URL:'original'},'fallback'),'original');
 });
+test('reads declared or esbuild-hoisted fallback assignment but rejects ambiguity',()=>{
+ const value='mysql://fixture:fixture@localhost/test';
+ assert.equal(gate.bundleDatabaseFallback(`var TENCENT_CLOUD_DB_URL = ${JSON.stringify(value)};`),value);
+ assert.equal(gate.bundleDatabaseFallback(`var TENCENT_CLOUD_DB_URL, ENV;var init=()=>{TENCENT_CLOUD_DB_URL = ${JSON.stringify(value)};};`),value);
+ assert.throws(()=>gate.bundleDatabaseFallback('var ENV = {};'),/Cannot identify/);
+ assert.throws(()=>gate.bundleDatabaseFallback('TENCENT_CLOUD_DB_URL = "not-a-url";'),/Cannot identify/);
+ assert.throws(()=>gate.bundleDatabaseFallback(`TENCENT_CLOUD_DB_URL = ${JSON.stringify(value)}; TENCENT_CLOUD_DB_URL = ${JSON.stringify(value)};`),/Cannot identify/);
+});
 test('production cannot use preview or development database mode',()=>{
  assert.throws(()=>runtime({},[],{FAST_PREVIEW:'true'}),/FAST_PREVIEW/);
  assert.throws(()=>runtime({},[],{USE_DEV_DB:'true'}),/USE_DEV_DB/);

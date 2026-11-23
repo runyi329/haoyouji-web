@@ -93,6 +93,14 @@ function mainDatabaseUrl(env, fallback) {
   if (!selected) throw new Error("Production main database configuration is empty");
   return selected;
 }
+function bundleDatabaseFallback(bundle) {
+  // esbuild may hoist the declaration and assign inside an __esm initializer.
+  const matches = [...bundle.matchAll(/\bTENCENT_CLOUD_DB_URL\s*=\s*("(?:[^"\\]|\\.)*")\s*;/g)];
+  if (matches.length !== 1) throw new Error("Cannot identify the verified bundle main-database fallback");
+  const value = JSON.parse(matches[0][1]);
+  if (typeof value !== "string" || !value.startsWith("mysql://")) throw new Error("Cannot identify the verified bundle main-database fallback");
+  return value;
+}
 function columnSpec(structure, name) {
   const lengths = { name: 100, series_key: 64, source: 32, action: 64 };
   if (lengths[name]) return { type: `varchar(${lengths[name]})`, nullable: false, default: null };
@@ -189,9 +197,8 @@ async function main() {
   // Use the SAME fallback as the exact bundle being deployed, without duplicating
   // its existing credential in this script or exposing it in logs.
   const bundle = fs.readFileSync(path.join(releaseDir, "index.js"), "utf8");
-  const fallback = bundle.match(/\b(?:var|let|const) TENCENT_CLOUD_DB_URL = ("(?:[^"\\]|\\.)*");/);
-  if (!fallback) throw new Error("Cannot identify the verified bundle main-database fallback");
-  const urls = effective.map(env => mainDatabaseUrl(env, JSON.parse(fallback[1])));
+  const fallback = bundleDatabaseFallback(bundle);
+  const urls = effective.map(env => mainDatabaseUrl(env, fallback));
   if (new Set(urls).size !== 1) throw new Error("Workers have different main database configurations");
   const created = writeDedicatedSecret(envFile, dotenv.parse, effective, overriding);
   const uri = urls[0];
@@ -199,7 +206,7 @@ async function main() {
   try { await ensureAndVerify(db); } finally { await db.end(); }
   console.log(JSON.stringify({ supplierTablesReady: 5, sharedFulfillmentSecretReady: true, dedicatedSecretCreated: created, productionRuntimeVerified: true, namedLockVerified: true, supplierAssignmentsImported: false, orderOrWalletWrites: false }));
 }
-module.exports = { TABLES, STRUCTURES, validateRuntime, mainDatabaseUrl, columnSpec, verifyColumn, writeDedicatedSecret, ensureAndVerify };
+module.exports = { TABLES, STRUCTURES, validateRuntime, mainDatabaseUrl, bundleDatabaseFallback, columnSpec, verifyColumn, writeDedicatedSecret, ensureAndVerify };
 if (require.main === module) main().catch(error => {
   // Database error messages can embed connection details; only emit safe codes.
   const code = typeof error.code === "string" ? error.code : null;
