@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { AI_WALLET_SETTLEMENT_ASSETS, AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS } from '../shared/ai-wallet-assets';
 import { getWalletFlowCategory, getWalletFundingCurrency } from '../client/src/lib/walletFlowPresentation';
+import { refreshAdminWalletSnapshot } from '../client/src/lib/adminWalletSnapshotRefresh';
 
 // 仅 import 无副作用展示工具；页面/路由/DB不加载。真实生产AST回调在VM执行，
 // 所有刷新、缓存、toast、资金mutation均为离线spy，无网络、浏览器或实际账务请求。
@@ -60,13 +61,16 @@ function successHarness(name: MutationName) {
   const refetchHistory = vi.fn();
   const refetchGlobal = vi.fn();
   const forbidden = vi.fn(() => { throw new Error('Forbidden funds/network side effect'); });
+  const snapshot = { cancel: vi.fn(async () => undefined), invalidate: invalidations.walletSnapshot,
+    fetch: vi.fn(async ({ userId }: { userId: number }) => ({ id: userId })) };
   const bindings: Record<string, unknown> = {
     ...state, ...setters, AI_WALLET_SETTLEMENT_ASSETS, getWalletFlowCategory, getWalletFundingCurrency,
+    refreshAdminWalletSnapshot,
     adjSelectedUserIdRef: selectedRef, adjSelectedUser: { id: 28 },
     toast, rememberRecentAdjUser: remember,
     adjUtils: {
       adminUser: Object.fromEntries(Object.entries(invalidations)
-        .filter(([key]) => key !== 'afGetMyRechargeHistory').map(([key, invalidate]) => [key, { invalidate }])),
+        .filter(([key]) => key !== 'afGetMyRechargeHistory').map(([key, invalidate]) => [key, key === 'walletSnapshot' ? snapshot : { invalidate }])),
       ledger: { afGetMyRechargeHistory: { invalidate: invalidations.afGetMyRechargeHistory } },
     },
     refetchAdjHistory: refetchHistory, refetchAdjGlobal: refetchGlobal,
@@ -90,17 +94,19 @@ function successHarness(name: MutationName) {
   const callbacks = expression<MutationCallbacks>(name, bindings);
   expect(useMutation).toHaveBeenCalledOnce();
   return { state, setters, selectedRef, toast, remember, invalidations, refetchHistory, refetchGlobal,
-    forbidden, callbacks, refresh, completions };
+    forbidden, callbacks, refresh, completions, snapshot };
 }
 async function expectRefresh(test: ReturnType<typeof successHarness>, sameUser = true) {
   expect(test.refresh.mock.calls).toEqual([[28]]);
   const forced = { cancelRefetch: true, throwOnError: true };
-  expect(test.invalidations.walletSnapshot.mock.calls).toEqual([[{ userId: 28 }, undefined, forced]]);
+  expect(test.snapshot.cancel.mock.calls).toEqual([[{ userId: 28 }]]);
   expect(test.invalidations.multiAssetWalletHistoryPage.mock.calls).toEqual([[{ userId: 28 }, undefined, forced]]);
   expect(test.invalidations.afGetMyRechargeHistory.mock.calls).toEqual([[{ viewAsUserId: 28 }, undefined, forced]]);
   for (const key of ['list', 'walletGlobalHistory', 'walletBalanceTrend', 'multiAssetWalletHistory'])
     expect(test.invalidations[key], key).not.toHaveBeenCalled();
   await Promise.all(test.completions);
+  expect(test.invalidations.walletSnapshot.mock.calls).toEqual([[{ userId: 28 }, { refetchType: 'none' }]]);
+  expect(test.snapshot.fetch.mock.calls).toEqual([[{ userId: 28 }, { staleTime: 0 }]]);
   for (const [key, invalidate] of Object.entries(test.invalidations)) {
     if (['walletSnapshot', 'multiAssetWalletHistoryPage', 'afGetMyRechargeHistory'].includes(key)) continue;
     expect(invalidate.mock.calls, key).toEqual(key === 'multiAssetWalletHistory' ? [[{ userId: 28 }]] : [[]]);
@@ -197,6 +203,8 @@ describe('真实调账成功回调：本笔variables币种/用户、草稿隔离
       expect(test.state).toEqual(before);
       for (const setter of Object.values(test.setters)) expect(setter).not.toHaveBeenCalled();
       for (const invalidate of Object.values(test.invalidations)) expect(invalidate).not.toHaveBeenCalled();
+      expect(test.snapshot.cancel).not.toHaveBeenCalled();
+      expect(test.snapshot.fetch).not.toHaveBeenCalled();
       expect(test.toast.error).toHaveBeenCalledWith(message || (name === 'adjMutation' ? '调账失败' : '52号市场资产调账失败'));
       expect(test.toast.success).not.toHaveBeenCalled();
       expect(test.remember).not.toHaveBeenCalled();

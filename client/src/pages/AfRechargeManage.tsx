@@ -10,6 +10,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "@/pages/miban/mibanTrpc";
 import { toast } from "sonner";
+import { refreshAdminWalletSnapshot } from "@/lib/adminWalletSnapshotRefresh";
 import {
   AI_WALLET_ASSET_CATALOG,
   AI_WALLET_CRYPTO_MARKET_ASSETS,
@@ -760,8 +761,9 @@ export default function AfRechargeManage() {
     const options = { cancelRefetch: true, throwOnError: true };
     const targetInput = Number.isInteger(userId) && userId > 0 ? { userId } : undefined;
     // 保存已完成。优先同步目标用户余额/担保及流水，不等全网站统计或长周期走势。
+    // 顶部完整快照必须是提交后的新读取，不能复用提交前仍在加载中的旧余额请求。
     const results = await Promise.allSettled([
-      adjUtils.adminUser.walletSnapshot.invalidate(targetInput, undefined, options),
+      refreshAdminWalletSnapshot(adjUtils.adminUser.walletSnapshot, userId),
       adjUtils.ledger.afGetMyRechargeHistory.invalidate(targetInput ? { viewAsUserId: userId } : undefined, undefined, options),
       adjUtils.adminUser.multiAssetWalletHistoryPage.invalidate(targetInput, undefined, options),
     ]);

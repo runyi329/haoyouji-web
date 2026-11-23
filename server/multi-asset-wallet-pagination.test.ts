@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
 import { getWalletFlowCategory } from '../client/src/lib/walletFlowPresentation';
-
+import { refreshAdminWalletSnapshot } from '../client/src/lib/adminWalletSnapshotRefresh';
 // 离线回归：从 AST 抽取真实函数/表达式，不 import DB 或路由模块，不执行模块顶层 DDL。
 // 假连接只接受 SELECT；夹具模拟行筛选/排序，不假装是 MySQL 引擎。
 // SQL 本身的条件、绑定、COUNT/分页先后与稳定排序另作断言。
@@ -709,7 +709,8 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
     let resolveCore!: () => void;
     const corePending = new Promise<void>(resolve => { resolveCore = resolve; });
     const invalidatePage = vi.fn(() => corePending);
-    const invalidateSnapshot = vi.fn(() => corePending);
+    const snapshot = { cancel: vi.fn(async () => undefined), invalidate: vi.fn(async () => undefined),
+      fetch: vi.fn(async () => { await corePending; return { id: 28 }; }) };
     const invalidateFunding = vi.fn(() => corePending);
     const invalidateOld = vi.fn(() => Promise.resolve());
     const invalidateList = vi.fn(() => Promise.resolve());
@@ -725,11 +726,12 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
     const rememberUser = vi.fn();
     const bindings = {
       toast: { success: vi.fn(), error: vi.fn() }, adjSelectedUser: { id: 28 }, rememberRecentAdjUser: rememberUser,
+      refreshAdminWalletSnapshot,
       setAdjAmount: vi.fn(), setAdjNote: vi.fn(), setShowRevokeDialog: vi.fn(), setRevokeTarget: vi.fn(),
       setShowNoteDialog: vi.fn(), setNoteTarget: vi.fn(), setNoteContent: vi.fn(),
       adjUtils: { adminUser: {
         list: { invalidate: invalidateList }, walletGlobalHistory: { invalidate: invalidateGlobal },
-        walletBalanceTrend: { invalidate: invalidateTrend }, walletSnapshot: { invalidate: invalidateSnapshot },
+        walletBalanceTrend: { invalidate: invalidateTrend }, walletSnapshot: snapshot,
         multiAssetWalletHistory: { invalidate: invalidateOld }, multiAssetWalletHistoryPage: { invalidate: invalidatePage },
       }, ledger: { afGetMyRechargeHistory: { invalidate: invalidateFunding } } },
       setAdjAssetFlowScope: setScope, adjAssetFlowUserId: 28, adjAssetFlowCurrency: 'ETH',
@@ -754,8 +756,12 @@ describe('digital adjustment/revoke/note success and unchanged money mutation co
     const forced = { cancelRefetch: true, throwOnError: true };
     expect(invalidatePage).toHaveBeenCalledOnce();
     expect(invalidatePage).toHaveBeenCalledWith({ userId: 28 }, undefined, forced);
-    expect(invalidateSnapshot.mock.calls).toEqual([[{ userId: 28 }, undefined, forced]]);
+    expect(snapshot.cancel.mock.calls).toEqual([[{ userId: 28 }]]);
     expect(invalidateFunding.mock.calls).toEqual([[{ viewAsUserId: 28 }, undefined, forced]]);
+    for (const read of [invalidateOld, invalidateList, invalidateGlobal, invalidateTrend]) expect(read).not.toHaveBeenCalled();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(snapshot.invalidate.mock.calls).toEqual([[{ userId: 28 }, { refetchType: 'none' }]]);
+    expect(snapshot.fetch.mock.calls).toEqual([[{ userId: 28 }, { staleTime: 0 }]]);
     for (const read of [invalidateOld, invalidateList, invalidateGlobal, invalidateTrend]) expect(read).not.toHaveBeenCalled();
     resolveCore();
     await refreshCompletion;

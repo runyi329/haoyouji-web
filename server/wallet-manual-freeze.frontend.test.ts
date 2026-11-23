@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AI_WALLET_ASSETS, AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
 import type { AiWalletAsset } from '../shared/ai-wallet-assets';
 import type { ManualWalletFreeze } from '../client/src/lib/walletManualFreeze';
-
+import { refreshAdminWalletSnapshot } from '../client/src/lib/adminWalletSnapshotRefresh';
 // 严格离线：编译完整真实助手/组件，模块 require 只允许下面的无副作用白名单。
 // 不 import 页面、tRPC 客户端、服务端路由或 DB；没有网络、浏览器、process 或真实资金调用。
 // hooks 是显式 render 的最小 fixture；mutation 仅 spy，回调由测试手动结算，不模拟账务实现。
@@ -552,13 +552,18 @@ describe('成功保存与只读刷新分离、用户key隔离、旧响应不能�
   it('父余额刷新真实Promise.allSettled只读失效提交用户快照/流水，失败已保存提示且无资金mutation', async () => {
     const names = ['walletSnapshot', 'multiAssetWalletHistoryPage', 'list', 'walletGlobalHistory', 'walletBalanceTrend', 'multiAssetWalletHistory'];
     const adminUser = Object.fromEntries(names.map(name => [name, { invalidate: vi.fn(() => Promise.reject(new Error(`离线${name}失败`))) }]));
+    const snapshot = { cancel: vi.fn(async () => undefined), invalidate: adminUser.walletSnapshot.invalidate,
+      fetch: vi.fn(async () => ({ id: 28 })) };
+    adminUser.walletSnapshot = snapshot;
     const history = { invalidate: vi.fn(() => Promise.reject(new Error('离线资金流水失败'))) };
     const toast = { error: vi.fn() };
     const refresh = expression<(id: number) => Promise<void>>(pageAst, 'refreshAdjWalletAfterChange', {
-      adjUtils: { adminUser, ledger: { afGetMyRechargeHistory: history } }, toast,
+      adjUtils: { adminUser, ledger: { afGetMyRechargeHistory: history } }, toast, refreshAdminWalletSnapshot,
     });
     await expect(refresh(28)).resolves.toBeUndefined(); await microtasks();
-    expect(adminUser.walletSnapshot.invalidate).toHaveBeenCalledWith({ userId: 28 }, undefined, { cancelRefetch: true, throwOnError: true });
+    expect(snapshot.cancel).toHaveBeenCalledWith({ userId: 28 });
+    expect(snapshot.invalidate).toHaveBeenCalledWith({ userId: 28 }, { refetchType: 'none' });
+    expect(snapshot.fetch).not.toHaveBeenCalled(); // helper 必须串行，invalidate 失败不继续读。
     expect(history.invalidate).toHaveBeenCalledWith({ viewAsUserId: 28 }, undefined, { cancelRefetch: true, throwOnError: true });
     expect(adminUser.multiAssetWalletHistoryPage.invalidate).toHaveBeenCalledWith({ userId: 28 }, undefined, { cancelRefetch: true, throwOnError: true });
     expect(toast.error).toHaveBeenCalledWith('账目已保存，部分余额或流水更新失败，请点更新重试；不要重复添加');

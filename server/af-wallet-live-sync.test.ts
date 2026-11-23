@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { AI_WALLET_SETTLEMENT_ASSETS } from '../shared/ai-wallet-assets';
 import { getWalletFlowCategory, getWalletFundingCurrency } from '../client/src/lib/walletFlowPresentation';
+import { refreshAdminWalletSnapshot } from '../client/src/lib/adminWalletSnapshotRefresh';
 
 // 精准离线回归：只读取生产源码并执行 AST 片段，不 import 页面/router/DB/行情。
 // JSX factory、tRPC cache、资金 mutation、基础设施初始化和 SQL 连接都是离线边界。
@@ -92,22 +93,25 @@ describe('管理员独立请求：执行真实路径匹配函数，不扩大普�
 });
 
 const coreNames = ['snapshot', 'funding', 'digitalPage'] as const;
+// 快照 helper 先 await cancel/invalidate；两项流水仍在同一 tick 并行启动。
+const coreOrder = ['funding', 'digitalPage', 'snapshot'] as const;
 const backgroundNames = ['list', 'global', 'trend', 'digitalLegacy'] as const;
-const readNames = [...coreNames, ...backgroundNames] as const;
+const readNames = [...coreOrder, ...backgroundNames] as const;
 type ReadName = typeof readNames[number];
 const forced = { cancelRefetch: true, throwOnError: true };
 function refreshHarness(implementations: Partial<Record<ReadName, () => unknown>> = {}) {
   const order: ReadName[] = [];
-  const reads = Object.fromEntries(readNames.map(name => [name, vi.fn(() => {
+  const reads = Object.fromEntries(readNames.map(name => [name, vi.fn((input?: { userId: number }) => {
     order.push(name);
-    return implementations[name]?.() ?? Promise.resolve(name);
+    return implementations[name]?.() ?? Promise.resolve(name === 'snapshot' ? { id: input?.userId } : name);
   })])) as Record<ReadName, ReturnType<typeof vi.fn>>;
   const forbidden = vi.fn(() => { throw new Error('Forbidden offline mutation/network/browser'); });
   const mutator = { mutate: forbidden, mutateAsync: forbidden };
   const poison: unknown = new Proxy(forbidden, { get: () => poison });
   const toast = { error: vi.fn(), success: vi.fn() };
-  const bindings = { toast, adjUtils: { adminUser: {
-    walletSnapshot: { invalidate: reads.snapshot }, list: { invalidate: reads.list },
+  const snapshot = { cancel: vi.fn(async () => undefined), invalidate: vi.fn(async () => undefined), fetch: reads.snapshot };
+  const bindings = { toast, refreshAdminWalletSnapshot, adjUtils: { adminUser: {
+    walletSnapshot: snapshot, list: { invalidate: reads.list },
     multiAssetWalletHistoryPage: { invalidate: reads.digitalPage },
     multiAssetWalletHistory: { invalidate: reads.digitalLegacy },
     walletGlobalHistory: { invalidate: reads.global }, walletBalanceTrend: { invalidate: reads.trend },
@@ -115,27 +119,31 @@ function refreshHarness(implementations: Partial<Record<ReadName, () => unknown>
   adjMutation: mutator, multiAssetAdjMutation: mutator, handleAdjSubmit: forbidden,
   mtrpc: poison, trpc: poison, window: poison, document: poison, fetch: forbidden };
   return { refresh: expression<(userId: number) => Promise<void>>('refreshAdjWalletAfterChange', bindings),
-    reads, order, forbidden, toast };
+    reads, order, forbidden, toast, snapshot };
 }
 function expectCore(test: ReturnType<typeof refreshHarness>, userId: number) {
-  expect(test.reads.snapshot.mock.calls).toEqual([[{ userId }, undefined, forced]]);
+  expect(test.snapshot.cancel.mock.calls).toEqual([[{ userId }]]);
+  expect(test.snapshot.invalidate.mock.calls).toEqual([[{ userId }, { refetchType: 'none' }]]);
+  expect(test.reads.snapshot.mock.calls).toEqual([[{ userId }, { staleTime: 0 }]]);
   expect(test.reads.funding.mock.calls).toEqual([[{ viewAsUserId: userId }, undefined, forced]]);
   // 部分键 {userId} 定向覆盖该用户所有币种/页码，不将其他用户拉进刷新。
   expect(test.reads.digitalPage.mock.calls).toEqual([[{ userId }, undefined, forced]]);
-  const options = coreNames.map(name => test.reads[name].mock.calls[0][2]);
+  const options = ['funding', 'digitalPage'].map(name => test.reads[name as ReadName].mock.calls[0][2]);
   expect(options.every(option => option === options[0])).toBe(true);
 }
 describe('真实 refreshAdjWalletAfterChange：核心完成后才后台刷新，不重提资金 mutation', () => {
-  it('仅目标 ID 的三种 invalidate 先启动；核心 promise 完成前列表/全局/走势绝不启动', async () => {
+  it('仅目标 ID 的快照新读取与两项流水并行；核心 promise 完成前列表/全局/走势绝不启动', async () => {
     const pending = Object.fromEntries(readNames.map(name => [name, deferred()])) as Record<ReadName, ReturnType<typeof deferred>>;
     const test = refreshHarness(Object.fromEntries(readNames.map(name => [name, () => pending[name].promise])));
     let finished = false;
     const running = test.refresh(28).then(() => { finished = true; });
+    expect(test.order).toEqual(['funding', 'digitalPage']);
+    await microtasks();
     expectCore(test, 28);
-    expect(test.order).toEqual(coreNames);
+    expect(test.order).toEqual(coreOrder);
     for (const name of coreNames.slice(0, 2)) {
-      pending[name].resolve(); await microtasks();
-      expect(test.order).toEqual(coreNames);
+      pending[name].resolve(name === 'snapshot' ? { id: 28 } : undefined); await microtasks();
+      expect(test.order).toEqual(coreOrder);
       expect(finished).toBe(false);
     }
     pending.digitalPage.resolve();
@@ -154,17 +162,18 @@ describe('真实 refreshAdjWalletAfterChange：核心完成后才后台刷新，
     const test = refreshHarness(Object.fromEntries(coreNames.map(name => [name, () => pending[name].promise])));
     let finished = false;
     const running = test.refresh(29).then(() => { finished = true; });
+    await microtasks();
     expectCore(test, 29);
     pending[failed].reject(new Error('offline read failure'));
     await microtasks();
     expect(finished).toBe(false);
     expect(test.toast.error).not.toHaveBeenCalled();
-    expect(test.order).toEqual(coreNames);
+    expect(test.order).toEqual(coreOrder);
     const others = coreNames.filter(name => name !== failed);
-    pending[others[0]].resolve(); await microtasks();
+    pending[others[0]].resolve(others[0] === 'snapshot' ? { id: 29 } : undefined); await microtasks();
     expect(test.toast.error).not.toHaveBeenCalled();
-    expect(test.order).toEqual(coreNames);
-    pending[others[1]].resolve(); await running;
+    expect(test.order).toEqual(coreOrder);
+    pending[others[1]].resolve(others[1] === 'snapshot' ? { id: 29 } : undefined); await running;
     expect(test.toast.error.mock.calls).toEqual([['账目已保存，部分余额或流水更新失败，请点更新重试；不要重复添加']]);
     expect(test.toast.success).not.toHaveBeenCalled();
     expect(test.order).toEqual(readNames);
