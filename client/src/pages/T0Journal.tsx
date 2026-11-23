@@ -3644,6 +3644,90 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
 
   return allocations;
 }
+
+/**
+ * 收益可见性不等于仓位消耗范围：后来加入分成的用户未参与旧平仓收益，
+ * 但可见开仓的剩余 ETH 仍必须扣除旧平仓。仅投影同一已授权开仓的数量关联，
+ * 不把这些历史平仓加入 selectedTrades、收入、分佣或共享收益集合。
+ */
+function buildVisiblePositionClosingAllocations(
+  visibleTrades: PreviewTrade[],
+  completeFilledTrades: PreviewTrade[],
+  completeAllocations: Map<string, LinkedClosingAllocation[]>,
+) {
+  const sourceOpenings = new Map<string, PreviewTrade>();
+  for (const trade of completeFilledTrades) {
+    if (trade.symbol === "ETH" && ACTIONS[trade.action].opening && !trade.isPending && !trade.isSyncing) {
+      sourceOpenings.set(getStoredEntryId(trade), trade);
+    }
+  }
+  const visibleAllocations = new Map<string, LinkedClosingAllocation[]>();
+  for (const opening of visibleTrades) {
+    if (opening.symbol !== "ETH" || !ACTIONS[opening.action].opening || opening.isPending || opening.isSyncing) continue;
+    const source = sourceOpenings.get(getStoredEntryId(opening));
+    if (!source || source.action !== opening.action || source.accountId !== opening.accountId
+      || (source.relatedUserId ?? "") !== (opening.relatedUserId ?? "")
+      || (source.relatedFundId ?? "") !== (opening.relatedFundId ?? "")
+      || Math.abs(source.price - opening.price) > 0.0000001
+      || Math.abs(source.quantity - opening.quantity) > 0.0000001) continue;
+    const linked = (completeAllocations.get(source.id) ?? []).filter(({ trade }) => (
+      !trade.isPending && !trade.isSyncing && trade.symbol === "ETH"
+      && trade.accountId === source.accountId
+      && (trade.relatedUserId ?? "") === (source.relatedUserId ?? "")
+      && (trade.relatedFundId ?? "") === (source.relatedFundId ?? "")
+      && ACTIONS[trade.action].side === ACTIONS[source.action].side
+      && !ACTIONS[trade.action].opening
+      && priceKey(archivePriceForTrade(trade)) === priceKey(archivePriceForTrade(source))
+    ));
+    visibleAllocations.set(opening.id, linked);
+  }
+  return visibleAllocations;
+}
+
+function getVisiblePositionRemainingQuantity(
+  trade: PreviewTrade,
+  allocations: Map<string, LinkedClosingAllocation[]>,
+) {
+  if (trade.isSyncing) return 0;
+  if (trade.isPending) return trade.quantity;
+  // 缺失或归属已变化的源单不能被缺省空数组伪装成“完全未平”。
+  if (!allocations.has(trade.id)) return 0;
+  const closedQuantity = (allocations.get(trade.id) ?? []).reduce((total, item) => total + item.quantity, 0);
+  return Math.max(0, trade.quantity - closedQuantity);
+}
+
+/** 只校正剩余数量、成本和浮盈基础；已实现收益及其费用字段仍来自原收益可见流水。 */
+function buildPositionDisplayBuckets(trades: PreviewTrade[], allocations: Map<string, LinkedClosingAllocation[]>) {
+  const validTrades = trades.filter((trade) => !trade.isSyncing && (
+    !ACTIONS[trade.action].opening || trade.isPending || allocations.has(trade.id)
+  ));
+  const remainingBuckets = new Map(buildIntegratedDisplayBuckets(validTrades, allocations, POSITION_ARCHIVE_STEP)
+    .map((bucket) => [bucket.key, bucket]));
+  // 基础仓位桶对期权不计算普通 ETH 浮盈；混合档也只保留现货/合约的金融敞口。
+  for (const trade of validTrades) {
+    if (!ACTIONS[trade.action].opening || trade.instrumentType !== "option" || trade.isPending) continue;
+    const key = `${ACTIONS[trade.action].side}:${priceKey(archivePriceForTrade(trade))}`;
+    const bucket = remainingBuckets.get(key);
+    if (!bucket) continue;
+    const optionQuantity = getTradeFinancialQuantity(trade, getVisiblePositionRemainingQuantity(trade, allocations));
+    bucket.financialQuantity = Math.max(0, bucket.financialQuantity - optionQuantity);
+    bucket.financialCostBasis = Math.max(0, bucket.financialCostBasis - optionQuantity * trade.price);
+  }
+  return buildPositionBuckets(validTrades).map((bucket) => {
+    const remaining = remainingBuckets.get(bucket.key);
+    return {
+      ...bucket,
+      remainingQuantity: remaining?.remainingQuantity ?? 0,
+      costBasis: remaining?.costBasis ?? 0,
+      financialQuantity: remaining?.financialQuantity ?? 0,
+      financialCostBasis: remaining?.financialCostBasis ?? 0,
+      openingFeeBasis: remaining?.openingFeeBasis ?? 0,
+      pendingQuantity: remaining?.pendingQuantity ?? 0,
+      lockedRemainingQuantity: remaining?.lockedRemainingQuantity ?? 0,
+    };
+  });
+}
+
 type T0ProjectStatusItem = { id: string; relatedUserId: string; name: string; relatedUserName: string; relatedUsername?: string; pendingCount: number; holdingCount: number };
 type T0ProjectStatusGroup = { userId: string; name: string; username?: string; projects: T0ProjectStatusItem[] };
 
@@ -7944,31 +8028,53 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price, gridReferencePrice]);
   const isIndividualLadderView = adminLadderDisplayMode === "individual";
-  // 资金、盈亏、手续费和 FIFO 仍仅使用实际成交单；挂单在成交前绝不参与这些财务口径。
-  const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
-  // “总仓位”则忠实反映顶部状态筛选：状态为全部时同时展示挂单与已成交数量，
-  // 切换至“已成交”或“已挂单”后只统计对应状态的数量。
-  const totalPositionBuckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
+  // 完整已授权投影只提供仓位消耗上下文；顶部受益人筛选仍独立控制收入和历史可见性。
+  const positionContextFilledTrades = useMemo(
+    () => (isMemberView ? rawJournalTrades : trades).filter((trade) => !trade.isPending && !trade.isSyncing),
+    [isMemberView, rawJournalTrades, trades],
+  );
+  const positionContextOpeningClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(positionContextFilledTrades),
+    [positionContextFilledTrades],
+  );
   const ladderOpeningClosingAllocations = useMemo(
+    () => buildVisiblePositionClosingAllocations(selectedTrades, positionContextFilledTrades, positionContextOpeningClosingAllocations),
+    [selectedTrades, positionContextFilledTrades, positionContextOpeningClosingAllocations],
+  );
+  const displayIncomeOpeningClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(selectedFilledTrades),
     [selectedFilledTrades],
   );
+  const selectedPositionTrades = useMemo(
+    () => selectedTrades.filter((trade) => !trade.isSyncing && (
+      !ACTIONS[trade.action].opening || trade.isPending || ladderOpeningClosingAllocations.has(trade.id)
+    )),
+    [selectedTrades, ladderOpeningClosingAllocations],
+  );
+  const buckets = useMemo(
+    () => buildPositionDisplayBuckets(selectedFilledTrades, ladderOpeningClosingAllocations),
+    [selectedFilledTrades, ladderOpeningClosingAllocations],
+  );
+  // “总仓位”则忠实反映顶部状态筛选：状态为全部时同时展示挂单与已成交数量，
+  // 切换至“已成交”或“已挂单”后只统计对应状态的数量。
+  const totalPositionBuckets = useMemo(
+    () => buildPositionDisplayBuckets(selectedTrades, ladderOpeningClosingAllocations),
+    [selectedTrades, ladderOpeningClosingAllocations],
+  );
   const integratedDisplayBuckets = useMemo(
-    () => buildIntegratedDisplayBuckets(selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
-    [selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
+    () => buildIntegratedDisplayBuckets(selectedPositionTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
+    [selectedPositionTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
   );
   const hiddenLockedOpeningClosingAllocations = useMemo(
-    () => buildOpeningClosingAllocations(selectedTradesIncludingLocked.filter((trade) => !trade.isPending)),
-    [selectedTradesIncludingLocked],
+    () => buildVisiblePositionClosingAllocations(selectedTradesIncludingLocked, positionContextFilledTrades, positionContextOpeningClosingAllocations),
+    [selectedTradesIncludingLocked, positionContextFilledTrades, positionContextOpeningClosingAllocations],
   );
   const hiddenLockedOverviewBySlot = useMemo(() => {
     const summaries = new Map<string, HiddenLockedPositionOverview>();
     if (!shouldHideLockedForDisplay) return summaries;
     for (const trade of selectedTradesIncludingLocked) {
       if (!ACTIONS[trade.action].opening || trade.isPending || !trade.isLocked) continue;
-      const closedQuantity = (hiddenLockedOpeningClosingAllocations.get(trade.id) ?? [])
-        .reduce((total, allocation) => total + allocation.quantity, 0);
-      const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+      const remainingQuantity = getVisiblePositionRemainingQuantity(trade, hiddenLockedOpeningClosingAllocations);
       if (remainingQuantity <= 0.0000001) continue;
       const side = ACTIONS[trade.action].side;
       // 锁单已从报价卡中隐藏，但筹码必须钉回这笔订单的真实成交价位置。
@@ -9210,7 +9316,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 分配出的实际片段带入本地详情，不能再把同一十美元归档档的其他订单混进来。
     if (isIndividualQuoteDetail && closingSourceTrade) {
       const sourceOpeningId = getStoredEntryId(closingSourceTrade);
-      const sourceClosingSlices = (ladderOpeningClosingAllocations.get(closingSourceTrade.id) ?? []).map(({ trade, quantity }) => ({
+      const sourceClosingSlices = (displayIncomeOpeningClosingAllocations.get(closingSourceTrade.id) ?? []).map(({ trade, quantity }) => ({
         ...trade,
         id: `individual-source-${trade.id}-${closingSourceTrade.id}`,
         quantity,
@@ -9234,7 +9340,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && !trade.isPending
       && priceKey(archivePriceForTrade(trade, entryArchiveStep)) === priceKey(targetPrice));
     const scopedClosings = openings.flatMap((opening) => (
-      (ladderOpeningClosingAllocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
+      (displayIncomeOpeningClosingAllocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
         ...trade,
         id: `display-${entryArchiveStep}-${trade.id}-${opening.id}`,
         quantity,
@@ -9243,16 +9349,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ));
     return [...openings, ...scopedClosings]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations, closingSourceTrade, isIndividualQuoteDetail]);
+  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, displayIncomeOpeningClosingAllocations, closingSourceTrade, isIndividualQuoteDetail]);
+  const openingClosingAllocations = useMemo(
+    () => buildVisiblePositionClosingAllocations(entryScopedTrades, positionContextFilledTrades, positionContextOpeningClosingAllocations),
+    [entryScopedTrades, positionContextFilledTrades, positionContextOpeningClosingAllocations],
+  );
   const entryScopedBuckets = useMemo(() => {
     if (isIndividualQuoteDetail && closingSourceTrade) {
-      return buildPositionBuckets(entryScopedTrades.filter((trade) => !trade.isPending));
+      return buildPositionDisplayBuckets(entryScopedTrades.filter((trade) => !trade.isPending), openingClosingAllocations);
     }
     const source = entryArchiveStep === POSITION_ARCHIVE_STEP ? buckets : integratedDisplayBuckets;
     return source.filter((bucket) => bucket.side === entrySide && (
       entryForm.targetPrice === undefined || priceKey(bucket.price) === priceKey(entryForm.targetPrice)
     ));
-  }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice, entryScopedTrades, isIndividualQuoteDetail, closingSourceTrade]);
+  }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice, entryScopedTrades, openingClosingAllocations, isIndividualQuoteDetail, closingSourceTrade]);
   const entryScopedFilledTrades = useMemo(
     () => entryScopedTrades.filter((trade) => !trade.isPending),
     [entryScopedTrades],
@@ -9270,7 +9380,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
   // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
   const entryScopeTitle = isOptionEntryContext ? "期权汇总" : isGridOpeningEntry ? "网格汇总" : `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
-  const openingClosingAllocations = useMemo(
+  const entryIncomeOpeningClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(entryScopedTrades.filter((trade) => !trade.isPending)),
     [entryScopedTrades],
   );
@@ -9284,9 +9394,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const active: PreviewTrade[] = [];
     const settled: PreviewTrade[] = [];
     for (const trade of openedTradeList) {
-      const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
-      const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-      if (trade.quantity - closedQuantity > 0.0000001) active.push(trade);
+      if (getVisiblePositionRemainingQuantity(trade, openingClosingAllocations) > 0.0000001) active.push(trade);
       else settled.push(trade);
     }
     return { activeOpenedTradeList: active, settledOpenedTradeList: settled };
@@ -9294,7 +9402,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const settledOpenedTradeSummary = useMemo(() => {
     const realizedNet = settledOpenedTradeList.reduce((total, openingTrade) => {
       const isLongPosition = ACTIONS[openingTrade.action].side === "long";
-      const linkedClosings = openingClosingAllocations.get(openingTrade.id) ?? [];
+      const linkedClosings = entryIncomeOpeningClosingAllocations.get(openingTrade.id) ?? [];
       const openingNet = linkedClosings.reduce((openingTotal, { trade: closingTrade, quantity }) => {
         const financialQuantity = getTradeFinancialQuantity(closingTrade, quantity);
         const grossPnl = isLongPosition
@@ -9311,7 +9419,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return total + openingNet;
     }, 0);
     return { count: settledOpenedTradeList.length, realizedNet };
-  }, [settledOpenedTradeList, openingClosingAllocations]);
+  }, [settledOpenedTradeList, entryIncomeOpeningClosingAllocations]);
   const activeOpenedTradeRows = useMemo(
     () => activeOpenedTradeList.map((trade) => ({ kind: "active" as const, trade })),
     [activeOpenedTradeList],
@@ -9497,10 +9605,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
   const editingRemainingQuantity = useMemo(() => {
     if (!isEditingEntry || !editingOriginalTrade) return null;
-    const linkedClosings = openingClosingAllocations.get(editingOriginalTrade.id) ?? [];
-    const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-    return Math.max(0, editingOriginalTrade.quantity - closedQuantity);
-  }, [editingOriginalTrade, isEditingEntry, openingClosingAllocations]);
+    return getVisiblePositionRemainingQuantity(editingOriginalTrade, ladderOpeningClosingAllocations);
+  }, [editingOriginalTrade, isEditingEntry, ladderOpeningClosingAllocations]);
   // 一旦发生关联平仓，原始开仓字段都要保留审计；仅有剩余仓位时才允许切换锁定状态。
   const hasDependentCloseOpeningEdit = Boolean(
     isEditingEntry
@@ -9651,18 +9757,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const side = ACTIONS[closingSourceTrade.action].side;
     const relatedUserKey = closingSourceTrade.relatedUserId ?? "";
     const relatedFundKey = closingSourceTrade.relatedFundId ?? "";
-    const sourceClosingAllocations = ladderOpeningClosingAllocations.get(closingSourceTrade.id) ?? [];
-    const sourceClosedQuantity = sourceClosingAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
-    const sourceRemainingQuantity = Math.max(0, closingSourceTrade.quantity - sourceClosedQuantity);
+    const sourceRemainingQuantity = getVisiblePositionRemainingQuantity(closingSourceTrade, ladderOpeningClosingAllocations);
     const targetPrice = entryForm.targetPrice ?? archivePriceForTrade(closingSourceTrade);
-    const scopeBuckets = buildPositionBuckets(selectedFilledTrades.filter((trade) => (
+    const scopeBuckets = buildPositionBuckets(positionContextFilledTrades.filter((trade) => (
       trade.accountId === closingSourceTrade.accountId
       && (trade.relatedUserId ?? "") === relatedUserKey
       && (trade.relatedFundId ?? "") === relatedFundKey
     )));
     const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
-  }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
+  }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, positionContextFilledTrades]);
   // 整合报价只按真实订单价位汇总；逐笔报价则按开仓主单逐笔显示。
   // 持续提醒不是挂单或仓位，因此只在管理员逐笔报价中作为待补位入口出现，
   // 不显示在整合报价，也不参与任何价位的数量、成本或盈亏汇总。
@@ -9689,7 +9793,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (!ACTIONS[trade.action].opening) continue;
       const linkedClosings = ladderOpeningClosingAllocations.get(trade.id) ?? [];
       const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-      const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+      const remainingQuantity = getVisiblePositionRemainingQuantity(trade, ladderOpeningClosingAllocations);
       if (remainingQuantity <= 0.0000001) continue;
       const side = ACTIONS[trade.action].side;
       const isPending = Boolean(trade.isPending);
@@ -9907,7 +10011,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 不会和任何已关联用户的订单互相抵扣。
     const relatedUserKey = trade.relatedUserId ?? "";
     const relatedFundKey = trade.relatedFundId ?? "";
-    const tradeUserBuckets = buildPositionBuckets(selectedFilledTrades.filter((item) => (
+    const tradeUserBuckets = buildPositionBuckets(positionContextFilledTrades.filter((item) => (
       item.accountId === trade.accountId
       && (item.relatedUserId ?? "") === relatedUserKey
       && (item.relatedFundId ?? "") === relatedFundKey
@@ -9918,9 +10022,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     // 数量预填必须取这张主单本身尚未关联平仓的剩余量，不能误用同价位汇总仓量。
-    const sourceClosingAllocations = ladderOpeningClosingAllocations.get(trade.id) ?? [];
-    const sourceClosedQuantity = sourceClosingAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
-    const sourceRemainingQuantity = Math.max(0, trade.quantity - sourceClosedQuantity);
+    const sourceRemainingQuantity = getVisiblePositionRemainingQuantity(trade, ladderOpeningClosingAllocations);
     const closableQuantity = Math.min(target.remainingQuantity, sourceRemainingQuantity);
     if (closableQuantity <= 0.0000001) {
       t0Toast.error("该笔订单已无可平数量");
@@ -10065,9 +10167,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     openingCommitRequestIdRef.current = null;
     openingCommitRequestFingerprintRef.current = null;
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
-    const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
+    const linkedClosings = ladderOpeningClosingAllocations.get(trade.id) ?? [];
     const closedQuantity = linkedClosings.reduce((total, allocation) => total + allocation.quantity, 0);
-    const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+    const remainingQuantity = getVisiblePositionRemainingQuantity(trade, ladderOpeningClosingAllocations);
     const editableQuantity = closedQuantity > 0.0000001 && remainingQuantity > 0.0000001
       ? remainingQuantity
       : trade.quantity;
@@ -11769,7 +11871,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const trade = row.trade;
   const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
   const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-  const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
+  const remainingQuantity = getVisiblePositionRemainingQuantity(trade, openingClosingAllocations);
   const historicalOpeningQuantity = trade.originalQuantityBeforeReassignment ?? trade.quantity;
   const historicalOpeningValue = historicalOpeningQuantity * trade.price;
   const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
