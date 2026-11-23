@@ -46,6 +46,8 @@ function successHarness(name: MutationName) {
     adjAssetFlowScope: { userId: 28, assetCode: 'ETH', page: 7 }, adjLogPage: 5,
     adjFundingFlowScope: { key: 'old-funding-filter-key', page: 7 },
     adjBalanceSearch: '保留搜索', adjGlobalFlowKeyword: '保留全局关键词',
+    adjGlobalAssetFilter: { category: 'digital', assetCode: 'ETH' },
+    adjBalanceAssetFilter: { category: 'cny', assetCode: 'CNY' },
   };
   const setters = Object.fromEntries(Object.keys(state).map(key => [
     `set${key[0].toUpperCase()}${key.slice(1)}`, vi.fn((value: unknown) => {
@@ -166,6 +168,8 @@ describe('真实调账成功回调：本笔variables币种/用户、草稿隔离
     expect(test.state.adjSelectedCommonNote).toBe('常用备注');
     expect(test.state.adjBalanceSearch).toBe('保留搜索');
     expect(test.state.adjGlobalFlowKeyword).toBe('保留全局关键词');
+    expect(test.state.adjGlobalAssetFilter).toEqual({ category: 'digital', assetCode: 'ETH' });
+    expect(test.state.adjBalanceAssetFilter).toEqual({ category: 'cny', assetCode: 'CNY' });
     if (name === 'multiAssetAdjMutation') expect(test.state.adjAssetFlowScope)
       .toEqual({ userId: 28, assetCode: code, page: 1 });
     else {

@@ -39,6 +39,10 @@ import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { WalletManualFreezePanel } from "@/components/WalletManualFreezePanel";
 import { getWalletFlowCategory, getWalletFundingCurrency, type WalletFlowCategory } from "@/lib/walletFlowPresentation";
+import {
+  getWalletAssetCategory, getWalletAssetFilterCodes, getWalletAssetFilterLabel,
+  matchesWalletAssetFilter, normalizeWalletAssetCode, type WalletAssetFilterCategory,
+} from "@shared/wallet-asset-filters";
 
 type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
 type WalletTrendDays = 7 | 30 | 60 | 70;
@@ -75,6 +79,42 @@ const getLedgerDateRange = (preset: LedgerDatePreset, customStart: string, custo
   }
   return { startDate: undefined, endDate: undefined };
 };
+
+type WalletAssetFilter = { category: WalletAssetFilterCategory; assetCode: string };
+
+/** 全局流水/余额只读筛选，独立于调账表单和当前用户流水的币种选择。 */
+function WalletAssetFilters({ id, filter, assetCodes, onChange }: {
+  id: string;
+  filter: WalletAssetFilter;
+  assetCodes: readonly string[];
+  onChange: (filter: WalletAssetFilter) => void;
+}) {
+  const visibleCodes = assetCodes.filter((code) => matchesWalletAssetFilter(code, filter.category));
+  return (
+    <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 p-2.5" data-wallet-asset-filter={id}>
+      <div className="grid grid-cols-4 gap-1" role="group" aria-label={`${id === "adj-global-flow" ? "全局流水" : "全局余额"}资产分类`}>
+        {([
+          ["all", "全部"], ["digital", "数字币"], ["stable", "稳定币"], ["cny", "人民币"],
+        ] as const).map(([category, label]) => (
+          <button key={category} type="button" aria-pressed={filter.category === category}
+            onClick={() => onChange({ category, assetCode: "all" })}
+            className={`min-w-0 rounded-lg border px-1 py-2 text-[11px] font-semibold transition-colors ${filter.category === category ? "border-orange-300 bg-orange-50 text-orange-600" : "border-transparent bg-white text-gray-500"}`}
+          >{label}</button>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <label htmlFor={`${id}-currency`} className="shrink-0 text-[11px] text-gray-500">币种</label>
+        <select id={`${id}-currency`} value={filter.assetCode}
+          onChange={(event) => onChange({ ...filter, assetCode: event.target.value })}
+          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-2 text-[12px] text-gray-700 outline-none focus:border-orange-400"
+        >
+          <option value="all">{filter.category === "all" ? "全部币种" : `全部${getWalletAssetFilterLabel(filter.category, "all")}`}</option>
+          {visibleCodes.map((code) => <option key={code} value={code}>{code === "CNY" ? "CNY · 人民币" : code}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
 
 function LedgerFlowFilters({
   keyword,
@@ -283,6 +323,7 @@ function WalletTotalAssetTrendChart({
   usdtCnyRate,
   assetPrices,
   fallbackMultiAssets,
+  assetFilter = { category: "all", assetCode: "all" },
 }: {
   trend: any;
   isLoading: boolean;
@@ -291,6 +332,7 @@ function WalletTotalAssetTrendChart({
   usdtCnyRate: number;
   assetPrices: Record<string, number>;
   fallbackMultiAssets: Record<string, number>;
+  assetFilter?: WalletAssetFilter;
 }) {
   const safeRate = Number.isFinite(usdtCnyRate) && usdtCnyRate > 0 ? usdtCnyRate : 0;
   const resolveBalances = (balances: unknown) => balances && typeof balances === "object"
@@ -298,23 +340,28 @@ function WalletTotalAssetTrendChart({
     : fallbackMultiAssets;
   const getDigitalAssetValueU = (balances: unknown) => {
     return Object.entries(resolveBalances(balances)).reduce((sum, [assetCode, quantity]) => {
-      const priceU = Number(assetPrices[String(assetCode).toUpperCase()] ?? 0);
+      const code = normalizeWalletAssetCode(assetCode);
+      // 基础币使用独立USDT/CNY账户值；兼容multiAssets行不能在走势里重复计价。
+      if (getWalletAssetCategory(code) !== "digital"
+        || !matchesWalletAssetFilter(code, assetFilter.category, assetFilter.assetCode)) return sum;
+      const priceU = Number(assetPrices[code] ?? 0);
       const total = Number(quantity ?? 0);
       return Number.isFinite(priceU) && priceU > 0 && Number.isFinite(total) ? sum + total * priceU : sum;
     }, 0);
   };
   const getAssetValueU = (balances: unknown, assetCode: string) => {
+    if (!matchesWalletAssetFilter(assetCode, assetFilter.category, assetFilter.assetCode)) return 0;
     const priceU = Number(assetPrices[assetCode] ?? 0);
     const quantity = Number(resolveBalances(balances)[assetCode] ?? 0);
     return Number.isFinite(priceU) && priceU > 0 && Number.isFinite(quantity) ? quantity * priceU : 0;
   };
   const series = (trend?.series ?? []).map((point: any) => {
-    const actualUsdt = Number(point?.usdt ?? 0);
-    const cnyAssetU = safeRate > 0 ? Number(point?.cny ?? 0) / safeRate : 0;
+    const actualUsdt = matchesWalletAssetFilter("USDT", assetFilter.category, assetFilter.assetCode) ? Number(point?.usdt ?? 0) : 0;
+    const cnyAssetU = safeRate > 0 && matchesWalletAssetFilter("CNY", assetFilter.category, assetFilter.assetCode) ? Number(point?.cny ?? 0) / safeRate : 0;
     const digitalAssetU = getDigitalAssetValueU(point?.multiAssets);
     const ethU = getAssetValueU(point?.multiAssets, "ETH");
     const solU = getAssetValueU(point?.multiAssets, "SOL");
-    const otherAssetsU = cnyAssetU + Math.max(0, digitalAssetU - ethU - solU);
+    const otherAssetsU = cnyAssetU + digitalAssetU - ethU - solU;
     const totalAssetU = actualUsdt + ethU + solU + otherAssetsU;
     return {
       ...point,
@@ -326,12 +373,12 @@ function WalletTotalAssetTrendChart({
       totalAssetU,
     };
   });
-  const currentUsdt = Number(trend?.current?.usdt ?? 0);
-  const currentCnyU = safeRate > 0 ? Number(trend?.current?.cny ?? 0) / safeRate : 0;
+  const currentUsdt = matchesWalletAssetFilter("USDT", assetFilter.category, assetFilter.assetCode) ? Number(trend?.current?.usdt ?? 0) : 0;
+  const currentCnyU = safeRate > 0 && matchesWalletAssetFilter("CNY", assetFilter.category, assetFilter.assetCode) ? Number(trend?.current?.cny ?? 0) / safeRate : 0;
   const currentDigitalAssetU = getDigitalAssetValueU(trend?.current?.multiAssets);
   const currentEthU = getAssetValueU(trend?.current?.multiAssets, "ETH");
   const currentSolU = getAssetValueU(trend?.current?.multiAssets, "SOL");
-  const currentOtherAssetsU = currentCnyU + Math.max(0, currentDigitalAssetU - currentEthU - currentSolU);
+  const currentOtherAssetsU = currentCnyU + currentDigitalAssetU - currentEthU - currentSolU;
   const currentTotalAssetU = currentUsdt + currentEthU + currentSolU + currentOtherAssetsU;
   const startingTotalAssetU = Number(series[0]?.totalAssetU ?? currentTotalAssetU);
   const periodChange = currentTotalAssetU - startingTotalAssetU;
@@ -352,7 +399,7 @@ function WalletTotalAssetTrendChart({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[13px] font-bold text-gray-900">全部用户资金走势</p>
-          <p className="mt-0.5 text-[10px] leading-4 text-gray-400">总资产以 U 计；分段显示 USDT、ETH、SOL 与其他资产</p>
+          <p className="mt-0.5 text-[10px] leading-4 text-gray-400">当前范围：{getWalletAssetFilterLabel(assetFilter.category, assetFilter.assetCode)}；所选资产统一折算为 U</p>
         </div>
         <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600">总资产 U</span>
       </div>
@@ -363,16 +410,18 @@ function WalletTotalAssetTrendChart({
           <p className="mt-0.5 truncate text-[18px] font-bold tabular-nums text-blue-700">≈ {formatAmount(currentTotalAssetU)} <span className="text-[10px] font-medium">U</span></p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-[10px] text-gray-400">实际 USDT</p>
-          <p className="mt-0.5 text-[12px] font-bold tabular-nums text-red-500">{formatAmount(currentUsdt)} U</p>
+          {matchesWalletAssetFilter("USDT", assetFilter.category, assetFilter.assetCode) && <>
+            <p className="text-[10px] text-gray-400">实际 USDT</p>
+            <p className="mt-0.5 text-[12px] font-bold tabular-nums text-red-500">{formatAmount(currentUsdt)} U</p>
+          </>}
           <p className={`mt-0.5 text-[9px] font-medium tabular-nums ${periodChange > 0 ? "text-green-600" : periodChange < 0 ? "text-red-500" : "text-gray-400"}`}>较 {days} 天前 {periodChange > 0 ? "+" : ""}{formatAmount(periodChange)} U</p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
-        <span className="inline-flex items-center gap-1 text-red-500"><span className="h-2 w-2 rounded-sm bg-red-400" />实际 USDT</span>
-        <span className="inline-flex items-center gap-1 text-indigo-600"><span className="h-2 w-2 rounded-sm bg-indigo-400" />ETH ≈ {formatAmount(currentEthU)} U</span>
-        <span className="inline-flex items-center gap-1 text-violet-600"><span className="h-2 w-2 rounded-sm bg-violet-500" />SOL ≈ {formatAmount(currentSolU)} U</span>
+        {matchesWalletAssetFilter("USDT", assetFilter.category, assetFilter.assetCode) && <span className="inline-flex items-center gap-1 text-red-500"><span className="h-2 w-2 rounded-sm bg-red-400" />实际 USDT</span>}
+        {matchesWalletAssetFilter("ETH", assetFilter.category, assetFilter.assetCode) && <span className="inline-flex items-center gap-1 text-indigo-600"><span className="h-2 w-2 rounded-sm bg-indigo-400" />ETH ≈ {formatAmount(currentEthU)} U</span>}
+        {matchesWalletAssetFilter("SOL", assetFilter.category, assetFilter.assetCode) && <span className="inline-flex items-center gap-1 text-violet-600"><span className="h-2 w-2 rounded-sm bg-violet-500" />SOL ≈ {formatAmount(currentSolU)} U</span>}
         <span className="inline-flex items-center gap-1 text-blue-600"><span className="h-2 w-2 rounded-sm bg-blue-400" />其他资产</span>
       </div>
       <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-0.5">
@@ -550,6 +599,8 @@ export default function AfRechargeManage() {
   const [adjGlobalFlowCustomStart, setAdjGlobalFlowCustomStart] = useState("");
   const [adjGlobalFlowCustomEnd, setAdjGlobalFlowCustomEnd] = useState("");
   const [adjFundingFlowScope, setAdjFundingFlowScope] = useState({ key: "", page: 1 });
+  const [adjGlobalAssetFilter, setAdjGlobalAssetFilter] = useState<WalletAssetFilter>({ category: "all", assetCode: "all" });
+  const [adjBalanceAssetFilter, setAdjBalanceAssetFilter] = useState<WalletAssetFilter>({ category: "all", assetCode: "all" });
   const ADJ_PAGE_SIZE = 20;
   // ===== 数据查询 =====
   const ordersQuery = trpc.recharge.adminGetAllOrders.useQuery({ limit: 200 }, {
@@ -671,6 +722,8 @@ export default function AfRechargeManage() {
       pageSize: ADJ_PAGE_SIZE,
       includeUnifiedBalance: true,
       includeAllWalletEvents: true,
+      ...(adjGlobalAssetFilter.category !== "all" ? { assetCategory: adjGlobalAssetFilter.category } : {}),
+      ...(adjGlobalAssetFilter.assetCode !== "all" ? { assetCode: adjGlobalAssetFilter.assetCode } : {}),
       ...(adjGlobalFlowKeyword.trim() ? { keyword: adjGlobalFlowKeyword.trim() } : {}),
       ...(adjGlobalDateRange.startDate ? { startDate: adjGlobalDateRange.startDate } : {}),
       ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
@@ -906,15 +959,22 @@ export default function AfRechargeManage() {
     };
   })();
   const adjBalanceQuery = adjBalanceSearch.trim().toLocaleLowerCase();
+  const adjWalletAssetFilterCodes = getWalletAssetFilterCodes([
+    ...adjUserList.flatMap((user: any) => (user.multiAssetBalances ?? []).map((asset: any) => asset.assetCode)),
+    ...adjLogItems.map((record: any) => record.currency),
+    ...(adjGlobalAssetFilter.assetCode !== "all" ? [adjGlobalAssetFilter.assetCode] : []),
+    ...(adjBalanceAssetFilter.assetCode !== "all" ? [adjBalanceAssetFilter.assetCode] : []),
+  ]);
+  const adjBalanceFilterLabel = getWalletAssetFilterLabel(adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode);
   const adjBalanceTotals = adjUserList.reduce((totals, user: any) => ({
     userCount: totals.userCount + 1,
-    usdt: totals.usdt + Number(user.usdtBalance ?? 0),
-    cny: totals.cny + Number(user.cnyBalance ?? 0),
+    usdt: totals.usdt + (matchesWalletAssetFilter("USDT", adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode) ? Number(user.usdtBalance ?? 0) : 0),
+    cny: totals.cny + (matchesWalletAssetFilter("CNY", adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode) ? Number(user.cnyBalance ?? 0) : 0),
   }), { userCount: 0, usdt: 0, cny: 0 });
   const adjMultiAssetTotals = adjUserList.reduce((totals: Record<string, number>, user: any) => {
     for (const balance of (user.multiAssetBalances ?? [])) {
-      const code = String(balance.assetCode || "").toUpperCase();
-      if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)) {
+      const code = normalizeWalletAssetCode(balance.assetCode);
+      if (getWalletAssetCategory(code) === "digital") {
         totals[code] = (totals[code] ?? 0) + getMultiAssetBreakdown(balance).total;
       }
     }
@@ -922,8 +982,8 @@ export default function AfRechargeManage() {
   }, {});
   const adjMultiAssetFrozenTotals = adjUserList.reduce((totals: Record<string, number>, user: any) => {
     for (const balance of (user.multiAssetBalances ?? [])) {
-      const code = String(balance.assetCode || "").toUpperCase();
-      if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)) {
+      const code = normalizeWalletAssetCode(balance.assetCode);
+      if (getWalletAssetCategory(code) === "digital") {
         totals[code] = (totals[code] ?? 0) + getMultiAssetBreakdown(balance).frozen;
       }
     }
@@ -934,7 +994,9 @@ export default function AfRechargeManage() {
   const adjBalancePrices = ((adjWalletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
   const adjBalanceUsdtCnyRate = Number((adjWalletPricesQuery.data as any)?.usdtCnyRate ?? 0);
   const adjBalanceHasRate = Number.isFinite(adjBalanceUsdtCnyRate) && adjBalanceUsdtCnyRate > 0;
-  const adjMultiAssetValuations = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[])
+  const adjMultiAssetValuations = adjWalletAssetFilterCodes
+    .filter((code) => getWalletAssetCategory(code) === "digital"
+      && matchesWalletAssetFilter(code, adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode))
     .map((assetCode) => {
       const total = Number(adjMultiAssetTotals[assetCode] ?? 0);
       const frozen = Number(adjMultiAssetFrozenTotals[assetCode] ?? 0);
@@ -970,8 +1032,8 @@ export default function AfRechargeManage() {
   const getUserWalletAssetRows = (user: any) => {
     const multiAssetByCode = new Map<string, { total: number; frozen: number }>();
     for (const balance of (user?.multiAssetBalances ?? [])) {
-      const assetCode = String(balance?.assetCode ?? "").trim().toUpperCase();
-      if (!assetCode || ["USDT", "CNY", "RMB", "人民币"].includes(assetCode)) continue;
+      const assetCode = normalizeWalletAssetCode(balance?.assetCode);
+      if (getWalletAssetCategory(assetCode) !== "digital") continue;
       const breakdown = getMultiAssetBreakdown(balance);
       const current = multiAssetByCode.get(assetCode) ?? { total: 0, frozen: 0 };
       multiAssetByCode.set(assetCode, {
@@ -998,6 +1060,7 @@ export default function AfRechargeManage() {
     const unpricedAssets: string[] = [];
     let totalU = 0;
     for (const asset of getUserWalletAssetRows(user)) {
+      if (!matchesWalletAssetFilter(asset.assetCode, adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode)) continue;
       if (asset.assetCode === "USDT") {
         totalU += asset.total;
         continue;
@@ -1031,7 +1094,8 @@ export default function AfRechargeManage() {
       .catch(() => toast.error("转账码复制失败"));
   };
   const userHasAnyWalletAsset = (user: any) => getUserWalletAssetRows(user)
-    .some((asset) => Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12);
+    .some((asset) => matchesWalletAssetFilter(asset.assetCode, adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode)
+      && (Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12));
   const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
     const matchesSearch = !adjBalanceQuery || [user.name, user.username, user.id]
       .some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
@@ -2683,6 +2747,9 @@ export default function AfRechargeManage() {
                 <span className="shrink-0 text-[11px] text-gray-400">共 {adjBalanceTotals.userCount} 位</span>
               </div>
 
+              <WalletAssetFilters id="adj-global-balance" filter={adjBalanceAssetFilter}
+                assetCodes={adjWalletAssetFilterCodes} onChange={setAdjBalanceAssetFilter} />
+
               <div className="mb-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 focus-within:border-orange-400">
                 <Search className="h-4 w-4 shrink-0 text-gray-400" />
                 <input
@@ -2700,7 +2767,7 @@ export default function AfRechargeManage() {
 
               <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-orange-200 bg-orange-50/50 px-3 py-2">
                 <span className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-semibold text-orange-600 shadow-sm">按用户</span>
-                <span className="min-w-0 text-right text-[10px] text-gray-500">每位用户展示完整钱包资产</span>
+                <span className="min-w-0 text-right text-[10px] text-gray-500">当前范围：{adjBalanceFilterLabel}</span>
                 <span className="shrink-0 text-[10px] text-gray-400">{adjSortedBalanceUsers.length} 位</span>
               </div>
 
@@ -2716,7 +2783,7 @@ export default function AfRechargeManage() {
                   onClick={() => setAdjHideZeroAssetTypes((hidden) => !hidden)}
                   className={`rounded-full border px-2 py-1 text-[10px] font-medium transition-colors ${adjHideZeroAssetTypes ? "border-violet-300 bg-violet-50 text-violet-600" : "border-gray-200 bg-white text-gray-500"}`}
                 >{adjHideZeroAssetTypes ? "已隐藏 0 余额币种" : "显示全部币种"}</button>
-                <span className="basis-full pt-0.5 text-[9px] text-gray-400">USDT、人民币固定置前；数字资产按该用户持有量依次展示。</span>
+                <span className="basis-full pt-0.5 text-[9px] text-gray-400">仅展示当前筛选的币种；隐藏零资产按所选币种判断，担保冻结计入持有量。</span>
               </div>
 
               {adjUserList.length === 0 ? (
@@ -2728,7 +2795,9 @@ export default function AfRechargeManage() {
                   {adjSortedBalanceUsers.map((user: any) => {
                     const name = String(user.name || "未设置昵称");
                     const username = String(user.username || `用户${user.id}`);
-                    const assetRows = getUserWalletAssetRows(user).filter((asset) => !adjHideZeroAssetTypes || Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12);
+                    const assetRows = getUserWalletAssetRows(user)
+                      .filter((asset) => matchesWalletAssetFilter(asset.assetCode, adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode))
+                      .filter((asset) => !adjHideZeroAssetTypes || Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12);
                     const walletValuation = adjUserWalletValuations.get(Number(user.id)) ?? getUserWalletTotalValuation(user);
                     return (
                       <div
@@ -2757,7 +2826,7 @@ export default function AfRechargeManage() {
                           <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[9px] font-medium text-orange-600 shadow-sm">{assetRows.length} 种资产</span>
                         </div>
                         <div className="mt-2.5 rounded-lg border border-orange-100 bg-white px-2.5 py-2 text-gray-500">
-                          <p className="text-[10px] font-semibold text-orange-700">全部资产</p>
+                          <p className="text-[10px] font-semibold text-orange-700">{adjBalanceFilterLabel === "全部币种" ? "全部资产" : `${adjBalanceFilterLabel}资产`}</p>
                           <p className="mt-0.5 text-[16px] font-bold tabular-nums text-orange-600">≈ {formatWalletAmount(walletValuation.totalU, 2)} <span className="text-[10px] font-semibold">U</span></p>
                           <p className="mt-0.5 text-[11px] font-medium tabular-nums text-gray-400">{walletValuation.totalCny == null ? "人民币估值待获取" : `≈ ${formatWalletAmount(walletValuation.totalCny, 2)} 元`}</p>
                         </div>
@@ -2802,7 +2871,7 @@ export default function AfRechargeManage() {
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-[10px] font-semibold text-orange-700">全部用户资产总价值</p>
-                    <p className="mt-0.5 text-[9px] text-orange-500/80">USDT、人民币及数字资产统一实时折算</p>
+                    <p className="mt-0.5 text-[9px] text-orange-500/80">当前范围：{adjBalanceFilterLabel}；含担保冻结，统一实时折算</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-medium text-orange-600 shadow-sm">实时估值</span>
                 </div>
@@ -2826,15 +2895,17 @@ export default function AfRechargeManage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                {matchesWalletAssetFilter("USDT", adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode) && <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
                   <p className="text-[10px] text-blue-500">全部用户 USDT 总余额</p>
                   <p className="mt-0.5 truncate text-[16px] font-bold text-blue-700">{formatWalletAmount(adjBalanceTotals.usdt, 2)}</p>
-                </div>
-                <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2.5">
+                </div>}
+                {matchesWalletAssetFilter("CNY", adjBalanceAssetFilter.category, adjBalanceAssetFilter.assetCode) && <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2.5">
                   <p className="text-[10px] text-green-600">全部用户 CNY 总余额</p>
                   <p className="mt-0.5 truncate text-[16px] font-bold text-green-700">¥{formatWalletAmount(adjBalanceTotals.cny, 2)}</p>
-                </div>
+                </div>}
               </div>
+              {(adjBalanceAssetFilter.category === "all" || adjBalanceAssetFilter.category === "digital")
+                && (adjBalanceAssetFilter.assetCode === "all" || getWalletAssetCategory(adjBalanceAssetFilter.assetCode) === "digital") && <>
               <div className="mb-3 rounded-xl border border-violet-100 bg-violet-50 p-2.5">
                 <p className="text-[10px] font-medium text-violet-600">独立数字资产总持有（含担保冻结，按实时市值由高到低）</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5">
@@ -2857,6 +2928,7 @@ export default function AfRechargeManage() {
                   ))}
                 </div>
               </div>
+              </>}
 
               </div>
               <WalletTotalAssetTrendChart
@@ -2867,6 +2939,7 @@ export default function AfRechargeManage() {
                 usdtCnyRate={adjBalanceUsdtCnyRate}
                 assetPrices={adjBalancePrices}
                 fallbackMultiAssets={adjMultiAssetTotals}
+                assetFilter={adjBalanceAssetFilter}
               />
             </>
           )}
@@ -2881,6 +2954,9 @@ export default function AfRechargeManage() {
               </div>
               <span className="text-[11px] text-gray-400">共 {adjLogTotal} 条</span>
             </div>
+            <WalletAssetFilters id="adj-global-flow" filter={adjGlobalAssetFilter}
+              assetCodes={adjWalletAssetFilterCodes}
+              onChange={(filter) => { setAdjGlobalAssetFilter(filter); setAdjLogPage(1); }} />
             <LedgerFlowFilters
               keyword={adjGlobalFlowKeyword}
               datePreset={adjGlobalFlowDatePreset}
@@ -2895,6 +2971,7 @@ export default function AfRechargeManage() {
                 setAdjGlobalFlowDatePreset("all");
                 setAdjGlobalFlowCustomStart("");
                 setAdjGlobalFlowCustomEnd("");
+                setAdjGlobalAssetFilter({ category: "all", assetCode: "all" });
                 setAdjLogPage(1);
               }}
             />
@@ -2911,7 +2988,7 @@ export default function AfRechargeManage() {
               <p className="py-6 text-center text-[12px] text-gray-300">全局流水加载中...</p>
             ) : adjLogItems.length === 0 ? (
               <p className="text-center text-[12px] text-gray-300 py-6">
-                {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' ? '未找到符合条件的流水' : '暂无钱包资金流水'}
+                {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' || adjGlobalAssetFilter.category !== "all" || adjGlobalAssetFilter.assetCode !== "all" ? '未找到符合条件的流水' : '暂无钱包资金流水'}
               </p>
             ) : (
               <div className="space-y-2">

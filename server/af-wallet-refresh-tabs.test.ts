@@ -62,6 +62,8 @@ const preserved = {
   adjGlobalFlowKeyword: '转账', adjGlobalFlowDatePreset: 'last_month',
   adjGlobalFlowCustomStart: '2026-09-01', adjGlobalFlowCustomEnd: '2026-09-30',
   adjUserTrendDays: 7, adjGlobalTrendDays: 60,
+  adjGlobalAssetFilter: { category: 'digital', assetCode: 'ETH' },
+  adjBalanceAssetFilter: { category: 'cny', assetCode: 'CNY' },
 };
 function refreshHarness(selected: boolean, flow: FlowTab, implementations: Partial<Record<ReadName, () => unknown>> = {}) {
   const reads = Object.fromEntries(allReads.map(name => [name,

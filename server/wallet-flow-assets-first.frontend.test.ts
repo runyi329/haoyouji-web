@@ -290,6 +290,7 @@ describe('所有展示流水每页20条；数字资产与全局流水维持服�
     for (const mainTab of ['adjust', 'records']) for (const adjFlowTab of ['user', 'global', 'balances']) {
       evaluate(`(${query.getText(ast)});`, { mtrpc: { adminUser: { walletGlobalHistory: { useQuery } } },
         mainTab, adjFlowTab, adjLogPage: 4, ADJ_PAGE_SIZE: expression('ADJ_PAGE_SIZE'),
+        adjGlobalAssetFilter: { category: 'all', assetCode: 'all' },
         adjGlobalFlowKeyword: '  退款  ', adjGlobalDateRange: { startDate: '2026-10-01', endDate: '2026-10-31' } });
       expect(useQuery).toHaveBeenLastCalledWith({ page: 4, pageSize: 20, includeUnifiedBalance: true,
         includeAllWalletEvents: true, keyword: '退款', startDate: '2026-10-01', endDate: '2026-10-31' }, {

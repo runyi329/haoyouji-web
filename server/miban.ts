@@ -43,6 +43,7 @@ import {
 } from "./db-multi-asset-wallet";
 import { freezeWalletManually, getWalletManualFreezeState, releaseWalletManually, hasWalletManualFreezeActions } from "./db-wallet-manual-freezes";
 import { AI_WALLET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import { buildWalletAssetFilterSql } from "../shared/wallet-asset-filters";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
@@ -5683,6 +5684,8 @@ export const mibanAdminUserRouter = router({
         includeUnifiedBalance: z.boolean().optional(),
         // true 时按真实钱包事件合并：充值、提现、系统钱包流水及 AF 订单/结算/费用流水。
         includeAllWalletEvents: z.boolean().optional(),
+        assetCategory: z.enum(["all", "digital", "stable", "cny"]).optional(),
+        assetCode: z.string().trim().min(1).max(32).optional(),
       })
     )
     .query(async ({ input }) => {
@@ -5917,6 +5920,12 @@ export const mibanAdminUserRouter = router({
           );
           whereValues.push(input.endDate);
         }
+        // Filter the deduplicated union, never its source rows or only the current page.
+        if (input.assetCategory !== undefined || input.assetCode !== undefined) {
+          const assetFilter = buildWalletAssetFilterSql("wallet_event.currency", input);
+          whereParts.push(...assetFilter.parts);
+          whereValues.push(...assetFilter.values);
+        }
         const whereSql = whereParts.length
           ? `WHERE ${whereParts.join(" AND ")}`
           : "";
@@ -5996,6 +6005,11 @@ export const mibanAdminUserRouter = router({
         // 结束日期按整日包含，避免用户选择当天时遗漏晚间流水。
         whereParts.push(`bh.created_at < DATE_ADD(?, INTERVAL 1 DAY)`);
         whereValues.push(input.endDate);
+      }
+      if (input.assetCategory !== undefined || input.assetCode !== undefined) {
+        const assetFilter = buildWalletAssetFilterSql("bh.currency", input);
+        whereParts.push(...assetFilter.parts);
+        whereValues.push(...assetFilter.values);
       }
       const whereSql = whereParts.length
         ? `WHERE ${whereParts.join(" AND ")}`
