@@ -431,6 +431,50 @@ describe("T0 提交反馈修复不得绕过真实签名计划、预算或原始�
     expect(h.state.closeConfirmationStep).toBe("review");
   });
 
+  it("1900空单的真实参数按钮进入review，仅确认参数、不实际平仓", () => {
+    const h = harness({ raw: [trade("101", { price: 1900 })],
+      form: { targetPrice: 1900, price: "1870", quantity: "10" },
+      globals: { closeConfirmationStep: "input" } });
+    h.invoke("openingClick");
+    expectNoWrites(h);
+    expect(h.setters.closeConfirmationStep).toHaveBeenCalledWith("review");
+    expect(h.state.closeSaveError).toBeNull();
+  });
+
+  it("1900空单数量超限仍拒绝，但参数页显示真实closeSaveError而不是空开仓错误", () => {
+    const h = harness({ raw: [trade("101", { price: 1900, quantity: 10 })],
+      form: { targetPrice: 1900, price: "1870", quantity: "11" },
+      globals: { closeConfirmationStep: "input" } });
+    h.invoke("openingClick");
+    expectNoWrites(h);
+    expect(h.setters.closeConfirmationStep).not.toHaveBeenCalled();
+    expect(h.state.closeSaveError).toMatch(/最多可平 10.00 ETH/);
+    expect(h.state.openingSaveError).toBeNull();
+    const render = required(nodes(page, ts.isJsxExpression).find(node => node.expression
+      && ts.isBinaryExpression(node.expression) && node.expression.left.getText(page).startsWith("!isCloseReview &&")
+      && node.getText(page).includes("未进入平仓确认：")), "input error alert expression");
+    const expression = render.expression as ts.BinaryExpression;
+    const visible = compile(`(${expression.left.getText(page)});`).script.runInContext(createContext({
+      isCloseReview: false, isClosingEntry: true, closeSaveError: h.state.closeSaveError, openingSaveError: null,
+    }));
+    expect(visible).toBe(h.state.closeSaveError);
+    expect(render.getText(page)).toContain('role="alert"');
+  });
+
+  it("输入错误容器隔离开仓和平仓；复核阶段仍复用原来的复核错误提示", () => {
+    const render = required(nodes(page, ts.isJsxExpression).find(node => node.expression
+      && ts.isBinaryExpression(node.expression) && node.expression.left.getText(page).startsWith("!isCloseReview &&")
+      && node.getText(page).includes("未进入平仓确认：")), "input error alert expression");
+    const expression = render.expression as ts.BinaryExpression;
+    const script = compile(`(${expression.left.getText(page)});`).script;
+    expect(script.runInContext(createContext({ isCloseReview: false, isClosingEntry: false,
+      openingSaveError: "开仓校验失败", closeSaveError: "上一笔平仓错误" }))).toBe("开仓校验失败");
+    expect(script.runInContext(createContext({ isCloseReview: false, isClosingEntry: true,
+      openingSaveError: "上一笔开仓错误", closeSaveError: null }))).toBeNull();
+    expect(script.runInContext(createContext({ isCloseReview: true, isClosingEntry: true,
+      openingSaveError: null, closeSaveError: "复核校验失败" }))).toBe(false);
+  });
+
   it("服务端缺token拒绝在DB连接前；签名/预算/fresh源仓仍在INSERT前（只读AST，不执行DB）", () => {
     const save = functionNode("saveLedger52T0JournalEntry", journal);
     const guard = required(nodes(save, ts.isIfStatement).find(node =>

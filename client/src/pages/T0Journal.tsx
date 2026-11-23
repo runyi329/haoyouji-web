@@ -11204,7 +11204,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     if (!selectedAction.opening) {
       if (archiveTargetPrice === undefined) {
-        t0Toast.error("请先在价格簿中点选要平的价格档位");
+        showSaveValidationError("请先在价格簿中点选要平的价格档位");
         return;
       }
       const side = ACTIONS[storedAction].side;
@@ -11860,7 +11860,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className="flex min-w-0 flex-col gap-0.5 text-slate-600"><span>开仓价</span><span data-t0-fit className="whitespace-nowrap text-[13px] font-semibold leading-5 text-slate-800">{formatPrice(trade.price)}</span></span>
               {trade.isPending ? <span className="flex min-w-0 flex-col items-end gap-0.5 text-sky-700"><span className="text-slate-500">当前状态</span><span className="inline-flex items-center gap-1 whitespace-nowrap leading-5"><Clock3 className="h-3 w-3" />待成交</span></span>
                 : trade.instrumentType === "option" ? <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="whitespace-nowrap text-[13px] font-semibold leading-5 tabular-nums" /></span>
-                : <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><span data-t0-fit className={`whitespace-nowrap text-[13px] font-semibold leading-5 ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span></span>}
+                : <span className="flex min-w-0 flex-col items-end gap-0.5"><span className="text-slate-500">实时盈亏</span><span data-t0-fit-ignore className={`max-w-full overflow-x-auto whitespace-nowrap text-[13px] font-semibold leading-5 tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span></span>}
             </span>
           </span>
         </button>
@@ -11905,7 +11905,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {trade.instrumentType === "option" && !trade.isPending ? (
                 <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} emptyLabel="期权报价加载中" className="mt-0.5 whitespace-nowrap text-[11px] font-semibold tabular-nums" />
               ) : (
-                <div data-t0-fit className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                <div data-t0-fit-ignore className={`mt-0.5 max-w-full overflow-x-auto whitespace-nowrap text-[11px] font-semibold leading-4 tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                 </div>
               )}
@@ -13546,7 +13546,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 <div className={`mx-3 flex min-w-0 items-center justify-between gap-2 border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : isGridOpeningEntry ? "border-cyan-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span data-t0-fit className={`shrink-0 ${entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    <span data-t0-fit-ignore className={`min-w-0 overflow-x-auto whitespace-nowrap text-[10px] leading-4 tabular-nums ${entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                     </span>
                     <span className="shrink-0 text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
@@ -14308,8 +14308,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               ? "sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur"
               : "fixed inset-x-0 bottom-0 z-20 border-t border-slate-100 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur"
             }>
-              {!isCloseReview && openingSaveError && <div role="alert" className="mb-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
-                <span className="font-semibold">未保存：</span>{openingSaveError}。请保留当前内容修改后重新保存。
+              {!isCloseReview && (isClosingEntry ? closeSaveError : openingSaveError) && <div role="alert" className="mb-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                <span className="font-semibold">{isClosingEntry ? "未进入平仓确认：" : "未保存："}</span>{isClosingEntry ? closeSaveError : openingSaveError}。请保留当前内容修改后重新确认。
               </div>}
               {!isCloseReview && (
                 <button
