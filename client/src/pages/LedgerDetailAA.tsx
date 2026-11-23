@@ -37,6 +37,7 @@ import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDo
 import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import { canRecordLedger37Calendar, isLedger37FullManager } from "@shared/ledger37-permissions";
+import { getBeijingLedgerRecordToday } from "@shared/ledger-record-date";
 import Ledger37CalendarNumberDialog from "@/components/Ledger37CalendarNumberDialog";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import Ledger37AiHome from "@/components/Ledger37AiHome";
@@ -2333,6 +2334,7 @@ export default function LedgerDetailAA({
   // 管理员保留单日维护快览。
   const handleDayClick = (day: number) => {
     const date = getDateStr(day);
+    if (ledgerId === 37 && date > getBeijingLedgerRecordToday()) return;
     if (!canOpenCalendarDayDetail) {
       if (isSelectedStockPortfolio && selectedTagId) {
         setShowStockPortfolio(true);
@@ -3015,7 +3017,8 @@ export default function LedgerDetailAA({
                         return r.stockCodes && Array.isArray(r.stockCodes) && r.stockCodes.length > 0;
                       });
                       const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
-                      const canOpenCalendarCell = !isNonTrading && (canOpenCalendarDayDetail || Boolean(hasImages) || (isSelectedStockPortfolio && Boolean(selectedTagId)));
+                      const isFutureCalendarDay = ledgerId === 37 && dayDateStr > getBeijingLedgerRecordToday();
+                      const canOpenCalendarCell = !isFutureCalendarDay && !isNonTrading && (canOpenCalendarDayDetail || Boolean(hasImages) || (isSelectedStockPortfolio && Boolean(selectedTagId)));
                       const canRecordCalendarCell = canRecordCalendarNumber && !isNonTrading
                         && !isSelectedStockPortfolio && Boolean(selectedTagId)
                         && dayDateStr <= new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -4528,14 +4531,15 @@ export default function LedgerDetailAA({
                                 const cellBg = isNonTrading ? '#F0F0F0' : isTodayCell ? '#FFF3E0' : '#F9F9F9';
                                 const cellBorder = isNonTrading ? '1px solid #E0E0E0' : isTodayCell ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                                 const dayNumColor = isNonTrading ? '#BDBDBD' : isTodayCell ? '#D32F2F' : '#222222';
+                                const canOpenSummaryDate = canOpenCalendarDayDetail && (ledgerId !== 37 || dateStr <= getBeijingLedgerRecordToday());
                                 return (
                                   <button
                                     key={day}
                                     type="button"
-                                    onClick={() => { if (canOpenCalendarDayDetail) setCalendarDateDetail({ scope: 'summary', date: dateStr, summaryTags: entry?.tags ?? [] }); }}
-                                    disabled={!canOpenCalendarDayDetail}
+                                    onClick={() => { if (canOpenSummaryDate) setCalendarDateDetail({ scope: 'summary', date: dateStr, summaryTags: entry?.tags ?? [] }); }}
+                                    disabled={!canOpenSummaryDate}
                                     className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
-                                    style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px', cursor: canOpenCalendarDayDetail ? 'pointer' : 'default' }}
+                                    style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px', cursor: canOpenSummaryDate ? 'pointer' : 'default' }}
                                   >
                                     <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor, marginBottom: '1px' }}>{day}</span>
                                     {isNonTrading ? (

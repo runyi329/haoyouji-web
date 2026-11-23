@@ -30,7 +30,11 @@ export default function Ledger37CalendarNumberDialog({ categoryId, date, onClose
   const validNumber = /^\d+(?:\.\d{1,2})?$/.test(amountText) && Number.isFinite(Number(amountText))
     && Number(amountText) <= 99999999.99;
   const canSave = ready && validNumber && !save.isPending && (!query.data?.exists || overwriteExisting);
-  return <div className="fixed inset-0 z-[530] flex items-center justify-center bg-black/50 px-4" onClick={() => { if (!save.isPending) onClose(); }}>
+  // 手机第二次 pointerup 打开弹窗后仍会产生兼容 click；不能让它命中遮罩后立即关闭。
+  // 只接受新发起、直接落在遮罩上的主指针按下，弹窗内部和保存期间均不关闭。
+  return <div className="fixed inset-0 z-[530] flex items-center justify-center bg-black/50 px-4" onPointerDown={(event) => {
+    if (event.target === event.currentTarget && event.button === 0 && !save.isPending) onClose();
+  }}>
     <section role="dialog" aria-modal="true" aria-labelledby="calendar-number-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
       <header className="flex items-center justify-between gap-3">
         <div><h2 id="calendar-number-title" className="text-base font-semibold text-[#222222]">登记数字</h2><p className="mt-1 text-xs text-[#757575]">{date}</p></div>
