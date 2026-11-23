@@ -110,19 +110,29 @@ describe('复用真实权限helper：拒绝先于锁、上传和数据库写', (
     expect(f.writes()).toEqual([]); expect(deps.lock).not.toHaveBeenCalled(); expect(deps.upload).not.toHaveBeenCalled(); expect(deps.sharp).not.toHaveBeenCalled();
   }
   it.each(['member', 'viewer', 'funder', 'owner'])('真实非admin成员%s不能因系统身份取得照片权限', async role => {
-    const f = fixture(); f.state.role = role; await rejectAll(f, { ...admin, user: { id: 201, role: 'super_admin' } } as typeof admin);
+    const f = fixture(); f.state.permissionAdd = 'none'; f.state.role = role; await rejectAll(f, { ...admin, user: { id: 201, role: 'super_admin' } } as typeof admin);
   });
   it.each([{ ...admin, isViewingAs: true }, { ...admin, realUser: { id: 100 } }, { ...owner, isViewingAs: true }])('代看身份拒绝 %j', async ctx => { await rejectAll(fixture(), ctx); });
-  it.each(['no-member', 'ai', 'permission-none'])('非真实成员/添加禁用%s拒绝', async mode => {
-    const f = fixture(); if (mode === 'no-member') f.state.member = false; if (mode === 'ai') f.state.memberType = 'ai'; if (mode === 'permission-none') f.state.permissionAdd = 'none'; await rejectAll(f);
+  it.each(['no-member', 'ai'])('非真实成员%s拒绝', async mode => {
+    const f = fixture(); if (mode === 'no-member') f.state.member = false; if (mode === 'ai') f.state.memberType = 'ai'; await rejectAll(f);
+  });
+  it.each(['none', 'own', 'all', null])('真实admin通用添加=%s仍可窄读取、上传与保存照片', async permissionAdd => {
+    const f = fixture(); f.state.permissionAdd = permissionAdd;
+    expect(await getCalendarEntry(admin, input)).toMatchObject({ amount: null, exists: false, images: [], version: null });
+    const photo = await uploadCalendarEntryImage(admin, upload());
+    expect(f.writes()).toEqual([]);
+    await expect(saveCalendarEntry(admin, save({ images: [photo] }))).resolves.toEqual({ success: true });
+    expect(f.writes()).toHaveLength(1); expect(f.state.permissionAdd).toBe(permissionAdd);
+    await expect(saveCalendarEntry(admin, await overwrite({ amount: 6 }))).resolves.toEqual({ success: true });
+    expect(f.writes()).toHaveLength(2); expect((await getCalendarEntry(admin, input)).images).toEqual([{ imageUrl: photo.imageUrl }]);
   });
   it.each([{ ledgerId: 52 }, { parentId: 9 }, { isDefault: 1 }, { accountingMode: 'stock_portfolio' }, { type: 'transfer' }])('跨账本/特殊标签 %j拒绝', async change => {
     const f = fixture(); Object.assign(f.state.category, change); await rejectAll(f);
   });
   it.each(['{"普通甲__visible":0}', '{"__tagVisibilityDefault":0}', 'broken', '[]'])('不可见或损坏标签配置%s拒绝', async balances => {
-    const f = fixture(); f.state.balances = balances; await rejectAll(f);
+    const f = fixture(); f.state.permissionAdd = 'none'; f.state.balances = balances; await rejectAll(f);
   });
-  it('暂停截止日后拒绝', async () => { const f = fixture(); f.state.config.pause_date = '2026-10-31'; await rejectAll(f); });
+  it('暂停截止日后仍拒绝，与通用添加关闭独立', async () => { const f = fixture(); f.state.permissionAdd = 'none'; f.state.config.pause_date = '2026-10-31'; await rejectAll(f); });
   it.each([{ type: 'transfer' }, { type: 'income' }, { description: 'capital_add' }, { description: '提现' }, { description: '分红' },
     { reimbursement_status: 'pending' }, { pending_type: 'payable' }, { aj_status: 'pending' }, { stock_codes: '[{"code":"x"}]' }])('特殊记录%j拒绝', async change => {
     const f = fixture(); f.state.records = [daily(change)]; await rejectAll(f, admin, 'CONFLICT');

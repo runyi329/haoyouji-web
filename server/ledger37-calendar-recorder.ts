@@ -75,7 +75,8 @@ async function recordScope(ctx: Ledger37Actor, conn?: any) {
   if (!realActor(ctx)) return fail('代看身份不能登记日历数字');
   const scope = await getLedger37Access(ctx, conn);
   if (!scope.canRecordCalendar) return fail('只有真实账本所有者或账本管理员可登记日历数字');
-  if (!scope.canManage && scope.row.permissionAdd === 'none') return fail('当前成员无日历登记权限');
+  // 37号真实admin拥有独立的日历余额/照片权限。旧permission_add只属于
+  // 通用账目权限，不能关闭这一窄能力；这里也绝不修改或放开通用管理权限。
   return { ...scope, balances: balancesOf(scope.row.initialBalances) };
 }
 function eligible(category: any, scope: Awaited<ReturnType<typeof recordScope>>): boolean {

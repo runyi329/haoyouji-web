@@ -78,9 +78,20 @@ describe('37日历数字严格schema / mockDB边界', () => {
     await expect(assertLedger37Owner(ctx, 37)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(f.writes()).toEqual([]); expect(deps.lock).not.toHaveBeenCalled();
   });
-  it.each(['none', 'ai'])('非真实成员与无添加权限禁止且零写', async mode => {
-    const f = fixture(); if (mode === 'none') f.state.permissionAdd = 'none'; else f.state.memberType = 'ai';
+  it.each(['no-member', 'ai'])('非真实成员%s禁止且零写', async mode => {
+    const f = fixture(); if (mode === 'no-member') f.state.member = false; else f.state.memberType = 'ai';
     await expect(saveCalendarNumber(admin, { ...input, amount: 2 })).rejects.toMatchObject({ code: 'FORBIDDEN' }); expect(f.writes()).toEqual([]);
+  });
+  it.each(['none', 'own', 'all', null])('admin日历登记独立于旧通用添加权限%s且不开放管理', async permissionAdd => {
+    const f = fixture(); f.state.permissionAdd = permissionAdd;
+    expect(await getLedger37Access(admin)).toMatchObject({ canManage: false, canRecordCalendar: true, row: { permissionAdd } });
+    expect(await getCalendarNumberCategories(admin, { ledgerId: 37 })).toEqual([{ categoryId: 90300, name: '普通甲' }]);
+    expect(await getCalendarNumber(admin, input)).toEqual({ amount: null, exists: false });
+    await saveCalendarNumber(admin, { ...input, amount: 2 });
+    expect(f.writes()).toHaveLength(1); expect(f.state.permissionAdd).toBe(permissionAdd);
+    await saveCalendarNumber(admin, { ...input, amount: 3, overwriteExisting: true });
+    expect(f.writes()).toHaveLength(2); expect(f.state.records[0].amount).toBe('3.00');
+    await expect(assertLedger37Owner(admin, 37)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
   it('owner仅取ledgers.ownerId且admin真实角色保留、无管理能力', async () => {
     fixture(); expect(await getLedger37Access(admin)).toMatchObject({ canManage: false, canRecordCalendar: true, row: { memberRole: 'admin' } });
