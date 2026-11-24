@@ -6,6 +6,7 @@
  */
 import React, { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import type { Ledger37OrderReferenceScope } from "@shared/ledger37-order-reference";
 
 // 计算某一分段的天数（北京时间，过0点算一天）
 function calcPeriodDays(startDateStr: string, endDateStr?: string | null): number {
@@ -37,18 +38,21 @@ function fmt(n: number): string {
 interface Props {
   ledgerId: number;
   tagName: string;
+  reference52?: Ledger37OrderReferenceScope;
 }
 
-export function RightInterestDetail({ ledgerId, tagName }: Props) {
+export function RightInterestDetail({ ledgerId, tagName, reference52 }: Props) {
+  // 原37页面不带订单引用时，保留原有inputs和缓存键。
+  const tagInput = reference52 ? { ledgerId, tagName, reference52 } : { ledgerId, tagName };
   // 所有分段
-  const { data: allPeriods = [] } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
-    { ledgerId, tagName },
+  const { data: allPeriods = [], error: periodsError, isPending: periodsPending } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    tagInput,
     { enabled: !!ledgerId && !!tagName }
   );
 
   // 当前标签配置（含暂停日期）
-  const { data: tagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId, tagName },
+  const { data: tagConfig, error: configError, isPending: configPending } = trpc.ledger.getTagConfig.useQuery(
+    tagInput,
     { enabled: !!ledgerId && !!tagName }
   );
 
@@ -76,6 +80,14 @@ export function RightInterestDetail({ ledgerId, tagName }: Props) {
   }, [allPeriods, tagConfig, tagName]);
 
   const { periodDetails, autoInterest, manualTotal, totalInterest, pauseDate } = tagData;
+
+  // 不显示服务端原始权限文本；失败不能通过默认[]伪装成零利息。
+  if (periodsError || configError) {
+    return <div role="alert" className="text-xs text-red-600 py-4 text-center">37号利息数据读取失败，请稍后重试</div>;
+  }
+  if (!!ledgerId && !!tagName && (periodsPending || configPending)) {
+    return <div className="text-xs text-gray-400 py-4 text-center">利息明细读取中...</div>;
+  }
 
   if (periodDetails.length === 0) {
     return (

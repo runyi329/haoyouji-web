@@ -4,6 +4,7 @@ import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } fr
 import { readLedgerTagHoldingValue } from '@/lib/ledgerTagHoldingValue';
 import { selectFunderWalletCollateralDisplay } from '@shared/funder-wallet-collateral-display';
 import { getWalletCollateralDraftError, getWalletCollateralMaximum } from '@shared/funder-wallet-collateral-input';
+import type { Ledger37OrderReferenceScope } from '@shared/ledger37-order-reference';
 // ===== FunderOrderCard 共享组件 =====
 // @refresh reset
 // 此文件由 FunderManagement.tsx 抽取，前后端统一使用此组件
@@ -1516,6 +1517,15 @@ export function FunderOrderCard({
     return null;
   }, [(order as any).collateral_source]);
   const sourceIsLedger37 = Number(_parsedCollateralSource?.ledgerId) === 37;
+  // 始终引用保存的52订单及当前个人卡scope，不切换为37拥有者身份。
+  // 未保存预览（无正整数id）和非52订单沿用原请求，不伪造订单引用。
+  const reference52UserId = Number((order as any).joint_segment_owner_user_id || _jointSegmentScopeUserId || 0);
+  const reference52: Ledger37OrderReferenceScope | undefined = Number(ledgerId) === 52
+    && sourceIsLedger37 && Number.isInteger(Number(order.id)) && Number(order.id) > 0
+    && Number.isInteger(reference52UserId) && reference52UserId > 0
+    ? { orderId: Number(order.id), userId: reference52UserId }
+    : undefined;
+  const reference52Input = reference52 ? { reference52 } : {};
   const linkedPnlTagName = _parsedCollateralSource?.floatingPnlTagName
     || (sourceIsLedger37 && _parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
   // 未配置时按新版默认的“今日余额 − 初始金额”处理；倍数后的净值盈亏仅在管理员显式选择后使用。
@@ -1587,37 +1597,37 @@ export function FunderOrderCard({
   );
 
   // 两个标签独立查询：盈亏只读净值，担保只读逐笔保证金；若选了同一标签，数据口径仍相同。
-  const { data: _pnlTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
+  const { data: _pnlTagConfig, error: pnlConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && !!linkedPnlTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _pnlTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
+  const { data: _pnlTagSummary, error: pnlSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && !!linkedPnlTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _collateralTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
+  const { data: _collateralTagConfig, error: collateralConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && !!linkedCollateralTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _collateralTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
+  const { data: _collateralTagSummary, error: collateralSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && !!linkedCollateralTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _marginRateTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+  const { data: _marginRateTagConfig, error: marginRateConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _marginRateTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+  const { data: _marginRateTagSummary, error: marginRateSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   // 37号原页面与52引用页共享同一个服务端估值快照，禁止两边各自用不同时间点的ETH价格重算。
-  const { data: _canonicalCollateralValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
+  const { data: _canonicalCollateralValuation, error: collateralValuationError } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalCollateral && !!linkedCollateralTagName, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false }
   );
-  const { data: _canonicalMarginRateValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+  const { data: _canonicalMarginRateValuation, error: marginRateValuationError } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false }
   );
   // 结清时37引用全部改读快照，不能由当前账本数据重建历史余额、担保或利息。
@@ -1653,18 +1663,25 @@ export function FunderOrderCard({
     return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
   }, [hasExternalMarginRateReference, effectiveMarginRateValuation, effectiveMarginRateTagConfig, effectiveMarginRateTagSummary]);
   // 与 RightInterestDetail 共用同一份标签分段；待结、已结分别拉取，允许引用不同标签。
-  const { data: _linkedPendingInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName },
+  const { data: _linkedPendingInterestPeriods, error: pendingInterestPeriodsError } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName, ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalPendingInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _linkedPaidInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPaidInterestTagName },
+  const { data: _linkedPaidInterestPeriods, error: paidInterestPeriodsError } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPaidInterestTagName, ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalPaidInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
-  const { data: _pendingInterestTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '' },
+  const { data: _pendingInterestTagConfig, error: pendingInterestConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '', ...reference52Input },
     { enabled: shouldLoadRemoteDetails && hasExternalPendingInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
+  const externalPnlReadError = !isSettlementFinal && sourceIsLedger37 && !!linkedPnlTagName && !!(pnlConfigError || pnlSummaryError);
+  const externalCollateralReadError = !isSettlementFinal && sourceIsLedger37 && hasExternalCollateral && !!(collateralConfigError || collateralSummaryError || collateralValuationError);
+  const externalMarginRateReadError = !isSettlementFinal && sourceIsLedger37 && hasExternalMarginRateReference && !!(marginRateConfigError || marginRateSummaryError || marginRateValuationError);
+  const externalPendingInterestReadError = !isSettlementFinal && hasExternalPendingInterest && !!(pendingInterestPeriodsError || pendingInterestConfigError);
+  const externalPaidInterestReadError = !isSettlementFinal && hasExternalPaidInterest && !!paidInterestPeriodsError;
+  const externalInterestReadError = externalPendingInterestReadError || externalPaidInterestReadError;
+  const external37ReadError = externalPnlReadError || externalCollateralReadError || externalMarginRateReadError || externalInterestReadError;
   const effectivePendingInterestPeriods = isPricingFrozen ? frozenExternal37Tag(linkedPendingInterestTagName)?.interestPeriods : _linkedPendingInterestPeriods;
   const effectivePaidInterestPeriods = isPricingFrozen ? frozenExternal37Tag(linkedPaidInterestTagName)?.interestPeriods : _linkedPaidInterestPeriods;
   const effectivePendingInterestTagConfig = isPricingFrozen ? frozenExternal37Tag(linkedPendingInterestTagName)?.config : _pendingInterestTagConfig;
@@ -3214,6 +3231,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             boxShadow: isPrimaryJointSegmentSettled ? '0 1px 5px rgba(220,38,38,0.10)' : (isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)'),
           }}
     >
+      {external37ReadError && <div role="alert" className="px-4 py-2 text-xs text-red-600 bg-red-50">37号数据读取失败，请稍后重试</div>}
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
           <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)', textAlign: 'center' }}>
@@ -3584,7 +3602,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 {usesCoinNativeCollateralFormula ? (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: '#6B7280' }}>0.00 u</span>
                 ) : isConfiguredStockPnlSource ? (
-                  configuredStockFloatPnlCny !== null ? (
+                  externalPnlReadError ? <span className="text-xs text-red-600">37号数据读取失败</span> : configuredStockFloatPnlCny !== null ? (
                     <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: configuredStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
                       {configuredStockFloatPnlCny >= 0 ? '+' : ''}{formatFunderFloatingPnlForDisplay(configuredStockFloatPnlCny, true)} 元
                     </span>
@@ -3907,6 +3925,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <RightInterestDetail
                           ledgerId={_parsedCollateralSource.ledgerId}
                           tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
+                          reference52={reference52}
                         />
                       </React.Suspense>
                     )}
@@ -3979,7 +3998,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           {show('accruedInterest') && (
               <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
                 <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayedAccruedValue === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {displayedAccruedValue === null ? '加载中' : <>{displayedAccruedValue === 0 ? '' : (isNegRate ? '-' : '+')}{formatFunderPendingInterest(displayedAccruedValue, usesContractInterestPrepaymentForDisplay)}</>}
+                  {externalPendingInterestReadError ? <span className="text-xs text-red-600">37号利息数据读取失败</span> : displayedAccruedValue === null ? '加载中' : <>{displayedAccruedValue === 0 ? '' : (isNegRate ? '-' : '+')}{formatFunderPendingInterest(displayedAccruedValue, usesContractInterestPrepaymentForDisplay)}</>}
                 </span>
                 <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{displayedAccruedUnit}</span>
                 {(() => {
@@ -4009,7 +4028,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 >{hasExternalPaidInterest ? <Linked37BadgeText /> : <HelpMarkerText symbol="!" />}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {paidRowValue === null
+                {externalPaidInterestReadError ? <span className="text-xs text-red-600">37号利息数据读取失败</span> : paidRowValue === null
                   ? <span className="text-xs text-gray-400">{isSettlementFinal ? '未保存历史已付利息' : '加载37号利息...'}</span>
                   : <>{formatFxEstimate(paidRowValue, 'toLocaleString', undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {paidRowUnit}</>}
               </span>
@@ -4146,7 +4165,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                   ><Linked37BadgeText /></button>
                 </span>
-                {(externalCollateralDisplayMode === 'CRYPTO' || readConfirmedExposureGap(externalCollateralDisplayMode === 'U' ? externalOnlyCollateralValueU : extTagCollateralValueCny) !== null) ? (
+                {externalCollateralReadError ? <span className="text-xs text-red-600">37号担保数据读取失败</span> : (externalCollateralDisplayMode === 'CRYPTO' || readConfirmedExposureGap(externalCollateralDisplayMode === 'U' ? externalOnlyCollateralValueU : extTagCollateralValueCny) !== null) ? (
                   <span className="min-w-0 max-w-[68%] font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
                     {externalCollateralDisplayMode === 'CRYPTO' ? (
                       externalCollateralDetailRows.length > 0 ? (
@@ -4281,7 +4300,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
               return (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">{hasExternalCollateral ? '担保总值（合并）' : ((isStockOrder || isManualSharedCollateral) ? '担保价值' : (collateralAssets.length > 1 ? '担保总值' : '担保价值'))}</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{externalCollateralReadError ? '37号担保数据读取失败' : cvDisplay ?? '---'}</span>
                 </div>
               );
             })()}
@@ -4354,6 +4373,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                               <RightMarginDetail
                                 ledgerId={_parsedCollateralSource.ledgerId}
                                 tagName={linkedCollateralTagName}
+                                reference52={reference52}
+                                linkedInterestReadError={externalInterestReadError}
                                 linkedPendingInterestCny={hasExternalPendingInterest ? linked37PendingInterestCny : undefined}
                                 linkedPaidInterestCny={hasExternalPaidInterest ? linked37PaidInterestCny : undefined}
                               />
@@ -5088,7 +5109,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     style={{ ...SOFT_BLUE_INDICATOR_STYLE, cursor: 'pointer' }}
                   ><HelpMarkerText symbol="!" /></button>
                 </div>
-                {isConfiguredStockPnlSource ? (
+                {external37ReadError ? <span className="text-xs text-red-600">37号数据读取失败</span> : isConfiguredStockPnlSource ? (
                   (isSharedMode ? (showExposureLoading ? null : effectiveExposure) : externalNonSharedGapU) !== null
                       ? (() => {
                         // 卡片行始终显示本订单的担保缺口/余量；共享池总计仅在说明弹窗中展示。
@@ -5174,7 +5195,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           style={{ ...SOFT_BLUE_INDICATOR_STYLE, cursor: 'pointer' }}
                         ><HelpMarkerText symbol="?" /></button>
                       </div>
-                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{marginRatio === null ? '加载中...' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%${isAlerting ? ' ⚠' : ''}`}</span>
+                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{externalMarginRateReadError ? '37号担保数据读取失败' : marginRatio === null ? '加载中...' : `${formatFxEstimate((marginRatio * 100), 'toFixed', 1)}%${isAlerting ? ' ⚠' : ''}`}</span>
                     </div>
                     {showMarginInfo && (
                       <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>

@@ -53,6 +53,7 @@ import * as dbLedger from "./db-ledger";
 import { assertLedger37Owner, assertLedger37ResourceOwner, assertLedger37SelfRead,
   getLedger37Access, calendarNumberCategoriesSchema, calendarNumberSchema, saveCalendarNumberSchema,
   getCalendarNumberCategories, getCalendarNumber, saveCalendarNumber, prepareLedger37PersonalConfigPatch } from './ledger37-calendar-recorder';
+import { assertLedger37OrderReferenceRead, ledger37OrderReferenceSchema } from './ledger37-order-reference';
 import { calendarEntrySchema, uploadCalendarEntryImageSchema, saveCalendarEntrySchema,
   getCalendarEntry, uploadCalendarEntryImage, saveCalendarEntry } from './ledger37-calendar-entry';
 import { reviewAJInvoice, resubmitAJInvoice, withdrawAJInvoice, assertAJLedgerAccess, assertAJCompanyAccess, getAJUsdCnyRate } from './aj-invoice-review';
@@ -18368,14 +18369,23 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         tagName: z.string(),
+        reference52: ledger37OrderReferenceSchema.optional(),
       }))
       .query(async ({ ctx, input }) => {
-        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        if (input.reference52) {
+          await assertLedger37OrderReferenceRead(ctx, input, 'config', await getDbConnection());
+        } else {
+          await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        }
         const db = await getLedgerDb();
         const rows = await db.execute(
           sql`SELECT * FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
         );
         const list = (rows as any)[0] as any[];
+        if (input.reference52 && list.length > 0) {
+          const { tag_name, initial_amount, account_multiplier, margin_base, margin_by_coin, pause_date, margin_pause_date } = list[0];
+          return { tag_name, initial_amount, account_multiplier, margin_base, margin_by_coin, pause_date, margin_pause_date };
+        }
         return list.length > 0 ? list[0] : null;
       }),
 
@@ -18787,9 +18797,14 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         tagName: z.string(),
+        reference52: ledger37OrderReferenceSchema.optional(),
       }))
       .query(async ({ ctx, input }) => {
-        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        if (input.reference52) {
+          await assertLedger37OrderReferenceRead(ctx, input, 'summary', await getDbConnection());
+        } else {
+          await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        }
         const db = await getLedgerDb();
         // 37号标签暂停后，手工余额只读取“最后结算日”及以前的数据；
         // 其余账本仍仅由保证金暂停控制，保持原有利息/保证金分层语义。
@@ -18857,7 +18872,7 @@ ${klinesSummary}
         );
         const categoryList = (categoryRows as any)[0] as any[];
         const category = categoryList.length > 0 ? categoryList[0] : null;
-        if (input.ledgerId === 37 && Number(category?.id) === R1_STOCK_CATEGORY_ID) {
+        if (!input.reference52 && input.ledgerId === 37 && Number(category?.id) === R1_STOCK_CATEGORY_ID) {
           const { getR1StockPresentationContext, assertR1RawReadAllowed } = await import('./r1-stock-presentation');
           const presentation = await getR1StockPresentationContext({ ledgerId: 37, categoryId: R1_STOCK_CATEGORY_ID, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
           assertR1RawReadAllowed(presentation);
@@ -18930,9 +18945,14 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         tagName: z.string(),
+        reference52: ledger37OrderReferenceSchema.optional(),
       }))
       .query(async ({ ctx, input }) => {
-        await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        if (input.reference52) {
+          await assertLedger37OrderReferenceRead(ctx, input, 'valuation', await getDbConnection());
+        } else {
+          await assertLedger37RawPresentationRead(ctx, input.ledgerId);
+        }
         const db = await getLedgerDb();
         const configRows = await db.execute(
           sql`SELECT margin_by_coin FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
@@ -19311,9 +19331,14 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         tagName: z.string().optional(),
+        reference52: ledger37OrderReferenceSchema.optional(),
       }))
       .query(async ({ ctx, input }) => {
-        await assertLedger37Owner(ctx, input.ledgerId);
+        if (input.reference52) {
+          await assertLedger37OrderReferenceRead(ctx, input, 'interest', await getDbConnection());
+        } else {
+          await assertLedger37Owner(ctx, input.ledgerId);
+        }
         const db = await getLedgerDb();
         let rows;
         if (input.tagName) {
@@ -19329,7 +19354,13 @@ ${klinesSummary}
                 ORDER BY tag_name ASC, start_date ASC, sort_order ASC, id ASC`
           );
         }
-        return (rows as any)[0] as any[];
+        const periods = (rows as any)[0] as any[];
+        if (input.reference52) {
+          return periods.map(({ id, tag_name, period_label, principal, annual_rate, start_date, end_date, sort_order, is_manual, manual_remark, created_at }) => ({
+            id, tag_name, period_label, principal, annual_rate, start_date, end_date, sort_order, is_manual, manual_remark, created_at,
+          }));
+        }
+        return periods;
       }),
 
     // 新增利息分段

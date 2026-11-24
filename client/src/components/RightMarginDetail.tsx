@@ -6,6 +6,7 @@
  */
 import React, { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import type { Ledger37OrderReferenceScope } from "@shared/ledger37-order-reference";
 import { TagMarginStockSaleDetails } from "@/components/TagMarginStockSaleDetails";
 import {
   getTagMarginCurrencyRecords,
@@ -36,6 +37,8 @@ function toCNY(margin: string | number, coin: string, prices: Record<string, num
 interface Props {
   ledgerId: number;
   tagName: string;
+  reference52?: Ledger37OrderReferenceScope;
+  linkedInterestReadError?: boolean;
   /**
    * 52号订单已显式引用37号标签利息时，由订单卡传入已使用的实时结果。
    * undefined 代表本次订单未引用该项；null 代表数据尚在读取。
@@ -44,24 +47,26 @@ interface Props {
   linkedPaidInterestCny?: number | null;
 }
 
-export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny, linkedPaidInterestCny }: Props) {
+export function RightMarginDetail({ ledgerId, tagName, reference52, linkedInterestReadError, linkedPendingInterestCny, linkedPaidInterestCny }: Props) {
+  const tagInput = reference52 ? { ledgerId, tagName, reference52 } : { ledgerId, tagName };
   // ── 数据查询 ──
+  // 52只获授权读取绑定标签；分类和全账本流水不属于订单引用契约。
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId && !reference52 }
   );
   const categories = useMemo(() => {
     if (!rawCategories) return [];
     return (rawCategories as any[]).filter((c: any) => !c.isDefault);
   }, [rawCategories]);
 
-  const { data: rightTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId, tagName },
+  const { data: rightTagConfig, error: configError, isPending: configPending } = trpc.ledger.getTagConfig.useQuery(
+    tagInput,
     { enabled: !!ledgerId && !!tagName }
   );
 
-  const { data: rightTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId, tagName },
+  const { data: rightTagSummary, error: summaryError, isPending: summaryPending } = (trpc.ledger as any).getTagSummary.useQuery(
+    tagInput,
     { enabled: !!ledgerId && !!tagName }
   );
 
@@ -73,7 +78,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
 
   const { data: transferRecordsData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: "transfer" as any, categoryId: selectedTagCategoryId ?? undefined, limit: 200 },
-    { enabled: !!ledgerId && !!selectedTagCategoryId }
+    { enabled: !!ledgerId && !!selectedTagCategoryId && !reference52 }
   );
 
   const transferRecords = useMemo(() => {
@@ -98,8 +103,8 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
   // 走服务器tRPC获取价格（price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
   // 与52号引用同用服务端快照，确保外部担保详情与37号原页面显示完全一致。
-  const { data: canonicalMarginValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId, tagName },
+  const { data: canonicalMarginValuation, error: valuationError, isPending: valuationPending } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    tagInput,
     { enabled: !!ledgerId && !!tagName, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true },
   );
   const cryptoPrices: Record<string, number> = useMemo(() => {
@@ -207,6 +212,13 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
   const shouldShowLinkedPaidInterest = linkedPaidInterestCny === null
     || (linkedPaidInterestCny !== undefined && Number(linkedPaidInterestCny) > 0);
   const hasLinkedInterestAdjustment = linkedPendingInterestCny !== undefined || shouldShowLinkedPaidInterest;
+
+  if (configError || summaryError || valuationError) {
+    return <div role="alert" className="text-xs text-red-600 py-4 text-center">37号担保数据读取失败，请稍后重试</div>;
+  }
+  if (!!ledgerId && !!tagName && (configPending || summaryPending || valuationPending)) {
+    return <div className="text-xs text-gray-400 py-4 text-center">担保明细读取中...</div>;
+  }
 
   return (
     <div className="text-xs space-y-3" style={{ color: "#4B5563" }}>
@@ -322,7 +334,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
                         <span className="text-xs font-medium" style={{ color: '#9A3412' }}>待结利息（37号引用）</span>
                         <span className="shrink-0 text-xs font-bold tabular-nums" style={{ color: '#DC2626' }}>
                           {linkedPendingInterestCny === null
-                            ? '读取中...'
+                            ? (linkedInterestReadError ? '37号利息数据读取失败' : '读取中...')
                             : `−¥${Math.max(0, Number(linkedPendingInterestCny) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </span>
                       </div>
@@ -332,7 +344,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
                         <span className="text-xs text-amber-800">已结利息（37号引用）</span>
                         <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: '#15803D' }}>
                           {linkedPaidInterestCny === null
-                            ? '读取中...'
+                            ? (linkedInterestReadError ? '37号利息数据读取失败' : '读取中...')
                             : `+¥${Math.max(0, Number(linkedPaidInterestCny) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </span>
                       </div>
@@ -350,6 +362,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
         )}
       </div>
 
+      {!reference52 && <>
       {/* ── 历史提现 ── */}
       <div className="rounded-xl p-3" style={{ backgroundColor: "#FFFBF0", border: "1px solid #FDE68A" }}>
         <div className="text-xs text-amber-700 font-medium mb-2">历史提现</div>
@@ -413,6 +426,7 @@ export function RightMarginDetail({ ledgerId, tagName, linkedPendingInterestCny,
         )}
       </div>
 
+      </>}
       {/* ── 账户余额 / 初始金额 / 倍数 / 保证金基数 ── */}
       <div className="rounded-xl p-3" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
         <div className="space-y-1.5">

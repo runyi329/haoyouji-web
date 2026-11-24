@@ -1,6 +1,7 @@
 import { finitePositive, getUsdtCnyRateFromPrices, formatFxEstimate } from '@shared/usdt-cny-display';
 import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunderHistoricalDisplay, readFunderHistoricalNumber, readFunderHistoricalOptionQuote, hasValidFunderHistoricalGreeks, getFunderRegisteredPaidDisplay, getFunderRegisteredCommissionDisplay, getFunderRegisteredCurrencyUnit } from '@shared/funder-settled-display';
 import { readLedgerTagHoldingValue } from '@/lib/ledgerTagHoldingValue';
+import type { Ledger37OrderReferenceScope } from '@shared/ledger37-order-reference';
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -1640,6 +1641,13 @@ export function FunderOrderCardV2Silver({
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
+  const reference52UserId = Number(order.joint_segment_owner_user_id || order._jointSnapshotUserId || _v2ParticipantId || _v2OwnerId || 0);
+  const reference52: Ledger37OrderReferenceScope | undefined = Number(ledgerId ?? order.ledger_id) === 52
+    && Number(_parsedCollateralSource?.ledgerId) === 37 && Number.isInteger(Number(order.id)) && Number(order.id) > 0
+    && Number.isInteger(reference52UserId) && reference52UserId > 0
+    ? { orderId: Number(order.id), userId: reference52UserId }
+    : undefined;
+  const reference52Input = reference52 ? { reference52 } : {};
   // 新订单可单独选择引用37号担保、浮盈和利息。旧订单没有开关时保持原有“引用即担保”兼容。
   const externalCollateralTagName = Number(_parsedCollateralSource?.ledgerId) !== 37 || _parsedCollateralSource?.useCollateral === false
     ? ''
@@ -1654,36 +1662,39 @@ export function FunderOrderCardV2Silver({
     : 'raw_net_pnl';
   // 兼容别名，保留下游代码不变
   const isFC2977 = hasExternalCollateral;
-  const { data: _fc2977TagConfigLive } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName },
+  const { data: _fc2977TagConfigLive, error: collateralConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 3000 }
   );
   const _fc2977TagConfig = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, externalCollateralTagName)?.config : _fc2977TagConfigLive;
-  const { data: _fc2977TagSummaryLive } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName },
+  const { data: _fc2977TagSummaryLive, error: collateralSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 3000 }
   );
   const _fc2977TagSummary = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, externalCollateralTagName)?.summary : _fc2977TagSummaryLive;
-  const { data: _marginRateTagConfigLive } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+  const { data: _marginRateTagConfigLive, error: marginRateConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalMarginRateReference, staleTime: 3000 }
   );
   const _marginRateTagConfig = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, marginRateReferenceTagName)?.config : _marginRateTagConfigLive;
-  const { data: _marginRateTagSummaryLive } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+  const { data: _marginRateTagSummaryLive, error: marginRateSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalMarginRateReference, staleTime: 3000 }
   );
   const _marginRateTagSummary = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, marginRateReferenceTagName)?.summary : _marginRateTagSummaryLive;
-  const { data: _canonicalMarginRateValuationLive } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+  const { data: _canonicalMarginRateValuationLive, error: marginRateValuationError } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalMarginRateReference, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
   );
   const _canonicalMarginRateValuation = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, marginRateReferenceTagName)?.marginValuation : _canonicalMarginRateValuationLive;
   // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
-  const { data: _fc2977CollateralValuationLive } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName },
+  const { data: _fc2977CollateralValuationLive, error: collateralValuationError } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 25_000, refetchInterval: 30_000 }
   );
+  const externalCollateralReadError = !displayInputs.frozen && hasExternalCollateral && !!(collateralConfigError || collateralSummaryError || collateralValuationError);
+  const externalMarginRateReadError = !displayInputs.frozen && hasExternalMarginRateReference && !!(marginRateConfigError || marginRateSummaryError || marginRateValuationError);
+  const external37ReadError = externalCollateralReadError || externalMarginRateReadError;
   const _fc2977CollateralValuation = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, externalCollateralTagName)?.marginValuation : _fc2977CollateralValuationLive;
   const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { enabled: !displayInputs.frozen && hasExternalCollateral, refetchInterval: 3000, staleTime: 2000 });
   const { fc2977RemainingMarginU, fc2977MarginBasePct, fc2977CnyRate, fc2977CollateralValueU, fc2977FloatingPnlU } = (() => {
@@ -1963,6 +1974,7 @@ export function FunderOrderCardV2Silver({
         boxShadow: cardShadow,
       }}
     >
+      {external37ReadError && <div role="alert" className="px-4 py-2 text-xs text-red-600 bg-red-50">37号数据读取失败，请稍后重试</div>}
       {/* SVG 磨砂噪点滤镜定义（隐藏） */}
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <defs>
@@ -2154,7 +2166,7 @@ export function FunderOrderCardV2Silver({
                 <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>担保资产</div>
                 <div className="text-sm text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                   {isFC2977 ? (
-                    fc2977MarginBasePct !== null ? (
+                    externalCollateralReadError ? <span className="text-xs text-red-600">37号担保数据读取失败</span> : fc2977MarginBasePct !== null ? (
                       <span>
                         <span style={{ display: 'inline-block', backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2, verticalAlign: 'middle', marginRight: 3 }}>
                           {fc2977MarginBasePct >= 0 ? '余' : '缺'}
@@ -2692,7 +2704,7 @@ export function FunderOrderCardV2Silver({
                   >!</button>
                 </span>
                 {isFC2977 ? (
-                  fc2977FinalGapU !== null ? (
+                  externalCollateralReadError ? <span className="text-xs text-red-600">37号担保数据读取失败</span> : fc2977FinalGapU !== null ? (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977FinalGapU >= 0 ? '余' : '缺'}</span>
                       <span style={{ color: TXT_PRI }}>{Math.abs(fc2977FinalGapU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
@@ -2713,7 +2725,7 @@ export function FunderOrderCardV2Silver({
             {cardDisplayConfig.marginRate === true && hasExternalMarginRateReference && isStockCard && !isSharedMode && (
               <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
                 <span style={{ color: TXT_SEC }}>保证金率</span>
-                {referencedMarginRatePct !== null ? (
+                {externalMarginRateReadError ? <span className="text-xs text-red-600">37号担保数据读取失败</span> : referencedMarginRatePct !== null ? (
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: TXT_PRI }}>
                     {referencedMarginRatePct >= 0 ? '+' : '-'}{Math.abs(referencedMarginRatePct).toFixed(1)}%
                   </span>
@@ -3078,7 +3090,7 @@ export function FunderOrderCardV2Silver({
               <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{_parsedCollateralSource.tagName}</span>
               <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
             </div>
-            <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+            {displayInputs.frozen ? <div className="text-xs text-amber-700 py-4">订单已结清，担保数据使用保存的历史快照，不再读取当前37号明细。</div> : <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={externalCollateralTagName} reference52={reference52} />}
           </div>
         </div>
       )}
@@ -3119,10 +3131,11 @@ export function FunderOrderCardV2Silver({
               <span className="text-sm font-bold" style={{ color: '#1A2340' }}>利息明细 · {(_parsedCollateralSource as any).interestTagName || _parsedCollateralSource.tagName}</span>
               <button onClick={() => setShowInterestDetail(false)} className="text-gray-400 text-lg leading-none">×</button>
             </div>
-            <RightInterestDetail
+            {displayInputs.frozen ? <div className="text-xs text-amber-700 py-4">订单已结清，利息数据使用保存的历史快照，不再读取当前37号明细。</div> : <RightInterestDetail
               ledgerId={_parsedCollateralSource.ledgerId}
               tagName={(_parsedCollateralSource as any).interestTagName || _parsedCollateralSource.tagName}
-            />
+              reference52={reference52}
+            />}
           </div>
         </div>
       )}
@@ -3411,6 +3424,14 @@ export function FunderLenderCardSilver({
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
+  // ln与借入卡解析同一个保存的collateral_source，不能授权另一份临时来源。
+  const reference52UserId = Number(order.joint_segment_owner_user_id || order._jointSnapshotUserId || _lnParticipantId || _lnOwnerId || 0);
+  const reference52: Ledger37OrderReferenceScope | undefined = Number(ledgerId ?? order.ledger_id) === 52
+    && Number(_lnParsedCollateralSource?.ledgerId) === 37 && Number.isInteger(Number(order.id)) && Number(order.id) > 0
+    && Number.isInteger(reference52UserId) && reference52UserId > 0
+    ? { orderId: Number(order.id), userId: reference52UserId }
+    : undefined;
+  const reference52Input = reference52 ? { reference52 } : {};
   const lnExternalCollateralTagName = Number(_lnParsedCollateralSource?.ledgerId) !== 37 || _lnParsedCollateralSource?.useCollateral === false
     ? ''
     : String(_lnParsedCollateralSource?.collateralTagName || _lnParsedCollateralSource?.tagName || '').trim();
@@ -3418,20 +3439,22 @@ export function FunderLenderCardSilver({
   const lnExternalFloatingPnlCalculationMode = _lnParsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
     ? 'leveraged_net_pnl'
     : 'raw_net_pnl';
-  const { data: _lnExtTagConfigLive } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName },
+  const { data: _lnExtTagConfigLive, error: collateralConfigError } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 3000 }
   );
   const _lnExtTagConfig = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, lnExternalCollateralTagName)?.config : _lnExtTagConfigLive;
-  const { data: _lnExtTagSummaryLive } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName },
+  const { data: _lnExtTagSummaryLive, error: collateralSummaryError } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 3000 }
   );
   const _lnExtTagSummary = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, lnExternalCollateralTagName)?.summary : _lnExtTagSummaryLive;
-  const { data: _lnExtCollateralValuationLive } = (trpc.ledger as any).getTagMarginValuation.useQuery(
-    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName },
+  const { data: _lnExtCollateralValuationLive, error: collateralValuationError } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName, ...reference52Input },
     { enabled: !displayInputs.frozen && hasExternalCollateral, staleTime: 25_000, refetchInterval: 30_000 }
   );
+  const externalCollateralReadError = !displayInputs.frozen && hasExternalCollateral && !!(collateralConfigError || collateralSummaryError || collateralValuationError);
+  const external37ReadError = externalCollateralReadError;
   const _lnExtCollateralValuation = displayInputs.frozen ? getFunderFrozenExternalTag(displayInputs, lnExternalCollateralTagName)?.marginValuation : _lnExtCollateralValuationLive;
   const { data: _lnExtPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: !displayInputs.frozen && hasExternalCollateral,
@@ -3794,6 +3817,7 @@ export function FunderLenderCardSilver({
         boxShadow: isParticipant ? GRN_SHADOW : isStock ? GOLD_SHADOW : isOption ? OPT_SHADOW : SL_SHADOW,
       }}
     >
+      {external37ReadError && <div role="alert" className="px-4 py-2 text-xs text-red-600 bg-red-50">37号数据读取失败，请稍后重试</div>}
       {/* SVG 磨砂噪点滤镜 */}
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <defs>
@@ -4261,7 +4285,7 @@ export function FunderLenderCardSilver({
                               <div className="mt-1 flex justify-between"><span>37号引用担保</span><strong>{getDisplayMode(order, 'externalCollateralValueDisplay', 'CNY') === 'CNY' ? `${formatFxEstimate(readConfirmedExposureGap(_lnExtCollateralValuation?.totalCny), 'toLocaleString', undefined, { maximumFractionDigits: 0 })} 元` : lnExtCollateralValueU === null ? unknownEstimateText : `${lnExtCollateralValueU.toFixed(2)} U`}</strong></div>
                               <div className="mt-1 border-t border-slate-200 pt-1 flex justify-between font-semibold text-slate-800"><span>担保总值（合并）</span><span>{combinedCollateralValueU === null ? '加载中...' : `${combinedCollateralValueU.toFixed(2)} U`}</span></div>
                             </div>
-                            <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={lnExternalCollateralTagName} />
+                            {displayInputs.frozen ? <div className="text-xs text-amber-700 py-4">订单已结清，担保数据使用保存的历史快照，不再读取当前37号明细。</div> : <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={lnExternalCollateralTagName} reference52={reference52} />}
                           </>
                         ) : (
                         <>
@@ -4482,7 +4506,7 @@ export function FunderLenderCardSilver({
                         >?</button>
                       </span>
                       {hasExternalCollateral ? (
-                        lenderFinalGapU !== null ? (
+                        externalCollateralReadError ? <span className="text-xs text-red-600">37号担保数据读取失败</span> : lenderFinalGapU !== null ? (
                           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                             <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lenderFinalGapU >= 0 ? '充足' : '不足'}</span>
                             <span style={{ color: TXT_PRI }}>{lenderFinalGapU >= 0 ? '+' : '-'}{formatFunderCollateralGap(Math.abs(lenderFinalGapU))} U</span>
