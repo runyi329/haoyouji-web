@@ -1,9 +1,11 @@
-name: 手动 PM2 重启
+name: 受保护的 R1 线上故障恢复
 
-# 正式发布由 deploy.yml 在构建和产物同步完成后顺序重启。
-# 此工作流仅供故障排查或紧急人工重启，不能在 push 时自动执行。
 on:
   workflow_dispatch:
+
+concurrency:
+  group: haoyouji-production-deploy
+  cancel-in-progress: false
 
 jobs:
   restart:
@@ -15,21 +17,39 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat > ~/.ssh/config <<'SSHEOF'
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            ServerAliveInterval 15
-            ServerAliveCountMax 10
-          SSHEOF
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 15\n  ServerAliveCountMax 4\n  ConnectTimeout 20\n' > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: 重启 PM2
+      - name: 只回切已知上一版发布并重启应用
         run: |
           ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} <<'ENDSSH'
-          set -e
-          sudo -u ubuntu env HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'ENDSSH'
+          set -euo pipefail
+          APP=/home/ubuntu/haoyouji-web
+          EXPECTED=ba247797b050dc71f3c41852efc0f04faf1bf873
+          PREVIOUS=530319fa554726d017e45a33f1251425aa92bcb9
+          CURRENT="$(readlink -f "$APP/dist")"
+          TARGET="$APP/releases/$PREVIOUS"
+          if [ "$CURRENT" != "$APP/releases/$EXPECTED" ]; then
+            echo "当前发布已经变化，拒绝回切以免覆盖其他修复。"
+            exit 1
+          fi
+          test "$(cat "$CURRENT/.deployed-commit")" = "$EXPECTED"
+          test "$(cat "$TARGET/.deployed-commit")" = "$PREVIOUS"
+          test -f "$TARGET/index.js"
+          test -f "$TARGET/public/index.html"
+          # 不删发布目录、不改规则、订单、日结、行情、汇率或钱包。
+          cp -al -n "$CURRENT/public/assets/." "$TARGET/public/assets/" \
+            || cp -a -n "$CURRENT/public/assets/." "$TARGET/public/assets/"
+          ln -s "$TARGET" "$APP/.dist-r1-restore"
+          mv -Tf "$APP/.dist-r1-restore" "$APP/dist"
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 restart "$APP/ecosystem.config.cjs" --update-env
           sudo -u ubuntu env HOME=/home/ubuntu pm2 save
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS --max-time 8 http://127.0.0.1:3000/ >/dev/null
+          echo "restored_release=$PREVIOUS"
           sudo -u ubuntu env HOME=/home/ubuntu pm2 list
           ENDSSH
