@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-24
+// 生成时间：2026-11-25
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -10040,5 +10040,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-11-24": [
     { date: "2026-11-24T02:00:40Z", type: "fix", cleanMessage: "scope ledger37 references to authorized orders" },
+    { date: "2026-11-24T03:29:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-11-25": [
+    { date: "2026-11-25T00:06:17Z", type: "fix", cleanMessage: "separate admin double-click entry from member photo preview" },
+    { date: "2026-11-25T00:49:51Z", type: "fix", cleanMessage: "scope member calendars to personal allocation returns" },
   ],
 };
