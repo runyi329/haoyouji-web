@@ -30,6 +30,8 @@ export type R1AiParticipationRow = {
   floatingPnl: number | null;
   realizedPnl: number | null;
   totalPnl: number | null;
+  /** Actual-participation historical CNY is frozen; observation may omit this field. */
+  realizedPnlCny?: number | null;
 };
 export type R1AiParticipationSummary = {
   floatingPnl: number | null;

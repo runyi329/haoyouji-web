@@ -20,6 +20,10 @@ import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio
 import { fetchStockUsdCnyAtClose, getLiveStockUsdCnyQuote } from './stock-usd-cny-rate';
 import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
 
+import { isR1StockSaleFxScope, ensureStockSaleFxLocksTable, readStockSaleFxLocks,
+  buildStockSaleFxLock, validateStockSaleFxLock, insertStockSaleFxLock, inheritStockSaleFxLock,
+  aggregateFrozenStockSaleAmounts, type StockSaleFxQuote, type StockSaleFxLock } from './stock-sale-fx-locks';
+
 import { type R1AiParticipationPortfolio, type R1AiParticipationRow } from '../shared/r1-stock-presentation';
 import type { Ledger37AiProject, Ledger37AiStockPool, StockPoolRow } from '../shared/ledger37-ai-presentation';
 import { getLedger37PresentationContext, readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
@@ -579,6 +583,8 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_sale_profit_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      // Schema only: existing R1 sales are frozen by an explicitly authorized one-time baseline.
+      await ensureStockSaleFxLocksTable(conn);
       await widenPortfolioIdentityColumns(conn, [
         'ledger_stock_events', 'ledger_stock_lots', 'ledger_stock_price_snapshots',
         'ledger_stock_intraday_quotes', 'ledger_stock_quote_history', 'ledger_stock_unified_close_prices',
@@ -725,6 +731,10 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
      ORDER BY COALESCE(e.actual_traded_at, e.server_registered_at) DESC, e.id DESC`,
     lotIds,
   );
+  const usesSaleFxLocks = isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId);
+  const locks = usesSaleFxLocks ? await readStockSaleFxLocks(conn, {
+    ledgerId: STOCK_LEDGER_ID, categoryId, eventIds: (rows as any[]).map(row => Number(row.sell_event_id)),
+  }) : new Map<number, StockSaleFxLock>();
   const lotById = new Map(selectedLots.map((lot) => [lot.id, lot]));
   const grouped = new Map<number, any[]>();
   for (const row of rows as any[]) {
@@ -780,6 +790,20 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
     }, 0);
     const latestSale = saleRows[0];
     const costValue = soldQuantity * lot.unitCost;
+    const frozen = usesSaleFxLocks ? aggregateFrozenStockSaleAmounts(saleRows.map(row => {
+      const quantity = numberValue(row.quantity);
+      const eventQuantity = numberValue(row.event_quantity);
+      const hasFee = row.transaction_fee !== null && row.transaction_fee !== undefined;
+      const rowSellFee = hasFee && !portfolioQuantityIsEmpty(lot.symbol, eventQuantity)
+        ? numberValue(row.transaction_fee) * quantity / eventQuantity : 0;
+      const rowBuyFee = hasFee ? quantity * (lot.openingFee === null
+        ? lot.unitCost * STOCK_TRADE_FEE_RATE : lot.openingFee / Math.max(EPSILON, lot.initialQuantity)) : 0;
+      const buyValue = quantity * lot.unitCost;
+      const sellValue = quantity * numberValue(row.execution_price);
+      const eventId = Number(row.sell_event_id);
+      return { eventId, currency: stockCurrency(lot.symbol), buyValue, sellValue,
+        realizedPnl: sellValue - rowSellFee - buyValue - rowBuyFee, lock: locks.get(eventId) };
+    })) : null;
     return [{
       lotId,
       symbol: lot.symbol,
@@ -801,6 +825,14 @@ async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof g
       buyFee: Number(buyFee.toFixed(8)),
       sellFee: Number(sellFee.toFixed(8)),
       accountNetProfit: Number((sellValue - sellFee - costValue - buyFee).toFixed(8)),
+      ...(frozen ? {
+        buyValueCny: frozen.buyValueCny,
+        sellValueCny: frozen.sellValueCny,
+        accountNetProfitCny: frozen.realizedPnlCny,
+        fxLocked: frozen.fxLocked,
+        fxRate: frozen.fxRate,
+        fxLockedAt: frozen.fxLockedAt,
+      } : {}),
     }];
   }).sort((left, right) => (
     String(right.soldAt).localeCompare(String(left.soldAt)) || right.sellEventId - left.sellEventId
@@ -1052,10 +1084,17 @@ async function getRealizedPnl(categoryId: number, usdCnyRate: number, usdtCnyRat
      GROUP BY e.id`,
     [STOCK_TRADE_FEE_RATE, categoryId],
   );
+  const usesSaleFxLocks = isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId);
+  const locks = usesSaleFxLocks ? await readStockSaleFxLocks(conn, {
+    ledgerId: STOCK_LEDGER_ID, categoryId, eventIds: (rows as any[]).map(row => Number(row.id)),
+  }) : new Map<number, StockSaleFxLock>();
   let total = 0;
   for (const row of rows as any[]) {
     const currency = stockCurrency(String(row.symbol || ''));
-    const multiplier = portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
+    const lock = locks.get(Number(row.id));
+    const multiplier = usesSaleFxLocks
+      ? validateStockSaleFxLock(lock, { eventId: Number(row.id), currency }) ? lock!.cnyRate : currency === 'CNY' ? 1 : null
+      : portfolioCashMultiplier(currency, usdCnyRate, usdtCnyRate);
     if (multiplier === null) return null;
     const proceeds = numberValue(row.quantity) * numberValue(row.execution_price);
     // 仅对新成交写入的手续费纳入净利润，旧历史成交没有 transaction_fee 时保留原有结果。
@@ -1610,6 +1649,51 @@ function memberCryptoParticipationStartDate(rows: readonly any[], today: string)
   return dates.sort()[0] ?? null;
 }
 
+/** Shared member/matrix read: each closure uses its own immutable sell-event FX. */
+async function readFrozenParticipationAmounts(conn: any, categoryId: number, userId?: number) {
+  const result = new Map<number, ReturnType<typeof aggregateFrozenStockSaleAmounts>>();
+  if (!isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId)) return result;
+  const [closureRows] = await conn.execute(
+    `SELECT c.participation_id, c.sell_event_id, c.quantity, c.sale_price, p.entry_price, l.symbol
+     FROM ledger_stock_participation_closures c
+     INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id AND l.ledger_id = p.ledger_id AND l.category_id = p.category_id
+     INNER JOIN ledger_stock_events e ON e.id = c.sell_event_id
+       AND e.ledger_id = p.ledger_id AND e.category_id = p.category_id
+     WHERE p.ledger_id = ? AND p.category_id = ? AND e.status = 'active'
+       AND e.event_type IN ('sell','reduce')${userId === undefined ? '' : ' AND p.user_id = ?'}`,
+    [STOCK_LEDGER_ID, categoryId, ...(userId === undefined ? [] : [userId])],
+  );
+  const locks = await readStockSaleFxLocks(conn, { ledgerId: STOCK_LEDGER_ID, categoryId,
+    eventIds: (closureRows as any[]).map(row => Number(row.sell_event_id)) });
+  const grouped = new Map<number, Parameters<typeof aggregateFrozenStockSaleAmounts>[0][number][]>();
+  for (const row of closureRows as any[]) {
+    const id = Number(row.participation_id);
+    const eventId = Number(row.sell_event_id);
+    const quantity = numberValue(row.quantity);
+    const buyValue = quantity * numberValue(row.entry_price);
+    const sellValue = quantity * numberValue(row.sale_price);
+    const list = grouped.get(id) || [];
+    // Member sign and fee policy are unchanged: member is the account's counterparty.
+    list.push({ eventId, currency: stockCurrency(String(row.symbol)), buyValue, sellValue,
+      realizedPnl: buyValue - sellValue, lock: locks.get(eventId) });
+    grouped.set(id, list);
+  }
+  grouped.forEach((closures, id) => result.set(id, aggregateFrozenStockSaleAmounts(closures)));
+  return result;
+}
+
+/** Only a truly empty closed quantity is zero; missing foreign closure evidence is unknown. */
+function frozenParticipationAmountsOrFallback(row: any, symbol: string,
+  frozen: ReturnType<typeof aggregateFrozenStockSaleAmounts> | undefined) {
+  if (frozen) return frozen;
+  const closedQuantity = numberValue(row.closed_quantity);
+  if (closedQuantity <= 0) return aggregateFrozenStockSaleAmounts([]);
+  return aggregateFrozenStockSaleAmounts([{ eventId: 0, currency: stockCurrency(symbol),
+    buyValue: closedQuantity * numberValue(row.entry_price), sellValue: numberValue(row.closed_value),
+    realizedPnl: numberValue(row.realized_pnl) }]);
+}
+
 /**
  * A member's view is deliberately separate from the administrator's tag-wide
  * portfolio.  A member's baseline is each allocated lot's entry price and
@@ -1640,6 +1724,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     [categoryId, userId],
   );
 
+  const frozenParticipationAmounts = await readFrozenParticipationAmounts(conn, categoryId, userId);
+  const usesSaleFxLocks = isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId);
   const today = beijingDate();
   const participations = (rows as any[]).map((row) => {
     const startDate = normalizeStoredDate(row.start_date) || normalizeStoredDate(row.opened_at) || today;
@@ -1651,6 +1737,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     const allocatedQuantity = numberValue(row.allocated_quantity);
     const remainingQuantity = numberValue(row.remaining_quantity);
     const lotInitialQuantity = numberValue(row.initial_quantity);
+    const frozen = frozenParticipationAmountsOrFallback(row, String(row.symbol), frozenParticipationAmounts.get(Number(row.id)));
     return {
       id: Number(row.id),
       lotId: Number(row.lot_id),
@@ -1674,6 +1761,13 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       realizedPnl: numberValue(row.realized_pnl),
       currency: stockCurrency(String(row.symbol)),
       market: stockMarket(String(row.symbol)),
+      ...(usesSaleFxLocks ? {
+        closedBuyValueCny: frozen.buyValueCny,
+        closedSellValueCny: frozen.sellValueCny,
+        realizedPnlCny: frozen.realizedPnlCny,
+        closedFxLocked: frozen.fxLocked,
+        fxLockedAt: frozen.fxLockedAt,
+      } : {}),
     };
   });
   const visibleParticipations = participations.filter((item) => item.startDate <= today);
@@ -1772,10 +1866,18 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
         sellValue,
         currency: stockCurrency(item.symbol),
         realizedPnl: item.realizedPnl,
+        ...(usesSaleFxLocks ? {
+          buyValueCny: item.closedBuyValueCny,
+          sellValueCny: item.closedSellValueCny,
+          realizedPnlCny: item.realizedPnlCny,
+          fxLocked: item.closedFxLocked,
+          fxLockedAt: item.fxLockedAt,
+        } : {}),
       };
     });
   const costValue = cnySummary.costValue;
   const realizedPnl = visibleParticipations.reduce<number | null>((total, item) => {
+    if (usesSaleFxLocks) return total === null || item.realizedPnlCny == null ? null : total + item.realizedPnlCny;
     const multiplier = portfolioCashMultiplier(stockCurrency(item.symbol), usdCnyRate, usdtCnyRate);
     return total === null || multiplier === null ? null : total + item.realizedPnl * multiplier;
   }, 0);
@@ -1920,7 +2022,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
         quantity: pending ? 0 : item.remainingQuantity, allocatedQuantity: item.allocatedQuantity,
         allocationRatio: item.allocationRatio, startDate: item.startDate,
         status: pending ? 'pending' : closed ? 'closed' : item.pauseDate && item.pauseDate <= today ? 'paused' : 'active',
-        ...r1PnlSummary(pending || closed ? 0 : r1FloatingByParticipation.get(item.id), pending ? 0 : item.realizedPnl) };
+        ...r1PnlSummary(pending || closed ? 0 : r1FloatingByParticipation.get(item.id), pending ? 0 : item.realizedPnl),
+        ...(usesSaleFxLocks ? { realizedPnlCny: pending ? 0 : item.realizedPnlCny ?? null } : {}) };
     }));
   }
   return result;
@@ -2187,9 +2290,19 @@ export async function getMyR1AiParticipationPortfolio(input: R1StockPresentation
   if (!portfolio.isEligible && !observation.holdings.length && !state.context.canManage) throw new Error('该股票标签尚未对您开放');
   const participations = r1MemberPresentationRows.get(portfolio);
   if (!participations) throw new Error('R1参与展示计算不可用');
-  return projectR1AiPortfolio({ context: state.context, portfolio, participations, recordedMargins,
+  const projected = projectR1AiPortfolio({ context: state.context, portfolio, participations, recordedMargins,
     observation: observation.holdings.length ? { summary: observation.summary,
       participations: r1ObservationPresentationRows.get(observation) ?? [] } : null });
+  if (isR1StockSaleFxScope(input.ledgerId, input.categoryId)) {
+    // Extend the existing safe DTO with exactly one authorized actual-participation amount.
+    // Never spread raw rows, prices, lock timestamps, account data or observation evidence.
+    const frozenById = new Map(participations.map(row => [row.id, row.realizedPnlCny]));
+    for (const row of projected.participations) {
+      const frozen = frozenById.get(row.id);
+      row.realizedPnlCny = typeof frozen === 'number' && Number.isFinite(frozen) ? frozen : null;
+    }
+  }
+  return projected;
 }
 
 /** 内部安全目录：授权每次直读，不返回缓存原组合、项目原名、价格或他人字段。 */
@@ -3383,6 +3496,19 @@ export async function createStockTagEvent(input: {
   }
 
   if (type !== 'note') await ensureStockCalendarResultTable();
+  const lockSaleFx = stock && (type === 'sell' || type === 'reduce')
+    && isR1StockSaleFxScope(access.ledgerId, access.categoryId);
+  let saleFxQuote: StockSaleFxQuote | null = null;
+  let saleFxLockedAt = serverRegisteredAt.toISOString();
+  if (lockSaleFx && !input.correctsEventId) {
+    if (stockCurrency(stock!.symbol) !== 'CNY') {
+      // Fetch before obtaining/beginning a transaction: unavailable FX must not save a sale.
+      try { saleFxQuote = await getLiveStockUsdCnyQuote(); } catch { saleFxQuote = null; }
+    }
+    saleFxLockedAt = new Date().toISOString();
+    buildStockSaleFxLock({ eventId: 1, ledgerId: access.ledgerId, categoryId: access.categoryId,
+      currency: stockCurrency(stock!.symbol), quote: saleFxQuote, lockedAt: saleFxLockedAt });
+  }
   const tx = await getDbTransactionConnection();
   if (!tx) throw new Error("数据库连接不可用");
   try {
@@ -3420,6 +3546,16 @@ export async function createStockTagEvent(input: {
     const eventId = Number((result as any).insertId);
     if (!eventId) throw new Error("股票操作保存失败");
 
+    if (lockSaleFx) {
+      if (input.correctsEventId) {
+        await inheritStockSaleFxLock(tx, { eventId, originalEventId: input.correctsEventId,
+          ledgerId: access.ledgerId, categoryId: access.categoryId, currency: stockCurrency(stock!.symbol) });
+      } else {
+        await insertStockSaleFxLock(tx, buildStockSaleFxLock({ eventId,
+          ledgerId: access.ledgerId, categoryId: access.categoryId, currency: stockCurrency(stock!.symbol),
+          quote: saleFxQuote, lockedAt: saleFxLockedAt }));
+      }
+    }
     if (type === "buy" || type === "add") {
       await (tx as any).execute(
         `INSERT INTO ledger_stock_lots
@@ -3863,6 +3999,16 @@ export async function correctStockTagEvent(input: {
     })).filter((row) => Number.isInteger(row.userId) && row.userId > 0 && row.percentage > 0);
     sellCorrection = { lotId, profitAllocations };
   }
+  if (isR1StockSaleFxScope(input.ledgerId, input.categoryId) && ['sell', 'reduce'].includes(original.event_type)) {
+    const originalCurrency = stockCurrency(String(original.symbol || ''));
+    const replacementCurrency = stockCurrency(normalizeSymbol(input.symbol || original.symbol));
+    if (replacementCurrency !== originalCurrency) throw new Error('更正卖出不能改变原锁汇币种');
+    const originalLock = (await readStockSaleFxLocks(conn, { ledgerId: input.ledgerId,
+      categoryId: input.categoryId, eventIds: [input.eventId] })).get(input.eventId);
+    if (originalCurrency !== 'CNY' && !validateStockSaleFxLock(originalLock, {
+      eventId: input.eventId, currency: originalCurrency, ledgerId: input.ledgerId, categoryId: input.categoryId,
+    })) throw new Error('原卖出缺少有效的冻结汇率，请先完成既有记录基准锁定再更正');
+  }
   await voidStockTagEvent({
     ledgerId: input.ledgerId,
     categoryId: input.categoryId,
@@ -4295,6 +4441,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
             DATE_FORMAT(MAX(p.pause_date), '%Y-%m-%d') AS pause_date,
             p.assigned_at, p.assigned_by,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
+            COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
             COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
      INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
@@ -4324,15 +4471,23 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     observationsByLot.set(observation.lotId, list);
   }
   const byLot = new Map<number, any[]>();
+  const frozenParticipationAmounts = await readFrozenParticipationAmounts(conn, categoryId);
   for (const row of participationRows as any[]) {
     const lotId = Number(row.lot_id);
     const list = byLot.get(lotId) || [];
+    const symbol = String((lotRows as any[]).find(lot => Number(lot.id) === lotId)?.symbol || '');
+    const frozen = frozenParticipationAmountsOrFallback(row, symbol, frozenParticipationAmounts.get(Number(row.id)));
     list.push({
       id: Number(row.id), userId: Number(row.user_id),
       allocatedQuantity: numberValue(row.allocated_quantity), remainingQuantity: numberValue(row.remaining_quantity),
       closedQuantity: numberValue(row.closed_quantity), entryPrice: numberValue(row.entry_price),
       startDate: row.start_date || '', pauseDate: row.pause_date || '',
       assignedAt: toIso(row.assigned_at), assignedBy: Number(row.assigned_by), realizedPnl: numberValue(row.realized_pnl),
+      ...(isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId) ? {
+        closedBuyValueCny: frozen.buyValueCny, closedSellValueCny: frozen.sellValueCny,
+        realizedPnlCny: frozen.realizedPnlCny, closedFxLocked: frozen.fxLocked,
+        fxLockedAt: frozen.fxLockedAt,
+      } : {}),
     });
     byLot.set(lotId, list);
   }
@@ -4987,6 +5142,8 @@ export async function updateStockTagSale(input: {
     if (!event || event.status !== 'active' || event.event_type !== 'sell') {
       throw new Error("仅可修改有效的已卖出订单");
     }
+    // The same event ID retains its original sale FX record (also when member closures are rebuilt).
+    // Missing legacy foreign locks remain unknown; an edit never locks them at today's FX.
     const symbol = String(event.symbol || '');
     if (isCryptoPortfolioSymbol(symbol) && actualTradedAt.getTime() > registeredAt.getTime()) {
       throw new Error('实际成交时间不能晚于服务器登记时间');

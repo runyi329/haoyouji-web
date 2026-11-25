@@ -1,5 +1,6 @@
-const STOCK_QUANTITY_EPSILON = 1e-8;
+import { portfolioCurrency } from './portfolio-instruments';
 
+const STOCK_QUANTITY_EPSILON = 1e-8;
 type OptionalNumber = number | null | undefined;
 
 /** Original member-side participation fields, before presentation or FX conversion. */
@@ -17,6 +18,10 @@ export interface StockMemberParticipation {
   closedAt?: string | null;
   entryPrice?: OptionalNumber;
   realizedPnl?: OptionalNumber;
+  closedBuyValueCny?: OptionalNumber;
+  closedSellValueCny?: OptionalNumber;
+  realizedPnlCny?: OptionalNumber;
+  closedFxLocked?: boolean;
 }
 
 export interface StockMemberRealizedLot {
@@ -35,14 +40,36 @@ export interface StockMemberRealizedLot {
   sellValue: number | null;
   realizedPnl: number | null;
   sellPrice: number | null;
+  buyValueCny: number | null;
+  sellValueCny: number | null;
+  realizedPnlCny: number | null;
+  fxLocked: boolean;
 }
 
 function isFiniteNumber(value: OptionalNumber): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
-
 function finiteOrNull(value: OptionalNumber): number | null {
   return isFiniteNumber(value) ? value : null;
+}
+
+/**
+ * CNY uses its known native amount; foreign currencies require a finite frozen
+ * CNY field and must not be explicitly unlocked. Native zero can aggregate
+ * closures at different rates into nonzero CNY, so it never substitutes for a
+ * frozen amount. Unknown native amounts stay unknown; today's FX is never used.
+ */
+export function stockRealizedValueCny(
+  lot: { symbol: string; fxLocked?: boolean } & Partial<Record<
+    'buyValue' | 'sellValue' | 'realizedPnl' | 'accountNetProfit'
+    | 'buyValueCny' | 'sellValueCny' | 'realizedPnlCny' | 'accountNetProfitCny', unknown>>,
+  field: 'buyValue' | 'sellValue' | 'realizedPnl' | 'accountNetProfit',
+): number | null {
+  const native = finiteOrNull(lot[field] as OptionalNumber);
+  if (native === null) return null;
+  if (portfolioCurrency(lot.symbol) === 'CNY') return native;
+  if (lot.fxLocked === false) return null;
+  return finiteOrNull(lot[`${field}Cny`] as OptionalNumber);
 }
 
 /** Activity depends on holdings/closures, including completely closed, break-even customers. */
@@ -71,26 +98,32 @@ export function buildStockMemberRealizedLots(
       && isFiniteNumber(item.closedQuantity)
       && item.closedQuantity > STOCK_QUANTITY_EPSILON)
     .map<StockMemberRealizedLot>((item) => {
-      // The filter guarantees a finite, strictly positive divisor.
       const soldQuantity = item.closedQuantity as number;
       const unitCost = finiteOrNull(item.entryPrice);
       const sellValue = finiteOrNull(item.closedValue);
+      const currency = /^\d{6}\.(SH|SZ|BJ)$/i.test(item.symbol) ? 'CNY' : 'USD';
+      const buyValue = unitCost === null ? null : finiteOrNull(soldQuantity * unitCost);
+      const realizedPnl = finiteOrNull(item.realizedPnl);
       return {
         lotId: item.lotId,
         participationId: item.id,
         symbol: item.symbol,
         stockName: item.stockName,
-        currency: /^\d{6}\.(SH|SZ|BJ)$/i.test(item.symbol) ? 'CNY' : 'USD',
+        currency,
         openedAt: item.openedAt,
         startDate: item.startDate,
         soldAt: item.closedAt ?? null,
         initialQuantity: finiteOrNull(item.allocatedQuantity),
         soldQuantity,
         unitCost,
-        buyValue: unitCost === null ? null : finiteOrNull(soldQuantity * unitCost),
+        buyValue,
         sellValue,
-        realizedPnl: finiteOrNull(item.realizedPnl),
+        realizedPnl,
         sellPrice: sellValue === null ? null : finiteOrNull(sellValue / soldQuantity),
+        buyValueCny: currency === 'CNY' ? buyValue : finiteOrNull(item.closedBuyValueCny),
+        sellValueCny: currency === 'CNY' ? sellValue : finiteOrNull(item.closedSellValueCny),
+        realizedPnlCny: currency === 'CNY' ? realizedPnl : finiteOrNull(item.realizedPnlCny),
+        fxLocked: currency === 'CNY' || item.closedFxLocked === true,
       };
     });
 }

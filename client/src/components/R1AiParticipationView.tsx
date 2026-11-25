@@ -1,7 +1,7 @@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { isR1StockPresentationScope, type R1AiParticipationPortfolio, type R1AiParticipationRow, type R1AiParticipationSummary } from "@shared/r1-stock-presentation";
-import { r1ParticipationMoney, r1ParticipationQuantity, r1ParticipationToCny, r1RecordedMarginAmount, r1SummaryAtDisplayFx } from "@/lib/r1StockPresentation";
+import { r1ParticipationMoney, r1ParticipationQuantity, r1ParticipationToCny, r1ParticipationRealizedCny, r1RecordedMarginAmount, r1SummaryAtDisplayFx } from "@/lib/r1StockPresentation";
 
 const participationStatus: Record<R1AiParticipationRow["status"], string> = {
   pending: "待开始", active: "进行中", paused: "已暂停", closed: "已结束",
@@ -44,7 +44,7 @@ function ParticipationRows({ rows, usdCnyRate, usdtCnyRate }: { rows: R1AiPartic
       <p className="mt-1 text-xs leading-5 text-[#61758A]">参与份额与分配收益将在这里展示</p>
     </div>
     : rows.map(row => {
-      const totalCny = r1ParticipationToCny(row.totalPnl, row.currency, usdCnyRate, usdtCnyRate);
+      const totalCny = r1SummaryAtDisplayFx([row], usdCnyRate, usdtCnyRate).totalPnl;
       return <article key={row.id} className="min-w-0 overflow-hidden rounded-xl border border-[#DCE7F0] bg-white shadow-sm">
         <div className="flex items-center justify-between gap-2 border-b border-[#DCE7F0] bg-[#EAF2F7] px-3 py-2.5">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -69,7 +69,7 @@ function ParticipationRows({ rows, usdCnyRate, usdtCnyRate }: { rows: R1AiPartic
               { label: "当前分配收益", value: row.floatingPnl },
               { label: "历史分配收益", value: row.realizedPnl },
             ].map(item => {
-              const cny = r1ParticipationToCny(item.value, row.currency, usdCnyRate, usdtCnyRate);
+              const cny = item.label === '历史分配收益' ? r1ParticipationRealizedCny(row, usdCnyRate, usdtCnyRate) : r1ParticipationToCny(item.value, row.currency, usdCnyRate, usdtCnyRate);
               return <div key={item.label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] border-b border-[#DCE7F0]">
                 <dt className="content-center border-r border-[#DCE7F0] bg-[#E4F4F6] px-2 py-2 text-[10px] leading-5 text-[#087987]">{item.label}</dt>
                 <div className="min-w-0 px-2 py-2 text-right">

@@ -1,6 +1,6 @@
 import { Eye, Loader2 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
-import StockParticipantProfitChart from '@/components/StockParticipantProfitChart';
+import StockParticipantProfitChart, { type ParticipantStockProfit } from '@/components/StockParticipantProfitChart';
 import type { StockObservationHolding } from '@shared/stock-observation-portfolio';
 
 export type StockActualDisplaySummary = {
@@ -12,7 +12,7 @@ export type StockActualDisplaySummary = {
   closedValue: number | null;
   totalPnl: number | null;
   positionNumbers: string[];
-  profitRows: { stockName: string; pnl: number | null }[];
+  profitRows: ParticipantStockProfit[];
 };
 
 type Props = {
@@ -161,7 +161,11 @@ export default function StockObservationAccountSummary({ categoryId, usdCnyRate,
     { title: '进行中', count: merged.holdingCount, initialValue: merged.currentCost, latestValue: merged.currentValue },
     { title: '已结束', count: merged.closedCount, initialValue: merged.endedCost, latestValue: merged.endedValue },
   ];
-  const observerProfitRows = effectiveHoldings.map(row => ({ stockName: row.stockName, pnl: asCny(finiteValue(row.totalPnl), row.currency) }));
+  // 部分结束只将余仓浮盈放入进行中、冻结盈亏放入已结束，全部再按同名合并。
+  const observerProfitRows: ParticipantStockProfit[] = [
+    ...currentHoldings.map(row => ({ stockName: row.stockName, pnl: asCny(finiteValue(row.floatingPnl), row.currency), status: 'active' as const })),
+    ...endedHoldings.map(row => ({ stockName: row.stockName, pnl: asCny(finiteValue(row.closedPnl), row.currency), status: 'closed' as const })),
+  ];
   // 图表内部按同名合并；两组原始行各拼接一次，不把观察金额混入真实来源。
   const profitRows = combined ? [...actualSummary.profitRows, ...observerProfitRows] : observerProfitRows;
   const dividerClass = combined ? 'divide-[#F2E8E2] border-[#F2E8E2]' : 'divide-[#E9E0F0] border-[#E9E0F0]';

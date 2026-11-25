@@ -33,10 +33,18 @@ export function r1RecordedMarginAmount(value: string): string {
   return /^[+-]?\d+(?:\.\d+)?$/.test(value) ? value : "—";
 }
 
-/** 原币行已包含当前与历史分配收益（含部分结束），只换汇不再重算收益。 */
+/** Actual rows carry frozen historical CNY. Observation retains its separate non-settling basis. */
+export function r1ParticipationRealizedCny(row: import("@shared/r1-stock-presentation").R1AiParticipationRow, usdCnyRate: number | null, usdtCnyRate: number | null): number | null {
+  if (Object.prototype.hasOwnProperty.call(row, "realizedPnlCny")) {
+    return typeof row.realizedPnlCny === 'number' && Number.isFinite(row.realizedPnlCny) ? row.realizedPnlCny : null;
+  }
+  return r1ParticipationToCny(row.realizedPnl, row.currency, usdCnyRate, usdtCnyRate);
+}
+
+/** 进行中按实时汇率，实际已结束部分只读取平仓时冻结的人民币收益。 */
 export function r1SummaryAtDisplayFx(rows: import("@shared/r1-stock-presentation").R1AiParticipationRow[], usdCnyRate: number | null, usdtCnyRate: number | null): import("@shared/r1-stock-presentation").R1AiParticipationSummary {
   const sum = (field: "floatingPnl" | "realizedPnl") => {
-    const values = rows.map(row => r1ParticipationToCny(row[field], row.currency, usdCnyRate, usdtCnyRate));
+    const values = rows.map(row => field === 'realizedPnl' ? r1ParticipationRealizedCny(row, usdCnyRate, usdtCnyRate) : r1ParticipationToCny(row[field], row.currency, usdCnyRate, usdtCnyRate));
     return values.some(value => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
   };
   const floatingPnl = sum("floatingPnl"), realizedPnl = sum("realizedPnl");
