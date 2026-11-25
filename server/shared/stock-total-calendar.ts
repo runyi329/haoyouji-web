@@ -8,6 +8,7 @@ import {
   type MemberCalendarSnapshot,
 } from './stock-member-calendar';
 import { isStockSessionDate } from '../../shared/stock-unified-close-policy';
+import type { StockLotDownsideRule } from '../../shared/stock-lot-downside';
 
 // Keep identical to ledger-stock-portfolio.ts/getSoldLots; importing that DB module
 // would make this otherwise offline reconstruction depend on infrastructure.
@@ -22,6 +23,7 @@ export type TotalCalendarLot = {
   openingFee: number | null;
   /** Actual exchange opening date (NY for US), never registration/effective date. */
   openedDate: string | null;
+  openedAt?: string;
 };
 
 export type TotalCalendarSale = {
@@ -32,6 +34,8 @@ export type TotalCalendarSale = {
   /** Whole sell-event quantity, not this lot's allocated sold quantity. */
   eventQuantity: number;
   closeDate: string | null;
+  countedSalePrice?: number;
+  actualAt?: string;
 };
 
 export type TotalCalendarSnapshot = MemberCalendarSnapshot & { scope: 'tag-total' };
@@ -43,6 +47,7 @@ export type TotalCalendarInput = {
   quotes: readonly MemberCalendarQuote[];
   fx: readonly MemberCalendarFx[];
   now?: Date;
+  downsideRules?: readonly StockLotDownsideRule[];
 };
 
 const reversePnl = (value: number | null): number | null => value === null ? null : value === 0 ? 0 : -value;
@@ -102,6 +107,9 @@ export function buildStockTotalCalendar(input: TotalCalendarInput): TotalCalenda
       participationId: lot.id,
       quantity: sale.quantity,
       salePrice: sale.salePrice - sellFeePerShare - buyFeePerShare,
+      rawExecutionPrice: sale.salePrice, feePerShare: sellFeePerShare + buyFeePerShare,
+      actualAt: sale.actualAt,
+      ...(sale.countedSalePrice === undefined ? {} : { countedSalePrice: sale.countedSalePrice - sellFeePerShare - buyFeePerShare }),
       // Preserve null/invalid history as invalid, never replace it with today's date.
       closeDate: sale.closeDate ?? '',
     });
@@ -113,12 +121,15 @@ export function buildStockTotalCalendar(input: TotalCalendarInput): TotalCalenda
     startDate: lot.openedDate ?? '',
     historyStartDate: lot.openedDate,
     entryPrice: lot.unitCost,
+    // An explicit physical date proves same-day opening cost; a precise timestamp takes priority.
+    openedAt: lot.openedAt ?? (lot.openedDate ? `${lot.openedDate}T00:00:00+08:00` : undefined),
+    physicalUnitCost: lot.unitCost,
     // Do not clamp oversold/NaN quantities into apparently valid realized PnL.
     // A negative sentinel makes the engine's related historical rows unknown.
     remainingQuantity: invalidTrade.has(lot.id) ? -1 : lot.initialQuantity - (soldById.get(lot.id) ?? 0),
   }));
 
-  return buildMemberStockCalendar({ participations, closures, quotes: input.quotes, fx: input.fx, now: input.now })
+  return buildMemberStockCalendar({ participations, closures, quotes: input.quotes, fx: input.fx, now: input.now, downsideRules: input.downsideRules })
     .map(row => ({
       ...row,
       scope: 'tag-total' as const,

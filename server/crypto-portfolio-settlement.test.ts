@@ -48,6 +48,7 @@ function fakeDb(categories = [81]) {
     execute: vi.fn(async (sql: string, params: any[] = []) => {
       sqls.push({ sql, params });
       if (sql.startsWith('CREATE TABLE')) return [{ affectedRows: 0 }];
+      if (sql.includes('FROM ledger_stock_lot_downside_rules')) return [[]];
       if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]];
       if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]];
       if (sql.includes('SELECT DISTINCT category.id')) return [categories.filter(id => params.length === 2 || id === params[2]).map(id => ({ id }))];

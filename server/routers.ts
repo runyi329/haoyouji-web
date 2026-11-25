@@ -14348,6 +14348,40 @@ ${klinesSummary}
         const { updateStockTagBuy } = await import('./ledger-stock-portfolio');
         return updateStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
+    getStockLotDownsideRule: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive(),
+      }).strict())
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { getStockLotDownsideRule } = await import('./ledger-stock-portfolio');
+        return getStockLotDownsideRule({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    setStockLotDownsideRule: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive(),
+        enabled: z.boolean(),
+        thresholdPrice: z.number().finite().positive().max(10_000_000).optional(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '请填写启用日期').refine(value => {
+          const date = new Date(value + 'T00:00:00Z');
+          return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+        }, '请填写有效的启用日期'),
+        downsidePercent: z.number().finite().min(0).max(100).optional(),
+        expectedVersion: z.number().int().min(0),
+      }).strict().superRefine((input, ctx) => {
+        if (input.enabled && (input.thresholdPrice === undefined || input.downsidePercent === undefined)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: '启用欠保证金需填写价格门槛和剩余保证金比例' });
+        }
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { setStockLotDownsideRule } = await import('./ledger-stock-portfolio');
+        return setStockLotDownsideRule({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
     cancelStockTagBuy: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),

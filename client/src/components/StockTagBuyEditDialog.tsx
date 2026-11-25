@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { beijingTradeInputTime, parseTradeInputTime } from "@/components/StockTagTradeDialog";
 import { isValidCryptoPortfolioQuantity, portfolioMarket, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCurrency, portfolioDisplaySymbol } from "@shared/portfolio-instruments";
+import { StockTagDownsideRulePanel, type StockLotDownsideRuleSaveDraft, type StockLotDownsideRuleView } from "@/components/StockTagDownsideRulePanel";
 
 export type EditableStockBuyOrder = {
   lotId: number;
@@ -19,6 +20,11 @@ export type EditableStockBuyOrder = {
   note: string;
   minimumQuantity?: number;
   hasSales?: boolean;
+  marketPrice?: number | null;
+  currentCountedPrice?: number | null;
+  countedMarketValue?: number | null;
+  countedFloatingPnl?: number | null;
+  currentDownsideRule?: StockLotDownsideRuleView | null;
 };
 
 type Props = {
@@ -28,17 +34,27 @@ type Props = {
   readOnlyPreview?: boolean;
   onClose: () => void;
   onRequestCancel?: (order: EditableStockBuyOrder) => void;
+  isViewingAs?: boolean;
+  allowDownside?: boolean;
+  currentMarketPrice?: number | null;
+  currentCountedPrice?: number | null;
+  onPreviewDownsideChange?: (lotId: number, rule: StockLotDownsideRuleSaveDraft) => Promise<void> | void;
+  previewDownsideRule?: StockLotDownsideRuleView | null;
 };
 
 /** Modify the original opening order without voiding/reopening a numbered lot. */
-export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPreview = false, onClose, onRequestCancel }: Props) {
+export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPreview = false, onClose, onRequestCancel, isViewingAs = false, allowDownside = true, onPreviewDownsideChange, previewDownsideRule, currentMarketPrice, currentCountedPrice }: Props) {
   const utils = trpc.useUtils();
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
   const [tradedAt, setTradedAt] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
+  const [activeTab, setActiveTab] = useState<"edit" | "downside">("edit");
+  const [downsidePending, setDownsidePending] = useState(false);
   useEffect(() => {
+    setActiveTab("edit");
+    setDownsidePending(false);
     if (!order) return;
     setQuantity(String(order.quantity));
     setPrice(String(order.executionPrice));
@@ -56,7 +72,7 @@ export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPrev
     },
     onError: error => toast.error(`修改失败：${error.message}`),
   });
-  const close = () => { if (!mutation.isPending) onClose(); };
+  const close = () => { if (!mutation.isPending && !downsidePending) onClose(); };
   const submit = () => {
     if (!canEdit || !order || mutation.isPending || !Number.isInteger(categoryId) || categoryId <= 0
       || !Number.isInteger(order.lotId) || order.lotId <= 0 || !Number.isInteger(order.eventId) || order.eventId <= 0) return;
@@ -90,11 +106,16 @@ export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPrev
   return <Dialog open={!!order && canEdit} onOpenChange={open => { if (!open) close(); }}>
     <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>修改买入订单</DialogTitle></DialogHeader>
+      {canEdit && <div role="tablist" aria-label="股票修改设置" className="grid grid-cols-2 gap-1 rounded-lg bg-[#FAF3ED] p-1">
+        <button id="stock-buy-edit-tab" type="button" role="tab" aria-selected={activeTab === "edit"} aria-controls="stock-buy-edit-panel" disabled={mutation.isPending || downsidePending} onClick={() => { if (!mutation.isPending && !downsidePending) setActiveTab("edit"); }} className={`rounded-md py-2 text-sm font-medium ${activeTab === "edit" ? "bg-[#C62828] text-white" : "text-gray-600"}`}>修改</button>
+        {allowDownside && !isViewingAs && <button id="stock-buy-downside-tab" type="button" role="tab" aria-selected={activeTab === "downside"} aria-controls="stock-buy-downside-panel" disabled={mutation.isPending || downsidePending} onClick={() => { if (!mutation.isPending && !downsidePending && canEdit && !isViewingAs) setActiveTab("downside"); }} className={`rounded-md py-2 text-sm font-medium ${activeTab === "downside" ? "bg-[#C62828] text-white" : "text-gray-600"}`}>欠保证金</button>}
+      </div>}
       {order && <div className="space-y-4 pt-1">
         <div className="rounded-lg bg-[#FAF3ED] px-3 py-2">
           <div className="break-words text-sm font-semibold">{order.stockName} <span className="text-xs font-normal text-gray-500">{portfolioDisplaySymbol(order.symbol)}</span></div>
           <div className="mt-1 text-[11px] text-gray-500">保留原持仓编号及股票标的，不会重新开仓。</div>
         </div>
+        {activeTab === "downside" && allowDownside && canEdit && !isViewingAs ? <StockTagDownsideRulePanel key={order.lotId} categoryId={categoryId} order={order} canEdit={canEdit} isViewingAs={isViewingAs} readOnlyPreview={readOnlyPreview} onClose={onClose} onPendingChange={setDownsidePending} currentMarketPrice={currentMarketPrice} currentCountedPrice={currentCountedPrice} previewDownsideRule={previewDownsideRule} onPreviewDownsideChange={onPreviewDownsideChange} /> : <div role="tabpanel" id="stock-buy-edit-panel" aria-labelledby="stock-buy-edit-tab" className="space-y-4">
         {order.hasSales && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">本批次已有卖出记录：成交信息已锁定，仍可修改开仓备注。</div>}
         <div className="grid grid-cols-2 gap-3">
           <div><Label htmlFor="buy-edit-price">买入价格（{portfolioQuotePrefix(portfolioCurrency(order.symbol))}）</Label><Input id="buy-edit-price" inputMode="decimal" value={price} onChange={event => { if (!mutation.isPending && !order.hasSales) setPrice(event.target.value); }} disabled={mutation.isPending || order.hasSales} className="mt-1" /></div>
@@ -107,6 +128,7 @@ export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPrev
         {(readOnlyPreview || import.meta.env.DEV) && <div role="status" className="text-xs text-gray-500">此热链接只供预览，不会保存到正式账目。</div>}
         <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={close} disabled={mutation.isPending}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submit} disabled={mutation.isPending || !canEdit || readOnlyPreview || import.meta.env.DEV}>{mutation.isPending ? "保存中…" : "保存修改"}</Button></div>
         {onRequestCancel && !order.hasSales && <button type="button" data-buy-cancel-entry onClick={requestCancel} disabled={mutation.isPending || !canEdit || readOnlyPreview || import.meta.env.DEV} className="w-full py-1 text-xs text-gray-500 underline underline-offset-2 disabled:opacity-50">整笔录错？撤销录入</button>}
+        </div>}
       </div>}
     </DialogContent>
   </Dialog>;

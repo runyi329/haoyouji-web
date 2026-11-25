@@ -118,6 +118,7 @@ function harness(options: Options = {}) {
     isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, ...cryptoPolicy, isStockSessionDate, assertStockBuySnapshotSafe,
     assertStockTagAccess: access, ensureStockCalendarResultTable: ensure, getDbTransactionConnection: getTx,
     stockObservationTableExists: observationExists,
+    readStockLotDownsideRules: async () => [],
     markStockCalendarResultDirty: dirty, invalidateMemberStockReadCaches: invalidate, queueStockCalendarResultRebuild: rebuild,
   });
   const expected = { quantity: Number(event.quantity), executionPrice: Number(event.execution_price),

@@ -4,6 +4,7 @@ import ts from 'typescript';
 import * as instruments from '../shared/portfolio-instruments';
 import * as policy from '../shared/crypto-portfolio-policy';
 import * as sessions from '../shared/stock-market-session';
+import * as downside from '../shared/stock-lot-downside';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { cryptoPortfolioStockAnchor, pendingCryptoCalendarSnapshot } from './shared/crypto-portfolio-calendar';
 
@@ -29,7 +30,9 @@ function actualFunctions(names: string[], deps: Record<string, any>) {
   const js = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   return new Function(...Object.keys(deps), `${js}\nreturn {${names.join(',')}};`)(...Object.values(deps));
 }
-const common = () => ({ ...instruments, ...policy, ...sessions, EPSILON: 1e-7, STOCK_LEDGER_ID: 37, STOCK_TRADE_FEE_RATE: 0.001,
+const common = () => ({ ...instruments, ...policy, ...sessions, ...downside, EPSILON: 1e-7, STOCK_LEDGER_ID: 37, STOCK_TRADE_FEE_RATE: 0.001,
+  readStockLotDownsideRules: vi.fn(async () => []), readStockLotDownsideSales: vi.fn(async () => []),
+  readStockLotDownsideMemberEpochs: vi.fn(async () => []),
   ensureStockCalendarResultTable: vi.fn(), ensureLedgerStockPortfolioTables: vi.fn(), markStockCalendarResultDirty: mocks.dirty,
   invalidateMemberStockReadCaches: vi.fn(), queueStockCalendarResultRebuild: vi.fn(),
   assertStockTagAccess: vi.fn(async (ledgerId: number, categoryId: number) => {
@@ -58,6 +61,7 @@ function db(symbol = BTC, securities = false) {
       if (sql.startsWith('CREATE TABLE')) return [{ affectedRows: 0 }];
       if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]];
       if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]];
+      if (sql.includes('ledger_stock_lot_downside_rules')) return [[]];
       if (sql.includes('SELECT DISTINCT category.id')) {
         const eligible = openingActive && instruments.isCryptoPortfolioSymbol(symbol) || sql.includes('OR EXISTS') && saved.size > 0;
         return [eligible && (params.length === 2 || params[2] === 81) ? [{ id: 81 }] : []];

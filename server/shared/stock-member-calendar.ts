@@ -1,6 +1,9 @@
 import { getUnifiedStockClosePublishAt, getUnifiedStockCloseSnapshotDate, isStockSessionDate, shiftStockSessionDate } from '../../shared/stock-unified-close-policy';
 import { isStockMarketSession, previousStockMarketSession, getOvernightUsSessionDate } from '../../shared/stock-market-session';
 import { latestCryptoPortfolioSnapshotDate } from '../../shared/crypto-portfolio-policy';
+import { valueStockLotDownside, countedStockLotPrice, selectStockLotDownsideRule, resolveStockLotDownsideHistoricalRules,
+  stockLotDownsideHistoricalEntryProof, stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, stockLotDownsidePriceAsOf,
+  type StockLotDownsideRule, type StockLotDownsideAudit, type StockLotDownsideMemberEpoch } from '../../shared/stock-lot-downside';
 
 const EPSILON = 1e-8;
 export type MemberCalendarParticipation = {
@@ -10,9 +13,23 @@ export type MemberCalendarParticipation = {
   /** Manual participation business-effective A date, distinct from the physical NY opening date. */
   participationEffectiveDate?: string | null;
   remainingQuantity: number; entryPrice: number;
+  lotId?: number;
+  entryAt?: string;
+  assignedAt?: string;
+  /** Immutable physical opening evidence, not the member's manually configured entryPrice. */
+  openedAt?: string;
+  physicalUnitCost?: number;
+  entryRawPrice?: number | null;
+  entryQuoteAsOf?: string;
 };
 export type MemberCalendarClosure = {
   participationId: number; quantity: number; salePrice: number; closeDate: string;
+  /** Independent immutable valuation evidence. Never replace real salePrice. */
+  countedSalePrice?: number | null;
+  actualAt?: string;
+  /** Real executed price before account-only fees; fees remain 100%. */
+  rawExecutionPrice?: number;
+  feePerShare?: number;
 };
 export type MemberCalendarQuote = {
   symbol: string; price: number; priceDate: string; capturedAt: string; source: string;
@@ -34,6 +51,7 @@ export type MemberCalendarSnapshot = {
   stockDailyPnl: number | null; fxDailyPnl: number | null;
   missingSymbols: string[];
   quoteAsOf: Array<{ symbol: string; priceDate: string; capturedAt: string; source: string; carried: boolean }>;
+  downsideRuleAudit?: StockLotDownsideAudit[];
 };
 
 export function memberCalendarMarket(symbol: string): 'A' | 'US' {
@@ -64,19 +82,45 @@ export function buildMemberStockCalendar(input: {
   participations: readonly MemberCalendarParticipation[]; closures: readonly MemberCalendarClosure[];
   quotes: readonly MemberCalendarQuote[]; fx: readonly MemberCalendarFx[];
   candidateDates?: readonly string[]; now?: Date;
+  downsideRules?: readonly StockLotDownsideRule[];
+  downsideMemberEpochs?: readonly StockLotDownsideMemberEpoch[];
 }): MemberCalendarSnapshot[] {
   const now = input.now ?? new Date();
   const quotesBySymbol = new Map<string, MemberCalendarQuote[]>();
+  const historicalQuotes = input.quotes.map(q => ({ symbol: q.symbol, price: q.price, priceDate: q.priceDate,
+    quoteAsOf: q.capturedAt, verified: isTrustedMemberCalendarClose(q) }));
+  const downsideRules = resolveStockLotDownsideHistoricalRules({ rules: input.downsideRules ?? [], now,
+    lots: input.participations.filter(p => p.openedAt && p.physicalUnitCost !== undefined).map(p => ({
+      lotId: p.lotId ?? p.id, symbol: p.symbol, openedAt: p.openedAt!, unitCost: p.physicalUnitCost! })), quotes: historicalQuotes });
+  const memberOffset = (item: MemberCalendarParticipation, asOf: string) => {
+    if (!item.assignedAt) return undefined;
+    const entryAt = stockLotDownsideMemberEntryAt(item.assignedAt, item.startDate);
+    const proof = stockLotDownsideHistoricalEntryProof(item.symbol, entryAt, historicalQuotes, now);
+    const openingProof = item.openedAt && Date.parse(item.openedAt) === Date.parse(entryAt);
+    return stockLotDownsideMemberOffset({ lotId: item.lotId ?? item.id, participationId: item.id,
+      assignedAt: item.assignedAt, startDate: item.startDate, rules: downsideRules,
+      epochs: input.downsideMemberEpochs ?? [], asOf,
+      entryRawPrice: item.entryRawPrice ?? (openingProof ? item.physicalUnitCost : proof?.price),
+      entryQuoteAsOf: item.entryQuoteAsOf ?? (openingProof ? item.openedAt : proof?.quoteAsOf) });
+  };
+  const countedClosurePrice = (item: MemberCalendarParticipation, row: MemberCalendarClosure): number | null => {
+    const saleAt = row.actualAt ?? stockLotDownsidePriceAsOf(item.symbol, row.closeDate);
+    const active = selectStockLotDownsideRule(downsideRules, item.lotId ?? item.id, saleAt);
+    if (!active?.startDate) return row.countedSalePrice === undefined ? row.salePrice : row.countedSalePrice;
+    const global = countedStockLotPrice(row.rawExecutionPrice ?? row.salePrice, active);
+    const offset = memberOffset(item, saleAt);
+    return global === null || offset === null ? null : global - (offset ?? 0) - (row.feePerShare ?? 0);
+  };
   for (const quote of input.quotes.filter(isTrustedMemberCalendarClose)) {
     const list = quotesBySymbol.get(quote.symbol) ?? [];
     list.push(quote); quotesBySymbol.set(quote.symbol, list);
   }
-  for (const list of quotesBySymbol.values()) list.sort((a, b) => a.priceDate.localeCompare(b.priceDate) || a.capturedAt.localeCompare(b.capturedAt));
+  for (const list of Array.from(quotesBySymbol.values())) list.sort((a, b) => a.priceDate.localeCompare(b.priceDate) || a.capturedAt.localeCompare(b.capturedAt));
   const fxByDate = new Map(input.fx.map(row => [row.snapshotDate, row]));
   const candidates = new Set([...(input.candidateDates ?? []), ...input.quotes.map(row => row.priceDate), ...input.fx.map(row => row.snapshotDate),
     ...input.participations.map(item => item.participationEffectiveDate ?? (item.historyStartDate === undefined ? item.startDate : item.historyStartDate))].filter(isStockSessionDate));
   // Include missing A sessions as pending, and map Friday's US proof to the next A day.
-  const firstDate = [...candidates].sort()[0];
+  const firstDate = Array.from(candidates).sort()[0];
   const today = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
   if (firstDate) for (let date = firstDate; date <= today; date = shiftStockSessionDate(date, 1)) candidates.add(date);
   const closuresById = new Map<number, MemberCalendarClosure[]>();
@@ -104,7 +148,7 @@ export function buildMemberStockCalendar(input: {
         && closure.closeDate > (memberCalendarMarket(item.symbol) === 'US' ? priorUs : priorA);
     });
   };
-  for (const date of [...candidates].filter(date => isStockMarketSession(date, 'A')).sort()) {
+  for (const date of Array.from(candidates).filter(date => isStockMarketSession(date, 'A')).sort()) {
     if (now.getTime() < getUnifiedStockClosePublishAt(date).getTime()) continue;
     const usCutoff = getOvernightUsSessionDate(date);
     if (!usCutoff) continue;
@@ -120,6 +164,7 @@ export function buildMemberStockCalendar(input: {
     if (!started.length && !invalidHistory) continue;
     const missingSymbols = new Set<string>();
     const quoteAsOf = new Map<string, MemberCalendarSnapshot['quoteAsOf'][number]>();
+    const downsideRuleAudit: StockLotDownsideAudit[] = [];
     let cost = 0, marketValue = 0, realized = 0, fxMissing = false;
     const nativeCost = { CNY: 0, USD: 0 }, nativeMarket = { CNY: 0, USD: 0 }, nativeRealized = { CNY: 0, USD: 0 };
     const positions = new Set<string>();
@@ -135,13 +180,18 @@ export function buildMemberStockCalendar(input: {
       const closures = closuresById.get(item.id) ?? [];
       if (!Number.isFinite(item.remainingQuantity) || item.remainingQuantity < 0 || !Number.isFinite(item.entryPrice)
         || (item.pauseDate && !isStockSessionDate(item.pauseDate))
-        || closures.some(row => !isStockSessionDate(row.closeDate) || !Number.isFinite(row.quantity) || row.quantity < 0 || !Number.isFinite(row.salePrice))) invalidHistory = true;
+        || closures.some(row => !isStockSessionDate(row.closeDate) || !Number.isFinite(row.quantity) || row.quantity < 0 || !Number.isFinite(row.salePrice)
+          || (row.closeDate <= cutoff && row.countedSalePrice === null))) invalidHistory = true;
       // Restore shares sold after this market's price cutoff, not after the A publication date.
       const quantity = item.remainingQuantity + closures.filter(row => row.closeDate > cutoff).reduce((sum, row) => sum + row.quantity, 0);
       const multiplier = market === 'US' ? fxRate ?? 0 : 1;
       // A pause freezes open-share valuation, but is not itself a sale.
       const currency = market === 'US' ? 'USD' : 'CNY';
-      nativeRealized[currency] += closures.filter(row => row.closeDate <= cutoff).reduce((sum, row) => sum + row.quantity * (item.entryPrice - row.salePrice), 0);
+      for (const closure of closures.filter(row => row.closeDate <= cutoff)) {
+        const counted = countedClosurePrice(item, closure);
+        if (counted === null) { invalidHistory = true; continue; }
+        nativeRealized[currency] += closure.quantity * (item.entryPrice - counted);
+      }
       if (quantity <= EPSILON) continue;
       positions.add(item.symbol);
       nativeCost[currency] += quantity * item.entryPrice;
@@ -150,8 +200,15 @@ export function buildMemberStockCalendar(input: {
       const expected = isStockMarketSession(asOf, market) ? asOf : previousStockMarketSession(asOf, market);
       const quote = (quotesBySymbol.get(item.symbol) ?? []).filter(row => row.priceDate === expected).at(-1);
       if (!quote) { missingSymbols.add(item.symbol); continue; }
-      nativeMarket[currency] += quantity * quote.price;
-      marketValue += quantity * quote.price * multiplier;
+      const priceAt = stockLotDownsidePriceAsOf(item.symbol, quote.priceDate);
+      const offset = memberOffset(item, priceAt);
+      const value = valueStockLotDownside({ lotId: item.lotId ?? item.id, quantity, entryPrice: item.entryPrice,
+        rawPrice: quote.price, rules: downsideRules, asOf: priceAt, direction: 'counterparty', entryAt: item.entryAt, entryCountedOffset: offset });
+      if (value.countedMarketValue === null) { invalidHistory = true; continue; }
+      nativeMarket[currency] += value.countedMarketValue!;
+      marketValue += value.countedMarketValue! * multiplier;
+      if (value.downsideRule) downsideRuleAudit.push({ lotId: item.lotId ?? item.id, version: value.downsideRule.version,
+        rawPrice: quote.price, countedPrice: value.countedMarketPrice!, effectiveAt: value.downsideRule.effectiveAt });
       const key = `${item.symbol}:${quote.priceDate}`;
       quoteAsOf.set(key, { symbol: item.symbol, priceDate: quote.priceDate, capturedAt: quote.capturedAt, source: quote.source, carried: quote.priceDate !== date });
     }
@@ -186,7 +243,8 @@ export function buildMemberStockCalendar(input: {
       usdCnyRate: fxRate, fxAsOf: hasUsd && !fxMissing ? fxRow?.asOf ?? null : null,
       fxSource: hasUsd && !fxMissing ? fxRow?.source ?? null : null,
       fxLockedAt: hasUsd && !fxMissing ? fxRow?.lockedAt ?? null : null,
-      missingSymbols: [...missingSymbols].sort(), quoteAsOf: [...quoteAsOf.values()],
+      missingSymbols: Array.from(missingSymbols).sort(), quoteAsOf: Array.from(quoteAsOf.values()),
+      ...(downsideRuleAudit.length ? { downsideRuleAudit } : {}),
     });
   }
   return snapshots;

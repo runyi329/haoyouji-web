@@ -22,6 +22,7 @@ function db(options: { rows?: any[]; cryptoOnly?: boolean; oldEdited?: boolean; 
     rollback: vi.fn(async () => { started = false; }), release: vi.fn(),
     execute: vi.fn(async (sql: string, params: any[] = []) => {
       sqls.push({ sql, params, transaction: started });
+      if (sql.includes('FROM ledger_stock_lot_downside_rules')) return [[]];
       if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]];
       if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]];
       if (sql.startsWith('SELECT payload FROM ledger_crypto')) return [saved.has(params[2]) ? [{ payload: saved.get(params[2]) }] : []];

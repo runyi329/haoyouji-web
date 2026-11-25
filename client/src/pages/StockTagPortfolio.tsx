@@ -3,6 +3,7 @@ import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, History, Loader2, Plus, 
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { mapStockTagDailySnapshots } from "@/lib/stock-tag-daily-snapshots";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -26,6 +27,9 @@ import { useSearch } from "wouter";
 import { isR1StockPresentationScope, type R1StockView } from "@shared/r1-stock-presentation";
 import type { Ledger37PresentationContext } from "@shared/ledger37-ai-presentation";
 import Ledger37AiHome, { Ledger37AiStockParticipationView, Ledger37PresentationPending, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
+import { stockTagCountedHistoricalPnl, stockTagCountedLotValues, stockTagCountedValue, stockTagServerAggregate } from "@/components/StockTagCountedSummary";
+import type { StockTagDownsidePreview } from "@/components/StockTagDownsideRulePanel";
+export type { StockTagDownsidePreview } from "@/components/StockTagDownsideRulePanel";
 
 const StockAllocationPanel = lazy(() => import("./LedgerAAInitialBalance").then((module) => ({ default: module.LedgerAAInitialBalanceContent })));
 
@@ -42,6 +46,8 @@ type Props = {
   effectiveUserId?: number;
   /** 仅37全局门控确认后传入，隔离旧组合查询的目标身份缓存。 */
   identityScoped?: boolean;
+  /** 显式本地热预览接入；不会让DEV调用正式规则或订单mutation。 */
+  downsidePreview?: StockTagDownsidePreview;
 };
 
 const eventLabels: Record<EventType, string> = {
@@ -307,7 +313,7 @@ function R1StockPresentationTabs({ props, context }: { props: Props; context: Le
   </div>;
 }
 
-export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false, effectiveUserId, identityScoped = false, presentationMode = "legacy" }: Props & { presentationMode?: "legacy" | "user" | "admin" }) {
+export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false, effectiveUserId, identityScoped = false, presentationMode = "legacy", downsidePreview }: Props & { presentationMode?: "legacy" | "user" | "admin" }) {
   function renderHoldingDerivationDetail(detail: any, participantView: boolean, usdtCnyRate: number | null) {
     const isUsdt = detail.nativeCurrency === 'USDT';
     const useNativeMain = isUsdt && [detail.entryPrice, detail.purchaseValue, detail.currentPrice, detail.currentValue, detail.floatingPnl].some(value => value == null || !Number.isFinite(value));
@@ -345,6 +351,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   const utils = trpc.useUtils();
   const { user: currentUser } = useAuth();
   const isR1Presentation = presentationMode !== "legacy";
+  const useCountedSummary = isR1StockPresentationScope(ledgerId, categoryId);
   const hideAdminPersonal = presentationMode === "admin";
   const identityInput = isR1Presentation || (ledgerId === 37 && identityScoped) ? { viewAsUserId: effectiveUserId } : {};
   // 股票原始成交与行情仍按交易所币种保存；账户与成员展示统一折算为人民币。
@@ -439,6 +446,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   const isLoading = participantView ? memberPortfolioQuery.isLoading : globalPortfolioQuery.isLoading;
   const error = participantView ? memberPortfolioQuery.error : globalPortfolioQuery.error;
   const canEdit = !participantView && Boolean((data as any)?.canEdit);
+  const ruleViewingAs = effectiveUserId !== undefined && currentUser?.id !== undefined && effectiveUserId !== currentUser.id;
   // 已卖出批次由服务端按成交记录冻结；不混入当前报价、当前市值或持仓编号。
   // 不依赖数据库默认返回顺序，管理员和用户端均以最新卖出日期排在最上面。
   const rawSoldLots = participantView
@@ -463,6 +471,16 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       ? stockRealizedValueCny(lot, field)
       : toCny(lot[field] == null ? null : Number(lot[field]), instrumentCurrency(lot.symbol))
   );
+  const countedHistoricalPnlCny = (lot: any, field: 'realizedPnl' | 'accountNetProfit') => {
+    const raw = historicalValueCny(lot, field);
+    if (!useCountedSummary) return raw;
+    // The immutable detail projection intentionally drops policy metadata. Resolve the member's
+    // own participation by ID rather than substituting an account-wide realized amount.
+    const source = field === 'realizedPnl' && participantView
+      ? (((data as any)?.participations || []) as any[]).find(row => Number(row.id) === Number(lot.participationId)) ?? lot
+      : lot;
+    return stockTagCountedHistoricalPnl(source, field, instrumentCurrency(lot.symbol), raw);
+  };
   // 管理员维护全账户的同时，也可能是获配成员。已平仓个人数据必须沿用成员端
   // 的入场价、平仓价和冻结收益，不能用总账户盈亏按比例反推。
   const adminOwnClosedLots = !participantView && canEdit && !hideAdminPersonal
@@ -614,7 +632,12 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       || (((data as any)?.realizedLots || (data as any)?.soldLots || []) as any[]).some(row => Number(row.lotId) === lotId);
     setEditingBuy({ lotId, eventId, stockName: holding.stockName, symbol: holding.symbol,
       quantity: originalQuantity, executionPrice: originalPrice, actualTradedAt: originalTime,
-      note: resolveLotNote(holding.lot, holding.symbol, holding.nativeUnitCost), minimumQuantity, hasSales });
+      note: resolveLotNote(holding.lot, holding.symbol, holding.nativeUnitCost), minimumQuantity, hasSales,
+      marketPrice: holding.nativeMarketPrice,
+      countedMarketValue: holding.lot.countedMarketValue,
+      countedFloatingPnl: holding.lot.countedFloatingPnl,
+      currentCountedPrice: holding.lot.countedMarketPrice ?? holding.lot.countedPrice ?? (holding.lot.countedMarketValue == null || Number(holding.lot.quantity) <= 0 ? null : Number(holding.lot.countedMarketValue) / Number(holding.lot.quantity)),
+      currentDownsideRule: holding.lot.downsideRule ?? holding.lot.currentDownsideRule ?? null });
   };
 
   const closeActionDialog = () => {
@@ -757,6 +780,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   // 优先使用两个盘尾快照的累计盈亏差额。这样本地热预览即使仍在读取尚未部署的
   // 服务端摘要字段，也不会把当天新增的持仓本金误显示为当日盈亏。
   const dailyPnlFromSnapshots = (() => {
+    if (useCountedSummary && summary?.dailyChange !== undefined) return summary.dailyChange;
     const latestTotalPnl = summary?.latestSnapshot?.totalPnl;
     const priorTotalPnl = summary?.priorSnapshot?.totalPnl;
     if (latestTotalPnl !== null && latestTotalPnl !== undefined && priorTotalPnl !== null && priorTotalPnl !== undefined) {
@@ -776,19 +800,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
     return snapshot?.snapshotDate ? `截至${formatMonthDay(String(snapshot.snapshotDate))}（时间待获取）` : '数据时间待获取';
   })();
   const dailyPnlRecords = !participantView
-    ? [...(((dailySnapshotsQuery.data || []) as any[]))]
-      .sort((left, right) => String(left.snapshotDate).localeCompare(String(right.snapshotDate)))
-      .map((snapshot, index, rows) => {
-        const totalPnl = Number(snapshot.totalPnl || 0);
-        const previousTotalPnl = index > 0 ? Number(rows[index - 1]?.totalPnl || 0) : 0;
-        return {
-          date: String(snapshot.snapshotDate),
-          totalPnl,
-          dailyPnl: index === 0 ? totalPnl : totalPnl - previousTotalPnl,
-          marketValue: snapshot.marketValue === null || snapshot.marketValue === undefined ? null : Number(snapshot.marketValue),
-          costValue: snapshot.costValue === null || snapshot.costValue === undefined ? null : Number(snapshot.costValue),
-        };
-      })
+    ? mapStockTagDailySnapshots((dailySnapshotsQuery.data || []) as any[])
     : [];
   const dailyPnlHistoryRecords = dailyPnlRecords.slice().reverse();
   const openDailyPnlHistory = () => setShowDailyPnlHistory(true);
@@ -883,6 +895,10 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
     const quotedAccountCostValue = toCny(Number(lot.quantity || 0) * Number(lot.unitCost || 0), nativeCurrency);
     const accountCostValue = nativeCurrency === 'USDT' ? quotedAccountCostValue : quotedAccountCostValue ?? 0;
     const accountMarketValue = nativeMarketPrice === null ? null : toCny(Number(lot.quantity || 0) * nativeMarketPrice, nativeCurrency);
+    // 每lot独立计入；不能把position的同股合计重复分配给每个lot。
+    const countedAccount = stockTagCountedLotValues(lot,
+      nativeMarketPrice === null ? null : Number(lot.quantity || 0) * nativeMarketPrice,
+      nativeMarketPrice === null ? null : Number(lot.quantity || 0) * (nativeMarketPrice - nativeUnitCost));
     return {
       position,
       symbol: position.symbol,
@@ -921,19 +937,24 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         // 管理员本人获配部分仍在 myHolding 中按对手盘方向单独计算。
         floatingPnl: accountMarketValue === null || accountCostValue === null ? null : accountMarketValue - accountCostValue,
         nativeFloatingPnl: nativeMarketPrice === null ? null : Number(lot.quantity || 0) * nativeMarketPrice - Number(lot.quantity || 0) * nativeUnitCost,
+        countedMarketValue: toCny(countedAccount.marketValue, nativeCurrency),
+        countedFloatingPnl: toCny(countedAccount.floatingPnl, nativeCurrency),
       },
     };
   })).map((holding: any, index: number) => ({ ...holding, positionNumber: index + 1 }));
   const tagHoldingLots = allTagHoldingLots.filter((holding: any) => !participantView || Number(holding.myHolding?.quantity || 0) > 0);
   const memberHoldingSummary = participantView ? (() => {
     const hasUnpricedHolding = tagHoldingLots.some((holding: any) => holding.myHolding?.marketValue === null || holding.myHolding?.marketValue === undefined);
-    const purchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => (
+    const rawPurchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => (
       total + Number(holding.myHolding?.quantity || 0) * Number(holding.myHolding?.entryPrice || 0)
     ), 0);
-    const marketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
+    const rawMarketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
       ? null
       : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.myHolding?.marketValue || 0), 0);
-    const floatingPnl = marketValue === null || purchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : purchaseValue - marketValue;
+    const purchaseValue = useCountedSummary ? stockTagServerAggregate(summary, 'costValue', rawPurchaseValue) : rawPurchaseValue;
+    const marketValue = useCountedSummary ? stockTagServerAggregate(summary, 'marketValue', rawMarketValue) : rawMarketValue;
+    const rawFloatingPnl = rawMarketValue === null || rawPurchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : rawPurchaseValue - rawMarketValue;
+    const floatingPnl = useCountedSummary ? stockTagServerAggregate(summary, 'floatingPnl', rawFloatingPnl) : rawFloatingPnl;
     const floatingPnlPercent = floatingPnl === null || purchaseValue === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
     return {
       positionNumbers: tagHoldingLots.map((holding: any) => String(holding.positionNumber).padStart(2, "0")),
@@ -950,6 +971,11 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         const currentValue = holding.myHolding?.marketValue === null || holding.myHolding?.marketValue === undefined
           ? null
           : Number(holding.myHolding.marketValue);
+        // 普通客户只从本人接口取计入浮盈，公开行情接口不暴露owner规则。
+        const memberRows = visibleMemberLots.filter(row => Number(row.lotId ?? row.id) === Number(holding.lot.id));
+        const countedPnls = memberRows.map(row => stockTagCountedValue(row.countedFloatingPnl,
+          row.floatingPnl == null ? null : Number(row.floatingPnl)));
+        const countedFloatingPnl = countedPnls.some(value => value === null) ? null : countedPnls.reduce<number>((total, value) => total + Number(value), 0);
         const nativeEntryPrice = holding.myHolding?.nativeEntryPrice == null || !Number.isFinite(holding.myHolding.nativeEntryPrice) ? null : Number(holding.myHolding.nativeEntryPrice);
         return {
           lotId: Number(holding.lot.id),
@@ -970,6 +996,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           currentValue,
           requiredMargin: currentValue === null ? null : currentValue * 0.2,
           floatingPnl: currentValue === null || purchaseValue === null ? null : purchaseValue - currentValue,
+          countedFloatingPnl: toCny(countedFloatingPnl, holding.nativeCurrency),
         };
       }),
     };
@@ -991,10 +1018,11 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   // 原交易币种，避免把不同币种的成交细节混在一起。
   const memberClosedLotsSummary = participantView ? (() => {
     const sumClosedMemberValue = (field: 'realizedPnl' | 'buyValue' | 'sellValue') => {
-      const values = memberRealizedLots.map(lot => historicalValueCny(lot, field));
+      const values = memberRealizedLots.map(lot => field === 'realizedPnl' ? countedHistoricalPnlCny(lot, field) : historicalValueCny(lot, field));
       return values.some(value => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
     };
-    const realizedPnl = sumClosedMemberValue('realizedPnl');
+    const rawOrCountedRealizedPnl = sumClosedMemberValue('realizedPnl');
+    const realizedPnl = useCountedSummary ? stockTagServerAggregate(summary, 'realizedPnl', rawOrCountedRealizedPnl) : rawOrCountedRealizedPnl;
     const closedCostValue = sumClosedMemberValue('buyValue');
     const closedMarketValue = sumClosedMemberValue('sellValue');
     const currencies = Array.from(new Set(memberRealizedLots.map(lot => instrumentCurrency(lot.symbol))));
@@ -1012,7 +1040,8 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
     const floatingPnl = memberHoldingSummary.floatingPnl;
     const realizedPnl = memberClosedLotsSummary.realizedPnl;
     const totalCostValue = memberClosedLotsSummary.closedCostValue === null || memberHoldingSummary.purchaseValue === null ? null : memberHoldingSummary.purchaseValue + memberClosedLotsSummary.closedCostValue;
-    const totalPnl = floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl;
+    const fallbackTotalPnl = floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl;
+    const totalPnl = useCountedSummary ? stockTagServerAggregate(summary, 'totalPnl', fallbackTotalPnl) : fallbackTotalPnl;
     return {
       floatingPnl,
       realizedPnl,
@@ -1022,11 +1051,11 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   })() : null;
   const memberStockProfitRows = participantView ? [
     ...(memberHoldingSummary?.details || []).map((holding: any) => ({
-      stockName: String(holding.stockName || holding.symbol), pnl: holding.floatingPnl as number | null, status: 'active' as const,
+      stockName: String(holding.stockName || holding.symbol), pnl: (useCountedSummary ? holding.countedFloatingPnl : holding.floatingPnl) as number | null, status: 'active' as const,
     })),
     ...memberRealizedLots.map(lot => ({
       stockName: String(lot.stockName || lot.symbol),
-      pnl: historicalValueCny(lot, 'realizedPnl'),
+      pnl: countedHistoricalPnlCny(lot, 'realizedPnl'),
       status: 'closed' as const,
     })),
   ] : [];
@@ -1046,11 +1075,14 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   // 作为对手盘，仍按“成本减当前价值”计算，二者在同一份额上严格相反。
   const accountHoldingSummary = !participantView ? (() => {
     const hasUnpricedHolding = tagHoldingLots.some((holding: any) => holding.accountHolding?.marketValue === null || holding.accountHolding?.marketValue === undefined);
-    const purchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.costValue || 0), 0);
-    const marketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
+    const rawPurchaseValue = hasCrypto ? (summary?.costValue ?? null) : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.costValue || 0), 0);
+    const rawMarketValue = hasCrypto ? (summary?.marketValue ?? null) : hasUnpricedHolding
       ? null
       : tagHoldingLots.reduce((total: number, holding: any) => total + Number(holding.accountHolding?.marketValue || 0), 0);
-    const floatingPnl = marketValue === null || purchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : marketValue - purchaseValue;
+    const purchaseValue = useCountedSummary ? stockTagServerAggregate(summary, 'costValue', rawPurchaseValue) : rawPurchaseValue;
+    const marketValue = useCountedSummary ? stockTagServerAggregate(summary, 'marketValue', rawMarketValue) : rawMarketValue;
+    const rawFloatingPnl = rawMarketValue === null || rawPurchaseValue === null ? null : hasCrypto ? (summary?.floatingPnl ?? null) : rawMarketValue - rawPurchaseValue;
+    const floatingPnl = useCountedSummary ? stockTagServerAggregate(summary, 'floatingPnl', rawFloatingPnl) : rawFloatingPnl;
     const floatingPnlPercent = floatingPnl === null || purchaseValue === null || purchaseValue <= 0 ? null : floatingPnl / purchaseValue;
     return {
       positionNumbers: tagHoldingLots.map((holding: any) => String(holding.positionNumber).padStart(2, "0")),
@@ -1097,11 +1129,12 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   // 账户平仓采用实际成交记录的净盈亏（含双边手续费），与客户对手盘收益区分。
   // 当前浮盈仍实时折算；已平仓只读取各次卖出的固定人民币金额。
   const accountClosedPnls = !participantView ? accountRealizedLots.map((lot: any) => (
-    historicalValueCny(lot, 'accountNetProfit')
+    countedHistoricalPnlCny(lot, 'accountNetProfit')
   )) : [];
   const accountRealizedPnl = accountClosedPnls.some((value) => value === null)
     ? null : accountClosedPnls.reduce<number>((total, value) => total + Number(value), 0);
-  const accountTotalPnl = displayedTopPnl === null || accountRealizedPnl === null ? null : displayedTopPnl + accountRealizedPnl;
+  const fallbackAccountTotalPnl = displayedTopPnl === null || accountRealizedPnl === null ? null : displayedTopPnl + accountRealizedPnl;
+  const accountTotalPnl = useCountedSummary ? stockTagServerAggregate(summary, 'totalPnl', fallbackAccountTotalPnl) : fallbackAccountTotalPnl;
   const sumClosedValue = (field: 'buyValue' | 'sellValue') => {
     const values = accountRealizedLots.map((lot: any) => historicalValueCny(lot, field));
     return values.some((value) => value === null) ? null : values.reduce<number>((total, value) => total + Number(value), 0);
@@ -1124,14 +1157,14 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       lotId: Number(holding.lot.id), state: 'holding' as const,
       openingValue: holding.accountHolding.costValue as number | null,
       quantity: typeof holding.accountHolding.quantity === 'number' ? holding.accountHolding.quantity : null,
-      pnl: holding.accountHolding.floatingPnl as number | null,
+      pnl: (useCountedSummary ? holding.accountHolding.countedFloatingPnl : holding.accountHolding.floatingPnl) as number | null,
     })),
     ...accountRealizedLots.map((lot: any) => ({
       stockName: String(lot.stockName || lot.symbol), symbol: String(lot.symbol),
       lotId: Number(lot.lotId), state: 'closed' as const,
       openingValue: historicalValueCny(lot, 'buyValue'),
       quantity: typeof lot.soldQuantity === 'number' ? lot.soldQuantity : null,
-      pnl: historicalValueCny(lot, 'accountNetProfit'),
+      pnl: countedHistoricalPnlCny(lot, 'accountNetProfit'),
     })),
   ] : [];
   const allocationMembersById = new Map<number, any>(
@@ -1171,7 +1204,8 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
     const marketValue = hasUnpricedHolding
       ? null
       : details.reduce((total: number, detail: any) => total + Number(detail.currentValue || 0), 0);
-    const floatingPnl = marketValue === null || purchaseValue === null ? null : purchaseValue - marketValue;
+    const rawFloatingPnl = marketValue === null || purchaseValue === null ? null : purchaseValue - marketValue;
+    const floatingPnl = useCountedSummary ? stockTagServerAggregate(memberPortfolioQuery.data?.summary, 'floatingPnl', rawFloatingPnl) : rawFloatingPnl;
     return {
       positionNumbers: details.map((detail: any) => detail.positionNumber),
       purchaseValue,
@@ -1225,6 +1259,8 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           nativeFloatingPnl: participation.floatingPnl === null || participation.floatingPnl === undefined
             ? null
             : Number(participation.floatingPnl),
+          countedFloatingPnl: toCny(stockTagCountedValue(participation.countedFloatingPnl,
+            participation.floatingPnl == null ? null : Number(participation.floatingPnl)), nativeCurrency),
           startDate: String(participation.startDate || ""),
           pauseDate: String(participation.pauseDate || ""),
         }];
@@ -1237,7 +1273,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           .map((item: any) => historicalValueCny({ ...item, symbol: lot.symbol, fxLocked: item.closedFxLocked }, 'realizedPnl'))
       ));
       const customerPnl = summarizeStockCustomerPnl(
-        positions.map((position: any) => position.floatingPnl),
+        positions.map((position: any) => useCountedSummary ? position.countedFloatingPnl : position.floatingPnl),
         realizedPnls,
       );
       const closedQuantities = (((allocationMatrixQuery.data as any)?.lots || []) as any[]).flatMap(lot => (lot.participations || [])
@@ -1878,10 +1914,28 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
         <DialogContent className="max-h-[86vh] max-w-md overflow-y-auto px-4 pb-6">
           <DialogHeader><DialogTitle className="text-left">每日盈亏记录</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-1">
-            <div className="rounded-xl border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-[11px] leading-5 text-gray-600">当日盈亏 = 当天盘尾累计盈亏 − 上一有效盘尾累计盈亏。新开仓、加仓或减仓的本金变动不会计入当日盈亏；首个有效盘尾以 0 为比较基准。</div>
+            <div className="rounded-xl border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-[11px] leading-5 text-gray-600">
+              <p>当日盈亏优先使用服务端已核验的日结金额；本金变动不作为当日盈亏。累计金额待核验、或前日基准缺失时，显示待核验，不按 0 计算，也不跳过缺口借用更早记录。首日仅在服务端已核实基准并返回有效日结金额时展示收益。</p>
+              <p className="mt-1">混合组合按北京时间自然日归属（含周末），15:05 为日结截点，并非全市场同时收盘；股票使用各市场对应的收盘依据。旧股票快照仅在相邻交易日两条累计金额均有限有效时兼容差分。</p>
+            </div>
             <div>
-              <div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-semibold text-[#333333]">盘尾净值记录</span><span className="text-[10px] text-gray-400">最新在上 · 仅有效交易日</span></div>
-              {dailySnapshotsQuery.isLoading ? <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入盘尾记录…</div> : dailyPnlHistoryRecords.length > 0 ? <div className="divide-y overflow-hidden rounded-xl border border-[#ECE6E2] bg-white">{dailyPnlHistoryRecords.map((record) => <div key={record.date} className="px-3 py-2.5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-[#333333]">{record.date}<span className="ml-1.5 text-[10px] font-normal text-gray-400">15:05 盘尾</span></div><div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-400"><span>累计盈亏 {signedMoney(record.totalPnl, portfolioCurrency)}</span><span>持仓市值 {money(record.marketValue, 2, portfolioCurrency)}</span><span>持仓成本 {money(record.costValue, 2, portfolioCurrency)}</span></div></div><div className="shrink-0 text-right"><div className="text-[10px] text-gray-400">当日盈亏</div><div className={`mt-0.5 text-sm font-bold ${record.dailyPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(record.dailyPnl, portfolioCurrency)}</div></div></div></div>)}</div> : <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400">暂无有效盘尾记录</div>}
+              <div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-semibold text-[#333333]">日结快照记录</span><span className="text-[10px] text-gray-400">最新在上 · 保留待核验记录</span></div>
+              {dailySnapshotsQuery.isLoading ? <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入日结记录…</div> : dailySnapshotsQuery.error ? <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400">日结记录暂不可用，请稍后重试</div> : dailyPnlHistoryRecords.length > 0 ? <div className="divide-y overflow-hidden rounded-xl border border-[#ECE6E2] bg-white">{dailyPnlHistoryRecords.map((record) => <div key={record.date} data-daily-snapshot-status={record.status ?? undefined} className="px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[#333333]">{record.date}<span className="ml-1.5 text-[10px] font-normal text-gray-400">{record.mixedNaturalDay ? "自然日日结" : "股票日结"}</span></div>
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-400">
+                      <span>累计盈亏 {record.totalPnlReady ? signedMoney(record.totalPnl, portfolioCurrency) : "待核验"}</span>
+                      <span>持仓市值 {money(record.marketValue, 2, portfolioCurrency)}</span>
+                      <span>持仓成本 {money(record.costValue, 2, portfolioCurrency)}</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[10px] text-gray-400">当日盈亏</div>
+                    <div className={`mt-0.5 text-sm font-bold ${!record.dailyPnlReady || record.dailyPnl === null ? "text-gray-400" : record.dailyPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{record.dailyPnlReady ? signedMoney(record.dailyPnl, portfolioCurrency) : "待核验"}</div>
+                  </div>
+                </div>
+              </div>)}</div> : <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400">暂无日结快照记录</div>}
             </div>
           </div>
         </DialogContent>
@@ -1948,6 +2002,14 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       {canEdit && !participantView && ledgerId === 37 && <StockTagBuyEditDialog
         categoryId={categoryId} order={editingBuy} canEdit={canEdit}
         readOnlyPreview={isLocalHotPreview} onClose={() => setEditingBuy(null)}
+        allowDownside={useCountedSummary} isViewingAs={ruleViewingAs}
+        currentMarketPrice={editingBuy ? tagHoldingLots.find((holding: any) => Number(holding.lot.id) === editingBuy.lotId)?.nativeMarketPrice : undefined}
+        currentCountedPrice={editingBuy ? tagHoldingLots.find((holding: any) => Number(holding.lot.id) === editingBuy.lotId)?.lot.countedMarketPrice : undefined}
+        previewDownsideRule={editingBuy ? downsidePreview?.rules[editingBuy.lotId] ?? null : null}
+        onPreviewDownsideChange={isLocalHotPreview && downsidePreview && !ruleViewingAs ? async (lotId, values) => {
+          await downsidePreview.save(lotId, values);
+          await utils.invalidate();
+        } : undefined}
         onRequestCancel={order => {
           if (!canEdit || participantView || ledgerId !== 37 || isLocalHotPreview) return;
           setEditingBuy(null);

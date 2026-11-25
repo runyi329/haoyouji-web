@@ -10,10 +10,13 @@ import { CRYPTO_PORTFOLIO_POLICY_VERSION, cryptoPortfolioBeijingDate, cryptoPort
   getCryptoPortfolioEffectiveDate, latestCryptoPortfolioSnapshotDate, parsePortfolioTradeTime } from '../shared/crypto-portfolio-policy';
 import { isCryptoPortfolioSymbol, parsePortfolioInstrument, portfolioQuantityIsEmpty } from '../shared/portfolio-instruments';
 import { isStockSessionDate, isStockMarketSession, previousStockMarketSession, shiftStockSessionDate } from '../shared/stock-market-session';
-import { buildCryptoPortfolioDailyPayload, cryptoPortfolioStockAnchor, isCryptoCalendarCloseQuote,
+import { buildCryptoPortfolioDailyPayload, revalueCryptoPortfolioDailyPayloads, cryptoPortfolioDownsideFingerprint,
+  cryptoPortfolioStockAnchor, isCryptoCalendarCloseQuote,
   pendingCryptoCalendarSnapshot, type CryptoCalendarLot, type CryptoCalendarSale, type CryptoCalendarParticipation,
   type CryptoCalendarClosure, type CryptoCalendarObservation, type CryptoCalendarQuote, type CryptoCalendarUsdFx,
   type CryptoPortfolioDailyPayload, type CryptoCalendarPersistedActivation } from './shared/crypto-portfolio-calendar';
+import { readStockLotDownsideRules, readStockLotDownsideSales, readStockLotDownsideMemberEpochs } from './stock-lot-downside-rules';
+import { stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, stockLotDownsidePriceAsOf, type StockLotDownsideRule } from '../shared/stock-lot-downside';
 
 const LEDGER_ID = 37;
 const POLICY = CRYPTO_PORTFOLIO_POLICY_VERSION;
@@ -103,8 +106,19 @@ async function readPayload(conn: any, categoryId: number, date: string): Promise
   return rows.length ? decodePayload(rows[0].payload, categoryId, date) : null;
 }
 
-async function readHistory(conn: any, categoryId: number) {
+async function readHistory(conn: any, categoryId: number, knownRules?: readonly StockLotDownsideRule[]) {
   const scope = [LEDGER_ID, categoryId];
+  // Scoped SELECT-only batch; absent optional tables mean legacy/raw accounting, never a read-time DDL.
+  const downsideRules = knownRules ?? await readStockLotDownsideRules(conn, LEDGER_ID, categoryId, true);
+  const countedSales = downsideRules.length ? await readStockLotDownsideSales(conn, LEDGER_ID, categoryId) : [];
+  const downsideMemberEpochs = downsideRules.length ? await readStockLotDownsideMemberEpochs(conn, LEDGER_ID, categoryId) : [];
+  const countedSalePrice = (lotId: number, eventId: number, rawPrice: number) => {
+    const saved = countedSales.find(s => s.lotId === lotId && s.eventId === eventId);
+    if (!saved) return undefined;
+    if (!Number.isFinite(saved.rawPrice) || !Number.isFinite(saved.countedPrice)
+      || Math.abs(saved.rawPrice - rawPrice) > Math.max(1e-10, Math.abs(rawPrice) * 1e-10)) throw new Error('invalid_downside_sale_evidence');
+    return saved.countedPrice;
+  };
   const [lotRows] = await conn.execute(`SELECT l.id,l.symbol,l.initial_quantity,l.unit_cost,e.transaction_fee AS opening_fee,
     DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at,
     DATE_FORMAT(e.server_registered_at,'%Y-%m-%d %H:%i:%s') AS registered_at,
@@ -116,7 +130,7 @@ async function readHistory(conn: any, categoryId: number) {
     initialQuantity: sourceNumber(row.initial_quantity), unitCost: sourceNumber(row.unit_cost),
     openingFee: row.opening_fee == null ? null : sourceNumber(row.opening_fee), openedDate: sourceDate(row, row.symbol),
     actualTradedAt: wallIso(row.actual_traded_at), registeredAt: wallIso(row.registered_at) }));
-  const [saleRows] = await conn.execute(`SELECT a.lot_id,a.quantity,e.execution_price,e.quantity AS event_quantity,e.transaction_fee,l.symbol,
+  const [saleRows] = await conn.execute(`SELECT a.lot_id,e.id AS sell_event_id,a.quantity,e.execution_price,e.quantity AS event_quantity,e.transaction_fee,l.symbol,
     DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at,
     DATE_FORMAT(e.server_registered_at,'%Y-%m-%d %H:%i:%s') AS registered_at,
     DATE_FORMAT(e.settlement_effective_date,'%Y-%m-%d') AS effective_date
@@ -127,7 +141,9 @@ async function readHistory(conn: any, categoryId: number) {
     WHERE e.ledger_id=? AND e.category_id=?`, scope);
   const sales: CryptoCalendarSale[] = saleRows.map((row: any) => ({ lotId: Number(row.lot_id), quantity: sourceNumber(row.quantity),
     salePrice: sourceNumber(row.execution_price), transactionFee: row.transaction_fee == null ? null : sourceNumber(row.transaction_fee),
-    eventQuantity: sourceNumber(row.event_quantity), closeDate: sourceDate(row, row.symbol) }));
+    eventQuantity: sourceNumber(row.event_quantity), closeDate: sourceDate(row, row.symbol), eventId: Number(row.sell_event_id),
+    countedSalePrice: countedSalePrice(Number(row.lot_id), Number(row.sell_event_id), sourceNumber(row.execution_price)),
+    soldAt: wallIso(row.actual_traded_at) ?? undefined }));
   const [participationRows] = await conn.execute(`SELECT p.id,p.lot_id,p.user_id,p.allocated_quantity,p.remaining_quantity,p.entry_price,
     DATE_FORMAT(p.start_date,'%Y-%m-%d') AS start_date,DATE_FORMAT(p.pause_date,'%Y-%m-%d') AS pause_date,
     DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at,DATE_FORMAT(p.updated_at,'%Y-%m-%d %H:%i:%s') AS updated_at
@@ -138,7 +154,7 @@ async function readHistory(conn: any, categoryId: number) {
   const participations: CryptoCalendarParticipation[] = participationRows.map((row: any) => ({ id: Number(row.id), lotId: Number(row.lot_id), userId: Number(row.user_id),
     allocatedQuantity: sourceNumber(row.allocated_quantity), remainingQuantity: sourceNumber(row.remaining_quantity), entryPrice: sourceNumber(row.entry_price),
     startDate: row.start_date ?? null, pauseDate: row.pause_date ?? null, assignedAt: wallIso(row.assigned_at), updatedAt: wallIso(row.updated_at) }));
-  const [closureRows] = await conn.execute(`SELECT c.participation_id,c.quantity,c.sale_price,l.symbol,
+  const [closureRows] = await conn.execute(`SELECT c.participation_id,c.sell_event_id,p.lot_id,c.quantity,c.sale_price,l.symbol,
     DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at,
     DATE_FORMAT(e.server_registered_at,'%Y-%m-%d %H:%i:%s') AS registered_at,
     DATE_FORMAT(e.settlement_effective_date,'%Y-%m-%d') AS effective_date
@@ -147,7 +163,9 @@ async function readHistory(conn: any, categoryId: number) {
     INNER JOIN ledger_stock_events e ON e.id=c.sell_event_id AND e.ledger_id=p.ledger_id AND e.category_id=p.category_id AND e.status='active'
     WHERE p.ledger_id=? AND p.category_id=?`, scope);
   const closures: CryptoCalendarClosure[] = closureRows.map((row: any) => ({ participationId: Number(row.participation_id),
-    quantity: sourceNumber(row.quantity), salePrice: sourceNumber(row.sale_price), closeDate: sourceDate(row, row.symbol) }));
+    quantity: sourceNumber(row.quantity), salePrice: sourceNumber(row.sale_price), closeDate: sourceDate(row, row.symbol),
+    eventId: Number(row.sell_event_id), countedSalePrice: countedSalePrice(Number(row.lot_id), Number(row.sell_event_id), sourceNumber(row.sale_price)),
+    soldAt: wallIso(row.actual_traded_at) ?? undefined }));
   let observations: CryptoCalendarObservation[] = [];
   try {
     const [observationRows] = await conn.execute(`SELECT o.lot_id,o.user_id,o.quantity,o.entry_price,
@@ -161,7 +179,7 @@ async function readHistory(conn: any, categoryId: number) {
       entryPrice: sourceNumber(row.entry_price), startDate: row.start_date, pauseDate: row.pause_date ?? null,
       assignedAt: wallIso(row.assigned_at), updatedAt: wallIso(row.updated_at) }));
   } catch (error) { if (!missingTable(error)) throw error; }
-  return { lots, sales, participations, closures, observations };
+  return { lots, sales, participations, closures, observations, downsideRules, downsideMemberEpochs };
 }
 
 async function savedStockProofs(conn: any, categoryId: number): Promise<CryptoCalendarQuote[]> {
@@ -221,10 +239,20 @@ async function legacyBaseline(conn: any, categoryId: number, activationDate: str
       const lot = history.lots.find(l => l.id === p.lotId)!;
       return { id: p.id, symbol: lot.symbol, startDate: p.startDate ?? lot.openedDate ?? '', historyStartDate: lot.openedDate,
         participationEffectiveDate: p.startDate ?? lot.openedDate, pauseDate: p.pauseDate,
-        remainingQuantity: p.remainingQuantity, entryPrice: p.entryPrice };
-    }), closures: history.closures.filter(c => ps.some(p => p.id === c.participationId)).map(c => ({ ...c, closeDate: c.closeDate ?? '' })),
+        remainingQuantity: p.remainingQuantity, entryPrice: p.entryPrice, lotId: lot.id,
+        entryAt: p.entryAt ?? stockLotDownsideMemberEntryAt(p.assignedAt!, p.startDate ?? lot.openedDate ?? ''), assignedAt: p.assignedAt! };
+    }), closures: history.closures.filter(c => ps.some(p => p.id === c.participationId)).map(c => {
+      const p = ps.find(p => p.id === c.participationId)!;
+      const lot = history.lots.find(lot => lot.id === p.lotId)!;
+      const offset = stockLotDownsideMemberOffset({ lotId: lot.id, participationId: p.id, assignedAt: p.assignedAt!,
+        rules: history.downsideRules, epochs: history.downsideMemberEpochs,
+        asOf: c.soldAt ?? stockLotDownsidePriceAsOf(lot.symbol, c.closeDate ?? '') });
+      return { ...c, closeDate: c.closeDate ?? '', countedSalePrice: c.countedSalePrice === undefined ? undefined
+        : offset === null ? null : c.countedSalePrice - offset };
+    }),
       quotes: quotes.map(q => ({ ...q, capturedAt: q.updatedAt })), fx: fx ? [{ ...fx }] : [], candidateDates: [date],
-      now: cryptoPortfolioCutoffAt(date) }).find(r => r.snapshotDate === date && r.ready);
+      now: cryptoPortfolioCutoffAt(date), downsideRules: history.downsideRules,
+      downsideMemberEpochs: history.downsideMemberEpochs }).find(r => r.snapshotDate === date && r.ready);
     if (snapshot) members[String(userId)] = snapshot;
   }
   return { snapshotDate: date, total, members };
@@ -311,13 +339,24 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
         }
       })();
       const [usdtFx, usdFx] = await Promise.all([usdtPromise, usdPromise, cryptoPromise, stockPromise]);
-      const previous = await readPayload(tx, categoryId, shiftStockSessionDate(snapshotDate, -1));
-      const baseline = snapshotDate === activationDate && !previous ? await legacyBaseline(tx, categoryId, activationDate, history, stockProofs) : null;
-      const payload = buildCryptoPortfolioDailyPayload({ categoryId, snapshotDate, activationDate, persistedActivation, now: new Date(), ...history, quotes, usdtFx, usdFx, previous, baseline });
+      const previousDate = shiftStockSessionDate(snapshotDate, -1);
+      const hasRetroRules = history.downsideRules.some(r => r.startDate && r.startDate <= snapshotDate);
+      // The original fixed row remains immutable; only the derived previous is used for new daily differences.
+      const previous = hasRetroRules ? (await readDerivedPayloads(tx, categoryId, activationDate, new Date()))
+        .find(p => p.snapshotDate === previousDate) ?? null : await readPayload(tx, categoryId, previousDate);
+      const retroBeforeActivation = history.downsideRules.some(r => r.startDate && r.startDate < activationDate);
+      const baseline = snapshotDate === activationDate && !previous && !retroBeforeActivation
+        ? await legacyBaseline(tx, categoryId, activationDate, history, stockProofs) : null;
+      const payload = buildCryptoPortfolioDailyPayload({ categoryId, snapshotDate, activationDate, persistedActivation, now: new Date(),
+        ...history, quotes, usdtFx, usdFx, previous, baseline, captureHistoryEvidence: true });
       const snapshots = [payload.total, ...Array.from(Object.values(payload.members)), ...Array.from(Object.values(payload.observations))];
       if (snapshots.some(s => !s.ready)) {
         const missingSymbols = [...Array.from(new Set(snapshots.flatMap(s => s.missingSymbols)))];
-        throw Object.assign(new Error(missingSymbols.length ? 'missing_verified_close' : 'missing_historical_fx'), { missingSymbols });
+        const missingBaseline = snapshots.some(s => s.dailyPnlReason === 'missing_downside_member_baseline');
+        const missingSale = snapshots.some(s => s.dailyPnlReason === 'missing_downside_sale_evidence');
+        throw Object.assign(new Error(missingSymbols.length ? 'missing_verified_close' : missingSale
+          ? 'missing_downside_sale_evidence' : missingBaseline
+          ? 'missing_downside_member_baseline' : 'missing_historical_fx'), { missingSymbols });
       }
       const [insert] = await tx.execute(`INSERT IGNORE INTO ledger_crypto_portfolio_daily_snapshots
         (ledger_id,category_id,snapshot_date,policy_version,activation_date,payload) VALUES (?,?,?,?,?,?)`,
@@ -335,7 +374,8 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
       if (started) { try { await tx.rollback(); } catch { /* Never publish or claim success after rollback failure. */ } }
       result.skipped++;
       const allowed = new Set(['publication_busy', 'missing_verified_close', 'missing_historical_fx', 'invalid_trade_history', 'invalid_sale_history',
-        'invalid_crypto_effective_date', 'unverifiable_allocation_history', 'unverifiable_observation_history', 'publication_insert_ignored']);
+        'invalid_crypto_effective_date', 'unverifiable_allocation_history', 'unverifiable_observation_history', 'publication_insert_ignored',
+        'missing_downside_member_baseline', 'invalid_downside_sale_evidence', 'missing_downside_sale_evidence']);
       (result.failures ??= []).push({ categoryId, snapshotDate, reason: allowed.has(error?.message) ? error.message : 'publication_failed',
         ...(error?.missingSymbols ? { missingSymbols: error.missingSymbols } : {}) });
     } finally {
@@ -346,18 +386,60 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
   return result;
 }
 
-/** SELECT-only. Missing natural days are pending, never a revaluation using mutable live prices. */
+const derivedCalendarCaches = new WeakMap<object, Map<string, { until: number; promise: Promise<CryptoPortfolioDailyPayload[]> }>>();
+async function readRevaluedStockBaseline(conn: any, categoryId: number, activationDate: string,
+  payloads: readonly CryptoPortfolioDailyPayload[], now: Date) {
+  const date = previousStockMarketSession(activationDate, 'A'); if (!date) return null;
+  // Lazy internal SELECT-only helper avoids the core module cycle; never imports routers or starts a server.
+  const { readStockLotDownsideCalendarBaseline } = await import('./ledger-stock-portfolio');
+  const total = await readStockLotDownsideCalendarBaseline(categoryId, date, undefined, conn, now);
+  const members: Record<string, MemberCalendarSnapshot> = {};
+  for (const userId of Object.keys(payloads[0]?.members ?? {})) {
+    const member = await readStockLotDownsideCalendarBaseline(categoryId, date, Number(userId), conn, now);
+    if (member?.ready) members[userId] = member;
+  }
+  return { snapshotDate: date, total: total?.ready ? total : undefined, members };
+}
+async function readDerivedPayloads(conn: any, categoryId: number, activationDate: string, now: Date): Promise<CryptoPortfolioDailyPayload[]> {
+  // Fresh, scoped revision read invalidates derived cache immediately after a save; no stale 15s rule cache.
+  const rules = await readStockLotDownsideRules(conn, LEDGER_ID, categoryId, true);
+  const retro = rules.some(r => r.startDate && r.startDate <= cryptoPortfolioBeijingDate(now));
+  const load = async () => {
+    let rows: any[];
+    try {
+      [rows] = await conn.execute(`SELECT payload FROM ledger_crypto_portfolio_daily_snapshots
+        WHERE ledger_id=? AND category_id=? AND policy_version=? AND snapshot_date>=? AND snapshot_date<=? ORDER BY snapshot_date ASC`,
+        [LEDGER_ID, categoryId, POLICY, activationDate, cryptoPortfolioBeijingDate(now)]);
+    } catch (error) { if (!missingTable(error)) throw error; rows = []; }
+    const originals = rows.map(r => decodePayload(r.payload, categoryId)).filter(p =>
+      cryptoPortfolioCutoffAt(p.snapshotDate).getTime() <= now.getTime() && Date.parse(p.publishedAt) <= now.getTime());
+    if (!retro || !originals.length) return originals;
+    const history = await readHistory(conn, categoryId, rules);
+    const historicalQuotes = await savedStockProofs(conn, categoryId);
+    const baseline = rules.some(r => r.startDate && r.startDate < activationDate)
+      ? await readRevaluedStockBaseline(conn, categoryId, activationDate, originals, now) : null;
+    return revalueCryptoPortfolioDailyPayloads({ categoryId, originalPayloads: originals,
+      history: { ...history, historicalQuotes }, baseline, now }).payloads;
+  };
+  if (!retro) return load(); // Exact legacy/no-startDate path has no new history/economic queries.
+  let cache = derivedCalendarCaches.get(conn); if (!cache) { cache = new Map(); derivedCalendarCaches.set(conn, cache); }
+  const fingerprint = cryptoPortfolioDownsideFingerprint(categoryId, { downsideRules: rules });
+  const key = `${categoryId}:${activationDate}:${cryptoPortfolioBeijingDate(now)}:${now.getTime() >= cryptoPortfolioCutoffAt(cryptoPortfolioBeijingDate(now)).getTime()}:${fingerprint}`;
+  const saved = cache.get(key);
+  if (saved && saved.until > Date.now()) return saved.promise;
+  // Keep at most one revision/day per category. Failed promises are not cached.
+  for (const old of Array.from(cache.keys())) if (old.startsWith(`${categoryId}:`)) cache.delete(old);
+  const promise = load(); cache.set(key, { until: Date.now() + 15_000, promise });
+  void promise.catch(() => { if (cache!.get(key)?.promise === promise) cache!.delete(key); });
+  return promise;
+}
+
+/** SELECT-only derived read. Missing evidence/days remain pending, never live price/FX fallback. */
 export async function readCryptoPortfolioCalendar(categoryId: number, userId?: number, now = new Date(), readConnection?: any): Promise<MemberCalendarSnapshot[]> {
   validateId(categoryId); if (userId !== undefined) validateId(userId);
   const conn = readConnection ?? await getDbConnection(); if (!conn) throw new Error('数据库连接不可用');
   const activationDate = await readActivation(conn, categoryId); if (!activationDate) return [];
-  let rows: any[];
-  try {
-    [rows] = await (conn as any).execute(`SELECT payload FROM ledger_crypto_portfolio_daily_snapshots
-      WHERE ledger_id=? AND category_id=? AND policy_version=? AND snapshot_date>=? AND snapshot_date<=? ORDER BY snapshot_date ASC`,
-      [LEDGER_ID, categoryId, POLICY, activationDate, cryptoPortfolioBeijingDate(now)]);
-  } catch (error) { if (!missingTable(error)) throw error; rows = []; }
-  const payloads = rows.map(r => decodePayload(r.payload, categoryId));
+  const payloads = await readDerivedPayloads(conn, categoryId, activationDate, now);
   // A user with no actual participation has no member calendar. Observations remain display-only
   // in stored payload; they are never silently substituted for an actual member's returns.
   if (userId !== undefined && !payloads.some(p => Object.hasOwn(p.members, String(userId)))) {
@@ -369,7 +451,12 @@ export async function readCryptoPortfolioCalendar(categoryId: number, userId?: n
   const snapshots: MemberCalendarSnapshot[] = [], today = cryptoPortfolioBeijingDate(now);
   for (let date = activationDate; date <= today; date = shiftStockSessionDate(date, 1)) snapshots.push(byDate.get(date)
     ?? pendingCryptoCalendarSnapshot(date, now.getTime() < cryptoPortfolioCutoffAt(date).getTime() ? 'awaiting_1505_close' : 'unpublished_daily_snapshot'));
-  return snapshots.reverse();
+  // No references into shared category cache, and never expose owner-only rule audit in member output.
+  return snapshots.reverse().map(row => {
+    const copy = JSON.parse(JSON.stringify(row)) as MemberCalendarSnapshot;
+    if (userId !== undefined) delete copy.downsideRuleAudit;
+    return copy;
+  });
 }
 
 /** Existing live quote table only. No source history/day snapshots, no core ensure or dirty marks. */

@@ -100,6 +100,7 @@ function harness(options: Options = {}) {
     isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, isStockSessionDate, ...cryptoPolicy, assertStockBuySnapshotSafe,
     assertStockTagAccess: access, ensureStockCalendarResultTable: ensure, getDbTransactionConnection: getTx,
     stockObservationTableExists: async () => options.observationTable !== false,
+    readStockLotDownsideRules: async () => [],
     markStockCalendarResultDirty: dirty, invalidateMemberStockReadCaches: invalidate, queueStockCalendarResultRebuild: rebuild,
   });
   const originalTime = options.crypto ? subject.toBeijingWallClockIso(event.actual_traded_at) : subject.toIso(event.actual_traded_at);
