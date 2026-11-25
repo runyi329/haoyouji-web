@@ -2,6 +2,9 @@ name: 受保护的 R1 线上故障恢复
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - hotfix/r1-restore-service-20261126
 
 concurrency:
   group: haoyouji-production-deploy
