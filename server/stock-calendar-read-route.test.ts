@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const fake = vi.hoisted(() => ({ execute: vi.fn(), read: vi.fn(), eligible: true,
+const fake = vi.hoisted(() => ({ execute: vi.fn(), read: vi.fn(), ruleRead: vi.fn(), eligible: true,
   category: { id: 19, ledgerId: 37, name: 'R1', parentId: null, accounting_mode: 'stock_portfolio', member_user_id: 5,
     member_role: 'member', initialBalances: '{}' } as any }));
 vi.mock('./db', () => ({ getDbConnection: async () => ({ execute: fake.execute }), getDbTransactionConnection: vi.fn() }));
@@ -9,6 +9,12 @@ vi.mock('./stock-unified-close-quotes', () => ({ fetchOvernightUnifiedCloseQuote
 vi.mock('./stock-usd-cny-rate', () => ({ fetchStockUsdCnyAtClose: vi.fn() }));
 vi.mock('./stock-calendar-result-cache', () => ({ ensureStockCalendarResultTable: vi.fn(), markStockCalendarResultDirty: vi.fn(),
   readStockCalendarResult: fake.read, rebuildCachedStockCalendarResult: vi.fn() }));
+// Resolve optional revisions for owner reads; preserve an isolated no-rule calendar fixture.
+// Rule SQL/reconstruction has separate regression suites; nonowners must not reach this read.
+vi.mock('./stock-lot-downside-rules', async importOriginal => ({
+  ...await importOriginal<typeof import('./stock-lot-downside-rules')>(),
+  readStockLotDownsideRules: fake.ruleRead,
+}));
 
 import { getStockTagCalendar } from './ledger-stock-portfolio';
 import { ensureStockCalendarResultTable, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
@@ -20,6 +26,7 @@ beforeEach(() => {
   fake.category = { id: 19, ledgerId: 37, name: 'R1', parentId: null, accounting_mode: 'stock_portfolio',
     member_user_id: 5, member_role: 'member', initialBalances: '{}' };
   fake.read.mockResolvedValue([]);
+  fake.ruleRead.mockResolvedValue([]);
   fake.execute.mockImplementation(async (sql: string) => {
     if (sql.includes('FROM ledger_categories c')) return [[{
       ledger_owner_id: fake.category.member_role === 'owner' ? fake.category.member_user_id : 999,
@@ -31,6 +38,7 @@ beforeEach(() => {
 
 function expectNoSharedCalendarRead() {
   expect(fake.read).not.toHaveBeenCalled();
+  expect(fake.ruleRead).not.toHaveBeenCalled();
   expect(ensureStockCalendarResultTable).not.toHaveBeenCalled();
   expect(rebuildCachedStockCalendarResult).not.toHaveBeenCalled();
   expect(fake.execute.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
@@ -50,6 +58,7 @@ describe('calendar read authorization (offline, no DB/HTTP)', () => {
       expect(auth).toContain('l.ownerId AS ledger_owner_id'); expect(auth).toMatch(/^SELECT/);
     }
     expect(fake.read).toHaveBeenCalledTimes(2); expect(fake.read).toHaveBeenCalledWith(19);
+    expect(fake.ruleRead).toHaveBeenCalledTimes(2);
     expect(ensureStockCalendarResultTable).not.toHaveBeenCalled();
     expect(rebuildCachedStockCalendarResult).not.toHaveBeenCalled();
   });

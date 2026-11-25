@@ -487,9 +487,25 @@ export function cryptoPortfolioDownsideFingerprint(categoryId: number, history: 
  * raw executions, publication timestamps, policy v1 and raw history evidence are never replaced.
  * Unknown mutable member history is pending in that member scope, never today's invented shares.
  */
-export function revalueCryptoPortfolioDailyPayloads(input: CryptoPortfolioRevaluationInput): {
+type CryptoPortfolioRevaluationResult = {
   payloads: CryptoPortfolioDailyPayload[]; fingerprint: string; startDate: string | null; issues: CryptoPortfolioRevaluationIssue[];
-} {
+};
+/** Offline compatibility API; server reads use the cooperative async variant below. */
+export function revalueCryptoPortfolioDailyPayloads(input: CryptoPortfolioRevaluationInput): CryptoPortfolioRevaluationResult {
+  const steps = revalueCryptoPortfolioDailyPayloadSteps(input);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+/** Same economics/evidence checks, but do not block unrelated HTTP requests for every historical day. */
+export async function revalueCryptoPortfolioDailyPayloadsAsync(input: CryptoPortfolioRevaluationInput,
+  yieldToEventLoop: () => Promise<void> = () => new Promise(resolve => setTimeout(resolve, 0))): Promise<CryptoPortfolioRevaluationResult> {
+  const steps = revalueCryptoPortfolioDailyPayloadSteps(input);
+  let step = steps.next();
+  while (!step.done) { await yieldToEventLoop(); step = steps.next(); }
+  return step.value;
+}
+function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluationInput): Generator<void, CryptoPortfolioRevaluationResult> {
   const originals = [...input.originalPayloads].sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
   if (originals.some((p, i) => p.ledgerId !== 37 || p.categoryId !== input.categoryId
     || p.policyVersion !== CRYPTO_PORTFOLIO_POLICY_VERSION || !isStockSessionDate(p.snapshotDate)
@@ -612,6 +628,7 @@ export function revalueCryptoPortfolioDailyPayloads(input: CryptoPortfolioRevalu
       for (const row of rows) if (!row.ready && !issues.some(i => i.snapshotDate === date && i.scope === scope && i.reason === row.dailyPnlReason))
         issues.push({ snapshotDate: date, scope, reason: row.dailyPnlReason ?? 'pending_verification' });
     payloads.push(derived);
+    yield;
   }
   return { payloads, fingerprint, startDate, issues };
 }

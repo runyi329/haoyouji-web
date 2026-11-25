@@ -12,11 +12,12 @@ import { isLedger37FullManager } from "../shared/ledger37-permissions";
 import { USDT_USD_PARITY_POLICY } from '../shared/usdt-usd-parity-policy';
 import { isLedger37LiveHoldingQuoteValid, valueLedger37LiveHoldings, ledger37HoldingWeights,
   ledger37HoldingKey, ledger37HoldingAmount, type Ledger37ValuationPosition } from './shared/ledger37-holding-valuation';
-import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote } from './shared/stock-member-calendar';
+import { buildMemberStockCalendar, isTrustedMemberCalendarClose, memberCalendarSettlementSummary, type MemberCalendarQuote, type MemberCalendarSnapshot } from './shared/stock-member-calendar';
 import { fetchOvernightUnifiedCloseQuotes, marketSessionDateFromBeijingTradeTimestamp, type UnifiedCloseQuote } from './stock-unified-close-quotes';
 import { getOvernightUsSessionDate, isStockMarketSession, isStockSessionDate } from '../shared/stock-market-session';
 import { getUnifiedStockCloseSnapshotDate, getUnifiedStockCloseVersion, isUnifiedStockCloseReady, isUnifiedStockCloseQuoteForDate, type UnifiedStockClosePublicationResult } from '../shared/stock-unified-close-policy';
-import { getCryptoPortfolioActivationDate, readCryptoPortfolioCalendar } from './crypto-portfolio-settlement';
+import { getCryptoPortfolioActivationDate, readCryptoPortfolioCalendar, invalidateCryptoPortfolioDerivedReadCaches } from './crypto-portfolio-settlement';
+import { StockPortfolioReadCache } from './stock-portfolio-read-cache';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { fetchStockUsdCnyAtClose, getLiveStockUsdCnyQuote } from './stock-usd-cny-rate';
 import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
@@ -84,6 +85,9 @@ const MEMBER_STOCK_READ_CACHE_TTL_MS = 20_000;
 type ShortLivedReadCacheEntry<T> = { expiresAt: number; promise: Promise<T> };
 const memberPortfolioReadCache = new Map<string, ShortLivedReadCacheEntry<any>>();
 const memberOverviewReadCache = new Map<string, ShortLivedReadCacheEntry<any[]>>();
+const downsideEvidenceReadCache = new StockPortfolioReadCache<Awaited<ReturnType<typeof loadStockLotDownsideHistoricalEvidence>>>();
+const downsideResolvedReadCache = new StockPortfolioReadCache<StockLotDownsideRule[]>();
+const revisionAwareCalendarReadCache = new StockPortfolioReadCache<Awaited<ReturnType<typeof calculateStockTagCalendar>>>();
 // 私有白名单已算行，避免改变关闭AI时的旧组合返回形状或资金核算口径。
 const r1MemberPresentationRows = new WeakMap<object, R1AiParticipationRow[]>();
 const r1ObservationPresentationRows = new WeakMap<object, R1AiParticipationRow[]>();
@@ -108,6 +112,10 @@ function readShortLivedCache<T>(
 function invalidateMemberStockReadCaches() {
   memberPortfolioReadCache.clear();
   memberOverviewReadCache.clear();
+  downsideEvidenceReadCache.clear();
+  downsideResolvedReadCache.clear();
+  revisionAwareCalendarReadCache.clear();
+  invalidateCryptoPortfolioDerivedReadCaches();
 }
 
 function asRows(result: any): any[] {
@@ -1431,6 +1439,10 @@ async function buildPortfolio(categoryId: number) {
 type StockLotDownsideAccessInput = { ledgerId: number; categoryId: number; lotId: number; userId: number; systemRole?: string; isViewingAs?: boolean };
 /** Optional historical evidence only. No live quote fetch, DDL or raw UPDATE on a read. */
 async function readStockLotDownsideHistoricalEvidence(conn: any, ledgerId: number, categoryId: number) {
+  return downsideEvidenceReadCache.read(conn, `${ledgerId}:${categoryId}`, '',
+    () => loadStockLotDownsideHistoricalEvidence(conn, ledgerId, categoryId));
+}
+async function loadStockLotDownsideHistoricalEvidence(conn: any, ledgerId: number, categoryId: number) {
   const optional = async (sql: string) => {
     try { const [rows] = await conn.execute(sql, [ledgerId, categoryId]); return rows as any[]; }
     catch (e: any) { if (e?.errno === 1146 || e?.code === 'ER_NO_SUCH_TABLE') return []; throw e; }
@@ -1471,10 +1483,16 @@ const historicalDownsideEvidence = new WeakMap<StockLotDownsideRule[], Awaited<R
 async function readStockLotDownsideRules(conn: any, ledgerId: number, categoryId: number, fresh = false): Promise<StockLotDownsideRule[]> {
   const rules = await readStoredStockLotDownsideRules(conn, ledgerId, categoryId, fresh);
   if (!rules.some(r => r.startDate)) return rules;
-  const evidence = await readStockLotDownsideHistoricalEvidence(conn, ledgerId, categoryId);
-  const resolved = resolveStockLotDownsideHistoricalRules({ rules, ...evidence, now: new Date() });
-  historicalDownsideEvidence.set(resolved, evidence);
-  return resolved;
+  const load = async () => {
+    const evidence = fresh ? await loadStockLotDownsideHistoricalEvidence(conn, ledgerId, categoryId)
+      : await readStockLotDownsideHistoricalEvidence(conn, ledgerId, categoryId);
+    const resolved = resolveStockLotDownsideHistoricalRules({ rules, ...evidence, now: new Date() });
+    historicalDownsideEvidence.set(resolved, evidence);
+    return resolved;
+  };
+  // Save/trade validation must retain fresh evidence; presentation reads share immutable reconstruction.
+  return fresh ? load() : downsideResolvedReadCache.read(conn, `${ledgerId}:${categoryId}`,
+    `${beijingDate()}:${JSON.stringify(rules)}`, load);
 }
 /** New revisions use actual execution price/time. Frozen counted evidence remains an audit only. */
 function countedDownsideSalePrice(rules: StockLotDownsideRule[], lotId: number, rawPrice: number, actualAt: string, saved?: { countedPrice: number; effectiveAt: string }) {
@@ -1497,8 +1515,11 @@ function resolvedDownsideMemberOffset(input: Parameters<typeof stockLotDownsideM
 async function readRevisionAwareStockCalendar(categoryId: number) {
   const conn = await getDbConnection(); if (!conn) throw new Error('数据库连接不可用');
   const rules = await readStoredStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId);
-  return rules.some(r => r.startDate) ? calculateStockTagCalendar({ ledgerId: STOCK_LEDGER_ID, categoryId }, new Date(), conn)
-    : readStockCalendarResult(categoryId);
+  if (!rules.some(r => r.startDate)) return readStockCalendarResult(categoryId);
+  const now = new Date(), date = beijingDate();
+  return revisionAwareCalendarReadCache.read(conn, String(categoryId),
+    `${date}:${isUnifiedStockCloseReady(date, now)}:${JSON.stringify(rules)}`,
+    () => calculateStockTagCalendar({ ledgerId: STOCK_LEDGER_ID, categoryId }, now, conn));
 }
 /** Owner-only rule configuration. Read never performs lazy table creation. */
 export async function getStockLotDownsideRule(input: StockLotDownsideAccessInput): Promise<StockLotDownsideRule | null> {
@@ -1581,8 +1602,8 @@ export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput
     invalidateStockLotDownsideRuleCache(conn, input.ledgerId, input.categoryId);
     invalidateStockLotDownsideRuleCache(tx, input.ledgerId, input.categoryId);
     invalidateMemberStockReadCaches();
-    // Date revisions only rebuild independent derived values, not historical raw evidence.
-    void rebuildStockTagCalendarResult({ categoryId: input.categoryId }).catch(() => { /* scheduler retries; never repair old evidence on a rule save */ });
+    // Keep the dirty generation for the existing scheduler. A rule-save response must not
+    // race frontend refetches with another full CPU reconstruction on the same Node event loop.
     return rule;
   } catch (error) { await tx.rollback(); throw error; }
   finally { if (typeof tx.release === 'function') tx.release(); }
@@ -1701,7 +1722,7 @@ async function isStockCalendarMemberEligible(access: Access, userId: number): Pr
 }
 
 /** Background-only: reuse all original sources and the same ready/unready reconstruction engine. */
-async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'ledgerId'>, now: Date, conn: any, stockOnly = false) {
+async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'ledgerId'>, now: Date, conn: any, stockOnly = false, snapshotDates?: readonly string[]) {
   const downsideRules = await readStockLotDownsideRules(conn, access.ledgerId, access.categoryId);
   const downsideSales = downsideRules.length ? await readStockLotDownsideSales(conn, access.ledgerId, access.categoryId) : [];
   const [lotRows] = await (conn as any).execute(
@@ -1761,7 +1782,7 @@ async function calculateStockTagCalendar(access: Pick<Access, 'categoryId' | 'le
     fx: (fxRows as any[]).map(row => ({ snapshotDate: String(row.snapshot_date),
       usdCnyRate: row.usd_cny_rate == null ? null : Number(row.usd_cny_rate), source: String(row.source),
       asOf: toBeijingWallClockIso(row.quote_as_of), lockedAt: toBeijingWallClockIso(row.locked_at) })),
-    now, downsideRules,
+    now, downsideRules, snapshotDates,
   });
   if (stockOnly) return legacySnapshots.sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate));
   const activationDate = tableNames.has('ledger_crypto_portfolio_daily_snapshots') || (lotRows as any[]).some(row => isCryptoPortfolioSymbol(row.symbol))
@@ -1777,25 +1798,61 @@ function calendarSourceNumber(value: unknown): number {
 }
 
 /** Internal mixed-engine baseline only; caller retains authorization. SELECT-only, no fixed totals and no live/repair calls. */
-export async function readStockLotDownsideCalendarBaseline(categoryId: number, snapshotDate: string, userId?: number, readConnection?: any, now = new Date()) {
+export async function readStockLotDownsideCalendarBaseline(categoryId: number, snapshotDate: string, userId?: number, readConnection?: any, now = new Date()): Promise<MemberCalendarSnapshot | null> {
   validateStockLotDownsideStartDate(snapshotDate);
   if (!Number.isSafeInteger(categoryId) || categoryId <= 0 || (userId !== undefined && (!Number.isSafeInteger(userId) || userId <= 0))) throw new Error('股票基准scope无效');
   const conn = readConnection ?? await getDbConnection(); if (!conn) throw new Error('数据库连接不可用');
-  if (userId === undefined) return (await calculateStockTagCalendar({ ledgerId: STOCK_LEDGER_ID, categoryId }, now, conn, true))
+  if (userId === undefined) return (await calculateStockTagCalendar({ ledgerId: STOCK_LEDGER_ID, categoryId }, now, conn, true, [snapshotDate]))
     .find(row => row.snapshotDate === snapshotDate) ?? null;
-  const rules = await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId, true);
+  return (await readStockLotDownsideCalendarBaselines(categoryId, snapshotDate, [userId], conn, now, false)).members[String(userId)] ?? null;
+}
+
+/** One SELECT batch per activation anchor, not one whole-history batch per client. */
+export async function readStockLotDownsideCalendarBaselines(categoryId: number, snapshotDate: string, userIds: readonly number[], conn: any, now = new Date(), includeTotal = true): Promise<{ snapshotDate: string; total?: MemberCalendarSnapshot; members: Record<string, MemberCalendarSnapshot> }> {
+  validateStockLotDownsideStartDate(snapshotDate);
+  if (!Number.isSafeInteger(categoryId) || categoryId <= 0 || userIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('股票基准scope无效');
+  const total = includeTotal ? await readStockLotDownsideCalendarBaseline(categoryId, snapshotDate, undefined, conn, now) : null;
+  const members: Record<string, ReturnType<typeof buildMemberStockCalendar>[number]> = {};
+  if (!userIds.length) return { snapshotDate, total: total?.ready ? total : undefined, members };
+  const rules = await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId);
   const evidence = historicalDownsideEvidence.get(rules) ?? await readStockLotDownsideHistoricalEvidence(conn, STOCK_LEDGER_ID, categoryId);
-  const epochs = rules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId) : [];
-  const [rows] = await conn.execute(`SELECT p.id,p.lot_id,p.entry_price,p.remaining_quantity,l.symbol,
+  const epochs = rules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId) : [];
+  const [rows] = await conn.execute(`SELECT p.id,p.lot_id,p.user_id,p.entry_price,p.remaining_quantity,l.symbol,
     DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at,
     DATE_FORMAT(p.updated_at,'%Y-%m-%d %H:%i:%s') AS updated_at,
     DATE_FORMAT(p.start_date,'%Y-%m-%d') AS start_date,DATE_FORMAT(p.pause_date,'%Y-%m-%d') AS pause_date
     FROM ledger_stock_lot_participations p INNER JOIN ledger_stock_lots l ON l.id=p.lot_id
       AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
     INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id AND opening.status='active'
-    WHERE p.ledger_id=? AND p.category_id=? AND p.user_id=? AND p.allocated_quantity>0`, [STOCK_LEDGER_ID, categoryId, userId]);
+    WHERE p.ledger_id=? AND p.category_id=? AND p.allocated_quantity>0`, [STOCK_LEDGER_ID, categoryId]);
   const cutoff = Date.parse(`${snapshotDate}T15:05:00+08:00`);
-  const participations = (rows as any[]).filter(r => !isCryptoPortfolioSymbol(r.symbol)).map(r => {
+  const participationGroups = new Map<number, any[]>();
+  for (const row of rows as any[]) {
+    const group = participationGroups.get(Number(row.user_id)) ?? [];
+    group.push(row); participationGroups.set(Number(row.user_id), group);
+  }
+  const [closures] = await conn.execute(`SELECT c.participation_id,p.user_id,c.quantity,c.sale_price,
+    DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
+    FROM ledger_stock_participation_closures c INNER JOIN ledger_stock_lot_participations p ON p.id=c.participation_id
+    INNER JOIN ledger_stock_events e ON e.id=c.sell_event_id AND e.ledger_id=p.ledger_id AND e.category_id=p.category_id AND e.status='active'
+    WHERE p.ledger_id=? AND p.category_id=?`, [STOCK_LEDGER_ID, categoryId]);
+  const closureGroups = new Map<number, any[]>();
+  for (const row of closures as any[]) {
+    const group = closureGroups.get(Number(row.user_id)) ?? [];
+    group.push(row); closureGroups.set(Number(row.user_id), group);
+  }
+  let fx: any[] = [];
+  try { [fx] = await conn.execute(`SELECT DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date,usd_cny_rate,source,
+    DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
+    FROM ledger_stock_unified_close_fx WHERE ledger_id=? AND category_id=? AND policy_version=?`, [STOCK_LEDGER_ID, categoryId, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]); }
+  catch (e: any) { if (e?.errno !== 1146 && e?.code !== 'ER_NO_SUCH_TABLE') throw e; }
+  const quotes = evidence.quotes.filter(q => q.verified && !isCryptoPortfolioSymbol(q.symbol)).map(q => ({
+    symbol: q.symbol, price: q.price, priceDate: q.priceDate, capturedAt: q.quoteAsOf,
+    source: stockMarket(q.symbol) === 'A' ? 'unified_close_tushare' : 'unified_close_yahoo' }));
+  const historicalFx = fx.map(r => ({ snapshotDate: String(r.snapshot_date), usdCnyRate: calendarSourceNumber(r.usd_cny_rate),
+    source: r.source, asOf: toBeijingWallClockIso(r.quote_as_of), lockedAt: toBeijingWallClockIso(r.locked_at) }));
+  for (const userId of Array.from(new Set(userIds))) {
+    const participations = (participationGroups.get(userId) ?? []).filter(r => !isCryptoPortfolioSymbol(r.symbol)).map(r => {
     const lot = evidence.lots.find((l: any) => l.lotId === Number(r.lot_id));
     const updated = Date.parse(toBeijingWallClockIso(r.updated_at));
     return { id: Number(r.id), lotId: Number(r.lot_id), symbol: String(r.symbol),
@@ -1807,27 +1864,17 @@ export async function readStockLotDownsideCalendarBaseline(categoryId: number, s
       entryPrice: calendarSourceNumber(r.entry_price), assignedAt: toBeijingWallClockIso(r.assigned_at),
       openedAt: lot?.openedAt, physicalUnitCost: lot?.unitCost };
   });
-  const [closures] = await conn.execute(`SELECT c.participation_id,c.quantity,c.sale_price,
-    DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
-    FROM ledger_stock_participation_closures c INNER JOIN ledger_stock_lot_participations p ON p.id=c.participation_id
-    INNER JOIN ledger_stock_events e ON e.id=c.sell_event_id AND e.ledger_id=p.ledger_id AND e.category_id=p.category_id AND e.status='active'
-    WHERE p.ledger_id=? AND p.category_id=? AND p.user_id=?`, [STOCK_LEDGER_ID, categoryId, userId]);
-  let fx: any[] = [];
-  try { [fx] = await conn.execute(`SELECT DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date,usd_cny_rate,source,
-    DATE_FORMAT(quote_as_of,'%Y-%m-%d %H:%i:%s') AS quote_as_of,DATE_FORMAT(locked_at,'%Y-%m-%d %H:%i:%s') AS locked_at
-    FROM ledger_stock_unified_close_fx WHERE ledger_id=? AND category_id=? AND policy_version=?`, [STOCK_LEDGER_ID, categoryId, STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION]); }
-  catch (e: any) { if (e?.errno !== 1146 && e?.code !== 'ER_NO_SUCH_TABLE') throw e; }
-  return buildMemberStockCalendar({ participations, downsideRules: rules, downsideMemberEpochs: epochs,
-    closures: (closures as any[]).flatMap(c => {
+  const member = buildMemberStockCalendar({ participations, downsideRules: rules, downsideMemberEpochs: epochs,
+    closures: (closureGroups.get(userId) ?? []).flatMap(c => {
       const p = participations.find(p => p.id === Number(c.participation_id));
       return !p ? [] : [{ participationId: p.id, quantity: calendarSourceNumber(c.quantity), salePrice: calendarSourceNumber(c.sale_price),
         actualAt: toBeijingWallClockIso(c.actual_traded_at), closeDate: marketSessionDateFromBeijingTradeTimestamp(c.actual_traded_at, stockMarket(p.symbol) as 'A' | 'US') ?? '' }];
-    }), quotes: evidence.quotes.filter(q => q.verified && !isCryptoPortfolioSymbol(q.symbol)).map(q => ({
-      symbol: q.symbol, price: q.price, priceDate: q.priceDate, capturedAt: q.quoteAsOf,
-      source: stockMarket(q.symbol) === 'A' ? 'unified_close_tushare' : 'unified_close_yahoo' })),
-    fx: fx.map(r => ({ snapshotDate: String(r.snapshot_date), usdCnyRate: calendarSourceNumber(r.usd_cny_rate),
-      source: r.source, asOf: toBeijingWallClockIso(r.quote_as_of), lockedAt: toBeijingWallClockIso(r.locked_at) })),
-    candidateDates: [snapshotDate], now }).find(row => row.snapshotDate === snapshotDate) ?? null;
+    }), quotes, fx: historicalFx,
+    snapshotDates: [snapshotDate], now }).find(row => row.snapshotDate === snapshotDate) ?? null;
+    if (member) members[String(userId)] = member;
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  return { snapshotDate, total: total?.ready ? total : undefined, members };
 }
 
 /** Internal scheduler/admin tool API; category validation is not a replacement for route authorization. */

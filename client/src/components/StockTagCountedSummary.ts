@@ -27,6 +27,25 @@ export function stockTagCountedLotValues(lot: StockTagCountedFields, rawMarketVa
   };
 }
 
+/** Legacy member DTOs have quantity/entryPrice but no per-lot PnL fields.
+ * Only absent fields permit reconstruction; explicit pending/null is never replaced.
+ * Use this member's exact remaining quantity and entry, not the tag total or another member.
+ */
+export function stockTagCountedMemberFloatingPnl(source: StockTagCountedFields & {
+  floatingPnl?: number | null; remainingQuantity?: number | null; quantity?: number | null;
+  entryPrice?: number | null; unitCost?: number | null;
+}, rawMarketPrice: number | null): number | null {
+  if (source.countedFloatingPnl !== undefined) return stockTagCountedValue(source.countedFloatingPnl, null);
+  if (source.floatingPnl !== undefined) return stockTagCountedValue(source.floatingPnl, null);
+  const quantity = source.remainingQuantity === undefined ? source.quantity : source.remainingQuantity;
+  const entry = source.entryPrice === undefined ? source.unitCost : source.entryPrice;
+  if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity < 0) return null;
+  if (quantity === 0) return 0;
+  if (typeof entry !== 'number' || !Number.isFinite(entry) || entry <= 0
+    || typeof rawMarketPrice !== 'number' || !Number.isFinite(rawMarketPrice) || rawMarketPrice <= 0) return null;
+  return stockTagCountedValue(quantity * (entry - rawMarketPrice), null);
+}
+
 /** Aggregate only: details keep their immutable real close/FX figures. Never revalue a foreign close at live FX. */
 export function stockTagCountedHistoricalPnl(source: {
   countedRealizedPnl?: number | null; countedRealizedPnlCny?: number | null;

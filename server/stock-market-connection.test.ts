@@ -5,6 +5,7 @@ import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getStockMarketExecutor } from "./stock-market-connection";
 import { getStockReturnRanking } from "./stock-return-ranking";
+import { readStockLotDownsideRules, invalidateStockLotDownsideRuleCache } from "./stock-lot-downside-rules";
 import {
   findStockCodesByInitials,
   resetStockSearchInitialsCacheForTests,
@@ -30,7 +31,12 @@ const factoryNames = new Set([
 const factorySource = dbAst.statements.filter(node =>
   ts.isFunctionDeclaration(node) && node.name && factoryNames.has(node.name.text),
 ).map(node => node.getText(dbAst)).join("\n");
+const wrapperStateSource = dbAst.statements.filter(node =>
+  ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration =>
+    ts.isIdentifier(declaration.name) && declaration.name.text === "_pooledConnectionWrappers"),
+).map(node => node.getText(dbAst)).join("\n");
 if (factorySource.length === 0) throw new Error("Missing production DB factory");
+if (wrapperStateSource.length === 0) throw new Error("Missing production pool wrapper cache");
 
 function connectionFactory(pools: mysql.Pool[], fallback: mysql.Connection | null = null) {
   const createPool = vi.fn(() => {
@@ -41,6 +47,7 @@ function connectionFactory(pools: mysql.Pool[], fallback: mysql.Connection | nul
   const exports: Record<string, any> = {};
   runInNewContext(transpile(`
     let _db = null, _pool = null, _connection = fallback;
+    ${wrapperStateSource}
     ${factorySource}
   `), {
     exports, fallback, mysql: { createPool }, drizzle: (pool: unknown) => ({ pool }),
@@ -124,7 +131,7 @@ afterEach(() => {
 });
 
 describe("AI physical-pool executor and unchanged legacy connection factory", () => {
-  it("two actual getters share identity despite fresh legacy proxies; transactions still acquire exclusive connections", async () => {
+  it("both actual read getters share their own stable identity; transactions still acquire and release exclusive connections", async () => {
     const f = poolFixture();
     const factory = connectionFactory([f.pool]);
     const first = await factory.getStockMarketConnection();
@@ -132,25 +139,38 @@ describe("AI physical-pool executor and unchanged legacy connection factory", ()
     const oldB = await factory.getDbConnection();
     const second = await factory.getStockMarketConnection();
     expect(first).toBe(second);
-    expect(oldA).not.toBe(oldB);
+    expect(oldA).toBe(oldB);
     expect(first).not.toBe(oldA);
     expect(factory.createPool).toHaveBeenCalledTimes(1);
     expect(f.mock.getConnection).not.toHaveBeenCalled();
-    expect(await factory.getDbTransactionConnection()).toBe(f.exclusive);
+    const tx = await factory.getDbTransactionConnection();
+    expect(tx).toBe(f.exclusive);
     expect(f.mock.getConnection).toHaveBeenCalledTimes(1);
+    await tx!.beginTransaction(); await tx!.commit();
+    (tx as any).release();
+    expect(f.exclusive.beginTransaction).toHaveBeenCalledOnce();
+    expect(f.exclusive.commit).toHaveBeenCalledOnce();
+    expect(f.exclusive.release).toHaveBeenCalledOnce();
+    expect(f.exclusive.rollback).not.toHaveBeenCalled();
   });
 
   it("query/execute and accessor bind the physical pool; end is an async no-op", async () => {
     const f = poolFixture();
+    const factory = connectionFactory([f.pool]);
     const executor = getStockMarketExecutor(f.pool, null)!;
-    const { query: boundQuery, execute: boundExecute } = executor;
-    expect(await boundQuery("SELECT ?", [7])).toEqual([[{ sql: "SELECT ?", params: [7] }], []]);
-    expect(await boundExecute("SELECT ts_code, name FROM ts_stock_basic", [])).toEqual([
-      [{ ts_code: "600001.SH", name: "新易盛" }], [],
-    ]);
-    expect((executor as any).marker).toBe("physical-pool");
-    await expect(executor.end()).resolves.toBeUndefined();
+    const legacy = (await factory.getDbConnection())!;
+    for (const connection of [executor, legacy]) {
+      const { query: boundQuery, execute: boundExecute } = connection;
+      expect(await boundQuery("SELECT ?", [7])).toEqual([[{ sql: "SELECT ?", params: [7] }], []]);
+      expect(await boundExecute("SELECT ts_code, name FROM ts_stock_basic", [])).toEqual([
+        [{ ts_code: "600001.SH", name: "新易盛" }], [],
+      ]);
+      expect((connection as any).marker).toBe("physical-pool");
+      await expect(connection.end()).resolves.toBeUndefined();
+      expect(typeof (connection as any).beginTransaction).toBe("undefined");
+    }
     expect(f.mock.end).not.toHaveBeenCalled();
+    expect(f.mock.getConnection).not.toHaveBeenCalled();
     expect(getStockMarketExecutor(f.pool, executor)).toBe(executor);
   });
 
@@ -160,8 +180,13 @@ describe("AI physical-pool executor and unchanged legacy connection factory", ()
     expect(getStockMarketExecutor(null, null)).toBeNull();
     const factory = connectionFactory([], fallback);
     expect(await factory.getStockMarketConnection()).toBe(fallback);
+    expect(await factory.getDbConnection()).toBe(fallback);
+    expect(await factory.getDbTransactionConnection()).toBe(fallback);
     expect(factory.createPool).not.toHaveBeenCalled();
-    expect(await connectionFactory([]).getStockMarketConnection()).toBeNull();
+    const empty = connectionFactory([]);
+    expect(await empty.getStockMarketConnection()).toBeNull();
+    expect(await empty.getDbConnection()).toBeNull();
+    expect(await empty.getDbTransactionConnection()).toBeNull();
   });
 
   it.each(["_closed", "pool._closed"])("actual factory rebuild for %s changes AI identity without closing either pool", async closedKey => {
@@ -176,6 +201,45 @@ describe("AI physical-pool executor and unchanged legacy connection factory", ()
     expect(factory.createPool).toHaveBeenCalledTimes(2);
     await first!.end(); await second!.end();
     expect(a.mock.end).not.toHaveBeenCalled(); expect(b.mock.end).not.toHaveBeenCalled();
+  });
+
+  it("separate legacy getters share rule singleflight; fresh reads and save invalidation still refresh", async () => {
+    const f = poolFixture(), factory = connectionFactory([f.pool]);
+    f.mock.execute.mockImplementation(async () => [[]] as any);
+    const a = (await factory.getDbConnection())!, b = (await factory.getDbConnection())!;
+    const [one, two] = await Promise.all([
+      readStockLotDownsideRules(a, 37, 90250), readStockLotDownsideRules(b, 37, 90250),
+    ]);
+    expect(one).toBe(two);
+    expect(f.mock.execute).toHaveBeenCalledTimes(1);
+    await readStockLotDownsideRules(b, 37, 90250, true);
+    expect(f.mock.execute).toHaveBeenCalledTimes(2);
+    invalidateStockLotDownsideRuleCache(b, 37, 90250);
+    await readStockLotDownsideRules(a, 37, 90250);
+    expect(f.mock.execute).toHaveBeenCalledTimes(3);
+    await readStockLotDownsideRules(a, 37, 90251);
+    expect(f.mock.execute).toHaveBeenCalledTimes(4);
+    expect(f.mock.execute.mock.calls.every(([sql]) => /^SELECT/.test(sql))).toBe(true);
+  });
+
+  it.each(["_closed", "pool._closed"])("legacy wrapper and rule cache isolate a rebuilt %s pool", async closedKey => {
+    const a = poolFixture(), b = poolFixture(), factory = connectionFactory([a.pool, b.pool]);
+    a.mock.execute.mockImplementation(async () => [[]] as any);
+    b.mock.execute.mockImplementation(async () => [[]] as any);
+    const first = (await factory.getDbConnection())!;
+    const before = await readStockLotDownsideRules(first, 37, 90250);
+    if (closedKey === "_closed") a.mock._closed = true;
+    else { delete (a.mock as any)._closed; (a.mock as any).pool = { _closed: true }; }
+    const second = (await factory.getDbConnection())!;
+    expect(second).not.toBe(first);
+    expect(await factory.getDbConnection()).toBe(second);
+    const after = await readStockLotDownsideRules(second, 37, 90250);
+    expect(after).not.toBe(before);
+    expect(a.mock.execute).toHaveBeenCalledTimes(1);
+    expect(b.mock.execute).toHaveBeenCalledTimes(1);
+    await first.end(); await second.end();
+    expect(a.mock.end).not.toHaveBeenCalled(); expect(b.mock.end).not.toHaveBeenCalled();
+    expect(factory.createPool).toHaveBeenCalledTimes(2);
   });
 });
 

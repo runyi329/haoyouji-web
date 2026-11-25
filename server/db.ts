@@ -54,6 +54,9 @@ let _pool: mysql.Pool | null = null;
 let _connection: mysql.Connection | null = null;
 let _guestConnection: mysql.Connection | null = null;
 const _localDatabaseLocks = new Map<string, Promise<void>>();
+// Cache by physical pool so connection-keyed read caches survive across requests.
+// Retired pools keep separate identities and can be garbage-collected.
+const _pooledConnectionWrappers = new WeakMap<mysql.Pool, mysql.Connection>();
 
 const GUEST_USER_ID = 5070293;
 
@@ -138,13 +141,17 @@ export async function getLedgerDb() {
  * 委托给原 pool；需要独占连接的调用方必须使用 getDbTransactionConnection。
  */
 function asPooledConnection(pool: mysql.Pool): mysql.Connection {
-  return new Proxy(pool, {
+  const cached = _pooledConnectionWrappers.get(pool);
+  if (cached) return cached;
+  const connection = new Proxy(pool, {
     get(target, property) {
       if (property === 'end') return async () => undefined;
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as unknown as mysql.Connection;
+  _pooledConnectionWrappers.set(pool, connection);
+  return connection;
 }
 
 /**

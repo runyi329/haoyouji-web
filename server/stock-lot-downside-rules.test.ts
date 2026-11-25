@@ -203,7 +203,7 @@ describe('rule save lot-first current-state recheck (offline concurrency mock)',
     expect(rule).toMatchObject({version:1,baselineSource:'opening',baselineStatus:'ready',baselineRawPrice:100});
     expect(mock.tx.commit).toHaveBeenCalledOnce();expect(mock.tx.rollback).not.toHaveBeenCalled();
     expect(mock.tx.release).toHaveBeenCalledOnce();expect(derived.dirty).toHaveBeenCalledWith(mock.tx,90250);
-    expect(derived.rebuild).toHaveBeenCalledOnce();expect(derived.ensureRules).toHaveBeenCalledOnce();
+    expect(derived.rebuild).not.toHaveBeenCalled();expect(derived.ensureRules).toHaveBeenCalledOnce();
     expect(derived.ensureCalendar).toHaveBeenCalledOnce();
     expect(mock.tx.execute.mock.calls[2]).toEqual([expect.stringContaining('e.ledger_id=? AND e.category_id=?'),[1,37,90250]]);
     const writes=mock.tx.execute.mock.calls.filter(([sql])=>!/^\s*SELECT/.test(sql));

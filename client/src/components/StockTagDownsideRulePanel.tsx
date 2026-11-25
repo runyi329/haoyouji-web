@@ -91,11 +91,14 @@ export function StockTagDownsideRulePanel({ categoryId, order, canEdit, readOnly
       const waitingBaseline = rule && "baselineStatus" in rule && rule.baselineStatus === "pending";
       toast.success(waitingBaseline ? "规则已保存到正式账目，等待启用日期与可核验历史基准；尚未重算" : "欠保证金规则已保存到正式账目，将从选定启用日期起重算可核验的日结和客户收益；缺少历史证据的记录保留待核验");
       void utils.ledger.getStockLotDownsideRule.invalidate({ ledgerId: 37, categoryId, lotId: order.lotId });
-      for (const name of ["getStockTagPortfolio", "getStockLotParticipationMatrix", "getMyStockTagParticipantPortfolio", "getStockTagPublicPortfolio", "getStockTagDailySnapshots"] as const) {
+      for (const name of ["getStockTagPortfolio", "getStockLotParticipationMatrix", "getMyStockTagParticipantPortfolio", "getStockTagPublicPortfolio", "getStockTagDailySnapshots", "getStockTagCalendar"] as const) {
         void utils.ledger[name].invalidate({ ledgerId: 37, categoryId });
       }
-      // AI净值、日历及账本摘要使用各自query key，不能继续显示旧的计入口径。
-      void utils.invalidate();
+      // Refresh only R1 consumers, not every mounted query across the whole website.
+      // Ledger-only inputs also match cached viewer-specific AI/overview query keys.
+      for (const name of ["getMyR1AiParticipationPortfolio", "getMyLedger37AiStockPool", "getMyLedger37AiWalletValue", "getMyLedger37HoldingSources", "getMyStockTagOverview", "getMyStockTagObservationOverview", "getCategories"] as const) {
+        void utils.ledger[name].invalidate({ ledgerId: 37 });
+      }
       onClose();
     },
     onError: error => {

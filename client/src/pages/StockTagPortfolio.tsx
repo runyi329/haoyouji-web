@@ -27,7 +27,7 @@ import { useSearch } from "wouter";
 import { isR1StockPresentationScope, type R1StockView } from "@shared/r1-stock-presentation";
 import type { Ledger37PresentationContext } from "@shared/ledger37-ai-presentation";
 import Ledger37AiHome, { Ledger37AiStockParticipationView, Ledger37PresentationPending, useLedger37PresentationContext } from "@/components/Ledger37AiHome";
-import { stockTagCountedHistoricalPnl, stockTagCountedLotValues, stockTagCountedValue, stockTagServerAggregate } from "@/components/StockTagCountedSummary";
+import { stockTagCountedHistoricalPnl, stockTagCountedLotValues, stockTagCountedMemberFloatingPnl, stockTagCountedValue, stockTagServerAggregate } from "@/components/StockTagCountedSummary";
 import type { StockTagDownsidePreview } from "@/components/StockTagDownsideRulePanel";
 export type { StockTagDownsidePreview } from "@/components/StockTagDownsideRulePanel";
 
@@ -973,9 +973,8 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
           : Number(holding.myHolding.marketValue);
         // 普通客户只从本人接口取计入浮盈，公开行情接口不暴露owner规则。
         const memberRows = visibleMemberLots.filter(row => Number(row.lotId ?? row.id) === Number(holding.lot.id));
-        const countedPnls = memberRows.map(row => stockTagCountedValue(row.countedFloatingPnl,
-          row.floatingPnl == null ? null : Number(row.floatingPnl)));
-        const countedFloatingPnl = countedPnls.some(value => value === null) ? null : countedPnls.reduce<number>((total, value) => total + Number(value), 0);
+        const countedPnls = memberRows.map(row => stockTagCountedMemberFloatingPnl(row, holding.nativeMarketPrice));
+        const countedFloatingPnl = !memberRows.length || countedPnls.some(value => value === null) ? null : countedPnls.reduce<number>((total, value) => total + Number(value), 0);
         const nativeEntryPrice = holding.myHolding?.nativeEntryPrice == null || !Number.isFinite(holding.myHolding.nativeEntryPrice) ? null : Number(holding.myHolding.nativeEntryPrice);
         return {
           lotId: Number(holding.lot.id),

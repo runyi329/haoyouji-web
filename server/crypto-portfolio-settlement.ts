@@ -10,13 +10,14 @@ import { CRYPTO_PORTFOLIO_POLICY_VERSION, cryptoPortfolioBeijingDate, cryptoPort
   getCryptoPortfolioEffectiveDate, latestCryptoPortfolioSnapshotDate, parsePortfolioTradeTime } from '../shared/crypto-portfolio-policy';
 import { isCryptoPortfolioSymbol, parsePortfolioInstrument, portfolioQuantityIsEmpty } from '../shared/portfolio-instruments';
 import { isStockSessionDate, isStockMarketSession, previousStockMarketSession, shiftStockSessionDate } from '../shared/stock-market-session';
-import { buildCryptoPortfolioDailyPayload, revalueCryptoPortfolioDailyPayloads, cryptoPortfolioDownsideFingerprint,
+import { buildCryptoPortfolioDailyPayload, revalueCryptoPortfolioDailyPayloadsAsync, cryptoPortfolioDownsideFingerprint,
   cryptoPortfolioStockAnchor, isCryptoCalendarCloseQuote,
   pendingCryptoCalendarSnapshot, type CryptoCalendarLot, type CryptoCalendarSale, type CryptoCalendarParticipation,
   type CryptoCalendarClosure, type CryptoCalendarObservation, type CryptoCalendarQuote, type CryptoCalendarUsdFx,
   type CryptoPortfolioDailyPayload, type CryptoCalendarPersistedActivation } from './shared/crypto-portfolio-calendar';
 import { readStockLotDownsideRules, readStockLotDownsideSales, readStockLotDownsideMemberEpochs } from './stock-lot-downside-rules';
 import { stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, stockLotDownsidePriceAsOf, type StockLotDownsideRule } from '../shared/stock-lot-downside';
+import { StockPortfolioReadCache } from './stock-portfolio-read-cache';
 
 const LEDGER_ID = 37;
 const POLICY = CRYPTO_PORTFOLIO_POLICY_VERSION;
@@ -386,19 +387,14 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
   return result;
 }
 
-const derivedCalendarCaches = new WeakMap<object, Map<string, { until: number; promise: Promise<CryptoPortfolioDailyPayload[]> }>>();
+const derivedCalendarCaches = new StockPortfolioReadCache<CryptoPortfolioDailyPayload[]>();
+export function invalidateCryptoPortfolioDerivedReadCaches(): void { derivedCalendarCaches.clear(); }
 async function readRevaluedStockBaseline(conn: any, categoryId: number, activationDate: string,
   payloads: readonly CryptoPortfolioDailyPayload[], now: Date) {
   const date = previousStockMarketSession(activationDate, 'A'); if (!date) return null;
   // Lazy internal SELECT-only helper avoids the core module cycle; never imports routers or starts a server.
-  const { readStockLotDownsideCalendarBaseline } = await import('./ledger-stock-portfolio');
-  const total = await readStockLotDownsideCalendarBaseline(categoryId, date, undefined, conn, now);
-  const members: Record<string, MemberCalendarSnapshot> = {};
-  for (const userId of Object.keys(payloads[0]?.members ?? {})) {
-    const member = await readStockLotDownsideCalendarBaseline(categoryId, date, Number(userId), conn, now);
-    if (member?.ready) members[userId] = member;
-  }
-  return { snapshotDate: date, total: total?.ready ? total : undefined, members };
+  const { readStockLotDownsideCalendarBaselines } = await import('./ledger-stock-portfolio');
+  return readStockLotDownsideCalendarBaselines(categoryId, date, Object.keys(payloads[0]?.members ?? {}).map(Number), conn, now);
 }
 async function readDerivedPayloads(conn: any, categoryId: number, activationDate: string, now: Date): Promise<CryptoPortfolioDailyPayload[]> {
   // Fresh, scoped revision read invalidates derived cache immediately after a save; no stale 15s rule cache.
@@ -418,20 +414,13 @@ async function readDerivedPayloads(conn: any, categoryId: number, activationDate
     const historicalQuotes = await savedStockProofs(conn, categoryId);
     const baseline = rules.some(r => r.startDate && r.startDate < activationDate)
       ? await readRevaluedStockBaseline(conn, categoryId, activationDate, originals, now) : null;
-    return revalueCryptoPortfolioDailyPayloads({ categoryId, originalPayloads: originals,
-      history: { ...history, historicalQuotes }, baseline, now }).payloads;
+    return (await revalueCryptoPortfolioDailyPayloadsAsync({ categoryId, originalPayloads: originals,
+      history: { ...history, historicalQuotes }, baseline, now })).payloads;
   };
   if (!retro) return load(); // Exact legacy/no-startDate path has no new history/economic queries.
-  let cache = derivedCalendarCaches.get(conn); if (!cache) { cache = new Map(); derivedCalendarCaches.set(conn, cache); }
   const fingerprint = cryptoPortfolioDownsideFingerprint(categoryId, { downsideRules: rules });
   const key = `${categoryId}:${activationDate}:${cryptoPortfolioBeijingDate(now)}:${now.getTime() >= cryptoPortfolioCutoffAt(cryptoPortfolioBeijingDate(now)).getTime()}:${fingerprint}`;
-  const saved = cache.get(key);
-  if (saved && saved.until > Date.now()) return saved.promise;
-  // Keep at most one revision/day per category. Failed promises are not cached.
-  for (const old of Array.from(cache.keys())) if (old.startsWith(`${categoryId}:`)) cache.delete(old);
-  const promise = load(); cache.set(key, { until: Date.now() + 15_000, promise });
-  void promise.catch(() => { if (cache!.get(key)?.promise === promise) cache!.delete(key); });
-  return promise;
+  return derivedCalendarCaches.read(conn, String(categoryId), key, load);
 }
 
 /** SELECT-only derived read. Missing evidence/days remain pending, never live price/FX fallback. */

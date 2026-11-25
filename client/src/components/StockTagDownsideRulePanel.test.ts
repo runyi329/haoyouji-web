@@ -26,7 +26,7 @@ function harness(options: { dev?: boolean; readOnlyPreview?: boolean; canEdit?: 
   let cursor = 0, effectCursor = 0, mutationOptions: any, queryOptions: any, queryInput: any;
   const mutation = { mutate: vi.fn(), isPending: false };
   const query = { data: options.queryData ?? null, isPending: options.queryPending ?? false, isFetching: false, error: options.queryError ?? null, refetch: vi.fn().mockResolvedValue(undefined) };
-  const invalidates = Object.fromEntries(['getStockLotDownsideRule', 'getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots'].map(name => [name, vi.fn().mockResolvedValue(undefined)]));
+  const invalidates = Object.fromEntries(['getStockLotDownsideRule', 'getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots', 'getStockTagCalendar', 'getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories'].map(name => [name, vi.fn().mockResolvedValue(undefined)]));
   const invalidateAll = vi.fn().mockResolvedValue(undefined);
   const props = { categoryId: 90250, order: { lotId: 11, eventId: 101, stockName: '苹果', symbol: 'AAPL', marketPrice: 9, currentCountedPrice: 9, quantity: 100, executionPrice: 8, actualTradedAt: '2026-11-01T00:00:00Z', note: '' }, canEdit: options.canEdit ?? true, isViewingAs: options.isViewingAs ?? false, readOnlyPreview: options.readOnlyPreview ?? false, onClose: vi.fn(), onPendingChange: vi.fn(), previewDownsideRule: options.rule, onPreviewDownsideChange: options.onPreviewDownsideChange };
   const scope = {
@@ -195,10 +195,21 @@ describe('欠保证金右页签：真实完整TSX离线测试', () => {
     expect(cancel.props.disabled).toBe(true); cancel.props.onClick();
     expect(h.props.onClose).not.toHaveBeenCalled(); expect(h.mutation.mutate).toHaveBeenCalledOnce();
     h.success(); expect(h.props.onClose).toHaveBeenCalledOnce();
-    expect(h.invalidateAll).toHaveBeenCalledOnce();
+    expect(h.invalidateAll).not.toHaveBeenCalled();
     for (const invalidate of Object.values(h.invalidates)) expect(invalidate).toHaveBeenCalledOnce();
     const failed = harness(); failed.render(); failed.error('版本冲突');
     expect(failed.query.refetch).toHaveBeenCalledOnce(); expect(failed.props.onClose).not.toHaveBeenCalled();
+  });
+  it('正式保存只失效本标签及37号AI、日历、概览，不发起全站重载', () => {
+    const h = harness(); h.render(); h.success({ baselineStatus: 'ready' });
+    expect(h.invalidateAll).not.toHaveBeenCalled();
+    expect(h.invalidates.getStockLotDownsideRule).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11 });
+    for (const name of ['getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots', 'getStockTagCalendar']) {
+      expect(h.invalidates[name]).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250 });
+    }
+    for (const name of ['getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories']) {
+      expect(h.invalidates[name]).toHaveBeenCalledWith({ ledgerId: 37 });
+    }
   });
   it('切换批次重新预填，不沿用上一批比例；原币USDT不误转人民币', () => {
     const h = harness({ dev: true, rule: { lotId: 11, version: 1, enabled: true, thresholdPrice: 10, downsidePercent: 0 } });
@@ -402,6 +413,8 @@ describe('启用日期与可核验基准等待状态', () => {
   it('API保存pending只提示规则已存和等待，不声称日结或客户收益已经重算', () => {
     const h = harness(); h.render(); h.success({ baselineStatus: 'pending' });
     expect(h.scope.toast.success).toHaveBeenCalledWith('规则已保存到正式账目，等待启用日期与可核验历史基准；尚未重算');
-    expect(h.invalidateAll).toHaveBeenCalledOnce();
+    expect(h.invalidateAll).not.toHaveBeenCalled();
+    expect(h.invalidates.getStockTagCalendar).toHaveBeenCalledOnce();
+    expect(h.invalidates.getMyLedger37AiStockPool).toHaveBeenCalledOnce();
   });
 });

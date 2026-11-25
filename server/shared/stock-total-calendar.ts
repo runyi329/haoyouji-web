@@ -47,6 +47,7 @@ export type TotalCalendarInput = {
   quotes: readonly MemberCalendarQuote[];
   fx: readonly MemberCalendarFx[];
   now?: Date;
+  snapshotDates?: readonly string[];
   downsideRules?: readonly StockLotDownsideRule[];
 };
 
@@ -129,7 +130,7 @@ export function buildStockTotalCalendar(input: TotalCalendarInput): TotalCalenda
     remainingQuantity: invalidTrade.has(lot.id) ? -1 : lot.initialQuantity - (soldById.get(lot.id) ?? 0),
   }));
 
-  return buildMemberStockCalendar({ participations, closures, quotes: input.quotes, fx: input.fx, now: input.now, downsideRules: input.downsideRules })
+  return buildMemberStockCalendar({ participations, closures, quotes: input.quotes, fx: input.fx, now: input.now, downsideRules: input.downsideRules, snapshotDates: input.snapshotDates })
     .map(row => ({
       ...row,
       scope: 'tag-total' as const,

@@ -6,6 +6,7 @@ import { valueStockLotDownside, countedStockLotPrice, selectStockLotDownsideRule
   type StockLotDownsideRule, type StockLotDownsideAudit, type StockLotDownsideMemberEpoch } from '../../shared/stock-lot-downside';
 
 const EPSILON = 1e-8;
+const nyCloseFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 export type MemberCalendarParticipation = {
   id: number; symbol: string; startDate: string; pauseDate?: string | null;
   /** Physical opening exchange date from actual trade time; null is unknown, never registration time. */
@@ -68,7 +69,7 @@ export function isTrustedMemberCalendarClose(quote: MemberCalendarQuote): boolea
   if (!Number.isFinite(capture)) return false;
   if (quote.source === 'unified_close_yahoo' || quote.source === 'unified_close_tushare' || quote.source === 'unified_close_sina') {
     if (market === 'A') return capture >= Date.parse(`${quote.priceDate}T15:00:00+08:00`);
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(capture));
+    const parts = nyCloseFormatter.formatToParts(new Date(capture));
     const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
     return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}` >= `${quote.priceDate}T16:00`;
   }
@@ -82,6 +83,8 @@ export function buildMemberStockCalendar(input: {
   participations: readonly MemberCalendarParticipation[]; closures: readonly MemberCalendarClosure[];
   quotes: readonly MemberCalendarQuote[]; fx: readonly MemberCalendarFx[];
   candidateDates?: readonly string[]; now?: Date;
+  /** Strict requested A dates, plus their immediate prior session for daily differences. */
+  snapshotDates?: readonly string[];
   downsideRules?: readonly StockLotDownsideRule[];
   downsideMemberEpochs?: readonly StockLotDownsideMemberEpoch[];
 }): MemberCalendarSnapshot[] {
@@ -92,10 +95,19 @@ export function buildMemberStockCalendar(input: {
   const downsideRules = resolveStockLotDownsideHistoricalRules({ rules: input.downsideRules ?? [], now,
     lots: input.participations.filter(p => p.openedAt && p.physicalUnitCost !== undefined).map(p => ({
       lotId: p.lotId ?? p.id, symbol: p.symbol, openedAt: p.openedAt!, unitCost: p.physicalUnitCost! })), quotes: historicalQuotes });
+  const entryProofs = new Map<string, ReturnType<typeof stockLotDownsideHistoricalEntryProof>>();
+  const priceDates = new Map<string, string>();
+  const priceAt = (symbol: string, date: string) => {
+    const key = `${symbol}:${date}`;
+    if (!priceDates.has(key)) priceDates.set(key, stockLotDownsidePriceAsOf(symbol, date));
+    return priceDates.get(key)!;
+  };
   const memberOffset = (item: MemberCalendarParticipation, asOf: string) => {
     if (!item.assignedAt) return undefined;
     const entryAt = stockLotDownsideMemberEntryAt(item.assignedAt, item.startDate);
-    const proof = stockLotDownsideHistoricalEntryProof(item.symbol, entryAt, historicalQuotes, now);
+    const proofKey = `${item.symbol}:${entryAt}`;
+    if (!entryProofs.has(proofKey)) entryProofs.set(proofKey, stockLotDownsideHistoricalEntryProof(item.symbol, entryAt, historicalQuotes, now));
+    const proof = entryProofs.get(proofKey);
     const openingProof = item.openedAt && Date.parse(item.openedAt) === Date.parse(entryAt);
     return stockLotDownsideMemberOffset({ lotId: item.lotId ?? item.id, participationId: item.id,
       assignedAt: item.assignedAt, startDate: item.startDate, rules: downsideRules,
@@ -104,7 +116,7 @@ export function buildMemberStockCalendar(input: {
       entryQuoteAsOf: item.entryQuoteAsOf ?? (openingProof ? item.openedAt : proof?.quoteAsOf) });
   };
   const countedClosurePrice = (item: MemberCalendarParticipation, row: MemberCalendarClosure): number | null => {
-    const saleAt = row.actualAt ?? stockLotDownsidePriceAsOf(item.symbol, row.closeDate);
+    const saleAt = row.actualAt ?? priceAt(item.symbol, row.closeDate);
     const active = selectStockLotDownsideRule(downsideRules, item.lotId ?? item.id, saleAt);
     if (!active?.startDate) return row.countedSalePrice === undefined ? row.salePrice : row.countedSalePrice;
     const global = countedStockLotPrice(row.rawExecutionPrice ?? row.salePrice, active);
@@ -117,12 +129,15 @@ export function buildMemberStockCalendar(input: {
   }
   for (const list of Array.from(quotesBySymbol.values())) list.sort((a, b) => a.priceDate.localeCompare(b.priceDate) || a.capturedAt.localeCompare(b.capturedAt));
   const fxByDate = new Map(input.fx.map(row => [row.snapshotDate, row]));
-  const candidates = new Set([...(input.candidateDates ?? []), ...input.quotes.map(row => row.priceDate), ...input.fx.map(row => row.snapshotDate),
+  const requestedDates = input.snapshotDates ? new Set(input.snapshotDates.filter(isStockSessionDate)) : null;
+  const candidates = requestedDates ? new Set(Array.from(requestedDates).flatMap(date => {
+    const previous = previousStockMarketSession(date, 'A'); return previous ? [previous, date] : [date];
+  })) : new Set([...(input.candidateDates ?? []), ...input.quotes.map(row => row.priceDate), ...input.fx.map(row => row.snapshotDate),
     ...input.participations.map(item => item.participationEffectiveDate ?? (item.historyStartDate === undefined ? item.startDate : item.historyStartDate))].filter(isStockSessionDate));
   // Include missing A sessions as pending, and map Friday's US proof to the next A day.
   const firstDate = Array.from(candidates).sort()[0];
   const today = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  if (firstDate) for (let date = firstDate; date <= today; date = shiftStockSessionDate(date, 1)) candidates.add(date);
+  if (firstDate && !requestedDates) for (let date = firstDate; date <= today; date = shiftStockSessionDate(date, 1)) candidates.add(date);
   const closuresById = new Map<number, MemberCalendarClosure[]>();
   for (const closure of input.closures) {
     const list = closuresById.get(closure.participationId) ?? [];
@@ -200,10 +215,10 @@ export function buildMemberStockCalendar(input: {
       const expected = isStockMarketSession(asOf, market) ? asOf : previousStockMarketSession(asOf, market);
       const quote = (quotesBySymbol.get(item.symbol) ?? []).filter(row => row.priceDate === expected).at(-1);
       if (!quote) { missingSymbols.add(item.symbol); continue; }
-      const priceAt = stockLotDownsidePriceAsOf(item.symbol, quote.priceDate);
-      const offset = memberOffset(item, priceAt);
+      const closeAt = priceAt(item.symbol, quote.priceDate);
+      const offset = memberOffset(item, closeAt);
       const value = valueStockLotDownside({ lotId: item.lotId ?? item.id, quantity, entryPrice: item.entryPrice,
-        rawPrice: quote.price, rules: downsideRules, asOf: priceAt, direction: 'counterparty', entryAt: item.entryAt, entryCountedOffset: offset });
+        rawPrice: quote.price, rules: downsideRules, asOf: closeAt, direction: 'counterparty', entryAt: item.entryAt, entryCountedOffset: offset });
       if (value.countedMarketValue === null) { invalidHistory = true; continue; }
       nativeMarket[currency] += value.countedMarketValue!;
       marketValue += value.countedMarketValue! * multiplier;
@@ -247,7 +262,7 @@ export function buildMemberStockCalendar(input: {
       ...(downsideRuleAudit.length ? { downsideRuleAudit } : {}),
     });
   }
-  return snapshots;
+  return requestedDates ? snapshots.filter(row => requestedDates.has(row.snapshotDate)) : snapshots;
 }
 
 /** Overview-only mapping. Portfolio/funds APIs retain their existing live summary untouched. */

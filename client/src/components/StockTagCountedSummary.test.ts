@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { stockTagCountedHistoricalPnl, stockTagCountedLotValues, stockTagCountedValue, stockTagServerAggregate } from './StockTagCountedSummary';
+import { stockTagCountedHistoricalPnl, stockTagCountedLotValues, stockTagCountedMemberFloatingPnl, stockTagCountedValue, stockTagServerAggregate } from './StockTagCountedSummary';
 
 const source = readFileSync(new URL('../pages/StockTagPortfolio.tsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('StockTagPortfolio.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -22,7 +22,7 @@ function holdings() {
     { symbol: 'AAPL', stockName: '苹果', nativeCurrency: 'USD', nativeUnitCost: 8, nativeMarketPrice: 9, marketPrice: 9, positionNumber: 2, lot: { id: 12, unitCost: 8 }, accountHolding: { quantity: 200, costValue: 1600, marketValue: 1800, countedMarketValue: 1680, floatingPnl: 200, countedFloatingPnl: 80, nativeMarketValue: 1800 }, myHolding: { quantity: 200, entryPrice: 8, marketValue: 1800, nativeMarketValue: 1800 } },
   ];
 }
-const base = () => ({ stockTagCountedLotValues, stockTagCountedValue, stockTagServerAggregate,
+const base = () => ({ stockTagCountedLotValues, stockTagCountedMemberFloatingPnl, stockTagCountedValue, stockTagServerAggregate,
   countedHistoricalPnlCny: (lot: any, field: 'realizedPnl' | 'accountNetProfit') => stockTagCountedHistoricalPnl(lot, field, 'USD', lot[field]),
   useCountedSummary: true, participantView: false, hasCrypto: false, tagHoldingLots: holdings(),
   summary: { costValue: 2400, marketValue: 2500, floatingPnl: 100, totalPnl: 150 },
@@ -90,5 +90,30 @@ describe('R1汇总采用计入口径，逐笔仍展示真实价格和浮盈', ()
   it('账户总体收益优先服务端totalPnl，日结优先已按计入口径计算dailyChange', () => {
     expect(evaluate('accountTotalPnl', { ...base(), displayedTopPnl: 100, accountRealizedPnl: 50, fallbackAccountTotalPnl: 150 })).toBe(150);
     expect(evaluate('dailyPnlFromSnapshots', { ...base(), summary: { dailyChange: 0, latestSnapshot: { totalPnl: 300 }, priorSnapshot: { totalPnl: 200 } } })).toBe(0);
+  });
+  it('旧本人接口缺逐笔盈亏字段，进行中红色汇总使用该本人数量和真实价，不误显示全部未知', () => {
+    const scope = { ...base(), participantView: true, visibleMemberLots: [
+      { id: 11, quantity: 100, entryPrice: 8 }, { id: 12, quantity: 200, entryPrice: 8 },
+    ] };
+    const summary = evaluate('memberHoldingSummary', scope);
+    expect(summary.details.map((row: any) => row.countedFloatingPnl)).toEqual([-100, -200]);
+    const rows = evaluate('memberStockProfitRows', { ...scope, memberHoldingSummary: summary, memberRealizedLots: [] });
+    expect(rows.map((row: any) => row.pnl)).toEqual([-100, -200]);
+  });
+  it('已给计入0或pending的新版接口绝不回退真实盈亏，原币跨币转换仍由调用方一次处理', () => {
+    expect(stockTagCountedMemberFloatingPnl({ countedFloatingPnl: 0, floatingPnl: 100 }, 9)).toBe(0);
+    expect(stockTagCountedMemberFloatingPnl({ countedFloatingPnl: null, floatingPnl: 100, quantity: 100, entryPrice: 8 }, 9)).toBeNull();
+    expect(stockTagCountedMemberFloatingPnl({ floatingPnl: null, quantity: 100, entryPrice: 8 }, 9)).toBeNull();
+    expect(stockTagCountedMemberFloatingPnl({ quantity: 3, entryPrice: 10 }, 8)).toBe(6);
+    expect(stockTagCountedMemberFloatingPnl({ quantity: 999, remainingQuantity: 2, entryPrice: 10 }, 8)).toBe(4);
+  });
+  it('缺报价、本人数量或真实入场价仍未知，已结束收益字段不被兼容函数修改', () => {
+    expect(stockTagCountedMemberFloatingPnl({ quantity: 3, entryPrice: 10 }, null)).toBeNull();
+    expect(stockTagCountedMemberFloatingPnl({ entryPrice: 10 }, 8)).toBeNull();
+    expect(stockTagCountedMemberFloatingPnl({ quantity: 3, entryPrice: null, unitCost: 10 }, 8)).toBeNull();
+    const row = { quantity: 2, entryPrice: 10, realizedPnl: 55 }; const before = { ...row };
+    expect(stockTagCountedMemberFloatingPnl(row, 8)).toBe(4); expect(row).toEqual(before);
+    const scope = { ...base(), participantView: true, visibleMemberLots: [] };
+    expect(evaluate('memberHoldingSummary', scope).details.map((row: any) => row.countedFloatingPnl)).toEqual([null, null]);
   });
 });
