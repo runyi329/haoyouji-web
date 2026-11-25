@@ -38,6 +38,29 @@ function fixture(capture = true) {
   return { categoryId, originalPayloads: payloads, history, now: new Date('2026-11-25T22:00:00+08:00') };
 }
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+function latePhysicalFixture(lateSymbol = 'CRYPTO:SUI-USDT', capture = false) {
+  const f = fixture(capture), payloads: CryptoPortfolioDailyPayload[] = [];
+  const current = day('2026-11-25', 150);
+  const lateLot = { id: 36, symbol: lateSymbol, initialQuantity: 2, unitCost: 200, openingFee: null,
+    openedDate: '2026-11-25', actualTradedAt: '2026-11-24T23:38:00+08:00', registeredAt: '2026-11-24T23:39:44+08:00' };
+  const otherMember = { ...current.participations[0], id: 12, userId: 29, allocatedQuantity: 0.5, remainingQuantity: 0.5 };
+  const lateMember = { ...current.participations[0], id: 36, lotId: 36, allocatedQuantity: 0.25, remainingQuantity: 0.25,
+    startDate: '2026-11-24', assignedAt: '2026-11-24T23:42:44+08:00', updatedAt: '2026-11-24T23:42:44+08:00' };
+  const lateObserver = { ...current.observations![0], lotId: 36, startDate: '2026-11-24',
+    assignedAt: lateMember.assignedAt, updatedAt: lateMember.updatedAt };
+  for (const old of f.originalPayloads) {
+    const d = day(old.snapshotDate, old.quotes[0].price);
+    payloads.push(buildCryptoPortfolioDailyPayload({ ...d, captureHistoryEvidence: capture,
+      lots: [...d.lots, lateLot], participations: [...d.participations, otherMember, lateMember],
+      observations: [...d.observations!, lateObserver],
+      quotes: old.snapshotDate === '2026-11-25' ? [...d.quotes, { ...d.quotes[0], symbol: lateSymbol }] : d.quotes,
+      previous: payloads.at(-1) }));
+  }
+  f.originalPayloads = payloads;
+  f.history = { ...f.history, lots: [...current.lots, lateLot],
+    participations: [...current.participations, otherMember, lateMember], observations: [...current.observations!, lateObserver] };
+  return f;
+}
 
 describe('crypto mixed retrodate derived revaluation', () => {
   it('earlier raw dates identical; start date changes totals/members/observations, raw JSON and hash immutable', () => {
@@ -137,6 +160,102 @@ describe('crypto mixed retrodate derived revaluation', () => {
     const f = fixture(); f.history.participations = f.history.participations.map(p => ({ ...p,
       entryPrice: 888, allocatedQuantity: 99, remainingQuantity: 99, updatedAt: '2026-11-25T18:00:00+08:00' }));
     expect(revalueCryptoPortfolioDailyPayloads(f).payloads[2].members['28'].nativePnl.USDT).toBe(36);
+  });
+  it.each(['CRYPTO:SUI-USDT', 'CRYPTO:SOL-USDT'])('late %s start Nov24/physical Nov25 never poisons Nov24, and Nov25 remains effective', lateSymbol => {
+    for (const capture of [false, true]) {
+      const f = latePhysicalFixture(lateSymbol, capture), before = hash(f);
+      const expected = revalueCryptoPortfolioDailyPayloads(fixture(capture));
+      const r = revalueCryptoPortfolioDailyPayloads(f);
+      for (const i of [2, 3]) {
+        expect(r.payloads[i].members['28']).toEqual(expected.payloads[i].members['28']);
+        expect(r.payloads[i].observations['99']).toEqual(expected.payloads[i].observations['99']);
+        expect(r.payloads[i].members['29']).toMatchObject({ ready: true, positionCount: 1 });
+        expect(r.issues.some(issue => issue.snapshotDate === f.originalPayloads[i].snapshotDate && issue.scope === 'member')).toBe(false);
+      }
+      expect(r.payloads[4].members['28']).toMatchObject({ ready: true, dailyPnlReady: true, positionCount: 2 });
+      expect(r.payloads[4].members['28'].nativePnl.USDT).toBe(expected.payloads[4].members['28'].nativePnl.USDT! + (200 - 150) * 0.25);
+      expect(r.payloads[4].observations['99']).toMatchObject({ ready: true, positionCount: 2 });
+      expect(r.payloads[4].members['29']).toMatchObject({ ready: true, positionCount: 1 });
+      expect(hash(f)).toBe(before);
+    }
+  });
+  it.each(['physical US cutoff', 'weekend member business day'])('%s uses builder anchors, not the Beijing snapshot date', mode => {
+    const f = fixture(false), d = day('2026-11-22', 180);
+    const stock = { id: 2, symbol: 'AAPL', initialQuantity: 1, unitCost: 200, openingFee: null,
+      openedDate: mode === 'physical US cutoff' ? '2026-11-20' : '2026-11-19' };
+    const late = { ...d.participations[0], id: 21, lotId: 2, startDate: '2026-11-22',
+      assignedAt: '2026-11-22T23:00:00+08:00', updatedAt: '2026-11-22T23:00:00+08:00' };
+    const us = cryptoPortfolioStockAnchor(d.snapshotDate)!.US, a = cryptoPortfolioStockAnchor(d.snapshotDate)!.A;
+    const input = { ...d, captureHistoryEvidence: false, lots: [...d.lots, stock], participations: [...d.participations, late],
+      usdFx: { snapshotDate: a, usdCnyRate: 7, pair: 'USD/CNY' as const, source: 'sina_usdcny',
+        asOf: `${a}T15:04:00+08:00`, lockedAt: `${a}T15:05:00+08:00` },
+      quotes: [...d.quotes, { symbol: 'AAPL', price: 100, currency: 'USD' as const, priceDate: us,
+        source: 'unified_close_yahoo', updatedAt: new Date(Date.parse(stockLotDownsidePriceAsOf('AAPL', us)) + 3000).toISOString() }] };
+    const original = buildCryptoPortfolioDailyPayload(input);
+    const r = revalueCryptoPortfolioDailyPayloads({ ...f, originalPayloads: [f.originalPayloads[0], original], history: {
+      ...f.history, lots: input.lots, participations: input.participations, downsideRules: [rule('2026-11-22')] } });
+    expect(r.payloads[1].members['28']).toMatchObject({ ready: true, positionCount: 1 });
+    expect(r.payloads[1].members['28'].quoteAsOf.map(q => q.symbol)).toEqual([symbol]);
+  });
+  it.each([false, true])('genuine past member mutation stays pending even alongside a future physical row (moved start=%s)', movedStart => {
+    const f = latePhysicalFixture(), expected = revalueCryptoPortfolioDailyPayloads(f);
+    f.history.participations = f.history.participations.map(p => p.id === 11 ? { ...p,
+      ...(movedStart ? { startDate: '2026-11-25' } : { allocatedQuantity: 10, remainingQuantity: 10 }),
+      updatedAt: '2026-11-25T18:00:00+08:00' } : p);
+    const r = revalueCryptoPortfolioDailyPayloads(f);
+    expect(r.payloads[3].members['28']).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'unverifiable_allocation_history' });
+    expect(r.payloads[3].members['29']).toEqual(expected.payloads[3].members['29']);
+    expect(r.payloads[3].total).toEqual(expected.payloads[3].total);
+    expect(r.payloads[3].observations['99']).toEqual(expected.payloads[3].observations['99']);
+  });
+  it.each(['unknown lot', 'unknown effective day'])('%s cannot establish future non-membership and other members remain isolated', unknown => {
+    const f = latePhysicalFixture(), expected = revalueCryptoPortfolioDailyPayloads(f);
+    if (unknown === 'unknown lot') f.history.participations = f.history.participations.map(p => p.id === 36 ? { ...p, lotId: 999 } : p);
+    else f.history.lots = f.history.lots.map(l => l.id === 36 ? { ...l, openedDate: null } : l);
+    const r = revalueCryptoPortfolioDailyPayloads(f);
+    expect(r.payloads[3].members['28']).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'unverifiable_allocation_history' });
+    if (unknown === 'unknown lot') expect(r.payloads[3].members['29']).toEqual(expected.payloads[3].members['29']);
+    else expect(r.payloads[3].total.ready).toBe(false); // Invalid physical history is never trusted either.
+  });
+  it('candidate publication proof only trusts its verified scopes; unverified history still reconciles economics', () => {
+    const f = latePhysicalFixture(), candidate = { ...f.history,
+      lots: f.history.lots.map(l => l.id === 1 ? { ...l, unitCost: 210 } : l),
+      participations: f.history.participations.map(p => ({ ...p, entryPrice: 210 })),
+      observations: f.history.observations.map(o => ({ ...o, entryPrice: 210 })) };
+    const r = revalueCryptoPortfolioDailyPayloads({ ...f, publicationHistoryByDate: { '2026-11-24': {
+      history: candidate, verifiedTotal: false, verifiedMemberIds: [28], verifiedObservationIds: [] } } });
+    expect(r.payloads[3].members['28'].ready).toBe(true);
+    expect(r.payloads[3].members['29']).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'unverifiable_allocation_history' });
+    expect(r.payloads[3].observations['99']).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'unverifiable_observation_history' });
+    expect(r.payloads[3].total).toMatchObject({ ready: false, totalPnl: null, dailyPnlReason: 'unverifiable_trade_history' });
+    const totalAndObserver = revalueCryptoPortfolioDailyPayloads({ ...f, publicationHistoryByDate: { '2026-11-24': {
+      history: candidate, verifiedTotal: true, verifiedMemberIds: [], verifiedObservationIds: [99] } } }).payloads[3];
+    expect(totalAndObserver.total.ready).toBe(true); expect(totalAndObserver.observations['99'].ready).toBe(true);
+    expect(totalAndObserver.members['28'].ready).toBe(false); expect(totalAndObserver.members['29'].ready).toBe(false);
+  });
+  it('unverified candidate scopes can still pass original economics, while verified scopes cannot bypass mutation cutoff', () => {
+    const f = latePhysicalFixture();
+    const proof = { history: f.history, verifiedTotal: false, verifiedMemberIds: [] as number[], verifiedObservationIds: [] as number[] };
+    expect(revalueCryptoPortfolioDailyPayloads({ ...f, publicationHistoryByDate: { '2026-11-24': proof } }).payloads[3].members['28'].ready).toBe(true);
+    proof.verifiedMemberIds = [28]; proof.verifiedObservationIds = [99];
+    proof.history = { ...f.history,
+      participations: f.history.participations.map(p => p.id === 11 ? { ...p, updatedAt: '2026-11-25T18:00:00+08:00' } : p),
+      observations: f.history.observations.map(o => o.lotId === 1 ? { ...o, updatedAt: '2026-11-25T18:00:00+08:00' } : o) };
+    const r = revalueCryptoPortfolioDailyPayloads({ ...f, publicationHistoryByDate: { '2026-11-24': proof } }).payloads[3];
+    expect(r.members['28']).toMatchObject({ ready: false, dailyPnlReason: 'unverifiable_allocation_history' });
+    expect(r.observations['99']).toMatchObject({ ready: false, dailyPnlReason: 'unverifiable_observation_history' });
+    expect(r.members['29'].ready).toBe(true);
+  });
+  it('history source precedence remains explicit legacy > captured publication > recovered candidate > mutable current', () => {
+    const f = fixture(), expected = revalueCryptoPortfolioDailyPayloads(f).payloads[3];
+    const invalidCurrent = { ...f.history, participations: f.history.participations.map(p => ({ ...p, entryPrice: 888 })) };
+    const proof = { history: invalidCurrent, verifiedTotal: true, verifiedMemberIds: [28], verifiedObservationIds: [99] };
+    const captured = revalueCryptoPortfolioDailyPayloads({ ...f, history: invalidCurrent, publicationHistoryByDate: { '2026-11-24': proof } });
+    expect(captured.payloads[3].members['28']).toEqual(expected.members['28']);
+    const explicit = { ...f.history, participations: f.history.participations.map(p => ({ ...p, entryPrice: 210 })) };
+    const legacy = revalueCryptoPortfolioDailyPayloads({ ...f, historyByDate: { '2026-11-24': explicit }, publicationHistoryByDate: { '2026-11-24': proof } });
+    expect(legacy.payloads[3].members['28'].ready).toBe(true);
+    expect(legacy.payloads[3].members['28'].nativePnl.USDT).not.toBe(expected.members['28'].nativePnl.USDT);
   });
   it('start before activation requires derived stock baseline; missing baseline does not doublecount old daily', () => {
     const f = fixture(); f.history.downsideRules = [rule('2026-11-20')];

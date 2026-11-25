@@ -18,6 +18,7 @@ import { buildCryptoPortfolioDailyPayload, revalueCryptoPortfolioDailyPayloadsAs
 import { readStockLotDownsideRules, readStockLotDownsideSales, readStockLotDownsideMemberEpochs } from './stock-lot-downside-rules';
 import { stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, stockLotDownsidePriceAsOf, type StockLotDownsideRule } from '../shared/stock-lot-downside';
 import { StockPortfolioReadCache } from './stock-portfolio-read-cache';
+import { buildLegacyCryptoPublicationHistory, type CryptoPublicationHistoryProofs } from './shared/crypto-portfolio-publication-history';
 
 const LEDGER_ID = 37;
 const POLICY = CRYPTO_PORTFOLIO_POLICY_VERSION;
@@ -389,6 +390,33 @@ export async function publishCryptoPortfolioSnapshots(options: { snapshotDate?: 
 
 const derivedCalendarCaches = new StockPortfolioReadCache<CryptoPortfolioDailyPayload[]>();
 export function invalidateCryptoPortfolioDerivedReadCaches(): void { derivedCalendarCaches.clear(); }
+/** Independent registration evidence for legacy publications; never backfills stored payloads. */
+async function readLegacyPublicationProofs(conn: any, categoryId: number): Promise<CryptoPublicationHistoryProofs> {
+  const scope = [LEDGER_ID, categoryId];
+  const [sales] = await conn.execute(`SELECT a.event_id,a.lot_id,
+    DATE_FORMAT(e.server_registered_at,'%Y-%m-%d %H:%i:%s') AS registered_at,
+    DATE_FORMAT(a.created_at,'%Y-%m-%d %H:%i:%s') AS allocated_at
+    FROM ledger_stock_event_lot_allocations a
+    INNER JOIN ledger_stock_events e ON e.id=a.event_id AND e.status='active' AND e.event_type IN ('reduce','sell')
+    INNER JOIN ledger_stock_lots l ON l.id=a.lot_id AND l.ledger_id=e.ledger_id AND l.category_id=e.category_id
+    INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id AND opening.status='active'
+    WHERE e.ledger_id=? AND e.category_id=?`, scope);
+  const [closures] = await conn.execute(`SELECT c.participation_id,c.sell_event_id,
+    DATE_FORMAT(e.server_registered_at,'%Y-%m-%d %H:%i:%s') AS registered_at,
+    DATE_FORMAT(c.closed_at,'%Y-%m-%d %H:%i:%s') AS recorded_at
+    FROM ledger_stock_participation_closures c
+    INNER JOIN ledger_stock_lot_participations p ON p.id=c.participation_id
+    INNER JOIN ledger_stock_events e ON e.id=c.sell_event_id AND e.ledger_id=p.ledger_id AND e.category_id=p.category_id AND e.status='active'
+    INNER JOIN ledger_stock_lots l ON l.id=p.lot_id AND l.ledger_id=p.ledger_id AND l.category_id=p.category_id
+    INNER JOIN ledger_stock_events opening ON opening.id=l.opened_event_id AND opening.status='active'
+    WHERE p.ledger_id=? AND p.category_id=?`, scope);
+  return {
+    sales: sales.map((row: any) => ({ eventId: Number(row.event_id), lotId: Number(row.lot_id),
+      registeredAt: wallIso(row.registered_at), allocatedAt: wallIso(row.allocated_at) })),
+    closures: closures.map((row: any) => ({ eventId: Number(row.sell_event_id), participationId: Number(row.participation_id),
+      registeredAt: wallIso(row.registered_at), recordedAt: wallIso(row.recorded_at) })),
+  };
+}
 async function readRevaluedStockBaseline(conn: any, categoryId: number, activationDate: string,
   payloads: readonly CryptoPortfolioDailyPayload[], now: Date) {
   const date = previousStockMarketSession(activationDate, 'A'); if (!date) return null;
@@ -414,8 +442,11 @@ async function readDerivedPayloads(conn: any, categoryId: number, activationDate
     const historicalQuotes = await savedStockProofs(conn, categoryId);
     const baseline = rules.some(r => r.startDate && r.startDate < activationDate)
       ? await readRevaluedStockBaseline(conn, categoryId, activationDate, originals, now) : null;
+    const publicationHistoryByDate = originals.some(p => !p.historyEvidence)
+      ? buildLegacyCryptoPublicationHistory({ originalPayloads: originals, history: { ...history, historicalQuotes },
+        proofs: await readLegacyPublicationProofs(conn, categoryId), now }) : undefined;
     return (await revalueCryptoPortfolioDailyPayloadsAsync({ categoryId, originalPayloads: originals,
-      history: { ...history, historicalQuotes }, baseline, now })).payloads;
+      history: { ...history, historicalQuotes }, publicationHistoryByDate, baseline, now })).payloads;
   };
   if (!retro) return load(); // Exact legacy/no-startDate path has no new history/economic queries.
   const fingerprint = cryptoPortfolioDownsideFingerprint(categoryId, { downsideRules: rules });

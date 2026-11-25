@@ -462,10 +462,17 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
 export type CryptoPortfolioRevaluationIssue = {
   snapshotDate: string; scope: 'tag-total' | 'member' | 'observation' | 'baseline'; userId?: number; reason: string;
 };
+/** Recovered publication history: each scope is independently verified against its saved economics. */
+export type CryptoCalendarPublicationHistory = {
+  history: CryptoCalendarHistory; verifiedTotal: boolean;
+  verifiedMemberIds: readonly number[]; verifiedObservationIds: readonly number[];
+};
 export type CryptoPortfolioRevaluationInput = {
   categoryId: number; originalPayloads: readonly CryptoPortfolioDailyPayload[]; history: CryptoCalendarHistory;
   /** Trusted publication-time history supplied by an offline evidence extractor, never today's edited shares. */
   historyByDate?: Readonly<Record<string, CryptoCalendarHistory>>;
+  /** Strict recovered proof, not blanket trust for every member in the candidate history. */
+  publicationHistoryByDate?: Readonly<Record<string, CryptoCalendarPublicationHistory>>;
   /** Must already reflect the selected revision when its start is before crypto activation. */
   baseline?: CryptoCalendarInput['baseline']; now?: Date;
 };
@@ -541,8 +548,12 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       payloads.push(original); continue;
     }
     const date = original.snapshotDate;
-    const evidence = input.historyByDate?.[date] ?? original.historyEvidence ?? input.history;
+    const publicationProof = input.publicationHistoryByDate?.[date];
+    const evidence = input.historyByDate?.[date] ?? original.historyEvidence ?? publicationProof?.history ?? input.history;
     const trustedPublicationHistory = !!input.historyByDate?.[date] || original.historyEvidence?.version === 1;
+    const trustedTotalHistory = trustedPublicationHistory || publicationProof?.verifiedTotal === true;
+    const trustedMemberHistory = (userId: number) => trustedPublicationHistory || publicationProof?.verifiedMemberIds.includes(userId) === true;
+    const trustedObservationHistory = (userId: number) => trustedPublicationHistory || publicationProof?.verifiedObservationIds.includes(userId) === true;
     const common = { categoryId: input.categoryId, snapshotDate: date, activationDate: original.activationDate,
       persistedActivation: { ledgerId: 37 as const, categoryId: input.categoryId,
         policyVersion: original.policyVersion, activationDate: original.activationDate, snapshotDate: date },
@@ -559,14 +570,28 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       buildCryptoPortfolioDailyPayload({ ...common, participations: ps, observations: os,
         ...(verify ? { downsideRules: beforePublicationRules, previous: null, baseline: null } : {}) });
     const cutoff = cryptoPortfolioCutoffAt(date).getTime();
+    const dates = cryptoPortfolioStockAnchor(date)!;
+    const lotsById = new Map(evidence.lots.map(lot => [lot.id, lot]));
+    const outsideHistoricalDay = (lotId: number, startDate: string | null, assigned: number, updated: number) => {
+      const lot = lotsById.get(lotId), instrument = parsePortfolioInstrument(lot?.symbol);
+      // Match the builder's physical effective-day skip before its mutable-row guard.
+      // Unknown instruments/dates cannot establish historical non-membership.
+      if (!lot || !instrument || !lot.openedDate || !isStockSessionDate(lot.openedDate)) return false;
+      if (lot.openedDate > dates[instrument.market]) return true;
+      const start = startDate ?? lot.openedDate;
+      const businessDate = instrument.market === 'CRYPTO' ? date : dates.A;
+      // Only genuinely newly assigned future rows are excluded. Moving an old
+      // member's start forward must still fail the publication timestamp guard.
+      return isStockSessionDate(start) && start > businessDate && assigned >= cutoff && updated >= assigned;
+    };
     const badMemberIds = new Set(evidence.participations.filter(p => {
       const assigned = Date.parse(p.assignedAt ?? ''), updated = Date.parse(p.updatedAt ?? '');
-      const trulyFuture = !!p.startDate && p.startDate > date && assigned >= cutoff && updated >= assigned;
+      const trulyFuture = outsideHistoricalDay(p.lotId, p.startDate, assigned, updated);
       return !trulyFuture && (!finite(assigned) || !finite(updated) || assigned >= cutoff || updated >= cutoff);
     }).map(p => p.userId));
     const badObserverIds = new Set((evidence.observations ?? []).filter(o => {
       const assigned = Date.parse(o.assignedAt ?? ''), updated = Date.parse(o.updatedAt ?? '');
-      const trulyFuture = o.startDate > date && assigned >= cutoff && updated >= assigned;
+      const trulyFuture = outsideHistoricalDay(o.lotId, o.startDate, assigned, updated);
       return !trulyFuture && (!finite(assigned) || !finite(updated) || assigned >= cutoff || updated >= cutoff);
     }).map(o => o.userId));
     const validPs = evidence.participations.filter(p => !badMemberIds.has(p.userId));
@@ -600,7 +625,7 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
     };
     try {
       const total = (allDerived ?? build([], [])).total;
-      if (!trustedPublicationHistory && !sameEconomics((allVerified ?? build([], [], true)).total, original.total))
+      if (!trustedTotalHistory && !sameEconomics((allVerified ?? build([], [], true)).total, original.total))
         derived.total = { ...pending('tag-total', 'unverifiable_trade_history'), scope: 'tag-total' };
       else derived.total = { ...preserveActivationDelta(total, original.total), scope: 'tag-total' };
     } catch (e: any) { derived.total = { ...pending('tag-total', e?.message ?? 'unverifiable_trade_history'), scope: 'tag-total' }; }
@@ -609,7 +634,7 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       try {
         if (!ps.length || badMemberIds.has(Number(user))) throw new Error('unverifiable_allocation_history');
         const next = (allDerived ?? build(ps, [])).members[user];
-        if (!next || !trustedPublicationHistory && !sameEconomics((allVerified ?? build(ps, [], true)).members[user], original.members[user]))
+        if (!next || !trustedMemberHistory(Number(user)) && !sameEconomics((allVerified ?? build(ps, [], true)).members[user], original.members[user]))
           throw new Error('unverifiable_allocation_history');
         derived.members[user] = preserveActivationDelta(next, original.members[user]);
       } catch (e: any) { derived.members[user] = pending('member', e?.message ?? 'unverifiable_allocation_history', Number(user)); }
@@ -619,7 +644,7 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       try {
         if (!os.length || badObserverIds.has(Number(user))) throw new Error('unverifiable_observation_history');
         const next = (allDerived ?? build([], os)).observations[user];
-        if (!next || !trustedPublicationHistory && !sameEconomics((allVerified ?? build([], os, true)).observations[user], original.observations[user]))
+        if (!next || !trustedObservationHistory(Number(user)) && !sameEconomics((allVerified ?? build([], os, true)).observations[user], original.observations[user]))
           throw new Error('unverifiable_observation_history');
         derived.observations[user] = next;
       } catch (e: any) { derived.observations[user] = pending('observation', e?.message ?? 'unverifiable_observation_history', Number(user)); }
