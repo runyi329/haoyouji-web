@@ -1415,11 +1415,14 @@ export async function getStockTagPublicPortfolio(input: {
   return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, positions: publicPositions, history: [] as any[] };
 }
 
-/** Tag-wide calendar only. Keeps the personal overview and all funds APIs untouched. */
+/** Owner-only tag-wide calendar. Members use their existing personal overview points. */
 export async function getStockTagCalendar(input: {
   ledgerId: number; categoryId: number; userId: number; systemRole?: string; isViewingAs?: boolean;
 }) {
   const access = await assertStockPresentationReadAccess(input, false);
+  if (access.ledgerId === STOCK_LEDGER_ID && !access.canEdit) {
+    throw new Error("仅37号账本所有者可以查看标签总盘日历");
+  }
   if (!access.canEdit && !await isStockCalendarMemberEligible(access, input.userId)) {
     throw new Error("该股票标签尚未对您开放");
   }

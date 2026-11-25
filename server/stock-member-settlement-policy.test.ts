@@ -150,11 +150,12 @@ describe('member-specific settlement policy (real production functions, strictly
   it('member securities fallback cannot rewrite or replace tag-total pending / stored total amounts', async () => {
     const h = harness(); const before = JSON.stringify(h.total);
     const member = await h.subject.buildMemberStockPortfolio(301, scope.userId);
-    const total = await h.subject.getStockTagCalendar(scope);
+    await expect(h.subject.getStockTagCalendar(scope)).rejects.toThrow('仅37号账本所有者可以查看标签总盘日历');
+    const total = h.total;
     expect(member.settlementSummary.confirmedTotalPnl).toBe(200);
     expect(total).toBe(h.total); expect(total[0]).toMatchObject({ ready: false, totalPnl: null, scope: 'tag-total' });
     expect(total[1].totalPnl).toBe(777); expect(JSON.stringify(h.total)).toBe(before);
-    expect(h.readTotal).toHaveBeenCalledWith(301);
+    expect(h.readTotal).not.toHaveBeenCalled();
     expect(h.execute.mock.calls.every(([sql]) => /^\s*SELECT\b/i.test(sql))).toBe(true);
   });
 });

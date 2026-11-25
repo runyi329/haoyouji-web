@@ -678,8 +678,7 @@ export default function LedgerDetailAA({
   };
   // 股票标签没有“初始金额”。普通成员（以及创建者切换到成员观察视角）
   // 仅在至少获得一笔股票份额且到达该份额开始日期后，才会在首页和标签下拉中看到它。
-  // 以下权限仅控制个人概览/份额：除胡大叔本人外，均按获配批次核算，代看亦同。
-  // 标签日历和下方走势单独查询标签总盘，不使用此权限决定收益口径。
+  // 概览、日历及走势统一隔离：仅胡大叔本人看总盘，其余按个人获配批次核算。
   const canViewLedger37StockTotal = canManageLedger37 && !viewAsUserId;
   const stockParticipantView = ledgerId === 37 && !canViewLedger37StockTotal;
   const r1PresentationScope = ledgerId === 37;
@@ -744,11 +743,11 @@ export default function LedgerDetailAA({
   // 首页最早预加载位置：只等分类 + 当前成员 visible，不等个人收益概览遍历，
   // 也不等选中 R1/打开日历。服务端继续核验 eligible；无权预取静默失败不重试。
   const stockCalendarPrefetchCategoryIds = useMemo(() => {
-    if (ledgerId !== 37 || !initialBalancesData || r1ShowsAi || !r1PresentationQuery.data || r1PresentationQuery.isError) return [];
+    if (ledgerId !== 37 || !canViewLedger37StockTotal || !initialBalancesData || r1ShowsAi || !r1PresentationQuery.data || r1PresentationQuery.isError) return [];
     return allCategories.filter((category: any) => category.accountingMode === 'stock_portfolio'
       && readTagVisible(initialBalancesData.balances ?? {}, category.name))
       .map((category: any) => Number(category.id));
-  }, [ledgerId, allCategories, initialBalancesData, r1ShowsAi, r1PresentationQuery.data, r1PresentationQuery.isError]);
+  }, [ledgerId, canViewLedger37StockTotal, allCategories, initialBalancesData, r1ShowsAi, r1PresentationQuery.data, r1PresentationQuery.isError]);
   const stockCalendarIdentityKey = JSON.stringify([ledgerId, Number(user?.id ?? 0), marginTargetUserId, viewAsUserId]);
   const stockCalendarIdentityRef = useRef(stockCalendarIdentityKey);
   stockCalendarIdentityRef.current = stockCalendarIdentityKey;
@@ -861,10 +860,13 @@ export default function LedgerDetailAA({
   useEffect(() => {
     setCalendarMode(isSelectedStockPortfolio ? 'daily' : 'balance');
   }, [selectedTagId, isSelectedStockPortfolio]);
-  // 37号标签日历始终展示全部股票总盘；个人概览继续使用成员获配点。
+  // 仅真实owner看总盘；成员、普通admin和代看复用个人日结，不按当前占比估算历史。
   const selectedStockOverview = stockTagOverviewById.get(Number(selectedTagId));
-  const selectedStockCalendarScope = ledgerId === 37 ? 'total' : stockCalendarScope(
-    Boolean(selectedStockOverview), !stockParticipantView, true);
+  const selectedStockCalendarScope = ledgerId === 37
+    ? canViewLedger37StockTotal ? 'total' : stockCalendarScope(
+      Boolean(selectedStockOverview), false, stockTagOverviewQuery.data !== undefined)
+    : stockCalendarScope(Boolean(selectedStockOverview), !stockParticipantView, true);
+  const stockCalendarScopeLabel = selectedStockCalendarScope === 'total' ? '标签总盘' : '个人日结';
   const stockCalendarSnapshotsQuery = useQuery({
     ...stockCalendarOptionsFor(selectedTagId || 0),
     enabled: Boolean(isSelectedStockPortfolio && selectedStockCalendarScope === 'total' && selectedTagId
@@ -872,8 +874,8 @@ export default function LedgerDetailAA({
   });
   const stockCalendarPoints = useMemo(() => {
     if (!isSelectedStockPortfolio || !selectedTagId) return [];
-    // 总盘不受当前用户的获配开始日、暂停历史或结束日裁剪。
-    if (ledgerId === 37) return normalizeStockCalendarPoints(
+    // 仅总盘不受当前用户的获配开始日、暂停历史或结束日裁剪。
+    if (ledgerId === 37 && selectedStockCalendarScope === 'total') return normalizeStockCalendarPoints(
       (stockCalendarSnapshotsQuery.data || []) as any[], 'total', getPrevStockTradingDay);
     const selectedStockPauseHistory = readTagPauseHistory(
       initialBalancesData?.balances as Record<string, unknown> | undefined,
@@ -919,11 +921,13 @@ export default function LedgerDetailAA({
       void stockCalendarSnapshotsQuery.refetch();
     }
   }, [isSelectedStockPortfolio, selectedTagId, selectedStockCalendarScope, showStockPortfolio, stockCalendarSnapshotsQuery.refetch]);
-  const stockCalendarLoading = selectedStockCalendarScope === 'total' && stockCalendarSnapshotsQuery.isPending;
-  const stockCalendarFetching = selectedStockCalendarScope === 'member'
+  const stockCalendarLoading = selectedStockCalendarScope === 'loading'
+    ? stockTagOverviewQuery.isPending
+    : selectedStockCalendarScope === 'total' && stockCalendarSnapshotsQuery.isPending;
+  const stockCalendarFetching = selectedStockCalendarScope === 'member' || selectedStockCalendarScope === 'loading'
     ? stockTagOverviewQuery.isFetching : stockCalendarSnapshotsQuery.isFetching;
-  const stockCalendarError = ledgerId === 37 ? stockCalendarSnapshotsQuery.error
-    : stockTagOverviewQuery.error || (selectedStockCalendarScope === 'total' && stockCalendarSnapshotsQuery.error);
+  const stockCalendarError = selectedStockCalendarScope === 'total'
+    ? stockCalendarSnapshotsQuery.error : stockTagOverviewQuery.error;
   const refreshLedgerView = () => {
     void trpcUtils.invalidate();
     void refetchTransactions();
@@ -1966,7 +1970,7 @@ export default function LedgerDetailAA({
 
   const chartData = useMemo(() => {
     const { year, month } = calendarDate;
-    // 股票日历、快览及下方走势复用同一组盘尾点（37号为标签总盘），
+    // 日历、快览和走势复用同scope盘尾点（owner总盘，其余个人获配），
     // 提前返回，不套普通标签或当前用户的开始/暂停/结束日期。
     if (isSelectedStockPortfolio) {
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -2179,7 +2183,7 @@ export default function LedgerDetailAA({
         return value === null ? null : formatMoney(Math.abs(value), value > 0 ? "+" : value < 0 ? "-" : "");
       }
       if (!point) return null;
-      // “值”展示盘尾持仓市值：37号所有成员均看该标签总盘，不是个人获配盈亏。
+      // “值”来自同scope盘尾持仓市值，个人scope仅含实际获配份额。
       if (calendarMode === "balance") {
         return point.marketValue === null ? null : formatMoney(point.marketValue);
       }
@@ -2918,7 +2922,7 @@ export default function LedgerDetailAA({
           </div>
 
           {isSelectedStockPortfolio && <div className="mb-2 text-[10px]" style={{ color: '#9E9E9E' }}>
-            {ledgerId === 37 ? '标签总盘' : selectedStockCalendarScope === 'member' ? '个人日结' : selectedStockCalendarScope === 'total' ? '总盘日结' : '日结'}
+            {ledgerId === 37 ? stockCalendarScopeLabel : selectedStockCalendarScope === 'member' ? '个人日结' : selectedStockCalendarScope === 'total' ? '总盘日结' : '日结'}
             {' · 15:05更新 · 当天A股＋隔夜美股'}
             {stockCalendarLoading ? ' · 加载中' : stockCalendarFetching ? ' · 更新中' : stockCalendarError ? ' · 加载失败，请刷新' : ''}
           </div>}
@@ -3241,7 +3245,7 @@ export default function LedgerDetailAA({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>{isSelectedStockPortfolio
-                ? calendarMode === 'balance' ? '标签总盘市值走势' : '标签总盘盈亏走势' : '余额走势'}</span>
+                ? calendarMode === 'balance' ? `${stockCalendarScopeLabel}市值走势` : `${stockCalendarScopeLabel}盈亏走势` : '余额走势'}</span>
               {selectedTag && (
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
                   {selectedTag.name}
@@ -3260,7 +3264,7 @@ export default function LedgerDetailAA({
             // 日盈亏模式：当月所有交易日的实际回报合计（已剔除本金/提现资金流）。
             const { year, month } = calendarDate;
             const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-            // 股票标签直接汇总日历盘尾点，37号为标签全部股票总盈亏。
+            // 与日历同scope：成员仅汇总个人获配日结，owner汇总标签总盘。
             const totalPnl = isSelectedStockPortfolio
               ? sumKnownStockDailyPnl(stockCalendarPoints.filter((point) => point.date.startsWith(monthPrefix)))
               : Array.from(selectedDailyReturnMap.entries())
@@ -6130,7 +6134,7 @@ export default function LedgerDetailAA({
         const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
         const primaryValue = detail.scope === 'summary' ? summaryTotal : dailyReturn;
         const primaryLabel = detail.scope === 'summary' ? '当日回报合计' : (detail.isStockPortfolio
-          ? ledgerId === 37 ? '标签总盘当日盈亏' : '当日日结回报' : '当日回报');
+          ? ledgerId === 37 ? `${stockCalendarScopeLabel}当日盈亏` : '当日日结回报' : '当日回报');
 
         return (
           <div className="fixed inset-0 z-[520] flex items-end justify-center bg-black/50" onClick={() => setCalendarDateDetail(null)}>
@@ -6153,7 +6157,7 @@ export default function LedgerDetailAA({
                   <div className="mt-1 text-2xl font-bold" style={{ color: moneyColor(primaryValue) }}>{signedMoney(primaryValue)}</div>
                   <div className="mt-1 text-[11px] leading-4" style={{ color: '#9E9E9E' }}>
                     {detail.scope === 'summary' ? '仅汇总当日已更新标签，已剔除本金与提现资金流。'
-                      : detail.isStockPortfolio ? `${ledgerId === 37 ? '标签全部股票总盈亏，非个人获配盈亏。' : ''}当天A股＋隔夜美股，按该日15:05锁定汇率统计。`
+                      : detail.isStockPortfolio ? `${ledgerId === 37 ? selectedStockCalendarScope === 'total' ? '标签全部股票总盈亏。' : '个人获配份额日结盈亏。' : ''}当天A股＋隔夜美股，按该日15:05锁定汇率统计。`
                       : '当日回报已剔除本金变动与提现等资金流。'}
                   </div>
                 </div>
@@ -6195,7 +6199,7 @@ export default function LedgerDetailAA({
                       </div>
                       <div className="px-3 py-3" style={{ borderBottom: '1px solid #EEEEEE' }}>
                         <div className="text-[11px]" style={{ color: '#888888' }}>{detail.isStockPortfolio
-                          ? ledgerId === 37 ? '标签总盘累计盈亏' : '累计日结回报' : '当日账目'}</div>
+                          ? ledgerId === 37 ? `${stockCalendarScopeLabel}累计盈亏` : '累计日结回报' : '当日账目'}</div>
                         <div className="mt-1 font-mono text-sm font-bold" style={{ color: detail.isStockPortfolio ? moneyColor(totalReturn) : '#1A1A1A' }}>
                           {detail.isStockPortfolio ? signedMoney(totalReturn) : `${dayRecords.length} 笔`}
                         </div>
