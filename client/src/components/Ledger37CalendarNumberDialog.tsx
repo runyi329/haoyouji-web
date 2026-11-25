@@ -111,8 +111,13 @@ function CalendarEntryPage({ categoryId, date, onClose, onSaved }: Props) {
   const smallLabel = 'mb-3 text-xs font-medium tracking-widest text-gray-400';
   return createPortal(<div className="fixed inset-0 z-[530] bg-[#FAF3ED]" onPointerDownCapture={event => {
     if (event.button === 0) freshPointer.current = true;
+  }} onTouchStartCapture={() => {
+    // 老版 WebView 可能只有 touch/mouse 事件；真实触摸开始仍可放行本页点击。
+    freshPointer.current = true;
+  }} onMouseDownCapture={event => {
+    if (event.button === 0) freshPointer.current = true;
   }} onClickCapture={event => {
-    // pointerup 打开后产生的来源兼容 click 没有本页 pointerdown，不能落到返回/删除/保存。
+    // 开页来源的残留 click 没有本页输入开始，不能落到返回/删除/保存。
     if (!freshPointer.current && event.detail > 0) { event.preventDefault(); event.stopPropagation(); }
   }} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <section role="dialog" aria-modal="true" aria-labelledby="calendar-entry-title" className="mx-auto flex h-[100dvh] w-full max-w-[480px] flex-col bg-[#FAF3ED]">

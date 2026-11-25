@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import Ledger37CalendarNumberDialog from '@/components/Ledger37CalendarNumberDialog';
+import { consumeLedgerCalendarDoubleTap, type LedgerCalendarTap } from '@shared/ledger-calendar-double-tap';
 
 /** AI管理员的唯一额外工具：只列可登记标签和日期；不读取任何原始交易/资金/配置。 */
 export default function Ledger37CalendarRecorder({ viewerUserId }: { viewerUserId: number }) {
@@ -9,13 +10,14 @@ export default function Ledger37CalendarRecorder({ viewerUserId }: { viewerUserI
   const [month, setMonth] = useState(today.slice(0, 7));
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [date, setDate] = useState<string | null>(null);
-  const lastTap = useRef<{ key: string; at: number } | null>(null);
+  const lastTap = useRef<LedgerCalendarTap | null>(null);
   const query = trpc.ledger.getCalendarNumberCategories.useQuery({ ledgerId: 37 }, {
     retry: false, staleTime: 0, gcTime: 0, placeholderData: undefined,
     refetchOnMount: 'always', refetchOnWindowFocus: false,
   });
   const categories = query.isFetchedAfterMount && !query.error ? query.data ?? [] : [];
   const selectedId = categories.some((item) => item.categoryId === categoryId) ? categoryId : categories[0]?.categoryId ?? null;
+  useEffect(() => { lastTap.current = null; }, [month, selectedId, viewerUserId]);
   if (categories.length === 0) return null;
   const [year, monthNumber] = month.split('-').map(Number);
   const firstDay = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
@@ -35,15 +37,12 @@ export default function Ledger37CalendarRecorder({ viewerUserId }: { viewerUserI
     <div className="mt-2 grid grid-cols-7 gap-1 text-center text-xs"><>{['日', '一', '二', '三', '四', '五', '六'].map((day) => <span key={day} className="py-1 text-[#61758A]">{day}</span>)}{Array.from({ length: firstDay }, (_, index) => <span key={`empty-${index}`} />)}{Array.from({ length: days }, (_, index) => {
       const dayDate = `${month}-${String(index + 1).padStart(2, '0')}`;
       const enabled = Boolean(selectedId) && dayDate <= today;
-      return <button key={dayDate} type="button" disabled={!enabled} onDoubleClick={() => openNumber(dayDate)} onPointerUp={(event) => {
-        if (!enabled || event.pointerType !== 'touch') return;
-        const key = `${selectedId}:${dayDate}`;
-        const now = Date.now();
-        if (lastTap.current?.key === key && now - lastTap.current.at < 350) openNumber(dayDate);
-        else lastTap.current = { key, at: now };
-      }} className={`h-10 rounded-lg text-xs disabled:opacity-30 ${dayDate === today ? 'bg-[#E4F4F6] font-semibold text-[#087987]' : 'bg-[#F2F6FA] text-[#142A3F]'}`} style={{ touchAction: 'manipulation' }}>{index + 1}</button>;
+      return <button key={dayDate} type="button" disabled={!enabled} onDoubleClick={() => { if (enabled) openNumber(dayDate); }} onClick={() => {
+        if (!enabled) return;
+        if (consumeLedgerCalendarDoubleTap(lastTap, `${viewerUserId}:${selectedId}:${dayDate}`)) openNumber(dayDate);
+      }} onPointerCancel={() => { lastTap.current = null; }} onTouchMove={() => { lastTap.current = null; }} className={`h-10 rounded-lg text-xs disabled:opacity-30 ${dayDate === today ? 'bg-[#E4F4F6] font-semibold text-[#087987]' : 'bg-[#F2F6FA] text-[#142A3F]'}`} style={{ touchAction: 'manipulation' }}>{index + 1}</button>;
     })}</></div>
-    <p className="mt-3 text-center text-[11px] text-[#61758A]">双击日期填写数字</p>
+    <p className="mt-3 text-center text-[11px] text-[#61758A]">双击日期登记，在放大镜中查看照片</p>
     {date && selectedId && <Ledger37CalendarNumberDialog key={`${viewerUserId}:${selectedId}:${date}`} categoryId={selectedId} date={date} onClose={() => setDate(null)} onSaved={() => {}} />}
   </section>;
 }

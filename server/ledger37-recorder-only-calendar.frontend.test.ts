@@ -71,10 +71,15 @@ describe('普通管理员与普通用户同版，只多双击日历余额与照�
   it('双击录入只打开余额与照片登记页，不打开股票管理或通用add', () => {
     const setCalendarNumberEditor = vi.fn();
     const setCalendarDateDetail = vi.fn();
-    const base = { getDateStr: () => '2020-01-01', canRecordCalendarNumber: true, selectedTagId: 7, isSelectedStockPortfolio: false, calendarNumberTapRef: { current: {} }, setCalendarDateDetail, setCalendarNumberEditor };
+    const setShowImagePreview = vi.fn();
+    const base = { getDateStr: () => '2020-01-01', canRecordCalendarNumber: true, selectedTagId: 7, isSelectedStockPortfolio: false, calendarNumberTapRef: { current: {} }, setCalendarDateDetail, setShowImagePreview, setCalendarNumberEditor };
     actual(aa, 'openCalendarNumberEditor', base)(1);
-    expect(setCalendarNumberEditor).toHaveBeenCalledWith({ categoryId: 7, date: '2020-01-01' });
+    const update = setCalendarNumberEditor.mock.calls[0][0];
+    const current = { categoryId: 7, date: '2020-01-01' };
+    expect(update(null)).toEqual(current);
+    expect(update(current)).toBe(current);
     expect(setCalendarDateDetail).toHaveBeenCalledWith(null);
+    expect(setShowImagePreview).toHaveBeenCalledWith(false);
     for (const patch of [{ canRecordCalendarNumber: false }, { selectedTagId: null }, { isSelectedStockPortfolio: true }, { getDateStr: () => '2999-01-01' }]) {
       setCalendarNumberEditor.mockClear(); actual(aa, 'openCalendarNumberEditor', { ...base, ...patch })(1); expect(setCalendarNumberEditor).not.toHaveBeenCalled();
     }
@@ -156,7 +161,8 @@ describe('普通管理员与普通用户同版，只多双击日历余额与照�
   });
   it('手机双点和桌面双击都存在，不把数字日历变成顶部设置或维护按钮', () => {
     expect(aa).toContain('onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}');
-    expect(aa).toContain("event.pointerType !== 'touch'");
+    expect(aa).toContain('consumeLedgerCalendarDoubleTap(calendarNumberTapRef');
+    expect(calendar).toContain('consumeLedgerCalendarDoubleTap(lastTap');
     expect(calendar).toContain("touchAction: 'manipulation'");
     expect(calendar).not.toMatch(/getTransactions|getTransactionDetail|getCalendarData|StockTagPortfolio|adminGetAllInitialBalances|Settings/);
     expect(dialog).toContain('trpc.ledger.getCalendarEntry.useQuery');

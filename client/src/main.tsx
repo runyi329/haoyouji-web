@@ -247,6 +247,8 @@ const trpcClient = trpc.createClient({
           || op.path === "aiStockMAMonitor"
           || op.path === "aiStockMAMonitorChart"
           || op.path === "aiStockChipDistribution"
+          // 日历双击后的余额和照片独立读取，不等待同批行情或账本统计。
+          || op.path === "ledger.getCalendarEntry"
           || op.path === "ledger.getMyOrdinaryTagObservationOverview"
           || op.path === "ledger.adminGetOrdinaryTagObservationConfig"
           || op.path === "ledger.adminSetOrdinaryTagObservationConfig"
