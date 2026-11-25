@@ -102,6 +102,7 @@ function legacy(participantView = false, presentationMode = "admin") {
   for (const name of ["normalizeCurrency", "money", "signedMoney", "formatQuantity", "formatDateTime", "daysSinceBeijingDate", "formatMonthDay", "memberClosedHoldingDays", "formatQuoteUpdate", "formatCompactQuoteUpdate", "localInputTime", "buildCryptoAwareMemberRealizedLots", "memberHoldingOrbVisual"]) scope[name] = actual(source, name, scope);
   for (const name of ["ArrowLeft", "BadgeCheck", "ChevronDown", "ChevronUp", "History", "Loader2", "Plus", "X", "Button", "Avatar", "AvatarImage", "AvatarFallback", "Input", "Label", "StockNameProfitSummary", "StockCustomerProfitSummary", "StockQuoteUpdateIndicator", "CryptoAwareObservationAccountSummary", "CryptoAwareObservationPortfolio", "StockParticipantProfitChart"]) scope[name] = "span";
   scope.StockTagBuyEditDialog = (p: any) => p.order && p.canEdit ? React.createElement("div", { "data-buy-edit-lot": p.order.lotId }) : null;
+  scope.StockTagBuyCancelDialog = (p: any) => p.order && p.canEdit ? React.createElement("div", { "data-buy-cancel-lot": p.order.lotId }) : null;
   for (const name of ["Dialog", "Sheet", "StockTagTradeDialog"]) scope[name] = (p: any) => p.open ? React.createElement("div", null, p.children) : null;
   for (const name of ["DialogContent", "DialogHeader", "SheetContent", "SheetHeader"]) scope[name] = "div";
   for (const name of ["DialogTitle", "SheetTitle"]) scope[name] = "h2";
@@ -1092,6 +1093,7 @@ function frozenFxPage(fixture = frozenFxPageFixture(), usdRate = 7, usdtRate: nu
   for (const name of ['ArrowLeft', 'BadgeCheck', 'ChevronDown', 'ChevronUp', 'History', 'Loader2', 'Plus', 'X', 'Button', 'Avatar', 'AvatarImage', 'AvatarFallback', 'Input', 'Label',
     'StockNameProfitSummary', 'StockCustomerProfitSummary', 'StockQuoteUpdateIndicator', 'CryptoAwareObservationAccountSummary', 'CryptoAwareObservationPortfolio']) scope[name] = 'span';
   scope.StockTagBuyEditDialog = () => null;
+  scope.StockTagBuyCancelDialog = () => null;
   for (const name of ['Dialog', 'Sheet', 'StockTagTradeDialog']) scope[name] = (p: any) => p.open ? React.createElement('div', null, p.children) : null;
   for (const name of ['DialogContent', 'DialogHeader', 'SheetContent', 'SheetHeader']) scope[name] = 'div';
   for (const name of ['DialogTitle', 'SheetTitle']) scope[name] = 'h2';

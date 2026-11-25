@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
 import { StockTagBuyEditDialog, type EditableStockBuyOrder } from "@/components/StockTagBuyEditDialog";
+import { StockTagBuyCancelDialog } from "@/components/StockTagBuyCancelDialog";
 import { summarizeStockCustomerPnl } from "@shared/stock-customer-pnl";
 import { buildStockMemberRealizedLots, hasStockCustomerActivity, stockRealizedValueCny } from "@shared/stock-realized-portfolio";
 import StockCustomerProfitSummary from "@/components/StockCustomerProfitSummary";
@@ -528,6 +529,7 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
   const [preselectedSellLotId, setPreselectedSellLotId] = useState<number | null>(null);
   const [editingSale, setEditingSale] = useState<any | null>(null);
   const [editingBuy, setEditingBuy] = useState<EditableStockBuyOrder | null>(null);
+  const [cancelingBuy, setCancelingBuy] = useState<EditableStockBuyOrder | null>(null);
   const [eventType, setEventType] = useState<EventType>("buy");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
@@ -1946,6 +1948,15 @@ export function LegacyStockTagPortfolio({ ledgerId, categoryId, categoryName, on
       {canEdit && !participantView && ledgerId === 37 && <StockTagBuyEditDialog
         categoryId={categoryId} order={editingBuy} canEdit={canEdit}
         readOnlyPreview={isLocalHotPreview} onClose={() => setEditingBuy(null)}
+        onRequestCancel={order => {
+          if (!canEdit || participantView || ledgerId !== 37 || isLocalHotPreview) return;
+          setEditingBuy(null);
+          setCancelingBuy(order);
+        }}
+      />}
+      {canEdit && !participantView && ledgerId === 37 && <StockTagBuyCancelDialog
+        categoryId={categoryId} order={cancelingBuy} canEdit={canEdit}
+        readOnlyPreview={isLocalHotPreview} onClose={() => setCancelingBuy(null)}
       />}
 
       <Dialog open={showActionDialog && !!correctingEvent} onOpenChange={(open) => !open && closeActionDialog()}>

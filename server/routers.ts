@@ -14348,6 +14348,25 @@ ${klinesSummary}
         const { updateStockTagBuy } = await import('./ledger-stock-portfolio');
         return updateStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
+    cancelStockTagBuy: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive(),
+        eventId: z.number().int().positive(),
+        reason: z.string().trim().min(1).max(300),
+        expected: z.object({
+          quantity: z.number().finite().positive(),
+          executionPrice: z.number().finite().positive(),
+          actualTradedAt: z.string().datetime(),
+          note: z.string().max(3000),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { cancelStockTagBuy } = await import('./ledger-stock-portfolio');
+        return cancelStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
     updateStockTagSale: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),

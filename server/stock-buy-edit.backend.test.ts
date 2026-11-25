@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity } from '../shared/portfolio-instruments';
 import * as cryptoPolicy from '../shared/crypto-portfolio-policy';
 import { isStockSessionDate } from '../shared/stock-market-session';
+import { assertStockBuySnapshotSafe } from './stock-buy-snapshot-guard';
 
 // Never import the backend module (and hence never load its DB/network modules).
 // Execute its current TypeScript AST declarations, with real pure shared policies.
@@ -34,7 +35,7 @@ const clone = <T>(value: T): T => structuredClone(value);
 type Row = Record<string, any>;
 type Options = { crypto?: boolean; event?: Row; lot?: Row; participations?: Row[]; observations?: Row[];
   sales?: number; closures?: number; observationTable?: boolean; activation?: string | null; savedActivation?: string | null; missingEvent?: boolean;
-  fail?: 'begin' | 'event' | 'lot' | 'audit' | 'dirty' | 'commit'; advanceAt?: 'event' | 'dirty'; };
+  fail?: 'begin' | 'event' | 'lot' | 'audit' | 'dirty' | 'commit'; advanceAt?: 'event' | 'lot' | 'audit' | 'dirty'; };
 const harnesses: ReturnType<typeof harness>[] = [];
 function harness(options: Options = {}) {
   const symbol = options.crypto ? 'CRYPTO:BTC-USDT' : 'AAPL';
@@ -43,7 +44,7 @@ function harness(options: Options = {}) {
     server_registered_at: options.crypto ? '2026-11-20 14:01:00' : '2026-11-10T02:01:00.000Z',
     settlement_effective_date: options.crypto ? '2026-11-20' : null, note: '原订单备注', created_by: 701,
     market_reference_price: '20.12345678', market_reference_at: '2026-11-10T02:00:01.000Z', ...options.event };
-  const lot: Row = { id: 11, symbol, stock_name: '离线资产', opened_event_id: 101, opened_at: event.actual_traded_at,
+  const lot: Row = { id: 11, symbol: event.symbol, stock_name: '离线资产', opened_event_id: 101, opened_at: event.actual_traded_at,
     initial_quantity: event.quantity, unit_cost: event.execution_price, note: '  原开仓备注\n完整保留  ', ...options.lot };
   const participations = clone(options.participations ?? []);
   const observations = clone(options.observations ?? []);
@@ -64,14 +65,21 @@ function harness(options: Options = {}) {
     calls.push({ sql, params });
     if (/^\s*SELECT/.test(sql)) {
       if (/FROM ledger_stock_lots WHERE/.test(sql)) { order.push('lot-lock'); return [[Object.freeze(clone(lot))]]; }
-      if (/FROM ledger_stock_events WHERE/.test(sql)) { order.push('event-lock'); return [options.missingEvent ? [] : [Object.freeze(clone(event))]]; }
+      if (/FROM ledger_stock_events WHERE/.test(sql)) {
+        order.push('event-lock');
+        const wall = (value: unknown) => {
+          try { return value == null ? null : subject.toMysqlBeijingDateTime(cryptoPolicy.parsePortfolioTradeTime(String(value)).toISOString()); } catch { return null; }
+        };
+        return [options.missingEvent ? [] : [Object.freeze({ ...clone(event), actual_traded_at_wall: wall(event.actual_traded_at),
+          server_registered_at_wall: wall(event.server_registered_at), effective_date_wall: event.settlement_effective_date })]];
+      }
       if (/FROM ledger_stock_event_lot_allocations/.test(sql)) return [[{ count: options.sales ?? 0 }]];
       if (/FROM ledger_stock_participation_closures/.test(sql)) return [[{ count: options.closures ?? 0 }]];
       if (/FROM ledger_stock_lot_participations/.test(sql)) return [participations.map(row => Object.freeze(clone(row)))];
       if (/FROM ledger_stock_lot_observations/.test(sql)) return [observations.filter(row => Number(row.enabled ?? 1) === 1).map(row => Object.freeze(clone(row)))];
       // Source activation and persisted activation are separate, SELECT-only evidence.
-      if (/crypto_activation_date/.test(sql) && /FROM ledger_stock_lots/.test(sql)) return [options.activation ? [{ crypto_activation_date: options.activation }] : []];
-      if (/FROM ledger_crypto_portfolio_daily_snapshots/.test(sql)) return [[{ crypto_activation_date: options.savedActivation ?? null }]];
+      if (/crypto_activation_date/.test(sql) && /FROM ledger_stock_lots/.test(sql)) return [options.activation !== undefined ? [{ crypto_activation_date: options.activation }] : []];
+      if (/FROM ledger_crypto_portfolio_daily_snapshots/.test(sql)) return [options.savedActivation !== undefined ? [{ crypto_activation_date: options.savedActivation }] : []];
       if (/information_schema/.test(sql)) return [options.observationTable === false ? [] : [{ count: 1, table_name: 'ledger_stock_lot_observations' }]];
       throw new Error(`Unapproved offline SELECT: ${sql}`);
     }
@@ -89,6 +97,7 @@ function harness(options: Options = {}) {
       order.push('audit'); if (options.fail === 'audit') throw new Error('FAIL_audit');
       const note = params.find(value => typeof value === 'string' && value.includes('买入订单修改'));
       if (note === undefined) throw new Error('Audit evidence missing');
+      if (options.advanceAt === 'audit') vi.setSystemTime(new Date('2026-11-20T07:05:00.000Z'));
       pendingAudit.push(note); return [{ affectedRows: 1, insertId: 9001 }];
     }
     throw new Error(`Forbidden offline mutation/DDL: ${sql}`);
@@ -105,8 +114,8 @@ function harness(options: Options = {}) {
   const invalidate = vi.fn(() => { order.push('invalidate'); });
   const rebuild = vi.fn(() => { order.push('rebuild'); });
   const observationExists = vi.fn(async () => options.observationTable !== false);
-  const subject = load([...pureNames, 'updateStockTagBuy'], {
-    isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, ...cryptoPolicy, isStockSessionDate,
+  const subject = load([...pureNames, 'stockBuySnapshotRecheck', 'updateStockTagBuy'], {
+    isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, ...cryptoPolicy, isStockSessionDate, assertStockBuySnapshotSafe,
     assertStockTagAccess: access, ensureStockCalendarResultTable: ensure, getDbTransactionConnection: getTx,
     stockObservationTableExists: observationExists,
     markStockCalendarResultDirty: dirty, invalidateMemberStockReadCaches: invalidate, queueStockCalendarResultRebuild: rebuild,
@@ -196,7 +205,7 @@ describe('opening order in-place edit: real production AST, pure policies, isola
   it('mismatched opening event link, scoped event absence/type/status/symbol and inconsistent lot economics all fail before writes', async () => {
     for (const options of [
       { lot: { opened_event_id: 102 } }, { event: { event_type: 'sell' } }, { event: { status: 'voided' } },
-      { event: { symbol: 'MSFT' } }, { lot: { initial_quantity: '11.00000000' } }, { lot: { unit_cost: '21.00000000' } }, { missingEvent: true },
+      { event: { symbol: 'MSFT' }, lot: { symbol: 'AAPL' } }, { lot: { initial_quantity: '11.00000000' } }, { lot: { unit_cost: '21.00000000' } }, { missingEvent: true },
     ]) { const h = harness(options); await expect(h.run({ executionPrice: 22 })).rejects.toThrow(/不匹配|有效|不一致/); h.assertBeforeWriteBlock(); }
   });
   it('quantity minimum is real allocated sum, not each member individually', async () => {
@@ -330,7 +339,7 @@ describe('opening order in-place edit: real production AST, pure policies, isola
     await expect(unchangedEffective.run({ executionPrice: 21 })).resolves.toMatchObject({ changed: true });
   });
   it('crypto and mixed stock crossing 15:05 during dirty step recheck before commit and roll all writes back', async () => {
-    for (const options of [{ crypto: true }, { activation: '2026-11-20' }]) {
+    for (const options of [{ crypto: true }, { activation: '2026-11-19', event: { symbol: '600519.SH', actual_traded_at: '2026-11-20T05:16:00.000Z', server_registered_at: null } }]) {
       vi.setSystemTime(new Date('2026-11-20T07:04:59.000Z'));
       const h = harness({ ...options, advanceAt: 'dirty' }); await expect(h.run({ executionPrice: 21 })).rejects.toThrow(/15:05|日结|生效/);
       expect(h.writes()).toHaveLength(3); expect(h.dirty).toHaveBeenCalledOnce(); expect(h.tx.rollback).toHaveBeenCalledOnce();
@@ -338,7 +347,7 @@ describe('opening order in-place edit: real production AST, pure policies, isola
       expect(h.invalidate).not.toHaveBeenCalled(); expect(h.rebuild).not.toHaveBeenCalled(); expect(h.tx.release).toHaveBeenCalledOnce();
     }
   });
-  it('already activated mixed-crypto tag freezes old stock economics without proof, but note-only and not-yet-activated tag are allowed', async () => {
+  it('per-order mixed history locks old stock without proof, permits new A 13:16 with NULL registration, preserves note-only/future activation', async () => {
     const h = harness({ activation: '2026-11-19' }); await expect(h.run({ executionPrice: 21 })).rejects.toThrow(/日结|数字币|15:05/); h.assertBeforeWriteBlock();
     const activationRead = h.calls.find(call => /crypto_activation_date/.test(call.sql) && /FROM ledger_stock_lots/.test(call.sql))!;
     expect(activationRead.params).toEqual([37, 301]);
@@ -347,6 +356,40 @@ describe('opening order in-place edit: real production AST, pure policies, isola
     expect(savedRead.params).toEqual([37, 301, cryptoPolicy.CRYPTO_PORTFOLIO_POLICY_VERSION]);
     const note = harness({ activation: '2026-11-19' }); await expect(note.run({ note: '备注不倒改日结' })).resolves.toMatchObject({ changed: true });
     const future = harness({ activation: '2026-11-20' }); await expect(future.run({ executionPrice: 21 })).resolves.toMatchObject({ changed: true });
+    const fresh = harness({ activation: '2026-11-18', event: { symbol: '600519.SH', actual_traded_at: '2026-11-20T05:16:00.000Z', server_registered_at: null } });
+    await expect(fresh.run({ quantity: 11, executionPrice: 21 })).resolves.toMatchObject({ changed: true });
+    expect(fresh.state().event.server_registered_at).toBeNull();
+    expect(fresh.writes().map(call => call.sql).join('\n')).not.toMatch(/SET[^;]*server_registered_at\s*=/);
+  });
+  it('original sealed date cannot be moved forward, and fresh stocks cannot be backdated into history', async () => {
+    const old = harness({ activation: '2026-11-18', event: { symbol: '600519.SH', actual_traded_at: '2026-11-19T05:16:00.000Z' } });
+    await expect(old.run({ actualTradedAt: '2026-11-20T05:16:00.000Z' })).rejects.toThrow(/历史日结/); old.assertBeforeWriteBlock();
+    const fresh = harness({ activation: '2026-11-18', event: { symbol: '600519.SH', actual_traded_at: '2026-11-20T05:16:00.000Z' } });
+    await expect(fresh.run({ actualTradedAt: '2026-11-19T05:16:00.000Z' })).rejects.toThrow(/历史日结/); fresh.assertBeforeWriteBlock();
+  });
+  it('US uses its real NY day and strictly older anchor, not Beijing A date', async () => {
+    const fresh = harness({ activation: '2026-11-18', event: { actual_traded_at: '2026-11-19T20:16:00.000Z' } });
+    await expect(fresh.run({ executionPrice: 21 })).resolves.toMatchObject({ changed: true });
+    const sealed = harness({ activation: '2026-11-18', event: { actual_traded_at: '2026-11-19T02:16:00.000Z' } });
+    await expect(sealed.run({ executionPrice: 21 })).rejects.toThrow(/历史日结/); sealed.assertBeforeWriteBlock();
+  });
+  it.each(['event', 'lot', 'audit'] as const)('stock crosses 15:05 at %s and stops before the next write, rolling back', async advanceAt => {
+    vi.setSystemTime(new Date('2026-11-20T07:04:59.000Z'));
+    const h = harness({ activation: '2026-11-18', advanceAt, event: { symbol: '600519.SH', actual_traded_at: '2026-11-20T05:16:00.000Z' } });
+    await expect(h.run({ executionPrice: 21 })).rejects.toThrow(/历史日结/);
+    expect(h.writes()).toHaveLength(advanceAt === 'event' ? 1 : advanceAt === 'lot' ? 2 : 3);
+    expect(h.state()).toEqual(h.original); expect(h.tx.commit).not.toHaveBeenCalled(); expect(h.tx.rollback).toHaveBeenCalledOnce();
+  });
+  it('NULL/illegal original actual date and NULL/illegal activation or crypto date fail closed, never substitute registration', async () => {
+    for (const activation of [null, '2026-02-30', 'garbage']) {
+      const h = harness({ activation }); await expect(h.run({ executionPrice: 21 })).rejects.toThrow(/日结/); h.assertBeforeWriteBlock();
+    }
+    for (const originalActualTradedAt of [null, '2026-02-30 13:16:00', '2026-11-20', 'garbage']) {
+      expect(() => assertStockBuySnapshotSafe({ symbol: '600519.SH', originalActualTradedAt, nextActualTradedAt: '2026-11-20 13:16:00',
+        registeredAt: '2026-11-20 13:17:00', effectiveDate: null, activationDates: ['2026-11-18'], operation: 'edit', now: new Date() })).toThrow(/历史日结/);
+    }
+    const invalidCrypto = harness({ crypto: true, event: { settlement_effective_date: '2026-02-30' } });
+    await expect(invalidCrypto.run({ executionPrice: 21 })).rejects.toThrow(/历史日结/); invalidCrypto.assertBeforeWriteBlock();
   });
   it('backend input finite/positive/safe-ID/future/reason checks happen before any transaction', async () => {
     for (const patch of [{ quantity: NaN }, { quantity: Infinity }, { quantity: 0 }, { executionPrice: Infinity }, { executionPrice: 0 },
@@ -406,6 +449,7 @@ describe('buy-edit actual router schema/owner wiring and old correction compatib
     const create = vi.fn(async () => { log.push('create'); return { eventId: 9002 }; });
     const subject = load(['correctStockTagEvent'], {
       assertStockTagAccess: vi.fn(), getDbConnection: async () => ({ execute }), voidStockTagEvent: voidEvent, createStockTagEvent: create,
+      isR1StockSaleFxScope: () => true,
     });
     const input = { ledgerId: 37, categoryId: 301, eventId: 101, userId: 870413, eventType: 'buy', reason: '旧更正' };
     await expect(subject.correctStockTagEvent(input)).resolves.toEqual({ eventId: 9002 });

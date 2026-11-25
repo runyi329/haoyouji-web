@@ -27,10 +27,11 @@ type Props = {
   canEdit: boolean;
   readOnlyPreview?: boolean;
   onClose: () => void;
+  onRequestCancel?: (order: EditableStockBuyOrder) => void;
 };
 
 /** Modify the original opening order without voiding/reopening a numbered lot. */
-export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPreview = false, onClose }: Props) {
+export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPreview = false, onClose, onRequestCancel }: Props) {
   const utils = trpc.useUtils();
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
@@ -81,6 +82,11 @@ export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPrev
       expected: { quantity: order.quantity, executionPrice: order.executionPrice, actualTradedAt: order.actualTradedAt, note: order.note },
     });
   };
+  const requestCancel = () => {
+    if (!canEdit || !order || order.hasSales || mutation.isPending || !onRequestCancel) return;
+    if (readOnlyPreview || import.meta.env.DEV) return toast.info("热预览仅展示，不会撤销正式订单");
+    onRequestCancel(order);
+  };
   return <Dialog open={!!order && canEdit} onOpenChange={open => { if (!open) close(); }}>
     <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>修改买入订单</DialogTitle></DialogHeader>
@@ -97,9 +103,10 @@ export function StockTagBuyEditDialog({ categoryId, order, canEdit, readOnlyPrev
         <div><Label htmlFor="buy-edit-time">实际买入时间（北京时间）</Label><Input id="buy-edit-time" type="datetime-local" value={tradedAt} onChange={event => { if (!mutation.isPending && !order.hasSales) setTradedAt(event.target.value); }} disabled={mutation.isPending || order.hasSales} className="mt-1" /></div>
         <div><Label htmlFor="buy-edit-note">开仓备注</Label><textarea id="buy-edit-note" rows={3} maxLength={3000} value={note} onChange={event => { if (!mutation.isPending) setNote(event.target.value.slice(0, 3000)); }} disabled={mutation.isPending} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" /></div>
         <div><Label htmlFor="buy-edit-reason">修改原因</Label><Input id="buy-edit-reason" maxLength={300} value={reason} onChange={event => { if (!mutation.isPending) setReason(event.target.value); }} disabled={mutation.isPending} placeholder="例如：买入价格填错" className="mt-1" /></div>
-        <div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] leading-5 text-gray-600">已有成员股数、入场价和参与日期不会自动改变。数量调整后如需修改分配比例，请到“分配”操作。账户历史统计可能重新计算，原信息会留存审计；已固定的数字币及混合标签日结不会倒改。</div>
+        <div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] leading-5 text-gray-600">修改不会自动改变成员份额、入场价和参与日期。需要调整份额，请到“分配”操作。已计入历史日结或已有卖出、结算的买入记录不能直接改成交信息；修改前的信息会保留在操作日志。</div>
         {(readOnlyPreview || import.meta.env.DEV) && <div role="status" className="text-xs text-gray-500">此热链接只供预览，不会保存到正式账目。</div>}
         <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={close} disabled={mutation.isPending}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submit} disabled={mutation.isPending || !canEdit || readOnlyPreview || import.meta.env.DEV}>{mutation.isPending ? "保存中…" : "保存修改"}</Button></div>
+        {onRequestCancel && !order.hasSales && <button type="button" data-buy-cancel-entry onClick={requestCancel} disabled={mutation.isPending || !canEdit || readOnlyPreview || import.meta.env.DEV} className="w-full py-1 text-xs text-gray-500 underline underline-offset-2 disabled:opacity-50">整笔录错？撤销录入</button>}
       </div>}
     </DialogContent>
   </Dialog>;

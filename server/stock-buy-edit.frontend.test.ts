@@ -67,7 +67,7 @@ function order(patch: Record<string, any> = {}) {
 const queryNames = ['getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots'] as const;
 const fieldNames = ['quantity', 'price', 'time', 'note', 'reason'] as const;
 type FieldName = typeof fieldNames[number];
-function harness(options: { order?: Record<string, any> | null; categoryId?: number; canEdit?: boolean; readOnlyPreview?: boolean; preview?: boolean } = {}) {
+function harness(options: { order?: Record<string, any> | null; categoryId?: number; canEdit?: boolean; readOnlyPreview?: boolean; preview?: boolean; onRequestCancel?: (order: Record<string, any>) => void } = {}) {
   const states: any[] = [], effects: any[] = [], pendingEffects: (() => void)[] = [];
   let cursor = 0, effectCursor = 0, renderCount = 0, effectCount = 0;
   const same = (a: any[] | undefined, b: any[]) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
@@ -367,5 +367,75 @@ describe('买入订单编辑：真实完整TSX与submit离线回归', () => {
     h.change('note', ` \n${'甲'.repeat(3100)}`); expect(h.field('note').props.value).toBe(` \n${'甲'.repeat(2998)}`);
     h.change('note', ''); h.validReason(); h.save(); expect(h.mutation.mutate.mock.calls[0][0].note).toBe('');
     expect(h.mutation.mutate.mock.calls[0][0].expected.note).toBe(originalNote);
+  });
+});
+
+describe('买入编辑可选撤销入口：只交接原order，绝不代写', () => {
+  const entry = (h: ReturnType<typeof harness>) => nodes(h.rawRender()).find(node => node.props?.['data-buy-cancel-entry'] !== undefined);
+  it('不传callback时保持原有取消/保存两个按钮且没有撤销入口', () => {
+    const h = harness();
+    expect(entry(h)).toBeUndefined();
+    expect(nodes(h.render()).filter(node => node.type === 'button').map(text)).toEqual(['取消', '保存修改']);
+    expect(h.mutation.mutate).not.toHaveBeenCalled(); expectNoInvalidation(h);
+  });
+  it('callback入口点击把同一个原order而非编辑草稿交给父，不提交/关闭/刷新', () => {
+    const onRequestCancel = vi.fn(); const h = harness({ onRequestCancel }); const original = h.props.order;
+    h.change('quantity', '777'); h.change('price', '66'); h.change('time', '2026-11-02T00:15');
+    h.change('note', '未保存的编辑说明'); h.change('reason', '未保存修改原因'); const draft = h.values();
+    const button = entry(h); expect(button).toBeDefined(); expect(text(button)).toContain('整笔录错'); expect(text(button)).toContain('撤销录入');
+    expect(button.props.disabled).toBe(false); button.props.onClick();
+    expect(onRequestCancel).toHaveBeenCalledOnce(); expect(onRequestCancel.mock.calls[0][0]).toBe(original);
+    expect(onRequestCancel.mock.calls[0][0]).toEqual(order()); expect(h.values()).toEqual(draft);
+    expect(h.props.onClose).not.toHaveBeenCalled(); expect(h.mutation.mutate).not.toHaveBeenCalled(); expectNoInvalidation(h);
+    expect(h.forbiddenCreate).not.toHaveBeenCalled(); expect(h.forbiddenSearch).not.toHaveBeenCalled();
+  });
+  it('canEdit=false完整Dialog隐藏，即使强行点击真实入口handler也不能交接', () => {
+    const onRequestCancel = vi.fn(); const h = harness({ canEdit: false, onRequestCancel });
+    expect(h.render()).toBeNull(); expect(renderToStaticMarkup(h.render())).toBe('');
+    expect(entry(h).props.disabled).toBe(true); entry(h).props.onClick();
+    expect(onRequestCancel).not.toHaveBeenCalled(); expect(h.mutation.mutate).not.toHaveBeenCalled(); expectNoInvalidation(h);
+  });
+  it('readOnlyPreview和DEV入口禁用，真实handler不能交接或写入', () => {
+    for (const options of [{ readOnlyPreview: true }, { preview: true }]) {
+      const onRequestCancel = vi.fn(); const h = harness({ ...options, onRequestCancel });
+      expect(entry(h).props.disabled).toBe(true); entry(h).props.onClick();
+      expect(onRequestCancel).not.toHaveBeenCalled(); expect(h.scope.toast.info).toHaveBeenCalledWith(expect.stringContaining('不会撤销正式订单'));
+      expect(h.mutation.mutate).not.toHaveBeenCalled(); expect(h.props.onClose).not.toHaveBeenCalled(); expectNoInvalidation(h);
+    }
+  });
+  it('pending入口disabled，直接点击也不跳走、不重入、不丢草稿', () => {
+    const onRequestCancel = vi.fn(); const h = harness({ onRequestCancel }); h.validReason(); h.save(); const draft = h.values();
+    h.mutation.isPending = true; expect(entry(h).props.disabled).toBe(true); entry(h).props.onClick();
+    expect(onRequestCancel).not.toHaveBeenCalled(); expect(h.props.onClose).not.toHaveBeenCalled();
+    expect(h.mutation.mutate).toHaveBeenCalledOnce(); expect(h.values()).toEqual(draft); expectNoInvalidation(h);
+  });
+  it('hasSales不渲染入口，并挡住变化前保留的真实闭包入口', () => {
+    const onRequestCancel = vi.fn(); const h = harness({ onRequestCancel }); const staleEntry = entry(h);
+    h.props.order.hasSales = true; expect(entry(h)).toBeUndefined(); staleEntry.props.onClick();
+    expect(onRequestCancel).not.toHaveBeenCalled(); expect(h.mutation.mutate).not.toHaveBeenCalled(); expectNoInvalidation(h);
+    const direct = submitScope({ order: order({ hasSales: true }), onRequestCancel });
+    actual(ast, 'requestCancel', direct)(); expect(onRequestCancel).not.toHaveBeenCalled();
+  });
+  it('真实requestCancel没有order/callback也安全退出，绝不代替父执行撤销mutation', () => {
+    for (const patch of [{ order: null, onRequestCancel: vi.fn() }, { onRequestCancel: undefined }]) {
+      const scope = submitScope(patch); actual(ast, 'requestCancel', scope)();
+      expect(scope.mutation.mutate).not.toHaveBeenCalled(); if (scope.onRequestCancel) expect(scope.onRequestCancel).not.toHaveBeenCalled();
+    }
+  });
+  it('传callback不放宽原金额/日期/成员下限/币精度/hasSales规则，也不把保存失败自动转成撤销', () => {
+    const cases = [
+      { field: 'quantity', value: '0', patch: {} },
+      { field: 'price', value: '-1', patch: {} },
+      { field: 'time', value: '2026-11-20T22:31', patch: {} },
+      { field: 'quantity', value: '19.999', patch: {} },
+      { field: 'quantity', value: '0.123456789', patch: { symbol: 'CRYPTO:BTC-USDT', minimumQuantity: 0 } },
+    ] as const;
+    for (const { field, value, patch } of cases) {
+      const onRequestCancel = vi.fn(); const h = harness({ order: order(patch), onRequestCancel }); h.validReason(); h.change(field, value); h.save();
+      expect(h.mutation.mutate, `${field}=${value}`).not.toHaveBeenCalled(); expect(onRequestCancel).not.toHaveBeenCalled(); expectNoInvalidation(h);
+    }
+    const onRequestCancel = vi.fn(); const scope = submitScope({ order: order({ hasSales: true }), quantity: '101', onRequestCancel });
+    runSubmit(scope); expect(scope.mutation.mutate).not.toHaveBeenCalled(); expect(onRequestCancel).not.toHaveBeenCalled();
+    expect(scope.toast.error).toHaveBeenCalledWith(expect.stringContaining('只能修改备注'));
   });
 });
