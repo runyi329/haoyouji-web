@@ -32,7 +32,11 @@ export function stockUserCountedSalePrice(rules: StockLotDownsideRule[], lotId: 
   if (!Number.isFinite(rawPrice)) return null;
   if (isStockUserDownsideExemptSelection(rules)) return Number.isFinite(rawPrice) ? rawPrice : null;
   const at = Number.isFinite(Date.parse(actualAt)) ? actualAt : saved?.effectiveAt ?? '';
-  if (!Number.isFinite(Date.parse(at))) return rules.some(r => r.lotId === lotId && r.startDate) ? null : saved?.countedPrice ?? rawPrice;
+  const hasAutoHistory = rules.some(r => r.lotId === lotId && r.activationMode === 'auto_drop');
+  if (!Number.isFinite(Date.parse(at))) return rules.some(r => r.lotId === lotId && (r.startDate || r.activationMode === 'auto_drop')) ? null : saved?.countedPrice ?? rawPrice;
   const rule = selectStockLotDownsideRule(rules, lotId, at);
-  return rule?.startDate ? countedStockLotPrice(rawPrice, rule) : saved?.countedPrice ?? rawPrice;
+  // Auto confirmation is intraday, not startDate midnight. A future auto rule cannot
+  // backfill an earlier sale from saved counted evidence; legacy selected rules stay intact.
+  return rule?.startDate || rule?.activationMode === 'auto_drop' ? countedStockLotPrice(rawPrice, rule)
+    : !rule && hasAutoHistory ? rawPrice : saved?.countedPrice ?? rawPrice;
 }

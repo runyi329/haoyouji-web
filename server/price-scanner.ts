@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { hasLedger52T0PendingOrders, scanLedger52T0PendingOrders } from './ledger52-t0-journal';
 import { getLiveUsdtCnyQuote, peekUsdtCnyQuote } from './usdt-cny-rate';
+import { isStockMarketSession, isStockSessionDate } from '../shared/stock-market-session';
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 const CRYPTO_SCAN_INTERVAL_MS = 3_000;
 const SLOW_MARKET_SCAN_INTERVAL_MS = 15_000;
@@ -612,6 +613,10 @@ type OnDemandStockQuote = {
   updatedAt: string;
   priceDate?: string;
   name?: string;
+  /** Auto-only provider evidence. Never substitute the display/retrieval updatedAt or priceDate. */
+  autoTriggerObservedAt?: string;
+  autoTriggerPriceDate?: string;
+  autoTriggerEligible?: boolean;
 };
 
 export type ManualStockMarket = 'A' | 'US';
@@ -647,6 +652,83 @@ function normalizeOnDemandStockSymbol(raw: string): string | null {
   return null;
 }
 
+/**
+ * A uses [30]+[31] in Beijing (+08:00), as in parseSinaSessionClose.
+ * Public field notes confirm A indices, but do NOT establish a timezone for naked gb_ [3]:
+ * https://blog.infoway.io/sina-financial-data-api-guide/
+ * US [3] needs an explicit offset or corroboration by [25] EST/EDT + [29] year,
+ * the regular-price evidence already used by parseSinaSessionClose. [24] is after-hours.
+ * Never infer an offset/date from receipt time, and never invent seconds from [25].
+ */
+function parseSinaAutoQuoteObservedAt(parts: string[], market: 'A' | 'US'): string | undefined {
+  const wall = (date: string, time: string, offset: string): number => {
+    if (!isStockSessionDate(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(time)
+      || !/^(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(offset)) return NaN;
+    return Date.parse(`${date}T${time}${offset}`);
+  };
+  if (market === 'A') {
+    const timestamp = wall(String(parts[30] || '').trim(), String(parts[31] || '').trim(), '+08:00');
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
+  }
+  const stamp = /^(\d{4}-\d{2}-\d{2})[ T]((?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d)(?:\s*(Z|[+-]\d{2}:\d{2}|EST|EDT))?$/.exec(String(parts[3] || '').trim());
+  if (!stamp) return undefined;
+  const nyClock = (timestamp: number) => {
+    const values = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }).formatToParts(new Date(timestamp));
+    const get = (type: Intl.DateTimeFormatPartTypes) => values.find(p => p.type === type)?.value || '';
+    return { date: `${get('year')}-${get('month')}-${get('day')}`,
+      time: `${get('hour')}:${get('minute')}:${get('second')}`, zone: get('timeZoneName') };
+  };
+  const regular = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(0[1-9]|1[0-2]):([0-5]\d)(AM|PM)\s+(EST|EDT)$/.exec(String(parts[25] || '').trim());
+  let regularDate: string | undefined, regularTime: string | undefined, regularOffset: string | undefined;
+  if (regular && /^\d{4}$/.test(String(parts[29])) && Number(parts[29]) >= 1900) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    regularDate = `${parts[29]}-${String(months.indexOf(regular[1]) + 1).padStart(2, '0')}-${regular[2].padStart(2, '0')}`;
+    regularTime = `${String(Number(regular[3]) % 12 + (regular[5] === 'PM' ? 12 : 0)).padStart(2, '0')}:${regular[4]}`;
+    regularOffset = regular[6] === 'EST' ? '-05:00' : '-04:00';
+    const regularAt = wall(regularDate, `${regularTime}:00`, regularOffset);
+    if (!Number.isFinite(regularAt)) return undefined;
+    const actual = nyClock(regularAt);
+    if (actual.date !== regularDate || actual.time.slice(0, 5) !== regularTime || actual.zone !== regular[6]) return undefined;
+  } else if (parts[25]) {
+    return undefined;
+  }
+  const zone = stamp[3];
+  // Without an explicit timezone, only an independently marked regular timestamp can resolve it.
+  const offsets = zone ? [zone === 'EST' ? '-05:00' : zone === 'EDT' ? '-04:00' : zone]
+    : regularOffset ? ['+08:00', regularOffset] : [];
+  const candidates = offsets.map(offset => wall(stamp[1], stamp[2], offset)).filter(timestamp => {
+    if (!Number.isFinite(timestamp)) return false;
+    const actual = nyClock(timestamp);
+    if ((zone === 'EST' || zone === 'EDT')
+      && (actual.date !== stamp[1] || actual.time !== stamp[2] || actual.zone !== zone)) return false;
+    return !regularDate || actual.date === regularDate && actual.time.slice(0, 5) === regularTime;
+  });
+  return candidates.length === 1 ? new Date(candidates[0]).toISOString() : undefined;
+}
+
+/** Auto-only freshness/session gate; the processor also rechecks freshness and each lot's armedAt. */
+function stockAutoQuoteEvidence(observedAt: string | undefined, market: 'A' | 'US', receivedAt: string) {
+  if (!observedAt) return { autoTriggerEligible: false };
+  const timestamp = Date.parse(observedAt), received = Date.parse(receivedAt), age = received - timestamp;
+  if (!Number.isFinite(timestamp) || !Number.isFinite(received)) return { autoTriggerEligible: false };
+  const clock = (at: number) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: market === 'A' ? 'Asia/Shanghai' : 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23' }).formatToParts(new Date(at));
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value || '';
+    return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}:${get('second')}` };
+  };
+  const observed = clock(timestamp);
+  const inSession = market === 'A'
+    ? (observed.time >= '09:30:00' && observed.time < '11:30:00') || (observed.time >= '13:00:00' && observed.time < '15:00:00')
+    : observed.time >= '09:30:00' && observed.time < '16:00:00';
+  return { autoTriggerObservedAt: observedAt, autoTriggerPriceDate: observed.date,
+    autoTriggerEligible: age >= 0 && age <= 120_000 && observed.date === clock(received).date
+      && isStockMarketSession(observed.date, market) && inSession };
+}
+
 async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStockQuote | null> {
   const aShare = symbol.match(/^(\d{6})\.(SH|SZ|BJ)$/);
   const sinaCode = aShare
@@ -659,9 +741,9 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
     });
     if (!response.ok) return null;
     const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
-    const match = text.match(/var\s+hq_str_[^=]+="([^"]*)"/);
-    if (!match?.[1]) return null;
-    const parts = match[1].split(',');
+    const match = text.match(/var\s+hq_str_([^=]+)="([^"]*)"/);
+    if (!match?.[2]) return null;
+    const parts = match[2].split(',');
     // 美股 gb_ 的第 2 项、A 股 sh/sz/bj 的第 4 项均为最近成交价。
     // A股开盘前/休市时最近成交价会返回 0；此时用昨收作为最后有效参考价，
     // 以便新加入的股票保证金能立即完成估值，且用来源明确标识并不伪称盘中成交。
@@ -671,17 +753,41 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
     const price = usePreviousClose ? previousClose : latestPrice;
     if (!isValidPrice(price)) return null;
     const dateIndex = parts.findIndex((part) => /^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(String(part).trim()));
+    const receivedAt = nowIso();
+    const observedAt = !usePreviousClose && match[1] === sinaCode
+      ? parseSinaAutoQuoteObservedAt(parts, aShare ? 'A' : 'US') : undefined;
     return {
       price,
       currency: aShare ? 'CNY' : 'USD',
       source: usePreviousClose ? '新浪财经·昨收参考' : '新浪财经',
-      updatedAt: nowIso(),
+      updatedAt: receivedAt,
       priceDate: dateIndex >= 0 ? String(parts[dateIndex]).trim().slice(0, 10) : undefined,
       name: String(parts[0] || '').trim() || undefined,
+      ...stockAutoQuoteEvidence(observedAt, aShare ? 'A' : 'US', receivedAt),
     };
   } catch {
     return null;
   }
+}
+
+/** Same request budget as the old Yahoo fallback, but retain the actual market timestamp. */
+async function fetchYahooIntradayStockQuote(symbol: string): Promise<OnDemandStockQuote | null> {
+  for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
+    try {
+      const data = await fetchJson(`https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const meta = data?.chart?.result?.[0]?.meta;
+      const price = Number(meta?.regularMarketPrice);
+      if (!isValidPrice(price)) continue;
+      const receivedAt = nowIso();
+      const timestamp = typeof meta?.regularMarketTime === 'number' ? meta.regularMarketTime * 1000 : NaN;
+      const observedAt = Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= Date.parse(receivedAt)
+        ? new Date(timestamp).toISOString() : undefined;
+      return { price, currency: 'USD', source: 'Yahoo Finance', updatedAt: receivedAt,
+        priceDate: newYorkTradingDate(new Date(receivedAt)),
+        ...stockAutoQuoteEvidence(observedAt, 'US', receivedAt) };
+    } catch {}
+  }
+  return null;
 }
 
 /**
@@ -705,16 +811,8 @@ export async function fetchIntradayStockQuotes(symbols: string[]): Promise<Recor
     }
     // 美股盘中更新与录入检索使用同一组回退来源，避免新浪短暂限流后持仓估值停止刷新。
     if (!/^\d{6}\.(SH|SZ|BJ)$/.test(symbol)) {
-      const yahooPrice = await fetchYahooPrice(symbol);
-      if (yahooPrice) {
-        results[symbol] = {
-          price: yahooPrice,
-          currency: 'USD',
-          source: 'Yahoo Finance',
-          updatedAt: nowIso(),
-          priceDate: newYorkTradingDate(),
-        };
-      }
+      const yahooQuote = await fetchYahooIntradayStockQuote(symbol);
+      if (yahooQuote) results[symbol] = yahooQuote;
     }
   }));
 

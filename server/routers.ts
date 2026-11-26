@@ -19,6 +19,7 @@ import { calculateFunderInterestDays, isValidFunderContractInterestPeriod, resol
 import { getWalletFlowCurrency } from "@shared/wallet-flow-currency";
 import { listWalletManualFundingFreezeEvents } from "./db-wallet-manual-freezes";
 import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/ledger-record-date";
+import { validateStockLotDownsideAutoDropPercent } from "@shared/stock-lot-downside";
 import { mibanSupplierRouter, mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHash, createHmac } from "crypto";
@@ -14472,14 +14473,33 @@ ${klinesSummary}
         categoryId: z.number().int().positive(),
         lotId: z.number().int().positive(),
         enabled: z.boolean(),
+        activationMode: z.enum(['manual', 'auto_drop']).optional(),
+        autoDropPercent: z.number().finite().gt(0).lt(100).optional(),
         thresholdPrice: z.number().finite().positive().max(10_000_000).optional(),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '请填写启用日期').refine(value => {
           const date = new Date(value + 'T00:00:00Z');
           return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
-        }, '请填写有效的启用日期'),
+        }, '请填写有效的启用日期').optional(),
         downsidePercent: z.number().finite().min(0).max(100).optional(),
         expectedVersion: z.number().int().min(0),
       }).strict().superRefine((input, ctx) => {
+        if (input.activationMode === 'auto_drop') {
+          if (input.autoDropPercent === undefined || input.thresholdPrice !== undefined
+            || input.downsidePercent !== undefined || input.startDate !== undefined) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: '自动模式只需填写下跌触发百分比，门槛、0%比例和生效时间由服务器确定' });
+          }
+          if (input.autoDropPercent !== undefined) {
+            try { validateStockLotDownsideAutoDropPercent(input.autoDropPercent); }
+            catch (error) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['autoDropPercent'],
+                message: error instanceof Error ? error.message : '自动触发下跌比例无效' });
+            }
+          }
+          return;
+        }
+        if (input.autoDropPercent !== undefined || input.startDate === undefined) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: '手动模式需填写有效启用日期，不允许自动触发参数' });
+        }
         if (input.enabled && (input.thresholdPrice === undefined || input.downsidePercent === undefined)) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: '启用欠保证金需填写价格门槛和剩余保证金比例' });
         }

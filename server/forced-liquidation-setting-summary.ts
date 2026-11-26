@@ -1,6 +1,6 @@
 import { decryptValue, isEncrypted } from './encryption';
 import { calculateOrdinaryTagDownsideSeries, type OrdinaryTagDownsidePoint, type OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
-import { stockLotDownsideEffectiveAt, type StockLotDownsideRule } from '../shared/stock-lot-downside';
+import { stockLotDownsideEffectiveAt, isStockLotDownsideAutoWaiting, isStockLotDownsideAutoRuleValid, type StockLotDownsideRule } from '../shared/stock-lot-downside';
 import { portfolioCurrency, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity } from '../shared/portfolio-instruments';
 import { chooseLatestStockQuote, forcedLiquidationLevelPercents, segmentedForcedLiquidationPriceDrop,
   type ForcedLiquidationSettingDetail, type ForcedLiquidationStockQuote } from '../shared/forced-liquidation-display';
@@ -206,10 +206,17 @@ export function buildForcedLiquidationStockDetail(input: ForcedLiquidationSettin
       downsidePercent: number(s.downside_percent) ?? NaN, startDate: date(s.start_date) ?? undefined,
       effectiveAt: s.effective_at, baselineRawPrice: number(s.baseline_raw_price) ?? NaN,
       baselineCountedPrice: number(s.baseline_counted_price) ?? NaN, baselineSource: s.baseline_source,
-      baselineStatus: s.baseline_status, holdingStartAt: s.holding_start_at, currency: s.currency };
+      baselineStatus: s.baseline_status, holdingStartAt: s.holding_start_at, currency: s.currency,
+      ...(s.activation_mode != null ? { activationMode: s.activation_mode, autoDropPercent: number(s.auto_drop_percent) ?? NaN,
+        autoEntryPrice: number(s.auto_entry_price) ?? NaN, armedAt: s.armed_at ?? undefined,
+        triggeredAt: s.triggered_at ?? undefined, triggerPrice: s.trigger_price == null ? undefined : number(s.trigger_price) ?? NaN,
+        triggerQuoteAsOf: s.trigger_quote_as_of ?? undefined, triggerSource: s.trigger_source ?? undefined } : {}) };
     if (id(rule.version) && Number.isFinite(rule.thresholdPrice) && Number.isFinite(rule.downsidePercent)) {
       dto.rule = { version: rule.version, enabled: rule.enabled, threshold: rule.thresholdPrice, downsidePercent: rule.downsidePercent,
-        startDate: rule.startDate ?? '', baselineSource: rule.baselineSource, baselineStatus: rule.baselineStatus };
+        startDate: rule.startDate ?? '', baselineSource: rule.baselineSource, baselineStatus: rule.baselineStatus,
+        ...(rule.activationMode === 'auto_drop' ? { activationMode: rule.activationMode, autoDropPercent: rule.autoDropPercent,
+          armedAt: rule.armedAt, triggeredAt: rule.triggeredAt, triggerPrice: rule.triggerPrice,
+          triggerQuoteAsOf: rule.triggerQuoteAsOf, triggerSource: rule.triggerSource } : {}) };
       Object.assign(dto, forcedLiquidationLevelPercents(dto.initialValue, rule.thresholdPrice, dto.latestValue));
     }
   }
@@ -224,9 +231,14 @@ export function buildForcedLiquidationStockDetail(input: ForcedLiquidationSettin
   if (!rule.startDate) {
     dto.notice = '旧规则缺少有效启用日期，无法确认当前展示适用范围；不自动转换或推测日期'; return dto;
   }
+  const automatic = rule.activationMode === 'auto_drop';
+  if (automatic && (!isStockLotDownsideAutoRuleValid(rule) || rule.autoEntryPrice !== dto.initialValue)) {
+    dto.notice = '自动预设或触发审计与真实买入价格不一致，等待核验'; return dto;
+  }
   if (rule.startDate > today || !Number.isFinite(Date.parse(rule.effectiveAt))
-    || Date.parse(rule.effectiveAt) > Date.parse(latest.updatedAt)
-    || stockLotDownsideEffectiveAt(rule.startDate) !== new Date(rule.effectiveAt).toISOString()) {
+    || (automatic ? Date.parse(rule.effectiveAt) > now
+      : Date.parse(rule.effectiveAt) > Date.parse(latest.updatedAt)
+        || stockLotDownsideEffectiveAt(rule.startDate) !== new Date(rule.effectiveAt).toISOString())) {
     dto.notice = '最新保存版本尚未在报价日生效或日期证据无效，不自动回退旧版本'; return dto;
   }
   if (![0, 1].includes(number(s.enabled) ?? NaN) || rule.currency !== dto.currency || !id(rule.userId)
@@ -237,9 +249,13 @@ export function buildForcedLiquidationStockDetail(input: ForcedLiquidationSettin
   // A legacy baseline or pending historical replay cannot invalidate these five real inputs.
   // This read never converts rules or changes the historical/day/member accounting engine.
   Object.assign(dto, segmentedForcedLiquidationPriceDrop({ initialPrice: dto.initialValue, latestPrice: dto.latestValue,
-    remainingQuantity: dto.remainingQuantity, threshold: rule.thresholdPrice, downsidePercent: rule.downsidePercent, enabled: rule.enabled }));
+    remainingQuantity: dto.remainingQuantity, threshold: rule.thresholdPrice, downsidePercent: rule.downsidePercent,
+    enabled: rule.enabled && !isStockLotDownsideAutoWaiting(rule) }));
   if (dto.effectiveFunds === null) { dto.notice = '分段收益金额溢出或证据无效'; return dto; }
   dto.status = 'ready'; dto.notice = '按已保存门槛、剩余比例和真实剩余股数，展示初始到最新的两段下跌金额；不是钱包余额或历史累计实得收益';
+  if (automatic) dto.notice += !rule.enabled ? '；自动预设已关闭，当前全部正常计入'
+    : isStockLotDownsideAutoWaiting(rule) ? '；已预设待触发，当前全部正常计入；页面读取不会触发，需后台扫描确认'
+      : '；已按后台扫描确认的精确时刻启用，门槛以下按0%，涨回门槛以上恢复正常计入';
   if (rule.baselineSource !== 'owner_threshold') dto.notice += '；此笔旧规则的历史日结和客户收益仍沿用原算法，不自动转换';
   if (rule.baselineStatus === 'pending') dto.notice += '；历史收益核验状态仍保留，不影响此处按真实数据分段展示';
   return dto;

@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import { ChevronDown, ChevronLeft, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +12,9 @@ import { parsePortfolioInstrument, portfolioDisplaySymbol } from "@shared/portfo
 import {
   StockTagDownsideRulePanel,
   beijingStockTagDownsideDate,
+  beijingStockTagDownsideTimestamp,
   isValidStockTagDownsideStartDate,
+  stockTagDownsideAutoStatus,
   type StockLotDownsideRuleView,
 } from "@/components/StockTagDownsideRulePanel";
 import type { EditableStockBuyOrder } from "@/components/StockTagBuyEditDialog";
@@ -147,6 +149,28 @@ export function forcedLiquidationIneffectiveNumber(value: number | null | undefi
   return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+export function forcedLiquidationStockRuleLabel(rule: StockLotDownsideRuleView | null): string {
+  const status = stockTagDownsideAutoStatus(rule);
+  if (status === "waiting") return "预设待触发";
+  if (status === "triggered") return "自动已触发";
+  if (status === "disabled") return "自动已关闭";
+  if (status === "invalid") return "自动待核验";
+  return rule?.enabled ? "已开启强平" : "未开启强平";
+}
+
+/** Read-only page-local polling: at most 20 ticks / 5 minutes, stopped on unmount or no visible presets. */
+export function startForcedLiquidationAutoPolling(input: { allowed: boolean; hasWaiting: boolean; read: () => void }): () => void {
+  if (!input.allowed || !input.hasWaiting) return () => {};
+  const stopAt = Date.now() + 5 * 60_000;
+  let ticks = 0;
+  const timer = window.setInterval(() => {
+    if (Date.now() >= stopAt || ticks >= 20 || isForcedLiquidationReadonlyView()) { window.clearInterval(timer); return; }
+    ticks += 1;
+    if (document.visibilityState === "visible") input.read();
+  }, 15_000);
+  return () => window.clearInterval(timer);
+}
+
 /** Resolve by persisted IDs against the latest list, never keep stale rule/holding snapshots after refresh. */
 export function resolveForcedLiquidationSelection(selection: Selection | null, categories: ForcedLiquidationCategory[]): Selection | null {
   if (!selection) return null;
@@ -226,6 +250,21 @@ function ForcedLiquidationSettingsList() {
   const categories = filterForcedLiquidationCategories(data?.categories ?? [], search, enabledOnly);
   // Keep a mounted in-flight draft stable; list and first-level rows always use current query data.
   const currentSelection = pending ? selection : resolveForcedLiquidationSelection(selection, data?.categories ?? []);
+  const visibleWaitingKey = view === "tags" ? categories.flatMap(category => category.stocks
+    .filter(stock => stockTagDownsideAutoStatus(stock.currentDownsideRule) === "waiting")
+    .map(stock => `${category.categoryId}:${stock.lotId}:${stock.currentDownsideRule?.version}`)).join("|") : "";
+  useEffect(() => startForcedLiquidationAutoPolling({
+    allowed: canEdit && !pending && !isViewingAs && !import.meta.env.DEV,
+    hasWaiting: !!visibleWaitingKey,
+    read: () => {
+      void query.refetch();
+      if (currentSelection?.kind === "stock") {
+        const scope = { ledgerId: 37, categoryId: currentSelection.category.categoryId, lotId: currentSelection.stock.lotId } as const;
+        void utils.ledger.getForcedLiquidationSettingDetail.invalidate(scope);
+        void utils.ledger.getStockLotDownsideRule.invalidate(scope);
+      }
+    },
+  }), [canEdit, pending, isViewingAs, visibleWaitingKey, currentSelection?.category.categoryId, currentSelection?.kind === "stock" ? currentSelection.stock.lotId : null]);
   // The original panels call onClose after confirmed success (stock may still report pending until its effect).
   const closeEditor = () => {
     setSelection(null);
@@ -286,6 +325,7 @@ function ForcedLiquidationSettingsList() {
       {view === "users" && !canEdit && <p role="status" className="text-xs text-gray-500">正在核验创建人权限…</p>}
       {view === "tags" && <>
       <p className="text-xs leading-5 text-gray-600">列表金额统一折算为人民币；股票标签合计其下所有已开启持仓的金额。股票先展开持仓，再点击查看原币详情与设置；普通标签点击整行设置。规则与原逐股入口同步，已暂停、已结束标签置底。</p>
+      <p className="text-[11px] leading-5 text-gray-500">“只看开启”包括自动预设待触发；待触发不等于已生效，触发前完全计入，预设财务影响为0。若有可见待触发规则，本页最多5分钟只读刷新确认状态，不触发规则保存。</p>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1"><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><Input aria-label="搜索标签名、股票名、编号或代码" placeholder="标签 / 股票 / 编号 / 代码" value={search} disabled={pending} onChange={event => { if (!pending) { setSearch(event.target.value); setSelection(null); } }} className="bg-white pl-9" /></div>
         <Button variant="outline" aria-label="只看开启强平" aria-pressed={enabledOnly} disabled={pending} onClick={() => { if (!pending) { setEnabledOnly(value => !value); setSelection(null); } }} className={enabledOnly ? "border-red-200 bg-red-50 px-3 text-xs text-[#C62828]" : "bg-white px-3 text-xs"}>只看开启</Button>
@@ -303,6 +343,7 @@ function ForcedLiquidationSettingsList() {
             const fullCategory = data?.categories.find(item => item.categoryId === category.categoryId);
             const allActiveStocks = (fullCategory?.stocks ?? []).filter(stock => stock.remainingQuantity > 0);
             const enabledCount = allActiveStocks.filter(stock => stock.currentDownsideRule?.enabled === true).length;
+            const waitingCount = allActiveStocks.filter(stock => stockTagDownsideAutoStatus(stock.currentDownsideRule) === "waiting").length;
             // Stock summaries share the full-query scope of enabledCount, never the searched/filtered lots.
             const summaryCategory = isStock ? fullCategory : category;
             const categoryIneffectiveNumber = forcedLiquidationIneffectiveNumber(summaryCategory?.ineffectiveFundsCny);
@@ -319,9 +360,10 @@ function ForcedLiquidationSettingsList() {
                     {isStock && !allActiveStocks.length && <span className="mt-0.5 block text-[11px] opacity-75">暂无持仓</span>}
                   </button></td>
                   <td className="whitespace-nowrap px-2 py-2 text-[11px]">
-                    <span className={enabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{enabled ? "已开启强平" : "未开启强平"}</span>
+                    <span className={enabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{isStock && enabled && waitingCount === enabledCount ? "预设待触发" : enabled ? "已开启强平" : "未开启强平"}</span>
                     {enabled && <span data-ineffective-funds={rowKey} data-ineffective-currency="CNY" title={categoryIneffectiveNumber === "—" ? "无效金额人民币折算待核验" : "无效金额 · CNY"} className="mt-0.5 block tabular-nums text-[#C62828]">{categoryIneffectiveNumber}</span>}
                     {isStock && <span className="mt-0.5 block text-[10px] text-gray-500">已开启 {enabledCount}/{allActiveStocks.length}</span>}
+                    {isStock && waitingCount > 0 && <span className="block text-[10px] text-gray-500">待触发 {waitingCount}</span>}
                   </td>
                   <td title={category.lifecycleDate ? `${lifecycle.label} · ${category.lifecycleDate}` : lifecycle.label} className="px-2 py-2 text-[11px]"><span className="flex items-center justify-between gap-1 whitespace-nowrap">{lifecycle.label}{editable && <ChevronDown aria-hidden="true" className={`h-3 w-3 shrink-0 transition-transform ${categoryExpanded ? "rotate-180" : ""}`} />}</span></td>
                 </tr>
@@ -345,7 +387,7 @@ function ForcedLiquidationSettingsList() {
                         {stock.note && <span className="block truncate text-[11px] opacity-75">{stock.note}</span>}
                       </button></td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-[11px]">
-                        <span className={lotEnabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{lotEnabled ? "已开启强平" : "未开启强平"}</span>
+                        <span className={lotEnabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{forcedLiquidationStockRuleLabel(stock.currentDownsideRule)}</span>
                         {lotEnabled && <span data-ineffective-funds={lotKey} data-ineffective-currency="CNY" title={lotIneffectiveNumber === "—" ? "无效金额人民币折算待核验" : "无效金额 · CNY"} className="mt-0.5 block tabular-nums text-[#C62828]">{lotIneffectiveNumber}</span>}
                       </td>
                       <td className="px-2 py-1.5 text-[11px]"><span className="flex items-center justify-between gap-1 whitespace-nowrap">{lifecycle.label}<ChevronDown aria-hidden="true" className={`h-3 w-3 shrink-0 transition-transform ${lotExpanded ? "rotate-180" : ""}`} /></span></td>
@@ -393,10 +435,20 @@ function InlineDetail({ selection, canEdit, isViewingAs }: { selection: Selectio
   if (query.isPending || !query.isFetchedAfterMount) return <p role="status" className="text-xs text-gray-500">正在读取已保存详情…</p>;
   if (!detail) return <p role="status" className="text-xs text-gray-500">详情范围不匹配或缺少数据，待核验。</p>;
   const rule = detail.rule;
-  const future = rule?.enabled && isValidStockTagDownsideStartDate(rule.startDate) && rule.startDate > beijingStockTagDownsideDate();
+  const auto = detail.kind === "stock" && rule?.activationMode === "auto_drop";
+  const autoBasisValid = auto && rule && Number.isFinite(rule.autoDropPercent) && rule.autoDropPercent! > 0 && rule.autoDropPercent! < 100
+    && rule.downsidePercent === 0 && Number.isFinite(rule.threshold) && rule.threshold > 0
+    && rule.baselineStatus === "ready" && rule.baselineSource === "owner_threshold" && Number.isFinite(Date.parse(rule.armedAt ?? ""));
+  const autoConfirmed = autoBasisValid && !!rule?.triggeredAt && Number.isFinite(Date.parse(rule.triggeredAt))
+    && Number.isFinite(Date.parse(rule.triggerQuoteAsOf ?? "")) && Date.parse(rule.armedAt!) <= Date.parse(rule.triggerQuoteAsOf!)
+    && Date.parse(rule.triggerQuoteAsOf!) <= Date.parse(rule.triggeredAt)
+    && Number.isFinite(rule.triggerPrice) && rule.triggerPrice! > 0 && rule.triggerPrice! <= rule.threshold && !!rule.triggerSource?.trim();
+  const autoWaiting = autoBasisValid && rule?.enabled && rule.triggeredAt === undefined
+    && rule.triggerPrice === undefined && rule.triggerQuoteAsOf === undefined && rule.triggerSource === undefined;
+  const future = !auto && rule?.enabled && isValidStockTagDownsideStartDate(rule.startDate) && rule.startDate > beijingStockTagDownsideDate();
   const money = (value: number | null | undefined) => forcedLiquidationDetailNumber(value, detail.currency);
   const rows: [string, string][] = [
-    ["当前强平规则", rule?.enabled ? future ? "已开启 · 尚未生效" : "已开启" : "未开启"],
+    ["当前强平规则", auto ? !rule?.enabled ? "自动已关闭" : autoWaiting ? "预设待触发" : autoConfirmed && rule.baselineStatus === "ready" ? "自动已触发" : "自动待核验（不确认生效）" : rule?.enabled ? future ? "已开启 · 尚未生效" : "已开启" : "未开启"],
     [detail.kind === "stock" ? "初始价" : "初始账户金额", money(detail.initialValue)],
     [detail.kind === "stock" ? "强平价" : "强平金额", rule ? money(rule.threshold) : "未设置"],
     ["从初始到门槛跌幅", forcedLiquidationDetailDrop(detail.initialToThresholdPercent)],
@@ -408,7 +460,12 @@ function InlineDetail({ selection, canEdit, isViewingAs }: { selection: Selectio
     ["原币种", detail.currency || "待核验"],
     ["最新数据日期", detail.latestDate ?? "待核验"],
     ["最新数据来源", detail.latestSource?.startsWith("ledger_records:") ? "日历余额登记" : detail.latestSource?.startsWith("ledger_stock_intraday_quotes:") ? "最新行情记录" : detail.latestSource?.startsWith("ledger_stock_price_snapshots:") ? "日结行情记录" : detail.latestSource ?? "待核验"],
-    ["已保存启用日期", rule?.startDate ?? "未设置"],
+    ...(auto ? [
+      ["自动下跌百分比", `${forcedLiquidationDetailNumber(rule?.autoDropPercent)}%`],
+      ["预设确认时间", beijingStockTagDownsideTimestamp(rule?.armedAt)],
+      ["首次扫描确认时间", rule?.triggeredAt ? beijingStockTagDownsideTimestamp(rule.triggeredAt) : "尚未触发"],
+      ...(rule?.triggeredAt ? [["触发行情价", money(rule.triggerPrice)], ["行情证据时间", beijingStockTagDownsideTimestamp(rule.triggerQuoteAsOf)], ["触发行情来源", rule.triggerSource ?? "待核验"]] : []),
+    ] as [string, string][] : [["已保存启用日期", rule?.startDate ?? "未设置"]] as [string, string][]),
   ];
   if (detail.kind === "stock" && selection.kind === "stock") rows.push([parsePortfolioInstrument(selection.stock.symbol)?.market === "CRYPTO" ? "剩余币数" : "剩余股数", detail.remainingQuantity == null ? "待核验" : forcedLiquidationStockQuantity(selection.stock, detail.remainingQuantity)]);
   if (detail.kind === "ordinary" && detail.fundBasis === "cashflow_neutral_replay") {
@@ -419,7 +476,9 @@ function InlineDetail({ selection, canEdit, isViewingAs }: { selection: Selectio
       {rows.map(([label, value]) => <Fragment key={label}><dt className="border-b border-red-50 bg-red-50/50 px-2 py-2 text-gray-600">{label}</dt><dd className="min-w-0 break-words border-b border-red-50 px-2 py-2 font-medium text-gray-800">{value}</dd></Fragment>)}
     </dl>
     {detail.fundBasis === "cashflow_neutral_replay" && <p className="text-[11px] leading-5 text-gray-500">资金口径：现金流中性历史重放，本金净变动与取回不作为收益；有效 / 无效资金由服务端核验，不按初始金额减门槛推算，不是钱包可用余额。</p>}
-    {detail.fundBasis === "segmented_price_drop" && <p className="text-[11px] leading-5 text-gray-500">资金口径：分段价格变动。有效资金为门槛以上下跌金额全额，加上门槛以下下跌金额×剩余比例；无效资金为门槛以下未计入的部分，均按真实剩余股数计算。仅展示当前门槛的两段金额，不改旧规则历史收益，不是钱包可用余额。</p>}
+    {detail.fundBasis === "segmented_price_drop" && !autoWaiting && <p className="text-[11px] leading-5 text-gray-500">资金口径：分段价格变动。有效资金为门槛以上下跌金额全额，加上门槛以下下跌金额×剩余比例；无效资金为门槛以下未计入的部分，均按真实剩余股数计算。仅展示当前门槛的两段金额，不改旧规则历史收益，不是钱包可用余额。</p>}
+    {autoWaiting && <p role="status" className="text-[11px] leading-5 text-gray-500">预设待触发：当前完全计入，预设财务影响为0；有效 / 无效资金仅显示服务端核验值，不提前套用0%比例。</p>}
+    {autoConfirmed && <p role="status" className="text-[11px] leading-5 text-gray-500">从首次扫描确认瞬间起计入，不从兼容日期00:00起，不追溯历史。{rule?.enabled && detail.latestValue != null && detail.latestValue >= rule.threshold ? "当前恢复正常计入；" : ""}回升或再次下跌均不清除首次触发记录。用户豁免优先，不会自动卖出。</p>}
     {(detail.notice || detail.status !== "ready" || rule?.baselineStatus === "pending") && <p role="status" className="rounded-lg bg-amber-50 px-2 py-2 text-xs leading-5 text-amber-800">{detail.notice ?? (detail.status === "no_data" ? "缺少历史数据，待核验；不以0代替。" : "数据或规则待生效 / 核验，不代表收益重算已完成。")}</p>}
     <p className="text-[11px] text-gray-500">以上为已保存规则与真实数据，下方试填不会改变展示。</p>
   </div>;

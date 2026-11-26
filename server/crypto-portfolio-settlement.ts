@@ -23,7 +23,7 @@ import { buildLegacyCryptoPublicationHistory, type CryptoPublicationHistoryProof
 import { readUserTagDownsideOverrides } from './user-tag-downside-overrides';
 import { isUserTagDownsideExempt, type UserTagDownsideOverride } from '../shared/user-tag-downside-override';
 import { stockUserDownsideRules, isStockUserDownsideExemptSelection } from './shared/stock-user-tag-downside';
-
+import { processStockLotDownsideAutoQuote } from './stock-lot-downside-auto-trigger';
 const LEDGER_ID = 37;
 const POLICY = CRYPTO_PORTFOLIO_POLICY_VERSION;
 const STOCK_POLICY = 'cn-day-us-overnight-1505-v1';
@@ -524,6 +524,19 @@ export async function refreshCryptoPortfolioIntradaySnapshots(): Promise<{ categ
         price=IF(VALUES(captured_at)>=captured_at,VALUES(price),price),
         price_date=IF(VALUES(captured_at)>=captured_at,VALUES(price_date),price_date),
         captured_at=GREATEST(captured_at,VALUES(captured_at))`, [LEDGER_ID, row.category_id, row.symbol, quote.price, quote.priceDate, wall]);
+      try {
+        const triggered = await processStockLotDownsideAutoQuote({ ledgerId: 37, categoryId: Number(row.category_id),
+          symbol: String(row.symbol), price: quote.price, currency: 'USDT', priceDate: quote.priceDate,
+          observedAt: quote.updatedAt, source: quote.source });
+        if (triggered.length) {
+          invalidateCryptoPortfolioDerivedReadCaches();
+          // Already resident in the production scheduler; imported only on a committed trigger.
+          const { invalidateStockAutoDownsideDerivedCaches } = await import('./ledger-stock-portfolio');
+          invalidateStockAutoDownsideDerivedCaches();
+        }
+      } catch (error) {
+        console.warn('[37数字币自动强平] 触发检查失败，保留待触发，不阻断报价:', error instanceof Error ? error.message : '核验失败');
+      }
       result.updated++;
     }
     return result;

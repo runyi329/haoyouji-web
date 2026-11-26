@@ -26,8 +26,9 @@ import type { UserTagDownsideOverride } from '../shared/user-tag-downside-overri
 import { stockUserDownsideRules, isStockUserDownsideExemptSelection, stockUserCountedSalePrice,
   stockUserTagOverrideVersion, stockUserTagOverridesFingerprint } from './shared/stock-user-tag-downside';
 import { valueStockLotDownside, isStockLotDownsideBaselineQuoteValid, stockLotDownsideBaselineMarketContext, countedStockLotPrice, stockLotDownsideMemberOffset, stockLotDownsideMemberEntryAt, selectStockLotDownsideRule, latestStockLotDownsideRule, createStockLotDownsideVersion, stockLotDownsidePriceAsOf,
-  validateStockLotDownsideStartDate, stockLotDownsideEffectiveAt, resolveStockLotDownsideHistoricalRules, stockLotDownsideHistoricalEntryProof, type StockLotDownsideHistoricalQuote, type StockLotDownsideRule } from '../shared/stock-lot-downside';
+  validateStockLotDownsideStartDate, stockLotDownsideEffectiveAt, stockLotDownsideAutoThreshold, resolveStockLotDownsideHistoricalRules, stockLotDownsideHistoricalEntryProof, type StockLotDownsideHistoricalQuote, type StockLotDownsideRule } from '../shared/stock-lot-downside';
 import { readStockLotDownsideRules as readStoredStockLotDownsideRules, appendStockLotDownsideRule, ensureStockLotDownsideRulesTables, invalidateStockLotDownsideRuleCache, readStockLotDownsideSales, freezeStockLotDownsideSale, readStockLotDownsideMemberEpochs, appendStockLotDownsideMemberEpoch } from './stock-lot-downside-rules';
+import { processStockLotDownsideAutoQuote } from './stock-lot-downside-auto-trigger';
 import { isR1StockSaleFxScope, ensureStockSaleFxLocksTable, readStockSaleFxLocks,
   buildStockSaleFxLock, validateStockSaleFxLock, insertStockSaleFxLock, inheritStockSaleFxLock,
   aggregateFrozenStockSaleAmounts, type StockSaleFxQuote, type StockSaleFxLock } from './stock-sale-fx-locks';
@@ -120,6 +121,11 @@ function invalidateMemberStockReadCaches() {
   downsideResolvedReadCache.clear();
   revisionAwareCalendarReadCache.clear();
   invalidateCryptoPortfolioDerivedReadCaches();
+}
+
+/** Only after an automatic rule revision commits; no valuation rebuild or financial write here. */
+export function invalidateStockAutoDownsideDerivedCaches(): void {
+  invalidateMemberStockReadCaches();
 }
 
 function asRows(result: any): any[] {
@@ -1536,15 +1542,26 @@ export async function getStockLotDownsideRule(input: StockLotDownsideAccessInput
   return latestStockLotDownsideRule(await readStockLotDownsideRules(conn, input.ledgerId, input.categoryId), input.lotId);
 }
 export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput & {
-  enabled: boolean; thresholdPrice?: number; downsidePercent?: number; expectedVersion: number; startDate: string;
+  enabled: boolean; thresholdPrice?: number; downsidePercent?: number; expectedVersion: number; startDate?: string;
+  activationMode?: 'manual' | 'auto_drop'; autoDropPercent?: number;
 }): Promise<StockLotDownsideRule> {
   await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true, false, input.isViewingAs);
   if (!Number.isSafeInteger(input.lotId) || input.lotId <= 0) throw new Error('持仓编号无效');
-  validateStockLotDownsideStartDate(input.startDate);
+  const automatic = input.activationMode === 'auto_drop';
+  if (input.activationMode !== undefined && !['manual', 'auto_drop'].includes(input.activationMode)) throw new Error('强平启用方式无效');
+  if (automatic) {
+    if (process.env.PREVIEW_READONLY === 'true' || process.env.FAST_PREVIEW === 'true' || process.env.DEV_BYPASS_AUTH === 'true') throw new Error('预览模式禁止保存自动强平预设');
+    if (input.autoDropPercent === undefined || input.thresholdPrice !== undefined || input.downsidePercent !== undefined || input.startDate !== undefined) {
+      throw new Error('自动模式只需填写下跌触发百分比，门槛和生效时间由服务器确定');
+    }
+  } else {
+    if (input.autoDropPercent !== undefined || input.startDate === undefined) throw new Error('手动模式需填写有效启用日期');
+    validateStockLotDownsideStartDate(input.startDate);
+  }
   const lots = await getActiveLots(input.categoryId), lot = lots.find(l => l.id === input.lotId);
   if (!lot || portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity)) throw new Error('已平仓或不存在的持仓不能设置欠保证金');
   const conn = await getDbConnection(); if (!conn) throw new Error('数据库连接不可用');
-  const createdAt = new Date().toISOString(), effectiveAt = stockLotDownsideEffectiveAt(input.startDate);
+  const createdAt = new Date().toISOString(), effectiveAt = automatic ? createdAt : stockLotDownsideEffectiveAt(input.startDate!);
   const existing = await readStoredStockLotDownsideRules(conn, input.ledgerId, input.categoryId, true);
   const previous = latestStockLotDownsideRule(existing, input.lotId);
   // A manually configured threshold is rule evidence, not a historical market quote.
@@ -1563,7 +1580,10 @@ export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput
   }
   const settings = { ...input, currency: stockCurrency(lot.symbol), currentRawPrice: NaN,
     effectiveAt, createdAt, baselineStatus: 'ready' as const,
-    baselineSource: 'owner_threshold' as const, holdingStartAt: openingEvidence.openedAt, beforeStartRule: null };
+    baselineSource: 'owner_threshold' as const, holdingStartAt: openingEvidence.openedAt, beforeStartRule: null,
+    ...(automatic ? { activationMode: 'auto_drop' as const, autoEntryPrice: lot.unitCost,
+      autoDropPercent: input.autoDropPercent!, thresholdPrice: stockLotDownsideAutoThreshold(lot.unitCost, input.autoDropPercent!),
+      downsidePercent: 0, armedAt: createdAt } : {}) };
   createStockLotDownsideVersion(settings, previous); // Validate/CAS before any DDL.
   await ensureStockLotDownsideRulesTables(conn);
   await ensureStockCalendarResultTable();
@@ -1605,7 +1625,9 @@ export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput
       || Date.parse(toBeijingWallClockIso(opening.actual_traded_at_wall)) !== Date.parse(openingEvidence.openedAt)) {
       throw new Error('开仓或持仓资料已变化，请刷新后重新设置欠保证金');
     }
-    const rule = await appendStockLotDownsideRule(tx, { ...settings, createdAt: new Date().toISOString() });
+    const savedAt = new Date().toISOString();
+    const rule = await appendStockLotDownsideRule(tx, { ...settings, createdAt: savedAt,
+      ...(automatic ? { armedAt: savedAt, effectiveAt: savedAt } : {}) });
     await markStockCalendarResultDirty(tx, input.categoryId);
     await tx.commit();
     invalidateStockLotDownsideRuleCache(conn, input.ledgerId, input.categoryId);
@@ -5003,6 +5025,19 @@ export async function refreshLedgerStockTagIntradaySnapshots(): Promise<{ catego
              price = VALUES(price), price_date = VALUES(price_date), captured_at = NOW()`,
           [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
         );
+        // Native background quote path only: opening the owner/member page never arms or triggers.
+        // Display updatedAt/priceDate retain legacy fallbacks. Only the provider's real instant
+        // and its exchange date may activate a rule; the processor rechecks age/session/armedAt.
+        if (quote.autoTriggerEligible === true && quote.autoTriggerObservedAt && quote.autoTriggerPriceDate) {
+          try {
+            const triggered = await processStockLotDownsideAutoQuote({ ledgerId: 37, categoryId, symbol,
+              price: quote.price, currency: quote.currency, priceDate: quote.autoTriggerPriceDate,
+              observedAt: quote.autoTriggerObservedAt, source: quote.source });
+            if (triggered.length) invalidateMemberStockReadCaches();
+          } catch (error) {
+            console.warn('[37自动强平] 本笔触发检查失败，保留待触发，不阻断行情刷新:', error instanceof Error ? error.message : '核验失败');
+          }
+        }
         updated += 1;
       }
     }

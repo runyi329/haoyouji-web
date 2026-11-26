@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { parsePortfolioInstrument, portfolioDisplaySymbol } from "../shared/portfolio-instruments";
+import { stockLotDownsideAutoThreshold } from "../shared/stock-lot-downside";
 
 // Execute actual frontend functions with inert hooks/tRPC. No backend imports, DB, HTTP, browser, or writes.
 const source = readFileSync(new URL("../client/src/pages/ForcedLiquidationSettings.tsx", import.meta.url), "utf8");
@@ -63,6 +64,10 @@ function readonlyWindow(search = "", stored: string | null = null) {
   return { location: { search }, sessionStorage: { getItem: vi.fn(() => stored) } };
 }
 const validDate = fn("isValidStockTagDownsideStartDate", {}, false, panel);
+const beijingDate = fn("beijingStockTagDownsideDate", {}, false, panel);
+const beijingTimestamp = fn("beijingStockTagDownsideTimestamp", {}, false, panel);
+const autoStatus = fn("stockTagDownsideAutoStatus", { stockLotDownsideAutoThreshold, beijingStockTagDownsideDate: beijingDate }, false, panel);
+const stockRuleLabel = fn("forcedLiquidationStockRuleLabel", { stockTagDownsideAutoStatus: autoStatus });
 const validate = fn("validateOrdinaryTagDownsideDraft", { isValidStockTagDownsideStartDate: validDate });
 const access = fn("canAccessForcedLiquidationSettings");
 const lifecycle = fn("forcedLiquidationLifecycle");
@@ -83,12 +88,14 @@ function listHarness({ viewing = false, allowed = true, list = categories }: { v
   const utils = { ledger: new Proxy({}, { get: (_, name: string) => ({ invalidate: invalidations[name] ??= vi.fn() }) }) };
   const query = { data: { ledgerId: 37, canEdit: allowed, categories: list }, isPending: false, error: null, refetch: vi.fn() };
   const useQuery = vi.fn(() => query);
-  const scope = { ...symbols, useState: hook.useState, useLocation: () => ["", vi.fn()],
+  const useEffect = vi.fn();
+  const scope = { ...symbols, useState: hook.useState, useEffect, useLocation: () => ["", vi.fn()],
     isForcedLiquidationReadonlyView: () => viewing, filterForcedLiquidationCategories: filter, forcedLiquidationStockOrder: order, forcedLiquidationLifecycle: lifecycle,
     forcedLiquidationStockLabel: stockLabel, forcedLiquidationPositionLabel: positionLabel, forcedLiquidationStockQuantity: stockQuantity, resolveForcedLiquidationSelection: resolveSelection,
     forcedLiquidationIneffectiveNumber: ineffectiveNumber,
+    stockTagDownsideAutoStatus: autoStatus, forcedLiquidationStockRuleLabel: stockRuleLabel,
     trpc: { useUtils: () => utils, ledger: { getForcedLiquidationSettings: { useQuery } } } };
-  return { hook, invalidations, useQuery, query, render: () => { hook.reset(); return fn("ForcedLiquidationSettingsList", scope)(); } };
+  return { hook, invalidations, useQuery, useEffect, query, render: () => { hook.reset(); return fn("ForcedLiquidationSettingsList", scope)(); } };
 }
 function ordinaryHarness({ viewing = false, canEdit = true, dev = false, saved = true, pending = false } = {}) {
   const hook = hooks(), mutate = vi.fn(), onClose = vi.fn(), onReload = vi.fn(), onPendingChange = vi.fn();
@@ -124,6 +131,7 @@ function detailHarness({ data = savedDetail, queryPatch = {}, viewing = false, c
   const useQuery = vi.fn(() => query);
   const scope = { ...symbols, forcedLiquidationDetailNumber: detailNumber, forcedLiquidationDetailDrop: detailDrop,
     isValidStockTagDownsideStartDate: validDate, beijingStockTagDownsideDate: () => "2026-11-26",
+    beijingStockTagDownsideTimestamp: beijingTimestamp,
     parsePortfolioInstrument, forcedLiquidationStockQuantity: stockQuantity,
     isForcedLiquidationReadonlyView: () => liveReadonly,
     trpc: { ledger: { getForcedLiquidationSettingDetail: { useQuery } } } };
@@ -809,5 +817,127 @@ describe("37号集中强平设置：离线前端契约", () => {
     expect(source).not.toMatch(/<(?:StockTagBuyEditDialog|StockTagTradeDialog)\b|utils\.invalidate\(|invalidate\(\)/);
     expect(source).not.toContain("getCryptoPrices"); expect(source).not.toContain("getStockPrice");
     expect(source).toContain("不自动卖出或操作钱包"); expect(source).toContain("不改原登记金额");
+  });
+});
+
+const savedAutoRule = {
+  lotId: 77, version: 10, enabled: true, activationMode: 'auto_drop', autoDropPercent: 10,
+  autoEntryPrice: 120, thresholdPrice: 108, downsidePercent: 0, startDate: '2026-11-26',
+  armedAt: '2026-11-26T02:01:02.345Z', effectiveAt: '2026-11-26T02:01:02.345Z',
+  baselineStatus: 'ready', baselineSource: 'owner_threshold',
+};
+const savedAutoTriggered = {
+  ...savedAutoRule, version: 11, effectiveAt: '2026-11-26T02:04:05.678Z',
+  triggeredAt: '2026-11-26T02:04:05.678Z', triggerPrice: 107.5,
+  triggerQuoteAsOf: '2026-11-26T02:04:04.123Z', triggerSource: 'live_provider',
+};
+const autoDetailRule = (rule = savedAutoRule) => ({ ...rule, threshold: rule.thresholdPrice });
+
+describe('集中自动强平：离线展示、只读刷新边界', () => {
+  it('启用筛选保留预设待触发、不标已生效，父金额仍来自完整人民币DTO', () => {
+    const list = [{ ...categories[0], ineffectiveFundsCny: 0, stocks: [
+      { ...stock, currentDownsideRule: savedAutoRule, ineffectiveFundsCny: 0 },
+      { ...stock, lotId: 78, currentDownsideRule: { ...savedAutoRule, lotId: 78, enabled: false }, ineffectiveFundsCny: 999 },
+    ] }];
+    expect(filter(list, '', true)[0].stocks.map((s: any) => s.lotId)).toEqual([77]);
+    const h = listHarness({ list }); let tree = openStockCategory(h);
+    const row = tableRows(tree).find(row => row.props['data-lot-id'] === 77);
+    expect(text(row)).toContain('预设待触发0.00'); expect(text(row)).not.toContain('已生效');
+    expect(text(tableRows(tree)[0])).toContain('预设待触发0.00已开启 1/2待触发 1');
+    expect(text(tree)).toContain('触发前完全计入，预设财务影响为0');
+    click(nodes(tree).find(n => n.props['aria-label'] === '只看开启强平')); tree = h.render();
+    expect(tableRows(tree).map(row => row.props['data-lot-id'])).toEqual([undefined, 77]);
+    expect(text(ineffectiveSpan(tree, '90250:tag'))).toBe('0.00');
+    expect(h.query.refetch).not.toHaveBeenCalled(); expect(Object.keys(h.invalidations)).toEqual([]);
+  });
+  it('已触发/已关闭/损坏审计状态区分，旧manual标签保持原名', () => {
+    expect(stockRuleLabel(savedAutoRule)).toBe('预设待触发');
+    expect(stockRuleLabel(savedAutoTriggered)).toBe('自动已触发');
+    expect(stockRuleLabel({ ...savedAutoTriggered, enabled: false })).toBe('自动已关闭');
+    expect(stockRuleLabel({ ...savedAutoTriggered, triggerSource: '' })).toBe('自动待核验');
+    expect(stockRuleLabel(categories[0].stocks[1].currentDownsideRule)).toBe('已开启强平');
+    expect(stockRuleLabel(null)).toBe('未开启强平');
+  });
+  it('auto waiting已保存详情不展示人工启用日期且原币门槛/财务影响正确解释', () => {
+    const tree = detailHarness({ data: { ...savedDetail, initialValue: 120, latestValue: 107, ineffectiveFunds: 0, rule: autoDetailRule() } }).render();
+    const values = detailValues(tree);
+    expect(values['当前强平规则']).toBe('预设待触发');
+    expect(values['强平价']).toBe('108 USD');
+    expect(values['剩余保证金比例']).toBe('剩0%保证金');
+    expect(values['预设确认时间']).toBe('2026-11-26 10:01:02.345（北京时间）');
+    expect(values['首次扫描确认时间']).toBe('尚未触发');
+    expect(values).not.toHaveProperty('已保存启用日期');
+    expect(text(tree)).toContain('不提前套用0%比例');
+    expect(text(tree)).not.toContain('无效资金为门槛以下未计入的部分');
+  });
+  it('触发后回升不清首次trigger，精确北京确认不同quote证据时刻', () => {
+    const data = { ...savedDetail, latestValue: 120, rule: autoDetailRule(savedAutoTriggered) };
+    const tree = detailHarness({ data }).render(), values = detailValues(tree);
+    expect(values['当前强平规则']).toBe('自动已触发');
+    expect(values['首次扫描确认时间']).toBe('2026-11-26 10:04:05.678（北京时间）');
+    expect(values['行情证据时间']).toBe('2026-11-26 10:04:04.123（北京时间）');
+    expect(text(tree)).toContain('当前恢复正常计入'); expect(text(tree)).toContain('不从兼容日期00:00起');
+    expect(values).not.toHaveProperty('已保存启用日期');
+    expect(data.rule.triggeredAt).toBe(savedAutoTriggered.triggeredAt);
+  });
+  it('API损坏触发证据或pending不以已触发ready标示', () => {
+    for (const patch of [{ triggeredAt: 'invalid' }, { baselineStatus: 'pending' }]) {
+      const tree = detailHarness({ data: { ...savedDetail, rule: { ...autoDetailRule(savedAutoTriggered), ...patch } } }).render();
+      expect(detailValues(tree)['当前强平规则']).toBe('自动待核验（不确认生效）');
+    }
+  });
+  it('auto混合行情只读重显与人民币parent不按过滤subset重算', () => {
+    const list = [{ ...categories[0], ineffectiveFundsCny: 700, stocks: [
+      { ...stock, currentDownsideRule: savedAutoRule, ineffectiveFundsCny: 0, ineffectiveCurrency: 'USD' },
+      { ...stock, lotId: 78, symbol: 'CRYPTO:BTC-USDT', currentDownsideRule: { ...savedAutoTriggered, lotId: 78 }, ineffectiveFundsCny: 700, ineffectiveCurrency: 'USDT' },
+    ] }];
+    const h = listHarness({ list }); let tree = openStockCategory(h);
+    nodes(tree).find(n => n.type === 'Input').props.onChange({ target: { value: 'AAPL' } }); tree = h.render();
+    expect(ineffectiveSpans(tree).map(text)).toEqual(['700.00', '0.00']);
+    expect(ineffectiveSpans(tree).every(n => n.props['data-ineffective-currency'] === 'CNY')).toBe(true);
+    expect(tableRows(tree).map(row => row.props['data-lot-id'])).toEqual([undefined, 77]);
+  });
+  it('有限polling仅允许owner与有可见waiting，5分钟或20ticks截止且卸载clear', () => {
+    let tick: (() => void) | undefined, time = 0;
+    const read = vi.fn(), clearInterval = vi.fn(), setInterval = vi.fn((callback: () => void) => { tick = callback; return 77; });
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => time);
+    const window = { setInterval, clearInterval };
+    const poll = fn('startForcedLiquidationAutoPolling', { window, document: { visibilityState: 'visible' }, isForcedLiquidationReadonlyView: () => false });
+    try {
+      poll({ allowed: false, hasWaiting: true, read }); poll({ allowed: true, hasWaiting: false, read });
+      expect(setInterval).not.toHaveBeenCalled();
+      const stop = poll({ allowed: true, hasWaiting: true, read });
+      expect(setInterval).toHaveBeenCalledWith(expect.any(Function), 15000);
+      for (let i = 0; i < 25; i++) tick!();
+      expect(read).toHaveBeenCalledTimes(20); expect(clearInterval).toHaveBeenCalledWith(77);
+      stop(); expect(clearInterval).toHaveBeenCalledWith(77);
+      read.mockClear(); poll({ allowed: true, hasWaiting: true, read }); time = 300000; tick!();
+      expect(read).not.toHaveBeenCalled();
+    } finally { now.mockRestore(); }
+  });
+  it('polling隐藏页不读取，代看立即停止，执行callback只query refetch和当前owner detail缓存失效', () => {
+    let tick!: () => void, readonly = false;
+    const document = { visibilityState: 'hidden' }, read = vi.fn(), clearInterval = vi.fn();
+    const poll = fn('startForcedLiquidationAutoPolling', { window: { setInterval: (callback: () => void) => { tick = callback; return 1; }, clearInterval }, document, isForcedLiquidationReadonlyView: () => readonly });
+    const stop = poll({ allowed: true, hasWaiting: true, read }); tick(); expect(read).not.toHaveBeenCalled();
+    document.visibilityState = 'visible'; tick(); expect(read).toHaveBeenCalledOnce();
+    readonly = true; tick(); expect(clearInterval).toHaveBeenCalledWith(1); expect(read).toHaveBeenCalledOnce(); stop();
+    const h = listHarness({ list: [{ ...categories[0], stocks: [{ ...stock, currentDownsideRule: savedAutoRule }] }] });
+    openStockLot(h);
+    const callback = h.useEffect.mock.calls.at(-1)![0];
+    const start = vi.fn((options: any) => { options.read(); return () => {}; });
+    // Extract the real useEffect callback with inert closures: cannot import or execute any backend.
+    const effectCall = find(file, n => ts.isCallExpression(n) && n.expression.getText(file) === 'useEffect')[0] as ts.CallExpression;
+    const currentSelection = { kind: 'stock', category: categories[0], stock };
+    const invalidations: Record<string, any> = {};
+    const actual = execute(effectCall.arguments[0].getText(file).replaceAll('import.meta.env.DEV', 'false'), {
+      startForcedLiquidationAutoPolling: start, canEdit: true, pending: false, isViewingAs: false, visibleWaitingKey: '90250:77:10',
+      currentSelection, query: h.query, utils: { ledger: new Proxy({}, { get: (_, name: string) => ({ invalidate: invalidations[name] ??= vi.fn() }) }) },
+    });
+    expect(typeof callback).toBe('function'); actual();
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ allowed: true, hasWaiting: true }));
+    expect(h.query.refetch).toHaveBeenCalledOnce();
+    expect(Object.keys(invalidations).sort()).toEqual(['getForcedLiquidationSettingDetail', 'getStockLotDownsideRule'].sort());
+    for (const invalidate of Object.values(invalidations)) expect(invalidate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 77 });
   });
 });

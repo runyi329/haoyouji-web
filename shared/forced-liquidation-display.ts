@@ -18,6 +18,13 @@ export type ForcedLiquidationSettingDetail = {
     startDate: string;
     baselineSource?: string;
     baselineStatus?: string;
+    activationMode?: 'manual' | 'auto_drop';
+    autoDropPercent?: number;
+    armedAt?: string;
+    triggeredAt?: string;
+    triggerPrice?: number;
+    triggerQuoteAsOf?: string;
+    triggerSource?: string;
   } | null;
   status: 'ready' | 'pending' | 'no_data';
   notice: string | null;

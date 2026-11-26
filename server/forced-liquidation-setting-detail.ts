@@ -16,6 +16,10 @@ function number(value: unknown): number | null {
 }
 const missingTable = (error: any) => error?.code === 'ER_NO_SUCH_TABLE' || error?.errno === 1146;
 const missingColumn = (error: any) => error?.code === 'ER_BAD_FIELD_ERROR' || error?.errno === 1054;
+const missingActivationMode = (error: any) => missingColumn(error)
+  && /Unknown column ['`](?:\w+\.)?activation_mode['`]/i.test(String(error?.sqlMessage ?? error?.message));
+// These DATETIME(3) columns contain UTC wall values already: no driver/local-zone conversion.
+const utcMillisColumn = (name: string) => `CONCAT(LEFT(DATE_FORMAT(${name},'%Y-%m-%dT%H:%i:%s.%f'),23),'Z') AS ${name}`;
 async function rows(conn: Connection, sql: string, values: unknown[]): Promise<any[]> {
   // This local boundary is deliberately incapable of transaction/DDL/write statements.
   if (!/^SELECT\b/.test(sql) || /\bFOR\s+UPDATE\b/i.test(sql)) throw new Error('详情仅允许SELECT');
@@ -84,13 +88,28 @@ async function stockDetail(conn: Connection, input: ForcedLiquidationSettingDeta
     } catch (error) { if (!missingTable(error)) throw error; }
   }
   const baseColumns = `ledger_id,category_id,lot_id,user_id,version,enabled,threshold_price,downside_percent,
-    DATE_FORMAT(effective_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS effective_at,baseline_raw_price,baseline_counted_price,currency`;
+    ${utcMillisColumn('effective_at')},baseline_raw_price,baseline_counted_price,currency`;
   let saved: any[] = [];
   const suffix = 'FROM ledger_stock_lot_downside_rules WHERE ledger_id=? AND category_id=? AND lot_id=? ORDER BY version DESC LIMIT 1';
   try {
     try { saved = await rows(conn, `SELECT ${baseColumns},DATE_FORMAT(start_date,'%Y-%m-%d') AS start_date,
-      baseline_status,baseline_source,holding_start_at ${suffix}`, [37, input.categoryId, input.lotId]); }
-    catch (error) { if (!missingColumn(error)) throw error; saved = await rows(conn, `SELECT ${baseColumns} ${suffix}`, [37, input.categoryId, input.lotId]); }
+      baseline_status,baseline_source,holding_start_at,activation_mode,auto_drop_percent,auto_entry_price,
+      ${utcMillisColumn('armed_at')},${utcMillisColumn('triggered_at')},trigger_price,
+      ${utcMillisColumn('trigger_quote_as_of')},trigger_source ${suffix}`, [37, input.categoryId, input.lotId]); }
+    catch (error) {
+      if (!missingColumn(error)) throw error;
+      let legacy = missingActivationMode(error);
+      if (!legacy) {
+        // The oldest schema may report start_date first. Confirm the mode column is absent
+        // using SELECT only; a partially migrated auto schema must never become manual.
+        try { await rows(conn, `SELECT activation_mode ${suffix}`, [37, input.categoryId, input.lotId]); }
+        catch (modeError) { if (!missingActivationMode(modeError)) throw modeError; legacy = true; }
+      }
+      if (!legacy) throw error;
+      try { saved = await rows(conn, `SELECT ${baseColumns},DATE_FORMAT(start_date,'%Y-%m-%d') AS start_date,
+        baseline_status,baseline_source,holding_start_at ${suffix}`, [37, input.categoryId, input.lotId]); }
+      catch (legacyError) { if (!missingColumn(legacyError)) throw legacyError; saved = await rows(conn, `SELECT ${baseColumns} ${suffix}`, [37, input.categoryId, input.lotId]); }
+    }
   } catch (error) { if (!missingTable(error)) throw error; }
   return buildForcedLiquidationStockDetail(input, lots, quotes, saved, now);
 }

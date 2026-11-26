@@ -3,6 +3,7 @@ import React from 'react';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as instruments from '../../../shared/portfolio-instruments';
+import { stockLotDownsideAutoThreshold } from '../../../shared/stock-lot-downside';
 
 // Beijing is already November 25 while UTC remains November 24.
 const now = Date.parse('2026-11-24T16:05:00.000Z');
@@ -31,6 +32,7 @@ function harness(options: { dev?: boolean; readOnlyPreview?: boolean; canEdit?: 
   const props = { categoryId: 90250, order: { lotId: 11, eventId: 101, stockName: '苹果', symbol: 'AAPL', marketPrice: 9, currentCountedPrice: 9, quantity: 100, executionPrice: 8, actualTradedAt: '2026-11-01T00:00:00Z', note: '' }, canEdit: options.canEdit ?? true, isViewingAs: options.isViewingAs ?? false, readOnlyPreview: options.readOnlyPreview ?? false, onClose: vi.fn(), onPendingChange: vi.fn(), previewDownsideRule: options.rule, onPreviewDownsideChange: options.onPreviewDownsideChange };
   const scope = {
     ...instruments,
+    stockLotDownsideAutoThreshold,
     useState: (initial: any) => {
       const i = cursor++;
       if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
@@ -65,9 +67,10 @@ function harness(options: { dev?: boolean; readOnlyPreview?: boolean; canEdit?: 
     if (!result) throw new Error(`Missing field ${suffix}`);
     return result;
   };
-  const change = (suffix: string, value: string | boolean) => field(suffix).props.onChange({ target: suffix === 'enabled' ? { checked: value } : { value } });
+  const change = (suffix: string, value: string | boolean) => field(suffix).props.onChange({ target: suffix === 'enabled' || suffix === 'rearm-confirm' ? { checked: value } : { value } });
+  const mode = (value: 'manual' | 'auto_drop') => field(`mode-${value}`).props.onClick();
   const save = () => nodes(render()).find(node => node.type === 'button' && /^保存/.test(text(node)))!.props.onClick();
-  return { props, scope, query, mutation, invalidates, invalidateAll, render, field, change, save, validate: exports.validateStockTagDownsideDraft, beijingDate: exports.beijingStockTagDownsideDate, validDate: exports.isValidStockTagDownsideStartDate, options: () => ({ queryOptions, queryInput }), success: (rule?: any) => mutationOptions.onSuccess(rule), error: (message: string) => mutationOptions.onError(new Error(message)) };
+  return { props, scope, query, mutation, invalidates, invalidateAll, render, field, change, mode, save, validate: exports.validateStockTagDownsideDraft, beijingDate: exports.beijingStockTagDownsideDate, beijingTimestamp: exports.beijingStockTagDownsideTimestamp, autoStatus: exports.stockTagDownsideAutoStatus, validDate: exports.isValidStockTagDownsideStartDate, options: () => ({ queryOptions, queryInput }), success: (rule?: any) => mutationOptions.onSuccess(rule), error: (message: string) => mutationOptions.onError(new Error(message)) };
 }
 
 beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(now); });
@@ -476,5 +479,124 @@ describe('启用日期范围与新旧规则pending兼容状态', () => {
       expect(h.invalidates.getMyLedger37AiStockPool).toHaveBeenCalledOnce();
       expect(h.props.onClose).toHaveBeenCalledOnce();
     }
+  });
+});
+
+const autoRule = {
+  lotId: 11, version: 4, enabled: true, activationMode: 'auto_drop', autoDropPercent: 10,
+  autoEntryPrice: 8, thresholdPrice: 7.2, downsidePercent: 0, startDate: today,
+  armedAt: '2026-11-24T16:01:02.123Z', effectiveAt: '2026-11-24T16:01:02.123Z',
+  baselineStatus: 'ready', baselineSource: 'owner_threshold',
+};
+const triggeredAutoRule = {
+  ...autoRule, version: 5, triggeredAt: '2026-11-24T16:04:05.678Z', effectiveAt: '2026-11-24T16:04:05.678Z',
+  triggerQuoteAsOf: '2026-11-24T16:04:04.321Z', triggerPrice: 7.1, triggerSource: 'live_provider',
+};
+
+describe('自动下跌：真实TSX严格分支与无写入回显', () => {
+  it('切换自动只出现drop输入，默认10示例，门槛按真实买入价而非行情计算', () => {
+    const h = harness(); h.mode('auto_drop');
+    expect(h.field('auto-drop').props.value).toBe('10');
+    expect(nodes(h.render()).filter(n => n.type === 'input').map(n => n.props.id)).toEqual(['stock-downside-enabled', 'stock-downside-auto-drop']);
+    const content = text(h.render());
+    expect(content).toContain('触发价 · USD：US$7.2');
+    expect(content).toContain('真实买入价 · USD：US$8');
+    expect(content).toContain('固定剩0%保证金（不可调整）');
+    expect(content).toContain('10%仅为默认示例');
+    expect(content).not.toContain('已保存启用日期');
+    expect(content).not.toContain('启用日期起重算');
+    expect(h.mutation.mutate).not.toHaveBeenCalled();
+  });
+  it('超过存储精度的drop明确拒绝，不以买入价错误掩盖；8位小数仍合法', async () => {
+    for (const drop of ['12.345678901', '0.000000001']) {
+      const h = harness(); h.mode('auto_drop'); h.change('auto-drop', drop); await h.save();
+      expect(h.mutation.mutate).not.toHaveBeenCalled();
+      expect(h.scope.toast.error).toHaveBeenCalledWith('下跌百分比最多支持8位小数');
+      expect(text(h.render())).toContain('最多8位小数');
+    }
+    const h = harness({ queryData: autoRule }); h.change('auto-drop', '12.3456789'); await h.save();
+    expect(h.mutation.mutate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11,
+      enabled: true, activationMode: 'auto_drop', autoDropPercent: 12.3456789, expectedVersion: 4 });
+  });
+  it('任意有效drop及关闭状态严格只发送scope/enabled/mode/drop/version，无手动或审计残留', async () => {
+    for (const drop of ['0.01', '10', '25.75', '99.999']) {
+      const h = harness({ queryData: autoRule }); h.change('auto-drop', drop); await h.save();
+      expect(h.mutation.mutate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11, enabled: true, activationMode: 'auto_drop', autoDropPercent: Number(drop), expectedVersion: 4 });
+      expect(Object.keys(h.mutation.mutate.mock.calls[0][0]).sort()).toEqual(['ledgerId', 'categoryId', 'lotId', 'enabled', 'activationMode', 'autoDropPercent', 'expectedVersion'].sort());
+    }
+    const h = harness({ queryData: triggeredAutoRule }); h.change('enabled', false); await h.save();
+    expect(h.mutation.mutate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11, enabled: false, activationMode: 'auto_drop', autoDropPercent: 10, expectedVersion: 5 });
+  });
+  it('drop拒绝空、0、100、超界和非有限输入；真实成交价无效不保存', async () => {
+    for (const drop of ['', ' ', '0', '-1', '100', '101', 'NaN', 'Infinity']) {
+      const h = harness(); h.mode('auto_drop'); h.change('auto-drop', drop); await h.save();
+      expect(h.mutation.mutate).not.toHaveBeenCalled();
+      expect(h.scope.toast.error).toHaveBeenCalledWith('下跌百分比须大于0且小于100%');
+    }
+    const h = harness(); h.props.order.executionPrice = 0; h.mode('auto_drop'); await h.save();
+    expect(h.mutation.mutate).not.toHaveBeenCalled();
+    expect(h.scope.toast.error).toHaveBeenCalledWith('缺少有效的真实买入价，不能预设自动触发规则');
+  });
+  it('auto本地仅callback，无callback/代看/非owner不保存也不启用读取', async () => {
+    const callback = vi.fn().mockResolvedValue(undefined);
+    const h = harness({ dev: true, onPreviewDownsideChange: callback }); h.mode('auto_drop'); h.change('enabled', true); h.change('auto-drop', '17.5'); await h.save();
+    expect(callback).toHaveBeenCalledWith(11, { enabled: true, activationMode: 'auto_drop', autoDropPercent: 17.5, expectedVersion: 0 });
+    expect(h.mutation.mutate).not.toHaveBeenCalled(); expect(h.options().queryOptions.enabled).toBe(false);
+    expect(text(h.render())).toContain('本地预览规则已保存');
+    for (const options of [{ dev: true }, { readOnlyPreview: true }, { dev: true, isViewingAs: true, onPreviewDownsideChange: callback }, { canEdit: false }]) {
+      const denied = harness(options);
+      if (denied.render()) { denied.mode('auto_drop'); await denied.save(); }
+      expect(denied.mutation.mutate).not.toHaveBeenCalled(); expect(denied.options().queryOptions.enabled).toBe(false);
+    }
+    expect(callback).toHaveBeenCalledOnce();
+  });
+  it('waiting当前计入价等于raw且不按pending隐掉，不比较市场价触发、不query写入', () => {
+    const h = harness({ queryData: autoRule }); h.props.order.marketPrice = 7;
+    h.props.order.currentCountedPrice = 7.2;
+    const content = text(h.render());
+    expect(content).toContain('预设待触发'); expect(content).toContain('财务影响为0');
+    const prices = nodes(h.render()).find(n => String(n.props?.className ?? '').includes('rounded-lg bg-[#FFF5F5]'));
+    expect(text(prices.props.children[1])).toContain('US$7');
+    expect(content).toContain('2026-11-25 00:01:02.123（北京时间）');
+    expect(content).not.toContain('首次扫描确认时间');
+    expect(h.mutation.mutate).not.toHaveBeenCalled(); expect(h.props.onPreviewDownsideChange).toBeUndefined();
+  });
+  it('首次触发回显精确确认时间和行情证据时间且回升保持已触发', () => {
+    const h = harness({ queryData: triggeredAutoRule }); h.props.order.marketPrice = 9;
+    const content = text(h.render());
+    expect(content).toContain('已触发'); expect(content).toContain('首次扫描确认时间：2026-11-25 00:04:05.678（北京时间）');
+    expect(content).toContain('行情证据时间：2026-11-25 00:04:04.321（北京时间）');
+    expect(content).not.toContain('已保存启用日期');
+    expect(h.autoStatus(triggeredAutoRule)).toBe('triggered');
+    expect(h.mutation.mutate).not.toHaveBeenCalled();
+    expect(h.beijingTimestamp('bad')).toBe('待核验');
+  });
+  it('已触发保存必须明确确认重新预设，修改drop后撤销确认，关闭不需要重设确认', async () => {
+    const h = harness({ queryData: triggeredAutoRule }); await h.save(); expect(h.mutation.mutate).not.toHaveBeenCalled();
+    expect(text(h.render())).toContain('我确认重新预设'); expect(text(h.render())).toContain('旧首次触发审计保留');
+    h.change('rearm-confirm', true); h.change('auto-drop', '20'); await h.save(); expect(h.mutation.mutate).not.toHaveBeenCalled();
+    h.change('rearm-confirm', true); await h.save(); expect(h.mutation.mutate).toHaveBeenCalledOnce();
+    expect(h.mutation.mutate.mock.calls[0][0]).not.toHaveProperty('triggeredAt');
+  });
+  it('损坏drop/门槛/触发证据不会被回显为已触发，关闭恒等raw', () => {
+    const h = harness({ queryData: triggeredAutoRule });
+    for (const patch of [{ autoDropPercent: 100 }, { thresholdPrice: 7.3 }, { triggerQuoteAsOf: 'bad' }, { triggerSource: '' }, { triggeredAt: null }, { startDate: '2026-11-24' }]) {
+      expect(h.autoStatus({ ...triggeredAutoRule, ...patch })).toBe('invalid');
+    }
+    h.query.data = { ...triggeredAutoRule, enabled: false }; h.props.order.currentCountedPrice = 7.2;
+    expect(text(h.render())).toContain('已关闭');
+    const prices = nodes(h.render()).find(n => String(n.props?.className ?? '').includes('rounded-lg bg-[#FFF5F5]'));
+    expect(text(prices.props.children[1])).toContain('US$9');
+  });
+  it('切回手动保留旧输入和旧payload，自动数据不得落进手动body', async () => {
+    const h = harness(); h.change('threshold', '10'); h.change('percent', '30'); h.change('start-date', '2026-11-01');
+    h.mode('auto_drop'); h.change('auto-drop', '25'); h.mode('manual'); await h.save();
+    expect(h.mutation.mutate).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11, enabled: false, thresholdPrice: 10, downsidePercent: 30, startDate: '2026-11-01', expectedVersion: 0 });
+  });
+  it('auto正式成功提示重新预设而非历史重算已完成，只失效原限定scope', () => {
+    const h = harness({ queryData: autoRule }); h.render(); h.success(autoRule);
+    expect(h.scope.toast.success.mock.calls[0][0]).toContain('待后台有效行情扫描确认触发');
+    expect(h.scope.toast.success.mock.calls[0][0]).not.toContain('启用日期起重算');
+    expect(h.invalidateAll).not.toHaveBeenCalled(); expect(h.props.onClose).toHaveBeenCalledOnce();
   });
 });

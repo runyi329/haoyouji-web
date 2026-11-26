@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 const db = vi.hoisted(() => ({ get: vi.fn(), tx: vi.fn() }));
+const isolation = vi.hoisted(() => ({ denied: vi.fn(() => { throw new Error('real DB/network forbidden'); }) }));
 vi.mock('./db', () => ({ getDbConnection: db.get, getDbTransactionConnection: db.tx }));
+vi.mock('mysql2/promise', () => ({ default: { createConnection: isolation.denied, createPool: isolation.denied },
+  createConnection: isolation.denied, createPool: isolation.denied }));
+vi.mock('mysql2', () => ({ default: { createConnection: isolation.denied, createPool: isolation.denied },
+  createConnection: isolation.denied, createPool: isolation.denied }));
+vi.mock('node:http', () => ({ default: { request: isolation.denied, get: isolation.denied }, request: isolation.denied, get: isolation.denied }));
+vi.mock('node:https', () => ({ default: { request: isolation.denied, get: isolation.denied }, request: isolation.denied, get: isolation.denied }));
+vi.mock('node:net', () => ({ default: { connect: isolation.denied, createConnection: isolation.denied }, connect: isolation.denied, createConnection: isolation.denied }));
+vi.mock('node:tls', () => ({ default: { connect: isolation.denied }, connect: isolation.denied }));
 import { getForcedLiquidationSettingDetail } from './forced-liquidation-setting-detail';
 import { calculateOrdinaryTagDownsideSeries } from '../shared/ordinary-tag-downside';
 // Project vitest include is server-only. This focused entry executes our shared pure suite
@@ -26,12 +35,27 @@ const ordinaryRule = (overrides: Record<string, unknown> = {}) => ({ ledger_id: 
 const record = (id: number, day: string, value: unknown, overrides: Record<string, unknown> = {}) => ({
   id, ledgerId: 37, categoryId: 81, recordDate: day, type: 'income', amount: value,
   createdAt: `${day} 12:00:00.000000`, deletedAt: null, description: null, ...overrides });
+const autoColumns = ['activation_mode', 'auto_drop_percent', 'auto_entry_price', 'armed_at', 'triggered_at',
+  'trigger_price', 'trigger_quote_as_of', 'trigger_source'];
+const dateColumns = ['start_date', 'baseline_status', 'baseline_source', 'holding_start_at'];
+const utcColumns = ['effective_at', 'armed_at', 'triggered_at', 'trigger_quote_as_of'];
+const badColumn = (name: string, errnoOnly = false) => Object.assign(new Error(`Unknown column '${name}' in 'field list'`),
+  errnoOnly ? { errno: 1054 } : { code: 'ER_BAD_FIELD_ERROR', sqlMessage: `Unknown column '${name}' in 'field list'` });
+// mysql2 interpreting a UTC DATETIME wall value in a local +08 zone produces a different Date
+// instant. Only SQL formatting must recover the stored wall value, never Date.toISOString().
+const mysqlDate = (wall: string) => Object.assign(new Date(`${wall.replace(' ', 'T')}+08:00`), { mysqlUtcWall: wall });
+const automaticRule = (overrides: Record<string, unknown> = {}) => rule({ version: 3, activation_mode: 'auto_drop',
+  threshold_price: '90', downside_percent: '0', auto_drop_percent: '10', auto_entry_price: '100',
+  baseline_raw_price: '90', baseline_counted_price: '90', start_date: '2026-11-26',
+  effective_at: '2026-11-25T16:00:13.123Z', armed_at: '2026-11-25T16:00:13.123Z',
+  triggered_at: null, trigger_price: null, trigger_quote_as_of: null, trigger_source: null, ...overrides });
 function fixture(ordinary = false) {
   const state = { owner: 7 as number | null, categories: [category(ordinary ? { accounting_mode: 'manual_balance' } : {})] as any[],
     lots: [lot()] as any[], stockRules: [rule()] as any[], ordinaryRules: [ordinaryRule()] as any[],
     close: [quote()] as any[], intraday: [] as any[], config: [{ ledger_id: 37, tag_name: '真实标签', initial_amount: '100' }] as any[],
     records: [record(1, '2026-11-20', '100'), record(2, '2026-11-25', '60')] as any[],
-    missing: new Set<string>(), failures: new Map<string, any>(), oldStockColumns: false };
+    missing: new Set<string>(), failures: new Map<string, any>(), oldStockColumns: false,
+    missingStockColumns: new Set<string>(), errnoOnly: false, unknownStockColumnError: false };
   const conn = { execute: vi.fn(async (sql: string, values: any[]) => {
     if (!/^SELECT\b/.test(sql) || /\bFOR UPDATE\b/i.test(sql)) throw new Error('forbidden non-SELECT');
     const table = sql.match(/\bFROM\s+(\w+)/)?.[1];
@@ -43,11 +67,24 @@ function fixture(ordinary = false) {
     if (table === 'ledger_stock_price_snapshots') return [state.close];
     if (table === 'ledger_stock_intraday_quotes') return [state.intraday];
     if (table === 'ledger_stock_lot_downside_rules') {
-      if (state.oldStockColumns && sql.includes('start_date')) throw Object.assign(new Error('old fields'), { errno: 1054 });
+      const select = sql.split(/\bFROM\b/)[0];
+      const absent = new Set([...Array.from(state.missingStockColumns), ...(state.oldStockColumns ? [...dateColumns, ...autoColumns] : [])]);
+      const missing = select.match(/\b[a-z_]+\b/g)?.find(name => absent.has(name));
+      if (missing) throw badColumn(missing, state.errnoOnly);
+      if (state.unknownStockColumnError && select.includes('auto_drop_percent')) throw Object.assign(new Error('unspecified bad field'), { errno: 1054 });
       const latest = [...state.stockRules].sort((a, b) => b.version - a.version)[0];
       if (!latest) return [[]];
-      if (state.oldStockColumns) return [[{ ...latest, start_date: undefined, baseline_source: undefined, baseline_status: undefined }]];
-      return [[latest]];
+      const projected = Object.fromEntries(Object.entries(latest).filter(([name]) => !absent.has(name) && new RegExp(`\\b${name}\\b`).test(select)));
+      for (const name of utcColumns) {
+        const value = projected[name] as any;
+        if (!(value instanceof Date) || !value.mysqlUtcWall) continue;
+        if (select.includes(`CONCAT(LEFT(DATE_FORMAT(${name},'%Y-%m-%dT%H:%i:%s.%f'),23),'Z') AS ${name}`)) {
+          projected[name] = `${value.mysqlUtcWall.replace(' ', 'T')}Z`;
+        } else if (select.includes(`DATE_FORMAT(${name},'%Y-%m-%dT%H:%i:%s.%fZ') AS ${name}`)) {
+          projected[name] = `${value.mysqlUtcWall.replace(' ', 'T')}000Z`;
+        }
+      }
+      return [[projected]];
     }
     if (table === 'ledger_ordinary_tag_downside_rules') return [state.ordinaryRules];
     if (table === 'ledger_tag_config') return [state.config];
@@ -58,8 +95,9 @@ function fixture(ordinary = false) {
   return { state, conn };
 }
 const ordinaryInput = { ledgerId: 37, userId: 7, categoryId: 81 };
-beforeEach(() => { vi.clearAllMocks(); vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-26T01:00:00Z')); });
-afterEach(() => vi.mocked(Date.now).mockRestore());
+beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('fetch', isolation.denied);
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-26T01:00:00Z')); });
+afterEach(() => { expect(isolation.denied).not.toHaveBeenCalled(); vi.mocked(Date.now).mockRestore(); vi.unstubAllGlobals(); });
 describe('detail owner-only scope and SELECT-only isolation', () => {
   it.each([{ ...input, isViewingAs: true }, { ...input, ledgerId: 52 }, { ...input, userId: 0 },
     { ...input, categoryId: 81.5 }, { ...input, lotId: -1 }])('bad input zero DB %o', async request => {
@@ -186,6 +224,96 @@ describe('stock source-native detail', () => {
   it('DB errors propagate without compatibility raw fallback', async () => {
     const { state } = fixture(); state.failures.set('ledger_stock_price_snapshots', new Error('network failure'));
     await expect(getForcedLiquidationSettingDetail(input)).rejects.toThrow('network failure');
+  });
+});
+describe('stock automatic detail SQL time and schema fail-closed regressions', () => {
+  const ruleQueries = (conn: ReturnType<typeof fixture>['conn']) => conn.execute.mock.calls.filter(([sql]) => sql.includes('FROM ledger_stock_lot_downside_rules'));
+  it('actual driver Date values become exact UTC millisecond strings through SQL, not local Date conversion', async () => {
+    const { state, conn } = fixture();
+    const armed = mysqlDate('2026-11-25 16:00:13.123');
+    const triggered = mysqlDate('2026-11-25 16:01:17.456');
+    const observed = mysqlDate('2026-11-25 16:01:16.789');
+    state.stockRules = [automaticRule({ effective_at: triggered, armed_at: armed, triggered_at: triggered,
+      trigger_price: '60', trigger_quote_as_of: observed, trigger_source: 'actual-intraday' })];
+    state.intraday = [quote({ captured_at: '2026-11-26 00:02:00.000000' })];
+    const result = await getForcedLiquidationSettingDetail(input);
+    expect(result.status).toBe('ready'); expect(result.ineffectiveFunds).toBeGreaterThan(0);
+    expect(result.rule).toMatchObject({ activationMode: 'auto_drop', armedAt: '2026-11-25T16:00:13.123Z',
+      triggeredAt: '2026-11-25T16:01:17.456Z', triggerQuoteAsOf: '2026-11-25T16:01:16.789Z', triggerSource: 'actual-intraday' });
+    expect(observed).toBeInstanceOf(Date); expect(observed.toISOString()).not.toBe(result.rule?.triggerQuoteAsOf);
+    expect(state.stockRules[0].trigger_quote_as_of).toBe(observed); // no input/audit repair
+    const queries = ruleQueries(conn); expect(queries).toHaveLength(1);
+    for (const name of utcColumns) expect(queries[0][0]).toContain(`CONCAT(LEFT(DATE_FORMAT(${name},'%Y-%m-%dT%H:%i:%s.%f'),23),'Z') AS ${name}`);
+    expect(queries[0][0]).not.toMatch(/CONVERT_TZ|\+08:00/);
+    expect(queries[0][1]).toEqual([37, 81, 101]); expect(conn.execute.mock.calls[0][0]).toBe('SELECT ownerId FROM ledgers WHERE id=? LIMIT 1');
+  });
+  it('Beijing midnight waiting retains exact save instant and older NY quote, never activates on read', async () => {
+    const { state, conn } = fixture(); vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-25T16:00:30Z'));
+    const armed = mysqlDate('2026-11-25 16:00:13.123');
+    state.stockRules = [rule({ version: 2 }), automaticRule({ effective_at: armed, armed_at: armed })];
+    state.intraday = [quote({ captured_at: '2026-11-26 00:00:10.000000' })];
+    const result = await getForcedLiquidationSettingDetail(input);
+    expect(result).toMatchObject({ status: 'ready', latestDate: '2026-11-25', effectiveFunds: 400, ineffectiveFunds: 0 });
+    expect(result.rule).toMatchObject({ version: 3, startDate: '2026-11-26', activationMode: 'auto_drop', armedAt: '2026-11-25T16:00:13.123Z' });
+    expect(result.rule?.triggeredAt).toBeUndefined(); expect(result.notice).toContain('页面读取不会触发');
+    expect(state.stockRules[1].triggered_at).toBeNull(); expect(ruleQueries(conn)).toHaveLength(1);
+    expect(db.tx).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('real preceding manual/date schema missing activation_mode remains ready (errnoOnly=%s)', async errnoOnly => {
+    const { state, conn } = fixture(); state.errnoOnly = errnoOnly;
+    autoColumns.forEach(name => state.missingStockColumns.add(name));
+    expect(await getForcedLiquidationSettingDetail(input)).toMatchObject({ status: 'ready', effectiveFunds: 240, ineffectiveFunds: 160 });
+    const queries = ruleQueries(conn); expect(queries).toHaveLength(2);
+    expect(queries[0][0]).toContain('activation_mode'); expect(queries[1][0]).toContain('start_date');
+    expect(queries[1][0]).not.toContain('activation_mode');
+    for (const [, values] of queries) expect(values).toEqual([37, 81, 101]);
+  });
+  it('true oldest schema reporting start_date first confirms missing mode by SELECT and preserves legacy pending', async () => {
+    const { state, conn } = fixture(); state.oldStockColumns = true;
+    const result = await getForcedLiquidationSettingDetail(input);
+    expect(result).toMatchObject({ status: 'pending', effectiveFunds: null, ineffectiveFunds: null }); expect(result.notice).toContain('旧规则');
+    const queries = ruleQueries(conn); expect(queries).toHaveLength(4);
+    expect(queries[1][0]).toMatch(/^SELECT activation_mode FROM/);
+    expect(queries[3][0]).not.toMatch(/start_date|activation_mode/);
+  });
+  it.each(['auto_drop_percent', 'auto_entry_price', 'armed_at', 'triggered_at', 'trigger_price', 'trigger_quote_as_of', 'trigger_source',
+    'start_date', 'baseline_status', 'baseline_source', 'holding_start_at'])('partial auto schema missing %s cannot become manual/ready, including midnight waiting', async name => {
+    const { state, conn } = fixture(); vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-25T16:00:30Z'));
+    state.stockRules = [rule({ version: 2 }), automaticRule()];
+    state.intraday = [quote({ captured_at: '2026-11-26 00:00:10.000000' })];
+    state.missingStockColumns.add(name);
+    const original = JSON.stringify(state.stockRules);
+    await expect(getForcedLiquidationSettingDetail(input)).rejects.toThrow(`Unknown column '${name}'`);
+    const queries = ruleQueries(conn); expect(queries).toHaveLength(2);
+    expect(queries[1][0]).toMatch(/^SELECT activation_mode FROM/);
+    expect(queries.every(([sql]) => sql.includes('activation_mode'))).toBe(true);
+    expect(JSON.stringify(state.stockRules)).toBe(original); expect(db.tx).not.toHaveBeenCalled();
+  });
+  it('unknown missing-column error with existing activation_mode cannot use a legacy projection', async () => {
+    const { state, conn } = fixture(); state.unknownStockColumnError = true; state.stockRules = [automaticRule()];
+    await expect(getForcedLiquidationSettingDetail(input)).rejects.toThrow('unspecified bad field');
+    expect(ruleQueries(conn)).toHaveLength(2); expect(ruleQueries(conn)[1][0]).toMatch(/^SELECT activation_mode FROM/);
+  });
+  it('unidentifiable activation-mode probe failure also fails closed without legacy reads', async () => {
+    const { state, conn } = fixture(); state.failures.set('ledger_stock_lot_downside_rules', Object.assign(new Error('unknown schema'), { errno: 1054 }));
+    await expect(getForcedLiquidationSettingDetail(input)).rejects.toThrow('unknown schema');
+    expect(ruleQueries(conn)).toHaveLength(2);
+  });
+  it.each([{ trigger_quote_as_of: null }, { trigger_source: '' }, { armed_at: null }])('present auto columns with damaged audit %o keep pending without inventing evidence', async overrides => {
+    const { state, conn } = fixture();
+    state.stockRules = [rule({ version: 2 }), automaticRule({ effective_at: '2026-11-25T16:01:17.456Z',
+      triggered_at: '2026-11-25T16:01:17.456Z', trigger_price: '60', trigger_quote_as_of: '2026-11-25T16:01:16.789Z',
+      trigger_source: 'actual-intraday', ...overrides })];
+    const original = JSON.stringify(state.stockRules);
+    expect(await getForcedLiquidationSettingDetail(input)).toMatchObject({ status: 'pending', effectiveFunds: null, ineffectiveFunds: null,
+      rule: { version: 3, activationMode: 'auto_drop' } });
+    expect(ruleQueries(conn)).toHaveLength(1); expect(JSON.stringify(state.stockRules)).toBe(original);
+  });
+  it('missing rules table never enables or creates a rule', async () => {
+    const { state, conn } = fixture(); state.stockRules = [automaticRule()]; state.missing.add('ledger_stock_lot_downside_rules');
+    expect(await getForcedLiquidationSettingDetail(input)).toMatchObject({ status: 'pending', rule: null, effectiveFunds: null, ineffectiveFunds: null });
+    expect(ruleQueries(conn)).toHaveLength(1); expect(db.tx).not.toHaveBeenCalled();
+    for (const [sql] of conn.execute.mock.calls) expect(sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|FOR UPDATE)\b/);
   });
 });
 describe('ordinary global initial canonical full-history neutral replay', () => {

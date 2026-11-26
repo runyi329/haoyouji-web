@@ -9,6 +9,10 @@ export const STOCK_LOT_DOWNSIDE_RULES_DDL = `CREATE TABLE IF NOT EXISTS ledger_s
   baseline_status VARCHAR(12) NULL, baseline_source VARCHAR(24) NULL, holding_start_at VARCHAR(40) NULL,
   currency VARCHAR(4) NOT NULL, quote_as_of VARCHAR(40) NULL,
   created_at DATETIME(3) NOT NULL COMMENT 'UTC server audit time',
+  activation_mode VARCHAR(12) NULL, auto_drop_percent DECIMAL(12,8) NULL, auto_entry_price DECIMAL(30,12) NULL,
+  armed_at DATETIME(3) NULL COMMENT 'UTC owner save confirmation',
+  triggered_at DATETIME(3) NULL COMMENT 'UTC first scan confirmation', trigger_price DECIMAL(30,12) NULL,
+  trigger_quote_as_of DATETIME(3) NULL COMMENT 'UTC actual quote observation', trigger_source VARCHAR(160) NULL,
   UNIQUE KEY uk_stock_lot_downside_version (ledger_id,category_id,lot_id,version),
   INDEX idx_stock_lot_downside_category (ledger_id,category_id,effective_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
@@ -22,15 +26,32 @@ export const STOCK_LOT_DOWNSIDE_SALES_DDL = `CREATE TABLE IF NOT EXISTS ledger_s
 const missingTable = (e: any) => e?.code === 'ER_NO_SUCH_TABLE' || e?.errno === 1146;
 const caches = new WeakMap<object, Map<string, { until: number; promise: Promise<StockLotDownsideRule[]> }>>();
 const iso = (value: unknown) => value instanceof Date ? value.toISOString() : String(value);
+const utcMillisColumn = (name: string) => `CONCAT(LEFT(DATE_FORMAT(${name},'%Y-%m-%dT%H:%i:%s.%f'),23),'Z') AS ${name}`;
 const columns = `ledger_id,category_id,lot_id,user_id,version,enabled,threshold_price,downside_percent,
-  DATE_FORMAT(effective_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS effective_at,
+  ${utcMillisColumn('effective_at')},
   baseline_raw_price,baseline_counted_price,currency,quote_as_of,
-  DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at`;
+  ${utcMillisColumn('created_at')}`;
 const dateColumns = `${columns},DATE_FORMAT(start_date,'%Y-%m-%d') AS start_date,baseline_status,baseline_source,holding_start_at`;
+const autoColumns = `${dateColumns},activation_mode,auto_drop_percent,auto_entry_price,
+  ${utcMillisColumn('armed_at')},${utcMillisColumn('triggered_at')},trigger_price,
+  ${utcMillisColumn('trigger_quote_as_of')},trigger_source`;
 const missingColumn = (e: any) => e?.code === 'ER_BAD_FIELD_ERROR' || e?.errno === 1054;
 async function selectRules(conn: any, suffix: string, params: any[]) {
-  try { return await conn.execute(`SELECT ${dateColumns} FROM ledger_stock_lot_downside_rules ${suffix}`, params); }
-  catch (e) { if (!missingColumn(e)) throw e; return conn.execute(`SELECT ${columns} FROM ledger_stock_lot_downside_rules ${suffix}`, params); }
+  try { return await conn.execute(`SELECT ${autoColumns} FROM ledger_stock_lot_downside_rules ${suffix}`, params); }
+  catch (e: any) {
+    if (!missingColumn(e)) throw e;
+    // A named missing auto column identifies the preceding manual/date schema.
+    // Unknown errors conservatively use the oldest schema; never infer auto readiness.
+    const missing = String(e.sqlMessage ?? e.message);
+    // A partially installed auto schema must not strip activation_mode and expose its 0% basis as manual.
+    if (/auto_drop_percent|auto_entry_price|armed_at|triggered_at|trigger_price|trigger_quote_as_of|trigger_source/.test(missing)
+      && !/activation_mode/.test(missing)) throw e;
+    if (/activation_mode/.test(missing)) {
+      try { return await conn.execute(`SELECT ${dateColumns} FROM ledger_stock_lot_downside_rules ${suffix}`, params); }
+      catch (legacy) { if (!missingColumn(legacy)) throw legacy; }
+    }
+    return conn.execute(`SELECT ${columns} FROM ledger_stock_lot_downside_rules ${suffix}`, params);
+  }
 }
 function decode(r: any): StockLotDownsideRule {
   return { ledgerId: Number(r.ledger_id), categoryId: Number(r.category_id), lotId: Number(r.lot_id), userId: Number(r.user_id),
@@ -38,7 +59,20 @@ function decode(r: any): StockLotDownsideRule {
     downsidePercent: Number(r.downside_percent), effectiveAt: iso(r.effective_at), baselineRawPrice: r.baseline_raw_price == null ? NaN : Number(r.baseline_raw_price),
     baselineCountedPrice: r.baseline_counted_price == null ? NaN : Number(r.baseline_counted_price), currency: r.currency, quoteAsOf: r.quote_as_of ?? undefined, createdAt: iso(r.created_at),
     ...(r.start_date ? { startDate: String(r.start_date) } : {}), baselineStatus: r.baseline_status ?? undefined,
-    baselineSource: r.baseline_source ?? undefined, holdingStartAt: r.holding_start_at ?? undefined };
+    baselineSource: r.baseline_source ?? undefined, holdingStartAt: r.holding_start_at ?? undefined,
+    ...(r.activation_mode == null ? {} : { activationMode: r.activation_mode }),
+    ...(r.auto_drop_percent == null ? {} : { autoDropPercent: Number(r.auto_drop_percent) }),
+    ...(r.auto_entry_price == null ? {} : { autoEntryPrice: Number(r.auto_entry_price) }),
+    ...(r.armed_at == null ? {} : { armedAt: iso(r.armed_at) }),
+    ...(r.triggered_at == null ? {} : { triggeredAt: iso(r.triggered_at) }),
+    ...(r.trigger_price == null ? {} : { triggerPrice: Number(r.trigger_price) }),
+    ...(r.trigger_quote_as_of == null ? {} : { triggerQuoteAsOf: iso(r.trigger_quote_as_of) }),
+    ...(r.trigger_source == null ? {} : { triggerSource: String(r.trigger_source) }) };
+}
+/** SELECT-only current highest version; caller locks lot then opening event first. */
+export async function readLatestStockLotDownsideRuleForUpdate(conn: any, ledgerId: number, categoryId: number, lotId: number): Promise<StockLotDownsideRule | null> {
+  const [rows] = await selectRules(conn, `WHERE ledger_id=? AND category_id=? AND lot_id=? ORDER BY version DESC LIMIT 1 FOR UPDATE`, [ledgerId, categoryId, lotId]);
+  return rows[0] ? decode(rows[0]) : null;
 }
 /** SELECT-only whole-ledger batch for settings/CAS: all saved versions, no effective-time filter or cache. */
 export async function readAllStockLotDownsideRules(conn: any, ledgerId: number): Promise<StockLotDownsideRule[]> {
@@ -75,7 +109,10 @@ export async function ensureStockLotDownsideRulesTables(conn: any): Promise<void
     WHERE table_schema=DATABASE() AND table_name='ledger_stock_lot_downside_rules'`);
   const names = new Set(existing.map((r: any) => String(r.COLUMN_NAME ?? r.column_name)));
   for (const [name, definition] of [['start_date','DATE NULL'],['baseline_status','VARCHAR(12) NULL'],
-    ['baseline_source','VARCHAR(24) NULL'],['holding_start_at','VARCHAR(40) NULL']]) {
+    ['baseline_source','VARCHAR(24) NULL'],['holding_start_at','VARCHAR(40) NULL'],
+    ['activation_mode','VARCHAR(12) NULL'],['auto_drop_percent','DECIMAL(12,8) NULL'],['auto_entry_price','DECIMAL(30,12) NULL'],
+    ['armed_at','DATETIME(3) NULL'],['triggered_at','DATETIME(3) NULL'],['trigger_price','DECIMAL(30,12) NULL'],
+    ['trigger_quote_as_of','DATETIME(3) NULL'],['trigger_source','VARCHAR(160) NULL']]) {
     if (!names.has(name)) await conn.execute(`ALTER TABLE ledger_stock_lot_downside_rules ADD COLUMN ${name} ${definition}`);
   }
   await conn.execute(`ALTER TABLE ledger_stock_lot_downside_rules MODIFY baseline_raw_price DECIMAL(30,12) NULL,
@@ -97,9 +134,14 @@ export async function appendStockLotDownsideRule(conn: any, input: Parameters<ty
       values[10] = Number.isFinite(next.baselineCountedPrice) ? next.baselineCountedPrice : null;
       values.push(next.startDate, next.baselineStatus ?? 'ready', next.baselineSource ?? null, next.holdingStartAt ?? null);
     }
+    const autoExtra = next.activationMode === 'auto_drop'
+      ? ',activation_mode,auto_drop_percent,auto_entry_price,armed_at,triggered_at,trigger_price,trigger_quote_as_of,trigger_source' : '';
+    if (autoExtra) values.push(next.activationMode!, next.autoDropPercent!, next.autoEntryPrice!, mysqlUtc(next.armedAt!),
+      next.triggeredAt ? mysqlUtc(next.triggeredAt) : null, next.triggerPrice ?? null,
+      next.triggerQuoteAsOf ? mysqlUtc(next.triggerQuoteAsOf) : null, next.triggerSource ?? null);
     const [result] = await conn.execute(`INSERT INTO ledger_stock_lot_downside_rules
       (ledger_id,category_id,lot_id,user_id,version,enabled,threshold_price,downside_percent,effective_at,
-       baseline_raw_price,baseline_counted_price,currency,quote_as_of,created_at${extra}) VALUES (${values.map(() => '?').join(',')})`, values);
+       baseline_raw_price,baseline_counted_price,currency,quote_as_of,created_at${extra}${autoExtra}) VALUES (${values.map(() => '?').join(',')})`, values);
     if (Number(result.affectedRows) !== 1) throw new Error('欠保证金版本保存失败');
   } catch (e: any) { if (e?.code === 'ER_DUP_ENTRY') throw new Error('欠保证金版本冲突，请刷新后重试'); throw e; }
   return next;
