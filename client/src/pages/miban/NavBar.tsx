@@ -5,7 +5,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { toast } from "sonner";
-import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet, Store } from "lucide-react";
+import { Home, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet, Store } from "lucide-react";
 import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
 import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { QRCodeSVG } from "qrcode.react";
@@ -88,7 +88,6 @@ function InviteQrDialog({ isAuthenticated, open, onClose }: { isAuthenticated: b
 
 const tabItems = [
   { href: "/p/proj_hzxm2t/", label: "首页", icon: Home },
-  { href: "/p/proj_hzxm2t/rice", label: "百科", icon: BookOpen },
   { href: "/p/proj_hzxm2t/limited", label: "限时", icon: Clock },
   { href: "/p/proj_hzxm2t/my-orders", label: "我的", icon: User },
 ];

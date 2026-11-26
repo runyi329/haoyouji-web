@@ -6,7 +6,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ShoppingCart, Trash2, BookOpen } from "lucide-react";
+import { ShoppingCart, Trash2, BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 import type { mibanUserRecipes } from "../../../../drizzle/schema";
@@ -633,6 +633,17 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── 米百科：仅保留首页底部的细横条入口 ─────────────── */}
+      <section className="px-4 pb-4" aria-label="米百科入口">
+        <Link
+          href="/p/proj_hzxm2t/rice"
+          className="flex min-h-11 items-center justify-between rounded-lg border border-gray-100 bg-gray-50/60 px-3 text-[13px] font-medium text-gray-600 active:bg-gray-100 transition-colors"
+          data-testid="miban-home-encyclopedia-entry"
+        >
+          <span>米百科</span>
+          <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+        </Link>
+      </section>
 
       {/* ── 营养成分抽屉 ─────────────────────────────────── */}
       {activeRice && (
