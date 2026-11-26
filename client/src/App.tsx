@@ -137,6 +137,7 @@ const PendingOverview = lazy(() => import("./pages/PendingOverview"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
+const ForcedLiquidationSettings = lazy(() => import("./pages/ForcedLiquidationSettings"));
 const EmailTemplateManage = lazy(() => import("./pages/EmailTemplateManage"));
 const ShortcutButtonsManage = lazy(() => import("./pages/ShortcutButtonsManage"));
 const PptGuide = lazy(() => import("./pages/PptGuide"));
@@ -637,6 +638,7 @@ function Router() {
         <Route path="/ledger/create" component={CreateLedger} />
         <Route path="/ledger/join/:token" component={JoinLedger} />
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
+        <Route path="/ledger/:id/forced-liquidation-settings" component={ForcedLiquidationSettings} />
         <Route path="/admin/email-templates" component={EmailTemplateManage} />
         <Route path="/ledger/:id/ag-data-sources" component={AgDataSources} />
         <Route path="/ledger/:ledgerId/equity-history" component={EquityHistoryPage} />

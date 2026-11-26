@@ -102,9 +102,14 @@ export function buildMemberStockCalendar(input: {
     if (!priceDates.has(key)) priceDates.set(key, stockLotDownsidePriceAsOf(symbol, date));
     return priceDates.get(key)!;
   };
-  const memberOffset = (item: MemberCalendarParticipation, asOf: string) => {
+  const memberOffset = (item: MemberCalendarParticipation, asOf: string, participationAsOf: string = asOf) => {
     if (!item.assignedAt) return undefined;
     const entryAt = stockLotDownsideMemberEntryAt(item.assignedAt, item.startDate);
+    if (selectStockLotDownsideRule(downsideRules, item.lotId ?? item.id, entryAt)?.baselineSource === 'owner_threshold') {
+      return stockLotDownsideMemberOffset({ lotId: item.lotId ?? item.id, participationId: item.id,
+        assignedAt: item.assignedAt, startDate: item.startDate, rules: downsideRules,
+        epochs: input.downsideMemberEpochs ?? [], asOf, participationAsOf, entryRawPrice: item.entryPrice });
+    }
     const proofKey = `${item.symbol}:${entryAt}`;
     if (!entryProofs.has(proofKey)) entryProofs.set(proofKey, stockLotDownsideHistoricalEntryProof(item.symbol, entryAt, historicalQuotes, now));
     const proof = entryProofs.get(proofKey);
@@ -216,7 +221,7 @@ export function buildMemberStockCalendar(input: {
       const quote = (quotesBySymbol.get(item.symbol) ?? []).filter(row => row.priceDate === expected).at(-1);
       if (!quote) { missingSymbols.add(item.symbol); continue; }
       const closeAt = priceAt(item.symbol, quote.priceDate);
-      const offset = memberOffset(item, closeAt);
+      const offset = memberOffset(item, closeAt, getUnifiedStockClosePublishAt(date).toISOString());
       const value = valueStockLotDownside({ lotId: item.lotId ?? item.id, quantity, entryPrice: item.entryPrice,
         rawPrice: quote.price, rules: downsideRules, asOf: closeAt, direction: 'counterparty', entryAt: item.entryAt, entryCountedOffset: offset });
       if (value.countedMarketValue === null) { invalidHistory = true; continue; }

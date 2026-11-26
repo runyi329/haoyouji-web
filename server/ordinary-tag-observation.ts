@@ -1,6 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { getDbConnection } from './db';
 import { decryptValue, isEncrypted } from './encryption';
+import { readAllOrdinaryTagDownsideRules } from './ordinary-tag-downside-rules';
+import type { OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
 import {
   ORDINARY_TAG_OBSERVATION_LEDGER_ID,
   calculateOrdinaryTagObservationSummary,
@@ -120,13 +122,14 @@ async function rawRecords(conn: Connection, category: Category, cutoff: string):
   // 开始日前记录仅供计算函数提取最后一个真实余额基准；未来/删除记录在SQL及纯函数双重排除。
   const rows = await selectRows<OrdinaryTagObservationRecord>(conn,
     `SELECT r.ledgerId, ? AS categoryId, DATE_FORMAT(r.recordDate, '%Y-%m-%d') AS recordDate, r.type, r.amount,
+            r.id AS recordId, DATE_FORMAT(r.createdAt, '%Y-%m-%d %H:%i:%s.%f') AS createdAt,
             CASE WHEN r.type = 'transfer' THEN r.description ELSE NULL END AS description,
             r.deleted_at AS deletedAt
      FROM ledger_records r
      INNER JOIN ledger_categories c ON c.id = r.categoryId AND c.ledgerId = r.ledgerId
      WHERE r.ledgerId = ? AND (c.id = ? OR c.parentId = ?)
        AND r.deleted_at IS NULL AND r.recordDate <= ?
-     ORDER BY r.recordDate ASC, r.id ASC`, [category.id, category.ledgerId, category.id, category.id, cutoff]);
+     ORDER BY r.recordDate ASC, r.createdAt ASC, r.id ASC`, [category.id, category.ledgerId, category.id, category.id, cutoff]);
   return rows.map((row) => {
     const description = typeof row.description === 'string' ? decryptValue(row.description) : null;
     if (description && isEncrypted(description)) {
@@ -135,15 +138,35 @@ async function rawRecords(conn: Connection, category: Category, cutoff: string):
     return { ...row, description };
   });
 }
-async function summaryFor(conn: Connection, category: Category, userId: number, config: OrdinaryTagObservationConfig): Promise<OrdinaryTagObservationSummary> {
+type DownsideRulesBatch = Map<number, OrdinaryTagDownsideRule[]> | null;
+async function readDownsideRulesBatch(conn: Connection): Promise<DownsideRulesBatch> {
+  try { return await readAllOrdinaryTagDownsideRules(conn, ORDINARY_TAG_OBSERVATION_LEDGER_ID); }
+  catch {
+    // 无法确认哪些category已保存规则时保守阻断所有受影响启用观察，不能降级成raw ready。
+    // 正常“尚未建表”由SELECT-only store明确返回空Map，不在这里吞成无规则。
+    return null;
+  }
+}
+async function summaryFor(
+  conn: Connection, category: Category, userId: number, config: OrdinaryTagObservationConfig,
+  loadedRules?: DownsideRulesBatch,
+): Promise<OrdinaryTagObservationSummary> {
   const today = ledgerToday();
   const base = { ledgerId: ORDINARY_TAG_OBSERVATION_LEDGER_ID, userId, categoryId: category.id, categoryName: category.name, config, today };
   // 非启用/未来/非法配置不读取行情，不补默认值。
   let valid = true;
   try { validateOrdinaryTagObservationConfig(config); } catch { valid = false; }
+  const rules = loadedRules === undefined ? await readDownsideRulesBatch(conn) : loadedRules;
+  if (rules === null && valid && config.enabled && config.startDate <= today) {
+    const pending = calculateOrdinaryTagObservationSummary({ ...base, records: [] });
+    return { ...pending, status: 'pending' };
+  }
+  const downsideRules = rules?.get(category.id);
   const cutoff = config.pauseDate !== null && config.pauseDate <= today ? config.pauseDate : today;
   const records = !valid || !config.enabled || config.startDate > today ? [] : await rawRecords(conn, category, cutoff);
-  return calculateOrdinaryTagObservationSummary({ ...base, records });
+  return calculateOrdinaryTagObservationSummary({ ...base, records,
+    ...(downsideRules?.length ? { downsideRules } : {}),
+  });
 }
 
 export async function adminGetOrdinaryTagObservationConfig(input: AdminInput): Promise<{ config: OrdinaryTagObservationConfig | null }> {
@@ -198,13 +221,15 @@ export async function getMyOrdinaryTagObservationOverview(input: {
      WHERE ledgerId = ? AND parentId IS NULL AND isDefault = 0 AND accounting_mode = 'manual_balance'
      ORDER BY sortOrder ASC, id ASC`, [input.ledgerId]);
   const observations: OrdinaryTagObservationSummary[] = [];
+  // 本次overview只批量SELECT规则一次；保留既有每tag真实records查询，不引入规则N+1。
+  const rules = await readDownsideRulesBatch(conn);
   for (const category of categories) {
     if (!isOrdinaryCategory(category, input.ledgerId)) continue;
     // 自己的enabled配置是独立观察授权，不扩大真实标签可见列表/详情权限。
     // 不能以真实__visible/是否真实参与阻断管理员明确开启的试用观察。
     const config = readOrdinaryTagObservationConfig(balances, category.name);
     if (!config?.enabled) continue;
-    observations.push(await summaryFor(conn, category, member.userId, config));
+    observations.push(await summaryFor(conn, category, member.userId, config, rules));
   }
   // 不返回balances、原始记录/备注或其他用户观察。
   return { userId: member.userId, observations };

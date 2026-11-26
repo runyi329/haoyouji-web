@@ -1501,10 +1501,13 @@ function countedDownsideSalePrice(rules: StockLotDownsideRule[], lotId: number, 
   const rule = selectStockLotDownsideRule(rules, lotId, at);
   return rule?.startDate ? countedStockLotPrice(rawPrice, rule) : saved?.countedPrice ?? rawPrice;
 }
-/** Exact personal epoch or a verified prior close is required; a manual entryPrice is never quote evidence. */
+/** Owner-input rules use the recorded participation price; older rules still require quote/epoch proof. */
 function resolvedDownsideMemberOffset(input: Parameters<typeof stockLotDownsideMemberOffset>[0] & { symbol?: string }) {
   const evidence = historicalDownsideEvidence.get(input.rules as StockLotDownsideRule[]);
   const entryAt = input.startDate ? stockLotDownsideMemberEntryAt(input.assignedAt, input.startDate) : input.assignedAt;
+  if (selectStockLotDownsideRule(input.rules, input.lotId, entryAt)?.baselineSource === 'owner_threshold') {
+    return stockLotDownsideMemberOffset(input);
+  }
   const lot = evidence?.lots.find((l: any) => l.lotId === input.lotId);
   const proof = input.symbol && evidence ? stockLotDownsideHistoricalEntryProof(input.symbol, entryAt, evidence.quotes, new Date()) : null;
   const isOpening = lot && Date.parse(lot.openedAt) === Date.parse(entryAt);
@@ -1540,20 +1543,25 @@ export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput
   if (!lot || portfolioQuantityIsEmpty(lot.symbol, lot.remainingQuantity)) throw new Error('已平仓或不存在的持仓不能设置欠保证金');
   const conn = await getDbConnection(); if (!conn) throw new Error('数据库连接不可用');
   const createdAt = new Date().toISOString(), effectiveAt = stockLotDownsideEffectiveAt(input.startDate);
-  const existing = await readStockLotDownsideRules(conn, input.ledgerId, input.categoryId, true);
+  const existing = await readStoredStockLotDownsideRules(conn, input.ledgerId, input.categoryId, true);
   const previous = latestStockLotDownsideRule(existing, input.lotId);
-  const evidence = historicalDownsideEvidence.get(existing) ?? await readStockLotDownsideHistoricalEvidence(conn, input.ledgerId, input.categoryId);
-  const candidate = createStockLotDownsideVersion({ ...input, currency: stockCurrency(lot.symbol),
-    currentRawPrice: NaN, effectiveAt, createdAt, baselineStatus: 'pending', beforeStartRule: null }, previous);
-  const resolved = resolveStockLotDownsideHistoricalRules({ rules: [...existing, candidate], ...evidence, now: new Date(createdAt) }).find(r => r.lotId === candidate.lotId && r.version === candidate.version)!;
-  if (Date.parse(effectiveAt) <= Date.parse(createdAt) && resolved.baselineStatus !== 'ready') {
-    throw new Error('启用日期缺少可核验的历史收盘或开仓基准，请选择更晚日期');
+  // A manually configured threshold is rule evidence, not a historical market quote.
+  // Read only the actual opening to retain the holding/date and concurrent-edit guards.
+  const [openingEvidenceRows] = await conn.execute(`SELECT l.id,l.symbol,l.unit_cost,
+    DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at
+    FROM ledger_stock_lots l INNER JOIN ledger_stock_events e ON e.id=l.opened_event_id
+      AND e.ledger_id=l.ledger_id AND e.category_id=l.category_id AND e.status='active'
+    WHERE l.ledger_id=? AND l.category_id=? AND l.id=?`, [input.ledgerId, input.categoryId, input.lotId]);
+  const openingRow = (openingEvidenceRows as any[])[0];
+  const openingEvidence = openingRow ? { symbol: String(openingRow.symbol),
+    unitCost: calendarSourceNumber(openingRow.unit_cost), openedAt: toBeijingWallClockIso(openingRow.actual_traded_at) } : null;
+  if (!openingEvidence || openingEvidence.symbol !== lot.symbol || openingEvidence.unitCost !== lot.unitCost
+    || !Number.isFinite(Date.parse(openingEvidence.openedAt))) {
+    throw new Error('开仓或持仓资料已变化，请刷新后重新设置欠保证金');
   }
-  const beforeStartRule = selectStockLotDownsideRule(existing, input.lotId,
-    new Date(Date.parse(effectiveAt) - 1));
-  const settings = { ...input, currency: stockCurrency(lot.symbol), currentRawPrice: resolved.baselineRawPrice,
-    effectiveAt, createdAt, quoteAsOf: resolved.quoteAsOf, baselineStatus: resolved.baselineStatus,
-    baselineSource: resolved.baselineSource, holdingStartAt: resolved.holdingStartAt, beforeStartRule };
+  const settings = { ...input, currency: stockCurrency(lot.symbol), currentRawPrice: NaN,
+    effectiveAt, createdAt, baselineStatus: 'ready' as const,
+    baselineSource: 'owner_threshold' as const, holdingStartAt: openingEvidence.openedAt, beforeStartRule: null };
   createStockLotDownsideVersion(settings, previous); // Validate/CAS before any DDL.
   await ensureStockLotDownsideRulesTables(conn);
   await ensureStockCalendarResultTable();
@@ -1584,15 +1592,14 @@ export async function setStockLotDownsideRule(input: StockLotDownsideAccessInput
     if (portfolioQuantityIsEmpty(currentSymbol, currentQuantity - Number(sold[0]?.quantity ?? 0))) {
       throw new Error('已平仓持仓不能设置欠保证金，请刷新后重试');
     }
-    const openingEvidence = evidence.lots.find(item => item.lotId === input.lotId);
     const currentOpenedAt = isCryptoPortfolioSymbol(currentSymbol) ? toBeijingWallClockIso(currentLot.opened_at) : toIso(currentLot.opened_at);
     const currentTradedAt = isCryptoPortfolioSymbol(currentSymbol) ? toBeijingWallClockIso(opening.actual_traded_at) : toIso(opening.actual_traded_at);
-    // Settings already contain a historical baseline. Reject stale drafts instead of saving that old baseline.
+    // The manual rule must still refer to the same real, active opening/holding.
     if (currentSymbol !== lot.symbol || currentQuantity !== lot.initialQuantity || Number(currentLot.unit_cost) !== lot.unitCost
       || Number(currentLot.opened_event_id) !== lot.openedEventId || Date.parse(currentOpenedAt) !== Date.parse(lot.openedAt)
       || Number(opening.quantity) !== currentQuantity || Number(opening.execution_price) !== Number(currentLot.unit_cost)
       || Date.parse(currentTradedAt) !== Date.parse(lot.openedAt)
-      || !openingEvidence || openingEvidence.symbol !== currentSymbol || openingEvidence.unitCost !== Number(currentLot.unit_cost)
+      || openingEvidence.symbol !== currentSymbol || openingEvidence.unitCost !== Number(currentLot.unit_cost)
       || Date.parse(toBeijingWallClockIso(opening.actual_traded_at_wall)) !== Date.parse(openingEvidence.openedAt)) {
       throw new Error('开仓或持仓资料已变化，请刷新后重新设置欠保证金');
     }
@@ -2004,6 +2011,7 @@ async function readFrozenParticipationAmounts(conn: any, categoryId: number, use
     const sale = sales.find(s => s.lotId === Number(row.lot_id) && s.eventId === eventId);
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const entryCarry = resolvedDownsideMemberOffset({ lotId: Number(row.lot_id), participationId: id, symbol: String(row.symbol),
+      entryRawPrice: calendarSourceNumber(row.entry_price),
       startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs, asOf: actualAt });
     const price = countedDownsideSalePrice(rules, Number(row.lot_id), numberValue(row.sale_price), actualAt, sale);
     const sellValue = entryCarry === null || price === null ? NaN : quantity * (price - entryCarry);
@@ -2086,7 +2094,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       entryAt: stockLotDownsideMemberEntryAt(toBeijingWallClockIso(row.assigned_at), startDate),
       assignedAt: toBeijingWallClockIso(row.assigned_at),
       entryCountedOffset: resolvedDownsideMemberOffset({ lotId: Number(row.lot_id), participationId: Number(row.id),
-        symbol: String(row.symbol), startDate,
+        symbol: String(row.symbol), startDate, entryRawPrice: calendarSourceNumber(row.entry_price),
         assignedAt: toBeijingWallClockIso(row.assigned_at), rules: downsideRules, epochs: memberEpochs, asOf: valuationAt }),
       symbol: String(row.symbol),
       stockName: String(row.stock_name),
@@ -2415,6 +2423,7 @@ async function readCountedNativeParticipationAmounts(conn: any, categoryId: numb
     const id = Number(row.participation_id);
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const carry = resolvedDownsideMemberOffset({ lotId: Number(row.lot_id), participationId: id, symbol: String(row.symbol),
+      entryRawPrice: calendarSourceNumber(row.entry_price),
       startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs, asOf: actualAt });
     const price = countedDownsideSalePrice(rules, Number(row.lot_id), numberValue(row.sale_price), actualAt, sale);
     if (carry === null || price === null || amounts.get(id) === null) { amounts.set(id, null); continue; }
@@ -2432,7 +2441,7 @@ async function mapCountedMemberCalendarClosures(conn: any, categoryId: number, r
     const sale = sales.find(s => s.lotId === p.lotId && s.eventId === Number(row.sell_event_id));
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const entryCarry = resolvedDownsideMemberOffset({ lotId: p.lotId, participationId: p.id, symbol: p.symbol,
-      startDate: p.startDate, assignedAt: p.assignedAt, rules, epochs, asOf: actualAt });
+      startDate: p.startDate, assignedAt: p.assignedAt, entryRawPrice: p.entryPrice, rules, epochs, asOf: actualAt });
     const counted = countedDownsideSalePrice(rules, p.lotId, numberValue(row.sale_price), actualAt, sale);
     return { participationId: p.id, quantity: numberValue(row.quantity), salePrice: numberValue(row.sale_price),
       actualAt,
@@ -5131,7 +5140,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
           const value = valueStockLotDownside({ lotId: Number(row.id), quantity: item.remainingQuantity, entryPrice: item.entryPrice,
             rawPrice: marketPrice, rules: downsideRules, asOf: valuationAt, direction: 'counterparty',
             entryCountedOffset: resolvedDownsideMemberOffset({ lotId: Number(row.id), participationId: item.id,
-              symbol, startDate: item.startDate,
+              symbol, startDate: item.startDate, entryRawPrice: item.entryPrice,
               assignedAt: item.assignedAt, rules: downsideRules, epochs: memberEpochs, asOf: valuationAt }) });
           return item.countedRealizedPnl === null || (value.countedFloatingPnl === null && item.remainingQuantity > 0)
             ? null : item.countedRealizedPnl + (value.countedFloatingPnl ?? 0);
@@ -5139,7 +5148,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
         ...valueStockLotDownside({ lotId: Number(row.id), quantity: item.remainingQuantity, entryPrice: item.entryPrice,
           rawPrice: marketPrice, rules: downsideRules, asOf: valuationAt, direction: 'counterparty',
           entryCountedOffset: resolvedDownsideMemberOffset({ lotId: Number(row.id), participationId: item.id,
-            symbol, startDate: item.startDate,
+            symbol, startDate: item.startDate, entryRawPrice: item.entryPrice,
             assignedAt: item.assignedAt, rules: downsideRules, epochs: memberEpochs, asOf: valuationAt }) }),
         floatingPnl: marketPrice === null ? null : (item.entryPrice - marketPrice) * item.remainingQuantity,
         totalPnl: marketPrice === null && !portfolioQuantityIsEmpty(symbol, item.remainingQuantity)

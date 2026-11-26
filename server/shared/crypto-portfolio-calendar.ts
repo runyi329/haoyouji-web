@@ -226,11 +226,24 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
     return at;
   };
   const closeQuoteCache = new Map<string, CryptoCalendarQuote | undefined>();
-  const memberOffset = (row: Pick<Position, 'lotId' | 'symbol' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate'>, asOf: string) => {
+  const memberOffset = (row: Pick<Position, 'lotId' | 'symbol' | 'entryPrice' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate'>, asOf: string, participationAsOf: string = asOf) => {
     if (!row.assignedAt) return undefined;
     const entryAt = row.entryAt ?? stockLotDownsideMemberEntryAt(row.assignedAt, row.startDate ?? '');
     const entryRule = selectStockLotDownsideRule(downsideRules, row.lotId, entryAt);
     const currentRule = selectStockLotDownsideRule(downsideRules, row.lotId, asOf);
+    // Recorded participation/observation price is an input to the owner rule, not an external quote.
+    if (entryRule?.baselineSource === 'owner_threshold') {
+      if (row.participationId === undefined) {
+        if (!Number.isFinite(Date.parse(participationAsOf)) || Date.parse(entryAt) > Date.parse(participationAsOf)) return null;
+        const basisRule = Date.parse(entryAt) > Date.parse(asOf) ? currentRule : entryRule;
+        if (basisRule?.baselineSource !== 'owner_threshold') return 0;
+        const counted = countedStockLotPrice(row.entryPrice, basisRule);
+        return counted === null ? null : counted - row.entryPrice;
+      }
+      return stockLotDownsideMemberOffset({ lotId: row.lotId, participationId: row.participationId,
+        assignedAt: row.assignedAt, startDate: row.startDate, rules: downsideRules,
+        epochs: downsideMemberEpochs, asOf, participationAsOf, entryRawPrice: row.entryPrice });
+    }
     if (row.participationId !== undefined && !currentRule?.startDate) {
       const legacyEpoch = downsideMemberEpochs.filter(e => e.lotId === row.lotId && e.participationId === row.participationId
         && Date.parse(e.effectiveAt) <= Date.parse(asOf)).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
@@ -303,7 +316,7 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
       if (!quoteAsOf.some(q => q.symbol === quote.symbol && q.priceDate === quote.priceDate)) quoteAsOf.push({ symbol: quote.symbol, priceDate: quote.priceDate,
         capturedAt: quote.updatedAt, source: quote.source, carried: quote.priceDate !== date });
       const priceAt = priceAtFor(row.symbol, quote.priceDate);
-      const entryCountedOffset = memberOffset(row, priceAt);
+      const entryCountedOffset = memberOffset(row, priceAt, cryptoPortfolioCutoffAt(date).toISOString());
       if (entryCountedOffset === null) missingMemberBaseline = true;
       const value = valueStockLotDownside({ lotId: row.lotId, quantity: row.quantity, entryPrice: row.entryPrice,
         rawPrice: quote.price, rules: downsideRules, asOf: priceAt,
@@ -482,7 +495,7 @@ export function cryptoPortfolioDownsideFingerprint(categoryId: number, history: 
     rules: [...(history.downsideRules ?? [])].filter(r => r.ledgerId === 37 && r.categoryId === categoryId)
       .sort((a, b) => a.lotId - b.lotId || a.version - b.version).map(r => [r.lotId, r.version, r.startDate ?? null,
         r.effectiveAt, r.enabled, r.thresholdPrice, r.downsidePercent, r.baselineRawPrice, r.baselineCountedPrice,
-        r.baselineStatus ?? null, r.holdingStartAt ?? null, r.quoteAsOf ?? null, r.createdAt ?? null]),
+        r.baselineStatus ?? null, r.holdingStartAt ?? null, r.quoteAsOf ?? null, r.createdAt ?? null, r.baselineSource ?? null]),
     epochs: [...(history.downsideMemberEpochs ?? [])].filter(e => e.ledgerId === 37 && e.categoryId === categoryId)
       .sort((a, b) => a.participationId - b.participationId || a.effectiveAt.localeCompare(b.effectiveAt))
       .map(e => [e.lotId, e.participationId, e.userId, e.effectiveAt, e.rawPrice, e.ruleVersion ?? null, e.entryCountedOffset]),

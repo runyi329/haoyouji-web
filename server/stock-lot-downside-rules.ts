@@ -40,6 +40,13 @@ function decode(r: any): StockLotDownsideRule {
     ...(r.start_date ? { startDate: String(r.start_date) } : {}), baselineStatus: r.baseline_status ?? undefined,
     baselineSource: r.baseline_source ?? undefined, holdingStartAt: r.holding_start_at ?? undefined };
 }
+/** SELECT-only whole-ledger batch for settings/CAS: all saved versions, no effective-time filter or cache. */
+export async function readAllStockLotDownsideRules(conn: any, ledgerId: number): Promise<StockLotDownsideRule[]> {
+  try {
+    const [rows] = await selectRules(conn, `WHERE ledger_id=? ORDER BY category_id,lot_id,version`, [ledgerId]);
+    return rows.map(decode);
+  } catch (e) { if (missingTable(e)) return []; throw e; }
+}
 /** SELECT-only, one query per category, including negative cache. No startup/read DDL. */
 export async function readStockLotDownsideRules(conn: any, ledgerId: number, categoryId: number, fresh = false): Promise<StockLotDownsideRule[]> {
   let cache = caches.get(conn); if (!cache) { cache = new Map(); caches.set(conn, cache); }

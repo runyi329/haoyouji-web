@@ -1,3 +1,5 @@
+import { calculateOrdinaryTagDownsideSeries, type OrdinaryTagDownsideRule } from './ordinary-tag-downside';
+
 /** 独立观察口径；这里的金额不是押金、权益、分红或可提现余额。 */
 export const ORDINARY_TAG_OBSERVATION_LEDGER_ID = 37 as const;
 export const ORDINARY_TAG_OBSERVATION_SUFFIX = '__ordinaryObservation';
@@ -15,6 +17,11 @@ export type OrdinaryTagObservationPoint = {
   balance: number;
   pnl: number;
   dailyPnl: number | null;
+  /** 规则派生参考余额，不是真实余额、权益或可提现金额。 */
+  countedBalance?: number;
+  /** 同日真实余额/资金流按原观察公式得到的未调节收益。 */
+  rawPnl?: number;
+  ruleVersion?: number | null;
 };
 export type OrdinaryTagObservationSummary = {
   ledgerId: 37;
@@ -30,6 +37,9 @@ export type OrdinaryTagObservationSummary = {
   totalPnl: number | null;
   todayPnl: number | null;
   points: OrdinaryTagObservationPoint[];
+  countedBalance?: number | null;
+  rawPnl?: number | null;
+  ruleVersion?: number | null;
 };
 export type OrdinaryTagObservationOverview = {
   userId: number;
@@ -45,6 +55,8 @@ export type OrdinaryTagObservationRecord = {
   amount: number | string | null;
   description?: string | null;
   deletedAt?: string | null;
+  recordId?: number;
+  createdAt?: string | Date | null;
 };
 export type OrdinaryTagObservationCalculationInput = {
   ledgerId: 37;
@@ -55,6 +67,8 @@ export type OrdinaryTagObservationCalculationInput = {
   records: readonly OrdinaryTagObservationRecord[];
   /** 明确传入账本业务日期，禁止计算函数使用隐式系统时间。 */
   today: string;
+  /** 仅传入此category已保存的规则；缺省/空数组严格保留旧逐字段输出。 */
+  downsideRules?: readonly OrdinaryTagDownsideRule[];
 };
 
 /** 观察模式不占实际比例；关闭不自动恢复原份额。只改变配置，不产生资金流水。 */
@@ -140,6 +154,147 @@ function realAmount(value: OrdinaryTagObservationRecord['amount']): number | nul
   return Number.isFinite(amount) ? Math.abs(amount) : null;
 }
 
+export type OrdinaryTagObservationCanonicalDay = {
+  date: string;
+  /** 日末非transfer的真实B；显式0有效，缺失金额不转为0。 */
+  balance: number | null;
+  /** 当日真实本金净变动和提现，独立于余额排序。 */
+  capitalChange: number;
+  withdrawTotal: number;
+};
+
+/** 仅供saved-rule路径；旧income/expense聚合不调用此规范化。 */
+export function canonicalOrdinaryTagObservationDays(
+  input: OrdinaryTagObservationCalculationInput,
+  cutoff: string,
+): OrdinaryTagObservationCanonicalDay[] {
+  const days = new Map<string, OrdinaryTagObservationCanonicalDay>();
+  const createdOrder = (value: OrdinaryTagObservationRecord['createdAt']): string => {
+    const text = value instanceof Date ? (Number.isFinite(value.getTime()) ? value.toISOString() : '')
+      : typeof value === 'string' ? value : '';
+    const normalized = text.replace('T', ' ').replace(/Z$/, '');
+    const parts = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?$/.exec(normalized);
+    return parts ? `${parts[1]}.${(parts[2] ?? '').padEnd(6, '0')}` : normalized;
+  };
+  // sort只操作副本；同date/createdAt/id时稳定保留SQL原始顺序。
+  const records = input.records.filter(record => record.ledgerId === input.ledgerId
+    && record.categoryId === input.categoryId && !record.deletedAt
+    && isOrdinaryTagObservationDate(record.recordDate) && record.recordDate <= cutoff)
+    .slice().sort((a, b) => a.recordDate.localeCompare(b.recordDate)
+      || createdOrder(a.createdAt).localeCompare(createdOrder(b.createdAt))
+      || (a.recordId ?? 0) - (b.recordId ?? 0));
+  for (const record of records) {
+    const day = days.get(record.recordDate) ?? {
+      date: record.recordDate, balance: null, capitalChange: 0, withdrawTotal: 0,
+    };
+    const amount = realAmount(record.amount);
+    if (record.type === 'income' || record.type === 'expense') day.balance = amount;
+    else if (record.type === 'transfer' && record.recordDate >= input.config.startDate) {
+      if (record.description?.startsWith('capital_')) {
+        day.capitalChange += amount === null ? NaN : record.description.startsWith('capital_add') ? amount : -amount;
+      } else day.withdrawTotal += amount === null ? NaN : amount;
+    }
+    days.set(record.recordDate, day);
+  }
+  return Array.from(days.values());
+}
+
+/** saved-rule日级派生观察；真实B和资金流不被counted替换。 */
+function calculateDownsideObservation(
+  input: OrdinaryTagObservationCalculationInput,
+  result: OrdinaryTagObservationSummary,
+  cutoff: string,
+  paused: boolean,
+): OrdinaryTagObservationSummary {
+  const days = canonicalOrdinaryTagObservationDays(input, cutoff);
+  let previousBalance: number | null = null;
+  for (const day of days) {
+    if (day.date >= input.config.startDate) break;
+    if (day.balance !== null) previousBalance = day.balance;
+  }
+  const visibleDays = days.filter(day => day.date >= input.config.startDate);
+  // initialAmount/startDate/ratio只取观察自己的config，绝不借用真实成员本金或份额。
+  // 区分真正无余额的资金流日期与已登记但日末金额无效的日期；后者不能沿用旧ready摘要。
+  const balanceDates = new Set(input.records.filter(record => record.ledgerId === input.ledgerId
+    && record.categoryId === input.categoryId && !record.deletedAt
+    && (record.type === 'income' || record.type === 'expense')
+    && isOrdinaryTagObservationDate(record.recordDate) && record.recordDate <= cutoff)
+    .map(record => record.recordDate));
+  const series = calculateOrdinaryTagDownsideSeries({
+    ledgerId: input.ledgerId, categoryId: input.categoryId,
+    initialAmount: input.config.initialAmount, entryDate: input.config.startDate, ratio: input.config.ratio,
+    rules: input.downsideRules!,
+    points: visibleDays.map(day => ({ date: day.date, rawBalance: day.balance,
+      capitalChange: day.capitalChange, withdraw: day.withdrawTotal })),
+  });
+  let capital = 0, withdraw = 0;
+  let observedBalance = false;
+  let pendingEvidence = false;
+  let latestPending = false;
+  result.countedBalance = result.rawPnl = null;
+  result.ruleVersion = null;
+  for (let index = 0; index < visibleDays.length; index++) {
+    const day = visibleDays[index], derived = series[index];
+    capital += day.capitalChange;
+    withdraw += day.withdrawTotal;
+    if (![capital, withdraw].every(Number.isFinite)) pendingEvidence = true;
+    if (day.balance === null) {
+      if (balanceDates.has(day.date)) {
+        result.latestDate = day.date;
+        result.latestBalance = result.countedBalance = result.rawPnl = result.totalPnl = result.todayPnl = null;
+        result.capitalChange = Number.isFinite(capital) ? capital : 0;
+        result.withdrawTotal = Number.isFinite(withdraw) ? withdraw : 0;
+        result.ruleVersion = derived.ruleVersion;
+        latestPending = true;
+      }
+      continue;
+    }
+    result.latestDate = day.date;
+    result.latestBalance = day.balance;
+    result.capitalChange = Number.isFinite(capital) ? capital : 0;
+    result.withdrawTotal = Number.isFinite(withdraw) ? withdraw : 0;
+    result.countedBalance = derived.countedBalance;
+    result.rawPnl = derived.rawPnl;
+    result.ruleVersion = derived.ruleVersion;
+    if (derived.status !== 'ready' || derived.countedPnl === null || derived.rawPnl === null
+      || derived.countedBalance === null || pendingEvidence) {
+      result.totalPnl = result.todayPnl = null;
+      latestPending = true;
+      observedBalance = true;
+      continue;
+    }
+    // 引擎累计从config初始额起算；首daily只减开始前最后真实B的raw基准。
+    // 基准不包含开始日起任何cash，防止首日本金/withdraw被重复减去。
+    const firstRawBaseline = previousBalance === null ? null
+      : (input.config.initialAmount - previousBalance) * input.config.ratio / 100;
+    const daily = observedBalance ? derived.dailyCountedPnl
+      : firstRawBaseline === null ? null : derived.countedPnl - firstRawBaseline;
+    if (daily !== null && !Number.isFinite(daily)) {
+      result.totalPnl = result.todayPnl = null;
+      pendingEvidence = true;
+      observedBalance = true;
+      continue;
+    }
+    const dailyPnl = daily === 0 ? 0 : daily;
+    result.points.push({ date: day.date, balance: day.balance, pnl: derived.countedPnl,
+      dailyPnl, countedBalance: derived.countedBalance, rawPnl: derived.rawPnl,
+      ruleVersion: derived.ruleVersion });
+    result.totalPnl = derived.countedPnl;
+    if (day.date === input.today) result.todayPnl = dailyPnl;
+    observedBalance = true;
+    latestPending = false;
+  }
+  if (!observedBalance) {
+    result.capitalChange = Number.isFinite(capital) ? capital : 0;
+    result.withdrawTotal = Number.isFinite(withdraw) ? withdraw : 0;
+  }
+  if (latestPending || (!observedBalance && pendingEvidence)) {
+    result.status = 'pending';
+    result.totalPnl = result.todayPnl = null;
+  } else if (observedBalance) result.status = paused ? 'paused' : 'active';
+  return result;
+}
+
 /**
  * 严格复用 LedgerDetailAA 的manual_balance对赌方向：
  * (参考初始金额 + 开始日起本金变动 - 真实余额 - 开始日起提现) × ratio / 100。
@@ -183,6 +338,9 @@ export function calculateOrdinaryTagObservationSummary(
   if (config.startDate > today) { result.status = 'pending'; return result; }
   const paused = config.pauseDate !== null && config.pauseDate <= today;
   const cutoff = paused ? config.pauseDate! : today;
+  if (input.downsideRules?.some(rule => rule.ledgerId === input.ledgerId && rule.categoryId === input.categoryId)) {
+    return calculateDownsideObservation(input, result, cutoff, paused);
+  }
   const days = new Map<string, { income: number; expense: number; capital: number; withdraw: number }>();
   for (const record of input.records) {
     if (record.ledgerId !== input.ledgerId || record.categoryId !== input.categoryId || record.deletedAt

@@ -201,3 +201,77 @@ describe('mixed crypto fixed calendar 欠保证金 pure routing', () => {
     expect(invalid.total.ready).toBe(false);
   });
 });
+
+
+describe('owner-input threshold in mixed daily settlement', () => {
+  const manualInput = (pct = 20): CryptoCalendarInput => {
+    const data = input();
+    data.lots[0].openedAt = `${date}T06:00:00+08:00`;
+    data.downsideRules = [createStockLotDownsideVersion({ ledgerId: 37, categoryId: 81, lotId: 1, userId: 28,
+      currency: 'USDT', enabled: true, thresholdPrice: 200, downsidePercent: pct, expectedVersion: 0,
+      currentRawPrice: NaN, startDate: '2026-11-24', effectiveAt: '2026-11-23T16:00:00Z',
+      createdAt: `${date}T16:00:00+08:00`, baselineSource: 'owner_threshold' }, null)];
+    return data;
+  };
+  it('no activation close required: manual basis revalues total, member and separate observer without changing raw inputs', () => {
+    const data = manualInput(), before = JSON.stringify(data);
+    const p = buildCryptoPortfolioDailyPayload(data);
+    expect(p.total.ready).toBe(true); expect(p.total.nativePnl.USDT).toBe(-40);
+    expect(p.members['28'].ready).toBe(true); expect(p.members['28'].nativePnl.USDT).toBe(20);
+    expect(p.observations['99'].ready).toBe(true); expect(p.observations['99'].nativePnl.USDT).toBe(10);
+    expect(p.members['99']).toBeUndefined();
+    expect(p.total.downsideRuleAudit?.[0]).toMatchObject({ rawPrice: 100, countedPrice: 180 });
+    expect(p.quotes[0].price).toBe(100); expect(p.fx.usdt!.usdtCnyRate).toBe(7);
+    expect(JSON.stringify(data)).toBe(before);
+  });
+  it.each([[0, 0], [100, 100]])('manual %s%% preserves the %s native member result', (pct, expected) => {
+    const p = buildCryptoPortfolioDailyPayload(manualInput(pct));
+    expect(p.members['28'].nativePnl.USDT).toBe(expected);
+    expect(p.total.nativePnl.USDT).toBe(expected === 0 ? 0 : -2 * expected);
+  });
+  it('late participant and observer use their recorded entry price, not an unavailable intraday/previous-close proof', () => {
+    const data = manualInput(0);
+    data.lots[0].unitCost = 100;
+    data.downsideRules![0] = { ...data.downsideRules![0], thresholdPrice: 100, baselineRawPrice: 100, baselineCountedPrice: 100 };
+    data.participations[0].entryPrice = 90; data.observations![0].entryPrice = 90;
+    data.quotes[0].price = 80;
+    const p = buildCryptoPortfolioDailyPayload(data);
+    expect(p.total.nativePnl.USDT).toBe(0);
+    expect(p.members['28'].ready).toBe(true); expect(p.members['28'].nativePnl.USDT).toBe(0);
+    expect(p.observations['99'].ready).toBe(true); expect(p.observations['99'].nativePnl.USDT).toBe(0);
+    expect(p.members['28'].marketValue).toBe(90 * 7);
+  });
+  it('manual 0% never fabricates a missing current close or missing fixed FX', () => {
+    const data = manualInput(0);
+    data.quotes = [];
+    const p = buildCryptoPortfolioDailyPayload(data);
+    for (const row of [p.total, p.members['28'], p.observations['99']]) {
+      expect(row.ready).toBe(false); expect(row.totalPnl).toBeNull(); expect(row.missingSymbols).toContain(symbol);
+    }
+    const missingFx = buildCryptoPortfolioDailyPayload({ ...manualInput(0), usdtFx: null });
+    expect(missingFx.total.ready).toBe(false); expect(missingFx.total.totalPnl).toBeNull();
+  });
+  it('manual price basis does not bypass allocation timestamps, share conservation or raw sale evidence', () => {
+    const changed = manualInput(); changed.participations[0].updatedAt = `${date}T15:05:01+08:00`;
+    expect(() => buildCryptoPortfolioDailyPayload(changed)).toThrow('unverifiable_allocation_history');
+    const shares = manualInput(); shares.participations[0].remainingQuantity = 0.5;
+    expect(() => buildCryptoPortfolioDailyPayload(shares)).toThrow('unverifiable_allocation_history');
+    const sale = manualInput();
+    sale.sales = [{ lotId: 1, quantity: 1, salePrice: 100, eventQuantity: 1, transactionFee: null, closeDate: date }];
+    const p = buildCryptoPortfolioDailyPayload(sale);
+    expect(p.total.ready).toBe(false); expect(p.total.totalPnl).toBeNull();
+  });
+  it('partial sale uses actual execution with manual member carry, keeps fees and old frozen evidence untouched', () => {
+    const data = manualInput();
+    data.sales = [{ lotId: 1, quantity: 1, salePrice: 100, countedSalePrice: 999, transactionFee: 2,
+      eventQuantity: 1, closeDate: date, soldAt: `${date}T13:00:00+08:00` }];
+    data.closures = [{ participationId: 11, quantity: 0.5, salePrice: 100, countedSalePrice: 999,
+      closeDate: date, soldAt: `${date}T13:00:00+08:00` }];
+    data.participations[0].remainingQuantity = 0.5;
+    const before = JSON.stringify(data), p = buildCryptoPortfolioDailyPayload(data);
+    expect(p.total.nativePnl.USDT).toBe(-(200 - 180) * 2 - 2 - 200 * 0.001);
+    expect(p.members['28'].nativePnl.USDT).toBe(20);
+    expect(p.members['28'].realizedPnl).toBe(70); expect(p.members['28'].floatingPnl).toBe(70);
+    expect(JSON.stringify(data)).toBe(before);
+  });
+});

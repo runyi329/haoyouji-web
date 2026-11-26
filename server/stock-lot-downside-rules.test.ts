@@ -22,6 +22,13 @@ describe('append-only downside store offline',()=>{
     expect(await readStockLotDownsideRules(conn,37,90250)).toEqual([]);
     expect(conn.execute).toHaveBeenCalledTimes(1);expect(conn.execute.mock.calls[0]?.[0]).toMatch(/^SELECT/);
   });
+  it('owner threshold source and both manual bases survive SELECT decoding without DDL',async()=>{
+    const conn={execute:vi.fn(async()=>[[{...stored,start_date:'2026-11-16',baseline_source:'owner_threshold',
+      baseline_status:'ready',threshold_price:'74.23',baseline_raw_price:'74.23',baseline_counted_price:'74.23',quote_as_of:null}]])};
+    expect((await readStockLotDownsideRules(conn,37,90250))[0]).toMatchObject({baselineSource:'owner_threshold',
+      baselineStatus:'ready',baselineRawPrice:74.23,baselineCountedPrice:74.23,quoteAsOf:undefined});
+    expect(conn.execute.mock.calls.every(([sql])=>/^SELECT/.test(sql))).toBe(true);
+  });
   it('category batch never queries each lot and has scope SQL bindings',async()=>{
     const conn={execute:vi.fn(async()=>[[stored]])};
     const rules=await readStockLotDownsideRules(conn,37,90250);expect(rules[0]).toMatchObject({lotId:1,version:1,thresholdPrice:100});
@@ -77,11 +84,6 @@ describe('date persistence and read-only compatibility (mock DB only)',()=>{
     await expect(setStockLotDownsideRule({...input,startDate})).rejects.toThrow('启用日期');
     expect(conn.execute).toHaveBeenCalledTimes(1);expect(db.tx).not.toHaveBeenCalled();
   });
-  it('past missing close refuses save and suggests later date without DDL/POST/quotes',async()=>{
-    const conn=mockOwner();db.get.mockResolvedValue(conn);
-    await expect(setStockLotDownsideRule(input)).rejects.toThrow('更晚日期');
-    expect(conn.execute.mock.calls.every(([sql])=>/^\s*SELECT/.test(sql))).toBe(true);expect(db.tx).not.toHaveBeenCalled();
-  });
   it('future highest version readable although active date is older, with real createdAt',async()=>{
     const future={...stored,version:2,start_date:'2099-12-01',effective_at:'2099-11-30T16:00:00Z',
       created_at:'2026-11-25T14:00:00Z',baseline_raw_price:null,baseline_counted_price:null,baseline_status:'pending'};
@@ -111,6 +113,16 @@ describe('date persistence and read-only compatibility (mock DB only)',()=>{
       effectiveAt:'2099-11-30T16:00:00Z',createdAt:'2026-11-25T14:00:00Z',baselineStatus:'pending'});
     expect(r.baselineStatus).toBe('pending');const values=(conn.execute.mock.calls[1] as unknown as [string,unknown[]])[1];
     expect(values[9]).toBeNull();expect(values[10]).toBeNull();
+  });
+  it('manual append persists owner basis rather than inheriting an old counted carry',async()=>{
+    const old={...stored,baseline_raw_price:'80',baseline_counted_price:'96'};
+    const conn={execute:vi.fn(async(sql:string)=>sql.startsWith('SELECT')?[[old]]:[{affectedRows:1}])};
+    const r=await appendStockLotDownsideRule(conn,{...input,thresholdPrice:74.23,downsidePercent:0,expectedVersion:1,
+      currency:'USD',currentRawPrice:NaN,effectiveAt:'2026-11-22T16:00:00Z',baselineSource:'owner_threshold'});
+    expect(r).toMatchObject({version:2,baselineSource:'owner_threshold',baselineRawPrice:74.23,baselineCountedPrice:74.23});
+    const values=(conn.execute.mock.calls[1] as unknown as [string,unknown[]])[1];
+    expect(values[9]).toBe(74.23);expect(values[10]).toBe(74.23);expect(values[16]).toBe('owner_threshold');
+    expect(conn.execute.mock.calls.every(([sql])=>/^\s*(SELECT|INSERT)/.test(sql))).toBe(true);
   });
 });
 
@@ -197,10 +209,10 @@ describe('rule save lot-first current-state recheck (offline concurrency mock)',
   it('concurrent opening link replacement rejects stale draft',async()=>{
     await expectRejected(setup({opened_event_id:12},{id:12}));
   });
-  it.each(['600000.SH','AAPL','CRYPTO:BTC-USDT'])('unchanged %s opening plus partial sale saves existing baseline',async symbol=>{
+  it.each(['600000.SH','AAPL','CRYPTO:BTC-USDT'])('unchanged %s opening plus partial sale saves owner basis',async symbol=>{
     const mock=setup({}, {},2,{symbol});
     const rule=await setStockLotDownsideRule({...input,startDate:'2026-11-20'});
-    expect(rule).toMatchObject({version:1,baselineSource:'opening',baselineStatus:'ready',baselineRawPrice:100});
+    expect(rule).toMatchObject({version:1,baselineSource:'owner_threshold',baselineStatus:'ready',baselineRawPrice:100,baselineCountedPrice:100});
     expect(mock.tx.commit).toHaveBeenCalledOnce();expect(mock.tx.rollback).not.toHaveBeenCalled();
     expect(mock.tx.release).toHaveBeenCalledOnce();expect(derived.dirty).toHaveBeenCalledWith(mock.tx,90250);
     expect(derived.rebuild).not.toHaveBeenCalled();expect(derived.ensureRules).toHaveBeenCalledOnce();
@@ -209,5 +221,27 @@ describe('rule save lot-first current-state recheck (offline concurrency mock)',
     const writes=mock.tx.execute.mock.calls.filter(([sql])=>!/^\s*SELECT/.test(sql));
     expect(writes).toHaveLength(1);expect(writes[0]?.[0]).toMatch(/^INSERT INTO ledger_stock_lot_downside_rules/);
     expect(db.tx).toHaveBeenCalledOnce();
+  });
+  it('past start accepts manual threshold without historical close queries',async()=>{
+    const mock=setup();
+    expect(await setStockLotDownsideRule(input)).toMatchObject({baselineSource:'owner_threshold',baselineStatus:'ready',
+      baselineRawPrice:100,baselineCountedPrice:100,startDate:'2026-11-23'});
+    expect(mock.conn.execute.mock.calls.every(([sql])=>/^\s*SELECT/.test(sql))).toBe(true);
+    expect(mock.conn.execute.mock.calls.some(([sql])=>/close_prices|price_snapshots|daily_snapshots/.test(sql))).toBe(false);
+    expect(mock.tx.commit).toHaveBeenCalledOnce();expect(derived.rebuild).not.toHaveBeenCalled();
+  });
+  it('HOOD 74.23 and 0% from November 16 is the authoritative stored rule',async()=>{
+    const mock=setup({}, {},0,{symbol:'HOOD',unit_cost:'74.58000000',initial_quantity:'415.00000000',opened_at:'2026-11-15 22:51:00'});
+    const rule=await setStockLotDownsideRule({...input,thresholdPrice:74.23,downsidePercent:0,startDate:'2026-11-16'});
+    expect(rule).toMatchObject({currency:'USD',thresholdPrice:74.23,downsidePercent:0,startDate:'2026-11-16',
+      baselineSource:'owner_threshold',baselineRawPrice:74.23,baselineCountedPrice:74.23,quoteAsOf:undefined});
+    expect(mock.tx.commit).toHaveBeenCalledOnce();expect(derived.rebuild).not.toHaveBeenCalled();
+    expect(mock.conn.execute.mock.calls.some(([sql])=>/close_prices|price_snapshots|daily_snapshots/.test(sql))).toBe(false);
+  });
+  it('future owner basis is saved ready without requiring a future quote',async()=>{
+    const mock=setup();
+    const rule=await setStockLotDownsideRule({...input,startDate:'2099-12-01'});
+    expect(rule).toMatchObject({startDate:'2099-12-01',baselineSource:'owner_threshold',baselineStatus:'ready'});
+    expect(mock.tx.commit).toHaveBeenCalledOnce();expect(derived.rebuild).not.toHaveBeenCalled();
   });
 });

@@ -26,7 +26,7 @@ function harness(options: { dev?: boolean; readOnlyPreview?: boolean; canEdit?: 
   let cursor = 0, effectCursor = 0, mutationOptions: any, queryOptions: any, queryInput: any;
   const mutation = { mutate: vi.fn(), isPending: false };
   const query = { data: options.queryData ?? null, isPending: options.queryPending ?? false, isFetching: false, error: options.queryError ?? null, refetch: vi.fn().mockResolvedValue(undefined) };
-  const invalidates = Object.fromEntries(['getStockLotDownsideRule', 'getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots', 'getStockTagCalendar', 'getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories'].map(name => [name, vi.fn().mockResolvedValue(undefined)]));
+  const invalidates = Object.fromEntries(['getStockLotDownsideRule', 'getForcedLiquidationSettings', 'getForcedLiquidationSettingDetail', 'getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots', 'getStockTagCalendar', 'getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories'].map(name => [name, vi.fn().mockResolvedValue(undefined)]));
   const invalidateAll = vi.fn().mockResolvedValue(undefined);
   const props = { categoryId: 90250, order: { lotId: 11, eventId: 101, stockName: '苹果', symbol: 'AAPL', marketPrice: 9, currentCountedPrice: 9, quantity: 100, executionPrice: 8, actualTradedAt: '2026-11-01T00:00:00Z', note: '' }, canEdit: options.canEdit ?? true, isViewingAs: options.isViewingAs ?? false, readOnlyPreview: options.readOnlyPreview ?? false, onClose: vi.fn(), onPendingChange: vi.fn(), previewDownsideRule: options.rule, onPreviewDownsideChange: options.onPreviewDownsideChange };
   const scope = {
@@ -89,6 +89,17 @@ describe('欠保证金右页签：真实完整TSX离线测试', () => {
     expect(h.options().queryInput).toEqual({ ledgerId: 37, categoryId: 90250, lotId: 11 });
     expect(h.options().queryOptions.enabled).toBe(true);
   });
+  it('集中行内隐藏重复估值卡片，但原入口默认不变且正式保存刷新同批次详情', async () => {
+    const h = harness();
+    (h.props as any).hideValuationSummary = true;
+    expect(text(h.render())).not.toContain('实际当前价 · USD');
+    expect(text(h.render())).not.toContain('当前计入价 · USD');
+    expect(h.field('threshold').props.value).toBe('9');
+    await h.save();
+    expect(h.mutation.mutate).toHaveBeenCalledWith(expect.objectContaining({ ledgerId: 37, categoryId: 90250, lotId: 11 }));
+    h.success();
+    expect(h.invalidates.getForcedLiquidationSettingDetail).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250, lotId: 11 });
+  });
   it('改为剩30%保证金时文案和实际计入数值同步，0%仍有效', async () => {
     const h = harness();
     h.change('percent', '30');
@@ -108,6 +119,7 @@ describe('欠保证金右页签：真实完整TSX离线测试', () => {
     expect(h.mutation.mutate.mock.calls[0][0]).not.toHaveProperty('eventId');
     expect(h.mutation.mutate.mock.calls[0][0]).not.toHaveProperty('createdAt');
     expect(h.mutation.mutate.mock.calls[0][0]).not.toHaveProperty('auditTime');
+    expect(h.mutation.mutate.mock.calls[0][0]).not.toHaveProperty('baselineSource');
     expect(h.props.onClose).not.toHaveBeenCalled();
   });
   it('允许100和小数比例，拒绝负数/101/空白/非有限比例', async () => {
@@ -154,6 +166,24 @@ describe('欠保证金右页签：真实完整TSX离线测试', () => {
     expect(text(h.render())).toContain('本地预览规则已保存');
     expect(h.mutation.mutate).not.toHaveBeenCalled(); expect(h.invalidateAll).not.toHaveBeenCalled();
     expect(h.props.onClose).not.toHaveBeenCalled();
+  });
+  it('新规则直接按人工门槛计入，0%门槛以下等于门槛，不新增来源输入', () => {
+    const h = harness({ queryData: { lotId: 11, version: 1, enabled: true, thresholdPrice: 10, downsidePercent: 0, startDate: today, baselineStatus: 'ready', baselineSource: 'owner_threshold' } });
+    const content = text(h.render());
+    expect(content).toContain('实际价格达到或超过门槛时，计入价就是实际价格');
+    expect(content).toContain('计入价=门槛+(实际价格-门槛)×剩余保证金比例');
+    expect(content).toContain('剩0%保证金时，门槛以下计入价为门槛');
+    expect(content).toContain('管理员填写的价格门槛为人工规则依据，不是外部历史报价');
+    expect(content).toContain('启用日期只控制适用范围，启用前计入口径不变');
+    expect(content).toContain('旧已保存规则沿用原算法，不自动转换为新规则');
+    expect(content).toContain('原始成交、真实行情、FX汇率和单股真实盈亏不变');
+    expect(content).toContain('缺少可核验历史成交或份额证据的记录保留“待核验”');
+    expect(content).toContain('不会用0或今天的持仓代替');
+    expect(content).toContain('不下单、不操作钱包');
+    expect(nodes(h.render()).filter(node => node.type === 'input').map(node => node.props.id)).toEqual(['stock-downside-enabled', 'stock-downside-threshold', 'stock-downside-start-date', 'stock-downside-percent']);
+    expect(source).toContain('import type { StockLotDownsideRule } from "@shared/stock-lot-downside"');
+    expect(source).toContain('baselineSource?: StockLotDownsideRule["baselineSource"]');
+    expect(source).not.toContain('server/routers');
   });
   it('本地保存后父组件更新version并结束pending，成功反馈不被重新预填清除', async () => {
     let finish!: () => void;
@@ -207,7 +237,7 @@ describe('欠保证金右页签：真实完整TSX离线测试', () => {
     for (const name of ['getStockTagPortfolio', 'getStockLotParticipationMatrix', 'getMyStockTagParticipantPortfolio', 'getStockTagPublicPortfolio', 'getStockTagDailySnapshots', 'getStockTagCalendar']) {
       expect(h.invalidates[name]).toHaveBeenCalledWith({ ledgerId: 37, categoryId: 90250 });
     }
-    for (const name of ['getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories']) {
+    for (const name of ['getForcedLiquidationSettings', 'getMyR1AiParticipationPortfolio', 'getMyLedger37AiStockPool', 'getMyLedger37AiWalletValue', 'getMyLedger37HoldingSources', 'getMyStockTagOverview', 'getMyStockTagObservationOverview', 'getCategories']) {
       expect(h.invalidates[name]).toHaveBeenCalledWith({ ledgerId: 37 });
     }
   });
@@ -257,7 +287,7 @@ describe('欠保证金启用日期：可过去且重算日期起日结与客户�
     expect(h.mutation.mutate).not.toHaveBeenCalled();
     expect(h.field('start-date').props.value).toBe('2026-11-02');
     expect(text(h.render())).toContain('剩30%保证金');
-    expect(text(h.render())).toContain('选定启用日期起的汇总、日结和客户收益将按新比例重算；原始成交、真实行情和单股真实盈亏不变');
+    expect(text(h.render())).toContain('选定启用日期起的汇总、日结和客户收益将按新比例重算；原始成交、真实行情、FX汇率和单股真实盈亏不变');
     for (const stale of ['从保存时', '不追改', '不回改固定历史', '此前已计入的影响保留', '仅从保存时起生效']) expect(text(h.render())).not.toContain(stale);
     await h.save();
     expect(h.mutation.mutate).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, downsidePercent: 30, startDate: '2026-11-02' }));
@@ -336,8 +366,11 @@ describe('欠保证金启用日期：可过去且重算日期起日结与客户�
     expect(h.scope.toast.success).not.toHaveBeenCalled(); expect(h.mutation.mutate).not.toHaveBeenCalled();
   });
   it('成功提示按选定日期重算而非按保存时刻', () => {
-    const h = harness(); h.render(); h.success();
-    expect(h.scope.toast.success).toHaveBeenCalledWith('欠保证金规则已保存到正式账目，将从选定启用日期起重算可核验的日结和客户收益；缺少历史证据的记录保留待核验');
+    for (const rule of [undefined, { baselineStatus: 'ready', baselineSource: 'owner_threshold' }]) {
+      const h = harness(); h.render(); h.success(rule);
+      expect(h.scope.toast.success).toHaveBeenCalledWith('欠保证金规则已保存到正式账目；新规则以管理员填写的价格门槛为依据，启用前不变，启用日期起重算可核验的日结和客户收益；缺少历史成交或份额证据的记录保留待核验');
+      expect(h.scope.toast.success.mock.calls[0][0]).not.toContain('已经重算');
+    }
   });
   it('正式环境明确写入正式账目，点击仅发mutation，服务端成功前不显示已保存', async () => {
     const previewSave = vi.fn(); const h = harness({ onPreviewDownsideChange: previewSave });
@@ -348,13 +381,14 @@ describe('欠保证金启用日期：可过去且重算日期起日结与客户�
     expect(h.mutation.mutate).toHaveBeenCalledOnce();
     expect(previewSave).not.toHaveBeenCalled();
     expect(h.scope.toast.success).not.toHaveBeenCalled();
-    h.success({ baselineStatus: 'ready' });
+    h.success({ baselineStatus: 'ready', baselineSource: 'owner_threshold' });
     expect(h.scope.toast.success.mock.calls[0][0]).toContain('已保存到正式账目');
     expect(h.scope.toast.success.mock.calls[0][0]).toContain('保留待核验');
   });
-  it('正式未来pending只确认规则保存，不宣称历史已经重算', () => {
-    const h = harness(); h.render(); h.success({ baselineStatus: 'pending' });
-    expect(h.scope.toast.success).toHaveBeenCalledWith('规则已保存到正式账目，等待启用日期与可核验历史基准；尚未重算');
+  it('新规则未来pending只确认保存与人工依据，不宣称历史已经重算', () => {
+    const h = harness(); h.render(); h.success({ baselineStatus: 'pending', baselineSource: 'owner_threshold' });
+    expect(h.scope.toast.success).toHaveBeenCalledWith('规则已保存到正式账目，以管理员填写的价格门槛为依据；启用前不变，启用日期起重算；当前仍待生效或核验，尚未确认日结和客户收益重算完成');
+    expect(h.scope.toast.success.mock.calls[0][0]).not.toContain('可核验历史基准');
   });
 });
 
@@ -391,30 +425,56 @@ describe('R1父页本地预览回调：完整日期与CAS版本接线', () => {
   });
 });
 
-describe('启用日期与可核验基准等待状态', () => {
+describe('启用日期范围与新旧规则pending兼容状态', () => {
   it('未来日期仍允许保存但先提示不立即按新规则计入', async () => {
     const h = harness(); h.change('start-date', '2027-01-01');
     expect(text(h.render())).toContain('所选启用日期尚未到达');
     expect(text(h.render())).toContain('不会立即按新规则计入');
+    const status = nodes(h.render()).find(node => node.props?.role === 'status' && text(node).includes('所选启用日期尚未到达'));
+    expect(text(status)).toContain('管理员填写的价格门槛为依据');
+    expect(text(status)).toContain('启用前计入口径不变，启用日期起重算');
+    expect(text(status)).not.toContain('可核验历史基准');
     await h.save(); expect(h.mutation.mutate).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2027-01-01' }));
   });
-  it('savedRule.pending即使误带旧计入价也显示待更新且明确尚未重算', () => {
-    for (const options of [
-      { queryData: { lotId: 11, version: 3, enabled: true, thresholdPrice: 10, downsidePercent: 30, startDate: '2027-01-01', baselineStatus: 'pending' } },
-      { dev: true, rule: { lotId: 11, version: 3, enabled: true, thresholdPrice: 10, downsidePercent: 30, startDate: '2026-11-01', baselineStatus: 'pending' } },
-    ]) {
-      const h = harness(options);
-      expect(text(h.render())).toContain('等待启用日期与可核验历史基准；尚未重算日结和客户收益');
+  it('旧pending来源缺失/opening/verified_close兼容保留待核验，不自动转换或冒充ready', () => {
+    for (const baselineSource of [undefined, 'opening', 'verified_close']) {
+      const rule = { lotId: 11, version: 3, enabled: true, thresholdPrice: 10, downsidePercent: 30, startDate: '2026-11-01', baselineStatus: 'pending', baselineSource };
+      for (const options of [{ queryData: rule }, { dev: true, rule }]) {
+        const h = harness(options);
+        const status = nodes(h.render()).find(node => node.props?.role === 'status' && text(node).includes('旧版规则已保存'));
+        expect(text(status)).toBe('旧版规则已保存，沿用原算法，仍待生效或核验；尚未确认日结和客户收益重算完成，不自动转换为新规则。');
+        expect(text(status)).not.toContain('管理员填写');
+        expect(text(h.render())).not.toContain('可核验历史基准');
+        const prices = nodes(h.render()).find(node => String(node.props?.className ?? '').includes('rounded-lg bg-[#FFF5F5]'));
+        expect(text(prices.props.children[0])).toContain('US$9');
+        expect(text(prices.props.children[1])).toContain('待更新');
+        expect(h.mutation.mutate).not.toHaveBeenCalled();
+        expect(rule.baselineStatus).toBe('pending');
+        expect(rule.baselineSource).toBe(baselineSource);
+      }
+    }
+  });
+  it('owner_threshold pending不等待启用历史报价，但仍隐藏未确认计入价', () => {
+    for (const startDate of ['2026-11-01', '2027-01-01']) {
+      const h = harness({ queryData: { lotId: 11, version: 3, enabled: true, thresholdPrice: 10, downsidePercent: 0, startDate, baselineStatus: 'pending', baselineSource: 'owner_threshold' } });
+      const status = nodes(h.render()).find(node => node.props?.role === 'status' && text(node).includes('规则已保存，以管理员填写'));
+      expect(text(status)).toContain('以管理员填写的价格门槛为依据');
+      expect(text(status)).toContain('启用前计入口径不变，启用日期起重算');
+      expect(text(status)).toContain('当前仍待生效或核验，尚未确认日结和客户收益重算完成');
+      expect(text(h.render())).not.toContain('可核验历史基准');
       const prices = nodes(h.render()).find(node => String(node.props?.className ?? '').includes('rounded-lg bg-[#FFF5F5]'));
-      expect(text(prices.props.children[0])).toContain('US$9');
       expect(text(prices.props.children[1])).toContain('待更新');
     }
   });
-  it('API保存pending只提示规则已存和等待，不声称日结或客户收益已经重算', () => {
-    const h = harness(); h.render(); h.success({ baselineStatus: 'pending' });
-    expect(h.scope.toast.success).toHaveBeenCalledWith('规则已保存到正式账目，等待启用日期与可核验历史基准；尚未重算');
-    expect(h.invalidateAll).not.toHaveBeenCalled();
-    expect(h.invalidates.getStockTagCalendar).toHaveBeenCalledOnce();
-    expect(h.invalidates.getMyLedger37AiStockPool).toHaveBeenCalledOnce();
+  it('API旧pending兼容只提示原算法与待生效或核验，仍仅scope invalidation', () => {
+    for (const baselineSource of [undefined, 'opening', 'verified_close']) {
+      const h = harness(); h.render(); h.success({ baselineStatus: 'pending', baselineSource });
+      expect(h.scope.toast.success).toHaveBeenCalledWith('规则已保存到正式账目，旧版规则沿用原算法，仍待生效或核验；尚未确认日结和客户收益重算完成');
+      expect(h.scope.toast.success.mock.calls[0][0]).not.toContain('可核验历史基准');
+      expect(h.invalidateAll).not.toHaveBeenCalled();
+      expect(h.invalidates.getStockTagCalendar).toHaveBeenCalledOnce();
+      expect(h.invalidates.getMyLedger37AiStockPool).toHaveBeenCalledOnce();
+      expect(h.props.onClose).toHaveBeenCalledOnce();
+    }
   });
 });

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   calculateOrdinaryTagObservationSummary,
+  canonicalOrdinaryTagObservationDays,
   ordinaryTagObservationKey,
   ordinaryObservationAllocationPatch,
   assertOrdinaryObservationAllocationChange,
@@ -241,6 +242,8 @@ let categories: FixtureCategory[];
 let records: OrdinaryTagObservationRecord[];
 let beforeUpdate: (() => void) | null;
 let affectedRows: number;
+let downsideRows: Array<Record<string, unknown>>;
+let downsideReadError: Error | null;
 const ADMIN = { ledgerId: 37, categoryId: 10, targetUserId: 201, actorUserId: 100 };
 function ownBalances(value: Record<string, unknown>) { members.find(m => m.userId === 201)!.initialBalances = JSON.stringify(value); }
 function currentBalances() { return JSON.parse(members.find(m => m.userId === 201)!.initialBalances!); }
@@ -261,8 +264,14 @@ beforeEach(() => {
   records = [record('2026-11-01', 'income', 1000), record('2026-11-09', 'income', 900)];
   beforeUpdate = null;
   affectedRows = 1;
+  downsideRows = [];
+  downsideReadError = null;
   mocks.getDbConnection.mockResolvedValue({ execute: mocks.execute });
   mocks.execute.mockImplementation(async (sql: string, values: Array<number | string>) => {
+    if (/FROM ledger_ordinary_tag_downside_rules/.test(sql)) {
+      if (downsideReadError) throw downsideReadError;
+      return [downsideRows.filter(r => Number(r.ledger_id) === values[0]), []];
+    }
     if (/FROM ledger_members m/.test(sql)) {
       return [members.filter(m => m.ledgerId === values[0] && m.userId === values[1]), []];
     }
@@ -505,6 +514,9 @@ describe('普通标签观察服务：仅mock DB', () => {
     expect(sql).toContain('r.deleted_at IS NULL AND r.recordDate <= ?');
     expect(sql).toContain('c.id = r.categoryId AND c.ledgerId = r.ledgerId');
     expect(sql).toContain('(c.id = ? OR c.parentId = ?)');
+    expect(sql).toContain('r.id AS recordId');
+    expect(sql).toContain('AS createdAt');
+    expect(sql).toContain('ORDER BY r.recordDate ASC, r.createdAt ASC, r.id ASC');
     expect(sql).not.toMatch(/ledger_id|category_id|record_date|created_by/);
     expect(params).toEqual([10, 37, 10, 10, '2026-11-09']);
     expect(writes()).toHaveLength(0);
@@ -616,5 +628,417 @@ describe('普通标签内联观察模式：配置转换', () => {
   it.each([0, '0', '0.0000'])('启用观察允许明确的零实际份额 %#', value => {
     const previous = { [ordinaryTagObservationKey('普通')]: JSON.stringify(CONFIG) };
     expect(() => assertOrdinaryObservationAllocationChange(previous, { 普通__ratio: value, 普通__targetAmount: value }, '普通')).not.toThrow();
+  });
+});
+
+describe('普通观察saved-rule脚手架：日末余额和只读批量规则', () => {
+  function canonical(rows: OrdinaryTagObservationRecord[], cutoff = '2026-11-09') {
+    return canonicalOrdinaryTagObservationDays({ ledgerId: 37, userId: 201, categoryId: 10,
+      categoryName: '普通', config: CONFIG, records: rows, today: '2026-11-09' }, cutoff);
+  }
+  it('日末余额按date/createdAt/id而不是income优先或同日求和，不修改输入', () => {
+    const rows = [
+      { ...record('2026-11-09', 'expense', 70), recordId: 5, createdAt: '2026-11-09 09:00:00' },
+      { ...record('2026-11-09', 'income', 800), recordId: 99, createdAt: '2026-11-09 08:00:00' },
+      { ...record('2026-11-09', 'income', 90), recordId: 4, createdAt: '2026-11-09 09:00:00' },
+      { ...record('2026-11-08', 'income', 100), recordId: 3, createdAt: '2026-11-10 09:00:00' },
+    ];
+    const snapshot = JSON.stringify(rows);
+    expect(canonical(rows)).toEqual([
+      { date: '2026-11-08', balance: 100, capitalChange: 0, withdrawTotal: 0 },
+      { date: '2026-11-09', balance: 70, capitalChange: 0, withdrawTotal: 0 },
+    ]);
+    expect(JSON.stringify(rows)).toBe(snapshot);
+  });
+  it('日末真零有效；末记录缺失不回退到前一条有效金额，更不补零', () => {
+    expect(canonical([
+      { ...record('2026-11-08', 'income', 900), recordId: 1 },
+      { ...record('2026-11-08', 'expense', 0), recordId: 2 },
+      { ...record('2026-11-09', 'income', 800), recordId: 3 },
+      { ...record('2026-11-09', 'expense', null), recordId: 4 },
+    ]).map(d => d.balance)).toEqual([0, null]);
+  });
+  it('transfer不覆盖日末B，现金流独立；开始前流忽略、暂停后流和余额排除', () => {
+    const days = canonical([
+      record('2026-11-01', 'income', 1100), record('2026-11-01', 'transfer', 999, 'capital_add'),
+      record('2026-11-02', 'income', 1050), record('2026-11-02', 'transfer', 100, 'capital_add'),
+      record('2026-11-02', 'transfer', 20, 'capital_reduce'), record('2026-11-02', 'transfer', 30, '提现'),
+      record('2026-11-03', 'transfer', 40, 'capital_other'), record('2026-11-04', 'income', 0),
+      record('2026-11-04', 'transfer', 800, 'capital_add'),
+    ], '2026-11-03');
+    expect(days).toEqual([
+      { date: '2026-11-01', balance: 1100, capitalChange: 0, withdrawTotal: 0 },
+      { date: '2026-11-02', balance: 1050, capitalChange: 80, withdrawTotal: 30 },
+      { date: '2026-11-03', balance: null, capitalChange: -40, withdrawTotal: 0 },
+    ]);
+  });
+  it('规则日末路径仍严格隔离ledger/category/deleted/future/非法日期', () => {
+    expect(canonical([
+      record('2026-11-09', 'income', 100),
+      { ...record('2026-11-09', 'income', 999), ledgerId: 52 },
+      { ...record('2026-11-09', 'income', 999), categoryId: 11 },
+      { ...record('2026-11-09', 'income', 999), deletedAt: '2026-11-09' },
+      record('2026-11-10', 'income', 999), record('2026-11-99', 'income', 999),
+    ])).toEqual([{ date: '2026-11-09', balance: 100, capitalChange: 0, withdrawTotal: 0 }]);
+  });
+  it('overview多个启用tag仍只读一次全37规则，不逐tag查表，未保存规则旧输出逐字段相同', async () => {
+    categories.push({ ...categories[0], id: 11, name: '另一个' });
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify(CONFIG),
+      [ordinaryTagObservationKey('另一个')]: JSON.stringify(CONFIG) });
+    records.push({ ...record('2026-11-09', 'income', 800), categoryId: 11 });
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    const reads = mocks.execute.mock.calls.filter(([sql]) => /FROM ledger_ordinary_tag_downside_rules/.test(sql));
+    expect(reads).toHaveLength(1);
+    expect(reads[0][1]).toEqual([37]);
+    expect(reads[0][0]).toMatch(/^SELECT\b/);
+    expect(reads[0][0]).not.toMatch(/category_id\s*=\s*\?/);
+    expect(result.observations[0]).toEqual(calculate(records));
+    expect(result.observations[0]).not.toHaveProperty('countedBalance');
+    expect(writes()).toEqual([]);
+  });
+  it('规则读取失败未知saved状态时affected观察pending/null，不降级raw active也不读余额', async () => {
+    downsideReadError = new Error('rules read unavailable');
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations[0]).toMatchObject({ status: 'pending', points: [],
+      totalPnl: null, todayPnl: null, latestDate: null, latestBalance: null });
+    expect(mocks.execute.mock.calls.filter(([sql]) => /FROM ledger_ordinary_tag_downside_rules/.test(sql))).toHaveLength(1);
+    expect(mocks.execute.mock.calls.some(([sql]) => /FROM ledger_records/.test(sql))).toBe(false);
+    expect(writes()).toEqual([]);
+  });
+  it('新表明确不存在视为未保存规则，不DDL、不生成派生字段', async () => {
+    downsideReadError = Object.assign(new Error('new rules table absent'), { code: 'ER_NO_SUCH_TABLE', errno: 1146 });
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations[0]).toEqual(calculate(records));
+    expect(writes()).toEqual([]);
+  });
+  it('预览同样一次批量SELECT规则，读失败返回pending且DEV不能保存', async () => {
+    vi.stubEnv('PREVIEW_READONLY', 'true');
+    vi.stubEnv('DEV_BYPASS_AUTH', 'true');
+    downsideReadError = new Error('rules unavailable');
+    expect(await getOrdinaryTagObservationPreviewSummary({ ...ADMIN, config: CONFIG }))
+      .toMatchObject({ status: 'pending', totalPnl: null, todayPnl: null, points: [] });
+    expect(mocks.execute.mock.calls.filter(([sql]) => /FROM ledger_ordinary_tag_downside_rules/.test(sql))).toHaveLength(1);
+    await expect(adminSetOrdinaryTagObservationConfig({ ...ADMIN, config: CONFIG }))
+      .rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(writes()).toEqual([]);
+  });
+});
+
+describe('普通观察规则输入安全边界', () => {
+  it('缺省与空saved规则数组逐字段相同，仍旧聚合且不输出任何派生字段', () => {
+    const rows = [record('2026-11-09', 'income', 800), record('2026-11-09', 'income', 100),
+      record('2026-11-09', 'expense', 0)];
+    const input = { ledgerId: 37 as const, userId: 201, categoryId: 10, categoryName: '普通',
+      config: CONFIG, records: rows, today: '2026-11-09' };
+    expect(calculateOrdinaryTagObservationSummary({ ...input, downsideRules: [] }))
+      .toEqual(calculateOrdinaryTagObservationSummary(input));
+    expect(calculateOrdinaryTagObservationSummary(input).latestBalance).toBe(900);
+  });
+  it('规则路径缺失transfer金额以非有限证据阻断，不伪造成没有现金流', () => {
+    const input = { ledgerId: 37 as const, userId: 201, categoryId: 10, categoryName: '普通',
+      config: CONFIG, records: [record('2026-11-09', 'income', 900),
+        record('2026-11-09', 'transfer', null, 'capital_add')], today: '2026-11-09' };
+    const [day] = canonicalOrdinaryTagObservationDays(input, input.today);
+    expect(day.balance).toBe(900);
+    expect(Number.isFinite(day.capitalChange)).toBe(false);
+    expect(day.withdrawTotal).toBe(0);
+  });
+  it('Date和SQL/ISO创建时间可混用，仍以同一timestamp及id选日末', () => {
+    const input = { ledgerId: 37 as const, userId: 201, categoryId: 10, categoryName: '普通',
+      config: CONFIG, records: [
+        { ...record('2026-11-09', 'income', 100), recordId: 10, createdAt: new Date('2026-11-09T08:00:00Z') },
+        { ...record('2026-11-09', 'expense', 80), recordId: 11, createdAt: '2026-11-09 09:00:00.000000' },
+        { ...record('2026-11-09', 'income', 90), recordId: 12, createdAt: '2026-11-09T08:30:00.000Z' },
+      ], today: '2026-11-09' };
+    expect(canonicalOrdinaryTagObservationDays(input, input.today)[0].balance).toBe(80);
+  });
+});
+
+describe('普通观察saved规则接入', () => {
+  it('saved规则仅影响对应category，已保存路径输出明确派生字段', async () => {
+    downsideRows = [{ ledger_id: 37, category_id: 10, user_id: 100, version: 1, enabled: 1,
+      threshold_amount: '500', downside_percent: '0', start_date: '2026-11-02',
+      created_at: '2026-11-01T00:00:00.000000Z' }];
+    categories.push({ ...categories[0], id: 11, name: '未保存规则' });
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify(CONFIG),
+      [ordinaryTagObservationKey('未保存规则')]: JSON.stringify(CONFIG) });
+    records.push({ ...record('2026-11-09', 'income', 800), categoryId: 11 });
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations[0]).toMatchObject({ status: 'active', totalPnl: 50,
+      latestBalance: 900, countedBalance: 900, rawPnl: 50, ruleVersion: 1 });
+    expect(result.observations[1]).toMatchObject({ status: 'active', latestBalance: 800, totalPnl: 100 });
+    expect(mocks.execute.mock.calls.filter(([sql]) => /FROM ledger_ordinary_tag_downside_rules/.test(sql))).toHaveLength(1);
+    expect(writes()).toEqual([]);
+  });
+});
+
+describe('普通观察saved-rule日级现金流中性', () => {
+  const rule = (change: Partial<import('../shared/ordinary-tag-downside').OrdinaryTagDownsideRule> = {}) => ({
+    ledgerId: 37 as const, categoryId: 10, userId: 100, version: 1, enabled: true,
+    thresholdAmount: 500, downsidePercent: 0, startDate: '2026-11-02',
+    createdAt: '2026-11-01T00:00:00.000Z', ...change,
+  });
+  function counted(rows: OrdinaryTagObservationRecord[], config = CONFIG,
+    rules = [rule()], today = '2026-11-09') {
+    return calculateOrdinaryTagObservationSummary({ ledgerId: 37, userId: 201, categoryId: 10,
+      categoryName: '普通', config, records: rows, today, downsideRules: rules });
+  }
+  it('显式0是真实B，日末expense覆盖income但不改no-rule聚合', () => {
+    const rows = [
+      { ...record('2026-11-02', 'income', 900), recordId: 1 },
+      { ...record('2026-11-02', 'expense', 0), recordId: 2 },
+    ];
+    const result = counted(rows);
+    expect(result.latestBalance).toBe(0);
+    expect(result.countedBalance).toBe(500);
+    expect(result.rawPnl).toBe(500);
+    expect(result.totalPnl).toBe(250);
+    expect(result.points[0].dailyPnl).toBeNull();
+    expect(calculate(rows).latestBalance).toBe(900);
+  });
+  it('纯加本金/减本金/withdraw即使资金跨K也无收益，资金本身不按r缩小', () => {
+    const config = { ...CONFIG, initialAmount: 400 };
+    const result = counted([
+      record('2026-11-02', 'income', 400),
+      record('2026-11-03', 'transfer', 200, 'capital_add'), record('2026-11-03', 'income', 600),
+      record('2026-11-04', 'transfer', 100, 'capital_reduce'), record('2026-11-04', 'income', 500),
+      record('2026-11-09', 'transfer', 200, '真实提现'), record('2026-11-09', 'expense', 300),
+    ], config);
+    expect(result.points.map(p => p.pnl)).toEqual([0, 0, 0, 0]);
+    expect(result.points.map(p => p.dailyPnl)).toEqual([null, 0, 0, 0]);
+    expect(result.totalPnl).toBe(0);
+    expect(result.todayPnl).toBe(0);
+    expect(result.capitalChange).toBe(100);
+    expect(result.withdrawTotal).toBe(200);
+    expect(result.latestBalance).toBe(300);
+    expect(result.countedBalance).toBe(500);
+  });
+  it('无余额cash日期只累积流到下一真实点，不虚构收益点，latest后cash不倒灌摘要', () => {
+    const result = counted([
+      record('2026-11-02', 'income', 400), record('2026-11-03', 'transfer', 200, 'capital_add'),
+      record('2026-11-04', 'income', 600), record('2026-11-05', 'transfer', 900, 'capital_add'),
+    ], { ...CONFIG, initialAmount: 400 });
+    expect(result.points.map(p => p.date)).toEqual(['2026-11-02', '2026-11-04']);
+    expect(result.points.map(p => p.pnl)).toEqual([0, 0]);
+    expect(result.capitalChange).toBe(200);
+    expect(result.todayPnl).toBeNull();
+  });
+  it('r=0 belowK不波动，跨K恢复100%，往返无棘轮收益', () => {
+    const result = counted([
+      record('2026-11-02', 'income', 400), record('2026-11-03', 'income', 300),
+      record('2026-11-04', 'income', 550), record('2026-11-09', 'income', 400),
+    ], { ...CONFIG, initialAmount: 400 });
+    expect(result.points.map(p => p.pnl)).toEqual([0, 0, -25, 0]);
+    expect(result.points.map(p => p.dailyPnl)).toEqual([null, 0, -25, 25]);
+    expect(result.points.map(p => p.balance)).toEqual([400, 300, 550, 400]);
+    expect(result.points.map(p => p.countedBalance)).toEqual([500, 500, 550, 500]);
+  });
+  it('晚入场belowK无虚亏，初始观察额与真实成员本金/ratio无自动联动', () => {
+    const config = { ...CONFIG, initialAmount: 400, ratio: 25, startDate: '2026-11-04' };
+    const result = counted([record('2026-11-04', 'income', 400), record('2026-11-09', 'income', 200)], config,
+      [rule({ downsidePercent: 20 })]);
+    expect(result.points.map(p => p.pnl)).toEqual([0, 10]);
+    expect(result.points.map(p => p.rawPnl)).toEqual([0, 50]);
+    expect(result.config).toEqual(config);
+    expect(result.totalPnl).toBe(10);
+  });
+  it('开始前lastB只作首daily基准，累计仍initial；首day cash只计一次', () => {
+    const result = counted([
+      record('2026-11-01', 'income', 900), record('2026-11-01', 'transfer', 999, 'capital_add'),
+      record('2026-11-02', 'transfer', 100, 'capital_add'), record('2026-11-02', 'transfer', 20, '提现'),
+      record('2026-11-02', 'income', 980), record('2026-11-09', 'income', 930),
+    ]);
+    expect(result.points.map(p => p.date)).toEqual(['2026-11-02', '2026-11-09']);
+    expect(result.points.map(p => p.pnl)).toEqual([50, 75]);
+    expect(result.points.map(p => p.dailyPnl)).toEqual([0, 25]);
+    expect(result.capitalChange).toBe(100);
+    expect(result.withdrawTotal).toBe(20);
+  });
+  it('开始前余额不是收益点；无首daily真实基准保持null，不造zero', () => {
+    const result = counted([record('2026-11-02', 'income', 900)]);
+    expect(result.totalPnl).toBe(50);
+    expect(result.points[0].dailyPnl).toBeNull();
+    const none = counted([record('2026-11-01', 'income', 900)]);
+    expect(none.status).toBe('no_data');
+    expect(none.points).toEqual([]);
+    expect(none.latestBalance).toBeNull();
+    expect(none.totalPnl).toBeNull();
+  });
+  it('暂停独立cutoff、包含当日，之后规则版本和未来记录不得应用', () => {
+    const rules = [rule(), rule({ version: 2, startDate: '2026-11-05', enabled: false })];
+    const result = counted([
+      record('2026-11-02', 'income', 400), record('2026-11-04', 'income', 300),
+      record('2026-11-05', 'income', 100), record('2026-11-09', 'transfer', 100, 'capital_add'),
+    ], { ...CONFIG, initialAmount: 400, pauseDate: '2026-11-04' }, rules);
+    expect(result).toMatchObject({ status: 'paused', latestDate: '2026-11-04', latestBalance: 300,
+      totalPnl: 0, todayPnl: null, ruleVersion: 1, capitalChange: 0 });
+    expect(result.points).toHaveLength(2);
+  });
+  it('未来规则不提前，关闭规则恢复raw，daily是相邻counted累计差', () => {
+    const result = counted([
+      record('2026-11-02', 'income', 400), record('2026-11-03', 'income', 300),
+      record('2026-11-04', 'income', 300), record('2026-11-09', 'income', 300),
+    ], { ...CONFIG, initialAmount: 400 }, [rule({ startDate: '2026-11-03' }),
+      rule({ version: 2, enabled: false, startDate: '2026-11-09' }),
+      rule({ version: 3, thresholdAmount: 1000, startDate: '2026-11-10' })]);
+    expect(result.points.map(p => p.ruleVersion)).toEqual([0, 1, 1, 2]);
+    expect(result.points.map(p => p.pnl)).toEqual([0, 0, 0, 50]);
+    expect(result.todayPnl).toBe(50);
+  });
+  it('缺失现金流证据或非法cash-before-performance基准必须pending/null，不能raw ready', () => {
+    for (const rows of [
+      [record('2026-11-02', 'income', 400), record('2026-11-09', 'transfer', null, 'capital_add'), record('2026-11-09', 'income', 300)],
+      [record('2026-11-02', 'income', 400), record('2026-11-09', 'transfer', 500, '提现'), record('2026-11-09', 'income', 300)],
+    ]) {
+      const result = counted(rows, { ...CONFIG, initialAmount: 400 });
+      expect(result.status).toBe('pending');
+      expect(result.latestBalance).toBe(300);
+      expect(result.totalPnl).toBeNull();
+      expect(result.todayPnl).toBeNull();
+    }
+  });
+});
+
+describe('普通观察saved-rule只读服务边界', () => {
+  const stored = (change: Record<string, unknown> = {}) => ({ ledger_id: 37, category_id: 10, user_id: 100,
+    version: 1, enabled: 1, threshold_amount: '500', downside_percent: '0', start_date: '2026-11-02',
+    created_at: '2026-11-01T00:00:00.000000Z', ...change });
+  it('服务真实记录按日末B而非聚合、transfer不覆盖B且备注不泄漏', async () => {
+    downsideRows = [stored()];
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify({ ...CONFIG, initialAmount: 400 }) });
+    records = [
+      { ...record('2026-11-02', 'income', 400), recordId: 1, createdAt: '2026-11-02 09:00:00' },
+      { ...record('2026-11-09', 'income', 900), recordId: 2, createdAt: '2026-11-09 08:00:00' },
+      { ...record('2026-11-09', 'expense', 300), recordId: 3, createdAt: '2026-11-09 09:00:00' },
+      { ...record('2026-11-09', 'transfer', 0, '私密transfer备注'), recordId: 4, createdAt: '2026-11-09 10:00:00' },
+    ];
+    const snapshot = JSON.stringify(members);
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations[0]).toMatchObject({ latestBalance: 300, countedBalance: 500, rawPnl: 50,
+      totalPnl: 0, todayPnl: 0, capitalChange: 0, withdrawTotal: 0 });
+    expect(JSON.stringify(result)).not.toContain('私密transfer备注');
+    expect(JSON.stringify(members)).toBe(snapshot);
+    expect(writes()).toEqual([]);
+  });
+  it('saved-rule预览使用独立试填config、暂停切断未来规则及记录，只SELECT不保存', async () => {
+    vi.stubEnv('PREVIEW_READONLY', 'true');
+    vi.stubEnv('DEV_BYPASS_AUTH', 'true');
+    downsideRows = [stored(), stored({ version: 2, start_date: '2026-11-05', enabled: 0 })];
+    records = [record('2026-11-02', 'income', 400), record('2026-11-04', 'income', 300),
+      record('2026-11-09', 'income', 200)];
+    const config = { ...CONFIG, initialAmount: 400, ratio: 25, pauseDate: '2026-11-04' };
+    const snapshot = JSON.stringify(members);
+    const result = await getOrdinaryTagObservationPreviewSummary({ ...ADMIN, config });
+    expect(result).toMatchObject({ config, status: 'paused', latestDate: '2026-11-04', latestBalance: 300,
+      countedBalance: 500, rawPnl: 25, totalPnl: 0, todayPnl: null, ruleVersion: 1 });
+    expect(mocks.execute.mock.calls.filter(([sql]) => /FROM ledger_ordinary_tag_downside_rules/.test(sql))).toHaveLength(1);
+    expect(JSON.stringify(members)).toBe(snapshot);
+    expect(writes()).toEqual([]);
+  });
+  it('坏saved规则解码失败同样pending/null，不能退回raw ready或触发DDL', async () => {
+    downsideRows = [stored({ downside_percent: 'not a percent' })];
+    const result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations[0]).toMatchObject({ status: 'pending', points: [], totalPnl: null,
+      todayPnl: null, latestBalance: null });
+    expect(mocks.execute.mock.calls.some(([sql]) => /FROM ledger_records/.test(sql))).toBe(false);
+    expect(writes()).toEqual([]);
+  });
+  it('saved规则不可解密transfer保持原拒绝语义，不误当cash0', async () => {
+    vi.stubEnv('ENCRYPTION_KEY', '');
+    downsideRows = [stored()];
+    records.push(record('2026-11-09', 'transfer', 100, 'enc:v1:unreadable'));
+    await expect(getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 }))
+      .rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(writes()).toEqual([]);
+  });
+  it('pure传入其他category/ledger规则不触发新版余额规范，保留原逐字段输出', () => {
+    const input = { ledgerId: 37 as const, userId: 201, categoryId: 10, categoryName: '普通',
+      config: CONFIG, records: [record('2026-11-09', 'income', 800), record('2026-11-09', 'income', 100)],
+      today: '2026-11-09' };
+    const rule = { ledgerId: 37 as const, categoryId: 11, userId: 100, version: 1, enabled: true,
+      thresholdAmount: 500, downsidePercent: 0, startDate: '2026-11-02', createdAt: '2026-11-01T00:00:00.000Z' };
+    expect(calculateOrdinaryTagObservationSummary({ ...input, downsideRules: [rule] }))
+      .toEqual(calculateOrdinaryTagObservationSummary(input));
+  });
+});
+
+describe('普通观察日级引擎附加回归', () => {
+  const rules = [{ ledgerId: 37 as const, categoryId: 10, userId: 100, version: 1,
+    enabled: true, thresholdAmount: 500, downsidePercent: 0, startDate: '2026-11-02',
+    createdAt: '2026-11-01T00:00:00.000Z' }];
+  const input = (rows: OrdinaryTagObservationRecord[], config = CONFIG) => ({ ledgerId: 37 as const,
+    userId: 201, categoryId: 10, categoryName: '普通', config, records: rows,
+    today: '2026-11-09', downsideRules: rules });
+  it('相同timestamp的不同小数精度以recordId决胜', () => {
+    const rows = [
+      { ...record('2026-11-09', 'expense', 100), recordId: 1, createdAt: '2026-11-09 09:00:00.000000' },
+      { ...record('2026-11-09', 'income', 80), recordId: 2, createdAt: new Date('2026-11-09T09:00:00.000Z') },
+    ];
+    expect(canonicalOrdinaryTagObservationDays(input(rows), '2026-11-09')[0].balance).toBe(80);
+  });
+  it('同日规则最高version胜出且不按createdAt审计时间排序', () => {
+    const result = calculateOrdinaryTagObservationSummary({ ...input([record('2026-11-09', 'income', 300)]),
+      downsideRules: [rules[0], { ...rules[0], version: 2, downsidePercent: 100,
+        createdAt: '2026-10-01T00:00:00.000Z' }] });
+    expect(result).toMatchObject({ ruleVersion: 2, rawPnl: 350, totalPnl: 350, countedBalance: 300 });
+  });
+  it('明确零比例保持0而非默认100，独立参考初始金额0也合法', () => {
+    const result = calculateOrdinaryTagObservationSummary(input([record('2026-11-09', 'income', 0)],
+      { ...CONFIG, initialAmount: 0, ratio: 0 }));
+    expect(result).toMatchObject({ status: 'active', latestBalance: 0, totalPnl: 0, rawPnl: 0 });
+    expect(result.points[0].dailyPnl).toBeNull();
+  });
+  it('后续缺失余额不伪造zero或收益点，明确现金流可带到下一真实点', () => {
+    const result = calculateOrdinaryTagObservationSummary(input([
+      record('2026-11-02', 'income', 400), record('2026-11-03', 'income', null),
+      record('2026-11-03', 'transfer', 200, 'capital_add'), record('2026-11-09', 'income', 600),
+    ], { ...CONFIG, initialAmount: 400 }));
+    expect(result.points.map(p => p.date)).toEqual(['2026-11-02', '2026-11-09']);
+    expect(result).toMatchObject({ status: 'active', totalPnl: 0, todayPnl: 0, capitalChange: 200 });
+  });
+});
+
+describe('普通观察最新余额缺证据保护', () => {
+  const rules = [{ ledgerId: 37 as const, categoryId: 10, userId: 100, version: 1,
+    enabled: true, thresholdAmount: 500, downsidePercent: 20, startDate: '2026-11-02',
+    createdAt: '2026-11-01T00:00:00.000Z' }];
+  const input = (rows: OrdinaryTagObservationRecord[], config = CONFIG) => ({ ledgerId: 37 as const,
+    userId: 201, categoryId: 10, categoryName: '普通', config, records: rows,
+    today: '2026-11-09', downsideRules: rules });
+  it.each([null, '', ' ', 'NaN', NaN, Infinity])('最新登记金额无效%j时不能回退为上一日ready摘要', amount => {
+    const result = calculateOrdinaryTagObservationSummary(input([
+      record('2026-11-02', 'income', 900), record('2026-11-09', 'income', amount),
+    ]));
+    expect(result).toMatchObject({ status: 'pending', latestDate: '2026-11-09', latestBalance: null,
+      countedBalance: null, rawPnl: null, totalPnl: null, todayPnl: null });
+    expect(result.points.map(point => point.date)).toEqual(['2026-11-02']);
+  });
+  it('同日最后一笔无效覆盖此前有效余额，不退回同日旧值', () => {
+    const result = calculateOrdinaryTagObservationSummary(input([
+      record('2026-11-02', 'income', 900),
+      { ...record('2026-11-09', 'income', 800), recordId: 1 },
+      { ...record('2026-11-09', 'income', null), recordId: 2 },
+    ]));
+    expect(result).toMatchObject({ status: 'pending', latestDate: '2026-11-09', latestBalance: null, totalPnl: null });
+    expect(result.points.map(point => point.date)).toEqual(['2026-11-02']);
+  });
+  it('暂停截止日无效余额仍待核验，而非展示较早日期的paused收益', () => {
+    const result = calculateOrdinaryTagObservationSummary(input([
+      record('2026-11-02', 'income', 900), record('2026-11-04', 'income', null),
+      record('2026-11-09', 'income', 800),
+    ], { ...CONFIG, pauseDate: '2026-11-04' }));
+    expect(result).toMatchObject({ status: 'pending', latestDate: '2026-11-04', latestBalance: null,
+      countedBalance: null, rawPnl: null, totalPnl: null, todayPnl: null });
+  });
+  it('只有资金流、被删除、未来或他类无效余额不冒充本类最新登记', () => {
+    const base = record('2026-11-02', 'income', 900);
+    const original = calculateOrdinaryTagObservationSummary(input([base]));
+    const result = calculateOrdinaryTagObservationSummary(input([
+      base, record('2026-11-09', 'transfer', 100, 'capital_add'),
+      { ...record('2026-11-09', 'income', null), deletedAt: '2026-11-09' },
+      record('2026-11-10', 'income', null),
+      { ...record('2026-11-09', 'income', null), categoryId: 11 },
+    ]));
+    expect(result).toEqual(original);
   });
 });

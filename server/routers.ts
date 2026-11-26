@@ -3023,6 +3023,11 @@ async function requireLedger52PayoutManager(userId: number, userRole: string | u
 async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: number; systemRole?: unknown }) {
   const db = await getLedgerDb();
   if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  const { readAllOrdinaryTagDownsideRules } = await import('./ordinary-tag-downside-rules');
+  const ordinaryRulesByCategory = await readAllOrdinaryTagDownsideRules(conn, LEDGER_37_ID);
+  const { buildOrdinaryTagDownsideValuation } = await import('./ordinary-tag-downside-valuation');
   const [memberRows, balancesMapRaw, categoryResult, recordResult, dividendResult] = await Promise.all([
     dbLedger.getLedgerMembers(LEDGER_37_ID, params.actorUserId),
     dbLedger.getAllMembersInitialBalances(LEDGER_37_ID),
@@ -3034,8 +3039,10 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
       ORDER BY sortOrder ASC, id ASC
     `),
     db.execute(sql`
-      SELECT lr.categoryId, lr.type, lr.amount, lr.description, lr.recordDate, lr.createdAt, lr.id
+      SELECT lr.ledgerId, lr.categoryId, lr.type, lr.amount, lr.description, lr.recordDate, lr.createdAt, lr.id,
+        COALESCE(lc.parentId, lc.id) AS rootCategoryId
       FROM ledger_records lr
+      LEFT JOIN ledger_categories lc ON lc.id = lr.categoryId AND lc.ledgerId = lr.ledgerId
       WHERE lr.ledgerId = ${LEDGER_37_ID} AND lr.deleted_at IS NULL
       ORDER BY lr.recordDate ASC, lr.createdAt ASC, lr.id ASC
     `),
@@ -3070,6 +3077,18 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
     const day = parts.find((part) => part.type === 'day')?.value;
     return year && month && day ? `${year}-${month}-${day}` : '';
   };
+  // 配置了强平的普通标签使用同一完整日末序列；不复用前端有页数上限的流水。
+  // 每个账本只读一次规则与一次全量流水，成员之间仅做纯计算。
+  const ordinaryRecordsByCategory = new Map<number, Array<import('./ordinary-tag-downside-valuation').OrdinaryTagDownsideValuationRecord>>();
+  for (const record of asRows(recordResult)) {
+    const categoryId = Number(record.rootCategoryId ?? record.categoryId);
+    if (!ordinaryRulesByCategory.has(categoryId)) continue;
+    const records = ordinaryRecordsByCategory.get(categoryId) || [];
+    records.push({ ledgerId: LEDGER_37_ID, categoryId, recordDate: dateOf(record.recordDate),
+      type: record.type, amount: record.amount, description: record.description ?? null,
+      createdAt: record.createdAt, recordId: Number(record.id) });
+    ordinaryRecordsByCategory.set(categoryId, records);
+  }
   const holidays2026 = new Set([
     '2026-01-01','2026-01-02','2026-01-03',
     '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
@@ -3173,6 +3192,13 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
           cumulativeReturn = stockPnl.get(tagName) || 0;
           hasReturnData = true;
         }
+      } else if (category && ordinaryRulesByCategory.has(category.id)) {
+        const valuation = buildOrdinaryTagDownsideValuation({ ledgerId: LEDGER_37_ID,
+          userId, categoryId: category.id, categoryName: tagName, balances,
+          records: ordinaryRecordsByCategory.get(category.id) || [],
+          rules: ordinaryRulesByCategory.get(category.id) || [], today: getBeijingLedgerRecordToday() });
+        hasReturnData = valuation.status === 'ready' && valuation.totalPnl !== null && Number.isFinite(valuation.totalPnl);
+        if (hasReturnData) cumulativeReturn = valuation.totalPnl!;
       } else {
         const start = previousTradingDay(balances[`${tagName}__startDate`]);
         const pausedAt = pauseDate(balances, tagName);
@@ -3205,6 +3231,7 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
       const settledPaidDividend = money(paidDividend);
       return {
         tagName,
+        categoryId: category?.id ?? null,
         accountingMode: category?.accountingMode || 'manual_balance',
         cumulativeReturn: settledCumulativeReturn,
         paidDividend: settledPaidDividend,
@@ -14348,6 +14375,52 @@ ${klinesSummary}
         const { updateStockTagBuy } = await import('./ledger-stock-portfolio');
         return updateStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
+    getForcedLiquidationSettings: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }).strict())
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { getForcedLiquidationSettings } = await import('./forced-liquidation-settings');
+        return getForcedLiquidationSettings({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getForcedLiquidationSettingDetail: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        lotId: z.number().int().positive().optional(),
+      }).strict())
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { getForcedLiquidationSettingDetail } = await import('./forced-liquidation-setting-detail');
+        return getForcedLiquidationSettingDetail({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    setOrdinaryTagDownsideRule: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number().int().positive(),
+        enabled: z.boolean(),
+        thresholdAmount: z.number().finite().positive().max(1_000_000_000_000),
+        downsidePercent: z.number().finite().min(0).max(100),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '请填写启用日期').refine(value => {
+          const date = new Date(value + 'T00:00:00Z');
+          return value >= '1000-01-01' && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+        }, '请填写有效的启用日期'),
+        expectedVersion: z.number().int().min(0),
+      }).strict())
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { setOrdinaryTagDownsideRule } = await import('./ordinary-tag-downside-rules');
+        return setOrdinaryTagDownsideRule({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getMyOrdinaryTagDownsideValuations: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }).strict())
+      .query(async ({ ctx, input }) => {
+        const { getMyOrdinaryTagDownsideValuations } = await import('./ordinary-tag-downside-valuation');
+        return getMyOrdinaryTagDownsideValuations({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
     getStockLotDownsideRule: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),
@@ -18230,14 +18303,27 @@ ${klinesSummary}
         const availabilityTag = (availability.users as any[])
           .find((member: any) => Number(member.userId) === input.targetUserId)?.tags
           ?.find((tag: any) => String(tag.tagName) === input.tagName);
-        const hasReturnData = Boolean(availabilityTag?.hasReturnData);
-        const cumulativeReturn = Math.round((Number(availabilityTag?.cumulativeReturn || 0) + Number.EPSILON) * 100) / 100;
+        let hasReturnData = Boolean(availabilityTag?.hasReturnData);
+        let cumulativeReturn = Math.round((Number(availabilityTag?.cumulativeReturn || 0) + Number.EPSILON) * 100) / 100;
 
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
         const transaction = conn as any;
         try {
           await transaction.beginTransaction();
+          const { readOrdinaryTagDownsidePaymentReturn } = await import('./ordinary-tag-downside-payment-readback');
+          const ordinaryReadback = await readOrdinaryTagDownsidePaymentReturn(transaction, {
+            ledgerId: LEDGER_37_ID, userId: input.targetUserId, tagName: input.tagName,
+            actorUserId: ctx.user.id, expectedCategoryId: Number(category.id), today: getBeijingLedgerRecordToday(),
+          });
+          if (ordinaryReadback.applicable) {
+            if (ordinaryReadback.status !== 'ready' || ordinaryReadback.cumulativeReturn === null
+              || !Number.isFinite(ordinaryReadback.cumulativeReturn)) {
+              throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '普通标签强平收益尚待核验，不能结算' });
+            }
+            hasReturnData = true;
+            cumulativeReturn = Math.round(ordinaryReadback.cumulativeReturn * 100) / 100;
+          }
           const [memberRows] = await transaction.execute(
             'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
             [LEDGER_37_ID, input.targetUserId],
@@ -18970,6 +19056,21 @@ ${klinesSummary}
             currentHoldingValueDate = null;
           }
         }
+        // 强平是派生计入口径，绝不能覆盖真实余额/52的 currentHoldingValue。
+        let countedHoldingValue: { value: number | null; currency: 'CNY'; categoryId: number; updatedDate: string | null; ruleVersion: number | null } | undefined;
+        if (!input.reference52 && input.ledgerId === LEDGER_37_ID && category
+          && accountingMode === 'manual_balance' && currentHoldingValueDate) {
+          const conn = await getDbConnection();
+          if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '强平计入口径暂不可用' });
+          const { readAllOrdinaryTagDownsideRules } = await import('./ordinary-tag-downside-rules');
+          const { countedOrdinaryTagBalance, selectOrdinaryTagDownsideRule } = await import('../shared/ordinary-tag-downside');
+          const rules = (await readAllOrdinaryTagDownsideRules(conn, LEDGER_37_ID)).get(Number(category.id)) || [];
+          if (rules.length > 0) {
+            const rule = selectOrdinaryTagDownsideRule(rules, Number(category.id), currentHoldingValueDate.slice(0, 10));
+            countedHoldingValue = { value: currentHoldingValue === null ? null : countedOrdinaryTagBalance(currentHoldingValue, rule),
+              currency: 'CNY', categoryId: Number(category.id), updatedDate: currentHoldingValueDate, ruleVersion: rule?.version ?? null };
+          }
+        }
         return {
           marginByCoin,
           latestBalance: latestBalance ? {
@@ -18989,6 +19090,7 @@ ${klinesSummary}
             categoryId: Number(category?.id),
             updatedDate: currentHoldingValueDate,
           } : null,
+          ...(countedHoldingValue !== undefined ? { countedHoldingValue } : {}),
         };
       }),
 
@@ -37324,7 +37426,7 @@ insights 数组每项包含：
         systemRole: (ctx.user as any).role,
       });
       const roundCny = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
-      const candidates: Array<{ userId: number; tagName: string; cumulativeReturn: number; expectedAmount: number }> = [];
+      const candidates: Array<{ userId: number; tagName: string; categoryId?: number; cumulativeReturn: number; expectedAmount: number }> = [];
       for (const member of availability.users as any[]) {
         if (Number(member.userId) !== input.targetUserId) continue;
         for (const tag of member.tags ?? []) {
@@ -37336,6 +37438,7 @@ insights 数组每项包含：
             candidates.push({
               userId: Number(member.userId),
               tagName: String(tag.tagName),
+              categoryId: Number.isSafeInteger(tag.categoryId) && tag.categoryId > 0 ? tag.categoryId : undefined,
               cumulativeReturn: roundCny(Number(tag.cumulativeReturn)),
               expectedAmount: roundCny(expectedAmount),
             });
@@ -37352,6 +37455,19 @@ insights 数组每项包含：
         const transaction = conn as any;
         try {
           await transaction.beginTransaction();
+          const { readOrdinaryTagDownsidePaymentReturn } = await import('./ordinary-tag-downside-payment-readback');
+          const ordinaryReadback = await readOrdinaryTagDownsidePaymentReturn(transaction, {
+            ledgerId: LEDGER_37_ID, userId: candidate.userId, tagName: candidate.tagName,
+            actorUserId: ctx.user.id, expectedCategoryId: candidate.categoryId, today: getBeijingLedgerRecordToday(),
+          });
+          let lockedCumulativeReturn = candidate.cumulativeReturn;
+          if (ordinaryReadback.applicable) {
+            if (ordinaryReadback.status !== 'ready' || ordinaryReadback.cumulativeReturn === null
+              || !Number.isFinite(ordinaryReadback.cumulativeReturn)) {
+              throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '普通标签强平收益已变化或待核验，请刷新后重试' });
+            }
+            lockedCumulativeReturn = roundCny(ordinaryReadback.cumulativeReturn);
+          }
           const [existingActionRows] = await transaction.execute(
             `SELECT status, processed_cny_amount, skip_reason
                FROM ledger37_dividend_batch_actions
@@ -37379,7 +37495,7 @@ insights 数组每项包含：
             [LEDGER_37_ID, candidate.userId, candidate.tagName],
           );
           const currentPaid = Number(asRows(paidRows)[0]?.paid_total || 0);
-          const currentAvailable = roundCny(candidate.cumulativeReturn - currentPaid);
+          const currentAvailable = roundCny(lockedCumulativeReturn - currentPaid);
           const currentExpected = input.mode === 'distribute' ? currentAvailable : -currentAvailable;
           const amount = roundCny(Math.min(candidate.expectedAmount, Math.max(0, currentExpected)));
           if (!(amount > 0.005)) {

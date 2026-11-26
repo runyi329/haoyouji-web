@@ -34,6 +34,14 @@ export default function LedgerSettings() {
  const { data: ledgerData, isLoading } = trpc.ledger.getById.useQuery({
  ledgerId,
  });
+ // 新入口独立限制；不改变其他旧设置的owner/admin权限，也不静态加载强平编辑器。
+ const canOpenForcedLiquidationSettings = (() => {
+   if (ledgerId !== 37 || !user?.id || ledgerData?.userRole !== 'owner' || ledgerData?.ownerId !== user.id) return false;
+   try {
+     return !_urlSearchParams.has('viewAs') && window.sessionStorage.getItem('view-as-user-id') === null
+       && _urlSearchParams.get('readonly') !== 'true' && _urlSearchParams.get('readonly') !== '1';
+   } catch { return false; }
+ })();
 
  // 
  const { data: members } = trpc.ledger.getMembers.useQuery({ ledgerId });
@@ -477,6 +485,13 @@ export default function LedgerSettings() {
          showIcon
          onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
        />
+       {canOpenForcedLiquidationSettings && (
+         <SettingItem
+           label="强平设置"
+           showIcon
+           onClick={() => setLocation(`/ledger/${ledgerId}/forced-liquidation-settings`)}
+         />
+       )}
        <SettingItem
          label="利息管理"
          showIcon

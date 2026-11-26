@@ -8,7 +8,8 @@ export type StockLotDownsideRule = {
   /** Business effective instant, distinct from the real server audit timestamp. */
   effectiveAt: string;
   baselineRawPrice: number; baselineCountedPrice: number;
-  baselineStatus?: 'ready' | 'pending'; baselineSource?: 'opening' | 'verified_close';
+  /** owner_threshold is an administrator's native-price basis, never a market quote. */
+  baselineStatus?: 'ready' | 'pending'; baselineSource?: 'opening' | 'verified_close' | 'owner_threshold';
   holdingStartAt?: string;
   currency: 'CNY' | 'USD' | 'USDT';
   quoteAsOf?: string; createdAt?: string;
@@ -46,17 +47,42 @@ export function stockLotDownsideMemberOffset(input: {
   lotId: number; participationId: number; assignedAt: string; startDate?: string;
   rules: readonly StockLotDownsideRule[]; epochs: readonly StockLotDownsideMemberEpoch[]; asOf: string | Date;
   entryRawPrice?: number | null; entryQuoteAsOf?: string;
+  /** Already verified participation scope cutoff; distinct from an earlier carried market close. */
+  participationAsOf?: string | Date;
 }): number | null {
   const at = input.asOf instanceof Date ? input.asOf.getTime() : Date.parse(input.asOf);
   const entryAt = input.startDate ? stockLotDownsideMemberEntryAt(input.assignedAt, input.startDate) : input.assignedAt;
   if (!Number.isFinite(Date.parse(entryAt))) return input.rules.some(r => r.lotId === input.lotId && Date.parse(r.effectiveAt) <= at) ? null : 0;
-  if (Date.parse(entryAt) > at) return 0;
   const entryRule = selectStockLotDownsideRule(input.rules, input.lotId, entryAt);
+  let ownerBasisRule = entryRule;
+  if (Date.parse(entryAt) > at) {
+    if (entryRule?.baselineSource !== 'owner_threshold' || input.participationAsOf === undefined) return 0;
+    const scopeAt = input.participationAsOf instanceof Date ? input.participationAsOf.getTime() : Date.parse(input.participationAsOf);
+    if (!Number.isFinite(scopeAt) || Date.parse(entryAt) >= scopeAt) return null;
+    // The older quote retains its own applicable rule; scope timing never activates a future rule.
+    ownerBasisRule = selectStockLotDownsideRule(input.rules, input.lotId, input.asOf);
+    if (ownerBasisRule?.baselineSource !== 'owner_threshold') return 0;
+  }
   if (!entryRule) return 0;
   const epoch = input.epochs.filter(e => e.lotId === input.lotId && e.participationId === input.participationId
     && Date.parse(e.effectiveAt) <= at && Date.parse(e.effectiveAt) >= Date.parse(entryAt)
     && Date.parse(e.effectiveAt) - Date.parse(entryAt) <= 120_000)
     .sort((a, b) => (b.ruleVersion ?? 0) - (a.ruleVersion ?? 0))[0];
+  if (entryRule.baselineSource === 'owner_threshold') {
+    if (!Number.isFinite(Date.parse(input.assignedAt))) return null;
+    const scopeAt = input.participationAsOf === undefined ? at
+      : input.participationAsOf instanceof Date ? input.participationAsOf.getTime() : Date.parse(input.participationAsOf);
+    if (!Number.isFinite(scopeAt) || Date.parse(entryAt) > scopeAt) return null;
+    // A real participation price is a business entry basis, not external historical quote proof.
+    // Only an exact entry epoch may substitute for a missing explicit participation price.
+    const exactEpoch = input.epochs.filter(e => e.lotId === input.lotId && e.participationId === input.participationId
+      && Date.parse(e.effectiveAt) === Date.parse(entryAt) && Date.parse(e.effectiveAt) <= scopeAt)
+      .sort((a, b) => (b.ruleVersion ?? 0) - (a.ruleVersion ?? 0))[0];
+    const raw = input.entryRawPrice ?? exactEpoch?.rawPrice;
+    if (raw == null || !Number.isFinite(raw) || raw <= 0) return null;
+    const counted = countedStockLotPrice(raw, ownerBasisRule);
+    return counted === null ? null : counted - raw;
+  }
   // Legacy epoch evidence is sufficient for legacy rules; preserve its prospective contract.
   if (epoch && !entryRule.startDate && epoch.ruleVersion === undefined) return epoch.entryCountedOffset;
   const raw = epoch?.rawPrice ?? input.entryRawPrice;
@@ -75,10 +101,23 @@ export function applyStockLotDownsidePrice(price: number | null, thresholdPrice:
   validateStockLotDownsideSettings(thresholdPrice, downsidePercent);
   return price >= thresholdPrice ? price : thresholdPrice + (price - thresholdPrice) * downsidePercent / 100;
 }
+/** Persisted manual data must already be valid; never repair a damaged basis with K or a quote. */
+function isOwnerStockLotDownsideBasisValid(rule: StockLotDownsideRule): boolean {
+  return rule.baselineStatus === 'ready' && typeof rule.enabled === 'boolean'
+    && Number.isFinite(rule.thresholdPrice) && rule.thresholdPrice > 0
+    && Number.isFinite(rule.downsidePercent) && rule.downsidePercent >= 0 && rule.downsidePercent <= 100
+    && Number.isFinite(rule.baselineRawPrice) && rule.baselineRawPrice > 0
+    && Number.isFinite(rule.baselineCountedPrice) && rule.baselineCountedPrice > 0
+    && rule.baselineRawPrice === rule.thresholdPrice && rule.baselineCountedPrice === rule.thresholdPrice;
+}
 /** Missing baseline proof stays pending, never zero or today's quote. */
 export function countedStockLotPrice(price: number | null, rule: StockLotDownsideRule | null): number | null {
   if (price === null || !Number.isFinite(price) || price <= 0) return null;
   if (!rule) return price;
+  if (rule.baselineSource === 'owner_threshold') {
+    if (!isOwnerStockLotDownsideBasisValid(rule)) return null;
+    return rule.enabled ? applyStockLotDownsidePrice(price, rule.thresholdPrice, rule.downsidePercent) : price;
+  }
   if (rule.baselineStatus === 'pending' || !Number.isFinite(rule.baselineRawPrice) || rule.baselineRawPrice <= 0
     || !Number.isFinite(rule.baselineCountedPrice)) return null;
   const f = (p: number) => rule.enabled ? applyStockLotDownsidePrice(p, rule.thresholdPrice, rule.downsidePercent)! : p;
@@ -132,7 +171,7 @@ export function createStockLotDownsideVersion(input: {
   enabled: boolean; thresholdPrice?: number; downsidePercent?: number; expectedVersion: number;
   currentRawPrice: number; effectiveAt: string; quoteAsOf?: string;
   startDate?: string; createdAt?: string; baselineStatus?: 'ready' | 'pending';
-  baselineSource?: 'opening' | 'verified_close'; holdingStartAt?: string;
+  baselineSource?: StockLotDownsideRule['baselineSource']; holdingStartAt?: string;
   beforeStartRule?: StockLotDownsideRule | null;
 }, previous: StockLotDownsideRule | null): StockLotDownsideRule {
   if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 || input.expectedVersion !== (previous?.version ?? 0)) throw new Error('欠保证金版本冲突，请刷新后重试');
@@ -140,13 +179,21 @@ export function createStockLotDownsideVersion(input: {
   if (input.startDate !== undefined) validateStockLotDownsideStartDate(input.startDate);
   const effectiveAt = input.startDate === undefined ? input.effectiveAt : stockLotDownsideEffectiveAt(input.startDate);
   const createdAt = input.createdAt ?? (input.startDate ? new Date().toISOString() : input.effectiveAt);
+  const ownerThreshold = input.baselineSource === 'owner_threshold';
   if (!Number.isFinite(Date.parse(effectiveAt)) || !Number.isFinite(Date.parse(createdAt))
-    || (input.baselineStatus !== 'pending' && (!Number.isFinite(input.currentRawPrice) || input.currentRawPrice <= 0))) throw new Error('缺少可核验历史基准，请选择更晚的启用日期');
+    || (!ownerThreshold && input.baselineStatus !== 'pending' && (!Number.isFinite(input.currentRawPrice) || input.currentRawPrice <= 0))) throw new Error('缺少可核验历史基准，请选择更晚的启用日期');
   // Legacy direct helper callers retain their old server-time monotonic safety.
   if (!input.startDate && previous && Date.parse(effectiveAt) < Date.parse(previous.effectiveAt)) throw new Error('服务器生效时间不能早于上一版本');
-  const thresholdPrice = input.thresholdPrice ?? previous?.thresholdPrice ?? input.currentRawPrice;
+  const thresholdPrice = input.thresholdPrice ?? previous?.thresholdPrice ?? (ownerThreshold ? NaN : input.currentRawPrice);
   const downsidePercent = input.downsidePercent ?? previous?.downsidePercent ?? 100;
   validateStockLotDownsideSettings(thresholdPrice, downsidePercent);
+  if (ownerThreshold) {
+    return { ledgerId: input.ledgerId, categoryId: input.categoryId, lotId: input.lotId, userId: input.userId,
+      currency: input.currency, version: input.expectedVersion + 1, enabled: input.enabled, thresholdPrice, downsidePercent,
+      ...(input.startDate ? { startDate: input.startDate } : {}), effectiveAt, baselineRawPrice: thresholdPrice,
+      baselineCountedPrice: thresholdPrice, baselineStatus: 'ready', baselineSource: 'owner_threshold',
+      quoteAsOf: undefined, createdAt, holdingStartAt: input.holdingStartAt };
+  }
   const carryRule = input.beforeStartRule !== undefined ? input.beforeStartRule
     : previous && Date.parse(previous.effectiveAt) < Date.parse(effectiveAt) ? previous : null;
   const baselineCountedPrice = input.baselineStatus === 'pending' ? NaN : countedStockLotPrice(input.currentRawPrice, carryRule);
@@ -182,6 +229,16 @@ export function resolveStockLotDownsideHistoricalRules(input: {
 }): StockLotDownsideRule[] {
   const resolved: StockLotDownsideRule[] = [];
   for (const original of [...input.rules].sort((a, b) => a.version - b.version)) {
+    if (original.baselineSource === 'owner_threshold') {
+      const lot = input.lots.find(l => l.lotId === original.lotId);
+      const opened = lot ? Date.parse(lot.openedAt) : NaN;
+      const validHolding = !!lot && Number.isFinite(opened) && opened <= input.now.getTime();
+      // Future effective dates need no market proof. Actual holding evidence still gates applicability.
+      resolved.push({ ...original, holdingStartAt: validHolding ? lot!.openedAt : undefined,
+        baselineStatus: validHolding && Number.isFinite(Date.parse(original.effectiveAt))
+          && isOwnerStockLotDownsideBasisValid(original) ? 'ready' : 'pending' });
+      continue;
+    }
     if (!original.startDate) { resolved.push({ ...original }); continue; }
     const rule = { ...original, baselineRawPrice: NaN, baselineCountedPrice: NaN, baselineStatus: 'pending' as const } as StockLotDownsideRule;
     const lot = input.lots.find(l => l.lotId === rule.lotId);
