@@ -99,13 +99,14 @@ export default function MidaniangSelection() {
             return (
               <div
                 key={item.key}
-                className="relative"
+                className="relative isolate overflow-hidden rounded-[20px]"
+                style={{ clipPath: "inset(0 round 20px)" }}
                 data-testid="midaniang-product-card"
               >
                 <Link
                   href={`${MIDANIANG_SELECTION_PATH}/${item.key}`}
                   aria-label={`查看${item.title}详情`}
-                  className="block overflow-hidden rounded-[20px] border border-[#e5e0d5] bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#8d292c]"
+                  className="relative isolate block overflow-hidden rounded-[20px] border border-[#e5e0d5] bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#8d292c]"
                   data-selection-key={item.key}
                 >
                   <article
@@ -113,32 +114,36 @@ export default function MidaniangSelection() {
                     data-testid="midaniang-product-row"
                   >
                     <div
-                      className="relative isolate min-w-0 overflow-hidden bg-[#eee8dd]"
+                      className="relative isolate min-w-0 overflow-hidden rounded-l-[19px] bg-white"
+                      style={{ clipPath: "inset(0 round 19px 0 0 19px)" }}
                       data-testid="midaniang-product-media"
                     >
                       <div
                         aria-hidden="true"
-                        className="absolute -inset-3 bg-cover bg-center opacity-60 blur-[10px]"
+                        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-50 blur-[10px]"
                         style={{
                           backgroundImage: `url("${getMibanImageSource(midaniangSelectionAssets.grid[item.key], "thumbnail")}")`,
                         }}
                       />
-                      <MibanImage
-                        variant="thumbnail"
-                        priority={index === 0}
-                        src={midaniangSelectionAssets.grid[item.key]}
-                        alt={`米大娘${item.title}包装示意`}
-                        width={1024}
-                        height={1024}
-                        loading={index === 0 ? "eager" : "lazy"}
-                        className="absolute inset-0 block h-full w-full object-contain"
-                        style={{
-                          maskImage:
-                            "linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)",
-                          WebkitMaskImage:
-                            "linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)",
-                        }}
-                      />
+                      {/* 渐变作用于商品图自身的方形边缘，不作用于含上下留白的整块区域。 */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <MibanImage
+                          variant="thumbnail"
+                          priority={index === 0}
+                          src={midaniangSelectionAssets.grid[item.key]}
+                          alt={`米大娘${item.title}包装示意`}
+                          width={1024}
+                          height={1024}
+                          loading={index === 0 ? "eager" : "lazy"}
+                          className="block aspect-square h-auto w-full object-contain"
+                          style={{
+                            maskImage:
+                              "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 8%, #000 20%, #000 80%, rgba(0,0,0,0.35) 92%, transparent 100%)",
+                            WebkitMaskImage:
+                              "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 8%, #000 20%, #000 80%, rgba(0,0,0,0.35) 92%, transparent 100%)",
+                          }}
+                        />
+                      </div>
                       <div
                         aria-hidden="true"
                         data-testid="midaniang-product-media-gradient"
@@ -154,7 +159,7 @@ export default function MidaniangSelection() {
                         className="pointer-events-none absolute inset-0"
                         style={{
                           background:
-                            "linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.55) 8%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,0.55) 92%, #fff 100%)",
+                            "linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.85) 8%, rgba(255,255,255,0.35) 20%, rgba(255,255,255,0) 35%, rgba(255,255,255,0) 65%, rgba(255,255,255,0.35) 80%, rgba(255,255,255,0.85) 92%, #fff 100%)",
                         }}
                       />
                     </div>
