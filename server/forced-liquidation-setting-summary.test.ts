@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 const db = vi.hoisted(() => ({ get: vi.fn(), tx: vi.fn() }));
+const fx = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('./db', () => ({ getDbConnection: db.get, getDbTransactionConnection: db.tx }));
+vi.mock('./stock-usd-cny-rate', () => ({ getLiveStockUsdCnyQuote: fx.get }));
 import { getForcedLiquidationSettings } from './forced-liquidation-settings';
 import { getForcedLiquidationSettingDetail } from './forced-liquidation-setting-detail';
 import { aggregateForcedLiquidationStockSummaries, buildForcedLiquidationStockDetail,
@@ -82,7 +84,11 @@ function fixture() {
 const stockAt = async () => (await getForcedLiquidationSettings(input)).categories.find(c => c.categoryId === 81)!.stocks[0]!;
 const categoryAt = async (id = 81) => (await getForcedLiquidationSettings(input)).categories.find(c => c.categoryId === id)!;
 const callsFor = (conn: ReturnType<typeof fixture>['conn'], table: string) => conn.execute.mock.calls.filter(([sql]) => sql.includes(`FROM ${table} `));
-beforeEach(() => { vi.clearAllMocks(); vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-26T01:00:00Z')); });
+beforeEach(() => {
+  vi.clearAllMocks(); vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-26T01:00:00Z'));
+  fx.get.mockReset().mockResolvedValue({ rate: 7, pair: 'USD/CNY', stale: false,
+    source: 'sina_usdcny', asOf: '2026-11-26T00:59:59Z' });
+});
 afterEach(() => vi.mocked(Date.now).mockRestore());
 
 describe('enabled-only scoped batch list summaries, not lazy detail N+1', () => {
@@ -343,5 +349,76 @@ describe('summary implementation safety', () => {
     const pure = readFileSync(new URL('./forced-liquidation-setting-summary.ts', import.meta.url), 'utf8');
     expect(pure).not.toMatch(/getDbConnection|\.execute\(/);
     expect(buildForcedLiquidationStockDetail).toBeTypeOf('function');
+  });
+});
+
+describe('CNY display list integration: one live FX leg, full enabled totals, native detail unchanged', () => {
+  it('mixed A-share/US/crypto totals converted enabled rows, excludes disabled rows, never alters rule/quote/native detail', async () => {
+    const { state, conn } = fixture();
+    state.lots.push(lot(102, 81, 'AAPL'), lot(103, 81, 'CRYPTO:UNI-USDT'), lot(104, 81, 'MSFT'));
+    state.stockRules.push(stockRule(102, 81, 'USD'), stockRule(103, 81, 'USDT'), stockRule(104, 81, 'USD', { enabled: 0 }));
+    state.close.push(quote(81, 'AAPL'), quote(81, 'CRYPTO:UNI-USDT'));
+    const original = structuredClone(state);
+    const c = await categoryAt();
+    expect(c.ineffectiveFunds).toBeNull(); // No meaningless native mixed sum.
+    expect(c.ineffectiveFundsCny).toBe(2400);
+    expect(c.ineffectiveCnyStatus).toBe('ready');
+    expect(c.stocks.slice(0, 3).map(s => s.ineffectiveFundsCny)).toEqual([160, 1120, 1120]);
+    expect(c.stocks.slice(0, 3).map(s => s.ineffectiveFunds)).toEqual([160, 160, 160]);
+    expect(c.stocks[3]).not.toHaveProperty('ineffectiveFundsCny');
+    expect(fx.get).toHaveBeenCalledTimes(1); expect(conn.execute).toHaveBeenCalledTimes(8);
+    expect(state).toEqual(original); expect(db.tx).not.toHaveBeenCalled();
+    const d = await getForcedLiquidationSettingDetail({ ...input, categoryId: 81, lotId: 102 });
+    expect(d.currency).toBe('USD'); expect(d.ineffectiveFunds).toBe(160);
+    expect(d.rule?.threshold).toBe(80); expect(d).not.toHaveProperty('ineffectiveFundsCny');
+    expect(fx.get).toHaveBeenCalledTimes(1); // Lazy native detail has no extra FX read.
+  });
+  it.each([1, 4, 40])('%s enabled foreign lots use one shared FX observation, not per-lot or per-category requests', async count => {
+    const { state, conn } = fixture();
+    state.lots = Array.from({ length: count }, (_, i) => lot(101 + i, 81, 'AAPL'));
+    state.stockRules = state.lots.map(l => stockRule(l.id, 81, 'USD'));
+    state.close = [quote(81, 'AAPL')];
+    const c = await categoryAt();
+    expect(c.ineffectiveFundsCny).toBe(count * 1120);
+    expect(c.ineffectiveFundsCny).toBe(c.stocks.reduce((sum, s) => sum + s.ineffectiveFundsCny!, 0));
+    expect(fx.get).toHaveBeenCalledTimes(1); expect(conn.execute).toHaveBeenCalledTimes(8);
+  });
+  it('CNY-only ordinary and stocks never wait for FX, ordinary signed replay stays native', async () => {
+    const { state } = fixture(); state.ordinaryRules = [ordinaryRule()];
+    let result = await getForcedLiquidationSettings(input);
+    expect(result.categories.find(c => c.categoryId === 81)?.ineffectiveFundsCny).toBe(160);
+    expect(result.categories.find(c => c.categoryId === 83)?.ineffectiveFundsCny).toBe(16);
+    state.records = [record(1, '2026-11-20', 100), record(2, '2026-11-25', 110)];
+    state.ordinaryRules = [ordinaryRule(83, { threshold_amount: 120 })];
+    result = await getForcedLiquidationSettings(input);
+    expect(result.categories.find(c => c.categoryId === 83)?.ineffectiveFundsCny).toBe(-8);
+    expect(fx.get).not.toHaveBeenCalled();
+  });
+  it.each([null, { rate: 7, pair: 'USD/CNY', stale: true, source: 'sina_usdcny', asOf: '2026-11-26T00:59:59Z' },
+    { rate: 7, pair: 'USD/CNH', stale: false, source: 'wrong-pair', asOf: '2026-11-26T00:59:59Z' }])('missing/invalid FX %j keeps foreign and parent pending but native/CNY available', async failed => {
+    const { state } = fixture(); state.lots.push(lot(102, 81, 'AAPL'));
+    state.stockRules.push(stockRule(102, 81, 'USD')); state.close.push(quote(81, 'AAPL'));
+    fx.get.mockResolvedValue(failed);
+    const c = await categoryAt();
+    expect(c.stocks[0]?.ineffectiveFundsCny).toBe(160);
+    expect(c.stocks[1]).toMatchObject({ ineffectiveFunds: 160, ineffectiveFundsCny: null, ineffectiveCnyStatus: 'pending' });
+    expect(c.ineffectiveFundsCny).toBeNull(); expect(c.ineffectiveCnyStatus).toBe('pending');
+  });
+  it('FX rejection fails closed without blocking list or making a partial category sum', async () => {
+    const { state } = fixture(); state.lots.push(lot(102, 81, 'AAPL'));
+    state.stockRules.push(stockRule(102, 81, 'USD')); state.close.push(quote(81, 'AAPL'));
+    fx.get.mockRejectedValue(new Error('rate unavailable'));
+    const c = await categoryAt(); expect(c.ineffectiveFundsCny).toBeNull();
+    expect(c.stocks[0]?.ineffectiveFundsCny).toBe(160); expect(c.stocks[1]?.ineffectiveFunds).toBe(160);
+  });
+  it('owner/viewAs rejection, disabled and pending foreign lots cause zero FX requests', async () => {
+    const { state } = fixture(); state.owner = 8;
+    await expect(getForcedLiquidationSettings(input)).rejects.toThrow('所有者');
+    await expect(getForcedLiquidationSettings({ ...input, isViewingAs: true })).rejects.toThrow('代看');
+    state.owner = 7; state.lots = [lot(102, 81, 'AAPL')]; state.stockRules = [stockRule(102, 81, 'USD', { enabled: 0 })];
+    await getForcedLiquidationSettings(input);
+    state.stockRules = [stockRule(102, 81, 'USD')]; state.close = [];
+    await getForcedLiquidationSettings(input);
+    expect(fx.get).not.toHaveBeenCalled();
   });
 });

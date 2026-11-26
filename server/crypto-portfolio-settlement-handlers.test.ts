@@ -59,6 +59,11 @@ function db(symbol = BTC, securities = false) {
     execute: vi.fn(async (sql: string, params: any[] = []) => {
       sqls.push({ sql, params });
       if (sql.startsWith('CREATE TABLE')) return [{ affectedRows: 0 }];
+      if (sql.includes('FROM ledger_user_tag_downside_overrides')) {
+        expect(sql.replace(/\s+/g, ' ').trim()).toBe("SELECT ledger_id,category_id,target_user_id,actor_user_id,version,mode, DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM ledger_user_tag_downside_overrides WHERE ledger_id=? ORDER BY target_user_id,category_id,version");
+        expect(params).toEqual([37]);
+        return [[]];
+      }
       if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]];
       if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]];
       if (sql.includes('ledger_stock_lot_downside_rules')) return [[]];

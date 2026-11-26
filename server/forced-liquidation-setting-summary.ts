@@ -5,6 +5,7 @@ import { portfolioCurrency, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuant
 import { chooseLatestStockQuote, forcedLiquidationLevelPercents, segmentedForcedLiquidationPriceDrop,
   type ForcedLiquidationSettingDetail, type ForcedLiquidationStockQuote } from '../shared/forced-liquidation-display';
 import type { ForcedLiquidationSettingDetailInput } from './forced-liquidation-setting-detail';
+import { USDT_USD_PARITY_POLICY, USDT_USD_PARITY_RATE } from '../shared/usdt-usd-parity-policy';
 
 /** SQL-returned quotes are rechecked at the tenant/category/symbol/time boundary. */
 export function decodeForcedLiquidationStockQuotes(found: readonly any[], categoryId: number, symbol: string,
@@ -22,6 +23,14 @@ export function decodeForcedLiquidationStockQuotes(found: readonly any[], catego
   return quotes;
 }
 
+/** Injected upstream quote, structurally compatible with StockUsdCnyQuote; never fetched here. */
+export type ForcedLiquidationCnyFx = {
+  rate: number;
+  pair: 'USD/CNY';
+  stale: boolean;
+  source: string;
+  asOf: string;
+};
 export type ForcedLiquidationIneffectiveSummary = {
   /** Only present for enabled targets. Null means missing/pending, not zero. */
   ineffectiveFunds?: number | null;
@@ -30,15 +39,98 @@ export type ForcedLiquidationIneffectiveSummary = {
   ineffectiveNotice?: string | null;
   ineffectiveStatus?: 'ready' | 'pending' | 'no_data';
   ineffectiveCurrencies?: Array<'CNY' | 'USD' | 'USDT'>;
+  /** Display-only CNY, rounded per enabled child to two decimals; never a native accounting input. */
+  ineffectiveFundsCny?: number | null;
+  ineffectiveCnyStatus?: 'ready' | 'pending' | 'no_data';
+  ineffectiveCnyNotice?: string | null;
+  /** Only validated conversion evidence; CNY passthrough and parent sums need no quote. */
+  ineffectiveCnyFx?: ForcedLiquidationCnyFx;
+  ineffectiveCnyPolicy?: typeof USDT_USD_PARITY_POLICY;
 };
 const nativeCurrency = (value: string): 'CNY' | 'USD' | 'USDT' | undefined =>
   value === 'CNY' || value === 'USD' || value === 'USDT' ? value : undefined;
-export function forcedLiquidationDetailSummary(dto: ForcedLiquidationSettingDetail): ForcedLiquidationIneffectiveSummary {
-  return { ineffectiveFunds: dto.status === 'ready' ? dto.ineffectiveFunds : null,
-    ineffectiveCurrency: nativeCurrency(dto.currency), ineffectiveNotice: dto.notice, ineffectiveStatus: dto.status };
+/** Decimal half-away-from-zero display rounding, including signed ordinary recovery amounts.
+ * Exponent shifting avoids the usual 1.005 * 100 binary rounding trap. Reject values whose
+ * safe cents cannot survive number/2-decimal rendering, rather than display a different cent.
+ */
+function cnyDisplayCents(value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  const [mantissa, exponent = '0'] = Math.abs(value).toString().split('e');
+  const scaled = Number(`${mantissa}e${Number(exponent) + 2}`);
+  if (!Number.isFinite(scaled)) return null;
+  const cents = Math.round(scaled) * (value < 0 ? -1 : 1);
+  if (!Number.isSafeInteger(cents)) return null;
+  const renderedCents = Number((cents / 100).toFixed(2).replace('.', ''));
+  if (renderedCents !== cents) return null;
+  return cents === 0 ? 0 : cents;
 }
-/** Caller passes only enabled real stocks; never cross-FX or sum partial evidence. */
+function validCnyFx(fx: ForcedLiquidationCnyFx | null, now: number): fx is ForcedLiquidationCnyFx {
+  if (!fx || fx.pair !== 'USD/CNY' || fx.stale !== false || typeof fx.rate !== 'number'
+    || !Number.isFinite(fx.rate) || fx.rate <= 0 || typeof fx.source !== 'string' || !fx.source.trim()
+    || typeof fx.asOf !== 'string' || !fx.asOf.trim() || !date(fx.asOf.slice(0, 10)) || !Number.isFinite(now)) return false;
+  const asOf = Date.parse(fx.asOf);
+  // Upstream owns holiday/market-close freshness; do not introduce a second age limit.
+  return Number.isFinite(asOf) && asOf <= now;
+}
+function detailCnySummary(dto: ForcedLiquidationSettingDetail, fx: ForcedLiquidationCnyFx | null,
+  now: number): ForcedLiquidationIneffectiveSummary {
+  const pending = (notice: string): ForcedLiquidationIneffectiveSummary => ({ ineffectiveFundsCny: null,
+    ineffectiveCnyStatus: 'pending', ineffectiveCnyNotice: notice });
+  if (dto.status !== 'ready' || typeof dto.ineffectiveFunds !== 'number' || !Number.isFinite(dto.ineffectiveFunds)) {
+    return pending(`原币金额证据缺失或待核验，人民币展示待核验${dto.notice ? `；${dto.notice}` : ''}`);
+  }
+  const currency = nativeCurrency(dto.currency);
+  if (!currency) return pending('原币币种未知，不回退原币金额或推测人民币金额');
+  let converted = dto.ineffectiveFunds;
+  let evidence: ForcedLiquidationIneffectiveSummary = {};
+  if (currency !== 'CNY') {
+    if (!validCnyFx(fx, now)) return pending('有效USD/CNY汇率证据缺失、过期或异常，人民币展示待核验');
+    converted *= fx.rate * (currency === 'USDT' ? USDT_USD_PARITY_RATE : 1);
+    evidence = { ineffectiveCnyFx: { rate: fx.rate, pair: fx.pair, stale: fx.stale, source: fx.source, asOf: fx.asOf },
+      ...(currency === 'USDT' ? { ineffectiveCnyPolicy: USDT_USD_PARITY_POLICY } : {}) };
+  }
+  const cents = cnyDisplayCents(converted);
+  if (cents === null) return pending('人民币展示金额溢出或不能以安全整数分值准确展示，等待核验');
+  return { ...evidence, ineffectiveFundsCny: cents / 100, ineffectiveCnyStatus: 'ready',
+    ineffectiveCnyNotice: currency === 'CNY' ? '原币人民币金额仅为列表展示取两位小数，保留原币原始精度及符号'
+      : `仅列表展示按有效USD/CNY换算人民币并取两位小数，不改变原币规则或资金算法${currency === 'USDT' ? '；按已授权USDT=USD政策' : ''}` };
+}
+export function forcedLiquidationDetailSummary(dto: ForcedLiquidationSettingDetail,
+  fx: ForcedLiquidationCnyFx | null = null, now: number = Date.now()): ForcedLiquidationIneffectiveSummary {
+  return { ineffectiveFunds: dto.status === 'ready' ? dto.ineffectiveFunds : null,
+    ineffectiveCurrency: nativeCurrency(dto.currency), ineffectiveNotice: dto.notice, ineffectiveStatus: dto.status,
+    ...detailCnySummary(dto, fx, now) };
+}
+/** Caller passes only enabled real stocks. CNY sums the exact displayed child cents, never
+ * converts a native aggregate, fetches another quote, or sums partial/legacy evidence.
+ */
 export function aggregateForcedLiquidationStockSummaries(stocks: readonly ForcedLiquidationIneffectiveSummary[]): ForcedLiquidationIneffectiveSummary {
+  if (stocks.length === 0) return {};
+  return { ...aggregateNativeStockSummaries(stocks), ...aggregateCnyStockSummaries(stocks) };
+}
+function aggregateCnyStockSummaries(stocks: readonly ForcedLiquidationIneffectiveSummary[]): ForcedLiquidationIneffectiveSummary {
+  const pending = (notice: string): ForcedLiquidationIneffectiveSummary => ({ ineffectiveFundsCny: null,
+    ineffectiveCnyStatus: 'pending', ineffectiveCnyNotice: notice });
+  let totalCents = 0;
+  for (const stock of stocks) {
+    if (stock.ineffectiveCnyStatus !== 'ready' || typeof stock.ineffectiveFundsCny !== 'number'
+      || !Number.isFinite(stock.ineffectiveFundsCny)) {
+      return pending('任一已开启真实持仓人民币展示证据缺失或待核验，不展示不完整汇总');
+    }
+    const cents = cnyDisplayCents(stock.ineffectiveFundsCny);
+    if (cents === null || cents / 100 !== stock.ineffectiveFundsCny) {
+      return pending('单笔人民币展示金额不是准确的安全整数分值，不重新取汇率或取整补齐');
+    }
+    totalCents += cents;
+    if (!Number.isSafeInteger(totalCents)) return pending('人民币展示汇总整数分值溢出，等待核验');
+  }
+  const display = totalCents / 100;
+  if (cnyDisplayCents(display) !== totalCents) return pending('人民币展示汇总不能准确显示到分，等待核验');
+  return { ineffectiveFundsCny: display === 0 ? 0 : display, ineffectiveCnyStatus: 'ready',
+    ineffectiveCnyNotice: '仅按全部已开启真实持仓的单笔人民币显示分值相加，不另取汇率、不含未开启持仓或部分汇总' };
+}
+/** Legacy native aggregation stays independent, including mixed-currency pending behavior. */
+function aggregateNativeStockSummaries(stocks: readonly ForcedLiquidationIneffectiveSummary[]): ForcedLiquidationIneffectiveSummary {
   if (stocks.length === 0) return {};
   const currencies = Array.from(new Set(stocks.flatMap(s => s.ineffectiveCurrency ? [s.ineffectiveCurrency] : [])));
   const common = currencies.length === 1 && stocks.every(s => s.ineffectiveCurrency === currencies[0]);

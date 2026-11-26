@@ -7,6 +7,11 @@ import { marketSessionDateFromBeijingTradeTimestamp } from './stock-unified-clos
 import { buildMemberStockCalendar, memberCalendarSettlementSummary, type MemberCalendarSnapshot } from './shared/stock-member-calendar';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { pendingCryptoCalendarSnapshot } from './shared/crypto-portfolio-calendar';
+import { stockUserDownsideRules, stockUserTagOverrideVersion, stockUserTagOverridesFingerprint,
+  isStockUserDownsideExemptSelection, stockUserCountedSalePrice } from './shared/stock-user-tag-downside';
+import { stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, selectStockLotDownsideRule,
+  stockLotDownsideHistoricalEntryProof, valueStockLotDownside } from '../shared/stock-lot-downside';
+import { aggregateFrozenStockSaleAmounts, isR1StockSaleFxScope } from './stock-sale-fx-locks';
 
 // Load actual production declarations; only DB/HTTP/auth boundaries are injected.
 // This must never import routers, start the server, issue DDL, or reach a real database.
@@ -21,6 +26,8 @@ function declaration(name: string) {
 const names = ['STOCK_LEDGER_ID', 'EPSILON', 'STOCK_UNIFIED_CLOSE_FX_POLICY_VERSION', 'r1MemberPresentationRows',
   'beijingDate', 'stockCurrency', 'stockMarket', 'numberValue', 'normalizeStoredDate', 'toIso', 'toBeijingWallClockIso',
   'summarizePositionsByCurrency', 'summarizePositionsInCny', 'mergeLatestQuoteMaps', 'mergeLivePortfolioQuoteMaps',
+  'calendarSourceNumber', 'frozenParticipationAmountsOrFallback', 'resolvedDownsideMemberOffset',
+  'readCountedNativeParticipationAmounts', 'countedDownsideSalePrice', 'mapCountedMemberCalendarClosures',
   'memberCryptoParticipationStartDate', 'buildMemberStockPortfolio', 'buildMyStockTagOverview',
   'projectMemberSettlementSnapshotForAi', 'getMyStockTagOverview', 'getStockTagCalendar'];
 const code = ts.transpileModule(names.map(declaration).join('\n').replace(/\bexport\s+/g, ''),
@@ -76,6 +83,14 @@ function harness(options: { rows?: any[]; activation?: string | null; mixed?: Me
   const dependencies = { ...instruments, ...cryptoPolicy, marketSessionDateFromBeijingTradeTimestamp,
     buildMemberStockCalendar, memberCalendarSettlementSummary, mergeCryptoPortfolioCalendarSnapshots,
     getDbConnection: async () => conn,
+    readUserTagDownsideOverrides: async () => [],
+    stockUserDownsideRules, stockUserTagOverrideVersion, stockUserTagOverridesFingerprint,
+    isStockUserDownsideExemptSelection, stockUserCountedSalePrice,
+    stockLotDownsideMemberEntryAt, stockLotDownsideMemberOffset, selectStockLotDownsideRule,
+    stockLotDownsideHistoricalEntryProof, valueStockLotDownside,
+    aggregateFrozenStockSaleAmounts, isR1StockSaleFxScope,
+    readStockLotDownsideRules: async () => [], historicalDownsideEvidence: new WeakMap(),
+    readFrozenParticipationAmounts: async () => new Map(),
     getLatestReferenceQuotes: async () => ({}), getLatestQuotes: async () => ({}), getLatestIntradayQuotes: async () => ({}),
     getUsStockExchangeMap: async () => ({}), getLiveCryptoQuotes: async () => ({}),
     readLiveUsdtCnyRate: async () => null, readLiveUsdCnyRate: async () => 7,

@@ -3028,6 +3028,9 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
   const { readAllOrdinaryTagDownsideRules } = await import('./ordinary-tag-downside-rules');
   const ordinaryRulesByCategory = await readAllOrdinaryTagDownsideRules(conn, LEDGER_37_ID);
   const { buildOrdinaryTagDownsideValuation } = await import('./ordinary-tag-downside-valuation');
+  const { readUserTagDownsideOverrides } = await import('./user-tag-downside-overrides');
+  // One batch BEFORE calculating candidates; payment rechecks this exact saved version under ledger lock.
+  const userTagDownsideOverrides = await readUserTagDownsideOverrides(conn, LEDGER_37_ID);
   const [memberRows, balancesMapRaw, categoryResult, recordResult, dividendResult] = await Promise.all([
     dbLedger.getLedgerMembers(LEDGER_37_ID, params.actorUserId),
     dbLedger.getAllMembersInitialBalances(LEDGER_37_ID),
@@ -3151,7 +3154,7 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
   for (const row of asRows(dividendResult)) {
     paidByUserTag.set(`${Number(row.user_id)}|${String(row.tag_name || '')}`, num(row.paid_total));
   }
-  const stockPnlByUser = new Map<number, Map<string, number>>();
+  const stockPnlByUser = new Map<number, Map<string, number | null>>();
   await Promise.all(members.map(async (member: any) => {
     try {
       const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
@@ -3161,7 +3164,8 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
         systemRole: params.systemRole,
       });
       stockPnlByUser.set(Number(member.userId), new Map(
-        overview.map((item: any) => [String(item.name), num(item.summary?.totalPnl)]),
+        overview.map((item: any) => [String(item.name), typeof item.summary?.totalPnl === 'number'
+          && Number.isFinite(item.summary.totalPnl) ? item.summary.totalPnl : null]),
       ));
     } catch (error) {
       console.warn('[adminGetLedger37DividendAvailability] 股票成员回报读取失败:', member.userId, error);
@@ -3188,15 +3192,17 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
       let cumulativeReturn = 0;
       let hasReturnData = false;
       if (category?.accountingMode === 'stock_portfolio') {
-        if (stockPnl.has(tagName)) {
-          cumulativeReturn = stockPnl.get(tagName) || 0;
+        const value = stockPnl.get(tagName);
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          cumulativeReturn = value;
           hasReturnData = true;
         }
       } else if (category && ordinaryRulesByCategory.has(category.id)) {
         const valuation = buildOrdinaryTagDownsideValuation({ ledgerId: LEDGER_37_ID,
           userId, categoryId: category.id, categoryName: tagName, balances,
           records: ordinaryRecordsByCategory.get(category.id) || [],
-          rules: ordinaryRulesByCategory.get(category.id) || [], today: getBeijingLedgerRecordToday() });
+          rules: ordinaryRulesByCategory.get(category.id) || [], today: getBeijingLedgerRecordToday(),
+          userTagDownsideOverrides });
         hasReturnData = valuation.status === 'ready' && valuation.totalPnl !== null && Number.isFinite(valuation.totalPnl);
         if (hasReturnData) cumulativeReturn = valuation.totalPnl!;
       } else {
@@ -3237,6 +3243,8 @@ async function getLedger37DividendAvailabilitySnapshot(params: { actorUserId: nu
         paidDividend: settledPaidDividend,
         availableDividend: money(settledCumulativeReturn - settledPaidDividend),
         hasReturnData,
+        userTagOverrideVersion: category ? userTagDownsideOverrides.filter(override => override.targetUserId === userId
+          && override.categoryId === category.id).reduce((latest, override) => Math.max(latest, override.version), 0) : 0,
         order: category?.order ?? Number.MAX_SAFE_INTEGER,
       };
     }).sort((left, right) => left.order - right.order || left.tagName.localeCompare(right.tagName, 'zh-CN'));
@@ -14395,6 +14403,32 @@ ${klinesSummary}
         return getForcedLiquidationSettingDetail({ ...input, userId: ctx.user.id,
           systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
+    getForcedLiquidationUsers: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }).strict())
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { getForcedLiquidationUsers } = await import('./forced-liquidation-user-impact');
+        return getForcedLiquidationUsers({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    getForcedLiquidationUserImpact: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), targetUserId: z.number().int().positive() }).strict())
+      .query(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { getForcedLiquidationUserImpact } = await import('./forced-liquidation-user-impact');
+        return getForcedLiquidationUserImpact({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    setUserTagDownsideOverride: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number().int().positive(),
+        targetUserId: z.number().int().positive(), mode: z.enum(['follow_tag', 'exempt']),
+        expectedVersion: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER - 1) }).strict())
+      .mutation(async ({ ctx, input }) => {
+        await assertLedger37Owner(ctx, input.ledgerId);
+        const { setUserTagDownsideOverride } = await import('./user-tag-downside-overrides');
+        return setUserTagDownsideOverride({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
     setOrdinaryTagDownsideRule: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),
@@ -18323,6 +18357,12 @@ ${klinesSummary}
             }
             hasReturnData = true;
             cumulativeReturn = Math.round(ordinaryReadback.cumulativeReturn * 100) / 100;
+          }
+          if (!ordinaryReadback.applicable) {
+            const { assertUserTagOverridePaymentVersion } = await import('./user-tag-downside-payment-guard');
+            await assertUserTagOverridePaymentVersion(transaction, { ledgerId: LEDGER_37_ID,
+              categoryId: Number(category.id), targetUserId: input.targetUserId, actorUserId: ctx.user.id,
+              expectedVersion: availabilityTag?.userTagOverrideVersion });
           }
           const [memberRows] = await transaction.execute(
             'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
@@ -37426,7 +37466,7 @@ insights 数组每项包含：
         systemRole: (ctx.user as any).role,
       });
       const roundCny = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
-      const candidates: Array<{ userId: number; tagName: string; categoryId?: number; cumulativeReturn: number; expectedAmount: number }> = [];
+      const candidates: Array<{ userId: number; tagName: string; categoryId?: number; cumulativeReturn: number; expectedAmount: number; userTagOverrideVersion: number }> = [];
       for (const member of availability.users as any[]) {
         if (Number(member.userId) !== input.targetUserId) continue;
         for (const tag of member.tags ?? []) {
@@ -37441,6 +37481,7 @@ insights 数组每项包含：
               categoryId: Number.isSafeInteger(tag.categoryId) && tag.categoryId > 0 ? tag.categoryId : undefined,
               cumulativeReturn: roundCny(Number(tag.cumulativeReturn)),
               expectedAmount: roundCny(expectedAmount),
+              userTagOverrideVersion: tag.userTagOverrideVersion,
             });
           }
         }
@@ -37467,6 +37508,12 @@ insights 数组每项包含：
               throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '普通标签强平收益已变化或待核验，请刷新后重试' });
             }
             lockedCumulativeReturn = roundCny(ordinaryReadback.cumulativeReturn);
+          }
+          if (!ordinaryReadback.applicable && candidate.categoryId !== undefined) {
+            const { assertUserTagOverridePaymentVersion } = await import('./user-tag-downside-payment-guard');
+            await assertUserTagOverridePaymentVersion(transaction, { ledgerId: LEDGER_37_ID,
+              categoryId: candidate.categoryId, targetUserId: candidate.userId, actorUserId: ctx.user.id,
+              expectedVersion: candidate.userTagOverrideVersion });
           }
           const [existingActionRows] = await transaction.execute(
             `SELECT status, processed_cny_amount, skip_reason

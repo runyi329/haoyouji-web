@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 const db = vi.hoisted(() => ({ get: vi.fn(), tx: vi.fn() }));
 const ordinary = vi.hoisted(() => ({ read: vi.fn() }));
+const fx = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('./db', () => ({ getDbConnection: db.get, getDbTransactionConnection: db.tx }));
+vi.mock('./stock-usd-cny-rate', () => ({ getLiveStockUsdCnyQuote: fx.get }));
 // Spy on the real parent-owned SELECT/decode implementation, never its save mutation.
 vi.mock('./ordinary-tag-downside-rules', async importOriginal => {
   const original = await importOriginal<typeof import('./ordinary-tag-downside-rules')>();
@@ -120,6 +122,8 @@ function fixture() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-26T01:00:00Z'));
+  fx.get.mockReset().mockResolvedValue({ rate: 7, pair: 'USD/CNY', stale: false,
+    source: 'sina_usdcny', asOf: '2026-11-26T00:59:59Z' });
 });
 afterEach(() => vi.mocked(Date.now).mockRestore());
 

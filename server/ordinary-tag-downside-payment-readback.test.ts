@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
 
-const deps = vi.hoisted(() => ({ rules: vi.fn(), build: vi.fn(), decrypt: vi.fn(), encrypted: vi.fn() }));
+const deps = vi.hoisted(() => ({ rules: vi.fn(), build: vi.fn(), decrypt: vi.fn(), encrypted: vi.fn(), overrides: vi.fn() }));
 vi.mock('./ordinary-tag-downside-rules', () => ({ readOrdinaryTagDownsideRules: deps.rules }));
 vi.mock('./ordinary-tag-downside-valuation', () => ({ buildOrdinaryTagDownsideValuation: deps.build }));
 vi.mock('./encryption', () => ({ decryptValue: deps.decrypt, isEncrypted: deps.encrypted }));
+vi.mock('./user-tag-downside-overrides', () => ({ readUserTagDownsideOverrides: deps.overrides }));
 import { readOrdinaryTagDownsidePaymentReturn, type OrdinaryTagDownsidePaymentReadbackInput } from './ordinary-tag-downside-payment-readback';
 
 const input: OrdinaryTagDownsidePaymentReadbackInput = {
@@ -44,6 +45,7 @@ function fixture() {
     }),
   };
   deps.rules.mockImplementation(async () => { events.push('rules'); return [rule]; });
+  deps.overrides.mockImplementation(async () => { events.push('overrides'); return []; });
   deps.build.mockReturnValue({ categoryId: 90, categoryName: input.tagName, status: 'ready',
     totalPnl: 12.345678901, latestDate: '2026-11-03', points: [{ date: '2026-11-03', ruleVersion: 1 }] });
   return { state, log, lockLog, events, conn, run: (patch: Partial<OrdinaryTagDownsidePaymentReadbackInput> = {}) => readOrdinaryTagDownsidePaymentReturn(conn, { ...input, ...patch }) };
@@ -58,7 +60,7 @@ describe('ordinary-tag downside payment readback (offline SELECT-only)', () => {
   it('锁ledger -> category -> scoped全部规则 -> 目标真实member -> 完整records；返回pure精确累计而非端点公式', async () => {
     const f = fixture();
     expect(await f.run()).toEqual({ applicable: true, status: 'ready', cumulativeReturn: 12.345678901, ruleVersion: 1, categoryId: 90 });
-    expect(f.events).toEqual(['ledger', 'category', 'rules', 'member', 'records']);
+    expect(f.events).toEqual(['ledger', 'category', 'rules', 'member', 'overrides', 'records']);
     expect(f.lockLog[0]).toEqual({ sql: 'SELECT id, ownerId FROM ledgers WHERE id = ? FOR UPDATE', params: [37] });
     expect(deps.rules).toHaveBeenCalledTimes(1);
     expect(deps.rules).toHaveBeenCalledWith(f.conn, 37, 90);
@@ -84,7 +86,9 @@ describe('ordinary-tag downside payment readback (offline SELECT-only)', () => {
     expect(deps.build).toHaveBeenCalledTimes(1);
     expect(deps.build).toHaveBeenCalledWith({ ledgerId: 37, userId: input.userId,
       categoryId: 90, categoryName: input.tagName, balances: { [input.tagName]: 0, [`${input.tagName}__ratio`]: 0 },
-      records: f.state.records, rules: [rule], today: input.today });
+      records: f.state.records, rules: [rule], userTagDownsideOverrides: [], today: input.today });
+    expect(deps.overrides).toHaveBeenCalledTimes(1);
+    expect(deps.overrides).toHaveBeenCalledWith(f.conn, 37, input.userId);
   });
   it.each([{ ledgers: [] }, { ledgers: [{ id: 52 }] }, { ledgers: [{ id: 37 }, { id: 37 }] }])('ledger锁范围失效 %j先阻断，不能读分类/成员', async ({ ledgers }) => {
     const f = fixture(); f.state.ledgers = ledgers;
@@ -98,7 +102,7 @@ describe('ordinary-tag downside payment readback (offline SELECT-only)', () => {
   });
   it('仅内部caller已保证owner的兼容调用允许省略actorUserId，但仍锁ledger/category/member', async () => {
     const f = fixture(); expect((await f.run({ actorUserId: undefined })).status).toBe('ready');
-    expect(f.events).toEqual(['ledger', 'category', 'rules', 'member', 'records']);
+    expect(f.events).toEqual(['ledger', 'category', 'rules', 'member', 'overrides', 'records']);
   });
   it('无规则/尚未建表[]仍保留category锁且不读取成员/流水，不制造raw收益', async () => {
     const f = fixture(); deps.rules.mockResolvedValue([]);
@@ -219,6 +223,21 @@ describe('ordinary-tag downside payment readback (offline SELECT-only)', () => {
     const f = fixture(); deps.build.mockImplementation(() => { throw new Error('flow missing'); });
     expect((await f.run()).status).toBe('pending');
     for (const fn of [f.conn.beginTransaction, f.conn.commit, f.conn.rollback, f.conn.release, f.conn.end]) expect(fn).not.toHaveBeenCalled();
+  });
+  it('豁免在ledger/category/member锁后一次读取目标人，传原规则和override由pure恢复raw', async () => {
+    const f = fixture();
+    const overrides = [{ ledgerId: 37, categoryId: 90, targetUserId: 202, actorUserId: 101, version: 3, mode: 'exempt', createdAt: '2026-11-20T00:00:00.000Z' }];
+    deps.overrides.mockImplementation(async () => { f.events.push('overrides'); return overrides; });
+    await f.run();
+    expect(f.events).toEqual(['ledger', 'category', 'rules', 'member', 'overrides', 'records']);
+    expect(deps.build.mock.calls[0][0]).toMatchObject({ userId: 202, rules: [rule], userTagDownsideOverrides: overrides });
+    expect(deps.overrides).toHaveBeenCalledWith(f.conn, 37, 202);
+  });
+  it('豁免存储读取故障或坏数据不能放宽支付到raw或candidate快照', async () => {
+    const f = fixture(); deps.overrides.mockRejectedValue(new Error('override corrupt'));
+    expect(await f.run()).toEqual({ applicable: true, status: 'pending', cumulativeReturn: null, categoryId: 90 });
+    expect(deps.build).not.toHaveBeenCalled(); expect(f.events).not.toContain('records');
+    for (const fn of [f.conn.beginTransaction, f.conn.commit, f.conn.rollback, f.conn.release]) expect(fn).not.toHaveBeenCalled();
   });
   it('数据库锁/历史读取失败上抛，由caller负责回滚，不吞成零或自有事务', async () => {
     const f = fixture(); f.conn.execute.mockRejectedValue(new Error('lock timeout'));

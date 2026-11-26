@@ -15,6 +15,7 @@ import {
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   getDbConnection: vi.fn(),
+  readOverrides: vi.fn(),
   getDbTransactionConnection: vi.fn(() => { throw new Error('禁止资金连接'); }),
   getLedgerDb: vi.fn(() => { throw new Error('禁止旧账本初始化'); }),
   updateMyInitialBalances: vi.fn(() => { throw new Error('禁止覆盖真实配置'); }),
@@ -28,6 +29,7 @@ vi.mock('./db', () => ({
 }));
 vi.mock('./db-ledger', () => ({ updateMyInitialBalances: mocks.updateMyInitialBalances }));
 vi.mock('./ledger-stock-portfolio', () => ({ ensureLedgerStockPortfolioTables: mocks.ensureLedgerStockPortfolioTables }));
+vi.mock('./user-tag-downside-overrides', () => ({ readUserTagDownsideOverrides: mocks.readOverrides }));
 import {
   adminGetOrdinaryTagObservationConfig,
   adminSetOrdinaryTagObservationConfig,
@@ -267,6 +269,7 @@ beforeEach(() => {
   downsideRows = [];
   downsideReadError = null;
   mocks.getDbConnection.mockResolvedValue({ execute: mocks.execute });
+  mocks.readOverrides.mockResolvedValue([]);
   mocks.execute.mockImplementation(async (sql: string, values: Array<number | string>) => {
     if (/FROM ledger_ordinary_tag_downside_rules/.test(sql)) {
       if (downsideReadError) throw downsideReadError;
@@ -632,6 +635,55 @@ describe('普通标签内联观察模式：配置转换', () => {
 });
 
 describe('普通观察saved-rule脚手架：日末余额和只读批量规则', () => {
+  const exemption = { ledgerId: 37 as const, categoryId: 10, targetUserId: 201, actorUserId: 100,
+    version: 1, mode: 'exempt' as const, createdAt: '2026-11-09T00:00:00.000Z' };
+  function enabledRule(categoryId = 10) {
+    return { ledger_id: 37, category_id: categoryId, user_id: 100, version: 1, enabled: 1,
+      threshold_amount: '1000', downside_percent: '30', start_date: '2026-11-02', created_at: '2026-11-01T00:00:00.000Z' };
+  }
+  it('豁免观察仍走canonical raw cash-neutral，不能落回legacy同日求和或丢失真零', async () => {
+    downsideRows = [enabledRule()]; mocks.readOverrides.mockResolvedValue([exemption]);
+    records = [record('2026-11-01', 'income', 1000), record('2026-11-02', 'income', 900),
+      record('2026-11-03', 'transfer', 200, 'capital_add'), record('2026-11-04', 'transfer', 100, 'capital_reduce'),
+      record('2026-11-05', 'transfer', 50, 'withdraw'),
+      { ...record('2026-11-09', 'income', 9999), recordId: 1 },
+      { ...record('2026-11-09', 'expense', 950), recordId: 2 }];
+    const snapshot = JSON.stringify({ members, records, downsideRows });
+    let result = (await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).observations[0];
+    expect(result).toMatchObject({ status: 'active', latestBalance: 950, totalPnl: 50, rawPnl: 50, countedBalance: 950, capitalChange: 100, withdrawTotal: 50 });
+    expect(result.points.at(-1)?.dailyPnl).toBe(0);
+    expect(mocks.readOverrides).toHaveBeenCalledTimes(1);
+    expect(mocks.readOverrides).toHaveBeenCalledWith(expect.objectContaining({ execute: mocks.execute }), 37, 201);
+    expect(JSON.stringify({ members, records, downsideRows })).toBe(snapshot);
+    records = [record('2026-11-09', 'income', 0)];
+    result = (await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).observations[0];
+    expect(result).toMatchObject({ status: 'active', latestBalance: 0, totalPnl: 500, rawPnl: 500 });
+  });
+  it('观察只豁免目标标签；latest follow恢复，最新余额缺失/配置无效仍pending而非raw假0', async () => {
+    downsideRows = [enabledRule(), enabledRule(11)];
+    categories.push({ ...categories[0], id: 11, name: '另一个' });
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify(CONFIG), [ordinaryTagObservationKey('另一个')]: JSON.stringify(CONFIG) });
+    records.push({ ...record('2026-11-09', 'income', 900), categoryId: 11 });
+    mocks.readOverrides.mockResolvedValue([exemption]);
+    let result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations.map(o => o.totalPnl)).toEqual([50, 15]);
+    mocks.readOverrides.mockResolvedValue([exemption, { ...exemption, version: 2, mode: 'follow_tag' }]);
+    result = await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 });
+    expect(result.observations.map(o => o.totalPnl)).toEqual([15, 15]);
+    mocks.readOverrides.mockResolvedValue([exemption]);
+    records.push({ ...record('2026-11-09', 'expense', null), recordId: 99 });
+    expect((await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).observations[0]).toMatchObject({ status: 'pending', totalPnl: null, latestBalance: null });
+    ownBalances({ [ordinaryTagObservationKey('普通')]: JSON.stringify({ ...CONFIG, startDate: '' }) });
+    expect((await getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).observations[0]).toMatchObject({ status: 'invalid_config', totalPnl: null });
+  });
+  it('override读取失败抛错且不读取records；无权AI/第三人不能获取override', async () => {
+    mocks.readOverrides.mockRejectedValue(new Error('override corrupt'));
+    await expect(getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).rejects.toThrow('override corrupt');
+    expect(mocks.execute.mock.calls.some(([sql]) => /FROM ledger_records/.test(sql))).toBe(false);
+    mocks.readOverrides.mockClear(); members.find(m => m.userId === 201)!.memberType = 'ai';
+    await expect(getMyOrdinaryTagObservationOverview({ ledgerId: 37, userId: 201 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.readOverrides).not.toHaveBeenCalled();
+  });
   function canonical(rows: OrdinaryTagObservationRecord[], cutoff = '2026-11-09') {
     return canonicalOrdinaryTagObservationDays({ ledgerId: 37, userId: 201, categoryId: 10,
       categoryName: '普通', config: CONFIG, records: rows, today: '2026-11-09' }, cutoff);

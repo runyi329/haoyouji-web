@@ -1,5 +1,6 @@
 import { decryptValue, isEncrypted } from './encryption';
 import { readOrdinaryTagDownsideRules } from './ordinary-tag-downside-rules';
+import { readUserTagDownsideOverrides } from './user-tag-downside-overrides';
 import {
   buildOrdinaryTagDownsideValuation,
   type OrdinaryTagDownsideValuationRecord,
@@ -133,6 +134,13 @@ export async function readOrdinaryTagDownsidePaymentReturn(
   const balances = balancesOf(member.initialBalances);
   if (balances === null) return pending(categoryId);
 
+  // Writers share the ledger -> category -> target-member lock order. Read the validated
+  // override only after those locks; caller has made no earlier consistent/snapshot SELECT.
+  // A broken store must block payment, never silently grant raw or fall back to a snapshot.
+  let userTagDownsideOverrides;
+  try { userTagDownsideOverrides = await readUserTagDownsideOverrides(conn, 37, input.userId); }
+  catch { return pending(categoryId); }
+
   // Current locking read, not the rules SELECT's repeatable-read snapshot. Lock all real
   // balances/flows against legacy record writers that do not participate in the ledger lock.
   const records = await rows<OrdinaryTagDownsideValuationRecord>(conn,
@@ -159,7 +167,7 @@ export async function readOrdinaryTagDownsidePaymentReturn(
       return { ...row, description };
     });
     const valuation = buildOrdinaryTagDownsideValuation({ ledgerId: 37, userId: input.userId,
-      categoryId, categoryName: category.name, balances, records: decrypted, rules, today: input.today });
+      categoryId, categoryName: category.name, balances, records: decrypted, rules, userTagDownsideOverrides, today: input.today });
     if (valuation.categoryId !== categoryId || valuation.categoryName !== category.name) return pending(categoryId);
     if (valuation.status === 'pending') return pending(categoryId);
     if (valuation.status === 'no_data') return { applicable: true, status: 'no_data', cumulativeReturn: null, categoryId };

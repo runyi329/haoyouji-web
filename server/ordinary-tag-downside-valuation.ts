@@ -5,6 +5,8 @@ import { readAllOrdinaryTagDownsideRules } from './ordinary-tag-downside-rules';
 import { readTagVisible } from '../shared/tag-visibility';
 import { isStockSessionDate, previousStockMarketSession } from '../shared/stock-market-session';
 import { calculateOrdinaryTagDownsideSeries, type OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
+import { isUserTagDownsideExempt, type UserTagDownsideOverride } from '../shared/user-tag-downside-override';
+import { readUserTagDownsideOverrides } from './user-tag-downside-overrides';
 
 const LEDGER_ID = 37 as const;
 type Connection = NonNullable<Awaited<ReturnType<typeof getDbConnection>>>;
@@ -54,6 +56,8 @@ export type BuildOrdinaryTagDownsideValuationInput = {
   /** Root-scoped real rows; transfer descriptions may still be encrypted. No fetch occurs. */
   records: readonly OrdinaryTagDownsideValuationRecord[];
   rules: readonly OrdinaryTagDownsideRule[];
+  /** Authenticated loader supplies validated history; latest user×tag mode covers all dates. */
+  userTagDownsideOverrides?: readonly UserTagDownsideOverride[];
   today: string;
 };
 type Member = { id: number; ledgerId: number; userId: number; memberType: string; initialBalances: string | null; ownerId: number };
@@ -198,8 +202,11 @@ export function buildOrdinaryTagDownsideValuation(input: BuildOrdinaryTagDownsid
   const seriesInitial = initialAmount !== null && baseline ? baseline.rawBalance : initialAmount;
   const bridge = initialAmount !== null && seriesInitial !== null ? (initialAmount - seriesInitial) * ratio / 100 : 0;
   if (!Number.isFinite(bridge)) return emptyCategory(input, 'pending');
+  // Exemption removes only the derived rule. True entry, ratio, pause and full cashflow evidence
+  // still run through the same canonical pipeline; missing evidence never becomes raw ready/zero.
+  const rules = isUserTagDownsideExempt(input.userTagDownsideOverrides ?? [], input.userId, input.categoryId) ? [] : input.rules;
   const calculated = calculateOrdinaryTagDownsideSeries({ ledgerId: LEDGER_ID, categoryId: input.categoryId,
-    initialAmount: seriesInitial, entryDate, ratio, points: canonical, rules: input.rules });
+    initialAmount: seriesInitial, entryDate, ratio, points: canonical, rules });
   let capitalChange = 0, withdrawToDate = 0;
   const cashflowByDate = new Map(canonical.filter(p => !entryDate || p.date >= entryDate).map(p => [p.date, p]));
   const effective = calculated.filter(point => (!entryDate || point.date >= entryDate)
@@ -281,6 +288,8 @@ export async function getMyOrdinaryTagDownsideValuations(input: {
       && c.accountingMode === 'manual_balance' && typeof c.name === 'string' && Boolean(c.name.trim())
       && Boolean(rules.get(c.id)?.length) && (actualOwner || readTagVisible(balances, c.name)));
   if (!categories.length) return { ledgerId: LEDGER_ID, categories: [] };
+  // One target-scoped SELECT-only batch, never per category; store errors propagate fail closed.
+  const userTagDownsideOverrides = await readUserTagDownsideOverrides(conn, LEDGER_ID, input.userId);
   const today = ordinaryTagDownsideBusinessDate(new Date())!;
   const usableCategories = categories.filter(c => readPauses(balances, c.name).valid);
   let records: OrdinaryTagDownsideValuationRecord[] = [];
@@ -310,6 +319,6 @@ export async function getMyOrdinaryTagDownsideValuations(input: {
   // Pure builder can be reused by availability after its own one-time batch rules/history SELECT.
   return { ledgerId: LEDGER_ID, categories: categories.map(category => buildOrdinaryTagDownsideValuation({
     ledgerId: LEDGER_ID, userId: input.userId, categoryId: category.id, categoryName: category.name,
-    balances, records, rules: rules.get(category.id)!, today,
+    balances, records, rules: rules.get(category.id)!, userTagDownsideOverrides, today,
   })) };
 }

@@ -3,6 +3,8 @@ import { getDbConnection } from './db';
 import { decryptValue, isEncrypted } from './encryption';
 import { readAllOrdinaryTagDownsideRules } from './ordinary-tag-downside-rules';
 import type { OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
+import { isUserTagDownsideExempt, type UserTagDownsideOverride } from '../shared/user-tag-downside-override';
+import { readUserTagDownsideOverrides } from './user-tag-downside-overrides';
 import {
   ORDINARY_TAG_OBSERVATION_LEDGER_ID,
   calculateOrdinaryTagObservationSummary,
@@ -150,6 +152,7 @@ async function readDownsideRulesBatch(conn: Connection): Promise<DownsideRulesBa
 async function summaryFor(
   conn: Connection, category: Category, userId: number, config: OrdinaryTagObservationConfig,
   loadedRules?: DownsideRulesBatch,
+  loadedOverrides?: readonly UserTagDownsideOverride[],
 ): Promise<OrdinaryTagObservationSummary> {
   const today = ledgerToday();
   const base = { ledgerId: ORDINARY_TAG_OBSERVATION_LEDGER_ID, userId, categoryId: category.id, categoryName: category.name, config, today };
@@ -161,7 +164,12 @@ async function summaryFor(
     const pending = calculateOrdinaryTagObservationSummary({ ...base, records: [] });
     return { ...pending, status: 'pending' };
   }
-  const downsideRules = rules?.get(category.id);
+  const overrides = loadedOverrides ?? await readUserTagDownsideOverrides(conn, ORDINARY_TAG_OBSERVATION_LEDGER_ID, userId);
+  const savedRules = rules?.get(category.id);
+  // Keep the saved-rule canonical series path (true zero/missing evidence and all flows).
+  // Passing [] would select the legacy income/expense aggregation and is not the same raw replay.
+  const downsideRules = isUserTagDownsideExempt(overrides, userId, category.id)
+    ? savedRules?.map(rule => ({ ...rule, enabled: false })) : savedRules;
   const cutoff = config.pauseDate !== null && config.pauseDate <= today ? config.pauseDate : today;
   const records = !valid || !config.enabled || config.startDate > today ? [] : await rawRecords(conn, category, cutoff);
   return calculateOrdinaryTagObservationSummary({ ...base, records,
@@ -223,13 +231,14 @@ export async function getMyOrdinaryTagObservationOverview(input: {
   const observations: OrdinaryTagObservationSummary[] = [];
   // 本次overview只批量SELECT规则一次；保留既有每tag真实records查询，不引入规则N+1。
   const rules = await readDownsideRulesBatch(conn);
+  const overrides = await readUserTagDownsideOverrides(conn, input.ledgerId, member.userId);
   for (const category of categories) {
     if (!isOrdinaryCategory(category, input.ledgerId)) continue;
     // 自己的enabled配置是独立观察授权，不扩大真实标签可见列表/详情权限。
     // 不能以真实__visible/是否真实参与阻断管理员明确开启的试用观察。
     const config = readOrdinaryTagObservationConfig(balances, category.name);
     if (!config?.enabled) continue;
-    observations.push(await summaryFor(conn, category, member.userId, config, rules));
+    observations.push(await summaryFor(conn, category, member.userId, config, rules, overrides));
   }
   // 不返回balances、原始记录/备注或其他用户观察。
   return { userId: member.userId, observations };

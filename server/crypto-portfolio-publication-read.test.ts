@@ -144,6 +144,11 @@ function database(options: Scenario = {}) {
       if (!/^SELECT\b/.test(sql) || /\b(?:INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|CALL|FOR UPDATE|GET_LOCK|RELEASE_LOCK)\b/i.test(sql)) {
         m.write();
       }
+      if (sql.includes('FROM ledger_user_tag_downside_overrides')) {
+        expect(sql.replace(/\s+/g, ' ').trim()).toBe("SELECT ledger_id,category_id,target_user_id,actor_user_id,version,mode, DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM ledger_user_tag_downside_overrides WHERE ledger_id=? ORDER BY target_user_id,category_id,version");
+        expect(params).toEqual([37]);
+        return [[]];
+      }
       if (params[0] !== 37 || params[1] !== categoryId) throw new Error('必须保持标签与账本scope');
       if (sql.includes('MIN(e.settlement_effective_date)')) return [[{ activation_date: activation }]];
       if (sql.includes('MIN(activation_date)')) return [[{
@@ -204,7 +209,10 @@ function row(rows: MemberCalendarSnapshot[], date: string) {
 function assertSafe(s: ReturnType<typeof database>) {
   expect(s.calls.length).toBeGreaterThan(0);
   expect(s.calls.every(c => /^SELECT\b/.test(c.sql))).toBe(true);
-  expect(s.calls.every(c => c.params[0] === 37 && c.params[1] === categoryId)).toBe(true);
+  for (const c of s.calls) {
+    if (c.sql.includes('FROM ledger_user_tag_downside_overrides')) expect(c.params).toEqual([37]);
+    else expect(c.params[0] === 37 && c.params[1] === categoryId).toBe(true);
+  }
   expect(JSON.stringify(s.saved)).toBe(s.before);
   expect(m.db).not.toHaveBeenCalled();
   expect(m.write).not.toHaveBeenCalled();

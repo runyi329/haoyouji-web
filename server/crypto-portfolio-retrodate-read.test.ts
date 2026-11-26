@@ -31,6 +31,11 @@ function db() {
   const calls: Array<{ sql: string; params: any[] }> = [];
   const conn = { execute: vi.fn(async (sql: string, params: any[]) => {
     calls.push({ sql, params }); if (!sql.startsWith('SELECT')) throw new Error('禁止DB写入');
+    if (sql.includes('FROM ledger_user_tag_downside_overrides')) {
+      expect(sql.replace(/\s+/g, ' ').trim()).toBe("SELECT ledger_id,category_id,target_user_id,actor_user_id,version,mode, DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM ledger_user_tag_downside_overrides WHERE ledger_id=? ORDER BY target_user_id,category_id,version");
+      expect(params).toEqual([37]);
+      return [[]];
+    }
     if (sql.includes('MIN(e.settlement_effective_date)')) return [[{ activation_date: '2026-11-24' }]];
     if (sql.includes('MIN(activation_date)')) return [[{ ledger_id: 37, category_id: categoryId, policy_version: CRYPTO_PORTFOLIO_POLICY_VERSION,
       activation_date: '2026-11-24', snapshot_date: '2026-11-24' }]];

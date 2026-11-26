@@ -21,6 +21,10 @@ import { StockPortfolioReadCache } from './stock-portfolio-read-cache';
 import { mergeCryptoPortfolioCalendarSnapshots } from './shared/crypto-portfolio-calendar-integration';
 import { fetchStockUsdCnyAtClose, getLiveStockUsdCnyQuote } from './stock-usd-cny-rate';
 import { ensureStockCalendarResultTable, markStockCalendarResultDirty, readStockCalendarResult, rebuildCachedStockCalendarResult } from './stock-calendar-result-cache';
+import { readUserTagDownsideOverrides } from './user-tag-downside-overrides';
+import type { UserTagDownsideOverride } from '../shared/user-tag-downside-override';
+import { stockUserDownsideRules, isStockUserDownsideExemptSelection, stockUserCountedSalePrice,
+  stockUserTagOverrideVersion, stockUserTagOverridesFingerprint } from './shared/stock-user-tag-downside';
 import { valueStockLotDownside, isStockLotDownsideBaselineQuoteValid, stockLotDownsideBaselineMarketContext, countedStockLotPrice, stockLotDownsideMemberOffset, stockLotDownsideMemberEntryAt, selectStockLotDownsideRule, latestStockLotDownsideRule, createStockLotDownsideVersion, stockLotDownsidePriceAsOf,
   validateStockLotDownsideStartDate, stockLotDownsideEffectiveAt, resolveStockLotDownsideHistoricalRules, stockLotDownsideHistoricalEntryProof, type StockLotDownsideHistoricalQuote, type StockLotDownsideRule } from '../shared/stock-lot-downside';
 import { readStockLotDownsideRules as readStoredStockLotDownsideRules, appendStockLotDownsideRule, ensureStockLotDownsideRulesTables, invalidateStockLotDownsideRuleCache, readStockLotDownsideSales, freezeStockLotDownsideSale, readStockLotDownsideMemberEpochs, appendStockLotDownsideMemberEpoch } from './stock-lot-downside-rules';
@@ -1496,13 +1500,11 @@ async function readStockLotDownsideRules(conn: any, ledgerId: number, categoryId
 }
 /** New revisions use actual execution price/time. Frozen counted evidence remains an audit only. */
 function countedDownsideSalePrice(rules: StockLotDownsideRule[], lotId: number, rawPrice: number, actualAt: string, saved?: { countedPrice: number; effectiveAt: string }) {
-  const at = Number.isFinite(Date.parse(actualAt)) ? actualAt : saved?.effectiveAt ?? '';
-  if (!Number.isFinite(Date.parse(at))) return rules.some(r => r.lotId === lotId && r.startDate) ? null : saved?.countedPrice ?? rawPrice;
-  const rule = selectStockLotDownsideRule(rules, lotId, at);
-  return rule?.startDate ? countedStockLotPrice(rawPrice, rule) : saved?.countedPrice ?? rawPrice;
+  return stockUserCountedSalePrice(rules, lotId, rawPrice, actualAt, saved);
 }
 /** Owner-input rules use the recorded participation price; older rules still require quote/epoch proof. */
 function resolvedDownsideMemberOffset(input: Parameters<typeof stockLotDownsideMemberOffset>[0] & { symbol?: string }) {
+  if (isStockUserDownsideExemptSelection(input.rules)) return 0;
   const evidence = historicalDownsideEvidence.get(input.rules as StockLotDownsideRule[]);
   const entryAt = input.startDate ? stockLotDownsideMemberEntryAt(input.assignedAt, input.startDate) : input.assignedAt;
   if (selectStockLotDownsideRule(input.rules, input.lotId, entryAt)?.baselineSource === 'owner_threshold') {
@@ -1815,7 +1817,7 @@ export async function readStockLotDownsideCalendarBaseline(categoryId: number, s
 }
 
 /** One SELECT batch per activation anchor, not one whole-history batch per client. */
-export async function readStockLotDownsideCalendarBaselines(categoryId: number, snapshotDate: string, userIds: readonly number[], conn: any, now = new Date(), includeTotal = true): Promise<{ snapshotDate: string; total?: MemberCalendarSnapshot; members: Record<string, MemberCalendarSnapshot> }> {
+export async function readStockLotDownsideCalendarBaselines(categoryId: number, snapshotDate: string, userIds: readonly number[], conn: any, now = new Date(), includeTotal = true, knownOverrides?: readonly UserTagDownsideOverride[]): Promise<{ snapshotDate: string; total?: MemberCalendarSnapshot; members: Record<string, MemberCalendarSnapshot> }> {
   validateStockLotDownsideStartDate(snapshotDate);
   if (!Number.isSafeInteger(categoryId) || categoryId <= 0 || userIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('股票基准scope无效');
   const total = includeTotal ? await readStockLotDownsideCalendarBaseline(categoryId, snapshotDate, undefined, conn, now) : null;
@@ -1823,6 +1825,7 @@ export async function readStockLotDownsideCalendarBaselines(categoryId: number, 
   if (!userIds.length) return { snapshotDate, total: total?.ready ? total : undefined, members };
   const rules = await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId);
   const evidence = historicalDownsideEvidence.get(rules) ?? await readStockLotDownsideHistoricalEvidence(conn, STOCK_LEDGER_ID, categoryId);
+  const overrides = knownOverrides ?? await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID);
   const epochs = rules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId) : [];
   const [rows] = await conn.execute(`SELECT p.id,p.lot_id,p.user_id,p.entry_price,p.remaining_quantity,l.symbol,
     DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at,
@@ -1859,6 +1862,8 @@ export async function readStockLotDownsideCalendarBaselines(categoryId: number, 
   const historicalFx = fx.map(r => ({ snapshotDate: String(r.snapshot_date), usdCnyRate: calendarSourceNumber(r.usd_cny_rate),
     source: r.source, asOf: toBeijingWallClockIso(r.quote_as_of), lockedAt: toBeijingWallClockIso(r.locked_at) }));
   for (const userId of Array.from(new Set(userIds))) {
+    const userRules = stockUserDownsideRules(rules, overrides, userId, categoryId);
+    const userEpochs = isStockUserDownsideExemptSelection(userRules) ? [] : epochs;
     const participations = (participationGroups.get(userId) ?? []).filter(r => !isCryptoPortfolioSymbol(r.symbol)).map(r => {
     const lot = evidence.lots.find((l: any) => l.lotId === Number(r.lot_id));
     const updated = Date.parse(toBeijingWallClockIso(r.updated_at));
@@ -1871,7 +1876,7 @@ export async function readStockLotDownsideCalendarBaselines(categoryId: number, 
       entryPrice: calendarSourceNumber(r.entry_price), assignedAt: toBeijingWallClockIso(r.assigned_at),
       openedAt: lot?.openedAt, physicalUnitCost: lot?.unitCost };
   });
-  const member = buildMemberStockCalendar({ participations, downsideRules: rules, downsideMemberEpochs: epochs,
+  const member = buildMemberStockCalendar({ participations, downsideRules: userRules, downsideMemberEpochs: userEpochs,
     closures: (closureGroups.get(userId) ?? []).flatMap(c => {
       const p = participations.find(p => p.id === Number(c.participation_id));
       return !p ? [] : [{ participationId: p.id, quantity: calendarSourceNumber(c.quantity), salePrice: calendarSourceNumber(c.sale_price),
@@ -1980,11 +1985,11 @@ function memberCryptoParticipationStartDate(rows: readonly any[], today: string)
 }
 
 /** Shared member/matrix read: each closure uses its own immutable sell-event FX. */
-async function readFrozenParticipationAmounts(conn: any, categoryId: number, userId?: number, counted = false) {
+async function readFrozenParticipationAmounts(conn: any, categoryId: number, userId?: number, counted = false, knownRules?: StockLotDownsideRule[], knownOverrides?: readonly UserTagDownsideOverride[]) {
   const result = new Map<number, ReturnType<typeof aggregateFrozenStockSaleAmounts>>();
   if (!isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId)) return result;
   const [closureRows] = await conn.execute(
-    `SELECT c.participation_id, c.sell_event_id, c.quantity, c.sale_price, p.entry_price, p.lot_id,
+    `SELECT c.participation_id, c.sell_event_id, c.quantity, c.sale_price, p.entry_price, p.lot_id, p.user_id,
        DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at,
        DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at,
        DATE_FORMAT(COALESCE(p.start_date,DATE(l.opened_at)),'%Y-%m-%d') AS start_date, l.symbol
@@ -1999,21 +2004,24 @@ async function readFrozenParticipationAmounts(conn: any, categoryId: number, use
   );
   const locks = await readStockSaleFxLocks(conn, { ledgerId: STOCK_LEDGER_ID, categoryId,
     eventIds: (closureRows as any[]).map(row => Number(row.sell_event_id)) });
-  const rules = counted ? await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId) : [];
-  const sales = rules.length ? await readStockLotDownsideSales(conn, STOCK_LEDGER_ID, categoryId) : [];
-  const epochs = rules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId) : [];
+  const globalRules = counted ? knownRules ?? await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId) : [];
+  const overrides = counted ? knownOverrides ?? await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID, userId) : [];
+  const sales = globalRules.length ? await readStockLotDownsideSales(conn, STOCK_LEDGER_ID, categoryId) : [];
+  const epochs = globalRules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId) : [];
   const grouped = new Map<number, Parameters<typeof aggregateFrozenStockSaleAmounts>[0][number][]>();
   for (const row of closureRows as any[]) {
+    const rules = counted ? stockUserDownsideRules(globalRules, overrides, Number(row.user_id), categoryId) : globalRules;
+    const userEpochs = isStockUserDownsideExemptSelection(rules) ? [] : epochs;
     const id = Number(row.participation_id);
     const eventId = Number(row.sell_event_id);
-    const quantity = numberValue(row.quantity);
-    const buyValue = quantity * numberValue(row.entry_price);
+    const quantity = calendarSourceNumber(row.quantity);
+    const buyValue = quantity * calendarSourceNumber(row.entry_price);
     const sale = sales.find(s => s.lotId === Number(row.lot_id) && s.eventId === eventId);
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const entryCarry = resolvedDownsideMemberOffset({ lotId: Number(row.lot_id), participationId: id, symbol: String(row.symbol),
       entryRawPrice: calendarSourceNumber(row.entry_price),
-      startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs, asOf: actualAt });
-    const price = countedDownsideSalePrice(rules, Number(row.lot_id), numberValue(row.sale_price), actualAt, sale);
+      startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs: userEpochs, asOf: actualAt });
+    const price = countedDownsideSalePrice(rules, Number(row.lot_id), calendarSourceNumber(row.sale_price), actualAt, sale);
     const sellValue = entryCarry === null || price === null ? NaN : quantity * (price - entryCarry);
     const list = grouped.get(id) || [];
     // Member sign and fee policy are unchanged: member is the account's counterparty.
@@ -2029,11 +2037,11 @@ async function readFrozenParticipationAmounts(conn: any, categoryId: number, use
 function frozenParticipationAmountsOrFallback(row: any, symbol: string,
   frozen: ReturnType<typeof aggregateFrozenStockSaleAmounts> | undefined) {
   if (frozen) return frozen;
-  const closedQuantity = numberValue(row.closed_quantity);
+  const closedQuantity = calendarSourceNumber(row.closed_quantity);
   if (closedQuantity <= 0) return aggregateFrozenStockSaleAmounts([]);
   return aggregateFrozenStockSaleAmounts([{ eventId: 0, currency: stockCurrency(symbol),
-    buyValue: closedQuantity * numberValue(row.entry_price), sellValue: numberValue(row.closed_value),
-    realizedPnl: numberValue(row.realized_pnl) }]);
+    buyValue: closedQuantity * calendarSourceNumber(row.entry_price), sellValue: calendarSourceNumber(row.closed_value),
+    realizedPnl: calendarSourceNumber(row.realized_pnl) }]);
 }
 
 /**
@@ -2041,10 +2049,12 @@ function frozenParticipationAmountsOrFallback(row: any, symbol: string,
  * portfolio.  A member's baseline is each allocated lot's entry price and
  * start date, never the tag's (non-existent) manual initial balance.
  */
-async function buildMemberStockPortfolio(categoryId: number, userId: number) {
-  const conn = await getDbConnection();
+async function buildMemberStockPortfolio(categoryId: number, userId: number, knownOverrides?: readonly UserTagDownsideOverride[], readConnection?: any) {
+  const conn = readConnection ?? await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
-  const downsideRules = await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId);
+  const overrides = knownOverrides ?? await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID, userId);
+  const downsideRules = stockUserDownsideRules(await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId), overrides, userId, categoryId);
+  const userTagOverrideVersion = stockUserTagOverrideVersion(overrides, userId, categoryId);
   const valuationAt = new Date();
   const memberEpochs = downsideRules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId) : [];
   const [rows] = await (conn as any).execute(
@@ -2054,24 +2064,25 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
             DATE_FORMAT(opening.actual_traded_at, '%Y-%m-%d %H:%i:%s') AS opening_actual_traded_at,
             opening.status AS opening_status,
             DATE_FORMAT(opening.settlement_effective_date, '%Y-%m-%d') AS opening_settlement_effective_date,
-            COALESCE(SUM(c.quantity), 0) AS closed_quantity,
-            COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
-            MAX(c.closed_at) AS closed_at,
-            COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
+            COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity ELSE 0 END), 0) AS closed_quantity,
+            CASE WHEN SUM(CASE WHEN closed_event.status = 'active' AND (c.sale_price IS NULL OR c.quantity IS NULL) THEN 1 ELSE 0 END) > 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity * c.sale_price ELSE 0 END), 0) END AS closed_value,
+            MAX(CASE WHEN closed_event.status = 'active' THEN closed_event.actual_traded_at ELSE NULL END) AS closed_at,
+            CASE WHEN p.entry_price IS NULL OR SUM(CASE WHEN closed_event.status = 'active' AND (c.sale_price IS NULL OR c.quantity IS NULL) THEN 1 ELSE 0 END) > 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity * (p.entry_price - c.sale_price) ELSE 0 END), 0) END AS realized_pnl
      FROM ledger_stock_lot_participations p
-     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id AND l.ledger_id = p.ledger_id AND l.category_id = p.category_id
      LEFT JOIN ledger_stock_events opening ON opening.id = l.opened_event_id
        AND opening.ledger_id = p.ledger_id AND opening.category_id = p.category_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
-     WHERE p.category_id = ? AND p.user_id = ? AND p.allocated_quantity > 0
+     LEFT JOIN ledger_stock_events closed_event ON closed_event.id = c.sell_event_id AND closed_event.ledger_id = p.ledger_id AND closed_event.category_id = p.category_id AND closed_event.event_type IN ('sell','reduce')
+     WHERE p.ledger_id = 37 AND p.category_id = ? AND p.user_id = ? AND p.allocated_quantity > 0
      GROUP BY p.id
      ORDER BY COALESCE(p.start_date, DATE(l.opened_at)) ASC, p.assigned_at ASC, p.id ASC`,
     [categoryId, userId],
   );
 
   const frozenParticipationAmounts = await readFrozenParticipationAmounts(conn, categoryId, userId);
-  const countedFrozenParticipationAmounts = downsideRules.length ? await readFrozenParticipationAmounts(conn, categoryId, userId, true) : frozenParticipationAmounts;
-  const countedNativeParticipationAmounts = await readCountedNativeParticipationAmounts(conn, categoryId, userId, downsideRules);
+  const countedFrozenParticipationAmounts = downsideRules.length ? await readFrozenParticipationAmounts(conn, categoryId, userId, true, downsideRules, overrides) : frozenParticipationAmounts;
+  const countedNativeParticipationAmounts = await readCountedNativeParticipationAmounts(conn, categoryId, userId, downsideRules, overrides);
   const usesSaleFxLocks = isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId);
   const today = beijingDate();
   const participations = (rows as any[]).map((row) => {
@@ -2081,9 +2092,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       : marketSessionDateFromBeijingTradeTimestamp(row.opening_actual_traded_at, stockMarket(String(row.symbol)) as 'A' | 'US');
     const businessEffectiveDate = normalizeStoredDate(row.start_date) || openingSessionDate;
     const pauseDate = normalizeStoredDate(row.pause_date);
-    const allocatedQuantity = numberValue(row.allocated_quantity);
-    const remainingQuantity = numberValue(row.remaining_quantity);
-    const lotInitialQuantity = numberValue(row.initial_quantity);
+    const allocatedQuantity = calendarSourceNumber(row.allocated_quantity);
+    const remainingQuantity = calendarSourceNumber(row.remaining_quantity);
+    const lotInitialQuantity = calendarSourceNumber(row.initial_quantity);
     const frozen = frozenParticipationAmountsOrFallback(row, String(row.symbol), frozenParticipationAmounts.get(Number(row.id)));
     const countedFrozen = frozenParticipationAmountsOrFallback(row, String(row.symbol), countedFrozenParticipationAmounts.get(Number(row.id)));
     return {
@@ -2107,14 +2118,14 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       participationEffectiveDate: businessEffectiveDate,
       allocatedQuantity,
       remainingQuantity,
-      closedQuantity: numberValue(row.closed_quantity),
-      closedValue: numberValue(row.closed_value),
+      closedQuantity: calendarSourceNumber(row.closed_quantity),
+      closedValue: calendarSourceNumber(row.closed_value),
       closedAt: isCryptoPortfolioSymbol(row.symbol) ? toBeijingWallClockIso(row.closed_at) : toIso(row.closed_at),
-      entryPrice: numberValue(row.entry_price),
+      entryPrice: calendarSourceNumber(row.entry_price),
       lotInitialQuantity,
       allocationRatio: !portfolioQuantityIsEmpty(row.symbol, lotInitialQuantity) ? allocatedQuantity / lotInitialQuantity : 0,
-      realizedPnl: numberValue(row.realized_pnl),
-      countedRealizedPnl: countedNativeParticipationAmounts.has(Number(row.id)) ? countedNativeParticipationAmounts.get(Number(row.id))! : numberValue(row.realized_pnl),
+      realizedPnl: row.realized_pnl == null ? null : calendarSourceNumber(row.realized_pnl),
+      countedRealizedPnl: countedNativeParticipationAmounts.has(Number(row.id)) ? countedNativeParticipationAmounts.get(Number(row.id))! : row.realized_pnl == null ? null : calendarSourceNumber(row.realized_pnl),
       currency: stockCurrency(String(row.symbol)),
       market: stockMarket(String(row.symbol)),
       ...(usesSaleFxLocks ? {
@@ -2157,7 +2168,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     };
     current.quantity += item.remainingQuantity;
     current.costValue += item.remainingQuantity * item.entryPrice;
-    current.realizedPnl += item.realizedPnl;
+    current.realizedPnl = current.realizedPnl === null || item.realizedPnl === null ? null : current.realizedPnl + item.realizedPnl;
     current.lots.push({
       id: item.lotId,
       participationId: item.id,
@@ -2363,8 +2374,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     startDate: visibleParticipations.map((item) => item.startDate).sort()[0] || null,
     dailySnapshots: dailySnapshots.slice().reverse(),
     rawSummary: { reportingCurrency: 'CNY' as const, ...rawCnySummary, currencySummaries: summarizePositionsByCurrency(positions) },
-    settlementSummary: memberCalendarSettlementSummary(dailySnapshots, { settlementPolicy }),
+    settlementSummary: { ...memberCalendarSettlementSummary(dailySnapshots, { settlementPolicy }), userTagOverrideVersion },
     summary: {
+      userTagOverrideVersion,
       reportingCurrency: 'CNY' as const,
       usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
       usdtCnyRate,
@@ -2403,12 +2415,13 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   return result;
 }
 
-async function readCountedNativeParticipationAmounts(conn: any, categoryId: number, userId: number | undefined, rules: StockLotDownsideRule[]) {
+async function readCountedNativeParticipationAmounts(conn: any, categoryId: number, userId: number | undefined, globalRules: StockLotDownsideRule[], knownOverrides?: readonly UserTagDownsideOverride[]) {
   const amounts = new Map<number, number | null>();
-  if (!rules.length) return amounts;
-  const sales = await readStockLotDownsideSales(conn, STOCK_LEDGER_ID, categoryId);
-  const epochs = await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId);
-  const [rows] = await conn.execute(`SELECT c.participation_id,c.sell_event_id,c.quantity,c.sale_price,p.lot_id,p.entry_price,
+  if (!globalRules.length && !isStockUserDownsideExemptSelection(globalRules)) return amounts;
+  const overrides = knownOverrides ?? await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID, userId);
+  const sales = globalRules.length ? await readStockLotDownsideSales(conn, STOCK_LEDGER_ID, categoryId) : [];
+  const epochs = globalRules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId, userId) : [];
+  const [rows] = await conn.execute(`SELECT c.participation_id,c.sell_event_id,c.quantity,c.sale_price,p.lot_id,p.entry_price,p.user_id,
     DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at,
     DATE_FORMAT(e.actual_traded_at,'%Y-%m-%d %H:%i:%s') AS actual_traded_at,l.symbol,
     DATE_FORMAT(COALESCE(p.start_date,DATE(l.opened_at)),'%Y-%m-%d') AS start_date
@@ -2418,16 +2431,18 @@ async function readCountedNativeParticipationAmounts(conn: any, categoryId: numb
     WHERE p.ledger_id=? AND p.category_id=?${userId === undefined ? '' : ' AND p.user_id=?'}`,
   [STOCK_LEDGER_ID, categoryId, ...(userId === undefined ? [] : [userId])]);
   for (const row of rows) {
+    const rules = isStockUserDownsideExemptSelection(globalRules) ? globalRules : stockUserDownsideRules(globalRules, overrides, Number(row.user_id), categoryId);
+    const userEpochs = isStockUserDownsideExemptSelection(rules) ? [] : epochs;
     const sale = sales.find(s => s.lotId === Number(row.lot_id) && s.eventId === Number(row.sell_event_id));
-    const entry = numberValue(row.entry_price);
+    const entry = calendarSourceNumber(row.entry_price);
     const id = Number(row.participation_id);
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const carry = resolvedDownsideMemberOffset({ lotId: Number(row.lot_id), participationId: id, symbol: String(row.symbol),
       entryRawPrice: calendarSourceNumber(row.entry_price),
-      startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs, asOf: actualAt });
-    const price = countedDownsideSalePrice(rules, Number(row.lot_id), numberValue(row.sale_price), actualAt, sale);
-    if (carry === null || price === null || amounts.get(id) === null) { amounts.set(id, null); continue; }
-    const value = numberValue(row.quantity) * (entry - (price - carry));
+      startDate: String(row.start_date), assignedAt: toBeijingWallClockIso(row.assigned_at), rules, epochs: userEpochs, asOf: actualAt });
+    const price = countedDownsideSalePrice(rules, Number(row.lot_id), calendarSourceNumber(row.sale_price), actualAt, sale);
+    if (carry === null || price === null || !Number.isFinite(entry) || !Number.isFinite(calendarSourceNumber(row.quantity)) || amounts.get(id) === null) { amounts.set(id, null); continue; }
+    const value = calendarSourceNumber(row.quantity) * (entry - (price - carry));
     amounts.set(id, (amounts.get(id) ?? 0) + value);
   }
   return amounts;
@@ -2442,19 +2457,22 @@ async function mapCountedMemberCalendarClosures(conn: any, categoryId: number, r
     const actualAt = toBeijingWallClockIso(row.actual_traded_at) || sale?.effectiveAt || '';
     const entryCarry = resolvedDownsideMemberOffset({ lotId: p.lotId, participationId: p.id, symbol: p.symbol,
       startDate: p.startDate, assignedAt: p.assignedAt, entryRawPrice: p.entryPrice, rules, epochs, asOf: actualAt });
-    const counted = countedDownsideSalePrice(rules, p.lotId, numberValue(row.sale_price), actualAt, sale);
-    return { participationId: p.id, quantity: numberValue(row.quantity), salePrice: numberValue(row.sale_price),
+    const counted = countedDownsideSalePrice(rules, p.lotId, calendarSourceNumber(row.sale_price), actualAt, sale);
+    return { participationId: p.id, quantity: calendarSourceNumber(row.quantity), salePrice: calendarSourceNumber(row.sale_price),
       actualAt,
       ...(rules.some(r => r.lotId === p.lotId) ? { countedSalePrice: entryCarry === null || counted === null ? null : counted - entryCarry } : {}),
       closeDate: marketSessionDateFromBeijingTradeTimestamp(row.actual_traded_at, stockMarket(p.symbol) as 'A' | 'US') || '' };
   });
 }
 
-function getCachedMemberStockPortfolio(categoryId: number, userId: number) {
+async function getCachedMemberStockPortfolio(categoryId: number, userId: number, knownOverrides?: readonly UserTagDownsideOverride[]) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const overrides = knownOverrides ?? await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID, userId);
   return readShortLivedCache(
     memberPortfolioReadCache,
-    `${categoryId}:${userId}`,
-    () => buildMemberStockPortfolio(categoryId, userId),
+    `${categoryId}:${userId}:${stockUserTagOverridesFingerprint(overrides, categoryId)}`,
+    () => buildMemberStockPortfolio(categoryId, userId, overrides, conn),
   );
 }
 
@@ -3618,7 +3636,7 @@ export async function getMyStockTagParticipantPortfolio(input: {
 }
 
 /** All immediately-visible stock tags for the effective member, used by 37's overview table. */
-async function buildMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
+async function buildMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }, knownOverrides?: readonly UserTagDownsideOverride[]) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -3642,7 +3660,7 @@ async function buildMyStockTagOverview(input: { ledgerId: number; userId: number
       if (error instanceof Error && error.message === "您无权查看此标签") continue;
       throw error;
     }
-    const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId);
+    const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId, knownOverrides);
     if (!portfolio.isEligible) continue;
     // R1只展示最近已过A交易日15:05的同scope日结；持仓/资金summary仍独立实时估值。
     const points = portfolio.dailySnapshots.slice().reverse().map((snapshot: (typeof portfolio.dailySnapshots)[number]) => ({
@@ -3672,10 +3690,13 @@ function projectMemberSettlementSnapshotForAi(snapshot: any) {
 export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean }) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
   const context = await getLedger37PresentationContext({ ...input, ledgerId: 37 });
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const overrides = await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID, input.userId);
   const result = await readShortLivedCache(
     memberOverviewReadCache,
-    `${input.ledgerId}:${input.userId}:${input.systemRole || ''}:${input.isViewingAs ? 'viewing' : ''}`,
-    () => buildMyStockTagOverview(input),
+    `${input.ledgerId}:${input.userId}:${input.systemRole || ''}:${input.isViewingAs ? 'viewing' : ''}:${stockUserTagOverridesFingerprint(overrides)}`,
+    () => buildMyStockTagOverview(input, overrides),
   );
   // 缓存不保存权限；每次重新校验成员可见性，不能从旧缓存恢复已隐藏项目。
   const visible: any[] = [];
@@ -4996,9 +5017,15 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const downsideRules = await readStockLotDownsideRules(conn, STOCK_LEDGER_ID, categoryId);
+  const overrides = await readUserTagDownsideOverrides(conn, STOCK_LEDGER_ID);
+  const userRuleCache = new Map<number, StockLotDownsideRule[]>();
+  const userRulesFor = (userId: number) => {
+    if (!userRuleCache.has(userId)) userRuleCache.set(userId, stockUserDownsideRules(downsideRules, overrides, userId, categoryId));
+    return userRuleCache.get(userId)!;
+  };
   const valuationAt = new Date();
-  const countedNativeAmounts = await readCountedNativeParticipationAmounts(conn, categoryId, undefined, downsideRules);
-  const countedFrozenAmounts = downsideRules.length ? await readFrozenParticipationAmounts(conn, categoryId, undefined, true) : new Map();
+  const countedNativeAmounts = await readCountedNativeParticipationAmounts(conn, categoryId, undefined, downsideRules, overrides);
+  const countedFrozenAmounts = downsideRules.length ? await readFrozenParticipationAmounts(conn, categoryId, undefined, true, downsideRules, overrides) : new Map();
   const memberEpochs = downsideRules.length ? await readStockLotDownsideMemberEpochs(conn, STOCK_LEDGER_ID, categoryId) : [];
   const [lotRows] = await (conn as any).execute(
     `SELECT l.id, l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
@@ -5035,13 +5062,14 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
             DATE_FORMAT(COALESCE(MAX(p.start_date), DATE(MAX(l.opened_at))), '%Y-%m-%d') AS start_date,
             DATE_FORMAT(MAX(p.pause_date), '%Y-%m-%d') AS pause_date,
             DATE_FORMAT(p.assigned_at,'%Y-%m-%d %H:%i:%s') AS assigned_at, p.assigned_by,
-            COALESCE(SUM(c.quantity), 0) AS closed_quantity,
-            COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
-            COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
+            COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity ELSE 0 END), 0) AS closed_quantity,
+            CASE WHEN SUM(CASE WHEN closed_event.status = 'active' AND (c.sale_price IS NULL OR c.quantity IS NULL) THEN 1 ELSE 0 END) > 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity * c.sale_price ELSE 0 END), 0) END AS closed_value,
+            CASE WHEN p.entry_price IS NULL OR SUM(CASE WHEN closed_event.status = 'active' AND (c.sale_price IS NULL OR c.quantity IS NULL) THEN 1 ELSE 0 END) > 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN closed_event.status = 'active' THEN c.quantity * (p.entry_price - c.sale_price) ELSE 0 END), 0) END AS realized_pnl
      FROM ledger_stock_lot_participations p
-     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id AND l.ledger_id = p.ledger_id AND l.category_id = p.category_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
-     WHERE p.category_id = ?
+     LEFT JOIN ledger_stock_events closed_event ON closed_event.id = c.sell_event_id AND closed_event.ledger_id = p.ledger_id AND closed_event.category_id = p.category_id AND closed_event.event_type IN ('sell','reduce')
+     WHERE p.ledger_id = 37 AND p.category_id = ?
      GROUP BY p.id
      ORDER BY p.assigned_at ASC, p.id ASC`,
     [categoryId],
@@ -5074,11 +5102,11 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     const frozen = frozenParticipationAmountsOrFallback(row, symbol, frozenParticipationAmounts.get(Number(row.id)));
     list.push({
       id: Number(row.id), userId: Number(row.user_id),
-      allocatedQuantity: numberValue(row.allocated_quantity), remainingQuantity: numberValue(row.remaining_quantity),
-      closedQuantity: numberValue(row.closed_quantity), entryPrice: numberValue(row.entry_price),
+      allocatedQuantity: calendarSourceNumber(row.allocated_quantity), remainingQuantity: calendarSourceNumber(row.remaining_quantity),
+      closedQuantity: calendarSourceNumber(row.closed_quantity), entryPrice: calendarSourceNumber(row.entry_price),
       startDate: row.start_date || '', pauseDate: row.pause_date || '',
-      assignedAt: toBeijingWallClockIso(row.assigned_at), assignedBy: Number(row.assigned_by), realizedPnl: numberValue(row.realized_pnl),
-      countedRealizedPnl: countedNativeAmounts.has(Number(row.id)) ? countedNativeAmounts.get(Number(row.id))! : numberValue(row.realized_pnl),
+      assignedAt: toBeijingWallClockIso(row.assigned_at), assignedBy: Number(row.assigned_by), realizedPnl: row.realized_pnl == null ? null : calendarSourceNumber(row.realized_pnl),
+      countedRealizedPnl: countedNativeAmounts.has(Number(row.id)) ? countedNativeAmounts.get(Number(row.id))! : row.realized_pnl == null ? null : calendarSourceNumber(row.realized_pnl),
       countedRealizedPnlCny: countedFrozenAmounts.has(Number(row.id)) ? countedFrozenAmounts.get(Number(row.id))!.realizedPnlCny : frozen.realizedPnlCny,
       ...(isR1StockSaleFxScope(STOCK_LEDGER_ID, categoryId) ? {
         closedBuyValueCny: frozen.buyValueCny, closedSellValueCny: frozen.sellValueCny,
@@ -5138,21 +5166,21 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
         currency: stockCurrency(symbol), market: stockMarket(symbol),
         countedTotalPnl: (() => {
           const value = valueStockLotDownside({ lotId: Number(row.id), quantity: item.remainingQuantity, entryPrice: item.entryPrice,
-            rawPrice: marketPrice, rules: downsideRules, asOf: valuationAt, direction: 'counterparty',
+            rawPrice: marketPrice, rules: userRulesFor(item.userId), asOf: valuationAt, direction: 'counterparty',
             entryCountedOffset: resolvedDownsideMemberOffset({ lotId: Number(row.id), participationId: item.id,
               symbol, startDate: item.startDate, entryRawPrice: item.entryPrice,
-              assignedAt: item.assignedAt, rules: downsideRules, epochs: memberEpochs, asOf: valuationAt }) });
+              assignedAt: item.assignedAt, rules: userRulesFor(item.userId), epochs: isStockUserDownsideExemptSelection(userRulesFor(item.userId)) ? [] : memberEpochs, asOf: valuationAt }) });
           return item.countedRealizedPnl === null || (value.countedFloatingPnl === null && item.remainingQuantity > 0)
             ? null : item.countedRealizedPnl + (value.countedFloatingPnl ?? 0);
         })(),
         ...valueStockLotDownside({ lotId: Number(row.id), quantity: item.remainingQuantity, entryPrice: item.entryPrice,
-          rawPrice: marketPrice, rules: downsideRules, asOf: valuationAt, direction: 'counterparty',
+          rawPrice: marketPrice, rules: userRulesFor(item.userId), asOf: valuationAt, direction: 'counterparty',
           entryCountedOffset: resolvedDownsideMemberOffset({ lotId: Number(row.id), participationId: item.id,
             symbol, startDate: item.startDate, entryRawPrice: item.entryPrice,
-            assignedAt: item.assignedAt, rules: downsideRules, epochs: memberEpochs, asOf: valuationAt }) }),
+            assignedAt: item.assignedAt, rules: userRulesFor(item.userId), epochs: isStockUserDownsideExemptSelection(userRulesFor(item.userId)) ? [] : memberEpochs, asOf: valuationAt }) }),
         floatingPnl: marketPrice === null ? null : (item.entryPrice - marketPrice) * item.remainingQuantity,
         totalPnl: marketPrice === null && !portfolioQuantityIsEmpty(symbol, item.remainingQuantity)
-          ? null : item.realizedPnl + (marketPrice === null ? 0 : (item.entryPrice - marketPrice) * item.remainingQuantity),
+          ? null : item.realizedPnl === null ? null : item.realizedPnl + (marketPrice === null ? 0 : (item.entryPrice - marketPrice) * item.remainingQuantity),
       })),
       // 观察配置只附加展示，不进入 activeAllocatedQuantity 或 availableForParticipation。
       observations: (observationsByLot.get(Number(row.id)) || []).map((observation) => {

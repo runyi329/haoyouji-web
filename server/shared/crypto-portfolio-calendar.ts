@@ -14,6 +14,9 @@ import { valueStockLotDownside, stockLotDownsidePriceAsOf, stockLotDownsideMembe
   countedStockLotPrice, stockLotDownsideHistoricalEntryProof, resolveStockLotDownsideHistoricalRules,
   type StockLotDownsideHistoricalQuote, type StockLotDownsideMemberEpoch } from '../../shared/stock-lot-downside';
 
+import { isUserTagDownsideExempt, type UserTagDownsideOverride } from '../../shared/user-tag-downside-override';
+import { stockUserDownsideRules, isStockUserDownsideExemptSelection, stockUserTagOverridesFingerprint } from './stock-user-tag-downside';
+
 export type CryptoCalendarLot = {
   id: number; symbol: string; initialQuantity: number; unitCost: number; openingFee: number | null;
   /** Stocks: actual exchange day. Crypto: persisted max(actual,registration) effective day. */
@@ -79,6 +82,7 @@ export type CryptoCalendarHistoryEvidence = {
   observations: readonly CryptoCalendarObservation[];
 };
 export type CryptoCalendarHistory = Omit<CryptoCalendarHistoryEvidence, 'version'> & {
+  userTagDownsideOverrides?: readonly UserTagDownsideOverride[];
   downsideRules?: readonly StockLotDownsideRule[];
   downsideMemberEpochs?: readonly StockLotDownsideMemberEpoch[];
   /** Existing stored raw closes only; not live or newly fetched historical prices. */
@@ -98,6 +102,7 @@ export type CryptoCalendarInput = {
   previous?: CryptoPortfolioDailyPayload | null;
   baseline?: { snapshotDate: string; total?: MemberCalendarSnapshot; members?: Record<string, MemberCalendarSnapshot> } | null;
   /** Pure caller-supplied, scoped append-only history. Never loads a DB here. */
+  userTagDownsideOverrides?: readonly UserTagDownsideOverride[];
   downsideRules?: readonly StockLotDownsideRule[];
   downsideMemberEpochs?: readonly StockLotDownsideMemberEpoch[];
   historicalQuotes?: readonly CryptoCalendarQuote[];
@@ -212,7 +217,15 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
     && rule.currency === parsePortfolioInstrument(lots.get(rule.lotId)?.symbol)?.currency);
   const downsideMemberEpochs = (input.downsideMemberEpochs ?? []).filter(epoch => epoch.ledgerId === 37 && epoch.categoryId === input.categoryId
     && input.participations.some(p => p.id === epoch.participationId && p.lotId === epoch.lotId && p.userId === epoch.userId));
-  type Position = { lotId: number; symbol: string; quantity: number; entryPrice: number; asOf: string;
+  const overrides = input.userTagDownsideOverrides ?? [];
+  stockUserTagOverridesFingerprint(overrides, input.categoryId); // validate even an empty member scope
+  const userRuleCache = new Map<number, StockLotDownsideRule[]>();
+  const rulesFor = (row: { userId?: number }) => {
+    if (row.userId === undefined) return downsideRules; // physical total and observations stay global
+    if (!userRuleCache.has(row.userId)) userRuleCache.set(row.userId, stockUserDownsideRules(downsideRules, overrides, row.userId, input.categoryId));
+    return userRuleCache.get(row.userId)!;
+  };
+  type Position = { userId?: number; lotId: number; symbol: string; quantity: number; entryPrice: number; asOf: string;
     entryAt?: string; participationId?: number; assignedAt?: string; startDate?: string };
   type Realized = { symbol: string; amount: CryptoPortfolioDecimal | null; missingSaleEvidence?: boolean };
   const historicalProofs: StockLotDownsideHistoricalQuote[] = [...(input.historicalQuotes ?? input.quotes)].map(q => ({
@@ -226,11 +239,13 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
     return at;
   };
   const closeQuoteCache = new Map<string, CryptoCalendarQuote | undefined>();
-  const memberOffset = (row: Pick<Position, 'lotId' | 'symbol' | 'entryPrice' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate'>, asOf: string, participationAsOf: string = asOf) => {
+  const memberOffset = (row: Pick<Position, 'lotId' | 'symbol' | 'entryPrice' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate' | 'userId'>, asOf: string, participationAsOf: string = asOf) => {
+    const memberRules = rulesFor(row);
+    if (isStockUserDownsideExemptSelection(memberRules)) return 0;
     if (!row.assignedAt) return undefined;
     const entryAt = row.entryAt ?? stockLotDownsideMemberEntryAt(row.assignedAt, row.startDate ?? '');
-    const entryRule = selectStockLotDownsideRule(downsideRules, row.lotId, entryAt);
-    const currentRule = selectStockLotDownsideRule(downsideRules, row.lotId, asOf);
+    const entryRule = selectStockLotDownsideRule(memberRules, row.lotId, entryAt);
+    const currentRule = selectStockLotDownsideRule(memberRules, row.lotId, asOf);
     // Recorded participation/observation price is an input to the owner rule, not an external quote.
     if (entryRule?.baselineSource === 'owner_threshold') {
       if (row.participationId === undefined) {
@@ -241,7 +256,7 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
         return counted === null ? null : counted - row.entryPrice;
       }
       return stockLotDownsideMemberOffset({ lotId: row.lotId, participationId: row.participationId,
-        assignedAt: row.assignedAt, startDate: row.startDate, rules: downsideRules,
+        assignedAt: row.assignedAt, startDate: row.startDate, rules: memberRules,
         epochs: downsideMemberEpochs, asOf, participationAsOf, entryRawPrice: row.entryPrice });
     }
     if (row.participationId !== undefined && !currentRule?.startDate) {
@@ -260,19 +275,21 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
       return counted === null ? null : counted - proof!.price;
     }
     return stockLotDownsideMemberOffset({ lotId: row.lotId, participationId: row.participationId,
-      assignedAt: row.assignedAt, startDate: row.startDate, rules: downsideRules, epochs: downsideMemberEpochs, asOf,
+      assignedAt: row.assignedAt, startDate: row.startDate, rules: memberRules, epochs: downsideMemberEpochs, asOf,
       entryRawPrice: proof?.price, entryQuoteAsOf: proof ? stockLotDownsidePriceAsOf(proof.symbol, proof.priceDate) : undefined });
   };
   // Retro revisions reprice raw executions at actual soldAt; old frozen rows remain audit evidence only.
-  const frozenSalePrice = (sale: { salePrice: number; countedSalePrice?: number; soldAt?: string; closeDate: string | null }, row: Pick<Position, 'lotId' | 'symbol' | 'entryPrice' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate'>) => {
+  const frozenSalePrice = (sale: { salePrice: number; countedSalePrice?: number; soldAt?: string; closeDate: string | null }, row: Pick<Position, 'lotId' | 'symbol' | 'entryPrice' | 'entryAt' | 'participationId' | 'assignedAt' | 'startDate' | 'userId'>) => {
+    const memberRules = rulesFor(row);
+    if (isStockUserDownsideExemptSelection(memberRules)) return finite(sale.salePrice) ? sale.salePrice : null;
     const saleAt = sale.soldAt ?? stockLotDownsidePriceAsOf(row.symbol, sale.closeDate!);
-    const applicable = selectStockLotDownsideRule(downsideRules, row.lotId, saleAt);
+    const applicable = selectStockLotDownsideRule(memberRules, row.lotId, saleAt);
     if (applicable?.startDate) {
       if (!sale.soldAt || !Number.isFinite(Date.parse(sale.soldAt))) return null;
       const price = countedStockLotPrice(sale.salePrice, applicable), offset = memberOffset(row, saleAt);
       return price === null || offset === null ? null : price - (offset ?? 0);
     }
-    if (sale.countedSalePrice === undefined) return sale.soldAt && selectStockLotDownsideRule(downsideRules, row.lotId, sale.soldAt)
+    if (sale.countedSalePrice === undefined) return sale.soldAt && selectStockLotDownsideRule(memberRules, row.lotId, sale.soldAt)
       ? null : sale.salePrice;
     if (!finite(sale.countedSalePrice)) throw new Error('invalid_downside_sale_evidence');
     const offset = memberOffset(row, sale.soldAt ?? stockLotDownsidePriceAsOf(row.symbol, sale.closeDate!));
@@ -280,9 +297,9 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
     if (offset !== undefined) return sale.countedSalePrice - offset;
     // Reuse the pure member baseline helper: at entry, C(E)-adjusted C(E) is exactly entryCarry.
     const entryValue = row.entryAt ? valueStockLotDownside({ ...row, quantity: 1, rawPrice: row.entryPrice,
-      rules: downsideRules, asOf: row.entryAt }) : null;
+      rules: memberRules, asOf: row.entryAt }) : null;
     const globalEntryValue = row.entryAt ? valueStockLotDownside({ lotId: row.lotId, entryPrice: row.entryPrice,
-      quantity: 1, rawPrice: row.entryPrice, rules: downsideRules, asOf: row.entryAt }) : null;
+      quantity: 1, rawPrice: row.entryPrice, rules: memberRules, asOf: row.entryAt }) : null;
     const entryCarry = entryValue && globalEntryValue ? globalEntryValue.countedMarketPrice! - entryValue.countedMarketPrice! : 0;
     return sale.countedSalePrice - entryCarry;
   };
@@ -319,7 +336,7 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
       const entryCountedOffset = memberOffset(row, priceAt, cryptoPortfolioCutoffAt(date).toISOString());
       if (entryCountedOffset === null) missingMemberBaseline = true;
       const value = valueStockLotDownside({ lotId: row.lotId, quantity: row.quantity, entryPrice: row.entryPrice,
-        rawPrice: quote.price, rules: downsideRules, asOf: priceAt,
+        rawPrice: quote.price, rules: rulesFor(row), asOf: priceAt,
         direction: 'counterparty', entryAt: row.entryAt, entryCountedOffset });
       if (value.countedMarketPrice === null || !finite(value.countedMarketPrice)) {
         if (value.downsideRule?.baselineStatus === 'pending') missingRuleBaseline = true;
@@ -425,7 +442,7 @@ export function buildCryptoPortfolioDailyPayload(input: CryptoCalendarInput): Cr
       const quantity = parsePortfolioInstrument(lot.symbol)!.market === 'CRYPTO' ? Math.round(rawQuantity * 1e8) / 1e8 : rawQuantity;
       if (quantity < -tolerance(p.allocatedQuantity)) throw new Error('oversold_participation');
       const entryAt = p.entryAt ?? stockLotDownsideMemberEntryAt(p.assignedAt!, start);
-      const position = { lotId: lot.id, symbol: lot.symbol, quantity: Math.max(0, quantity), entryPrice: p.entryPrice, asOf, entryAt,
+      const position = { userId, lotId: lot.id, symbol: lot.symbol, quantity: Math.max(0, quantity), entryPrice: p.entryPrice, asOf, entryAt,
         participationId: p.id, assignedAt: p.assignedAt!, startDate: start };
       positions.push(position);
       for (const c of Array.from(closed)) {
@@ -490,8 +507,9 @@ export type CryptoPortfolioRevaluationInput = {
   baseline?: CryptoCalendarInput['baseline']; now?: Date;
 };
 /** Collision-free canonical revision identity, including carry and entry evidence, not just the policy v1 label. */
-export function cryptoPortfolioDownsideFingerprint(categoryId: number, history: Pick<CryptoCalendarHistory, 'downsideRules' | 'downsideMemberEpochs'>): string {
+export function cryptoPortfolioDownsideFingerprint(categoryId: number, history: Pick<CryptoCalendarHistory, 'downsideRules' | 'downsideMemberEpochs' | 'userTagDownsideOverrides'>): string {
   return JSON.stringify({ categoryId,
+    userTagOverrides: stockUserTagOverridesFingerprint(history.userTagDownsideOverrides ?? [], categoryId),
     rules: [...(history.downsideRules ?? [])].filter(r => r.ledgerId === 37 && r.categoryId === categoryId)
       .sort((a, b) => a.lotId - b.lotId || a.version - b.version).map(r => [r.lotId, r.version, r.startDate ?? null,
         r.effectiveAt, r.enabled, r.thresholdPrice, r.downsidePercent, r.baselineRawPrice, r.baselineCountedPrice,
@@ -532,7 +550,11 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
     || i > 0 && p.snapshotDate === originals[i - 1].snapshotDate)) throw new Error('invalid_saved_crypto_payload');
   const rules = (input.history.downsideRules ?? []).filter(r => r.ledgerId === 37 && r.categoryId === input.categoryId);
   const retroDates = rules.map(r => r.startDate).filter((d): d is string => !!d && isStockSessionDate(d));
-  const startDate = retroDates.sort()[0] ?? null;
+  const overrides = input.history.userTagDownsideOverrides ?? [];
+  const exemptUserIds = new Set(overrides.filter(r => r.categoryId === input.categoryId)
+    .map(r => r.targetUserId).filter(id => isUserTagDownsideExempt(overrides, id, input.categoryId)));
+  const retroStartDate = retroDates.sort()[0] ?? null;
+  const startDate = exemptUserIds.size && originals.length ? [originals[0].snapshotDate, retroStartDate].filter((d): d is string => !!d).sort()[0] : retroStartDate;
   const fingerprint = cryptoPortfolioDownsideFingerprint(input.categoryId, input.history);
   const issues: CryptoPortfolioRevaluationIssue[] = [];
   if (!startDate) return { payloads: originals, fingerprint, startDate, issues };
@@ -572,6 +594,7 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
         policyVersion: original.policyVersion, activationDate: original.activationDate, snapshotDate: date },
       now: new Date(original.publishedAt), lots: evidence.lots, sales: evidence.sales, quotes: original.quotes,
       historicalQuotes: rawQuotes, closures: evidence.closures, usdtFx: original.fx.usdt, usdFx: original.fx.usd,
+      userTagDownsideOverrides: overrides,
       downsideRules: resolvedRules, downsideMemberEpochs: input.history.downsideMemberEpochs,
       previous: payloads.at(-1) ?? null,
       baseline: date === original.activationDate ? input.baseline : null,
@@ -581,7 +604,7 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
     const beforePublicationRules = rules.filter(r => !r.startDate && (!r.createdAt || Date.parse(r.createdAt) <= Date.parse(original.publishedAt)));
     const build = (ps: readonly CryptoCalendarParticipation[], os: readonly CryptoCalendarObservation[], verify = false) =>
       buildCryptoPortfolioDailyPayload({ ...common, participations: ps, observations: os,
-        ...(verify ? { downsideRules: beforePublicationRules, previous: null, baseline: null } : {}) });
+        ...(verify ? { downsideRules: beforePublicationRules, userTagDownsideOverrides: [], previous: null, baseline: null } : {}) });
     const cutoff = cryptoPortfolioCutoffAt(date).getTime();
     const dates = cryptoPortfolioStockAnchor(date)!;
     const lotsById = new Map(evidence.lots.map(lot => [lot.id, lot]));
@@ -620,9 +643,9 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       issues.push({ snapshotDate: date, scope, reason, ...(userId === undefined ? {} : { userId }) });
       return pendingCryptoCalendarSnapshot(date, reason);
     };
-    const preserveActivationDelta = (next: MemberCalendarSnapshot, old: MemberCalendarSnapshot) => {
+    const preserveActivationDelta = (next: MemberCalendarSnapshot, old: MemberCalendarSnapshot, memberExempt = false) => {
       if (date !== original.activationDate || input.baseline) return next;
-      if (startDate < original.activationDate) {
+      if (startDate < original.activationDate || memberExempt) {
         issues.push({ snapshotDate: date, scope: 'baseline', reason: 'missing_revalued_stock_activation_baseline' });
         return { ...next, dailyPnl: null, stockDailyPnl: null, fxDailyPnl: null, dailyPnlReady: false,
           dailyPnlReason: next.ready ? 'missing_revalued_stock_activation_baseline' : next.dailyPnlReason };
@@ -636,23 +659,29 @@ function* revalueCryptoPortfolioDailyPayloadSteps(input: CryptoPortfolioRevaluat
       }
       return next;
     };
+    const globalRevaluationApplies = retroStartDate !== null && date >= retroStartDate;
     try {
-      const total = (allDerived ?? build([], [])).total;
-      if (!trustedTotalHistory && !sameEconomics((allVerified ?? build([], [], true)).total, original.total))
-        derived.total = { ...pending('tag-total', 'unverifiable_trade_history'), scope: 'tag-total' };
-      else derived.total = { ...preserveActivationDelta(total, original.total), scope: 'tag-total' };
+      if (!globalRevaluationApplies) derived.total = original.total;
+      else {
+        const total = (allDerived ?? build([], [])).total;
+        if (!trustedTotalHistory && !sameEconomics((allVerified ?? build([], [], true)).total, original.total))
+          derived.total = { ...pending('tag-total', 'unverifiable_trade_history'), scope: 'tag-total' };
+        else derived.total = { ...preserveActivationDelta(total, original.total), scope: 'tag-total' };
+      }
     } catch (e: any) { derived.total = { ...pending('tag-total', e?.message ?? 'unverifiable_trade_history'), scope: 'tag-total' }; }
     for (const user of Object.keys(original.members)) {
+      if (!globalRevaluationApplies && !exemptUserIds.has(Number(user))) { derived.members[user] = original.members[user]; continue; }
       const ps = evidence.participations.filter(p => String(p.userId) === user);
       try {
-        if (!ps.length || badMemberIds.has(Number(user))) throw new Error('unverifiable_allocation_history');
+        if (!ps.length || ps.some(p => !input.history.participations.some(current => current.id === p.id && current.userId === p.userId && current.lotId === p.lotId)) || badMemberIds.has(Number(user))) throw new Error('unverifiable_allocation_history');
         const next = (allDerived ?? build(ps, [])).members[user];
         if (!next || !trustedMemberHistory(Number(user)) && !sameEconomics((allVerified ?? build(ps, [], true)).members[user], original.members[user]))
           throw new Error('unverifiable_allocation_history');
-        derived.members[user] = preserveActivationDelta(next, original.members[user]);
+        derived.members[user] = preserveActivationDelta(next, original.members[user], exemptUserIds.has(Number(user)));
       } catch (e: any) { derived.members[user] = pending('member', e?.message ?? 'unverifiable_allocation_history', Number(user)); }
     }
     for (const user of Object.keys(original.observations)) {
+      if (!globalRevaluationApplies) { derived.observations[user] = original.observations[user]; continue; }
       const os = (evidence.observations ?? []).filter(o => String(o.userId) === user);
       try {
         if (!os.length || badObserverIds.has(Number(user))) throw new Error('unverifiable_observation_history');

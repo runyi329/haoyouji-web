@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ForcedLiquidationSettingDetail } from "@shared/forced-liquidation-display";
+import ForcedLiquidationUserControl from "@/components/ForcedLiquidationUserControl";
 import { parsePortfolioInstrument, portfolioDisplaySymbol } from "@shared/portfolio-instruments";
 import {
   StockTagDownsideRulePanel,
@@ -37,6 +38,7 @@ export type ForcedLiquidationStock = {
   currentDownsideRule: StockLotDownsideRuleView | null;
   ineffectiveFunds?: number | null;
   ineffectiveCurrency?: string;
+  ineffectiveFundsCny?: number | null;
 };
 export type ForcedLiquidationCategory = {
   categoryId: number;
@@ -49,6 +51,7 @@ export type ForcedLiquidationCategory = {
   stocks: ForcedLiquidationStock[];
   ineffectiveFunds?: number | null;
   ineffectiveCurrency?: string;
+  ineffectiveFundsCny?: number | null;
 };
 type ForcedLiquidationList = { ledgerId: number; canEdit: boolean; categories: ForcedLiquidationCategory[] };
 type Selection = { kind: "stock"; category: ForcedLiquidationCategory; stock: ForcedLiquidationStock }
@@ -218,6 +221,8 @@ function ForcedLiquidationSettingsList() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState(false);
   const [expandedCategoryId, setExpandedCategoryId] = useState<number | null>(null);
+  const [view, setView] = useState<"tags" | "users">("tags");
+  const [userFocusCategoryId, setUserFocusCategoryId] = useState<number | null>(null);
   const categories = filterForcedLiquidationCategories(data?.categories ?? [], search, enabledOnly);
   // Keep a mounted in-flight draft stable; list and first-level rows always use current query data.
   const currentSelection = pending ? selection : resolveForcedLiquidationSelection(selection, data?.categories ?? []);
@@ -226,6 +231,7 @@ function ForcedLiquidationSettingsList() {
     setSelection(null);
     setPending(false);
     void utils.ledger.getForcedLiquidationSettings.invalidate({ ledgerId: 37 });
+    void utils.ledger.getForcedLiquidationUserImpact.invalidate({ ledgerId: 37 });
     if (selection) void utils.ledger.getForcedLiquidationSettingDetail.invalidate({ ledgerId: 37, categoryId: selection.category.categoryId, ...(selection.kind === "stock" ? { lotId: selection.stock.lotId } : {}) });
   };
   const selectEditor = (next: Selection) => {
@@ -252,6 +258,12 @@ function ForcedLiquidationSettingsList() {
         {selected.kind === "stock" ? <StockTagDownsideRulePanel key={rowKey} categoryId={selected.category.categoryId} order={forcedLiquidationStockOrder(selected.stock)} canEdit={canEdit} isViewingAs={isViewingAs} hideValuationSummary onPendingChange={setPending} onClose={closeEditor} />
           : <OrdinaryTagDownsideRuleForm key={`${selected.category.categoryId}:${selected.category.ordinaryRule?.version ?? 0}`} category={selected.category} canEdit={canEdit} isViewingAs={isViewingAs} onPendingChange={setPending} onClose={closeEditor} onReload={() => { void query.refetch(); void utils.ledger.getForcedLiquidationSettingDetail.invalidate({ ledgerId: 37, categoryId: selected.category.categoryId }); }} />}
       </div>
+      <Button variant="outline" disabled={pending} className="h-8 w-full text-xs" onClick={() => {
+        if (pending || !canEdit || isForcedLiquidationReadonlyView()) return;
+        setUserFocusCategoryId(selected.category.categoryId);
+        setSelection(null);
+        setView("users");
+      }}>查看 / 管理该标签的用户规则</Button>
     </section>
   </td></tr>;
   if (isViewingAs) return <AccessNotice ledgerId={37} message="代看或只读视角不能进入强平设置。" />;
@@ -262,7 +274,18 @@ function ForcedLiquidationSettingsList() {
       <span className="ml-auto text-xs text-gray-500">37号 · 创建人</span>
     </header>
     <main className="space-y-3 p-3">
-      <p className="text-xs leading-5 text-gray-600">股票标签先展开持仓，再点击持仓查看已保存数据与设置；普通标签点击整行直接设置。规则与原逐股入口同步。已暂停、已结束标签置底，仍可设置；状态不代表强平开关。</p>
+      <div role="tablist" aria-label="强平管理维度" className="grid grid-cols-2 gap-2">
+        {(["tags", "users"] as const).map(mode => <Button key={mode} role="tab" aria-selected={view === mode}
+          variant="outline" disabled={pending} className={view === mode ? "border-red-200 bg-red-50 text-xs text-[#C62828]" : "bg-white text-xs"}
+          onClick={() => { if (!pending) { setSelection(null); setUserFocusCategoryId(null); setView(mode); } }}>
+          {mode === "tags" ? "标签设置" : "用户控制"}
+        </Button>)}
+      </div>
+      {view === "users" && canEdit && <ForcedLiquidationUserControl initialCategoryId={userFocusCategoryId}
+        onPendingChange={setPending} onSaved={() => { void utils.ledger.getForcedLiquidationSettings.invalidate({ ledgerId: 37 }); }} />}
+      {view === "users" && !canEdit && <p role="status" className="text-xs text-gray-500">正在核验创建人权限…</p>}
+      {view === "tags" && <>
+      <p className="text-xs leading-5 text-gray-600">列表金额统一折算为人民币；股票标签合计其下所有已开启持仓的金额。股票先展开持仓，再点击查看原币详情与设置；普通标签点击整行设置。规则与原逐股入口同步，已暂停、已结束标签置底。</p>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1"><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><Input aria-label="搜索标签名、股票名、编号或代码" placeholder="标签 / 股票 / 编号 / 代码" value={search} disabled={pending} onChange={event => { if (!pending) { setSearch(event.target.value); setSelection(null); } }} className="bg-white pl-9" /></div>
         <Button variant="outline" aria-label="只看开启强平" aria-pressed={enabledOnly} disabled={pending} onClick={() => { if (!pending) { setEnabledOnly(value => !value); setSelection(null); } }} className={enabledOnly ? "border-red-200 bg-red-50 px-3 text-xs text-[#C62828]" : "bg-white px-3 text-xs"}>只看开启</Button>
@@ -282,7 +305,7 @@ function ForcedLiquidationSettingsList() {
             const enabledCount = allActiveStocks.filter(stock => stock.currentDownsideRule?.enabled === true).length;
             // Stock summaries share the full-query scope of enabledCount, never the searched/filtered lots.
             const summaryCategory = isStock ? fullCategory : category;
-            const categoryIneffectiveNumber = forcedLiquidationIneffectiveNumber(summaryCategory?.ineffectiveFunds);
+            const categoryIneffectiveNumber = forcedLiquidationIneffectiveNumber(summaryCategory?.ineffectiveFundsCny);
             const editable = !isStock || category.stocks.length > 0;
             const enabled = isStock ? enabledCount > 0 : category.ordinaryRule?.enabled === true;
             const categoryExpanded = isStock ? expandedCategoryId === category.categoryId : currentSelection?.kind === "ordinary" && currentSelection.category.categoryId === category.categoryId;
@@ -297,7 +320,7 @@ function ForcedLiquidationSettingsList() {
                   </button></td>
                   <td className="whitespace-nowrap px-2 py-2 text-[11px]">
                     <span className={enabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{enabled ? "已开启强平" : "未开启强平"}</span>
-                    {enabled && <span data-ineffective-funds={rowKey} title={categoryIneffectiveNumber === "—" ? "无效金额待核验" : `无效金额${summaryCategory?.ineffectiveCurrency ? ` · ${summaryCategory.ineffectiveCurrency}` : ""}`} className="mt-0.5 block tabular-nums text-[#C62828]">{categoryIneffectiveNumber}</span>}
+                    {enabled && <span data-ineffective-funds={rowKey} data-ineffective-currency="CNY" title={categoryIneffectiveNumber === "—" ? "无效金额人民币折算待核验" : "无效金额 · CNY"} className="mt-0.5 block tabular-nums text-[#C62828]">{categoryIneffectiveNumber}</span>}
                     {isStock && <span className="mt-0.5 block text-[10px] text-gray-500">已开启 {enabledCount}/{allActiveStocks.length}</span>}
                   </td>
                   <td title={category.lifecycleDate ? `${lifecycle.label} · ${category.lifecycleDate}` : lifecycle.label} className="px-2 py-2 text-[11px]"><span className="flex items-center justify-between gap-1 whitespace-nowrap">{lifecycle.label}{editable && <ChevronDown aria-hidden="true" className={`h-3 w-3 shrink-0 transition-transform ${categoryExpanded ? "rotate-180" : ""}`} />}</span></td>
@@ -312,7 +335,7 @@ function ForcedLiquidationSettingsList() {
                   const fullName = `${category.categoryName} · ${name} · ${position} · ${quantity}`;
                   const lotExpanded = currentSelection?.kind === "stock" && currentSelection.category.categoryId === category.categoryId && currentSelection.stock.lotId === stock.lotId;
                   const lotEnabled = stock.currentDownsideRule?.enabled === true;
-                  const lotIneffectiveNumber = forcedLiquidationIneffectiveNumber(stock.ineffectiveFunds);
+                  const lotIneffectiveNumber = forcedLiquidationIneffectiveNumber(stock.ineffectiveFundsCny);
                   const toggleLot = () => selectEditor({ kind: "stock", category, stock });
                   return <Fragment key={lotKey}>
                     <tr id={index === 0 ? `forced-liquidation-lots-${category.categoryId}` : undefined} data-category-id={category.categoryId} data-lot-id={stock.lotId} data-lifecycle-status={lifecycle.status} onClick={toggleLot} className={`border-t border-red-100 ${!pending ? "cursor-pointer" : ""} ${lifecycle.rowClassName}`}>
@@ -323,7 +346,7 @@ function ForcedLiquidationSettingsList() {
                       </button></td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-[11px]">
                         <span className={lotEnabled ? "font-medium text-[#C62828]" : "text-gray-500"}>{lotEnabled ? "已开启强平" : "未开启强平"}</span>
-                        {lotEnabled && <span data-ineffective-funds={lotKey} title={lotIneffectiveNumber === "—" ? "无效金额待核验" : `无效金额${stock.ineffectiveCurrency ? ` · ${stock.ineffectiveCurrency}` : ""}`} className="mt-0.5 block tabular-nums text-[#C62828]">{lotIneffectiveNumber}</span>}
+                        {lotEnabled && <span data-ineffective-funds={lotKey} data-ineffective-currency="CNY" title={lotIneffectiveNumber === "—" ? "无效金额人民币折算待核验" : "无效金额 · CNY"} className="mt-0.5 block tabular-nums text-[#C62828]">{lotIneffectiveNumber}</span>}
                       </td>
                       <td className="px-2 py-1.5 text-[11px]"><span className="flex items-center justify-between gap-1 whitespace-nowrap">{lifecycle.label}<ChevronDown aria-hidden="true" className={`h-3 w-3 shrink-0 transition-transform ${lotExpanded ? "rotate-180" : ""}`} /></span></td>
                     </tr>
@@ -336,6 +359,7 @@ function ForcedLiquidationSettingsList() {
         </div>
       }
       {canEdit && !categories.length && <p className="p-4 text-center text-sm text-gray-500">{search || enabledOnly ? "没有匹配的标签或股票" : "暂无可设置标签"}</p>}
+      </>}
     </main>
   </div>;
 }

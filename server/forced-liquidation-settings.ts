@@ -1,12 +1,14 @@
 import { getDbConnection } from './db';
 import { readAllStockLotDownsideRules } from './stock-lot-downside-rules';
 import { readAllOrdinaryTagDownsideRules } from './ordinary-tag-downside-rules';
+import { getLiveStockUsdCnyQuote } from './stock-usd-cny-rate';
 import { isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, portfolioQuantityIsEmpty } from '../shared/portfolio-instruments';
 import type { StockLotDownsideRule } from '../shared/stock-lot-downside';
 import type { OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
 import type { ForcedLiquidationStockQuote } from '../shared/forced-liquidation-display';
 import { buildForcedLiquidationStockDetail, buildForcedLiquidationOrdinaryDetail, decodeForcedLiquidationStockQuotes,
-  forcedLiquidationDetailSummary, aggregateForcedLiquidationStockSummaries, type ForcedLiquidationIneffectiveSummary } from './forced-liquidation-setting-summary';
+  forcedLiquidationDetailSummary, aggregateForcedLiquidationStockSummaries, type ForcedLiquidationIneffectiveSummary,
+  type ForcedLiquidationCnyFx } from './forced-liquidation-setting-summary';
 
 export type ForcedLiquidationSettingsInput = {
   ledgerId: number;
@@ -108,7 +110,8 @@ function isMissingInitialAmount(error: any): boolean {
  * Five SELECTs plus one ordinary-rule batch when manual categories exist, regardless of tag/lot count.
  * Enabled stocks add exactly two scoped quote SELECTs; enabled ordinary tags add one scoped history SELECT.
  * Old schemas may require bounded compatibility SELECTs; disabled targets add no valuation reads.
- * No rule conversion, market requests, member/wallet reads, DDL, cache or mutation.
+ * Ready enabled foreign-currency summaries reuse at most one shared live USD/CNY quote.
+ * No rule conversion, stock/crypto quote fetching, member/wallet reads, DDL or mutation.
  */
 export async function getForcedLiquidationSettings(input: ForcedLiquidationSettingsInput): Promise<ForcedLiquidationSettings> {
   if (input.isViewingAs) throw new Error('代看模式禁止维护强平设置');
@@ -281,14 +284,23 @@ export async function getForcedLiquidationSettings(input: ForcedLiquidationSetti
       const key = scopeKey(sourceNumber(row.category_id), sourceNumber(row.lot_id)), previous = rawLatest.get(key);
       if (!previous || sourceNumber(row.version) > sourceNumber(previous.version)) rawLatest.set(key, row);
     }
-    for (const { category, stock } of enabledStocks) {
+    const details = enabledStocks.map(({ category, stock }) => {
       const raw = rawByStock.get(stock);
       const saved = rawLatest.get(scopeKey(category.categoryId, stock.lotId));
       const dto = buildForcedLiquidationStockDetail({ ...input, categoryId: category.categoryId, lotId: stock.lotId },
         [{ ...raw, allocated_quantity: raw.current_allocated_quantity }],
         quotes.get(JSON.stringify([category.categoryId, stock.symbol])) ?? [], saved ? [saved] : [], now);
-      Object.assign(stock, forcedLiquidationDetailSummary(dto));
+      return { stock, dto };
+    });
+    // One actual USD/CNY observation for the whole list. USDT uses the existing
+    // authorized USD parity policy; neither a fixed guessed rate nor per-lot FX reads.
+    let cnyFx: ForcedLiquidationCnyFx | null = null;
+    if (details.some(({ dto }) => dto.status === 'ready' && (dto.currency === 'USD' || dto.currency === 'USDT'))) {
+      try { cnyFx = await getLiveStockUsdCnyQuote(); }
+      catch { /* Foreign summaries remain pending; native details and CNY rows stay available. */ }
     }
+    const cnyDisplayNow = Date.now();
+    for (const { stock, dto } of details) Object.assign(stock, forcedLiquidationDetailSummary(dto, cnyFx, cnyDisplayNow));
     for (const category of categories) {
       if (category.accountingMode === 'stock_portfolio') Object.assign(category,
         aggregateForcedLiquidationStockSummaries(category.stocks.filter(stock => stock.currentDownsideRule?.enabled === true)));

@@ -16,6 +16,11 @@ function db(options: { missingRules?: boolean; late?: boolean; missingEpoch?: bo
   const conn: any = { beginTransaction: vi.fn(), commit: vi.fn(), rollback: vi.fn(), release: vi.fn(),
     execute: vi.fn(async (sql: string, params: any[] = []) => {
       calls.push({ sql, params });
+      if (sql.includes('FROM ledger_user_tag_downside_overrides')) {
+        expect(sql.replace(/\s+/g, ' ').trim()).toBe("SELECT ledger_id,category_id,target_user_id,actor_user_id,version,mode, DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ') AS created_at FROM ledger_user_tag_downside_overrides WHERE ledger_id=? ORDER BY target_user_id,category_id,version");
+        expect(params).toEqual([37]);
+        return [[]];
+      }
       if (sql.startsWith('CREATE TABLE')) {
         if (!sql.includes('ledger_crypto_portfolio_daily_snapshots')) throw new Error('禁止自动安装规则表');
         return [{ affectedRows: 0 }];

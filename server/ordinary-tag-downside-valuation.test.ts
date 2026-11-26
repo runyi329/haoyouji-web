@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrdinaryTagDownsideRule } from '../shared/ordinary-tag-downside';
-const mocks = vi.hoisted(() => ({ execute: vi.fn(), getDbConnection: vi.fn(), decryptValue: vi.fn(),
+import type { UserTagDownsideOverride } from '../shared/user-tag-downside-override';
+const mocks = vi.hoisted(() => ({ execute: vi.fn(), getDbConnection: vi.fn(), decryptValue: vi.fn(), readOverrides: vi.fn(),
   getDbTransactionConnection: vi.fn(() => { throw new Error('transaction forbidden'); }),
   getLedgerDb: vi.fn(() => { throw new Error('legacy DB forbidden'); }) }));
 vi.mock('./db', () => ({ getDbConnection: mocks.getDbConnection,
   getDbTransactionConnection: mocks.getDbTransactionConnection, getLedgerDb: mocks.getLedgerDb }));
 vi.mock('./encryption', () => ({ decryptValue: mocks.decryptValue, isEncrypted: (value: string) => value.startsWith('enc:v1:') }));
+vi.mock('./user-tag-downside-overrides', () => ({ readUserTagDownsideOverrides: mocks.readOverrides }));
 import { buildOrdinaryTagDownsideValuation, getMyOrdinaryTagDownsideValuations, ordinaryTagDownsideBusinessDate,
   type OrdinaryTagDownsideValuationRecord } from './ordinary-tag-downside-valuation';
 
@@ -46,6 +48,7 @@ beforeEach(() => {
   records = [record('2026-11-02', 1000), record(TODAY, 900)];
   rules = [RULE]; ruleError = null;
   mocks.getDbConnection.mockResolvedValue({ execute: mocks.execute });
+  mocks.readOverrides.mockResolvedValue([]);
   mocks.decryptValue.mockImplementation((value: string) => value === 'enc:v1:valid' ? 'capital_add:private' : value);
   mocks.execute.mockImplementation(async (sql: string, values: Array<number | string>) => {
     if (sql.includes('FROM ledger_members m')) return [members.filter(m => m.ledgerId === values[0] && m.userId === values[1]), []];
@@ -147,7 +150,7 @@ describe('getMyOrdinaryTagDownsideValuations member scope and batch SELECT only'
     await expect(getMyOrdinaryTagDownsideValuations({ ledgerId: 37, userId: 201 })).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     expect(queries('FROM ledger_records')).toHaveLength(0);
   });
-  it('4 queries for many eligible roots, one rules batch and one full history batch, no N+1', async () => {
+  it('4 valuation queries plus one mocked override batch for many eligible roots, no N+1', async () => {
     const root = categories[0];
     categories.push({ ...root, id: 20, name: '第二' }, { ...root, id: 30, name: '第三' },
       { ...root, id: 40, name: '未配置' }, { ...root, id: 50, name: '隐藏' },
@@ -159,6 +162,8 @@ describe('getMyOrdinaryTagDownsideValuations member scope and batch SELECT only'
     const result = await getMyOrdinaryTagDownsideValuations({ ledgerId: 37, userId: 201 });
     expect(result.categories.map(c => c.categoryId)).toEqual([10, 20, 30]);
     expect(result.categories[0].points.at(-1)?.balance).toBe(42); expect(mocks.execute).toHaveBeenCalledTimes(4);
+    expect(mocks.readOverrides).toHaveBeenCalledTimes(1);
+    expect(mocks.readOverrides).toHaveBeenCalledWith(expect.objectContaining({ execute: mocks.execute }), 37, 201);
     expect(queries('FROM ledger_ordinary_tag_downside_rules')).toHaveLength(1); expect(queries('FROM ledger_records')).toHaveLength(1);
     const [sql, values] = queries('FROM ledger_records')[0];
     expect(values.slice(0, 8)).toEqual([37, 10, 20, 30, 10, 20, 30, TODAY]);
@@ -210,6 +215,48 @@ describe('getMyOrdinaryTagDownsideValuations member scope and batch SELECT only'
 });
 
 describe('pure category DTO normalization and real cashflow-neutral series', () => {
+  const exemption: UserTagDownsideOverride = { ledgerId: 37, categoryId: 10, targetUserId: 201,
+    actorUserId: 100, version: 1, mode: 'exempt', createdAt: '2026-11-26T00:00:00.000Z' };
+  const withOverrides = (rows: OrdinaryTagDownsideValuationRecord[], overrides = [exemption], balances: Record<string, unknown> = BALANCES) =>
+    buildOrdinaryTagDownsideValuation({ ledgerId: 37, userId: 201, categoryId: 10, categoryName: '普通',
+      balances, records: rows, rules: [RULE], userTagDownsideOverrides: overrides, today: TODAY });
+  it('用户标签豁免恢复所有历史和累计raw；pure不改规则/记录且不能放宽他人或相邻tag', () => {
+    const rows = [record('2026-11-02', 900), record(TODAY, 800)];
+    const snapshot = JSON.stringify({ rows, rule: RULE, exemption });
+    const exempt = withOverrides(rows);
+    expect(exempt.points.map(p => [p.rawPnl, p.pnl, p.dailyPnl, p.countedBalance])).toEqual([[100, 100, 100, 900], [200, 200, 100, 800]]);
+    expect(exempt.totalPnl).toBe(200);
+    for (const override of [{ ...exemption, targetUserId: 202 }, { ...exemption, categoryId: 20 }]) {
+      expect(withOverrides(rows, [override as UserTagDownsideOverride]).totalPnl).toBe(60);
+    }
+    expect(() => withOverrides(rows, [{ ...exemption, ledgerId: 52 } as unknown as UserTagDownsideOverride])).toThrow();
+    expect(JSON.stringify({ rows, rule: RULE, exemption })).toBe(snapshot);
+  });
+  it('latest follow恢复规则，豁免前后不把纯加减本金或提现变为收益', () => {
+    const rows = [record('2026-11-02', 900), transfer('2026-11-03', 200, 'capital_add'),
+      transfer('2026-11-04', 100, 'capital_reduce'), transfer('2026-11-05', 50, 'withdraw'), record(TODAY, 950)];
+    const exempt = withOverrides(rows);
+    expect(exempt.points.at(-1)).toMatchObject({ rawPnl: 100, pnl: 100, dailyPnl: 0, capitalChange: 100, withdrawToDate: 50 });
+    expect(withOverrides(rows, [exemption, { ...exemption, version: 2, mode: 'follow_tag' }]).totalPnl).toBe(30);
+  });
+  it('豁免不能假造entry/本金/最新余额或无数据；个人暂停仍截断历史', () => {
+    const rows = [record('2026-11-02', 900), record(TODAY, 500)];
+    for (const balances of [{ ...BALANCES, 普通: null }, { ...BALANCES, 普通__startDate: '' }]) {
+      expect(withOverrides(rows, [exemption], balances)).toMatchObject({ status: 'pending', totalPnl: null });
+    }
+    expect(withOverrides([record(TODAY, null)])).toMatchObject({ status: 'pending', totalPnl: null });
+    expect(withOverrides([])).toMatchObject({ status: 'no_data', totalPnl: null });
+    expect(withOverrides(rows, [exemption], { ...BALANCES, 普通__pauseDate: '2026-11-02' })).toMatchObject({ latestDate: '2026-11-02', totalPnl: 100 });
+  });
+  it('完整用户入口一次target批量读取override并传pure；store故障不回退raw或0', async () => {
+    mocks.readOverrides.mockResolvedValue([exemption]);
+    expect((await getMyOrdinaryTagDownsideValuations({ ledgerId: 37, userId: 201 })).categories[0].totalPnl).toBe(100);
+    expect(mocks.readOverrides).toHaveBeenCalledTimes(1);
+    expect(mocks.readOverrides).toHaveBeenCalledWith(expect.objectContaining({ execute: mocks.execute }), 37, 201);
+    mocks.execute.mockClear(); mocks.readOverrides.mockRejectedValue(new Error('override corrupt'));
+    await expect(getMyOrdinaryTagDownsideValuations({ ledgerId: 37, userId: 201 })).rejects.toThrow('override corrupt');
+    expect(queries('FROM ledger_records')).toHaveLength(0);
+  });
   it('canonical last daily non-transfer by createdAt then highest id, zero is valid; not income/expense sums', () => {
     const rows = [record(TODAY, 400, { recordId: 2 }), record(TODAY, 0, { recordId: 9, type: 'expense' }),
       record(TODAY, 300, { recordId: 3 }), record(TODAY, 500, { recordId: 1, createdAt: '2026-11-26 00:00:00.000000' })];

@@ -218,31 +218,32 @@ describe("37号集中强平设置：离线前端契约", () => {
   });
   it("开启category/lot金额在开启文字下方，仅数字无标题无单位，开启计数在金额后；真实zero正常", () => {
     const list = [
-      { ...categories[0], ineffectiveFunds: 9876.54, ineffectiveCurrency: "HKD", stocks: [
-        { ...stock, ineffectiveFunds: 999, ineffectiveCurrency: "USD" },
-        { ...categories[0].stocks[1], ineffectiveFunds: 42.5, ineffectiveCurrency: "HKD" },
+      { ...categories[0], ineffectiveFundsCny: 42.5, ineffectiveCurrency: "HKD", stocks: [
+        { ...stock, ineffectiveFundsCny: 999, ineffectiveCurrency: "USD" },
+        { ...categories[0].stocks[1], ineffectiveFundsCny: 42.5, ineffectiveCurrency: "HKD" },
       ] },
-      { ...categories[1], ineffectiveFunds: 0, ineffectiveCurrency: "CNY" },
-      { ...categories[2], ineffectiveFunds: 1234, ineffectiveCurrency: "CNY" },
+      { ...categories[1], ineffectiveFundsCny: 0, ineffectiveCurrency: "CNY" },
+      { ...categories[2], ineffectiveFundsCny: 1234, ineffectiveCurrency: "CNY" },
     ];
     const h = listHarness({ list }); let tree = h.render();
     expect(ineffectiveSpans(tree).map(node => [node.props["data-ineffective-funds"], text(node)])).toEqual([
-      ["90250:tag", "9,876.54"], ["90251:tag", "0.00"],
+      ["90250:tag", "42.50"], ["90251:tag", "0.00"],
     ]);
-    expect(nodes(tableRows(tree)[0]).filter(node => node.type === "td")[1].props.children.filter(Boolean).map(text)).toEqual(["已开启强平", "9,876.54", "已开启 1/2"]);
+    expect(nodes(tableRows(tree)[0]).filter(node => node.type === "td")[1].props.children.filter(Boolean).map(text)).toEqual(["已开启强平", "42.50", "已开启 1/2"]);
     tree = openStockCategory(h);
     expect(ineffectiveSpans(tree).map(node => [node.props["data-ineffective-funds"], text(node)])).toEqual([
-      ["90250:tag", "9,876.54"], ["90250:78", "42.50"], ["90251:tag", "0.00"],
+      ["90250:tag", "42.50"], ["90250:78", "42.50"], ["90251:tag", "0.00"],
     ]);
     const lotCell = nodes(tableRows(tree).find(row => row.props["data-lot-id"] === 78)).filter(node => node.type === "td")[1];
     expect(lotCell.props.children.filter(Boolean).map(text)).toEqual(["已开启强平", "42.50"]);
     for (const span of ineffectiveSpans(tree)) {
+      expect(span.props["data-ineffective-currency"]).toBe("CNY");
       expect(span.props.className).toContain("block"); expect(span.props.className).toContain("tabular-nums");
       expect(text(span)).toMatch(/^-?[\d,]+\.\d{2}$/); expect(text(span)).not.toMatch(/无效|金额|CNY|HKD|USD|元|¥/);
       expect(span.props).not.toHaveProperty("onClick"); expect(span.props).not.toHaveProperty("onKeyDown");
       expect(renderToStaticMarkup(span)).toContain(`>${text(span)}</span>`);
     }
-    expect(ineffectiveSpan(tree, "90250:tag").props.title).toBe("无效金额 · HKD");
+    expect(ineffectiveSpan(tree, "90250:tag").props.title).toBe("无效金额 · CNY");
     expect(ineffectiveSpan(tree, "90251:tag").props.title).toBe("无效金额 · CNY");
     expect(ineffectiveSpan(tree, "90250:77")).toBeUndefined(); expect(ineffectiveSpan(tree, "90252:tag")).toBeUndefined();
     expect(nodes(tree).filter(node => ["InlineDetail", "StockTagDownsideRulePanel"].includes(node.type))).toHaveLength(0);
@@ -254,8 +255,8 @@ describe("37号集中强平设置：离线前端契约", () => {
   });
   it("开启stock category、真实lot和ordinary金额zero都显示0.00而不是—", () => {
     const list = [
-      { ...categories[0], ineffectiveFunds: 0, stocks: [{ ...categories[0].stocks[1], ineffectiveFunds: 0 }] },
-      { ...categories[1], ineffectiveFunds: 0 },
+      { ...categories[0], ineffectiveFundsCny: 0, stocks: [{ ...categories[0].stocks[1], ineffectiveFundsCny: 0 }] },
+      { ...categories[1], ineffectiveFundsCny: 0 },
     ];
     const tree = openStockCategory(listHarness({ list }));
     expect(ineffectiveSpans(tree).map(node => [node.props["data-ineffective-funds"], text(node)])).toEqual([
@@ -264,26 +265,26 @@ describe("37号集中强平设置：离线前端契约", () => {
   });
   it.each([undefined, null, NaN, Infinity, -Infinity])("开启category/lot缺失或异常DTO %s显示—，不套门槛/数量/价格造数字", value => {
     const list = [
-      { ...categories[0], ineffectiveFunds: value, stocks: [{ ...categories[0].stocks[1], ineffectiveFunds: value }] },
-      { ...categories[1], ineffectiveFunds: value },
+      { ...categories[0], ineffectiveFundsCny: value, stocks: [{ ...categories[0].stocks[1], ineffectiveFundsCny: value }] },
+      { ...categories[1], ineffectiveFundsCny: value },
     ];
     const h = listHarness({ list }), tree = openStockCategory(h);
     expect(ineffectiveSpans(tree).map(node => [node.props["data-ineffective-funds"], text(node)])).toEqual([
       ["90250:tag", "—"], ["90250:78", "—"], ["90251:tag", "—"],
     ]);
     for (const span of ineffectiveSpans(tree)) {
-      expect(span.props.title).toBe("无效金额待核验"); expect(renderToStaticMarkup(span)).toContain(">—</span>");
+      expect(span.props.title).toBe("无效金额人民币折算待核验"); expect(renderToStaticMarkup(span)).toContain(">—</span>");
       expect(text(span)).not.toMatch(/0|NaN|Infinity/);
     }
     expect(nodes(tree).filter(node => node.type === "InlineDetail")).toHaveLength(0);
   });
-  it.each([0, 1234.5, undefined, null, NaN, Infinity])("未开启category/lot即使DTO有金额%s也无numericspan或—", ineffectiveFunds => {
+  it.each([0, 1234.5, undefined, null, NaN, Infinity])("未开启category/lot即使DTO有金额%s也无numericspan或—", ineffectiveFundsCny => {
     const list = [
-      { ...categories[0], ineffectiveFunds, stocks: [
-        { ...stock, ineffectiveFunds },
-        { ...stock, lotId: 78, ineffectiveFunds, currentDownsideRule: { ...categories[0].stocks[1].currentDownsideRule, enabled: false } },
+      { ...categories[0], ineffectiveFundsCny, stocks: [
+        { ...stock, ineffectiveFundsCny },
+        { ...stock, lotId: 78, ineffectiveFundsCny, currentDownsideRule: { ...categories[0].stocks[1].currentDownsideRule, enabled: false } },
       ] },
-      { ...categories[1], ineffectiveFunds, ordinaryRule: { ...categories[1].ordinaryRule, enabled: false } },
+      { ...categories[1], ineffectiveFundsCny, ordinaryRule: { ...categories[1].ordinaryRule, enabled: false } },
     ];
     const tree = openStockCategory(listHarness({ list }));
     expect(ineffectiveSpans(tree)).toHaveLength(0);
@@ -292,36 +293,36 @@ describe("37号集中强平设置：离线前端契约", () => {
     expect(cells.map(text).join("")).not.toContain("—");
   });
   it("父行summary读取完整query category DTO，search/only-enabled只改变可见lot，不以subset累加", () => {
-    const list = [{ ...categories[0], ineffectiveFunds: 4567.89, ineffectiveCurrency: "CNY", stocks: [
-      { ...categories[0].stocks[1], lotId: 78, stockName: "第一笔", symbol: "600519.SH", ineffectiveFunds: 100, ineffectiveCurrency: "CNY" },
-      { ...categories[0].stocks[1], lotId: 79, stockName: "第二笔", symbol: "600519.SH", ineffectiveFunds: 200, ineffectiveCurrency: "CNY" },
-      { ...stock, lotId: 80, stockName: "第三笔", ineffectiveFunds: 999, ineffectiveCurrency: "CNY" },
+    const list = [{ ...categories[0], ineffectiveFundsCny: 300, ineffectiveCurrency: "CNY", stocks: [
+      { ...categories[0].stocks[1], lotId: 78, stockName: "第一笔", symbol: "600519.SH", ineffectiveFundsCny: 100, ineffectiveCurrency: "CNY" },
+      { ...categories[0].stocks[1], lotId: 79, stockName: "第二笔", symbol: "600519.SH", ineffectiveFundsCny: 200, ineffectiveCurrency: "CNY" },
+      { ...stock, lotId: 80, stockName: "第三笔", ineffectiveFundsCny: 999, ineffectiveCurrency: "CNY" },
     ] }];
     const h = listHarness({ list }); let tree = openStockCategory(h);
     nodes(tree).find(node => node.type === "Input").props.onChange({ target: { value: "第一笔" } }); tree = h.render();
     expect(tableRows(tree).map(row => row.props["data-lot-id"])).toEqual([undefined, 78]);
-    expect(text(ineffectiveSpan(tree, "90250:tag"))).toBe("4,567.89"); expect(text(ineffectiveSpan(tree, "90250:78"))).toBe("100.00");
-    expect(text(tableRows(tree)[0])).toContain("已开启强平4,567.89已开启 2/3");
+    expect(text(ineffectiveSpan(tree, "90250:tag"))).toBe("300.00"); expect(text(ineffectiveSpan(tree, "90250:78"))).toBe("100.00");
+    expect(text(tableRows(tree)[0])).toContain("已开启强平300.00已开启 2/3");
     click(nodes(tree).find(node => node.props["aria-label"] === "只看开启强平")); tree = h.render();
-    expect(text(ineffectiveSpan(tree, "90250:tag"))).toBe("4,567.89");
+    expect(text(ineffectiveSpan(tree, "90250:tag"))).toBe("300.00");
     nodes(tree).find(node => node.type === "Input").props.onChange({ target: { value: "" } }); tree = h.render();
     expect(tableRows(tree).map(row => row.props["data-lot-id"])).toEqual([undefined, 78, 79]);
-    expect(ineffectiveSpans(tree).map(text)).toEqual(["4,567.89", "100.00", "200.00"]);
+    expect(ineffectiveSpans(tree).map(text)).toEqual(["300.00", "100.00", "200.00"]);
     expect(nodes(tree).filter(node => node.type === "InlineDetail")).toHaveLength(0); expect(h.query.refetch).not.toHaveBeenCalled();
     // Explicit AST contract prevents a later filtered-category or client-side sum replacement.
-    const fullCategory = { ineffectiveFunds: 4567.89 }, category = { ineffectiveFunds: 100 };
+    const fullCategory = { ineffectiveFundsCny: 300 }, category = { ineffectiveFundsCny: 100 };
     expect(expression("summaryCategory", { isStock: true, fullCategory, category })).toBe(fullCategory);
     expect(expression("summaryCategory", { isStock: false, fullCategory, category })).toBe(category);
-    expect(expression("categoryIneffectiveNumber", { summaryCategory: fullCategory, forcedLiquidationIneffectiveNumber: ineffectiveNumber })).toBe("4,567.89");
-    expect(expression("lotIneffectiveNumber", { stock: { ineffectiveFunds: 200 }, forcedLiquidationIneffectiveNumber: ineffectiveNumber })).toBe("200.00");
+    expect(expression("categoryIneffectiveNumber", { summaryCategory: fullCategory, forcedLiquidationIneffectiveNumber: ineffectiveNumber })).toBe("300.00");
+    expect(expression("lotIneffectiveNumber", { stock: { ineffectiveFundsCny: 200 }, forcedLiquidationIneffectiveNumber: ineffectiveNumber })).toBe("200.00");
   });
-  it("同币/跨币证据就绪仅由后端summary决定；缺summary不从有效lot补sum或FX估算，币种只在tooltip", () => {
+  it("人民币汇总证据就绪仅由后端summary决定；缺summary不从有效lot补sum或FX估算，币种只在tooltip", () => {
     const lots = [
-      { ...categories[0].stocks[1], lotId: 78, ineffectiveFunds: 100, ineffectiveCurrency: "USD" },
-      { ...categories[0].stocks[1], lotId: 79, ineffectiveFunds: 200, ineffectiveCurrency: "HKD" },
+      { ...categories[0].stocks[1], lotId: 78, ineffectiveFundsCny: 100, ineffectiveCurrency: "USD" },
+      { ...categories[0].stocks[1], lotId: 79, ineffectiveFundsCny: 200, ineffectiveCurrency: "HKD" },
     ];
     for (const list of [
-      [{ ...categories[0], ineffectiveFunds: null, stocks: lots }],
+      [{ ...categories[0], ineffectiveFundsCny: null, stocks: lots }],
       [{ ...categories[0], stocks: lots.map(lot => ({ ...lot, ineffectiveCurrency: "CNY" })) }],
     ]) {
       const tree = openStockCategory(listHarness({ list }));
@@ -329,10 +330,26 @@ describe("37号集中强平设置：离线前端契约", () => {
       expect(text(ineffectiveSpan(tree, "90250:tag"))).not.toBe("300.00");
       expect(nodes(tree).filter(node => node.type === "InlineDetail")).toHaveLength(0);
     }
-    const fields = find(file, node => ts.isPropertySignature(node) && ["ineffectiveFunds", "ineffectiveCurrency"].includes(node.name.getText(file))) as ts.PropertySignature[];
-    expect(fields.map(node => node.getText(file))).toEqual(["ineffectiveFunds?: number | null;", "ineffectiveCurrency?: string;", "ineffectiveFunds?: number | null;", "ineffectiveCurrency?: string;"]);
+    const fields = find(file, node => ts.isPropertySignature(node) && ["ineffectiveFunds", "ineffectiveCurrency", "ineffectiveFundsCny"].includes(node.name.getText(file))) as ts.PropertySignature[];
+    expect(fields.map(node => node.getText(file))).toEqual(["ineffectiveFunds?: number | null;", "ineffectiveCurrency?: string;", "ineffectiveFundsCny?: number | null;", "ineffectiveFunds?: number | null;", "ineffectiveCurrency?: string;", "ineffectiveFundsCny?: number | null;"]);
     const numberFn = find(file, node => ts.isFunctionDeclaration(node) && node.name?.text === "forcedLiquidationIneffectiveNumber")[0];
     expect(find(parse(numberFn.getText(file)), node => ts.isCallExpression(node) && node.expression.getText().endsWith(".useQuery"))).toHaveLength(0);
+  });
+  it("只读人民币字段：混合A股/美股/数字币父金额等于所有已开启人民币子金额，原币不误当人民币", () => {
+    const base = categories[0].stocks[1];
+    const list = [{ ...categories[0], ineffectiveFunds: null, ineffectiveFundsCny: 2400, stocks: [
+      { ...base, lotId: 78, symbol: "600519.SH", stockName: "贵州茅台", ineffectiveFunds: 300, ineffectiveCurrency: "CNY", ineffectiveFundsCny: 300 },
+      { ...base, lotId: 79, symbol: "HOOD", ineffectiveFunds: 100, ineffectiveCurrency: "USD", ineffectiveFundsCny: 700 },
+      { ...base, lotId: 80, symbol: "CRYPTO:UNI-USDT", ineffectiveFunds: 200, ineffectiveCurrency: "USDT", ineffectiveFundsCny: 1400 },
+      { ...stock, lotId: 81, ineffectiveFunds: 999999, ineffectiveFundsCny: 6999993 },
+    ] }];
+    const h = listHarness({ list }), tree = openStockCategory(h);
+    expect(ineffectiveSpans(tree).map(text)).toEqual(["2,400.00", "300.00", "700.00", "1,400.00"]);
+    expect(ineffectiveSpans(tree).every(node => node.props["data-ineffective-currency"] === "CNY")).toBe(true);
+    const missing = list.map(c => ({ ...c, ineffectiveFundsCny: undefined, stocks: c.stocks.map(l => ({ ...l, ineffectiveFundsCny: undefined })) }));
+    expect(ineffectiveSpans(openStockCategory(listHarness({ list: missing }))).map(text)).toEqual(["—", "—", "—", "—"]);
+    expect(source).toContain("列表金额统一折算为人民币");
+    expect(source).toContain("股票标签合计其下所有已开启持仓的金额");
   });
   it("全局生命周期active在前，paused/ended共同稳定沉底异色，不从关闭规则、成员暂停或空仓推断", () => {
     const list = [
@@ -609,30 +626,30 @@ describe("37号集中强平设置：离线前端契约", () => {
     expect(resolveSelection({ kind: "stock", category: categories[0], stock }, [{ ...freshCategory, stocks: [{ ...freshStock, remainingQuantity: 0 }] }])).toBe(null);
   });
   it("金额随真实query刷新：category summary与同symbol逐lot准确，pending不拿selection旧DTO而草稿仍稳定", () => {
-    const firstLot = { ...categories[0].stocks[1], lotId: 77, ineffectiveFunds: 10 };
-    const secondLot = { ...firstLot, lotId: 78, ineffectiveFunds: 20 };
-    const initialCategory = { ...categories[0], ineffectiveFunds: 30, stocks: [firstLot, secondLot] };
+    const firstLot = { ...categories[0].stocks[1], lotId: 77, ineffectiveFundsCny: 10 };
+    const secondLot = { ...firstLot, lotId: 78, ineffectiveFundsCny: 20 };
+    const initialCategory = { ...categories[0], ineffectiveFundsCny: 30, stocks: [firstLot, secondLot] };
     const h = listHarness({ list: [initialCategory] }); let tree = openStockLot(h);
     const originalPanel = nodes(tree).find(node => node.type === "StockTagDownsideRulePanel");
     originalPanel.props.onPendingChange(true);
-    const freshLot = { ...firstLot, ineffectiveFunds: 1234.56, currentDownsideRule: { ...firstLot.currentDownsideRule, version: 10 } };
-    h.query.data.categories = [{ ...initialCategory, ineffectiveFunds: 7890.12, stocks: [freshLot, { ...secondLot, ineffectiveFunds: 0 }] }]; tree = h.render();
+    const freshLot = { ...firstLot, ineffectiveFundsCny: 1234.56, currentDownsideRule: { ...firstLot.currentDownsideRule, version: 10 } };
+    h.query.data.categories = [{ ...initialCategory, ineffectiveFundsCny: 1234.56, stocks: [freshLot, { ...secondLot, ineffectiveFundsCny: 0 }] }]; tree = h.render();
     expect(ineffectiveSpans(tree).map(node => [node.props["data-ineffective-funds"], text(node)])).toEqual([
-      ["90250:tag", "7,890.12"], ["90250:77", "1,234.56"], ["90250:78", "0.00"],
+      ["90250:tag", "1,234.56"], ["90250:77", "1,234.56"], ["90250:78", "0.00"],
     ]);
     const pendingPanel = nodes(tree).find(node => node.type === "StockTagDownsideRulePanel");
     expect(pendingPanel.key).toBe(originalPanel.key); expect(pendingPanel.props.order.currentDownsideRule.version).toBe(firstLot.currentDownsideRule!.version);
     pendingPanel.props.onClose(); tree = h.render();
-    expect(ineffectiveSpans(tree).map(text)).toEqual(["7,890.12", "1,234.56", "0.00"]);
+    expect(ineffectiveSpans(tree).map(text)).toEqual(["1,234.56", "1,234.56", "0.00"]);
     click(rowButton(tree, 90250, 77)); tree = h.render();
     expect(nodes(tree).find(node => node.type === "InlineDetail").props.selection.stock).toBe(freshLot);
     expect(nodes(tree).find(node => node.type === "StockTagDownsideRulePanel").props.order.currentDownsideRule.version).toBe(10);
-    const ordinary = listHarness({ list: [{ ...categories[1], ineffectiveFunds: 100 }] });
+    const ordinary = listHarness({ list: [{ ...categories[1], ineffectiveFundsCny: 100 }] });
     click(rowButton(ordinary.render(), 90251)); tree = ordinary.render();
     const form = nodes(tree).find(node => node.type === "OrdinaryTagDownsideRuleForm"); form.props.onPendingChange(true);
-    ordinary.query.data.categories = [{ ...categories[1], ineffectiveFunds: 4321.09 }]; tree = ordinary.render();
+    ordinary.query.data.categories = [{ ...categories[1], ineffectiveFundsCny: 4321.09 }]; tree = ordinary.render();
     expect(text(ineffectiveSpan(tree, "90251:tag"))).toBe("4,321.09");
-    expect(nodes(tree).find(node => node.type === "OrdinaryTagDownsideRuleForm").props.category.ineffectiveFunds).toBe(100);
+    expect(nodes(tree).find(node => node.type === "OrdinaryTagDownsideRuleForm").props.category.ineffectiveFundsCny).toBe(100);
     expect(nodes(tree).find(node => node.type === "OrdinaryTagDownsideRuleForm").key).toBe(form.key);
   });
   it("未展开不挂详情；InlineDetail的lazy hook只请求ledger/category/stock lot，不传userId且强制新鲜核验", () => {
