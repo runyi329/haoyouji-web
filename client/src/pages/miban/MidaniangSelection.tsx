@@ -89,6 +89,10 @@ export default function MidaniangSelection() {
       </section>
 
       <section aria-label="米大娘精选资料列表" className="px-4">
+        <div className="mb-4 rounded-xl border border-[#e5e0d5] bg-white px-4 py-3 text-[12px] leading-6" data-testid="midaniang-plan-introduction">
+          <p className="font-medium text-[#8d292c]">单月购买 · 全年计划</p>
+          <p className="text-[#676b60]">全年计划连续12个月按月发货，每月1份、2份、3份等可选，不一次发完。</p>
+        </div>
         <div className="space-y-3" data-testid="midaniang-product-list">
           {midaniangSelectionCatalog.map((item, index) => {
             const priceU = cnyToU(item.priceCny, usdtCnyRate);

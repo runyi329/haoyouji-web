@@ -1,5 +1,5 @@
 import { MibanImage } from "./MibanImage";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -266,7 +266,7 @@ function UserMenu({ user, isAuthenticated, onLogout, supplierAdmin, hasSupplierA
   const rankName = RANK_NAMES[mibanRankIndex] ?? "米农";
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen(v => !v)}
         type="button"
@@ -363,18 +363,51 @@ function PersonalWalletEntry() {
   const { value, isLoading, error, isAuthenticated } = useMibanWalletValue();
   const walletPath = "/p/proj_hzxm2t/wallet";
   const amount = !isAuthenticated ? "登录查看" : error ? "暂不可用" : isLoading || !value ? "加载中…" : value.availableCny == null ? "估值待更新" : `¥${value.availableCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const amountRef = useRef<HTMLSpanElement>(null);
+
+  // 先使用完整金额的自然宽度；仅在顶栏剩余空间不足时缩小字号，不换行或省略。
+  useLayoutEffect(() => {
+    const element = amountRef.current;
+    if (!element) return;
+    let active = true;
+    const fitAmount = () => {
+      if (!active) return;
+      element.style.fontSize = "12px";
+      const availableWidth = element.getBoundingClientRect().width;
+      if (availableWidth <= 0) return;
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const naturalWidth = range.getBoundingClientRect().width;
+      if (naturalWidth > availableWidth) {
+        element.style.fontSize = `${12 * Math.max(0, availableWidth - 0.5) / naturalWidth}px`;
+      }
+    };
+    fitAmount();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fitAmount);
+    observer?.observe(element);
+    window.addEventListener("resize", fitAmount);
+    document.fonts?.ready.then(fitAmount);
+    document.fonts?.addEventListener("loadingdone", fitAmount);
+    return () => {
+      active = false;
+      observer?.disconnect();
+      window.removeEventListener("resize", fitAmount);
+      document.fonts?.removeEventListener("loadingdone", fitAmount);
+    };
+  }, [amount]);
+
   return (
     <Link
       href={isAuthenticated ? walletPath : `/login?from=${encodeURIComponent(walletPath)}`}
       onClick={() => clearLedgerViewAsState()}
-      className="flex h-9 w-[104px] items-center justify-end gap-0.5 active:opacity-70 max-[350px]:w-[84px]"
+      className="flex h-9 min-w-0 items-center justify-end gap-0.5 active:opacity-70"
       aria-label="钱包可用余额"
       title="全部资产剔除冻结后的可用余额"
     >
       <span className="h-8 w-7 shrink-0"><AnimatedWalletLogo /></span>
       <span className="min-w-0 text-right">
-        <span className="block text-[9px] leading-3 text-gray-400">可用余额</span>
-        <span className="block break-all text-[12px] font-bold leading-[14px] text-[#B08B32] tabular-nums" data-header-wallet-balance>{amount}</span>
+        <span className="block whitespace-nowrap text-[9px] leading-3 text-gray-400">可用余额</span>
+        <span ref={amountRef} className="block whitespace-nowrap text-[12px] font-bold leading-[14px] text-[#B08B32] tabular-nums" data-header-wallet-balance>{amount}</span>
       </span>
     </Link>
   );
@@ -413,13 +446,13 @@ export default function NavBar() {
       >
         <div className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full gap-1 max-[350px]:px-3">
           {/* Logo + 版本切换 */}
-          <div className="flex min-w-0 items-center">
+          <div className="flex shrink-0 items-center">
             <LogoWithVersionSwitch />
           </div>
 
           {/* 所有米伴页面统一显示钱包与头像，内部仍分别打开钱包和用户菜单 */}
           <div
-            className="flex h-10 shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-white pl-1 pr-0.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+            className="flex h-10 min-w-0 items-center gap-1 rounded-xl border border-gray-200 bg-white pl-1 pr-0.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
             data-wallet-avatar-group="true"
           >
             <PersonalWalletEntry />

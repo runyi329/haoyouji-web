@@ -97,7 +97,12 @@ export default function MidaniangSelectionDetail() {
     {
       question: "怎么买？",
       answer:
-        "点击立即购买，核对规格、数量和收货地址，通过米伴钱包完成支付；也可将两款米大娘商品加入购物车合单结算。",
+        "可选择单月购买或全年计划，再选择份数并核对收货地址，通过米伴钱包支付。单月商品可加入购物车合单结算；全年计划单独下单，连续12个月按月配送。",
+    },
+    {
+      question: "全年计划是一次发12份吗？",
+      answer:
+        "不是。全年计划按月发货，连续12个月，每月发货份数由您选择。每月1份，全年共12份；每月2份，全年共24份；每月3份，全年共36份。1份为1盒，全年金额按单份价格×每月份数×12个月计算，一次支付全年合计，不一次性发完全年商品。",
     },
     {
       question: "有机认证信息怎么看？",
@@ -200,7 +205,7 @@ export default function MidaniangSelectionDetail() {
         <p className="mt-1 text-[11px] text-[#676b60]">
           人民币为商家原始推荐零售价 · USDT参考价按实时汇率折算
         </p>
-        <MidaniangPurchaseActions item={item} />
+        <MidaniangPurchaseActions key={item.key} item={item} usdtCnyRate={usdtCnyRate} />
         <p className="mt-3 text-[11px] leading-6 text-[#777b70]">
           图片为设计展示，商品规格、批次与日期以实物包装标签为准。
         </p>

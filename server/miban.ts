@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
@@ -59,6 +60,7 @@ import { PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPayment
 import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
+import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
 import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
 import { resolveSupplierOrderScope } from "../shared/miban-supplier";
 import { snapshotMibanSupplierOrderScope } from "./miban-supplier";
@@ -4668,6 +4670,181 @@ export const mibanLimitedProductRouter = router({
           },
         ];
       });
+    }),
+
+  // 仅米大娘两款礼盒：一次付全年，连续12个月各发月数量；不接入旧订阅/legacy支付。
+  createAnnualOrder: protectedProcedure
+    .input(
+      z.object({
+        productKey: z.enum(["midaniang-classic-rice-gift", "midaniang-family-rice-gift"]),
+        skuId: z.string().trim().min(1).max(80),
+        quantity: z.number().int().min(1).max(10),
+        receiverName: z.string().trim().min(1).max(64),
+        receiverPhone: mibanReceiverPhoneSchema,
+        receiverAddress: z.string().trim().min(5).max(500),
+        userNote: z.string().trim().max(500).optional(),
+        cnyAmount: z.number().finite().min(0),
+        paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36),
+        paymentQuoteToken: z.string().trim().min(1).max(16000),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertAiWalletOperationEnabled("version:proj_hzxm2t", "order_debit");
+      const product = getMibanLimitedProduct(input.productKey);
+      if (!product || product.brand !== "米大娘" || product.status !== "on_sale") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "该米大娘商品暂不可购买全年计划" });
+      }
+      const sku = getMibanLimitedProductSku(product, input.skuId);
+      if (!sku || !sku.active) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "商品规格不可购买" });
+      }
+      if (input.quantity > sku.maxPurchaseQty) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `每月最多购买 ${sku.maxPurchaseQty}${sku.unitLabel}` });
+      }
+
+      // 金额只取共享SKU现价，不接受客户端报价，不添加年付折扣。
+      const monthlyCents = Math.round(sku.priceCny * 100) * input.quantity;
+      const totalCents = monthlyCents * MIDANIANG_ANNUAL_MONTHS;
+      if (!Number.isSafeInteger(monthlyCents) || monthlyCents <= 0 || !Number.isSafeInteger(totalCents)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "全年计划金额必须大于0且有效" });
+      }
+      const monthlyCny = monthlyCents / 100;
+      const totalCny = totalCents / 100;
+      const userId = ctx.user!.id;
+      const payment = prepareMibanWalletPayment({
+        userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken,
+      });
+      if (!payment) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "全年计划必须使用签名钱包报价支付" });
+      }
+      const funding = mibanFundingDeductionAmounts(payment.deductions);
+      // cnyAmount只是所选CNY币量的兼容字段，不能覆盖签名报价核验后的扣款。
+      if (paymentDecimalUnits(input.cnyAmount) !== paymentDecimalUnits(funding.cnyAmount)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "人民币分配额与所选支付币量不一致，请刷新报价" });
+      }
+      const usdtRate = Number(payment.usdtCnyRate);
+      if (!Number.isFinite(usdtRate) || usdtRate <= 0) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "当前汇率暂不可用，请稍后再试" });
+      }
+      // 必须在钱包事务开始前使用既有初始化流程；不绕过库存状态或在事务内执行DDL。
+      await ensureMibanWalletPaymentInfrastructure(
+        payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT")
+      );
+      const periodPayments = splitMibanPaymentDeductions(payment.deductions, MIDANIANG_ANNUAL_MONTHS);
+      const scheduledShipDates = getMidaniangAnnualShipDates(new Date());
+      const subscriptionGroupId = `SUB${randomUUID().replace(/-/g, "").slice(0, 29)}`;
+      const allocatedOrderNos = new Set<string>();
+      const orderNos: string[] = [];
+      for (let index = 0; index < MIDANIANG_ANNUAL_MONTHS; index++) {
+        let orderNo = "";
+        for (let attempt = 0; attempt < 32; attempt++) {
+          const candidate = await createUniqueMibanOrderNo();
+          if (!allocatedOrderNos.has(candidate)) { orderNo = candidate; break; }
+        }
+        if (!orderNo) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "无法生成唯一月订单编号，请稍后重试" });
+        }
+        allocatedOrderNos.add(orderNo);
+        orderNos.push(orderNo);
+      }
+
+      const reservedOrderNos = new Set<string>();
+      let orderCreated = false;
+      try {
+        // 每月独立预占月数量并保留对应订单号，取消时可单独回补月库存。
+        // try覆盖整个预占循环，中途库存不足也会释放此前成功预占的所有月份。
+        for (const orderNo of orderNos) {
+          const reserved = await reserveLimitedSkuStock(product.key, sku.id, input.quantity, userId, orderNo);
+          if (reserved) reservedOrderNos.add(orderNo);
+        }
+        const [commissionLine] = await snapshotLimitedCommissionLines([{
+          productKey: product.key, skuId: sku.id, quantity: input.quantity,
+          brand: product.brand, category: product.category, commissionBaseCny: monthlyCny,
+        }]);
+        const commissionBaseCny = Number(commissionLine?.commissionBaseCny ?? 0);
+        const commissionTrigger = commissionBaseCny > 0
+          ? await getCommissionTriggerSnapshotForBuyer(userId)
+          : "not_eligible";
+        const productLine = {
+          kind: "limited_product" as const,
+          productKey: product.key, skuId: sku.id,
+          name: product.detail.title, skuName: sku.name,
+          image: sku.image || product.detail.productImage,
+          quantity: input.quantity, quantityPerOrder: sku.quantityPerOrder,
+          unitLabel: sku.unitLabel, netContentText: sku.netContentText,
+          unitPriceCny: sku.priceCny, lineTotalCny: monthlyCny,
+          // 12单各自快照下单时的资格和月金额，绝不能每单计入全年金额。
+          commissionEligible: commissionLine?.commissionEligible === true,
+          commissionBaseCny, colorHex: product.card.theme.accent,
+        };
+
+        const orders = await withGlobalWalletTransaction(userId, async transaction => {
+          const createdOrders: Array<{ orderId: number; orderNo: string; deductions: MibanPaymentDeduction[] }> = [];
+          for (let index = 0; index < MIDANIANG_ANNUAL_MONTHS; index++) {
+            const orderNo = orderNos[index];
+            const deductions = periodPayments[index];
+            const amounts = mibanFundingDeductionAmounts(deductions);
+            const orderId = await createOrder({
+              orderNo, userId,
+              recipeName: `${product.detail.title} · ${sku.name}`,
+              ingredients: JSON.stringify([productLine]) as any,
+              totalWeightJin: String(input.quantity) as any,
+              totalPrice: monthlyCny.toFixed(2),
+              receiverName: input.receiverName, receiverPhone: input.receiverPhone,
+              receiverAddress: input.receiverAddress, userNote: input.userNote || undefined,
+              productImg: sku.image || product.detail.productImage,
+              walletDeductCny: amounts.cnyAmount,
+              walletDeductUsdt: amounts.usdtAmount,
+              usdtCnyRateAtOrder: payment.usdtCnyRate,
+              commissionTrigger, subscriptionGroupId,
+              subscriptionMonths: MIDANIANG_ANNUAL_MONTHS,
+              subscriptionIndex: index + 1,
+              scheduledShipDate: scheduledShipDates[index],
+            }, transaction);
+            if (reservedOrderNos.has(orderNo)) {
+              await linkLimitedStockDeductionToOrder(product.key, sku.id, orderNo, orderId, transaction);
+            }
+            createdOrders.push({ orderId, orderNo, deductions });
+          }
+          // 仅扣一次全年原币合计；逐币原生精度尾差由最后一期承接并保存月订单快照。
+          await debitMibanWalletPayment({ transaction, userId, payment, orders: createdOrders });
+          return createdOrders;
+        });
+        // 钱包事务提交后才返回实际创建成功的订单ID/编号。
+        orderCreated = true;
+        return {
+          orderId: orders[0].orderId, orderNo: orders[0].orderNo,
+          orderIds: orders.map(order => order.orderId), orderNos: orders.map(order => order.orderNo),
+          totalCny, deductCny: Number(funding.cnyAmount), deductUsdt: Number(funding.usdtAmount),
+          walletPayments: payment.deductions,
+          subscriptionMonths: MIDANIANG_ANNUAL_MONTHS, subscriptionGroupId,
+          orderCount: MIDANIANG_ANNUAL_MONTHS, monthlyQuantity: input.quantity,
+          monthlyCny, scheduledShipDates,
+        };
+      } catch (error) {
+        if (!orderCreated) {
+          let releaseError: unknown;
+          // 即使某个月释放失败，也继续尝试其余月份；不因首个错误跳过剩余库存。
+          for (const orderNo of Array.from(reservedOrderNos)) {
+            try {
+              await releaseLimitedSkuStock(
+                product.key, sku.id, input.quantity, "order_rollback", null, userId,
+                `全年计划创建或支付失败，回滚月预留库存 #${orderNo}`
+              );
+            } catch (stockError) {
+              if (!releaseError) releaseError = stockError;
+            }
+          }
+          if (releaseError) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "全年计划未成功，部分预留库存释放失败，请联系管理员核对",
+              cause: releaseError,
+            });
+          }
+        }
+        throw error;
+      }
     }),
 
   createOrder: protectedProcedure

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useLocation, useRoute, useSearch } from "wouter";
 import {
   BookMarked,
   Check,
@@ -32,6 +32,21 @@ import { toast } from "sonner";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import { MibanImage, getMibanPosterParts } from "./MibanImage";
 
+const ANNUAL_SUBSCRIPTION_MONTHS = 12;
+const ANNUAL_PRODUCT_KEYS = new Set([
+  "midaniang-classic-rice-gift",
+  "midaniang-family-rice-gift",
+]);
+const ANNUAL_PREVIEW_NOTICE = "全年计划预览中，正式上线后开放付款";
+
+function normalizePurchaseQuantity(value: string | number | null, maxQuantity = 10) {
+  const safeMax = Number.isFinite(maxQuantity) ? Math.max(1, Math.floor(maxQuantity)) : 1;
+  const text = String(value ?? "");
+  if (!/^\d+$/.test(text)) return 1;
+  const parsed = Number(text);
+  return Number.isSafeInteger(parsed) ? Math.min(safeMax, Math.max(1, parsed)) : 1;
+}
+
 type LimitedOrderSuccess = {
   orderNo: string;
   totalCny: number;
@@ -41,6 +56,15 @@ type LimitedOrderSuccess = {
   quantity: number;
   unitLabel: string;
   createdAt: string;
+  annual?: {
+    orderId: number | string;
+    monthlyQuantity: number;
+    monthlyCny: number;
+    subscriptionMonths: 12;
+    orderCount: 12;
+    orderNos: string[];
+    scheduledShipDates: string[];
+  };
 };
 
 function formatOrderReceiptTime(value: string) {
@@ -97,6 +121,7 @@ function Price({
 
 export default function HerbalifeRedGinsengDetail() {
   const [location, navigate] = useLocation();
+  const queryString = useSearch();
   const [, checkoutRouteParams] = useRoute(
     "/p/proj_hzxm2t/limited/:productKey/buy"
   );
@@ -109,13 +134,18 @@ export default function HerbalifeRedGinsengDetail() {
   const detailPath = midaniangSelection
     ? `/p/proj_hzxm2t/limited/midaniang/${midaniangSelection.key}`
     : `/p/proj_hzxm2t/limited/${productKey}`;
-  const queryString =
-    typeof window === "undefined" ? "" : window.location.search;
-  const checkoutSkuId = new URLSearchParams(queryString).get("sku");
+  const checkoutQuery = new URLSearchParams(queryString);
+  const checkoutSkuId = checkoutQuery.get("sku");
+  const requestedAnnualPlan = checkoutQuery.get("plan") === "annual";
+  const supportsAnnualPlan = ANNUAL_PRODUCT_KEYS.has(productKey);
+  const isAnnualPlan = supportsAnnualPlan && requestedAnnualPlan;
+  // 不支持的商品携带 annual 参数时明确阻止付款，绝不静默退回普通订单。
+  const annualPlanUnavailable = requestedAnnualPlan && !supportsAnnualPlan;
   const checkoutPathBase = `/p/proj_hzxm2t/limited/${productKey}/buy`;
   const isCheckoutPage = location.split("?")[0] === checkoutPathBase;
   const currentProduct = getMibanLimitedProduct(productKey);
   const localPreviewMode = import.meta.env.DEV;
+  const annualPaymentBlocked = isAnnualPlan && localPreviewMode;
   const currentBrand = getMibanLimitedBrandByName(currentProduct?.brand ?? "");
   const theme = currentBrand?.theme ?? HERBALIFE_THEME;
   const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${localPreviewMode ? "?preview=1" : ""}`;
@@ -127,7 +157,7 @@ export default function HerbalifeRedGinsengDetail() {
   const { addItem: addCartItem } = useLimitedProductCart();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedSkuId, setSelectedSkuId] = useState(() => checkoutSkuId ?? "");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(() => normalizePurchaseQuantity(checkoutQuery.get("quantity")));
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [saveToBook, setSaveToBook] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<LimitedOrderSuccess | null>(
@@ -147,6 +177,9 @@ export default function HerbalifeRedGinsengDetail() {
   const [failedPosters, setFailedPosters] = useState<Set<string>>(() => new Set());
   const startXRef = useRef(0);
   const orderReceiptRef = useRef<HTMLDivElement>(null);
+  const [preparingPayment, setPreparingPayment] = useState(false);
+  const paymentAttemptRef = useRef(0);
+  const submissionGuardRef = useRef(false);
 
   const { data: availability, isLoading: availabilityLoading } =
     mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
@@ -171,10 +204,14 @@ export default function HerbalifeRedGinsengDetail() {
     ) ?? [];
   const defaultSku = activeSkus.find(sku => sku.featured) ?? activeSkus[0];
   const activeSkuId = selectedSkuId || defaultSku?.id || "";
-  const checkoutPath = `${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}`;
   const selectedSku = currentProduct
     ? activeSkus.find(sku => sku.id === activeSkuId)
     : undefined;
+  const maxQuantity = isAnnualPlan
+    ? Math.min(10, selectedSku?.maxPurchaseQty ?? 10)
+    : selectedSku?.maxPurchaseQty ?? 1;
+  const purchaseQuantity = normalizePurchaseQuantity(quantity, maxQuantity);
+  const checkoutPath = `${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}${requestedAnnualPlan ? `&plan=annual&quantity=${purchaseQuantity}` : ""}`;
   const skuSelectionLabel =
     currentProduct?.detail.skuSelectionLabel ??
     (activeSkus.length > 1 ? "口味" : "规格");
@@ -203,7 +240,9 @@ export default function HerbalifeRedGinsengDetail() {
   const checkoutProductImage =
     selectedSku?.image ?? currentProduct?.detail.productImage;
   const isOnSale = currentProduct?.status === "on_sale" && !!selectedSku;
-  const totalPrice = selectedSku ? selectedSku.priceCny * quantity : 0;
+  const monthlyPrice = selectedSku ? selectedSku.priceCny * purchaseQuantity : 0;
+  const totalQuantity = purchaseQuantity * (isAnnualPlan ? ANNUAL_SUBSCRIPTION_MONTHS : 1);
+  const totalPrice = monthlyPrice * (isAnnualPlan ? ANNUAL_SUBSCRIPTION_MONTHS : 1);
   const isMunicipality = ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(
     receiverProvince
   );
@@ -222,6 +261,12 @@ export default function HerbalifeRedGinsengDetail() {
       ]
         .filter(Boolean)
         .join("");
+  const checkoutScope = JSON.stringify([
+    isCheckoutPage, productKey, activeSkuId, requestedAnnualPlan, purchaseQuantity,
+    totalPrice, receiverName, receiverPhone, receiverAddress, userNote, saveToBook,
+  ]);
+  const latestCheckoutScope = useRef(checkoutScope);
+  latestCheckoutScope.current = checkoutScope;
 
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -283,11 +328,84 @@ export default function HerbalifeRedGinsengDetail() {
     },
   });
 
+  const createAnnualOrder = mtrpc.limitedProduct.createAnnualOrder.useMutation({
+    onSuccess: (data: any) => {
+      setShowWalletPayment(false);
+      trpcUtils.recharge.getBalance.invalidate();
+      trpcUtils.recharge.getCnyBalance.invalidate();
+      trpcUtils.recharge.getUsdtBalanceSummary.invalidate();
+      trpcUtils.recharge.getCnyBalanceSummary.invalidate();
+      trpcUtils.recharge.getMultiAssetBalances.invalidate();
+      mibanUtils.order.walletPaymentQuote.invalidate();
+      // 只接受年付接口的真实拆单回执；不由客户端生成期数、订单号或发货日期冒充成功。
+      if (
+        !data?.orderId || typeof data.orderNo !== "string" || !data.orderNo ||
+        !Number.isFinite(Number(data.totalCny)) || Number(data.totalCny) <= 0 ||
+        !Number.isInteger(Number(data.monthlyQuantity)) || Number(data.monthlyQuantity) < 1 || Number(data.monthlyQuantity) > 10 ||
+        !Number.isFinite(Number(data.monthlyCny)) || Number(data.monthlyCny) <= 0 ||
+        data.subscriptionMonths !== ANNUAL_SUBSCRIPTION_MONTHS || data.orderCount !== ANNUAL_SUBSCRIPTION_MONTHS ||
+        !Array.isArray(data.orderNos) || data.orderNos.length !== data.orderCount ||
+        !data.orderNos.every((value: unknown) => typeof value === "string" && value.length > 0) ||
+        !Array.isArray(data.scheduledShipDates) || data.scheduledShipDates.length !== data.orderCount ||
+        !data.scheduledShipDates.every((value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value)))
+      ) {
+        toast.warning("全年计划接口回执不完整，请到我的订单核对付款与12期订单，勿重复付款");
+        navigate("/p/proj_hzxm2t/my-orders");
+        return;
+      }
+      setOrderSuccess({
+        orderNo: data.orderNo,
+        totalCny: Number(data.totalCny),
+        deductCny: Number(data.deductCny ?? 0),
+        deductUsdt: Number(data.deductUsdt ?? 0),
+        walletPayments: data.walletPayments ?? [],
+        quantity: Number(data.monthlyQuantity) * data.subscriptionMonths,
+        unitLabel: data.unitLabel ?? selectedSku?.unitLabel ?? "份",
+        createdAt: data.createdAt ?? new Date().toISOString(),
+        annual: {
+          orderId: data.orderId,
+          monthlyQuantity: Number(data.monthlyQuantity),
+          monthlyCny: Number(data.monthlyCny),
+          subscriptionMonths: data.subscriptionMonths,
+          orderCount: data.orderCount,
+          orderNos: data.orderNos,
+          scheduledShipDates: data.scheduledShipDates,
+        },
+      });
+    },
+    onError: (error: { message?: string }) => {
+      const message = formatMibanCheckoutError(error);
+      toast.error(message);
+      if (/手机|联系电话|receiverPhone/.test(message)) {
+        setCheckoutAttempted(true);
+        setShowWalletPayment(false);
+      }
+    },
+  });
+  const orderPending = createOrder.isPending || createAnnualOrder.isPending;
+  const checkoutBusy = orderPending || preparingPayment;
+
   useEffect(() => {
-    if (selectedSku && quantity > selectedSku.maxPurchaseQty) {
-      setQuantity(selectedSku.maxPurchaseQty);
+    setSelectedSkuId(checkoutSkuId ?? "");
+    setQuantity(normalizePurchaseQuantity(new URLSearchParams(queryString).get("quantity")));
+  }, [productKey, queryString, checkoutSkuId]);
+
+  useEffect(() => {
+    if (quantity !== purchaseQuantity) {
+      setQuantity(purchaseQuantity);
     }
-  }, [quantity, selectedSku]);
+  }, [quantity, purchaseQuantity]);
+
+  useEffect(() => {
+    paymentAttemptRef.current++;
+    walletPayment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  }, [productKey, activeSkuId, requestedAnnualPlan, purchaseQuantity, isCheckoutPage, walletPayment.cancelPendingPayment]);
+
+  useEffect(() => () => {
+    paymentAttemptRef.current++;
+  }, []);
 
   useEffect(() => {
     setCurrentSlide(0);
@@ -332,7 +450,7 @@ export default function HerbalifeRedGinsengDetail() {
   };
 
   const handleAddToCart = () => {
-    if (!isOnSale || isPreviewProduct) return;
+    if (!isOnSale || isPreviewProduct || requestedAnnualPlan) return;
     addCartItem({
       checkoutGroupKey: currentProduct.checkoutGroupKey ?? currentProduct.key,
       groupLabel: `${currentProduct.brand}精选`,
@@ -345,7 +463,7 @@ export default function HerbalifeRedGinsengDetail() {
       netContentText: selectedSku.netContentText,
       priceCny: selectedSku.priceCny,
       maxPurchaseQty: selectedSku.maxPurchaseQty,
-      quantity,
+      quantity: purchaseQuantity,
       accent,
     });
   };
@@ -403,7 +521,16 @@ export default function HerbalifeRedGinsengDetail() {
       `下单时间：${formatOrderReceiptTime(orderSuccess.createdAt)}`,
       `商品：${currentProduct?.detail.title || "商品"}`,
       `规格：${selectedSku?.name || "--"}`,
-      `数量：${orderSuccess.quantity}${orderSuccess.unitLabel}`,
+      ...(orderSuccess.annual ? [
+        "购买计划：全年计划",
+        `配送：每月${orderSuccess.annual.monthlyQuantity}份 × ${orderSuccess.annual.subscriptionMonths}个月`,
+        `每期金额：¥${orderSuccess.annual.monthlyCny.toFixed(2)}`,
+        `已生成${orderSuccess.annual.orderCount}期订单，按月发货，非一次发完；一次支付全年合计`,
+        ...orderSuccess.annual.orderNos.map((orderNo, index) =>
+          `第${index + 1}期：${orderNo} · 计划发货 ${orderSuccess.annual!.scheduledShipDates[index]}`
+        ),
+      ] : []),
+      `${orderSuccess.annual ? "全年总数量" : "数量"}：${orderSuccess.quantity}${orderSuccess.annual ? "份" : orderSuccess.unitLabel}`,
       `应付金额：¥${orderSuccess.totalCny.toFixed(2)}`,
       ...paymentLines,
       `收货人：${receiverName.trim()}`,
@@ -415,22 +542,56 @@ export default function HerbalifeRedGinsengDetail() {
       .join("\n");
   };
 
+  const cancelWalletPayment = () => {
+    if (orderPending) return;
+    paymentAttemptRef.current++;
+    walletPayment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  };
+
+  const changeCheckoutPlan = (annual: boolean) => {
+    if (!supportsAnnualPlan || checkoutBusy) return;
+    cancelWalletPayment();
+    navigate(`${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}&plan=${annual ? "annual" : "single"}&quantity=${purchaseQuantity}`, { replace: true });
+  };
+
   const handleOpenWalletPayment = () => {
-    if (createOrder.isPending || !validateShipping()) return;
+    if (checkoutBusy) return;
+    if (annualPlanUnavailable) {
+      toast.error("此商品不支持全年计划，请选择普通购买");
+      return;
+    }
+    if (!validateShipping()) return;
     walletPayment.confirmPaymentReview(false);
     setShowWalletPayment(true);
   };
 
   const handleConfirmWalletPayment = async () => {
-    if (createOrder.isPending || !walletPayment.canPay) return;
-    if (!validateShipping()) {
-      setShowWalletPayment(false);
+    // DEV 热预览连接生产旧后端：在准备报价前阻断年付，且绝不降级到 createOrder。
+    if (annualPaymentBlocked) {
+      toast.info(ANNUAL_PREVIEW_NOTICE);
       return;
     }
-    const preparedPayment = await walletPayment.preparePayment();
-    if (!preparedPayment) return;
-    // 可选地址保存与付款分离：只有订单成功后才保存，失败重试不新增重复地址。
-    const addressToSave = saveToBook && currentProduct.orderPolicy.allowAddressBook ? {
+    if (annualPlanUnavailable) {
+      toast.error("此商品不支持全年计划，请选择普通购买");
+      return;
+    }
+    if (checkoutBusy || submissionGuardRef.current || !walletPayment.canPay || !isCheckoutPage || !isOnSale) return;
+    if (!validateShipping()) {
+      cancelWalletPayment();
+      return;
+    }
+    const attempt = ++paymentAttemptRef.current;
+    const scope = checkoutScope;
+    submissionGuardRef.current = true;
+    setPreparingPayment(true);
+    let submitted = false;
+    try {
+      const preparedPayment = await walletPayment.preparePayment();
+      if (!preparedPayment || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current) return;
+      // 可选地址保存与付款分离：只有订单成功后才保存，失败重试不新增重复地址。
+      const addressToSave = saveToBook && currentProduct.orderPolicy.allowAddressBook ? {
         name: receiverName.trim(),
         phone: normalizeMibanReceiverPhone(receiverPhone),
         province: receiverProvince,
@@ -440,22 +601,37 @@ export default function HerbalifeRedGinsengDetail() {
         label: "家",
         isDefault: false,
       } : null;
-    createOrder.mutate({
-      productKey: currentProduct.key,
-      skuId: selectedSku.id,
-      quantity,
-      receiverName: receiverName.trim(),
-      receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
-      receiverAddress: receiverAddress.trim(),
-      userNote: userNote.trim() || undefined,
-      cnyAmount: preparedPayment.cnyAmount,
-      paymentAssets: preparedPayment.paymentAssets,
-      paymentQuoteToken: preparedPayment.paymentQuoteToken,
-    }, {
-      onSuccess: () => {
-        if (addressToSave) addAddressMutation.mutate(addressToSave);
-      },
-    });
+      const input = {
+        productKey: currentProduct.key,
+        skuId: selectedSku.id,
+        // 年付接口的 quantity 是每月份数，12个月拆单由服务端原子完成。
+        quantity: purchaseQuantity,
+        receiverName: receiverName.trim(),
+        receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
+        receiverAddress: receiverAddress.trim(),
+        userNote: userNote.trim() || undefined,
+        cnyAmount: preparedPayment.cnyAmount,
+        paymentAssets: preparedPayment.paymentAssets,
+        paymentQuoteToken: preparedPayment.paymentQuoteToken,
+      };
+      const callbacks = {
+        onSuccess: () => {
+          if (addressToSave) addAddressMutation.mutate(addressToSave);
+        },
+        onSettled: () => { submissionGuardRef.current = false; },
+      };
+      if (isAnnualPlan) {
+        createAnnualOrder.mutate(input, callbacks);
+      } else {
+        createOrder.mutate(input, callbacks);
+      }
+      submitted = true;
+    } catch (error) {
+      toast.error(formatMibanCheckoutError(error));
+    } finally {
+      if (!submitted) submissionGuardRef.current = false;
+      if (attempt === paymentAttemptRef.current) setPreparingPayment(false);
+    }
   };
 
   return (
@@ -639,8 +815,9 @@ export default function HerbalifeRedGinsengDetail() {
                 key={sku.id}
                 onClick={() => {
                   setSelectedSkuId(sku.id);
-                  setQuantity(1);
+                  setQuantity(isAnnualPlan ? normalizePurchaseQuantity(purchaseQuantity, Math.min(10, sku.maxPurchaseQty)) : 1);
                 }}
+                disabled={checkoutBusy}
                 className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
                 style={{
                   borderColor: selected ? accent : "#E7E5E4",
@@ -955,21 +1132,25 @@ export default function HerbalifeRedGinsengDetail() {
             </span>
           </button>
         )}
-        <LimitedCartButton accent={accent} />
-        <button
-          onClick={handleAddToCart}
-          disabled={!isOnSale || isPreviewProduct}
-          className="h-14 flex-1 rounded-xl border text-[14px] font-extrabold disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300"
-          style={{
-            borderColor: isOnSale ? accent : undefined,
-            color: isOnSale ? accent : undefined,
-          }}
-        >
-          加入购物车
-        </button>
+        {!requestedAnnualPlan && (
+          <>
+            <LimitedCartButton accent={accent} />
+            <button
+              onClick={handleAddToCart}
+              disabled={!isOnSale || isPreviewProduct}
+              className="h-14 flex-1 rounded-xl border text-[14px] font-extrabold disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300"
+              style={{
+                borderColor: isOnSale ? accent : undefined,
+                color: isOnSale ? accent : undefined,
+              }}
+            >
+              加入购物车
+            </button>
+          </>
+        )}
         <button
           onClick={handleBuy}
-          disabled={!isOnSale || authLoading}
+          disabled={!isOnSale || authLoading || annualPlanUnavailable}
           className="h-14 flex-1 rounded-xl text-[14px] font-extrabold tracking-wide text-white disabled:cursor-not-allowed disabled:bg-gray-300"
           style={{
             background: isOnSale ? accent : undefined,
@@ -985,14 +1166,19 @@ export default function HerbalifeRedGinsengDetail() {
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div>
                 <div className="text-[18px] font-extrabold text-gray-900">
-                  确认订单
+                  {isAnnualPlan ? "确认全年计划" : "确认订单"}
                 </div>
                 <div className="mt-0.5 text-[11px] text-gray-400">
-                  请核对规格、数量与收货信息
+                  {isAnnualPlan ? "一次支付全年合计，连续12个月按月发货" : "请核对规格、数量与收货信息"}
                 </div>
               </div>
               <button
-                onClick={() => navigate(detailPath)}
+                onClick={() => {
+                  if (orderPending) return;
+                  cancelWalletPayment();
+                  navigate(detailPath);
+                }}
+                disabled={orderPending}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500"
                 aria-label="返回商品详情"
               >
@@ -1000,6 +1186,7 @@ export default function HerbalifeRedGinsengDetail() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4">
+              <fieldset disabled={checkoutBusy} className="min-w-0">
               <div
                 className="flex gap-3 rounded-2xl p-3"
                 style={{ background: theme.surfaceMuted }}
@@ -1027,41 +1214,99 @@ export default function HerbalifeRedGinsengDetail() {
                 </div>
               </div>
 
+              {supportsAnnualPlan && (
+                <fieldset className="mt-4 space-y-2">
+                  <legend className="mb-2 text-[13px] font-bold text-gray-800">购买计划</legend>
+                  {[
+                    { annual: false, title: "普通购买", description: "按本次数量单独购买" },
+                    { annual: true, title: "全年计划", description: "连续12个月按月发货，一次支付全年合计" },
+                  ].map(plan => (
+                    <label key={plan.title} className="flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-3" style={{ borderColor: isAnnualPlan === plan.annual ? accent : "#e5e7eb", background: isAnnualPlan === plan.annual ? theme.surfaceMuted : "#fff" }}>
+                      <input type="radio" name="limited-checkout-plan" checked={isAnnualPlan === plan.annual} onChange={() => changeCheckoutPlan(plan.annual)} className="mt-0.5 h-4 w-4" style={{ accentColor: accent }} />
+                      <span>
+                        <span className="block text-[13px] font-bold text-gray-800">{plan.title}</span>
+                        <span className="mt-1 block text-[11px] text-gray-500">{plan.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+
+              {annualPlanUnavailable && (
+                <div role="alert" className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-[12px] leading-5 text-amber-800">
+                  此商品不支持全年计划，不能提交年付订单。
+                  <button type="button" onClick={() => navigate(`${checkoutPathBase}?sku=${encodeURIComponent(activeSkuId)}`, { replace: true })} className="ml-2 font-bold underline">改为普通购买</button>
+                </div>
+              )}
+
+              {activeSkus.length > 1 && (
+                <fieldset className="mt-4 space-y-2">
+                  <legend className="mb-2 text-[13px] font-bold text-gray-800">选择{skuSelectionLabel}</legend>
+                  {activeSkus.map(sku => (
+                    <label key={sku.id} className="flex items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: selectedSku.id === sku.id ? accent : "#e5e7eb" }}>
+                      <input type="radio" name="limited-checkout-sku" checked={selectedSku.id === sku.id} onChange={() => {
+                        cancelWalletPayment();
+                        setSelectedSkuId(sku.id);
+                        setQuantity(normalizePurchaseQuantity(purchaseQuantity, isAnnualPlan ? Math.min(10, sku.maxPurchaseQty) : sku.maxPurchaseQty));
+                      }} className="h-4 w-4" style={{ accentColor: accent }} />
+                      <span className="flex-1 text-[12px] font-semibold text-gray-800">{sku.name}</span>
+                      <span className="text-[12px] text-gray-500">¥{sku.priceCny.toFixed(2)}/{sku.unitLabel}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+
               <div className="mt-5 flex items-center justify-between">
                 <div>
                   <div className="text-[13px] font-bold text-gray-800">
-                    购买数量
+                    {isAnnualPlan ? "每月发货数量" : "购买数量"}
                   </div>
                   <div className="mt-0.5 text-[11px] text-gray-400">
-                    单笔最多 {selectedSku.maxPurchaseQty}
-                    {selectedSku.unitLabel}
+                    {isAnnualPlan ? `每月1–${maxQuantity}份，每份1${selectedSku.unitLabel}` : `单笔最多 ${maxQuantity}${selectedSku.unitLabel}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setQuantity(value => Math.max(1, value - 1))}
-                    disabled={quantity <= 1}
+                    onClick={() => setQuantity(Math.max(1, purchaseQuantity - 1))}
+                    disabled={checkoutBusy || purchaseQuantity <= 1}
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-600 disabled:text-gray-300"
+                    aria-label={isAnnualPlan ? "减少每月份数" : "减少购买数量"}
                   >
                     <Minus size={15} />
                   </button>
-                  <span className="w-6 text-center text-[16px] font-extrabold text-gray-900">
-                    {quantity}
-                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={maxQuantity}
+                    step={1}
+                    aria-label={isAnnualPlan ? "每月发货份数" : "购买数量"}
+                    value={purchaseQuantity}
+                    onChange={event => setQuantity(normalizePurchaseQuantity(event.target.value, maxQuantity))}
+                    className="h-8 w-12 rounded-lg border border-gray-200 bg-white text-center text-[16px] font-extrabold text-gray-900 outline-none"
+                  />
                   <button
-                    onClick={() =>
-                      setQuantity(value =>
-                        Math.min(selectedSku.maxPurchaseQty, value + 1)
-                      )
-                    }
-                    disabled={quantity >= selectedSku.maxPurchaseQty}
+                    onClick={() => setQuantity(Math.min(maxQuantity, purchaseQuantity + 1))}
+                    disabled={checkoutBusy || purchaseQuantity >= maxQuantity}
                     className="flex h-8 w-8 items-center justify-center rounded-full border"
                     style={{ borderColor: accent, color: accent }}
+                    aria-label={isAnnualPlan ? "增加每月份数" : "增加购买数量"}
                   >
                     <Plus size={15} />
                   </button>
                 </div>
               </div>
+
+              {isAnnualPlan && (
+                <div className="mt-4 rounded-xl border px-4 py-3 text-[12px] leading-6" style={{ borderColor: theme.border, background: theme.surfaceMuted }}>
+                  <div className="font-extrabold" style={{ color: accent }}>全年计划 · 连续12个月</div>
+                  <div className="text-gray-700">每月 {purchaseQuantity} 份 × 12 个月 · 全年总 {totalQuantity} 份</div>
+                  <div className="text-gray-600">单份 ¥{selectedSku.priceCny.toFixed(2)} · 每月 ¥{monthlyPrice.toFixed(2)}</div>
+                  <div className="font-semibold text-gray-800">一次支付全年合计 ¥{totalPrice.toFixed(2)}</div>
+                  <p className="mt-1 text-[11px] text-gray-500">按月发货，非一次发完。全年计划单独下单，不加入普通购物车，不与其他商品合单。</p>
+                  {annualPaymentBlocked && <p role="status" className="mt-2 font-bold text-amber-700">{ANNUAL_PREVIEW_NOTICE}</p>}
+                </div>
+              )}
 
               <div
                 className="mt-4 rounded-xl px-4 py-3"
@@ -1069,7 +1314,7 @@ export default function HerbalifeRedGinsengDetail() {
               >
                 <div className="border-b border-gray-200 pb-3">
                   <div className="mb-2 text-[12px] font-semibold text-gray-600">
-                    应付金额
+                    {isAnnualPlan ? "全年应付合计（一次支付）" : "应付金额"}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="min-w-0 rounded-lg bg-white px-2.5 py-2">
@@ -1084,7 +1329,7 @@ export default function HerbalifeRedGinsengDetail() {
                     <div className="min-w-0 rounded-lg bg-white px-2.5 py-2 text-right">
                       <div className="text-[10px] text-gray-400">人民币</div>
                       <div className="mt-0.5 whitespace-nowrap text-[14px] font-extrabold text-gray-800">
-                        ≈ ¥{totalPrice.toFixed(2)}
+                        {isAnnualPlan ? "" : "≈ "}¥{totalPrice.toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -1093,7 +1338,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <div className="mb-2 text-[12px] font-semibold text-gray-600">
                     钱包可用余额
                   </div>
-                  <MibanWalletAvailableSummary payment={walletPayment} disabled={createOrder.isPending} accent={accent} />
+                  <MibanWalletAvailableSummary payment={walletPayment} disabled={checkoutBusy} accent={accent} />
                 </div>
               </div>
 
@@ -1258,6 +1503,7 @@ export default function HerbalifeRedGinsengDetail() {
                   </button>
                 )}
               </div>
+              </fieldset>
             </div>
             <div
               className="border-t border-gray-100 px-5 py-3"
@@ -1267,13 +1513,15 @@ export default function HerbalifeRedGinsengDetail() {
             >
               <button
                 onClick={handleOpenWalletPayment}
-                disabled={createOrder.isPending}
+                disabled={checkoutBusy || annualPlanUnavailable}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold text-white disabled:bg-gray-300"
                 style={{
-                  background: !createOrder.isPending ? accent : undefined,
+                  background: !checkoutBusy && !annualPlanUnavailable ? accent : undefined,
                 }}
               >
-                {!hasAvailablePaymentWallet
+                {annualPaymentBlocked
+                  ? "查看全年报价（预览不可付款）"
+                  : !hasAvailablePaymentWallet
                   ? "查看钱包余额"
                   : `去支付 · ${paymentSummary}`}
               </button>
@@ -1288,11 +1536,7 @@ export default function HerbalifeRedGinsengDetail() {
         !isPreviewProduct && (
           <div
             className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45"
-            onClick={() => {
-              if (createOrder.isPending) return;
-              walletPayment.cancelPendingPayment();
-              setShowWalletPayment(false);
-            }}
+            onClick={cancelWalletPayment}
           >
             <div
               className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
@@ -1306,7 +1550,7 @@ export default function HerbalifeRedGinsengDetail() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-[19px] font-extrabold text-gray-900">
-                    钱包支付
+                    {isAnnualPlan ? "全年计划 · 钱包支付" : "钱包支付"}
                   </h2>
                   <p className="mt-1 text-[12px] text-gray-400">
                     人民币、U 与持有数字币可单币或组合使用
@@ -1314,12 +1558,8 @@ export default function HerbalifeRedGinsengDetail() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (createOrder.isPending) return;
-                    walletPayment.cancelPendingPayment();
-                    setShowWalletPayment(false);
-                  }}
-                  disabled={createOrder.isPending}
+                  onClick={cancelWalletPayment}
+                  disabled={orderPending}
                   className="rounded-lg px-2 py-1 text-[13px] text-gray-500 disabled:opacity-40"
                 >
                   取消
@@ -1330,7 +1570,7 @@ export default function HerbalifeRedGinsengDetail() {
                 className="mt-4 rounded-2xl px-4 py-3"
                 style={{ background: theme.surfaceMuted }}
               >
-                <div className="text-[11px] text-gray-500">本次应付</div>
+                <div className="text-[11px] text-gray-500">{isAnnualPlan ? "一次支付全年合计" : "本次应付"}</div>
                 <div className="mt-1">
                   <Price
                     value={totalPrice}
@@ -1339,24 +1579,30 @@ export default function HerbalifeRedGinsengDetail() {
                     color={theme.price}
                   />
                 </div>
+                {isAnnualPlan && (
+                  <p className="mt-3 text-[12px] leading-5 text-gray-600">每月 {purchaseQuantity} 份 × 12 个月，共 {totalQuantity} 份；按月发货，非一次发完。</p>
+                )}
               </div>
 
+              {annualPaymentBlocked && (
+                <p role="status" className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-[12px] font-bold leading-5 text-amber-800">{ANNUAL_PREVIEW_NOTICE}。本预览不会提交全年计划或普通付款订单。</p>
+              )}
               <div className="mt-5">
-                <MibanMixedPaymentAllocation payment={walletPayment} disabled={createOrder.isPending} accent={accent} />
+                <MibanMixedPaymentAllocation payment={walletPayment} disabled={checkoutBusy} accent={accent} />
               </div>
               <button
                 type="button"
                 onClick={handleConfirmWalletPayment}
-                disabled={!combinedPaymentAvailable || createOrder.isPending}
+                disabled={!combinedPaymentAvailable || checkoutBusy || annualPaymentBlocked || annualPlanUnavailable}
                 className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 break-all rounded-xl px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
                 style={{
-                  background: combinedPaymentAvailable ? accent : undefined,
+                  background: combinedPaymentAvailable && !checkoutBusy && !annualPaymentBlocked && !annualPlanUnavailable ? accent : undefined,
                 }}
               >
-                {createOrder.isPending ? (
+                {annualPaymentBlocked ? ANNUAL_PREVIEW_NOTICE : checkoutBusy ? (
                   <>
                     <Loader2 size={17} className="animate-spin" />
-                    支付中
+                    {preparingPayment ? "正在核验报价" : "支付中"}
                   </>
                 ) : (
                   `确认支付 · ${paymentSummary}`
@@ -1387,10 +1633,12 @@ export default function HerbalifeRedGinsengDetail() {
                   <Check size={25} strokeWidth={3} />
                 </div>
                 <h2 className="mt-3 text-[19px] font-extrabold text-gray-900">
-                  订单已提交
+                  {orderSuccess.annual ? "全年计划已支付" : "订单已提交"}
                 </h2>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-gray-500">
-                  工作人员将核对订单并安排后续处理
+                  {orderSuccess.annual
+                    ? `已生成${orderSuccess.annual.orderCount}期订单，连续${orderSuccess.annual.subscriptionMonths}个月按月发货，非一次发完`
+                    : "工作人员将核对订单并安排后续处理"}
                 </p>
               </div>
 
@@ -1432,12 +1680,22 @@ export default function HerbalifeRedGinsengDetail() {
                   <span className="text-right font-medium text-gray-700">
                     {selectedSku.name}
                   </span>
-                  <span className="text-gray-400">购买数量</span>
+                  {orderSuccess.annual && (
+                    <>
+                      <span className="text-gray-400">购买计划</span>
+                      <span className="text-right font-semibold text-gray-800">全年计划</span>
+                      <span className="text-gray-400">每月发货</span>
+                      <span className="text-right font-medium text-gray-700">{orderSuccess.annual.monthlyQuantity}份 × {orderSuccess.annual.subscriptionMonths}个月</span>
+                      <span className="text-gray-400">每期金额</span>
+                      <span className="text-right font-medium text-gray-700">¥{orderSuccess.annual.monthlyCny.toFixed(2)}</span>
+                    </>
+                  )}
+                  <span className="text-gray-400">{orderSuccess.annual ? "全年总数量" : "购买数量"}</span>
                   <span className="text-right font-medium text-gray-700">
                     {orderSuccess.quantity}
-                    {orderSuccess.unitLabel}
+                    {orderSuccess.annual ? "份" : orderSuccess.unitLabel}
                   </span>
-                  <span className="text-gray-400">应付金额</span>
+                  <span className="text-gray-400">{orderSuccess.annual ? "全年已支付" : "应付金额"}</span>
                   <span
                     className="text-right font-extrabold"
                     style={{ color: theme.price }}
@@ -1449,6 +1707,20 @@ export default function HerbalifeRedGinsengDetail() {
                     {orderSuccess.walletPayments.length ? formatMibanPaymentSummary(orderSuccess.walletPayments) : "实际付款明细待核对，请查看订单"}
                   </span>
                 </div>
+                {orderSuccess.annual && (
+                  <div className="border-t border-dashed border-gray-200 pt-3">
+                    <div className="mb-2 font-bold text-gray-700">12期按月发货安排</div>
+                    <p className="mb-2 text-[10px] text-gray-400">以下订单号和计划发货日期来自实际接口回执。</p>
+                    <div className="space-y-2">
+                      {orderSuccess.annual.orderNos.map((orderNo, index) => (
+                        <div key={orderNo} className="rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] leading-5">
+                          <div className="font-semibold text-gray-700">第{index + 1}期 · {orderNo}</div>
+                          <div className="text-gray-500">计划发货：{orderSuccess.annual!.scheduledShipDates[index]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="border-t border-dashed border-gray-200 pt-3">
                   <div className="mb-1 text-gray-400">收货信息</div>
                   <div className="font-medium text-gray-700">

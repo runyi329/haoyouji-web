@@ -879,6 +879,18 @@ function OrdersTab() {
         const { groupId, orders: groupOrders } = item;
         const firstOrder = groupOrders[0];
         const subMonths = firstOrder.subscriptionMonths ?? groupOrders.length;
+        let annualRiceLine: { quantity: number; unitLabel: string } | null = null;
+        try {
+          const lines = typeof firstOrder.ingredients === "string"
+            ? JSON.parse(firstOrder.ingredients) : firstOrder.ingredients;
+          const line = Array.isArray(lines) ? lines.find(line =>
+            line?.kind === "limited_product" &&
+            ["midaniang-classic-rice-gift", "midaniang-family-rice-gift"].includes(line.productKey)
+          ) : null;
+          if (subMonths === 12 && Number.isInteger(line?.quantity) && line.quantity > 0 && line.unitLabel) {
+            annualRiceLine = { quantity: line.quantity, unitLabel: line.unitLabel };
+          }
+        } catch { /* 历史订单快照异常不影响原有订阅展示。 */ }
         const totalGroupPrice = groupOrders.reduce(
           (s, o) => s + Number(o.totalPrice),
           0
@@ -903,7 +915,7 @@ function OrdersTab() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] font-bold text-[#FF6900]">
-                    订阅计划
+                    {annualRiceLine ? "全年计划" : "订阅计划"}
                   </span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">
                     {subMonths}期
@@ -919,7 +931,9 @@ function OrdersTab() {
               <div className="flex items-center gap-3 mt-1.5">
                 <span className="text-[11px] text-gray-500">
                   {firstOrder.recipeName || "定制米"} ·{" "}
-                  {firstOrder.totalWeightJin}斤/期
+                  {annualRiceLine
+                    ? `每月${annualRiceLine.quantity}${annualRiceLine.unitLabel}，连续12个月`
+                    : `${firstOrder.totalWeightJin}斤/期`}
                 </span>
                 <div className="flex items-center gap-1.5 ml-auto">
                   {completedCount > 0 && (
