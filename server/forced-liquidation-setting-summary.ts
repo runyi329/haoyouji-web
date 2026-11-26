@@ -263,13 +263,21 @@ export function buildForcedLiquidationStockDetail(input: ForcedLiquidationSettin
 
 type Day = { date: string; hasBalance: boolean; balance: number | null; source: string | null;
   capitalChange: number | null; withdraw: number | null; hasFlow: boolean };
-/** Shared global-initial/full-history cash-neutral replay; never an endpoint shortcut. */
+/** Shared configured-principal/first-real-balance cash-neutral replay; never an endpoint shortcut.
+ * Dates are observable replay boundaries, not proof of account opening or config input time.
+ */
 export function buildForcedLiquidationOrdinaryDetail(input: ForcedLiquidationSettingDetailInput, name: string,
   configs: readonly any[], records: readonly any[], rules: readonly OrdinaryTagDownsideRule[], today: string): ForcedLiquidationSettingDetail {
   const dto = empty(input, 'ordinary'); dto.rawPnl = null; dto.countedPnl = null; dto.initialDate = null;
-  const config = configs.length === 1 && number(configs[0].ledger_id) === 37 && configs[0].tag_name === name ? configs[0] : null;
-  dto.initialValue = amount(config?.initial_amount);
-  const latestRule = rules.filter(r => r.ledgerId === 37 && r.categoryId === input.categoryId)
+  const config = configs.length === 1 && number(configs[0]?.ledger_id) === 37 && configs[0]?.tag_name === name ? configs[0] : null;
+  const configuredEmpty = config?.initial_amount == null
+    || (typeof config.initial_amount === 'string' && config.initial_amount.trim() === '');
+  if (config && !configuredEmpty) {
+    dto.initialValue = amount(typeof config.initial_amount === 'string' ? config.initial_amount.trim() : config.initial_amount);
+    dto.initialBasis = 'configured'; dto.initialSource = 'ledger_tag_config:initial_amount';
+  }
+  const scopedRules = rules.filter(r => r.ledgerId === 37 && r.categoryId === input.categoryId);
+  const latestRule = scopedRules
     .reduce<(typeof rules)[number] | null>((latest, rule) => !latest || rule.version > latest.version ? rule : latest, null);
   if (latestRule) dto.rule = { version: latestRule.version, enabled: latestRule.enabled, threshold: latestRule.thresholdAmount,
     downsidePercent: latestRule.downsidePercent, startDate: latestRule.startDate };
@@ -298,43 +306,71 @@ export function buildForcedLiquidationOrdinaryDetail(input: ForcedLiquidationSet
   const history = Array.from(days.values());
   const balanceDays = history.filter(d => d.hasBalance), latest = balanceDays.at(-1), first = balanceDays[0];
   dto.latestValue = latest?.balance ?? null; dto.latestDate = latest?.date ?? null; dto.latestSource = latest?.source ?? null;
-  if (dto.rule) Object.assign(dto, forcedLiquidationLevelPercents(dto.initialValue, dto.rule.threshold, dto.latestValue));
   if (!latest) { dto.status = 'no_data'; dto.notice = '没有真实非transfer余额记录，不能用本金或transfer代替余额'; return dto; }
-  if (dto.initialValue === null) { dto.notice = '全局ledger_tag_config.initial_amount缺失或无效；不使用任何成员本金推测基准'; return dto; }
-  // There is no global initial/start-date pair in the existing config schema. The only
-  // supported proof is the first canonical real balance exactly matching global initial,
-  // with no preceding/same-day nonzero or invalid flow. Never borrow member __startDate,
-  // config audit time, interest/balance date, or rule activation as an account entry date.
-  const beforeInitial = history.filter(d => d.date <= first.date);
-  if (first.balance !== dto.initialValue || beforeInitial.some(d => d.hasFlow || d.capitalChange !== 0 || d.withdraw !== 0)) {
-    dto.notice = '全局初始金额存在，但缺少有效全局起始余额证据：首个canonical余额须等于初始且此前无资金流；不推测成员起始日期'; return dto;
+  // A nonempty mismatched/duplicate result is not absence: never wash ambiguous evidence
+  // by filtering it into an apparently valid config or a first-balance fallback.
+  if (configs.length > 0 && !config) {
+    dto.notice = 'ledger_tag_config范围不匹配或配置重复，初始本金待核验；不回退首余额或使用任何成员本金'; return dto;
   }
-  dto.initialDate = first.date;
-  if (latest.balance === null) { dto.notice = '最后canonical非transfer余额无效，不回退旧有效余额'; return dto; }
-  if (!latestRule) { dto.notice = '尚无保存规则，计入收益金额待设置核验'; return dto; }
-  if (latestRule.startDate > latest.date) { dto.notice = '最新保存规则在余额观察日尚未生效，不自动回退旧版本'; return dto; }
-  const replayDays = history.filter(d => d.date > first.date && d.date <= latest.date);
-  const points: OrdinaryTagDownsidePoint[] = [{ date: first.date, rawBalance: first.balance, capitalChange: 0, withdraw: 0 },
-    ...replayDays.map(d => ({ date: d.date, rawBalance: d.hasBalance ? d.balance : null, capitalChange: d.capitalChange, withdraw: d.withdraw }))];
+  if (dto.initialBasis === 'configured') dto.initialDate = history[0].date;
+  else {
+    dto.initialBasis = 'first_balance'; dto.initialSource = first.source;
+    dto.initialValue = first.balance; dto.initialDate = first.date;
+  }
+  const sourceNotice = dto.initialBasis === 'configured'
+    ? '初始本金优先采用管理员配置ledger_tag_config.initial_amount；最早范围内历史日仅为计算观察起日，不代表真实开户日或管理员填写日；全部真实历史日及首日/前置资金流参与重放'
+    : '管理员未填写初始本金，采用首个canonical真实余额作为参考本金与观察基线；此前和同日资金流已包含于首余额，不重复计入；基线日期不代表真实开户日';
+  const pending = (notice: string) => { dto.notice = `${sourceNotice}；${notice}`; return dto; };
+  if (dto.rule) Object.assign(dto, forcedLiquidationLevelPercents(dto.initialValue, dto.rule.threshold, dto.latestValue));
+  if (dto.initialValue === null && dto.initialBasis === 'configured') {
+    return pending('管理员明确输入的初始本金无效，不能回退首余额；不使用任何成员本金、account_balance或门槛推测基准');
+  }
+  if (first.balance === null) return pending('首个canonical真实余额无效，不能跳到以后有效余额建立基线');
+  if (latest.balance === null) return pending('最后canonical非transfer余额无效，不回退旧有效余额');
+  if (!latestRule) return pending('尚无保存规则，计入收益金额待设置核验');
+  if (scopedRules.some(r => !id(r.version)) || !id(latestRule.userId) || typeof latestRule.enabled !== 'boolean'
+    || !date(latestRule.startDate) || !Number.isFinite(latestRule.thresholdAmount) || latestRule.thresholdAmount <= 0
+    || !Number.isFinite(latestRule.downsidePercent) || latestRule.downsidePercent < 0 || latestRule.downsidePercent > 100) {
+    return pending('最新保存规则或版本证据无效，不自动回退旧版本');
+  }
+  if (latestRule.startDate > latest.date) return pending('最新保存规则在余额观察日尚未生效，不自动回退旧版本');
+  // Even excluded baseline flows cannot turn damaged transfer evidence into a ready result.
+  if (history.some(d => d.capitalChange === null || d.withdraw === null || (d.hasBalance && d.balance === null))) {
+    return pending('真实历史资金流/余额无效或无法解密，不能跳过损坏证据');
+  }
+  let evidenceCapital = 0, evidenceWithdraw = 0, evidenceNet = 0;
+  for (const d of history) {
+    evidenceCapital += d.capitalChange!; evidenceWithdraw += d.withdraw!;
+    evidenceNet += d.capitalChange! - d.withdraw!;
+    if (![evidenceCapital, evidenceWithdraw, evidenceNet].every(Number.isFinite)) {
+      return pending('真实历史资金流累计溢出，不能通过回退基线跳过损坏证据');
+    }
+  }
+  const replayDays = dto.initialBasis === 'configured' ? history : history.filter(d => d.date >= first.date);
+  const points: OrdinaryTagDownsidePoint[] = replayDays.map(d => ({ date: d.date,
+    rawBalance: d.hasBalance ? d.balance : null,
+    capitalChange: dto.initialBasis === 'first_balance' && d.date === first.date ? 0 : d.capitalChange,
+    withdraw: dto.initialBasis === 'first_balance' && d.date === first.date ? 0 : d.withdraw }));
   const sum = (key: 'capitalChange' | 'withdraw') => {
     let total = 0;
-    for (const d of replayDays) { if (d[key] === null) return null; total += d[key]!; if (!Number.isFinite(total)) return null; }
+    for (const p of points) { if (p[key] == null) return null; total += p[key]!; if (!Number.isFinite(total)) return null; }
     return total === 0 ? 0 : total;
   };
   dto.capitalChange = sum('capitalChange'); dto.withdraw = sum('withdraw');
+  if (dto.capitalChange === null || dto.withdraw === null) return pending('完整观察范围加减本金/取回累计溢出，等待核验');
   const series = calculateOrdinaryTagDownsideSeries({ ledgerId: 37, categoryId: input.categoryId,
-    initialAmount: dto.initialValue, entryDate: first.date, ratio: 100, points, rules });
+    initialAmount: dto.initialValue, entryDate: dto.initialDate, ratio: 100, points, rules });
   const final = series.at(-1);
   dto.rawPnl = final?.rawPnl ?? null; dto.countedPnl = final?.countedPnl ?? null;
   if (final?.status !== 'ready' || dto.rawPnl === null || dto.countedPnl === null) {
-    dto.notice = '完整历史资金流/余额或规则证据缺失、无效或溢出，计入收益等待核验'; return dto;
+    return pending('完整观察范围资金流/余额或规则证据缺失、无效或溢出，计入收益等待核验');
   }
   const difference = dto.rawPnl - dto.countedPnl;
-  if (!Number.isFinite(difference)) { dto.notice = '真实收益与计入收益差额溢出'; return dto; }
+  if (!Number.isFinite(difference)) return pending('真实收益与计入收益差额溢出');
   dto.effectiveFunds = dto.countedPnl === 0 ? 0 : dto.countedPnl;
   dto.ineffectiveFunds = difference === 0 ? 0 : difference;
   dto.status = 'ready';
-  dto.notice = '全局本金100%口径：完整历史按既有日级cash-before-performance资金流中性重放；有效为真实计入收益，无效为raw收益与计入收益之差（保留回升符号），非钱包金额';
-  if (replayDays.some(d => d.capitalChange !== 0 || d.withdraw !== 0)) dto.notice += '；存在加减本金/取回，不是初始与最新两端简单相减';
+  dto.notice = `${sourceNotice}；参考本金100%口径按既有日级cash-before-performance资金流中性重放；启用日期前保留raw收益，不追溯门槛影响；有效为真实计入收益，无效为raw收益与计入收益之差（保留回升符号），不是钱包金额或实际成交`;
+  if (points.some(p => p.capitalChange !== 0 || p.withdraw !== 0)) dto.notice += '；存在加减本金/取回，不是初始与最新两端简单相减';
   return dto;
 }

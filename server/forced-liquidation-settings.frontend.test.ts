@@ -745,6 +745,20 @@ describe("37号集中强平设置：离线前端契约", () => {
     const missing = detailValues(detailHarness({ data: { ...data, capitalChange: null, withdraw: null, effectiveFunds: null }, selection: { kind: "ordinary", category: categories[1] } }).render());
     expect(missing["本金净变动"]).toBe("待核验"); expect(missing["取回"]).toBe("待核验"); expect(missing["有效资金"]).toBe("待核验");
   });
+  it.each([["configured", "管理员填写"], ["first_balance", "首条历史余额（未填写本金）"], [undefined, "待核验"]])("普通初始本金来源%s仅回显DTO，不重新选本金或制造开场日期", (basis, label) => {
+    const data = { ...savedDetail, categoryId: 90251, lotId: null, kind: "ordinary", currency: "CNY", fundBasis: "cashflow_neutral_replay",
+      initialValue: 100000, latestValue: 44915.37, initialBasis: basis, initialDate: "2026-09-15",
+      initialSource: basis === "configured" ? "ledger_tag_config:initial_amount" : "ledger_records:3604",
+      effectiveFunds: 54846.538, ineffectiveFunds: 238.092, capitalChange: 0, withdraw: 0 };
+    const h = detailHarness({ data, selection: { kind: "ordinary", category: categories[1] } }), tree = h.render(), values = detailValues(tree);
+    expect(values["初始本金来源"]).toBe(label); expect(values["计算观察起日"]).toBe("2026-09-15");
+    expect(values["初始账户金额"]).toBe("100,000 CNY");
+    expect(values["有效资金"]).toBe("54,846.538 CNY"); expect(values["无效资金"]).toBe("238.092 CNY");
+    expect(text(tree)).toContain("不要求首条登记等于填写本金"); expect(text(tree)).toContain("不是开户日期");
+    expect(h.query.refetch).not.toHaveBeenCalled(); expect(h.useQuery).toHaveBeenCalledOnce();
+    const unknown = detailValues(detailHarness({ data: { ...data, initialDate: null, initialBasis: undefined }, selection: { kind: "ordinary", category: categories[1] } }).render());
+    expect(unknown["初始本金来源"]).toBe("待核验"); expect(unknown["计算观察起日"]).toBe("待核验");
+  });
   it.each(["", "0", "-1", "NaN", "Infinity", "1000000000001"])("普通金额门槛%s必须为正且有限且不超后端上限", threshold => {
     expect(typeof validate(true, threshold, "20", "2026-01-01")).toBe("string");
   });

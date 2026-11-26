@@ -469,13 +469,15 @@ function InlineDetail({ selection, canEdit, isViewingAs }: { selection: Selectio
   ];
   if (detail.kind === "stock" && selection.kind === "stock") rows.push([parsePortfolioInstrument(selection.stock.symbol)?.market === "CRYPTO" ? "剩余币数" : "剩余股数", detail.remainingQuantity == null ? "待核验" : forcedLiquidationStockQuantity(selection.stock, detail.remainingQuantity)]);
   if (detail.kind === "ordinary" && detail.fundBasis === "cashflow_neutral_replay") {
+    rows.push(["初始本金来源", detail.initialBasis === "configured" ? "管理员填写" : detail.initialBasis === "first_balance" ? "首条历史余额（未填写本金）" : "待核验"],
+      ["计算观察起日", detail.initialDate ?? "待核验"]);
     rows.push(["本金净变动", money(detail.capitalChange)], ["取回", money(detail.withdraw)]);
   }
   return <div className="space-y-2" aria-label="已保存强平详情">
     <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden rounded-lg border border-red-100 text-xs">
       {rows.map(([label, value]) => <Fragment key={label}><dt className="border-b border-red-50 bg-red-50/50 px-2 py-2 text-gray-600">{label}</dt><dd className="min-w-0 break-words border-b border-red-50 px-2 py-2 font-medium text-gray-800">{value}</dd></Fragment>)}
     </dl>
-    {detail.fundBasis === "cashflow_neutral_replay" && <p className="text-[11px] leading-5 text-gray-500">资金口径：现金流中性历史重放，本金净变动与取回不作为收益；有效 / 无效资金由服务端核验，不按初始金额减门槛推算，不是钱包可用余额。</p>}
+    {detail.fundBasis === "cashflow_neutral_replay" && <p className="text-[11px] leading-5 text-gray-500">资金口径：优先采用管理员填写的初始本金；未填写时采用首条真实历史余额，不要求首条登记等于填写本金。计算观察起日不是开户日期。按现金流中性历史重放，本金净变动与取回不作为收益；有效 / 无效资金由服务端核验，不按初始金额减门槛推算，不是钱包可用余额。</p>}
     {detail.fundBasis === "segmented_price_drop" && !autoWaiting && <p className="text-[11px] leading-5 text-gray-500">资金口径：分段价格变动。有效资金为门槛以上下跌金额全额，加上门槛以下下跌金额×剩余比例；无效资金为门槛以下未计入的部分，均按真实剩余股数计算。仅展示当前门槛的两段金额，不改旧规则历史收益，不是钱包可用余额。</p>}
     {autoWaiting && <p role="status" className="text-[11px] leading-5 text-gray-500">预设待触发：当前完全计入，预设财务影响为0；有效 / 无效资金仅显示服务端核验值，不提前套用0%比例。</p>}
     {autoConfirmed && <p role="status" className="text-[11px] leading-5 text-gray-500">从首次扫描确认瞬间起计入，不从兼容日期00:00起，不追溯历史。{rule?.enabled && detail.latestValue != null && detail.latestValue >= rule.threshold ? "当前恢复正常计入；" : ""}回升或再次下跌均不清除首次触发记录。用户豁免优先，不会自动卖出。</p>}

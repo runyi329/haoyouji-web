@@ -316,11 +316,12 @@ describe('stock automatic detail SQL time and schema fail-closed regressions', (
     for (const [sql] of conn.execute.mock.calls) expect(sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|FOR UPDATE)\b/);
   });
 });
-describe('ordinary global initial canonical full-history neutral replay', () => {
-  it('global initial only and canonical nontransfer latest; parameter name avoids collation JOIN', async () => {
+describe('ordinary configured-principal / first-balance canonical neutral replay', () => {
+  it('configured principal priority and canonical nontransfer latest; parameter name avoids collation JOIN', async () => {
     const { state, conn } = fixture(true); state.records.push(record(3, '2026-11-25', 999, { type: 'transfer', description: 'capital_add' }));
     const r = await getForcedLiquidationSettingDetail(ordinaryInput);
     expect(r.latestValue).toBe(60); expect(r.latestSource).toBe('ledger_records:2'); expect(r.initialValue).toBe(100);
+    expect(r).toMatchObject({ initialBasis: 'configured', initialSource: 'ledger_tag_config:initial_amount', initialDate: '2026-11-20' });
     expect(r.notice).toContain('两端');
     const configQuery = conn.execute.mock.calls.find(([sql]) => sql.includes('FROM ledger_tag_config'))!;
     expect(configQuery[1]).toEqual([37, '真实标签']); expect(configQuery[0]).not.toContain('JOIN');
@@ -363,20 +364,30 @@ describe('ordinary global initial canonical full-history neutral replay', () => 
     state.records.push(record(12, '2026-11-25', null, { createdAt: '2026-11-25 12:00:00.000001' }));
     expect(await getForcedLiquidationSettingDetail(ordinaryInput)).toMatchObject({ latestValue: null, latestSource: 'ledger_records:12', status: 'pending', effectiveFunds: null });
   });
-  it.each([null, '', 'bad', '-1', '1e309'])('missing global initial %s pending; member/global account values never substitute', async initial => {
+  it.each([null, undefined, '', '  \t'])('empty configured initial %s falls back to first real balance, not member/account values', async initial => {
+    const { state } = fixture(true); state.config[0] = { ...state.config[0], initial_amount: initial, account_balance: 999, original_amount: 888, balance_date: '2026-11-19' };
+    const r = await getForcedLiquidationSettingDetail(ordinaryInput);
+    expect(r).toMatchObject({ initialValue: 100, initialBasis: 'first_balance', initialSource: 'ledger_records:1', initialDate: '2026-11-20',
+      latestValue: 60, effectiveFunds: 24, ineffectiveFunds: 16, status: 'ready' });
+    expect(r.notice).toContain('首个canonical真实余额'); expect(r.notice).toContain('不重复计入');
+  });
+  it.each(['bad', '-1', '1e309'])('explicit invalid configured initial %s pending; member/global account values never substitute', async initial => {
     const { state } = fixture(true); state.config[0] = { ...state.config[0], initial_amount: initial, account_balance: 100, original_amount: 100, balance_date: '2026-11-20' };
     const r = await getForcedLiquidationSettingDetail(ordinaryInput); expect(r.initialValue).toBeNull(); expect(r.latestValue).toBe(60); expect(r.effectiveFunds).toBeNull(); expect(r.notice).toContain('不使用任何成员本金');
   });
-  it('first canonical not global initial / earlier flow / net zero flow => no fabricated entry evidence', async () => {
-    const { state } = fixture(true); state.records[0].amount = 99; expect((await getForcedLiquidationSettingDetail(ordinaryInput)).notice).toContain('起始余额证据');
+  it('first canonical need not equal configured initial / earlier net zero flow is replayed, no fabricated opening date', async () => {
+    const { state } = fixture(true); state.records[0].amount = 99;
+    expect(await getForcedLiquidationSettingDetail(ordinaryInput)).toMatchObject({ initialValue: 100, latestValue: 60, status: 'ready', rawPnl: 40, effectiveFunds: 24 });
     state.records[0].amount = 100; state.records.push(record(10, '2026-11-19', 10, { type: 'transfer', description: 'capital_add' }), record(11, '2026-11-19', 10, { type: 'transfer', description: 'capital_remove' }));
-    expect((await getForcedLiquidationSettingDetail(ordinaryInput)).effectiveFunds).toBeNull();
+    const r = await getForcedLiquidationSettingDetail(ordinaryInput);
+    expect(r).toMatchObject({ initialDate: '2026-11-19', initialBasis: 'configured', status: 'ready', effectiveFunds: 24, capitalChange: 0 });
+    expect(r.notice).toContain('不代表真实开户日');
   });
-  it('no balance/transfer-only latest and missing config do not generate values', async () => {
+  it('no balance never generates a balance; missing config uses first real balance', async () => {
     const { state } = fixture(true); state.records = [record(2, '2026-11-25', 10, { type: 'transfer', description: 'capital_add' })];
     expect(await getForcedLiquidationSettingDetail(ordinaryInput)).toMatchObject({ status: 'no_data', latestValue: null, latestDate: null, effectiveFunds: null });
     state.records = [record(1, '2026-11-20', 100), record(2, '2026-11-25', 60)]; state.missing.add('ledger_tag_config');
-    expect((await getForcedLiquidationSettingDetail(ordinaryInput)).initialValue).toBeNull();
+    expect(await getForcedLiquidationSettingDetail(ordinaryInput)).toMatchObject({ initialValue: 100, initialBasis: 'first_balance', status: 'ready', effectiveFunds: 24 });
   });
   it('pending invalid/encrypted transfer and cumulative overflow stay null', async () => {
     const { state } = fixture(true); state.records.push(record(3, '2026-11-22', 'bad', { type: 'transfer', description: 'capital_add' }));

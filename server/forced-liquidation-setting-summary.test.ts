@@ -304,7 +304,14 @@ describe('ordinary enabled categories batch exact complete replay, no all-53 rec
     state.records.push(record(8, '2026-11-25', null, { createdAt: '2026-11-25 12:00:00.000001' }));
     expect(await categoryAt(83)).toMatchObject({ ineffectiveFunds: null, ineffectiveStatus: 'pending' });
   });
-  it.each([null, '', 'bad', -1, '1e309'])('global initial invalid %s null, not member substitute', async initial => {
+  it.each([null, '', ' '])('global initial not filled %s falls back to real first balance in both list and detail', async initial => {
+    const { state } = fixture(); state.stockRules = []; state.ordinaryRules = [ordinaryRule()]; state.configs = [config(83, initial)];
+    const c = await categoryAt(83), d = await getForcedLiquidationSettingDetail({ ...input, categoryId: 83 });
+    expect(c).toMatchObject({ ineffectiveFunds: 16, ineffectiveStatus: 'ready' });
+    expect(d).toMatchObject({ initialValue: 100, initialBasis: 'first_balance', ineffectiveFunds: 16, status: 'ready' });
+    expect(c.ineffectiveFunds).toBe(d.ineffectiveFunds); expect(c.ineffectiveNotice).toBe(d.notice);
+  });
+  it.each(['bad', -1, '1e309'])('global initial invalid %s null, not member or first balance substitute', async initial => {
     const { state } = fixture(); state.stockRules = []; state.ordinaryRules = [ordinaryRule()]; state.configs = [config(83, initial)];
     expect(await categoryAt(83)).toMatchObject({ ineffectiveFunds: null, ineffectiveStatus: 'pending' });
   });
@@ -314,7 +321,7 @@ describe('ordinary enabled categories batch exact complete replay, no all-53 rec
   });
   it('missing global initial old columns bounded compatibility; future rule pending; real records query error propagates', async () => {
     const { state, conn } = fixture(); state.stockRules = []; state.ordinaryRules = [ordinaryRule()]; state.missingInitial = true;
-    expect((await categoryAt(83)).ineffectiveFunds).toBeNull(); expect(callsFor(conn, 'ledger_tag_config')).toHaveLength(2);
+    expect(await categoryAt(83)).toMatchObject({ ineffectiveFunds: 16, ineffectiveStatus: 'ready' }); expect(callsFor(conn, 'ledger_tag_config')).toHaveLength(2);
     state.missingInitial = false; state.ordinaryRules.push(ordinaryRule(83, { version: 2, start_date: '2099-01-01' }));
     expect((await categoryAt(83)).ineffectiveNotice).toContain('不自动回退');
     const failure = new Error('records connection error'); state.failures.set('ledger_records', failure);
@@ -322,7 +329,7 @@ describe('ordinary enabled categories batch exact complete replay, no all-53 rec
   });
   it('missing config/rules/records tables produce no fake numbers and no mutations', async () => {
     const { state } = fixture(); state.stockRules = []; state.ordinaryRules = [ordinaryRule()]; state.missing.add('ledger_tag_config');
-    expect((await categoryAt(83)).ineffectiveFunds).toBeNull(); state.missing.clear(); state.missing.add('ledger_records');
+    expect(await categoryAt(83)).toMatchObject({ ineffectiveFunds: 16, ineffectiveStatus: 'ready' }); state.missing.clear(); state.missing.add('ledger_records');
     expect(await categoryAt(83)).toMatchObject({ ineffectiveFunds: null, ineffectiveStatus: 'no_data' });
     state.missing.clear(); state.missing.add('ledger_ordinary_tag_downside_rules'); expect(await categoryAt(83)).not.toHaveProperty('ineffectiveFunds');
     expect(db.tx).not.toHaveBeenCalled();

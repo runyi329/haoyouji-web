@@ -31,7 +31,7 @@ export type ForcedLiquidationSettingDetail = {
   capitalChange: number | null;
   withdraw: number | null;
   /** Stock: user-defined current segmented decline display; not historical accounted PnL.
-   * Ordinary: cashflow-neutral replay, only when full global initial/flow evidence exists. */
+   * Ordinary: cashflow-neutral replay using configured principal, or the first observed balance. */
   effectiveFunds: number | null;
   ineffectiveFunds: number | null;
   fundBasis: 'segmented_price_drop' | 'cashflow_neutral_replay';
@@ -40,6 +40,10 @@ export type ForcedLiquidationSettingDetail = {
   /** Signed real replay profit (downside contract direction), not an endpoint difference. */
   rawPnl?: number | null;
   countedPnl?: number | null;
+  /** Ordinary reference-basis provenance, not a wallet amount or member principal. */
+  initialBasis?: 'configured' | 'first_balance';
+  initialSource?: string | null;
+  /** Observable replay boundary for ordinary detail, not a fabricated account opening date. */
   initialDate?: string | null;
 };
 
