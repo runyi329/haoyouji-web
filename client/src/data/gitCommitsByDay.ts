@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-25
+// 生成时间：2026-11-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -10045,5 +10045,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-11-25": [
     { date: "2026-11-25T00:06:17Z", type: "fix", cleanMessage: "separate admin double-click entry from member photo preview" },
     { date: "2026-11-25T00:49:51Z", type: "fix", cleanMessage: "scope member calendars to personal allocation returns" },
+    { date: "2026-11-25T01:38:46Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-25T05:03:14Z", type: "feat", cleanMessage: "refine member R1 portfolio and freeze sale FX" },
+    { date: "2026-11-25T05:46:51Z", type: "fix", cleanMessage: "allow unsealed buy corrections and audited entry cancellation" },
+    { date: "2026-11-25T15:39:49Z", type: "feat", cleanMessage: "persist dated downside margin rules with safe historical revaluation" },
+  ],
+  "2026-11-26": [
+    { date: "2026-11-25T16:34:39Z", type: "fix", cleanMessage: "bound downside reconstruction and restore member counted summaries" },
+    { date: "2026-11-25T18:01:04Z", type: "fix", cleanMessage: "restore publication history for retroactive calendars" },
   ],
 };
