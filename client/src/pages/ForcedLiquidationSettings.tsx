@@ -513,6 +513,7 @@ function OrdinaryTagDownsideRuleForm({ category, canEdit, isViewingAs, onClose, 
       void utils.ledger.getReport.invalidate({ ledgerId: 37 });
       void utils.ledger.getMyOrdinaryTagObservationOverview.invalidate({ ledgerId: 37 });
       void utils.ledger.getMyOrdinaryTagDownsideValuations.invalidate({ ledgerId: 37 });
+      void utils.ledger.getMyOrdinaryTagReturnValuations.invalidate({ ledgerId: 37 });
       void utils.ledger.getTagSummary.invalidate({ ledgerId: 37, tagName: category.categoryName });
       void utils.ledger.getAllTagsMarginSummary.invalidate({ ledgerId: 37 });
       void utils.adminGetLedger37DividendAvailability.invalidate({ ledgerId: 37 });

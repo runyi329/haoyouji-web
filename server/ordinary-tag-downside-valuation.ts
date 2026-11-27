@@ -150,9 +150,9 @@ function canonicalPoints(input: BuildOrdinaryTagDownsideValuationInput, entryDat
       day.hasBalance = true;
       day.balance = amount !== null && amount >= 0 ? amount : null;
     } else if (record.type === 'transfer' && (!entryDate || date >= entryDate)) {
-      if (amount === null) fail('本金或提现流水金额缺失，不能计算欠保证金收益');
+      if (amount === null) fail('本金或提现流水金额缺失，回报暂不可用');
       const description = typeof record.description === 'string' ? decryptValue(record.description) : null;
-      if (description && isEncrypted(description)) fail('本金流水备注无法解密，不能计算欠保证金收益');
+      if (description && isEncrypted(description)) fail('本金流水备注无法解密，回报暂不可用');
       const absolute = Math.abs(amount);
       if (description?.startsWith('capital_')) day.capital += description.startsWith('capital_add') ? absolute : -absolute;
       else day.withdraw += absolute;
@@ -255,7 +255,7 @@ function memberBalances(member: Member): Record<string, unknown> {
 export async function getMyOrdinaryTagDownsideValuations(input: {
   ledgerId: number; userId: number; systemRole?: string; isViewingAs?: boolean;
 }): Promise<{ ledgerId: 37; categories: OrdinaryTagDownsideCategoryValuation[] }> {
-  if (input.ledgerId !== LEDGER_ID) throw new TRPCError({ code: 'BAD_REQUEST', message: '普通标签欠保证金仅支持37号账本' });
+  if (input.ledgerId !== LEDGER_ID) throw new TRPCError({ code: 'BAD_REQUEST', message: '普通标签回报仅支持37号账本' });
   if (!positiveId(input.userId)) throw new TRPCError({ code: 'UNAUTHORIZED', message: '缺少有效的真实用户身份' });
   // These fields are not part of the contract; fail closed even when called without the authenticated router.
   const extra = input as unknown as Record<string, unknown>;

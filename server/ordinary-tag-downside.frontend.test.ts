@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import {
@@ -36,8 +38,8 @@ const categories = [{ id: 7, name: '普通', accountingMode: 'manual_balance' },
 const initialBalancesData = { balances: { 普通: 1000, 普通__ratio: 50, 普通__startDate: '2026-11-01',
   普通__margin: 100, 旧普通: 1000, 旧普通__ratio: 50, 旧普通__startDate: '2026-11-01' } };
 const point = (date: string, balance: number, pnl: number | null, dailyPnl: number | null, extra: Partial<OrdinaryDownsidePoint> = {}): OrdinaryDownsidePoint => ({
-  date, balance, pnl, dailyPnl, countedBalance: balance + 100, rawPnl: pnl === null ? null : pnl - 50,
-  capitalChange: 400, withdrawToDate: 50, capitalChangeToday: 200, withdrawToday: 30, ruleVersion: 1, ...extra,
+  date, balance, pnl, dailyPnl,
+  capitalChange: 400, withdrawToDate: 50, capitalChangeToday: 200, withdrawToday: 30, ...extra,
 });
 const ready = (points = [point('2026-11-02', 1500, -100, -100), point('2026-11-03', 0, 25, 125)]): OrdinaryDownsideCategory => ({
   categoryId: 7, categoryName: '普通', status: 'ready', points, latestDate: points.at(-1)?.date ?? null, totalPnl: points.at(-1)?.pnl ?? null, todayPnl: points.at(-1)?.dailyPnl ?? null,
@@ -81,7 +83,7 @@ describe('普通强平估值前端：完整服务端结果、真实金额和隔�
     expect(scope.latestPoint?.balance).toBe(0);
     const chart = ordinaryDownsideChartPoints(scope, 1000, 100);
     expect(chart.at(-1)?.balance).toBe(0);
-    for (const field of ['capitalChange', 'withdrawToDate', 'capitalChangeToday', 'withdrawToday', 'rawPnl', 'countedBalance'] as const) {
+    for (const field of ['capitalChange', 'withdrawToDate', 'capitalChangeToday', 'withdrawToday', 'pnl', 'dailyPnl'] as const) {
       expect(chart.at(-1)?.[field]).toBe(frozen.at(-1)?.[field]);
     }
     expect(JSON.stringify(result)).toBe(before);
@@ -103,14 +105,14 @@ describe('普通强平估值前端：完整服务端结果、真实金额和隔�
     expect(scope.points.map(p => p.date)).toEqual(['2026-11-02']); expect(scope.totalPnl).toBe(-10); expect(scope.todayPnl).toBeNull();
   });
   it('关闭后server恢复raw系列不强制未来为0、保留过去有效版本，不客户端套新规则', () => {
-    const result = ready([point('2026-11-02', 1300, -150, -150), point('2026-11-03', 1350, -175, -25, { ruleVersion: 2, countedBalance: 1350, rawPnl: -175 })]);
+    const result = ready([point('2026-11-02', 1300, -150, -150), point('2026-11-03', 1350, -175, -25)]);
     const scope = scopes(result).get(7)!;
     expect(scope.points[0].pnl).toBe(-150); expect(scope.points[1].pnl).toBe(-175);
     expect(scope.todayPnl).toBe(-25); expect(sumOrdinaryDownsideDailyPnl(scope.points)).toBe(scope.totalPnl);
     expect(helperSource).not.toMatch(/calculateOrdinaryTagDownside|thresholdAmount|remainingRatio|wallet|fetch\(|\.query\(/);
   });
   it('effective user + viewAs独立缓存，集中tRPC invalidate前缀仍命中全部身份', async () => {
-    const base = [['ledger', 'getMyOrdinaryTagDownsideValuations'], { input: { ledgerId: 37 }, type: 'query' }];
+    const base = [['ledger', 'getMyOrdinaryTagReturnValuations'], { input: { ledgerId: 37 }, type: 'query' }];
     const client = new QueryClient();
     const a = ordinaryDownsideIdentityQueryKey(base, 37, 37, null);
     const b = ordinaryDownsideIdentityQueryKey(base, 37, 38, 38);
@@ -164,7 +166,7 @@ describe('实际AA页面useMemo/日历/概览分支：只喂离线mock DTO，无
   });
   it('坏的最新余额null保留坏日期并pending，不用上一日ready余额或收益冒充最新', () => {
     const result = { ...ready(), status: 'pending' as const,
-      points: [point('2026-11-02', 900, 50, 50), point('2026-11-03', 0, null, null, { balance: null, countedBalance: null, rawPnl: null })],
+      points: [point('2026-11-02', 900, 50, 50), point('2026-11-03', 0, null, null, { balance: null })],
       totalPnl: null, todayPnl: null };
     const ctx = context(result);
     const stats = actualFunction('stats', ctx)();
@@ -187,14 +189,15 @@ describe('实际AA页面useMemo/日历/概览分支：只喂离线mock DTO，无
 
 describe('前端source-contract安全边界', () => {
   it('单次身份缓存完整接口，37/rawpresentation/visible gate和切换取消生效', () => {
-    expect(source.match(/getMyOrdinaryTagDownsideValuations\.query\(/g)).toHaveLength(1);
-    expect(source).toContain('getQueryKey(trpc.ledger.getMyOrdinaryTagDownsideValuations, { ledgerId: 37 }');
+    expect(source.match(/getMyOrdinaryTagReturnValuations\.query\(/g)).toHaveLength(1);
+    expect(source).toContain('getQueryKey(trpc.ledger.getMyOrdinaryTagReturnValuations, { ledgerId: 37 }');
+    expect(source).not.toContain('getMyOrdinaryTagDownsideValuations');
     expect(source).toContain('Number(user?.id ?? 0), marginTargetUserId, viewAsUserId');
     expect(source).toContain('ordinaryDownsideIdentityRef.current !== ordinaryDownsideIdentity');
     expect(source).toContain('!r1PresentationQuery.isError && !r1ShowsAi');
     expect(source).toContain("categories.some((category: any) => category.accountingMode !== 'stock_portfolio')");
     expect(source).toContain('enabled: ordinaryDownsideQueryEnabled');
-    expect(source).toContain('void queryClient.cancelQueries({ queryKey: getQueryKey(trpc.ledger.getMyOrdinaryTagDownsideValuations');
+    expect(source).toContain('void queryClient.cancelQueries({ queryKey: getQueryKey(trpc.ledger.getMyOrdinaryTagReturnValuations');
   });
   it('汇总日历、概览、选中日差和收益详情显式scope，不伪造旧余额公式', () => {
     expect(source).toContain('if (selectedOrdinaryDownside) return new Map(selectedOrdinaryDownside.points.map');
@@ -203,8 +206,10 @@ describe('前端source-contract安全边界', () => {
     expect(source).toContain('const val = nullableOrdinaryNumber(point.dailyPnl)');
     expect(source).toContain('ordinarySummaryPendingDates');
     expect(source).toContain('if (selectedOrdinaryDownside) return <OrdinaryDownsideReturnDialog');
-    for (const label of ['强平规则计入收益', '真实账户余额 B', '原始收益（raw）', '规则派生差（计入 − raw）', '规则计入值（非账户余额）']) expect(source).toContain(label);
-    expect(source).toContain('不代表已实收分红');
+    for (const label of ['强平', '规则计入', '原始收益（raw）', '规则派生差', '规则计入值', '规则已隐藏']) expect(source).not.toContain(label);
+    expect(source).toContain("{row('累计回报', pnl)}");
+    expect(source).toContain("{row('当日回报', date ? point?.dailyPnl : scope.todayPnl)}");
+    expect(helperSource).not.toMatch(/rawPnl|countedBalance|ruleVersion/);
     expect(source).toContain('const divAmt = dividendByTag[tag.name] ?? 0');
     expect(source).toContain('const totalDividend = Object.values(dividendByTag).reduce');
   });
@@ -227,5 +232,51 @@ describe('前端source-contract安全边界', () => {
     const dto = service.slice(service.indexOf('export type OrdinaryTagDownsideValuationPoint'), service.indexOf('export type BuildOrdinary'));
     expect(dto).not.toMatch(/threshold|remainingRatio|rules:|userId/);
     expect(service).toContain('rules: rules.get(category.id)!');
+  });
+  it('设置保存仍刷新通用收益缓存，对外失败文字不包含内部业务，错误码原样', () => {
+    const settings = readFileSync(new URL('../client/src/pages/ForcedLiquidationSettings.tsx', import.meta.url), 'utf8');
+    const control = readFileSync(new URL('../client/src/components/ForcedLiquidationUserControl.tsx', import.meta.url), 'utf8');
+    expect(settings).toContain('utils.ledger.getMyOrdinaryTagReturnValuations.invalidate({ ledgerId: 37 })');
+    expect(control).toContain('"getMyOrdinaryTagReturnValuations"');
+    expect(service).not.toMatch(/欠保证金|强平/);
+    expect(service).toContain("fail('本金或提现流水金额缺失，回报暂不可用')");
+    expect(service).toContain("fail('本金流水备注无法解密，回报暂不可用')");
+    expect(service).toContain("throw new TRPCError({ code: 'PRECONDITION_FAILED', message })");
+  });
+});
+
+describe('普通收益详情真实JSX保密回归：不加载页面或业务后台', () => {
+  const node = ast.statements.find((item): item is ts.FunctionDeclaration => ts.isFunctionDeclaration(item)
+    && item.name?.text === 'OrdinaryDownsideReturnDisclosure');
+  if (!node) throw new Error('实际收益详情组件缺失');
+  const code = ts.transpileModule(`(${node.getText(ast)})`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
+  }).outputText;
+  function render(result = ready(), date?: string, identity: Record<string, unknown> = {}) {
+    const component = vm.runInNewContext(code, { React, nullableOrdinaryNumber, ...identity }, { timeout: 1000 });
+    return renderToStaticMarkup(React.createElement(component, { scope: scopes(result).get(7)!, date }));
+  }
+  it('普通用户及管理员代看显示同一收益数字，不渲染规则、解释或隐藏提示', () => {
+    const member = render();
+    const viewAs = render(ready(), undefined, { canEdit: true, viewAsUserId: 38, user: { id: 37, role: 'admin' } });
+    expect(viewAs).toBe(member);
+    expect(member).toContain('+¥25.00'); expect(member).toContain('+¥125.00');
+    expect(member).toContain('2026-11-02'); expect(member).toContain('2026-11-03');
+    expect(member).not.toMatch(/强平|规则|计入|派生|raw|保证金|历史有效版本|已隐藏/);
+  });
+  it('单日明细保留该日实际回报，不暴露即使意外携带的内部字段', () => {
+    const malicious = ready([Object.assign(point('2026-11-02', 1500, -100, -100), {
+      rawPnl: 98765, countedBalance: 123456, ruleVersion: 99, thresholdAmount: 54321, remainingRatio: 0.2,
+    })]);
+    const html = render(malicious, '2026-11-02');
+    expect(html).toContain('¥100.00'); expect(html).toContain('¥1,500.00');
+    expect(html).not.toMatch(/98765|123456|54321|98,765|123,456|54,321|强平|规则|raw/);
+  });
+  it('待更新收益仍为待更新，不变为零；真实零余额仍保留', () => {
+    const html = render({ ...ready([point('2026-11-03', 0, null, null)]), status: 'pending' });
+    expect(html).toContain('累计回报</span><span class="font-mono">待更新');
+    expect(html).toContain('当日回报</span><span class="font-mono">待更新');
+    expect(html).toContain('账户余额</span><span class="font-mono">¥0.00');
+    expect(html).not.toMatch(/强平|规则|计入|raw/);
   });
 });

@@ -380,43 +380,35 @@ function isDateInTagPausePeriod(date: string, history: TagPausePeriod[]): boolea
   ));
 }
 
-// 结果披露不反推/泄露规则参数，也不把计入余额伪装成真实账户金额。
+// 成员页面仅披露结算结果和真实资金流水，不展示内部计算口径。
 function OrdinaryDownsideReturnDisclosure({ scope, date }: { scope: OrdinaryDownsideScope; date?: string }) {
   const point = date ? scope.pointByDate.get(date) : scope.latestPoint;
   const pnl = date ? nullableOrdinaryNumber(point?.pnl) : scope.totalPnl;
-  const rawPnl = nullableOrdinaryNumber(point?.rawPnl);
-  const difference = pnl === null || rawPnl === null ? null : pnl - rawPnl;
   const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? '待更新'
     : `${value > 0 ? '+' : value < 0 ? '−' : ''}¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const row = (label: string, value: number | null | undefined) => <div className="flex justify-between gap-3"><span>{label}</span><span className="font-mono">{money(value)}</span></div>;
   return <div className="space-y-2 text-xs" style={{ color: '#666666' }}>
-    <div className="rounded-lg bg-gray-50 px-3 py-2 leading-5">强平规则计入收益 · 服务端按历史有效版本结算；日差直接采用同一序列的计入日收益，不按真实余额差重算。此为收益口径，不代表已实收分红，不改变钱包、保证金、真实本金或提现。</div>
     <div className="space-y-1 rounded-lg bg-gray-50 px-3 py-2">
-      {row('强平规则计入收益（累计）', pnl)}
-      {row('计入日收益', date ? point?.dailyPnl : scope.todayPnl)}
-      {row('原始收益（raw）', rawPnl)}
-      {row('规则派生差（计入 − raw）', difference)}
-      {row('真实账户余额 B', point?.balance)}
-      {row('规则计入值（非账户余额）', point?.countedBalance)}
-      {row('累计真实本金变动', point?.capitalChange)}
-      {row('累计真实提现', point?.withdrawToDate)}
-      {row('本有效点区间真实本金变动', point?.capitalChangeToday)}
-      {row('本有效点区间真实提现', point?.withdrawToday)}
+      {row('累计回报', pnl)}
+      {row('当日回报', date ? point?.dailyPnl : scope.todayPnl)}
+      {row('账户余额', point?.balance)}
+      {row('累计本金变动', point?.capitalChange)}
+      {row('累计提现', point?.withdrawToDate)}
     </div>
-    <div className="text-gray-400">截至 {point?.date ?? '待更新'} · 真实余额与资金流水仍可在原明细查看。</div>
+    <div className="text-gray-400">截至 {point?.date ?? '待更新'}</div>
     {!date && <div className="overflow-x-auto rounded-lg border border-gray-100">
-      <table className="w-full whitespace-nowrap text-[10px]"><thead><tr><th className="px-2 py-1 text-left">日期</th><th className="px-2 py-1">真实B</th><th className="px-2 py-1">计入累计</th><th className="px-2 py-1">计入日差</th><th className="px-2 py-1">raw收益</th></tr></thead>
-        <tbody>{scope.points.map(item => <tr key={item.date}><td className="px-2 py-1">{item.date}</td><td className="px-2 py-1">{money(item.balance)}</td><td className="px-2 py-1">{money(item.pnl)}</td><td className="px-2 py-1">{money(item.dailyPnl)}</td><td className="px-2 py-1">{money(item.rawPnl)}</td></tr>)}</tbody></table>
+      <table className="w-full whitespace-nowrap text-[10px]"><thead><tr><th className="px-2 py-1 text-left">日期</th><th className="px-2 py-1">累计回报</th><th className="px-2 py-1">当日回报</th></tr></thead>
+        <tbody>{scope.points.map(item => <tr key={item.date}><td className="px-2 py-1">{item.date}</td><td className="px-2 py-1">{money(item.pnl)}</td><td className="px-2 py-1">{money(item.dailyPnl)}</td></tr>)}</tbody></table>
     </div>}
   </div>;
 }
 
 function OrdinaryDownsideReturnDialog({ scope, onClose, rawWithdrawRecords }: { scope: OrdinaryDownsideScope; onClose: () => void; rawWithdrawRecords?: readonly { date: string; amount: number }[] }) {
   return <div className="fixed inset-0 z-[530] flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
-    <section className="flex max-h-[84vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={event => event.stopPropagation()} aria-label="强平规则计入收益详情">
-      <div className="flex items-center justify-between border-b px-4 py-3"><span className="text-sm font-bold">{scope.categoryName} · 回报明细</span><button type="button" aria-label="关闭计入收益详情" onClick={onClose}><X size={16} /></button></div>
+    <section className="flex max-h-[84vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={event => event.stopPropagation()} aria-label="回报明细">
+      <div className="flex items-center justify-between border-b px-4 py-3"><span className="text-sm font-bold">{scope.categoryName} · 回报明细</span><button type="button" aria-label="关闭回报明细" onClick={onClose}><X size={16} /></button></div>
       <div className="overflow-y-auto px-4 py-3"><OrdinaryDownsideReturnDisclosure scope={scope} />
-        {rawWithdrawRecords && <div className="mt-3 text-xs text-gray-500"><div className="mb-1 font-semibold">原始提现记录（金额未缩放，当前已加载明细）</div>{rawWithdrawRecords.length ? rawWithdrawRecords.map((record, index) => <div key={`${record.date}:${index}`} className="flex justify-between py-1"><span>{record.date}</span><span className="font-mono">¥{record.amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></div>) : <div>暂无已加载提现记录</div>}</div>}
+        {rawWithdrawRecords && <div className="mt-3 text-xs text-gray-500"><div className="mb-1 font-semibold">提现记录</div>{rawWithdrawRecords.length ? rawWithdrawRecords.map((record, index) => <div key={`${record.date}:${index}`} className="flex justify-between py-1"><span>{record.date}</span><span className="font-mono">¥{record.amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></div>) : <div>暂无已加载提现记录</div>}</div>}
       </div>
       <button type="button" className="border-t py-3 text-sm text-gray-500" onClick={onClose}>关闭</button>
     </section>
@@ -564,7 +556,7 @@ export default function LedgerDetailAA({
   const handleSwitchView = (userId: number | null) => {
     // 请求头决定有效身份；切换前取消旧请求，新身份使用独立缓存键，绝不沿用旧人数据。
     void queryClient.cancelQueries({ queryKey: ['ledger-aa-stock', ledgerId] });
-    void queryClient.cancelQueries({ queryKey: getQueryKey(trpc.ledger.getMyOrdinaryTagDownsideValuations, { ledgerId: 37 }, 'query') });
+    void queryClient.cancelQueries({ queryKey: getQueryKey(trpc.ledger.getMyOrdinaryTagReturnValuations, { ledgerId: 37 }, 'query') });
     setViewAsUserId(userId);
     setShowViewAsPicker(false);
     setViewAsSearch('');
@@ -798,12 +790,12 @@ export default function LedgerDetailAA({
   ordinaryDownsideIdentityRef.current = ordinaryDownsideIdentity;
   const ordinaryDownsideQuery = useQuery<OrdinaryDownsideResponse>({
     queryKey: ordinaryDownsideIdentityQueryKey(
-      getQueryKey(trpc.ledger.getMyOrdinaryTagDownsideValuations, { ledgerId: 37 }, 'query'),
+      getQueryKey(trpc.ledger.getMyOrdinaryTagReturnValuations, { ledgerId: 37 }, 'query'),
       Number(user?.id ?? 0), marginTargetUserId, viewAsUserId,
     ),
     queryFn: ({ signal }) => {
       if (signal.aborted || ordinaryDownsideIdentityRef.current !== ordinaryDownsideIdentity) throw new Error('普通标签视角已切换');
-      return trpcUtils.client.ledger.getMyOrdinaryTagDownsideValuations.query({ ledgerId: 37 }, { signal });
+      return trpcUtils.client.ledger.getMyOrdinaryTagReturnValuations.query({ ledgerId: 37 }, { signal });
     },
     enabled: ordinaryDownsideQueryEnabled,
     staleTime: 0, gcTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true, placeholderData: undefined,
@@ -3057,7 +3049,6 @@ export default function LedgerDetailAA({
             {' · 15:05更新 · 当天A股＋隔夜美股'}
             {stockCalendarLoading ? ' · 加载中' : stockCalendarFetching ? ' · 更新中' : stockCalendarError ? ' · 加载失败，请刷新' : ''}
           </div>}
-          {selectedOrdinaryDownside && <button type="button" className="mb-2 text-left text-[10px] text-gray-400" onClick={() => setOrdinaryPnlDetail(selectedOrdinaryDownside)}>强平规则计入收益 · 值为真实账户余额 · 日/月/年为计入日差 · {selectedOrdinaryDownside.totalPnl === null ? '待更新' : '查看计入收益与raw明细'}</button>}
           {/* 日视图 / 月视图 / 年视图 */}
           {(calendarMode === "balance" || calendarMode === "daily") && (
             <>
@@ -4219,7 +4210,7 @@ export default function LedgerDetailAA({
                               title={stockDisplay?.cumulativeTitle}
                               style={{ color: pnlColor, cursor: canClick ? 'pointer' : 'default', textDecoration: canClick ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: pnlColor, textUnderlineOffset: '2px' }}
                               onClick={canClick ? handlePnlClick : undefined}
-                            >{pnlText}{(stockDisplay || (tag as any).ordinaryDownside) && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E', lineHeight: '11px' }}>{stockDisplay?.cumulativeNote ?? (latestPnl === null ? '待更新' : '规则计入')}</span>}</span>
+                            >{pnlText}{stockDisplay?.cumulativeNote && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E', lineHeight: '11px' }}>{stockDisplay.cumulativeNote}</span>}</span>
                           );
                         })()}
                       </div>
@@ -6746,7 +6737,7 @@ export default function LedgerDetailAA({
                   {(() => {
                     const paidDividend = Number(dividendByTag[dividendNoteTag] ?? 0);
                     const dividendTagDetail = (allTagsStats.perTagDetail ?? []).find((tag) => tag.tagName === dividendNoteTag);
-                    if (dividendTagDetail?.ordinaryDownside && dividendTagDetail.tagPnl === null) return <div className="mb-3 text-xs text-gray-400">强平规则计入收益待更新；已实收分红仍以以下真实记录为准。</div>;
+                    if (dividendTagDetail?.ordinaryDownside && dividendTagDetail.tagPnl === null) return null;
                     const currentReturn = Number(dividendTagDetail?.tagPnl ?? 0);
                     const recoveryAmount = paidDividend - currentReturn;
                     if (paidDividend <= 0 || recoveryAmount <= 0) return null;

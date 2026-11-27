@@ -217,7 +217,7 @@ function ForcedLiquidationUserImpactBody({ targetUserId, initialCategoryId = nul
       for (const name of ["getMyStockTagParticipantPortfolio", "getStockTagPublicPortfolio", "getStockTagDailySnapshots", "getStockTagCalendar"] as const) {
         void utils.ledger[name].invalidate({ ledgerId: 37 });
       }
-      for (const name of ["getMyStockTagOverview", "getMyStockTagObservationOverview", "getMyOrdinaryTagObservationOverview", "getMyOrdinaryTagDownsideValuations", "getMyR1AiParticipationPortfolio", "getMyLedger37AiOverview", "getMyLedger37AiStockPool", "getMyLedger37AiWalletValue", "getMyLedger37HoldingSources", "getCategories", "getCalendarData", "getReport", "getAllTagsMarginSummary"] as const) {
+      for (const name of ["getMyStockTagOverview", "getMyStockTagObservationOverview", "getMyOrdinaryTagObservationOverview", "getMyOrdinaryTagDownsideValuations", "getMyOrdinaryTagReturnValuations", "getMyR1AiParticipationPortfolio", "getMyLedger37AiOverview", "getMyLedger37AiStockPool", "getMyLedger37AiWalletValue", "getMyLedger37HoldingSources", "getCategories", "getCalendarData", "getReport", "getAllTagsMarginSummary"] as const) {
         void utils.ledger[name].invalidate({ ledgerId: 37 });
       }
       void utils.adminGetLedger37DividendAvailability.invalidate({ ledgerId: 37 });

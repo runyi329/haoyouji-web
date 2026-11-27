@@ -2,15 +2,12 @@
 export type OrdinaryDownsidePoint = {
   date: string;
   balance: number | null;
-  countedBalance: number | null;
   pnl: number | null;
   dailyPnl: number | null;
-  rawPnl: number | null;
   capitalChange: number;
   withdrawToDate: number;
   capitalChangeToday: number;
   withdrawToday: number;
-  ruleVersion?: number | null;
 };
 export type OrdinaryDownsideCategory = {
   categoryId: number;

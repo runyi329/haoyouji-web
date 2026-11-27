@@ -1,4 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
+import { projectLedger37StockReturnDto } from './ledger37-return-dto';
 import { fetchIntradayStockQuotes, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 import { isStockLotSaleDateValid, requiresStockTradeOrderCheck } from "../shared/stock-trade-ordering";
 import { normalizePortfolioSymbol, portfolioCurrency, portfolioMarket, portfolioQuantityIsEmpty, isCryptoPortfolioSymbol, isValidCryptoPortfolioQuantity, portfolioCashMultiplier } from '../shared/portfolio-instruments';
@@ -1654,10 +1655,12 @@ export async function getStockTagPortfolio(input: {
   ]);
   // The administrator UI needs this only to label its own allocation inside the
   // full member allocation matrix.  Access remains enforced server-side.
-  return { ...access, viewerUserId: input.userId, accountingMode: "stock_portfolio" as const, ...portfolio,
+  return projectLedger37StockReturnDto({ ...access, viewerUserId: input.userId, accountingMode: "stock_portfolio" as const, ...portfolio,
     positions: access.canEdit ? portfolio.positions : portfolio.positions.map(position => ({ ...position,
       lots: position.lots.map(({ downsideRule: _rule, ...lot }: any) => lot) })),
-    realizedLots: access.canEdit ? portfolio.realizedLots : [], history };
+    realizedLots: access.canEdit ? portfolio.realizedLots : [], history }, {
+    ledgerId: access.ledgerId, canManage: access.canEdit, isViewingAs: input.isViewingAs,
+  });
 }
 
 /**
@@ -1719,7 +1722,9 @@ export async function getStockTagPublicPortfolio(input: {
     ...position,
     lots: position.lots.map(({ note: _note, downsideRule: _rule, ...lot }: any) => lot),
   }));
-  return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, positions: publicPositions, history: [] as any[] };
+  return projectLedger37StockReturnDto({ ...access, accountingMode: "stock_portfolio" as const, ...portfolio, positions: publicPositions, history: [] as any[] }, {
+    ledgerId: access.ledgerId, canManage: access.canEdit, isViewingAs: input.isViewingAs,
+  });
 }
 
 /** Owner-only tag-wide calendar. Members use their existing personal overview points. */
@@ -3648,13 +3653,13 @@ export async function getMyStockTagParticipantPortfolio(input: {
   // 普通成员只读取自己获配批次的估值，不能取得标签完整操作历史。
   const portfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!portfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
-  return {
+  return projectLedger37StockReturnDto({
     ...access,
     accountingMode: "stock_portfolio" as const,
     participantView: true,
     ...portfolio,
     history: [] as any[],
-  };
+  }, { ledgerId: access.ledgerId, canManage: access.canEdit, isViewingAs: input.isViewingAs });
 }
 
 /** All immediately-visible stock tags for the effective member, used by 37's overview table. */
@@ -3731,7 +3736,9 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
       throw error;
     }
   }
-  if (!context.aiEnabled || context.canManage) return visible;
+  if (!context.aiEnabled || context.canManage) return projectLedger37StockReturnDto(visible, {
+    ledgerId: input.ledgerId, canManage: context.canManage, isViewingAs: input.isViewingAs,
+  });
   return visible.map(row => ({
     categoryId: row.categoryId, name: `股票项目${row.categoryId}`, startDate: row.startDate,
     summary: { floatingPnl: row.summary.floatingPnl, realizedPnl: row.summary.realizedPnl,
@@ -3758,13 +3765,14 @@ export async function getStockTagDailySnapshots(input: {
   from?: string;
   to?: string;
 }) {
-  await assertStockPresentationReadAccess(input);
+  const access = await assertStockPresentationReadAccess(input);
+  const presentation = { ledgerId: access.ledgerId, canManage: access.canEdit, isViewingAs: input.isViewingAs };
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const rules = await readStoredStockLotDownsideRules(conn, input.ledgerId, input.categoryId);
-  if (rules.some(r => r.startDate)) return (await readRevisionAwareStockCalendar(input.categoryId))
+  if (rules.some(r => r.startDate)) return projectLedger37StockReturnDto((await readRevisionAwareStockCalendar(input.categoryId))
     .filter(row => (!input.from || row.snapshotDate >= input.from) && (!input.to || row.snapshotDate <= input.to))
-    .sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate));
+    .sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate)), presentation);
   const params: any[] = [input.categoryId];
   let rangeSql = "";
   if (input.from) { rangeSql += " AND snapshot_date >= ?"; params.push(input.from); }
@@ -3789,10 +3797,10 @@ export async function getStockTagDailySnapshots(input: {
   const [tables] = await (conn as any).execute(`SELECT TABLE_NAME FROM information_schema.tables
     WHERE table_schema=DATABASE() AND table_name='ledger_crypto_portfolio_daily_snapshots'`);
   const activationDate = (tables as any[]).length ? await getCryptoPortfolioActivationDate(input.categoryId, conn) : null;
-  return mergeCryptoPortfolioCalendarSnapshots(legacy,
+  return projectLedger37StockReturnDto(mergeCryptoPortfolioCalendarSnapshots(legacy,
     activationDate ? await readCryptoPortfolioCalendar(input.categoryId, undefined, new Date(), conn) : [], activationDate)
     .filter(row => (!input.from || row.snapshotDate >= input.from) && (!input.to || row.snapshotDate <= input.to))
-    .sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate));
+    .sort((left, right) => right.snapshotDate.localeCompare(left.snapshotDate)), presentation);
 }
 
 async function verifyStockForTrade(symbol: string) {

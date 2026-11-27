@@ -27,6 +27,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { compactT0JournalResponse } from "./t0-journal-response";
+import { projectLedger37OrdinaryReturnDto } from './ledger37-return-dto';
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
@@ -14452,9 +14453,23 @@ ${klinesSummary}
     getMyOrdinaryTagDownsideValuations: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }).strict())
       .query(async ({ ctx, input }) => {
+        const access = await getLedger37Access(ctx);
         const { getMyOrdinaryTagDownsideValuations } = await import('./ordinary-tag-downside-valuation');
-        return getMyOrdinaryTagDownsideValuations({ ...input, userId: ctx.user.id,
+        const result = await getMyOrdinaryTagDownsideValuations({ ...input, userId: ctx.user.id,
           systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+        return projectLedger37OrdinaryReturnDto(result, { ledgerId: input.ledgerId,
+          canManage: access.canManage, isViewingAs: Boolean(ctx.isViewingAs) });
+      }),
+    // 通用成员收益入口；与旧接口共用原计算及认证目标身份，客户端不能指定第三人或管理角色。
+    getMyOrdinaryTagReturnValuations: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }).strict())
+      .query(async ({ ctx, input }) => {
+        const access = await getLedger37Access(ctx);
+        const { getMyOrdinaryTagDownsideValuations } = await import('./ordinary-tag-downside-valuation');
+        const result = await getMyOrdinaryTagDownsideValuations({ ...input, userId: ctx.user.id,
+          systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
+        return projectLedger37OrdinaryReturnDto(result, { ledgerId: input.ledgerId,
+          canManage: access.canManage, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
     getStockLotDownsideRule: protectedProcedure
       .input(z.object({
@@ -17698,8 +17713,11 @@ ${klinesSummary}
         if (input.viewAsUserId !== undefined && input.viewAsUserId !== ctx.user.id) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '请在当前成员视角查看观察账户' });
         }
+        const access = await getLedger37Access(ctx);
         const observation = await import('./ordinary-tag-observation');
-        return observation.getMyOrdinaryTagObservationOverview({ ledgerId: input.ledgerId, userId: ctx.user.id });
+        const result = await observation.getMyOrdinaryTagObservationOverview({ ledgerId: input.ledgerId, userId: ctx.user.id });
+        return projectLedger37OrdinaryReturnDto(result, { ledgerId: input.ledgerId,
+          canManage: access.canManage, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
 
     // 37号：纠正一笔“历史手工保证金迁入并冻结”的录入错误。
@@ -19005,6 +19023,9 @@ ${klinesSummary}
           await assertLedger37RawPresentationRead(ctx, input.ledgerId);
         }
         const db = await getLedgerDb();
+        const returnPresentation = input.ledgerId === 37 && !input.reference52
+          ? { ledgerId: 37, canManage: (await getLedger37Access(ctx)).canManage, isViewingAs: Boolean(ctx.isViewingAs) }
+          : { ledgerId: input.ledgerId, canManage: true, isViewingAs: false };
         // 37号标签暂停后，手工余额只读取“最后结算日”及以前的数据；
         // 其余账本仍仅由保证金暂停控制，保持原有利息/保证金分层语义。
         const pauseConfigRows = await db.execute(
@@ -19131,7 +19152,7 @@ ${klinesSummary}
               currency: 'CNY', categoryId: Number(category.id), updatedDate: currentHoldingValueDate, ruleVersion: rule?.version ?? null };
           }
         }
-        return {
+        return projectLedger37OrdinaryReturnDto({
           marginByCoin,
           latestBalance: latestBalance ? {
             balance: latestBalance.amount,
@@ -19151,7 +19172,7 @@ ${klinesSummary}
             updatedDate: currentHoldingValueDate,
           } : null,
           ...(countedHoldingValue !== undefined ? { countedHoldingValue } : {}),
-        };
+        }, returnPresentation);
       }),
 
     // 37号保证金的唯一实时估值口径。37号原页面、52号引用详情和52订单风险公式
