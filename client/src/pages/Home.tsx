@@ -32,6 +32,9 @@ import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
 import { getSmartAccountingRoute } from "@/lib/smartAccountingNavigation";
 
+// 首屏海报与商城分类入口共用米伴首页地址，避免小入口退回商品分类弹窗。
+const MIBAN_HOME_PATH = '/p/proj_hzxm2t/';
+
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
 // 上半容器：高度 h/2，数字元素绝对定位 top:0，显示上半
@@ -1830,7 +1833,7 @@ export default function Home() {
           <div
             key="p0-miban"
             className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
-            onClick={() => navigate('/p/proj_hzxm2t/')}
+            onClick={() => navigate(MIBAN_HOME_PATH)}
           >
             <img
               src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/miban-flagship-banner.webp"
@@ -1877,6 +1880,10 @@ export default function Home() {
                     key={cat.id}
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
+                      if (cat.name === '米伴' || cat.name === '米瓣') {
+                        navigate(MIBAN_HOME_PATH);
+                        return;
+                      }
                       if (cat.name === '食品饮料') {
                         navigate('/rice-product');
                         return;
