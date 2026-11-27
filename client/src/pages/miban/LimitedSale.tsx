@@ -107,7 +107,7 @@ function WineTastingPreviewCard({ onClick, viewCount }: PreviewCardProps) {
           </p>
         </div>
         <Link
-          href="/p/proj_hzxm2t/limited/guizhou"
+          href="/p/proj_hzxm2t/limited/moutai-feitian"
           onClick={onClick}
           data-testid="brand-cta-guizhou"
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#8A5835] text-[#FFF9F0] transition-colors hover:bg-[#794A2B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8A5835] active:scale-[0.985]`}
@@ -445,8 +445,7 @@ export default function LimitedSale() {
   const viewCountFor = (brandSlug: BrandSlug) =>
     brandAttention === undefined
       ? undefined
-      : (brandAttention.find(item => item.brandSlug === brandSlug)?.viewCount ??
-        0);
+      : brandAttention.find(item => item.brandSlug === brandSlug)?.viewCount;
   const sortedBrands = [...BRAND_ORDER].sort(
     (a, b) =>
       (viewCountFor(b) ?? 0) - (viewCountFor(a) ?? 0) ||

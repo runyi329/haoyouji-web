@@ -22,7 +22,7 @@ export default function MoutaiFeitianDetail() {
     : null;
   if (!loading && !isAdmin) {
     return <div className="mx-auto min-h-screen max-w-[480px] bg-[#F4EBDD] px-6 py-10 text-center text-sm text-[#7A6B5A]">
-      <p>商品资料审核中，仅管理员可预览。</p>
+      <p>当前账号暂无法访问该商品。</p>
       <button type="button" onClick={() => setLocation('/p/proj_hzxm2t/limited')} className="mt-5 rounded-[8px] bg-[#9E2528] px-5 py-2.5 text-white">返回精选商品</button>
     </div>;
   }
@@ -30,7 +30,7 @@ export default function MoutaiFeitianDetail() {
     identity={user && isAdmin ? { verified: true, name: user.name || user.username || '管理员', role: user.role, mibanRole: (user as any).mibanRole, mode: 'readonly-admin-preview' } : null}
     identityLoading={loading}
     onRetryIdentity={() => { void refresh(); }}
-    onBack={() => setLocation('/p/proj_hzxm2t/limited/guizhou')}
+    onBack={() => setLocation('/p/proj_hzxm2t/limited')}
     usdtCnyRate={usdtCnyRate}
     fxAsOf={fxAsOf}
     renderPayment={(total) => <MoutaiWalletPayment totalCny={total} />}

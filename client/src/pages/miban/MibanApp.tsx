@@ -34,7 +34,6 @@ const LimitedBrandProducts = lazy(() => import("./LimitedBrandProducts"));
 const SeasonalFruitSelection = lazy(() => import("./SeasonalFruitSelection"));
 const MidaniangSelection = lazy(() => import("./MidaniangSelection"));
 const MidaniangSelectionDetail = lazy(() => import("./MidaniangSelectionDetail"));
-const GuizhouSelection = lazy(() => import("./GuizhouSelection"));
 const MoutaiFeitianDetail = lazy(() => import("./MoutaiFeitianDetail"));
 
 const BASE = "/p/proj_hzxm2t";
@@ -78,12 +77,12 @@ export default function MibanApp() {
   // 钱包复用原钱包独立页面：避免重复导航挤压账户与流水的原有布局。
   if (location === `${BASE}/wallet`) return <Suspense fallback={<MibanPageLoading />}><MibanWallet /></Suspense>;
 
-  // 贵州精选采用沉浸式长页的独立导航，不叠加商城底部Tab。
+  // 贵州精选直接进入飞天详情；旧贵州入口同样兼容详情，不叠加商城底部Tab。
   // 精确商品路由必须在通用 /limited/:productKey 之前匹配。
   const cleanPath = location.split("?")[0];
   if (cleanPath === `${BASE}/limited/guizhou` || cleanPath === `${BASE}/limited/moutai-feitian`) {
     return <Suspense fallback={<MibanPageLoading />}><Switch>
-      <Route path={`${BASE}/limited/guizhou`} component={GuizhouSelection} />
+      <Route path={`${BASE}/limited/guizhou`} component={MoutaiFeitianDetail} />
       <Route path={`${BASE}/limited/moutai-feitian`} component={MoutaiFeitianDetail} />
     </Switch></Suspense>;
   }

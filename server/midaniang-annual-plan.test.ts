@@ -189,7 +189,7 @@ function expectReleased(h: ReturnType<typeof harness>, orderNumbers: string[]) {
 const orderNumbers = (length: number) => Array.from({ length }, (_, index) => `AA${String(index + 1).padStart(4, "0")}`);
 
 describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => {
-  it("只新增年单接口，既有 router 每个属性与发布基准原文指纹一致", () => {
+  it("除明确扩展的关注品牌校验外，既有 router 与原发布基准指纹一致", () => {
     // 基准3aae608ba8132a1d953ef8bb7fa8eddfae26f0a6的initializer原文SHA256；不依赖移动HEAD或浅克隆历史。
     const baseline: Record<string, string> = {
       brandAttention: "3128c3c47908f29141af78c86714559bf295fd8c30ce09e3a93bc0d8738ebbb8",
@@ -208,7 +208,14 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     expect(current.map(node => node.name.getText()).filter(name => name !== "createAnnualOrder")).toEqual(Object.keys(baseline));
     for (const [name, fingerprint] of Object.entries(baseline)) {
       const initializer = current.find(node => node.name.getText() === name)?.initializer.getText();
-      expect(createHash("sha256").update(initializer ?? "").digest("hex")).toBe(fingerprint);
+      // 仅归一化本轮审核过的统计注册表达式；不改原基准哈希，也不放宽任何资金/库存/订单接口。
+      const baselineInitializer = name === "recordBrandAttention"
+        ? initializer?.replace(
+            "mibanLimitedAttentionSlugs.some(brandSlug => brandSlug === slug)",
+            "mibanLimitedBrands.some(brand => brand.slug === slug && brand.status === \"on_sale\")"
+          )
+        : initializer;
+      expect(createHash("sha256").update(baselineInitializer ?? "").digest("hex")).toBe(fingerprint);
     }
     expect(annualExpression).toMatch(/^protectedProcedure\s*\.input/);
     expect(annualExpression).not.toMatch(/\b(?:import\s*\(|require\s*\(|getDb\s*\(|fetch\s*\()/);

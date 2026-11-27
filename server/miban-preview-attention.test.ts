@@ -32,6 +32,7 @@ const expectedSlugs = [
   "guizhou", "amway", "marykay", "nuskin", "jianghai",
 ];
 const navigationSlugs = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka", "guizhou"];
+const navigationHref = (slug: string) => `/p/proj_hzxm2t/limited/${slug === "guizhou" ? "moutai-feitian" : slug}`;
 const previewMessages: Record<string, string> = {
   amway: "安利日用精选商品尚未上架，敬请期待。",
   marykay: "玫琳凯美肤精选商品尚未上架，敬请期待。",
@@ -95,6 +96,25 @@ describe("all limited brand cards record attention only through their CTA", () =
     expect(html).toContain("jianghai-fresh-selection-stage-v13.webp");
   });
 
+  it.each(expectedSlugs)("a missing %s row remains unknown while other real values are displayed", slug => {
+    boundary.cache = expectedSlugs.filter(brandSlug => brandSlug !== slug).map(brandSlug => ({ brandSlug, viewCount: 27 }));
+    const html = markupFor(React.createElement(LimitedSale));
+    const missing = expand(cardFor(slug)).find(el => el.props["data-testid"] === `${slug}-attention`)!;
+    expect(missing.props["data-view-count"]).toBe("unavailable");
+    expect(html.match(/关注 --/g)).toHaveLength(1);
+    expect(html.match(/关注 \+27/g)).toHaveLength(expectedSlugs.length - 1);
+    expect(html).not.toContain("关注 +0");
+    expect(boundary.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("an empty completed GET never fabricates eleven zero values", () => {
+    boundary.cache = [];
+    const html = markupFor(React.createElement(LimitedSale));
+    expect(html.match(/关注 --/g)).toHaveLength(expectedSlugs.length);
+    expect(html).not.toContain("关注 +0");
+    expect(boundary.mutateAsync).not.toHaveBeenCalled();
+  });
+
   it.each(expectedSlugs)("%s is a noninteractive article with exactly one native Link/button CTA", slug => {
     const card = cardFor(slug);
     const cta = ctaFor(slug, card);
@@ -114,9 +134,9 @@ describe("all limited brand cards record attention only through their CTA", () =
     const html = markupFor(card);
     if (navigationSlugs.includes(slug)) {
       expect(cta.type).toBe(Link);
-      expect(cta.props.href).toBe(`/p/proj_hzxm2t/limited/${slug}`);
+      expect(cta.props.href).toBe(navigationHref(slug));
       expect(html).toMatch(new RegExp(`<a\\b[^>]*data-testid="brand-cta-${slug}"`));
-      expect(html).toContain(`href="/p/proj_hzxm2t/limited/${slug}"`);
+      expect(html).toContain(`href="${navigationHref(slug)}"`);
     } else {
       expect(cta.type).toBe("button");
       expect(cta.props.type).toBe("button");
@@ -211,7 +231,7 @@ describe("all limited brand cards record attention only through their CTA", () =
       expect(boundary.toast).toHaveBeenCalledWith(previewMessages[slug]);
     } else {
       expect(cta.type).toBe(Link);
-      expect(cta.props.href).toBe(`/p/proj_hzxm2t/limited/${slug}`);
+      expect(cta.props.href).toBe(navigationHref(slug));
       expect(boundary.toast).not.toHaveBeenCalled();
     }
   });
@@ -228,7 +248,7 @@ describe("all limited brand cards record attention only through their CTA", () =
       expect(boundary.toast).toHaveBeenCalledTimes(1);
       expect(boundary.toast).toHaveBeenCalledWith(previewMessages[slug]);
     } else {
-      expect(cta.props.href).toBe(`/p/proj_hzxm2t/limited/${slug}`);
+      expect(cta.props.href).toBe(navigationHref(slug));
       expect(boundary.toast).not.toHaveBeenCalled();
     }
   });
