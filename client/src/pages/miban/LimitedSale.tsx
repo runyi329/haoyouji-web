@@ -3,7 +3,6 @@ import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "./mibanTrpc";
 import { MibanImage } from "./MibanImage";
-import { MOUTAI_THUMB } from "@/lib/moutai";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import {
   LINGCHUANG_THEME,
@@ -44,9 +43,71 @@ const BRAND_CARD_CTA_CLASS =
   "inline-flex min-h-[32px] w-fit items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-[11px] font-bold";
 const BRAND_CARD_CTA_ICON_CLASS = "h-3.5 w-3.5";
 
+const WINE_TASTING_PREVIEW = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guizhou/brand-card/v1/guizhou-original-stage-bd73885a1d59.webp";
+const MOUTAI_OFFICIAL_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guizhou/brand-card/v1/moutai-original-logo-6f22c1e6e462.webp";
+
 const BRAND_ORDER = mibanLimitedBrands.map(brand => brand.slug);
 type BrandSlug = MibanLimitedBrand["slug"];
 type BrandAttention = { brandSlug: string; viewCount: number };
+
+function WineTastingPreviewCard() {
+  return (
+    <article
+      className="relative isolate min-h-[224px] overflow-hidden rounded-[22px]"
+      data-testid="brand-card-guizhou"
+      style={{
+        background: "#F6ECDB",
+        clipPath: "inset(0 round 22px)",
+        boxShadow: "0 14px 32px rgba(132,77,39,0.14)",
+      }}
+      aria-label="贵州精选，AI茅台飞天与生肖系列陈列预览"
+    >
+      <MibanImage
+        variant="card"
+        src={WINE_TASTING_PREVIEW}
+        alt="AI茅台飞天与生肖系列陈列"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right"
+        loading="lazy"
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(90deg,rgba(250,241,225,0.99) 0%,rgba(250,241,225,0.96) 27%,rgba(250,241,225,0.84) 40%,rgba(250,241,225,0.44) 53%,rgba(250,241,225,0.10) 67%,rgba(250,241,225,0) 78%)",
+        }}
+      />
+      <div className="relative z-10 flex min-h-[224px] max-w-[60%] flex-col justify-between px-5 py-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <MibanImage
+              variant="icon"
+              src={MOUTAI_OFFICIAL_LOGO}
+              alt="贵州茅台官方品牌标识"
+              className="h-[68px] w-[68px] shrink-0 object-contain"
+              loading="lazy"
+            />
+            <p className="shrink-0 border-l border-[#A98A63]/35 pl-2 text-[10px] font-medium leading-[18px] tracking-[0.04em] text-[#8C6B50]">
+              贵州仁怀<br />茅台镇
+            </p>
+          </div>
+          <h3 className="mt-1.5 whitespace-nowrap text-[23px] font-extrabold leading-tight text-[#5A331B]">
+            贵州精选
+          </h3>
+          <p className="mt-1.5 text-[11px] leading-[18px] text-[#8C6B50]">
+            酱香突出，<br />幽雅细腻。
+          </p>
+        </div>
+        <Link
+          href="/p/proj_hzxm2t/limited/guizhou"
+          className="mt-3 inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-[#8A5835] px-3 py-2 text-[11px] font-bold text-[#FFF9F0] transition-colors hover:bg-[#794A2B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8A5835] active:scale-[0.985]"
+        >
+          查看贵州精选
+          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </Link>
+      </div>
+    </article>
+  );
+}
 
 function AmwayDailyPreviewCard() {
   return (
@@ -613,12 +674,7 @@ export default function LimitedSale() {
         aria-label="精选系列"
         data-testid="limited-brand-list"
       >
-        <Link href="/p/proj_hzxm2t/limited/guizhou" data-testid="brand-card-guizhou" className="block overflow-hidden rounded-[18px] border border-[#DACBB8] bg-[#F4EBDD]">
-          <div className="grid grid-cols-[112px_1fr] items-center gap-3">
-            <img src={MOUTAI_THUMB} alt="贵州精选飞天茅台主视觉" className="h-[158px] w-[112px] object-cover" />
-            <div className="py-4 pr-4"><p className="text-[10px] tracking-[0.15em] text-[#A1834F]">大曲酱香 · 审核预览</p><h3 className="mt-2 text-[22px] font-semibold text-[#9E2528]">贵州精选</h3><p className="mt-1.5 text-[11px] leading-relaxed text-[#7A6B5A]">飞天茅台 53度500mL<br />生产年份可选，每单1—6瓶</p><span className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-[#9E2528]">查看商品长页<ChevronRight className="h-3 w-3" /></span></div>
-          </div>
-        </Link>
+        <WineTastingPreviewCard />
         {sortedBrands.map(brandSlug => brandCards[brandSlug])}
         <AmwayDailyPreviewCard />
         <MaryKayBeautyPreviewCard />
