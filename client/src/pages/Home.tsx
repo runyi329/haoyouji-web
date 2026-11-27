@@ -31,6 +31,7 @@ import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
 import { getSmartAccountingRoute } from "@/lib/smartAccountingNavigation";
+import { MibanImage } from "@/pages/miban/MibanImage";
 
 // 首屏海报与商城分类入口共用米伴首页地址，避免小入口退回商品分类弹窗。
 const MIBAN_HOME_PATH = '/p/proj_hzxm2t/';
@@ -1843,9 +1844,13 @@ export default function Home() {
             className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
             onClick={() => navigate(MIBAN_HOME_PATH)}
           >
-            <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/miban-flagship-banner.webp"
-              alt="米伴·我的饭碗我做主"
+            <MibanImage
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/home-posters/miban-fine-linen-1862f21234d5921a5b67.webp"
+              alt="米伴·米与杂粮"
+              variant="card"
+              priority
+              width={960}
+              height={720}
               className="w-full h-full" style={{ objectFit: 'cover', objectPosition: 'left top' }}
             />
             {/* 右上角刷新按鈕（与 AI 球半完全一致） */}

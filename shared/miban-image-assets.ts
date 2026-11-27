@@ -239,6 +239,20 @@ export const mibanImageAssets: Record<string, MibanImageAsset> = {
       }
     }
   },
+  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/home-posters/miban-fine-linen-1862f21234d5921a5b67.webp": {
+    "original": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/home-posters/miban-fine-linen-1862f21234d5921a5b67.webp",
+    "width": 2368,
+    "height": 1776,
+    "bytes": 3417510,
+    "variants": {
+      "card": {
+        "src": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/optimized-images/v1/304532bb0a7e213118e5-960w.webp",
+        "width": 960,
+        "height": 720,
+        "bytes": 87130
+      }
+    }
+  },
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_black_single.webp": {
     "original": "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_black_single.webp",
     "width": 800,
