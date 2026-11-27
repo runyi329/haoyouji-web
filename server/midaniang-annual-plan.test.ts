@@ -5,6 +5,7 @@ import ts from "typescript";
 import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
+import { mibanInvoiceRequestSchema } from "../shared/miban-invoice";
 
 /**
  * 隔离安全回归：不运行时 import miban、db、router、钱包或任何业务模块。
@@ -93,12 +94,15 @@ type Options = {
   product?: any; sku?: any; reserveFailAt?: number; createFailAt?: number; linkFailAt?: number;
   debitFailure?: boolean; commitFailure?: boolean; snapshotFailure?: boolean;
   unlimitedAt?: number[]; releaseFailAt?: number[]; nullPayment?: boolean; rate?: string;
+  invoiceFailAt?: number; invoiceInfrastructureFailure?: boolean;
 };
 function harness(options: Options = {}) {
   const events: string[] = [];
   const transaction = Object.freeze({ testOnlyTransaction: true });
   const attemptedOrders: any[] = [];
   const committedOrders: any[] = [];
+  const attemptedInvoices: any[] = [];
+  const committedInvoices: any[] = [];
   const product = { key: "midaniang-classic-rice-gift", brand: "米大娘", status: "on_sale", category: "大米礼盒", detail: { title: "测试目录标题", productImage: "test-only.png" }, card: { theme: { accent: "#000000" } }, ...options.product };
   const sku = { id: "classic-500g-6", active: true, maxPurchaseQty: 10, priceCny: 228, quantityPerOrder: 1, unitLabel: "盒", netContentText: "测试规格", name: "测试SKU", ...options.sku };
   const prices = [{ assetCode: "CNY", priceCny: "1", priceUsdt: "0.142857142857142857" }, { assetCode: "USDT", priceCny: "7", priceUsdt: "1" }, { assetCode: "BTC", priceCny: "100000", priceUsdt: "14285.714285714285714285" }];
@@ -114,6 +118,18 @@ function harness(options: Options = {}) {
       return { quoteToken: args.paymentQuoteToken, quotedAt: NOW, expiresAt: "2026-02-01T16:05:00Z", usdtCnyRate: options.rate ?? "7.0000", deductions: paymentPure.validateMibanPaymentDeductions(args.totalCny, args.paymentAssets, prices) };
     }),
     ensureMibanWalletPaymentInfrastructure: vi.fn(async () => { events.push("infrastructure"); }),
+    ensureMibanOrderInvoiceInfrastructure: vi.fn(async () => {
+      events.push("invoice-infrastructure");
+      if (options.invoiceInfrastructureFailure) throw new Error("invoice-infrastructure-failed");
+    }),
+    insertMibanOrderInvoiceRequest: vi.fn(async (args: any) => {
+      expect(args.transaction).toBe(transaction);
+      expect(args.userId).toBe(USER_ID);
+      const index = mocks.insertMibanOrderInvoiceRequest.mock.calls.length;
+      events.push(`invoice:${index}`);
+      if (index === options.invoiceFailAt) throw new Error(`invoice-failed:${index}`);
+      attemptedInvoices.push(args);
+    }),
     createUniqueMibanOrderNo: vi.fn(async () => `AA${String(++number).padStart(4, "0")}`),
     reserveLimitedSkuStock: vi.fn(async (..._args: any[]) => {
       const index = mocks.reserveLimitedSkuStock.mock.calls.length;
@@ -157,6 +173,7 @@ function harness(options: Options = {}) {
         const orders = await work(transaction);
         if (options.commitFailure) throw new Error("commit-failed");
         committedOrders.push(...attemptedOrders);
+        committedInvoices.push(...attemptedInvoices);
         events.push("commit");
         return orders;
       } catch (error) { events.push("rollback"); throw error; }
@@ -169,14 +186,25 @@ function harness(options: Options = {}) {
   };
   const procedure = evaluate(`(${annualExpression});`, {
     ...mocks, protectedProcedure, z, mibanReceiverPhoneSchema: phoneSchema, TRPCError: MockTRPCError,
+    mibanInvoiceRequestSchema,
     MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates,
     paymentDecimalUnits: paymentPure.paymentDecimalUnits,
     splitMibanPaymentDeductions: paymentPure.splitMibanPaymentDeductions,
     mibanFundingDeductionAmounts: fundingAmounts,
     randomUUID: () => "11111111-2222-3333-4444-555555555555", Date: FixedDate,
   }) as { schema: z.ZodType; resolver: (args: any) => Promise<any> };
-  return { mocks, product, sku, transaction, attemptedOrders, committedOrders, events,
-    run: async (input: any = baseInput()) => procedure.resolver({ input: procedure.schema.parse(input), ctx: { user: { id: USER_ID } } }),
+  return { mocks, product, sku, transaction, attemptedOrders, committedOrders, attemptedInvoices, committedInvoices, events,
+    run: async (input: any = baseInput()) => {
+      try {
+        return await procedure.resolver({ input: procedure.schema.parse(input), ctx: { user: { id: USER_ID } } });
+      } finally {
+        // 所有原有成功/拒绝/回滚用例都必须保持关闭发票时零探测、零插入。
+        if (input.invoiceRequest === undefined) {
+          expect(mocks.ensureMibanOrderInvoiceInfrastructure).not.toHaveBeenCalled();
+          expect(mocks.insertMibanOrderInvoiceRequest).not.toHaveBeenCalled();
+        }
+      }
+    },
   };
 }
 function expectReleased(h: ReturnType<typeof harness>, orderNumbers: string[]) {
@@ -189,7 +217,7 @@ function expectReleased(h: ReturnType<typeof harness>, orderNumbers: string[]) {
 const orderNumbers = (length: number) => Array.from({ length }, (_, index) => `AA${String(index + 1).padStart(4, "0")}`);
 
 describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => {
-  it("除明确扩展的关注品牌校验外，既有 router 与原发布基准指纹一致", () => {
+  it("仅归一化明确审核的关注品牌和发票接入，既有 router 与原发布基准指纹一致", () => {
     // 基准3aae608ba8132a1d953ef8bb7fa8eddfae26f0a6的initializer原文SHA256；不依赖移动HEAD或浅克隆历史。
     const baseline: Record<string, string> = {
       brandAttention: "3128c3c47908f29141af78c86714559bf295fd8c30ce09e3a93bc0d8738ebbb8",
@@ -205,16 +233,33 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
       createCartOrder: "292ff8bd430853f92165f23a5dfdbd60b27447d4b7578322a3951261a796399e",
     };
     const current = getRouterProperties(source);
-    expect(current.map(node => node.name.getText()).filter(name => name !== "createAnnualOrder")).toEqual(Object.keys(baseline));
+    expect(current.map(node => node.name.getText())).toEqual([
+      "invoiceSupport", ...Object.keys(baseline).slice(0, -2), "createAnnualOrder", "createOrder", "createCartOrder",
+    ]);
+    expect(current.find(node => node.name.getText() === "invoiceSupport")?.initializer.getText()).toBe(
+      'protectedProcedure.query(async () => {\n    await ensureMibanOrderInvoiceInfrastructure();\n    return { supported: true, version: 1 } as const;\n  })'
+    );
     for (const [name, fingerprint] of Object.entries(baseline)) {
       const initializer = current.find(node => node.name.getText() === name)?.initializer.getText();
-      // 仅归一化本轮审核过的统计注册表达式；不改原基准哈希，也不放宽任何资金/库存/订单接口。
-      const baselineInitializer = name === "recordBrandAttention"
+      // 不更新原基准哈希；仅移除逐条、逐路由精确批准的发票接入行，其余原文必须保持不变。
+      let baselineInitializer = name === "recordBrandAttention"
         ? initializer?.replace(
             "mibanLimitedAttentionSlugs.some(brandSlug => brandSlug === slug)",
             "mibanLimitedBrands.some(brand => brand.slug === slug && brand.status === \"on_sale\")"
           )
         : initializer;
+      if (name === "createOrder" || name === "createCartOrder") {
+        const approvedInvoiceLines = [
+          "invoiceRequest: mibanInvoiceRequestSchema.optional(),",
+          "if (input.invoiceRequest) await ensureMibanOrderInvoiceInfrastructure();",
+          name === "createOrder"
+            ? "if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId: createdOrderId, userId, invoiceRequest: input.invoiceRequest });"
+            : "if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId, userId, invoiceRequest: input.invoiceRequest });",
+        ];
+        const lines = (baselineInitializer ?? "").split("\n");
+        for (const approved of approvedInvoiceLines) expect(lines.filter(line => line.trim() === approved)).toHaveLength(1);
+        baselineInitializer = lines.filter(line => !approvedInvoiceLines.includes(line.trim())).join("\n");
+      }
       expect(createHash("sha256").update(baselineInitializer ?? "").digest("hex")).toBe(fingerprint);
     }
     expect(annualExpression).toMatch(/^protectedProcedure\s*\.input/);
@@ -248,6 +293,58 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
       expect(h.mocks.reserveLimitedSkuStock.mock.calls[index]).toEqual([productKey, skuId, 2, USER_ID, result.orderNos[index]]);
     });
     expect(result.scheduledShipDates[0]).toBe("2026-02-01");
+  });
+
+  it.each([
+    { type: "personal", title: " 离线个人抬头 ", taxNo: "旧公司残留税号" },
+    { type: "company", title: " 离线公司抬头 ", taxNo: " 任意长度-税号 " },
+  ])("$type发票通过真实共享schema，12月申请均使用原钱包事务", async invoiceRequest => {
+    const h = harness();
+    const result = await h.run({ ...baseInput(), invoiceRequest });
+    const normalized = mibanInvoiceRequestSchema.parse(invoiceRequest);
+    expect(h.mocks.ensureMibanOrderInvoiceInfrastructure).toHaveBeenCalledTimes(1);
+    expect(h.events.indexOf("invoice-infrastructure")).toBeLessThan(h.events.indexOf("reserve:1"));
+    expect(h.events.indexOf("invoice-infrastructure")).toBeLessThan(h.events.indexOf("begin"));
+    expect(h.mocks.insertMibanOrderInvoiceRequest).toHaveBeenCalledTimes(12);
+    expect(h.committedInvoices).toHaveLength(12);
+    expect(h.committedInvoices.map(row => row.orderId)).toEqual(result.orderIds);
+    h.committedInvoices.forEach((row, index) => {
+      expect(row).toEqual({ transaction: h.transaction, orderId: result.orderIds[index], userId: USER_ID, invoiceRequest: normalized });
+      expect(h.events.indexOf(`invoice:${index + 1}`)).toBeGreaterThan(h.events.indexOf(`create:${index + 1}`));
+    });
+    expect(h.events.indexOf("debit")).toBeGreaterThan(h.events.indexOf("invoice:12"));
+    expect(h.mocks.debitMibanWalletPayment).toHaveBeenCalledTimes(1);
+    expect(h.mocks.releaseLimitedSkuStock).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 7, 12])("第%d月发票失败回滚12月订单和申请，释放全部月库存且不扣款", async invoiceFailAt => {
+    const h = harness({ invoiceFailAt });
+    await expect(h.run({ ...baseInput(), invoiceRequest: { type: "personal", title: "离线个人" } })).rejects.toThrow(`invoice-failed:${invoiceFailAt}`);
+    expect(h.mocks.insertMibanOrderInvoiceRequest).toHaveBeenCalledTimes(invoiceFailAt);
+    expect(h.committedOrders).toEqual([]);
+    expect(h.committedInvoices).toEqual([]);
+    expectReleased(h, orderNumbers(12));
+    expect(h.events.indexOf("rollback")).toBeLessThan(h.events.indexOf("release:1"));
+    expect(h.mocks.debitMibanWalletPayment).not.toHaveBeenCalled();
+  });
+
+  it("发票基础设施失败在库存预占和钱包事务之前拒绝", async () => {
+    const h = harness({ invoiceInfrastructureFailure: true });
+    await expect(h.run({ ...baseInput(), invoiceRequest: { type: "personal", title: "离线个人" } })).rejects.toThrow("invoice-infrastructure-failed");
+    expect(h.mocks.reserveLimitedSkuStock).not.toHaveBeenCalled();
+    expect(h.mocks.withGlobalWalletTransaction).not.toHaveBeenCalled();
+    expect(h.mocks.insertMibanOrderInvoiceRequest).not.toHaveBeenCalled();
+    expect(h.mocks.debitMibanWalletPayment).not.toHaveBeenCalled();
+  });
+
+  it("非法发票由真实schema拒绝，不触及钱包、基础设施、库存或订单", async () => {
+    for (const invoiceRequest of [{ type: "personal", title: " " }, { type: "company", title: "公司" }, { type: "company", title: "公司", taxNo: "\n税号" }]) {
+      const h = harness();
+      await expect(h.run({ ...baseInput(), invoiceRequest })).rejects.toThrow();
+      expect(h.events).toEqual([]);
+      expect(h.mocks.ensureMibanOrderInvoiceInfrastructure).not.toHaveBeenCalled();
+      expect(h.mocks.insertMibanOrderInvoiceRequest).not.toHaveBeenCalled();
+    }
   });
 
   it("CNY/USDT/BTC 12期原币BigInt严格守恒，各币原生精度及最后一期尾差不丢失", async () => {

@@ -33,9 +33,11 @@ import {
   formatMibanCheckoutError,
 } from "../../../../shared/miban-shipping";
 import {
-  MibanMixedPaymentAllocation,
+  MibanPaymentConfirmation,
+  MibanWalletAvailableSummary,
   useMibanMixedPayment,
 } from "./MibanMixedPayment";
+import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
 import {
   PAYMENT_SCALE,
   formatMibanPaymentSummary,
@@ -46,6 +48,13 @@ import {
   getMibanLimitedProduct,
   getMibanLimitedProductSku,
 } from "../../../../shared/miban-limited-products";
+import MibanInvoiceRequestForm, {
+  createMibanInvoiceDraft,
+  validateMibanInvoiceRequest,
+  MIBAN_INVOICE_UNAVAILABLE_NOTICE,
+  type MibanInvoiceDraft,
+  type MibanInvoiceErrors,
+} from "./MibanInvoiceRequestForm";
 
 const STORAGE_KEY = "miban-limited-product-cart-v1";
 
@@ -386,6 +395,12 @@ function LimitedProductCartOverlay() {
     ? getMibanReceiverPhoneError(selectedAddress.phone ?? "")
     : null;
   const [userNote, setUserNote] = useState("");
+  const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
+  const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  const [preparingPayment, setPreparingPayment] = useState(false);
+  const [showWalletPayment, setShowWalletPayment] = useState(false);
+  const paymentAttemptRef = useRef(0);
+  const submissionGuardRef = useRef(false);
   const [success, setSuccess] = useState<CartCheckoutReceipt | null>(null);
   // 分组仅用于展示；提交仍发送整车原始商品，由服务端按精选生成独立订单。
   const groups = useMemo(() => {
@@ -439,6 +454,32 @@ function LimitedProductCartOverlay() {
   const utils = trpc.useUtils();
   const mibanUtils = mtrpc.useUtils();
   const paymentInitialized = useRef(false);
+  const cartItemsScope = JSON.stringify(items.map(item => [item.productKey, item.skuId, item.quantity, item.priceCny]));
+  const checkoutScope = JSON.stringify([
+    open, checkoutOpen, showWalletPayment, location, isAuthenticated, cartItemsScope, totalCny,
+    selectedAddress?.id, selectedAddress?.name, selectedAddress?.phone,
+    formatAddress(selectedAddress), userNote, invoiceDraft,
+  ]);
+  const latestCheckoutScope = useRef(checkoutScope);
+  latestCheckoutScope.current = checkoutScope;
+
+  useEffect(() => {
+    paymentAttemptRef.current++;
+    submissionGuardRef.current = false;
+    payment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  }, [open, checkoutOpen, cartItemsScope, payment.cancelPendingPayment]);
+
+  useEffect(() => {
+    if (!open || !checkoutOpen) {
+      // 离开checkout即清空；切换地址和付款失败不清空本次申请。
+      setInvoiceDraft(createMibanInvoiceDraft());
+      setInvoiceErrors({});
+    }
+  }, [open, checkoutOpen]);
+
+  useEffect(() => () => { paymentAttemptRef.current++; }, []);
 
   useEffect(() => {
     if (!open) {
@@ -486,15 +527,18 @@ function LimitedProductCartOverlay() {
       utils.recharge.getCnyBalanceSummary.invalidate();
       utils.recharge.getMultiAssetBalances.invalidate();
       mibanUtils.order.walletPaymentQuote.invalidate();
+      setShowWalletPayment(false);
       setSuccess(data);
     },
     onError: (error: { message?: string }) => {
       toast.error(formatMibanCheckoutError(error));
     },
+    onSettled: () => { submissionGuardRef.current = false; },
   });
+  const checkoutBusy = createOrder.isPending || preparingPayment;
 
   const handleCheckout = () => {
-    if (authLoading) return;
+    if (authLoading || checkoutBusy || submissionGuardRef.current) return;
     if (!isAuthenticated) {
       closeCart();
       toast.message("请先登录后再结算购物车");
@@ -502,11 +546,45 @@ function LimitedProductCartOverlay() {
       return;
     }
     paymentInitialized.current = false;
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
     setCheckoutOpen(true);
   };
 
-  const handlePay = async () => {
+  const cancelWalletPayment = () => {
     if (createOrder.isPending) return;
+    paymentAttemptRef.current++;
+    submissionGuardRef.current = false;
+    payment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  };
+
+  const handleOpenWalletPayment = () => {
+    if (checkoutBusy || submissionGuardRef.current || !open || !checkoutOpen || !items.length) return;
+    if (!selectedAddress) {
+      toast.error("请先选择收货地址");
+      return;
+    }
+    if (receiverPhoneError) {
+      toast.error(receiverPhoneError);
+      return;
+    }
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) {
+      toast.error(invoice.message);
+      return;
+    }
+    if (!payment.canPay) {
+      toast.error(payment.statusMessage);
+      return;
+    }
+    setShowWalletPayment(true);
+  };
+
+  const handlePay = async () => {
+    if (checkoutBusy || submissionGuardRef.current || !open || !checkoutOpen || !showWalletPayment || !isAuthenticated || !items.length) return;
     if (!selectedAddress) {
       toast.error("请先选择收货地址");
       return;
@@ -519,10 +597,17 @@ function LimitedProductCartOverlay() {
       toast.error(payment.statusMessage);
       return;
     }
-    const preparedPayment = await payment.preparePayment();
-    if (!preparedPayment) return;
-    submittedGroups.current = groups;
-    createOrder.mutate({
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) {
+      toast.error(invoice.message);
+      cancelWalletPayment();
+      return;
+    }
+    const attempt = ++paymentAttemptRef.current;
+    const scope = checkoutScope;
+    // 点击时冻结订单与经过共享schema验证的申请，任何scope变化均禁止陈旧提交。
+    const orderInput = {
       items: items.map(item => ({
         productKey: item.productKey,
         skuId: item.skuId,
@@ -532,10 +617,42 @@ function LimitedProductCartOverlay() {
       receiverPhone: normalizeMibanReceiverPhone(selectedAddress.phone),
       receiverAddress: formatAddress(selectedAddress),
       userNote: userNote.trim() || undefined,
-      cnyAmount: preparedPayment.cnyAmount,
-      paymentAssets: preparedPayment.paymentAssets,
-      paymentQuoteToken: preparedPayment.paymentQuoteToken,
-    });
+      ...(invoice.invoiceRequest ? { invoiceRequest: invoice.invoiceRequest } : {}),
+    };
+    submissionGuardRef.current = true;
+    setPreparingPayment(true);
+    let submitted = false;
+    try {
+      if (invoice.invoiceRequest) {
+        let support: unknown;
+        try {
+          support = await mibanUtils.limitedProduct.invoiceSupport.fetch(undefined, { staleTime: 0, retry: false });
+        } catch {
+          if (attempt === paymentAttemptRef.current && scope === latestCheckoutScope.current && submissionGuardRef.current) {
+            toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          }
+          return;
+        }
+        if (attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
+        const capability = support as { supported?: unknown; version?: unknown } | null;
+        if (capability?.supported !== true || typeof capability.version !== "number" || !Number.isFinite(capability.version) || capability.version < 1) {
+          toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+      }
+      const preparedPayment = await payment.preparePayment();
+      if (!preparedPayment || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
+      submittedGroups.current = groups;
+      createOrder.mutate({ ...orderInput, ...preparedPayment });
+      submitted = true;
+    } catch (error) {
+      toast.error(formatMibanCheckoutError(error));
+    } finally {
+      if (attempt === paymentAttemptRef.current) {
+        if (!submitted) submissionGuardRef.current = false;
+        setPreparingPayment(false);
+      }
+    }
   };
 
   if (!open) return null;
@@ -549,7 +666,13 @@ function LimitedProductCartOverlay() {
               type="button"
               onClick={() => {
                 if (createOrder.isPending) return;
+                paymentAttemptRef.current++;
+                submissionGuardRef.current = false;
                 payment.cancelPendingPayment();
+                setPreparingPayment(false);
+                setShowWalletPayment(false);
+                setInvoiceDraft(createMibanInvoiceDraft());
+                setInvoiceErrors({});
                 if (success) {
                   setSuccess(null);
                   setCheckoutOpen(false);
@@ -680,8 +803,8 @@ function LimitedProductCartOverlay() {
               </button>
             </div>
           ) : (
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#F8F9F8] px-3 py-4 min-[375px]:px-4">
-              <section className="min-w-0 rounded-2xl bg-white p-3 shadow-sm min-[375px]:p-4">
+            <div data-miban-checkout="true" className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#F8F9F8] px-3 py-4 min-[375px]:px-4">
+              <section className="min-w-0 rounded-[4px] bg-white p-3 shadow-sm min-[375px]:p-4">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-[14px] font-extrabold text-gray-900">
                     商品清单
@@ -733,7 +856,7 @@ function LimitedProductCartOverlay() {
                             <MibanImage variant="thumbnail"
                               src={item.image}
                               alt=""
-                              className="h-11 w-11 shrink-0 rounded-lg border border-gray-100 object-cover"
+                              className="h-11 w-11 shrink-0 rounded-[4px] border border-gray-100 object-cover"
                             />
                             <div className="min-w-0 flex-1">
                               <p className="break-words text-[12px] font-bold text-gray-800">
@@ -760,7 +883,7 @@ function LimitedProductCartOverlay() {
                 </div>
               </section>
 
-              <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
+              <section className="mt-3 rounded-[4px] bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="text-[14px] font-extrabold text-gray-900">
                     收货地址
@@ -768,6 +891,7 @@ function LimitedProductCartOverlay() {
                   <button
                     type="button"
                     onClick={() => setShowAddressBook(true)}
+                    disabled={checkoutBusy}
                     className="text-[12px] font-bold text-[#0D7A3E]"
                   >
                     {selectedAddress ? "更换" : "选择"}
@@ -777,6 +901,7 @@ function LimitedProductCartOverlay() {
                   <button
                     type="button"
                     onClick={() => setShowAddressBook(true)}
+                    disabled={checkoutBusy}
                     className="w-full text-left"
                   >
                     <div className="flex items-start gap-2">
@@ -798,7 +923,8 @@ function LimitedProductCartOverlay() {
                   <button
                     type="button"
                     onClick={() => setShowAddressBook(true)}
-                    className="flex w-full items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-[12px] text-gray-400"
+                    disabled={checkoutBusy}
+                    className="flex w-full items-center justify-between rounded-[4px] bg-gray-50 px-3 py-3 text-[12px] text-gray-400"
                   >
                     <span>请选择或新增收货地址</span>
                     <ChevronRight className="h-4 w-4" />
@@ -810,6 +936,7 @@ function LimitedProductCartOverlay() {
                     <button
                       type="button"
                       onClick={() => setShowAddressBook(true)}
+                      disabled={checkoutBusy}
                       className="mt-1 font-semibold underline"
                     >
                       编辑收货地址
@@ -823,20 +950,33 @@ function LimitedProductCartOverlay() {
                   </label>
                   <textarea
                     value={userNote}
+                    disabled={checkoutBusy}
                     onChange={event =>
                       setUserNote(event.target.value.slice(0, 500))
                     }
                     placeholder="如有配送或商品备注请填写"
                     maxLength={500}
-                    className="mt-2 min-h-18 w-full resize-none rounded-xl bg-gray-50 p-3 text-[13px] outline-none"
+                    className="mt-2 min-h-18 w-full resize-none rounded-[4px] bg-gray-50 p-3 text-[13px] outline-none"
                   />
                 </div>
               </section>
 
-              <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-                <MibanMixedPaymentAllocation
+              <MibanInvoiceRequestForm
+                draft={invoiceDraft}
+                onChange={next => {
+                  if (checkoutBusy || submissionGuardRef.current) return;
+                  setInvoiceDraft(next);
+                  setInvoiceErrors({});
+                }}
+                errors={invoiceErrors}
+                disabled={checkoutBusy}
+                accent="#0D7A3E"
+                className="mt-3 shadow-sm"
+              />
+              <div className="mt-3 rounded-[4px] bg-white p-4 shadow-sm">
+                <MibanWalletAvailableSummary
                   payment={payment}
-                  disabled={createOrder.isPending}
+                  disabled={checkoutBusy}
                   accent="#0D7A3E"
                 />
               </div>
@@ -845,6 +985,7 @@ function LimitedProductCartOverlay() {
 
           {!success && (
             <div
+              data-miban-checkout="true"
               className="min-w-0 shrink-0 border-t border-gray-100 bg-white px-4 py-3"
               style={{
                 paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
@@ -863,19 +1004,66 @@ function LimitedProductCartOverlay() {
               </div>
               <button
                 type="button"
-                onClick={handlePay}
-                disabled={!payment.canPay || createOrder.isPending}
-                className="flex min-h-13 w-full items-center justify-center break-all rounded-xl bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
+                onClick={handleOpenWalletPayment}
+                disabled={!payment.canPay || checkoutBusy}
+                className="flex min-h-13 w-full items-center justify-center break-all rounded-[4px] bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
               >
-                {createOrder.isPending ? (
+                {checkoutBusy ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    正在提交订单…
+                    {preparingPayment ? "正在核验付款信息…" : "正在提交订单…"}
                   </>
                 ) : (
-                  `确认支付（${payment.paymentSummary.replace(" U", " USDT")}）`
+                  `去支付 · ${payment.paymentSummary.replace(" U", " USDT")}`
                 )}
               </button>
+            </div>
+          )}
+
+          {showWalletPayment && !success && selectedAddress && (
+            <div
+              data-miban-checkout="true"
+              data-testid="cart-wallet-confirmation"
+              className="fixed inset-0 z-[110] flex items-end justify-center bg-black/45"
+              onClick={cancelWalletPayment}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cart-wallet-title"
+                className="max-h-[90dvh] w-full min-w-0 max-w-[480px] overflow-y-auto rounded-t-[4px] bg-white px-4 pb-5 pt-4 shadow-2xl"
+                style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+                onClick={event => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 id="cart-wallet-title" className="text-[18px] font-extrabold text-gray-900">钱包支付</h2>
+                    <p className="mt-1 text-[12px] text-gray-500">确认付款金额、收货信息和发票，无误后支付</p>
+                  </div>
+                  <button type="button" aria-label="返回确认订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="shrink-0 rounded-[4px] px-2 py-1 text-[12px] text-gray-500 disabled:opacity-40">返回修改</button>
+                </div>
+                <div className="mt-4 rounded-[4px] bg-gray-50 p-3 text-[12px] leading-5 text-gray-600">
+                  共 {itemCount} 件，按精选生成 {groups.length} 张订单，统一付款后分开发货。
+                </div>
+                <div className="mt-4">
+                  <MibanPaymentConfirmation payment={payment} disabled={checkoutBusy} accent="#0D7A3E" />
+                </div>
+                <MibanCheckoutConfirmationDetails
+                  receiverName={selectedAddress.name}
+                  receiverPhone={normalizeMibanReceiverPhone(selectedAddress.phone)}
+                  receiverAddress={formatAddress(selectedAddress)}
+                  invoiceDraft={invoiceDraft}
+                  userNote={userNote}
+                />
+                <button
+                  type="button"
+                  onClick={handlePay}
+                  disabled={!payment.canPay || checkoutBusy}
+                  className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 break-all rounded-[4px] bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
+                >
+                  {checkoutBusy ? <><Loader2 className="h-4 w-4 animate-spin" />{preparingPayment ? "正在核验付款信息…" : "正在提交订单…"}</> : `确认支付 · ${payment.paymentSummary.replace(" U", " USDT")}`}
+                </button>
+              </section>
             </div>
           )}
 
@@ -898,6 +1086,7 @@ function LimitedProductCartOverlay() {
                 <AddressBook
                   mode="select"
                   onSelect={address => {
+                    if (checkoutBusy || submissionGuardRef.current) return;
                     setSelectedAddress(address);
                     setShowAddressBook(false);
                   }}

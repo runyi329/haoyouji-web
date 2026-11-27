@@ -60,6 +60,12 @@ import { PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPayment
 import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import { mibanLimitedBrands, mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config";
+import { mibanInvoiceRequestSchema } from "../shared/miban-invoice";
+import {
+  ensureMibanOrderInvoiceInfrastructure,
+  insertMibanOrderInvoiceRequest,
+  readMibanOrderInvoiceRequests,
+} from "./miban-order-invoice";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
 import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
 import { resolveSupplierOrderScope } from "../shared/miban-supplier";
@@ -1000,7 +1006,8 @@ async function getUserOrders(userId: number) {
     .where(eq(mibanOrders.userId, userId))
     .orderBy(desc(mibanOrders.createdAt));
   const payments = await readMibanOrderWalletPayments(rows.map(row => row.id));
-  return rows.map(row => ({ ...serializeOrder(row), walletPayments: payments.get(row.id) ?? [] }));
+  const invoiceRequests = await readMibanOrderInvoiceRequests(rows.map(row => row.id));
+  return rows.map(row => ({ ...serializeOrder(row), walletPayments: payments.get(row.id) ?? [], invoiceRequest: invoiceRequests.get(row.id) ?? null }));
 }
 
 async function getAllOrders() {
@@ -1048,6 +1055,7 @@ async function getAllOrders() {
     );
 
     const walletPayments = await readMibanOrderWalletPayments((Array.isArray(rows) ? rows : []).map((row: any) => Number(row.id)), conn);
+    const invoiceRequests = await readMibanOrderInvoiceRequests((Array.isArray(rows) ? rows : []).map((row: any) => Number(row.id)), conn);
     return (Array.isArray(rows) ? rows : []).map((o: any) => {
       const limitedLines = readLimitedProductLines(o);
       let commissionPreviewVisible = true;
@@ -1076,6 +1084,7 @@ async function getAllOrders() {
       return {
         ...serializeOrder(o),
         walletPayments: walletPayments.get(Number(o.id)) ?? [],
+        invoiceRequest: invoiceRequests.get(Number(o.id)) ?? null,
         userName: o.userName ?? o.userUsername ?? null,
         commissionPreviewVisible,
       };
@@ -3196,6 +3205,7 @@ export const mibanOrderRouter = router({
         receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().min(5),
         userNote: z.string().optional(),
+        invoiceRequest: mibanInvoiceRequestSchema.optional(),
         productImg: z.string().url().optional(),
         subscriptionMonths: z
           .union([z.literal(3), z.literal(6), z.literal(12)])
@@ -3224,6 +3234,7 @@ export const mibanOrderRouter = router({
       // 1. 仅预检全局钱包可用余额；扣款时会在锁定用户行的事务内再次校验。
       const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
       if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      if (input.invoiceRequest) await ensureMibanOrderInvoiceInfrastructure();
       const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
@@ -3354,6 +3365,7 @@ export const mibanOrderRouter = router({
             scheduledShipDate:
               subMonths !== null ? (scheduledShipDateStr as any) : undefined,
           }, transaction);
+          if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId, userId, invoiceRequest: input.invoiceRequest });
           orderIds.push(orderId);
           orderNos.push(orderNo);
         }
@@ -4196,6 +4208,12 @@ export const mibanOrderRouter = router({
 // 商品与 SKU 的名称、金额、图片和单位都从 shared/miban-limited-products.ts 读取。
 // 浏览器只提交 productKey、skuId、数量和收货信息，不能篡改成交金额或伪造成米种。
 export const mibanLimitedProductRouter = router({
+  // 所有米伴可结算入口共用此能力探测；发票开启时前端必须实时验证。
+  invoiceSupport: protectedProcedure.query(async () => {
+    await ensureMibanOrderInvoiceInfrastructure();
+    return { supported: true, version: 1 } as const;
+  }),
+
   // 关注度独立于库存和订单：读取不增加次数，真实点击按唯一事件幂等累计。
   brandAttention: publicProcedure.query(async () => {
     const conn = await getDbConnection();
@@ -4699,6 +4717,7 @@ export const mibanLimitedProductRouter = router({
         receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
+        invoiceRequest: mibanInvoiceRequestSchema.optional(),
         cnyAmount: z.number().finite().min(0),
         paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36),
         paymentQuoteToken: z.string().trim().min(1).max(16000),
@@ -4746,6 +4765,7 @@ export const mibanLimitedProductRouter = router({
       await ensureMibanWalletPaymentInfrastructure(
         payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT")
       );
+      if (input.invoiceRequest) await ensureMibanOrderInvoiceInfrastructure();
       const periodPayments = splitMibanPaymentDeductions(payment.deductions, MIDANIANG_ANNUAL_MONTHS);
       const scheduledShipDates = getMidaniangAnnualShipDates(new Date());
       const subscriptionGroupId = `SUB${randomUUID().replace(/-/g, "").slice(0, 29)}`;
@@ -4817,6 +4837,7 @@ export const mibanLimitedProductRouter = router({
               subscriptionIndex: index + 1,
               scheduledShipDate: scheduledShipDates[index],
             }, transaction);
+            if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId, userId, invoiceRequest: input.invoiceRequest });
             if (reservedOrderNos.has(orderNo)) {
               await linkLimitedStockDeductionToOrder(product.key, sku.id, orderNo, orderId, transaction);
             }
@@ -4873,6 +4894,7 @@ export const mibanLimitedProductRouter = router({
         receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
+        invoiceRequest: mibanInvoiceRequestSchema.optional(),
         cnyAmount: z.number().finite().min(0),
         paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36).optional(),
         paymentQuoteToken: z.string().max(16000).optional(),
@@ -4912,6 +4934,7 @@ export const mibanLimitedProductRouter = router({
       }
       const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
       if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      if (input.invoiceRequest) await ensureMibanOrderInvoiceInfrastructure();
       const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
@@ -5007,6 +5030,7 @@ export const mibanLimitedProductRouter = router({
             usdtCnyRateAtOrder: String(usdtRate) as any,
             commissionTrigger,
           }, transaction);
+          if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId: createdOrderId, userId, invoiceRequest: input.invoiceRequest });
           if (stockReserved) {
             await linkLimitedStockDeductionToOrder(
               product.key,
@@ -5080,6 +5104,7 @@ export const mibanLimitedProductRouter = router({
         receiverPhone: mibanReceiverPhoneSchema,
         receiverAddress: z.string().trim().min(5).max(500),
         userNote: z.string().trim().max(500).optional(),
+        invoiceRequest: mibanInvoiceRequestSchema.optional(),
         cnyAmount: z.number().finite().min(0),
         paymentAssets: z.array(z.object({ assetCode: z.string(), amount: z.string() })).min(1).max(36).optional(),
         paymentQuoteToken: z.string().max(16000).optional(),
@@ -5158,6 +5183,7 @@ export const mibanLimitedProductRouter = router({
       const userId = ctx.user!.id;
       const payment = prepareMibanWalletPayment({ userId, totalCny, paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken });
       if (payment) await ensureMibanWalletPaymentInfrastructure(payment.deductions.some(row => row.assetCode !== "CNY" && row.assetCode !== "USDT"));
+      if (input.invoiceRequest) await ensureMibanOrderInvoiceInfrastructure();
       const funding = payment ? mibanFundingDeductionAmounts(payment.deductions) : null;
       const cnyBalance = (await getGlobalWalletFundingBalance(userId, "CNY")).available;
       const usdtBalance = (await getGlobalWalletFundingBalance(userId, "USDT")).available;
@@ -5326,6 +5352,7 @@ export const mibanLimitedProductRouter = router({
               usdtCnyRateAtOrder: String(payment?.usdtCnyRate ?? usdtRate) as any,
               commissionTrigger: group.commissionTrigger,
             }, transaction);
+            if (input.invoiceRequest) await insertMibanOrderInvoiceRequest({ transaction, orderId, userId, invoiceRequest: input.invoiceRequest });
             if (group.reservationOrderNo !== checkoutNo) {
               for (const line of group.managedStockLines) {
                 const [updated] = await transaction.execute(

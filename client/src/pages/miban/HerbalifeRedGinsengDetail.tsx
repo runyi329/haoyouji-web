@@ -24,13 +24,21 @@ import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
 import { getCities, getDistricts, provinces, withCurrentRegionOption } from "./regionData";
 import { cnyToU } from "./useMibanUsdtCnyRate";
-import { MibanMixedPaymentAllocation, MibanWalletAvailableSummary, useMibanMixedPayment } from "./MibanMixedPayment";
+import { MibanPaymentConfirmation, MibanWalletAvailableSummary, useMibanMixedPayment } from "./MibanMixedPayment";
+import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
 import { formatMibanPaymentSummary, formatMibanUsdtAmount, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
 import { toast } from "sonner";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import { MibanImage, getMibanPosterParts } from "./MibanImage";
+import MibanInvoiceRequestForm, {
+  createMibanInvoiceDraft,
+  validateMibanInvoiceRequest,
+  MIBAN_INVOICE_UNAVAILABLE_NOTICE,
+  type MibanInvoiceDraft,
+  type MibanInvoiceErrors,
+} from "./MibanInvoiceRequestForm";
 
 const ANNUAL_SUBSCRIPTION_MONTHS = 12;
 const ANNUAL_PRODUCT_KEYS = new Set([
@@ -173,6 +181,8 @@ export default function HerbalifeRedGinsengDetail() {
   const [receiverDistrict, setReceiverDistrict] = useState("");
   const [receiverDetail, setReceiverDetail] = useState("");
   const [userNote, setUserNote] = useState("");
+  const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
+  const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
   const [favoritePending, setFavoritePending] = useState(false);
   const [failedPosters, setFailedPosters] = useState<Set<string>>(() => new Set());
   const startXRef = useRef(0);
@@ -262,8 +272,9 @@ export default function HerbalifeRedGinsengDetail() {
         .filter(Boolean)
         .join("");
   const checkoutScope = JSON.stringify([
-    isCheckoutPage, productKey, activeSkuId, requestedAnnualPlan, purchaseQuantity,
+    isCheckoutPage, showWalletPayment, isAuthenticated, user?.id, productKey, activeSkuId, requestedAnnualPlan, purchaseQuantity,
     totalPrice, receiverName, receiverPhone, receiverAddress, userNote, saveToBook,
+    invoiceDraft,
   ]);
   const latestCheckoutScope = useRef(checkoutScope);
   latestCheckoutScope.current = checkoutScope;
@@ -398,9 +409,13 @@ export default function HerbalifeRedGinsengDetail() {
 
   useEffect(() => {
     paymentAttemptRef.current++;
+    submissionGuardRef.current = false;
     walletPayment.cancelPendingPayment();
     setPreparingPayment(false);
     setShowWalletPayment(false);
+    // 新商品/规格/计划/checkout重置；地址变化和本次失败重试不清空填写。
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
   }, [productKey, activeSkuId, requestedAnnualPlan, purchaseQuantity, isCheckoutPage, walletPayment.cancelPendingPayment]);
 
   useEffect(() => () => {
@@ -545,6 +560,7 @@ export default function HerbalifeRedGinsengDetail() {
   const cancelWalletPayment = () => {
     if (orderPending) return;
     paymentAttemptRef.current++;
+    submissionGuardRef.current = false;
     walletPayment.cancelPendingPayment();
     setPreparingPayment(false);
     setShowWalletPayment(false);
@@ -563,7 +579,16 @@ export default function HerbalifeRedGinsengDetail() {
       return;
     }
     if (!validateShipping()) return;
-    walletPayment.confirmPaymentReview(false);
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) {
+      toast.error(invoice.message);
+      return;
+    }
+    if (!walletPayment.canPay) {
+      toast.error(walletPayment.statusMessage);
+      return;
+    }
     setShowWalletPayment(true);
   };
 
@@ -577,9 +602,16 @@ export default function HerbalifeRedGinsengDetail() {
       toast.error("此商品不支持全年计划，请选择普通购买");
       return;
     }
-    if (checkoutBusy || submissionGuardRef.current || !walletPayment.canPay || !isCheckoutPage || !isOnSale) return;
+    if (checkoutBusy || submissionGuardRef.current || !showWalletPayment || !walletPayment.canPay || !isCheckoutPage || !isOnSale) return;
     if (!validateShipping()) {
       cancelWalletPayment();
+      return;
+    }
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) {
+      toast.error(invoice.message);
+      setShowWalletPayment(false);
       return;
     }
     const attempt = ++paymentAttemptRef.current;
@@ -588,8 +620,26 @@ export default function HerbalifeRedGinsengDetail() {
     setPreparingPayment(true);
     let submitted = false;
     try {
+      if (invoice.invoiceRequest) {
+        // 必须实时核对能力，避免旧后端strip发票字段后仍扣款；关闭时完全不访问此接口。
+        let support: unknown;
+        try {
+          support = await mibanUtils.limitedProduct.invoiceSupport.fetch(undefined, { staleTime: 0, retry: false });
+        } catch {
+          if (attempt === paymentAttemptRef.current && scope === latestCheckoutScope.current && submissionGuardRef.current) {
+            toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          }
+          return;
+        }
+        if (attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
+        const capability = support as { supported?: unknown; version?: unknown } | null;
+        if (capability?.supported !== true || typeof capability.version !== "number" || !Number.isFinite(capability.version) || capability.version < 1) {
+          toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+      }
       const preparedPayment = await walletPayment.preparePayment();
-      if (!preparedPayment || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current) return;
+      if (!preparedPayment || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
       // 可选地址保存与付款分离：只有订单成功后才保存，失败重试不新增重复地址。
       const addressToSave = saveToBook && currentProduct.orderPolicy.allowAddressBook ? {
         name: receiverName.trim(),
@@ -613,6 +663,7 @@ export default function HerbalifeRedGinsengDetail() {
         cnyAmount: preparedPayment.cnyAmount,
         paymentAssets: preparedPayment.paymentAssets,
         paymentQuoteToken: preparedPayment.paymentQuoteToken,
+        ...(invoice.invoiceRequest ? { invoiceRequest: invoice.invoiceRequest } : {}),
       };
       const callbacks = {
         onSuccess: () => {
@@ -629,8 +680,10 @@ export default function HerbalifeRedGinsengDetail() {
     } catch (error) {
       toast.error(formatMibanCheckoutError(error));
     } finally {
-      if (!submitted) submissionGuardRef.current = false;
-      if (attempt === paymentAttemptRef.current) setPreparingPayment(false);
+      if (attempt === paymentAttemptRef.current) {
+        if (!submitted) submissionGuardRef.current = false;
+        setPreparingPayment(false);
+      }
     }
   };
 
@@ -1161,7 +1214,7 @@ export default function HerbalifeRedGinsengDetail() {
       </div>
 
       {isCheckoutPage && !orderSuccess && !isPreviewProduct && (
-        <div className="fixed inset-0 z-[70] bg-white">
+        <div data-miban-checkout="true" className="fixed inset-0 z-[70] bg-white">
           <div className="mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div>
@@ -1269,7 +1322,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <button
                     onClick={() => setQuantity(Math.max(1, purchaseQuantity - 1))}
                     disabled={checkoutBusy || purchaseQuantity <= 1}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-600 disabled:text-gray-300"
+                    className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-gray-200 text-gray-600 disabled:text-gray-300"
                     aria-label={isAnnualPlan ? "减少每月份数" : "减少购买数量"}
                   >
                     <Minus size={15} />
@@ -1288,7 +1341,7 @@ export default function HerbalifeRedGinsengDetail() {
                   <button
                     onClick={() => setQuantity(Math.min(maxQuantity, purchaseQuantity + 1))}
                     disabled={checkoutBusy || purchaseQuantity >= maxQuantity}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border"
+                    className="flex h-8 w-8 items-center justify-center rounded-[4px] border"
                     style={{ borderColor: accent, color: accent }}
                     aria-label={isAnnualPlan ? "增加每月份数" : "增加购买数量"}
                   >
@@ -1500,6 +1553,18 @@ export default function HerbalifeRedGinsengDetail() {
                   </button>
                 )}
               </div>
+              <MibanInvoiceRequestForm
+                draft={invoiceDraft}
+                onChange={next => {
+                  if (checkoutBusy || submissionGuardRef.current) return;
+                  setInvoiceDraft(next);
+                  setInvoiceErrors({});
+                }}
+                errors={invoiceErrors}
+                disabled={checkoutBusy}
+                accent={accent}
+                className="mt-4"
+              />
               </fieldset>
             </div>
             <div
@@ -1532,10 +1597,14 @@ export default function HerbalifeRedGinsengDetail() {
         !orderSuccess &&
         !isPreviewProduct && (
           <div
+            data-miban-checkout="true"
             className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45"
             onClick={cancelWalletPayment}
           >
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="limited-wallet-title"
               className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pb-5 pt-3 shadow-2xl"
               style={{
                 maxWidth: 480,
@@ -1546,20 +1615,21 @@ export default function HerbalifeRedGinsengDetail() {
               <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200" />
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-[19px] font-extrabold text-gray-900">
+                  <h2 id="limited-wallet-title" className="text-[19px] font-extrabold text-gray-900">
                     {isAnnualPlan ? "全年计划 · 钱包支付" : "钱包支付"}
                   </h2>
                   <p className="mt-1 text-[12px] text-gray-400">
-                    人民币、U 与持有数字币可单币或组合使用
+                    确认付款金额、收货信息和发票，无误后支付
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={cancelWalletPayment}
                   disabled={orderPending}
+                  aria-label="返回确认订单"
                   className="rounded-lg px-2 py-1 text-[13px] text-gray-500 disabled:opacity-40"
                 >
-                  取消
+                  返回修改
                 </button>
               </div>
 
@@ -1585,8 +1655,15 @@ export default function HerbalifeRedGinsengDetail() {
                 <p role="status" className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-[12px] font-bold leading-5 text-amber-800">{ANNUAL_PREVIEW_NOTICE}。本预览不会提交全年计划或普通付款订单。</p>
               )}
               <div className="mt-5">
-                <MibanMixedPaymentAllocation payment={walletPayment} disabled={checkoutBusy} accent={accent} />
+                <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} accent={accent} />
               </div>
+              <MibanCheckoutConfirmationDetails
+                receiverName={receiverName}
+                receiverPhone={normalizeMibanReceiverPhone(receiverPhone)}
+                receiverAddress={receiverAddress}
+                invoiceDraft={invoiceDraft}
+                userNote={userNote}
+              />
               <button
                 type="button"
                 onClick={handleConfirmWalletPayment}

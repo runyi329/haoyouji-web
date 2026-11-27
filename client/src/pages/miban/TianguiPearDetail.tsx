@@ -26,10 +26,13 @@ import { provinces, getCities, getDistricts, withCurrentRegionOption } from "./r
 import { toast } from "sonner";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import {
-  MibanMixedPaymentAllocation,
+  MibanWalletAvailableSummary,
+  MibanPaymentConfirmation,
   useMibanMixedPayment,
 } from "./MibanMixedPayment";
 import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
+import MibanInvoiceRequestForm, { createMibanInvoiceDraft, validateMibanInvoiceRequest, MIBAN_INVOICE_UNAVAILABLE_NOTICE, type MibanInvoiceDraft, type MibanInvoiceErrors } from "./MibanInvoiceRequestForm";
+import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
 
 const IMGS = {
   hero: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -186,10 +189,18 @@ export default function TianguiPearDetail() {
   const [qty, setQty] = useState(1);
   const trackRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   // 下单相关状态
   const [showOrderDialog, setShowOrderDialog] = useState(false);
+  const [showWalletPayment, setShowWalletPayment] = useState(false);
+  const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
+  const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  const [preparingPayment, setPreparingPayment] = useState(false);
+  const submitGuard = useRef(false);
+  const paymentAttemptRef = useRef(0);
+  const mountedRef = useRef(true);
+  const walletOpenRef = useRef(false);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [checkoutAttempted, setCheckoutAttempted] = useState(false);
@@ -271,6 +282,8 @@ export default function TianguiPearDetail() {
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (data: any) => {
       setShowOrderDialog(false);
+      walletOpenRef.current = false;
+      setShowWalletPayment(false);
       setOrderSuccess({
         orderNo: data.orderNo,
         deductCny: Number(data.deductCny ?? 0),
@@ -288,6 +301,7 @@ export default function TianguiPearDetail() {
     onError: (err: any) => {
       toast.error(formatMibanCheckoutError(err, "下单失败，请稍后再试"));
     },
+    onSettled: () => { submitGuard.current = false; },
   });
 
   useEffect(() => {
@@ -315,23 +329,42 @@ export default function TianguiPearDetail() {
   const handleBuy = () => {
     // Bug修复：登录状态加载中时 isAuthenticated=false，不能跳转登录页
     // 应等待 auth 加载完成后再判断
-    if (authLoading) return;
+    if (authLoading || isPearExpired || createOrder.isPending) return;
     if (!isAuthenticated) {
       navigate("/login");
       return;
     }
     walletPayment.resetToCnyFirst();
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
+    setCheckoutAttempted(false);
     setShowOrderDialog(true);
   };
 
-  const handleSubmitOrder = async () => {
-    if (createOrder.isPending || !walletPayment.canPay) return;
+  const validateCheckout = () => {
     setCheckoutAttempted(true);
     const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" :
       !receiverProvince || (!isMunicipality && !receiverCity) || !receiverDetail.trim() ? "请补全收货地址后再付款" : null);
-    if (message) { toast.error(message); return; }
-    const preparedPayment = await walletPayment.preparePayment();
-    if (!preparedPayment) return;
+    if (message) { toast.error(message); return null; }
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) { toast.error(invoice.message); return null; }
+    return invoice;
+  };
+  const handleOpenWalletPayment = () => {
+    if (checkoutBusy || submitGuard.current || !showOrderDialog || !isAuthenticated || isPearExpired) return;
+    if (!validateCheckout()) return;
+    if (!walletPayment.canPay) { toast.error(walletPayment.statusMessage); return; }
+    walletOpenRef.current = true;
+    setShowWalletPayment(true);
+  };
+  const handleConfirmWalletPayment = async () => {
+    if (checkoutBusy || submitGuard.current || !walletOpenRef.current || !showOrderDialog || !isAuthenticated || isPearExpired || !walletPayment.canPay) return;
+    const invoice = validateCheckout();
+    if (!invoice) { cancelWalletPayment(); return; }
+    const attempt = ++paymentAttemptRef.current;
+    const scope = checkoutScope;
+    const stillCurrent = () => mountedRef.current && walletOpenRef.current && submitGuard.current && attempt === paymentAttemptRef.current && scope === latestCheckoutScope.current;
     const addressToSave = saveToBook ? {
         name: receiverName.trim(),
         phone: normalizeMibanReceiverPhone(receiverPhone),
@@ -342,6 +375,27 @@ export default function TianguiPearDetail() {
         label: "家",
         isDefault: false,
       } : null;
+    submitGuard.current = true;
+    setPreparingPayment(true);
+    let submitted = false;
+    try {
+      if (invoiceDraft.enabled) {
+        let support: unknown;
+        try {
+          support = await mibanUtils.limitedProduct.invoiceSupport.fetch(undefined, { staleTime: 0, retry: false });
+        } catch {
+          if (stillCurrent()) toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+        if (!stillCurrent()) return;
+        const capability = support as { supported?: unknown; version?: unknown } | null;
+        if (capability?.supported !== true || typeof capability.version !== "number" || !Number.isFinite(capability.version) || capability.version < 1) {
+          toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+      }
+      const preparedPayment = await walletPayment.preparePayment();
+      if (!preparedPayment || !stillCurrent()) return;
     createOrder.mutate({
       recipeName: `天桂梨 · ${currentSpec.name}${qty > 1 ? ` x${qty}` : ""}`,
       ingredients: [
@@ -360,6 +414,7 @@ export default function TianguiPearDetail() {
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
       productImg: IMGS.hero,
+      ...(invoice.invoiceRequest ? { invoiceRequest: invoice.invoiceRequest } : {}),
       cnyAmount: preparedPayment.cnyAmount,
       paymentAssets: preparedPayment.paymentAssets,
       paymentQuoteToken: preparedPayment.paymentQuoteToken,
@@ -368,6 +423,15 @@ export default function TianguiPearDetail() {
         if (addressToSave) addAddressMut.mutate(addressToSave);
       },
     });
+      submitted = true;
+    } catch (error) {
+      if (stillCurrent()) toast.error(formatMibanCheckoutError(error));
+    } finally {
+      if (attempt === paymentAttemptRef.current) {
+        if (!submitted) submitGuard.current = false;
+        if (mountedRef.current) setPreparingPayment(false);
+      }
+    }
   };
 
   const features = [
@@ -443,7 +507,39 @@ export default function TianguiPearDetail() {
   const totalPrice = currentSpec.price * qty;
   const totalWeightJin = currentSpec.weightJin * qty;
   const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
-  const balanceOk = walletPayment.canPay;
+  const checkoutBusy = createOrder.isPending || preparingPayment;
+  const walletVersion = JSON.stringify([walletPayment.selectedCodes, walletPayment.priorityCode, walletPayment.cnyInput, walletPayment.paymentAssets]);
+  const checkoutInputScope = JSON.stringify([showOrderDialog, location, isAuthenticated, isPearExpired, spec, currentSpec, qty, totalPrice, totalWeightJin, receiverName, receiverPhone, receiverProvince, receiverCity, receiverDistrict, receiverDetail, receiverAddress, userNote, saveToBook, invoiceDraft]);
+  const checkoutScope = JSON.stringify([checkoutInputScope, walletVersion]);
+  const latestCheckoutScope = useRef(checkoutScope);
+  latestCheckoutScope.current = checkoutScope;
+
+  const cancelWalletPayment = () => {
+    if (createOrder.isPending) return;
+    paymentAttemptRef.current++;
+    walletOpenRef.current = false;
+    submitGuard.current = false;
+    walletPayment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  };
+  const closeOrderDialog = () => {
+    if (createOrder.isPending) return;
+    cancelWalletPayment();
+    setShowOrderDialog(false);
+  };
+  useEffect(() => {
+    if (!createOrder.isPending && (walletOpenRef.current || submitGuard.current)) cancelWalletPayment();
+  }, [checkoutInputScope]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      walletOpenRef.current = false;
+      paymentAttemptRef.current++;
+      walletPayment.cancelPendingPayment();
+    };
+  }, [walletPayment.cancelPendingPayment]);
 
   return (
     <div
@@ -1062,14 +1158,14 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 下单对话框 ── */}
-      {showOrderDialog && (
+      {showOrderDialog && !showWalletPayment && (
         <div
+          data-miban-checkout="true"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认订单"
           className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center"
-          onClick={() => {
-            if (createOrder.isPending) return;
-            walletPayment.cancelPendingPayment();
-            setShowOrderDialog(false);
-          }}
+          onClick={closeOrderDialog}
         >
           <div
             className="w-full bg-white rounded-t-3xl overflow-hidden flex flex-col"
@@ -1083,11 +1179,8 @@ export default function TianguiPearDetail() {
                   确认订单
                 </div>
                 <button
-                  onClick={() => {
-                    if (createOrder.isPending) return;
-                    walletPayment.cancelPendingPayment();
-                    setShowOrderDialog(false);
-                  }}
+                  aria-label="关闭确认订单"
+                  onClick={closeOrderDialog}
                   className="w-8 h-8 rounded-full flex items-center justify-center border-none"
                   style={{ background: "#f5f5f5" }}
                 >
@@ -1191,9 +1284,9 @@ export default function TianguiPearDetail() {
               </div>
 
               {isAuthenticated && (
-                <MibanMixedPaymentAllocation
+                <MibanWalletAvailableSummary
                   payment={walletPayment}
-                  disabled={createOrder.isPending}
+                  disabled={checkoutBusy}
                 />
               )}
               <div className="flex flex-col gap-3">
@@ -1397,26 +1490,35 @@ export default function TianguiPearDetail() {
                   </button>
                 </div>
               </div>
+              <MibanInvoiceRequestForm draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mt-4" />
 
-              {/* 确认下单按钮 */}
+              {/* 去支付仅校验确认订单内容，不核验报价或下单。 */}
               <button
-                disabled={createOrder.isPending || !balanceOk}
-                onClick={handleSubmitOrder}
+                disabled={checkoutBusy || !walletPayment.canPay || isPearExpired}
+                onClick={handleOpenWalletPayment}
                 className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform mt-5"
                 style={{ background: "#FF6900" }}
               >
-                {createOrder.isPending ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    提交中…
-                  </>
-                ) : !balanceOk ? (
-                  walletPayment.statusMessage
-                ) : (
-                  `确认下单 · ${walletPayment.paymentSummary}`
-                )}
+                去支付
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showWalletPayment && (
+        <div data-miban-checkout="true" role="dialog" aria-modal="true" aria-label="钱包支付确认" className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={cancelWalletPayment}>
+          <div className="max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-[4px] bg-white p-6 pb-10" onClick={event => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900">钱包支付确认</h2>
+              <button aria-label="返回修改订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="p-2 text-gray-500"><X size={18} /></button>
+            </div>
+            <p className="mb-4 text-[13px] text-gray-600">天桂梨 · {currentSpec.name} × {qty} · 应付 ¥{totalPrice.toFixed(2)}</p>
+            <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
+            <MibanCheckoutConfirmationDetails receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
+            <button disabled={createOrder.isPending} onClick={cancelWalletPayment} className="mt-4 w-full rounded-[4px] border border-gray-200 py-3 text-[13px] text-gray-600">返回修改订单</button>
+            <button disabled={checkoutBusy || !walletPayment.canPay || isPearExpired} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
+              {checkoutBusy ? <><Loader2 size={16} className="animate-spin" />{preparingPayment ? "正在核验支付" : "提交中…"}</> : "确认支付"}
+            </button>
           </div>
         </div>
       )}

@@ -37,6 +37,7 @@ import LogisticsDetails from "./LogisticsDetails";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import type { mibanOrders } from "../../../../drizzle/schema";
+import { MibanOrderInvoiceDetails, type MibanInvoiceRequest } from "./MibanOrderInvoiceDetails";
 
 type OrderItem = Omit<typeof mibanOrders.$inferSelect, "ingredients"> & {
   ingredients: (typeof mibanOrders.$inferSelect)["ingredients"] | string | null;
@@ -45,6 +46,7 @@ type OrderItem = Omit<typeof mibanOrders.$inferSelect, "ingredients"> & {
   userUsername?: string | null;
   userAvatar?: string | null;
   walletPayments?: unknown;
+  invoiceRequest?: MibanInvoiceRequest | null;
 };
 
 function dedupeAddress(addr: string): string {
@@ -87,8 +89,8 @@ function getPersonalOrderSearchText(order: Record<string, any>) {
     if (typeof value === "string" || typeof value === "number") values.push(String(value));
     else if (Array.isArray(value)) value.forEach(collect);
     else if (typeof value === "object") Object.entries(value).forEach(([key, item]) => {
-      // 搜索业务内容，不把头像或商品图片URL中的随机文件名作为订单关键词。
-      if (key !== "ingredients" && !/avatar|image|img|url|link/i.test(key)) collect(item);
+      // 发票申请仅在详情中展示；不把头像或商品图片URL中的随机文件名作为订单关键词。
+      if (key !== "ingredients" && key !== "invoiceRequest" && !/avatar|image|img|url|link/i.test(key)) collect(item);
     });
   };
   collect(order);
@@ -628,6 +630,8 @@ function OrdersTab() {
               </span>
             </div>
           </div>
+
+          <MibanOrderInvoiceDetails invoiceRequest={order.invoiceRequest} />
 
           <div className="flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
             <div className="min-w-0 flex-1 space-y-1 text-[11px] leading-4">

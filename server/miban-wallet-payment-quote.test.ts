@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import ts from "typescript";
+import { z } from "zod";
 import { buildMibanWalletPaymentQuote, verifyMibanPaymentQuoteToken } from "./miban-wallet-payment-quote";
 import { getMibanOrderWalletPaymentSummary, paymentDecimalUnits } from "../shared/miban-wallet-payment";
+import { mibanInvoiceRequestSchema } from "../shared/miban-invoice";
+import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 
 const now = Date.parse("2026-11-22T04:45:00.000Z");
 const key = "isolated-unit-test-key-no-production-access";
@@ -107,6 +113,82 @@ describe("miban wallet payment signed quote", () => {
     input.market.prices.ETH = 1234.5678901234567;
     const row = buildMibanWalletPaymentQuote(input).assets.find(row => row.assetCode === "ETH")!;
     expect(paymentDecimalUnits(row.priceCny!)).toBe(paymentDecimalUnits(String(input.market.prices.ETH)) * paymentDecimalUnits("6.5") / (10n ** 18n));
+  });
+});
+
+describe("four actual checkout quote schemas / no router execution", () => {
+  const source = readFileSync(new URL("./miban.ts", import.meta.url), "utf8");
+  const ast = ts.createSourceFile("miban.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const routes = [
+    ["mibanOrderRouter", "create", "order.create", false],
+    ["mibanLimitedProductRouter", "createAnnualOrder", "limitedProduct.createAnnualOrder", true],
+    ["mibanLimitedProductRouter", "createOrder", "limitedProduct.createOrder", false],
+    ["mibanLimitedProductRouter", "createCartOrder", "limitedProduct.createCartOrder", false],
+  ] as const;
+  function schemaFor(routerName: string, routeName: string): z.ZodObject<any> {
+    let schemaExpression: ts.Expression | undefined;
+    for (const node of ast.statements) if (ts.isVariableStatement(node)) {
+      for (const declaration of node.declarationList.declarations) {
+        if (declaration.name.getText(ast) !== routerName || !declaration.initializer || !ts.isCallExpression(declaration.initializer)) continue;
+        const object = declaration.initializer.arguments[0];
+        if (!ts.isObjectLiteralExpression(object)) continue;
+        const route = object.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(ast) === routeName);
+        if (!route || !ts.isPropertyAssignment(route)) continue;
+        const visit = (child: ts.Node) => {
+          if (ts.isCallExpression(child) && ts.isPropertyAccessExpression(child.expression) && child.expression.name.text === "input") {
+            schemaExpression = child.arguments[0];
+          }
+          ts.forEachChild(child, visit);
+        };
+        visit(route.initializer);
+      }
+    }
+    if (!schemaExpression) throw new Error(`真实输入schema缺失: ${routerName}.${routeName}`);
+    // 仅运行 input 参数，不运行 procedure/resolver；VM 无 require、process、fetch 或真实业务依赖。
+    const js = ts.transpileModule(`(${schemaExpression.getText(ast)});`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+    return new vm.Script(js).runInContext(vm.createContext({ z, mibanReceiverPhoneSchema, mibanInvoiceRequestSchema }, {
+      codeGeneration: { strings: false, wasm: false },
+    }), { timeout: 1000 });
+  }
+  it("paymentAssets schema belongs to exactly the four released order routes", () => {
+    const actualPaths: string[] = [];
+    for (const node of ast.statements) if (ts.isVariableStatement(node)) {
+      for (const declaration of node.declarationList.declarations) {
+        if (!declaration.initializer || !ts.isCallExpression(declaration.initializer)) continue;
+        const object = declaration.initializer.arguments[0];
+        if (!object || !ts.isObjectLiteralExpression(object)) continue;
+        for (const property of object.properties) if (ts.isPropertyAssignment(property)) {
+          const visit = (child: ts.Node) => {
+            if (ts.isPropertyAssignment(child) && child.name.getText(ast) === "paymentAssets" && child.initializer.getText(ast).startsWith("z.array(")) {
+              actualPaths.push(`${declaration.name.getText(ast)}.${property.name.getText(ast)}`);
+            }
+            ts.forEachChild(child, visit);
+          };
+          visit(property.initializer);
+        }
+      }
+    }
+    expect(actualPaths).toEqual(routes.map(([routerName, routeName]) => `${routerName}.${routeName}`));
+    expect(source.match(/paymentAssets: z\.array/g)).toHaveLength(4);
+  });
+  it.each(routes)("%s.%s retains exact native fields and optional real invoice schema (%s)", (routerName, routeName, _path, annual) => {
+    const schema = schemaFor(routerName, routeName);
+    const native = [{ assetCode: "ETH", amount: "0.000000000000000001" }];
+    expect(schema.shape.paymentAssets.parse(native)).toEqual(native);
+    expect(() => schema.shape.paymentAssets.parse([])).toThrow();
+    expect(() => schema.shape.paymentAssets.parse(Array.from({ length: 37 }, () => native[0]))).toThrow();
+    expect(() => schema.shape.paymentAssets.parse([{ assetCode: "ETH", amount: 1 }])).toThrow();
+    expect(schema.shape.paymentAssets.isOptional()).toBe(!annual);
+    expect(schema.shape.paymentQuoteToken.isOptional()).toBe(!annual);
+    expect(() => schema.shape.paymentQuoteToken.parse("x".repeat(16001))).toThrow();
+    if (annual) {
+      expect(() => schema.shape.paymentAssets.parse(undefined)).toThrow();
+      expect(() => schema.shape.paymentQuoteToken.parse("  ")).toThrow();
+    }
+    expect(schema.shape.invoiceRequest.parse(undefined)).toBeUndefined();
+    expect(schema.shape.invoiceRequest.parse({ type: "personal", title: " 个人 ", taxNo: "残留税号" })).toEqual({ type: "personal", title: "个人" });
+    expect(schema.shape.invoiceRequest.parse({ type: "company", title: " 公司 ", taxNo: " 非18位税号 " })).toEqual({ type: "company", title: "公司", taxNo: "非18位税号" });
+    expect(() => schema.shape.invoiceRequest.parse({ type: "company", title: "公司" })).toThrow();
   });
 });
 

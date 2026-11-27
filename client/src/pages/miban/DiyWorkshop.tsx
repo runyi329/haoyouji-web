@@ -31,7 +31,9 @@ import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
-import { MibanMixedPaymentAllocation, useMibanMixedPayment } from "./MibanMixedPayment";
+import { MibanWalletAvailableSummary, MibanPaymentConfirmation, useMibanMixedPayment } from "./MibanMixedPayment";
+import MibanInvoiceRequestForm, { createMibanInvoiceDraft, validateMibanInvoiceRequest, MIBAN_INVOICE_UNAVAILABLE_NOTICE, type MibanInvoiceDraft, type MibanInvoiceErrors } from "./MibanInvoiceRequestForm";
+import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 
@@ -273,6 +275,14 @@ export default function DiyWorkshop() {
   const [showAiDialog, setShowAiDialog] = useState(false);
   // 下单相关状态
   const [showOrderDialog, setShowOrderDialog] = useState(false);
+  const [showWalletPayment, setShowWalletPayment] = useState(false);
+  const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
+  const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  const [preparingPayment, setPreparingPayment] = useState(false);
+  const submitGuard = useRef(false);
+  const paymentAttemptRef = useRef(0);
+  const mountedRef = useRef(true);
+  const walletOpenRef = useRef(false);
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNo: string; deductCny: number; deductUsdt: number; walletPayments: MibanPaymentDeduction[]; subscriptionMonths?: number } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
@@ -312,6 +322,8 @@ export default function DiyWorkshop() {
         subscriptionMonths: subMonths ?? undefined,
       });
       setShowOrderDialog(false);
+      walletOpenRef.current = false;
+      setShowWalletPayment(false);
       cartList.refetch();
       // 下单扣款后立即刷新余额显示
       trpcUtils.recharge.getBalance.invalidate();
@@ -332,6 +344,7 @@ export default function DiyWorkshop() {
         toast.error(msg.slice(0, 60));
       }
     },
+    onSettled: () => { submitGuard.current = false; },
   });
   const aiRecommend = mtrpc.diy.aiRecommend.useMutation({
     onSuccess: (data: { recommended: string[]; reason: string }) => { setAiResult(data); },
@@ -406,6 +419,123 @@ export default function DiyWorkshop() {
 
   const checkoutTotalCny = Number((totalPrice() * (subscriptionPlan ?? 1)).toFixed(2));
   const walletPayment = useMibanMixedPayment(checkoutTotalCny, isAuthenticated);
+  const checkoutBusy = createOrder.isPending || preparingPayment;
+  const walletVersion = JSON.stringify([walletPayment.selectedCodes, walletPayment.priorityCode, walletPayment.cnyInput, walletPayment.paymentAssets]);
+  const checkoutInputScope = JSON.stringify([showOrderDialog, isAuthenticated, selected, ratios, riceTypes, weight, recipeName, subscriptionPlan, shipDay, checkoutTotalCny, receiverName, receiverPhone, receiverAddress, userNote, saveToBook, selectedFromBook, invoiceDraft]);
+  const checkoutScope = JSON.stringify([checkoutInputScope, walletVersion]);
+  const latestCheckoutScope = useRef(checkoutScope);
+  latestCheckoutScope.current = checkoutScope;
+
+  const cancelWalletPayment = () => {
+    if (createOrder.isPending) return;
+    paymentAttemptRef.current++;
+    walletOpenRef.current = false;
+    submitGuard.current = false;
+    walletPayment.cancelPendingPayment();
+    setPreparingPayment(false);
+    setShowWalletPayment(false);
+  };
+  const closeOrderDialog = () => {
+    if (createOrder.isPending) return;
+    cancelWalletPayment();
+    setShowOrderDialog(false);
+  };
+  useEffect(() => {
+    if (!createOrder.isPending && (walletOpenRef.current || submitGuard.current)) cancelWalletPayment();
+  }, [checkoutInputScope]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      walletOpenRef.current = false;
+      paymentAttemptRef.current++;
+      walletPayment.cancelPendingPayment();
+    };
+  }, [walletPayment.cancelPendingPayment]);
+  const validateCheckout = () => {
+    setCheckoutAttempted(true);
+    const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : !selected.length ? "请先选择米种" : null);
+    if (message) { toast.error(message); return null; }
+    const invoice = validateMibanInvoiceRequest(invoiceDraft);
+    setInvoiceErrors(invoice.success ? {} : invoice.errors);
+    if (!invoice.success) { toast.error(invoice.message); return null; }
+    return invoice;
+  };
+  const handleOpenWalletPayment = () => {
+    if (checkoutBusy || submitGuard.current || !showOrderDialog || !isAuthenticated) return;
+    if (!validateCheckout()) return;
+    if (!walletPayment.canPay) { toast.error(walletPayment.statusMessage); return; }
+    walletOpenRef.current = true;
+    setShowWalletPayment(true);
+  };
+  const handleConfirmWalletPayment = async () => {
+    if (checkoutBusy || submitGuard.current || !walletOpenRef.current || !showOrderDialog || !isAuthenticated || !walletPayment.canPay) return;
+    const invoice = validateCheckout();
+    if (!invoice) { cancelWalletPayment(); return; }
+    const attempt = ++paymentAttemptRef.current;
+    const scope = checkoutScope;
+    const stillCurrent = () => mountedRef.current && walletOpenRef.current && submitGuard.current && attempt === paymentAttemptRef.current && scope === latestCheckoutScope.current;
+    submitGuard.current = true;
+    setPreparingPayment(true);
+    let submitted = false;
+    try {
+      if (invoiceDraft.enabled) {
+        let support: unknown;
+        try {
+          support = await mibanUtils.limitedProduct.invoiceSupport.fetch(undefined, { staleTime: 0, retry: false });
+        } catch {
+          if (stillCurrent()) toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+        if (!stillCurrent()) return;
+        const capability = support as { supported?: unknown; version?: unknown } | null;
+        if (capability?.supported !== true || typeof capability.version !== "number" || !Number.isFinite(capability.version) || capability.version < 1) {
+          toast.info(MIBAN_INVOICE_UNAVAILABLE_NOTICE);
+          return;
+        }
+      }
+      const preparedPayment = await walletPayment.preparePayment();
+      if (!preparedPayment || !stillCurrent()) return;
+      const ingredients = selected.map((id) => {
+        const rice = riceTypes.find(r => r.id === id)!;
+        const pct = ratios[id] ?? Math.round(100 / selected.length);
+        const w = Math.round(weight * pct / 100 * 10) / 10;
+        const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : (parseInt(id, 10) || 0);
+        return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
+      });
+      const addressToSave = saveToBook ? {
+        name: receiverName.trim(), phone: normalizeMibanReceiverPhone(receiverPhone),
+        province: "", city: "", district: "", detail: receiverAddress.trim(), label: "其他", isDefault: false,
+      } : null;
+      createOrder.mutate({
+        recipeName: recipeName || "我的专属米",
+        ingredients,
+        totalWeightJin: weight,
+        totalPrice: totalPrice(),
+        receiverName: receiverName.trim(),
+        receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
+        receiverAddress: receiverAddress.trim(),
+        userNote: userNote.trim() || undefined,
+        subscriptionMonths: subscriptionPlan ?? undefined,
+        ...(invoice.invoiceRequest ? { invoiceRequest: invoice.invoiceRequest } : {}),
+        cnyAmount: preparedPayment.cnyAmount,
+        paymentAssets: preparedPayment.paymentAssets,
+        paymentQuoteToken: preparedPayment.paymentQuoteToken,
+      }, {
+        onSuccess: () => {
+          if (addressToSave) addAddressMut.mutate(addressToSave);
+        },
+      });
+      submitted = true;
+    } catch (error) {
+      if (stillCurrent()) toast.error(formatMibanCheckoutError(error));
+    } finally {
+      if (attempt === paymentAttemptRef.current) {
+        if (!submitted) submitGuard.current = false;
+        if (mountedRef.current) setPreparingPayment(false);
+      }
+    }
+  };
 
   const applyEqual = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
@@ -929,7 +1059,7 @@ export default function DiyWorkshop() {
         {/* 下单按钮 */}
         {isAuthenticated ? (
           <button
-            onClick={() => { walletPayment.resetToCnyFirst(); setShowOrderDialog(true); }}
+            onClick={() => { if (checkoutBusy) return; walletPayment.resetToCnyFirst(); setInvoiceDraft(createMibanInvoiceDraft()); setInvoiceErrors({}); setCheckoutAttempted(false); setShowOrderDialog(true); }}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform mb-2"
             style={{ background: "#FF6900" }}
           >
@@ -1055,7 +1185,7 @@ export default function DiyWorkshop() {
 
         {isAuthenticated ? (
           <button
-            onClick={() => { walletPayment.resetToCnyFirst(); setShowOrderDialog(true); }}
+            onClick={() => { if (checkoutBusy) return; walletPayment.resetToCnyFirst(); setInvoiceDraft(createMibanInvoiceDraft()); setInvoiceErrors({}); setCheckoutAttempted(false); setShowOrderDialog(true); }}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform"
             style={{ background: "#FF6900" }}
           >
@@ -1254,20 +1384,12 @@ export default function DiyWorkshop() {
       )}
 
       {/* ─── 下单弹窗 ─────────────────────────────────────────── */}
-      {showOrderDialog && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={() => {
-          if (createOrder.isPending) return;
-          walletPayment.cancelPendingPayment();
-          setShowOrderDialog(false);
-        }}>
+      {showOrderDialog && !showWalletPayment && (
+        <div data-miban-checkout="true" role="dialog" aria-modal="true" aria-label="确认订单" className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={closeOrderDialog}>
           <div className="w-full bg-white rounded-t-3xl p-6 pb-10 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[17px] font-bold text-black">确认下单</span>
-              <button onClick={() => {
-                if (createOrder.isPending) return;
-                walletPayment.cancelPendingPayment();
-                setShowOrderDialog(false);
-              }} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <span className="text-[17px] font-bold text-black">确认订单</span>
+              <button aria-label="关闭确认订单" onClick={closeOrderDialog} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                 <X size={16} className="text-gray-500" />
               </button>
             </div>
@@ -1300,7 +1422,7 @@ export default function DiyWorkshop() {
                 </div>
               </div>
             </div>
-            <MibanMixedPaymentAllocation payment={walletPayment} disabled={createOrder.isPending} />
+            <MibanWalletAvailableSummary payment={walletPayment} disabled={checkoutBusy} />
             {/* 收货信息 */}
             <div className="space-y-3 mb-5">
               <div className="flex items-center justify-between">
@@ -1387,70 +1509,26 @@ export default function DiyWorkshop() {
                 </button>
               )}
             </div>
-            {/* 下单按钮 */}
-            {(() => {
-              const isInsufficient = !walletPayment.canPay;
-              return (
-                <button
-                  disabled={createOrder.isPending || isInsufficient}
-                  onClick={async () => {
-                    if (createOrder.isPending || !walletPayment.canPay) return;
-                    setCheckoutAttempted(true);
-                    const message = receiverPhoneError || (!receiverName.trim() ? "请填写收货人姓名" : !receiverAddress.trim() ? "请补全收货地址后再付款" : null);
-                    if (message) { toast.error(message); return; }
-                    const preparedPayment = await walletPayment.preparePayment();
-                    if (!preparedPayment) return;
-                    const singlePrice = totalPrice();
-                    const ingredients = selected.map((id) => {
-                      const rice = allRiceList.find(r => r.id === id)!;
-                      const pct = ratios[id] ?? Math.round(100 / selected.length);
-                      const w = Math.round(weight * pct / 100 * 10) / 10;
-                      const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : (parseInt(id, 10) || 0);
-                      return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
-                    });
-                    const addressToSave = saveToBook ? {
-                        name: receiverName.trim(),
-                        phone: normalizeMibanReceiverPhone(receiverPhone),
-                        province: "",
-                        city: "",
-                        district: "",
-                        detail: receiverAddress.trim(),
-                        label: "其他",
-                        isDefault: false,
-                      } : null;
-                    createOrder.mutate({
-                      recipeName: recipeName || "我的专属米",
-                      ingredients,
-                      totalWeightJin: weight,
-                      totalPrice: singlePrice,
-                      receiverName: receiverName.trim(),
-                      receiverPhone: normalizeMibanReceiverPhone(receiverPhone),
-                      receiverAddress: receiverAddress.trim(),
-                      userNote: userNote.trim() || undefined,
-                      subscriptionMonths: subscriptionPlan ?? undefined,
-                      cnyAmount: preparedPayment.cnyAmount,
-                      paymentAssets: preparedPayment.paymentAssets,
-                      paymentQuoteToken: preparedPayment.paymentQuoteToken,
-                    }, {
-                      onSuccess: () => {
-                        if (addressToSave) addAddressMut.mutate(addressToSave);
-                      },
-                    });
-                  }}
-                  className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
-                  style={{ background: "#FF6900" }}
-                >
-                  {createOrder.isPending
-                    ? <><Loader2 size={18} className="animate-spin" />提交中…</>
-                    : isInsufficient
-                      ? walletPayment.statusMessage
-                      : subscriptionPlan !== null
-                        ? `确认订阅 ${subscriptionPlan} 期 · ${walletPayment.paymentSummary}`
-                        : `确认下单 · ${walletPayment.paymentSummary}`
-                  }
-                </button>
-              );
-            })()}
+            <MibanInvoiceRequestForm draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mb-5" />
+            <button disabled={checkoutBusy || !walletPayment.canPay} onClick={handleOpenWalletPayment} className="w-full rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">去支付</button>
+          </div>
+        </div>
+      )}
+
+      {showWalletPayment && (
+        <div data-miban-checkout="true" role="dialog" aria-modal="true" aria-label="钱包支付确认" className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={cancelWalletPayment}>
+          <div className="max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-[4px] bg-white p-6 pb-10" onClick={event => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900">钱包支付确认</h2>
+              <button aria-label="返回修改订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="p-2 text-gray-500"><X size={18} /></button>
+            </div>
+            <p className="mb-4 text-[13px] text-gray-600">{recipeName || "我的专属米"} · {weight}斤{subscriptionPlan ? ` × ${subscriptionPlan}期` : ""} · 应付 ¥{checkoutTotalCny.toFixed(2)}</p>
+            <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
+            <MibanCheckoutConfirmationDetails receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
+            <button disabled={createOrder.isPending} onClick={cancelWalletPayment} className="mt-4 w-full rounded-[4px] border border-gray-200 py-3 text-[13px] text-gray-600">返回修改订单</button>
+            <button disabled={checkoutBusy || !walletPayment.canPay} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
+              {checkoutBusy ? <><Loader2 size={16} className="animate-spin" />{preparingPayment ? "正在核验支付" : "提交中…"}</> : "确认支付"}
+            </button>
           </div>
         </div>
       )}

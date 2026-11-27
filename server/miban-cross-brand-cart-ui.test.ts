@@ -25,12 +25,16 @@ const boundary = vi.hoisted(() => ({
   quote: null as any,
   freshQuote: null as any,
   refetch: vi.fn(),
+  invoiceSupport: vi.fn(),
+  invoiceAccess: vi.fn(),
+  invoiceRouteAvailable: true,
   mutate: vi.fn(),
   quoteQuery: vi.fn(),
   invalidate: vi.fn(),
   navigate: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  toastInfo: vi.fn(),
   fetch: vi.fn(),
 }));
 vi.mock("react", async () => {
@@ -65,6 +69,14 @@ vi.mock("../client/src/pages/miban/mibanTrpc", () => ({
   mtrpc: {
     useUtils: () => ({
       order: { walletPaymentQuote: { invalidate: boundary.invalidate } },
+      limitedProduct: boundary.invoiceRouteAvailable
+        ? {
+            get invoiceSupport() {
+              boundary.invoiceAccess();
+              return { fetch: boundary.invoiceSupport };
+            },
+          }
+        : {},
     }),
     address: { list: { useQuery: () => ({ data: boundary.addresses }) } },
     order: { walletPaymentQuote: { useQuery: boundary.quoteQuery } },
@@ -80,6 +92,11 @@ vi.mock("../client/src/pages/miban/mibanTrpc", () => ({
 }));
 vi.mock("../client/src/lib/trpc", () => ({
   trpc: {
+    auth: {
+      me: {
+        useQuery: () => ({ data: { name: "隔离测试用户", avatar: null } }),
+      },
+    },
     useUtils: () => ({
       recharge: Object.fromEntries(
         [
@@ -107,6 +124,7 @@ vi.mock("sonner", () => ({
   toast: {
     error: boundary.toastError,
     success: boundary.toastSuccess,
+    info: boundary.toastInfo,
     message: vi.fn(),
   },
 }));
@@ -292,14 +310,39 @@ function cartPayment(
     element,
     node =>
       typeof node.type === "function" &&
-      node.type.name === "MibanMixedPaymentAllocation"
+      ["MibanWalletAvailableSummary", "MibanPaymentConfirmation"].includes(
+        node.type.name
+      )
   ).props.payment;
 }
-function reviewedPayButton(cart: ReturnType<typeof setupCart>) {
-  cartPayment(cart).confirmPaymentReview(true);
-  const element = cart.render();
-  const pay = findElement(
+function walletPopup(element: any) {
+  return findElement(
     element,
+    node => node.props["data-testid"] === "cart-wallet-confirmation"
+  );
+}
+function goPayButton(cart: ReturnType<typeof setupCart>) {
+  return findElement(
+    cart.render(),
+    node =>
+      node.type === "button" && String(node.props.children).startsWith("去支付")
+  );
+}
+function openWallet(cart: ReturnType<typeof setupCart>) {
+  if (!walletPopup(cart.render())) {
+    const button = goPayButton(cart);
+    expect(button.props.disabled, cartPayment(cart).statusMessage).toBe(false);
+    button.props.onClick();
+    cart.render();
+  }
+  const element = cart.render();
+  expect(walletPopup(element)).toBeDefined();
+  return element;
+}
+function paymentConfirmButton(cart: ReturnType<typeof setupCart>) {
+  const element = openWallet(cart);
+  const pay = findElement(
+    walletPopup(element),
     node =>
       node.type === "button" &&
       String(node.props.children).startsWith("确认支付")
@@ -308,7 +351,7 @@ function reviewedPayButton(cart: ReturnType<typeof setupCart>) {
   return { pay, payment: cartPayment(cart, element) };
 }
 async function clickPay(cart: ReturnType<typeof setupCart>) {
-  const { pay } = reviewedPayButton(cart);
+  const { pay } = paymentConfirmButton(cart);
   await pay.props.onClick();
   cart.render();
 }
@@ -328,6 +371,65 @@ function delayedRefetch() {
 }
 function html(element: any) {
   return renderToStaticMarkup(element);
+}
+// Render inside actual React SSR so useId/Radix Switch stay real; only expose the
+// component's event tree for isolated callback dispatch, never mount DOM/network.
+function componentTree(element: any) {
+  let tree: any;
+  function Probe() {
+    tree = element.type(element.props);
+    return tree;
+  }
+  html(React.createElement(Probe));
+  return tree;
+}
+function invoiceForm(cart: ReturnType<typeof setupCart>) {
+  return findElement(
+    cart.render(),
+    node =>
+      typeof node.type === "function" &&
+      node.type.name === "MibanInvoiceRequestForm"
+  );
+}
+function invoiceTree(cart: ReturnType<typeof setupCart>) {
+  return componentTree(invoiceForm(cart));
+}
+function setInvoiceEnabled(
+  cart: ReturnType<typeof setupCart>,
+  enabled: boolean
+) {
+  findElement(
+    invoiceTree(cart),
+    node =>
+      node.props["aria-label"] === "索取发票" &&
+      typeof node.props.onCheckedChange === "function"
+  ).props.onCheckedChange(enabled);
+  cart.render();
+}
+function chooseInvoiceType(
+  cart: ReturnType<typeof setupCart>,
+  type: "personal" | "company"
+) {
+  findElement(
+    invoiceTree(cart),
+    node =>
+      node.type === "button" &&
+      node.props.children === (type === "personal" ? "个人" : "公司")
+  ).props.onClick();
+  cart.render();
+}
+function setInvoiceField(
+  cart: ReturnType<typeof setupCart>,
+  field: "title" | "taxNo",
+  value: string
+) {
+  findElement(
+    invoiceTree(cart),
+    node =>
+      node.type === "input" &&
+      String(node.props.id).endsWith(field === "title" ? "-title" : "-tax-no")
+  ).props.onChange({ target: { value } });
+  cart.render();
 }
 const source = readFileSync(
   new URL("../client/src/pages/miban/LimitedProductCart.tsx", import.meta.url),
@@ -355,15 +457,33 @@ function expectPreparedPaymentContract(
   mutation: ts.CallExpression,
   paymentName: string
 ) {
-  const payload = mutation.arguments[0] as ts.ObjectLiteralExpression;
+  let payload: ts.Expression = mutation.arguments[0];
+  if (ts.isIdentifier(payload)) {
+    const declaration = walk(
+      page,
+      node =>
+        ts.isVariableDeclaration(node) &&
+        node.name.getText(page) === payload.getText(page)
+    ) as ts.VariableDeclaration[];
+    expect(declaration).toHaveLength(1);
+    payload = declaration[0].initializer as ts.ObjectLiteralExpression;
+  }
   expect(ts.isObjectLiteralExpression(payload)).toBe(true);
+  if (!ts.isObjectLiteralExpression(payload))
+    throw new Error("Payment DTO must be an object");
   const fields = payload.properties.filter(ts.isPropertyAssignment);
+  const preparedSpread = payload.properties.some(
+    property =>
+      ts.isSpreadAssignment(property) &&
+      property.expression.getText(page) === "preparedPayment"
+  );
   for (const key of ["cnyAmount", "paymentAssets", "paymentQuoteToken"]) {
-    expect(
-      fields
-        .find(field => field.name.getText(page) === key)
-        ?.initializer.getText(page)
-    ).toBe(`preparedPayment.${key}`);
+    if (!preparedSpread)
+      expect(
+        fields
+          .find(field => field.name.getText(page) === key)
+          ?.initializer.getText(page)
+      ).toBe(`preparedPayment.${key}`);
   }
   let handler: ts.Node | undefined = mutation.parent;
   while (
@@ -381,44 +501,43 @@ function expectPreparedPaymentContract(
       modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword
     )
   ).toBe(true);
-  expect(ts.isBlock(paymentHandler.body)).toBe(true);
-  const statements = (paymentHandler.body as ts.Block).statements;
-  const prepareIndex = statements.findIndex(
-    statement =>
-      ts.isVariableStatement(statement) &&
-      statement.declarationList.declarations.some(
-        declaration =>
-          declaration.name.getText(page) === "preparedPayment" &&
-          declaration.initializer &&
-          ts.isAwaitExpression(declaration.initializer) &&
-          ts.isCallExpression(declaration.initializer.expression) &&
-          declaration.initializer.expression.expression.getText(page) ===
-            `${paymentName}.preparePayment` &&
-          declaration.initializer.expression.arguments.length === 0
-      )
+  // Preparation and cancellation guard may live inside try/finally and combine scope/attempt guards.
+  const prepares = walk(
+    paymentHandler.body,
+    node =>
+      ts.isVariableDeclaration(node) &&
+      node.name.getText(page) === "preparedPayment" &&
+      Boolean(node.initializer) &&
+      ts.isAwaitExpression(node.initializer!) &&
+      ts.isCallExpression(node.initializer!.expression) &&
+      node.initializer!.expression.expression.getText(page) ===
+        `${paymentName}.preparePayment` &&
+      node.initializer!.expression.arguments.length === 0
   );
-  const guardIndex = statements.findIndex(
-    statement =>
-      ts.isIfStatement(statement) &&
-      ts.isPrefixUnaryExpression(statement.expression) &&
-      statement.expression.operator === ts.SyntaxKind.ExclamationToken &&
-      statement.expression.operand.getText(page) === "preparedPayment" &&
-      !statement.elseStatement &&
-      ((ts.isReturnStatement(statement.thenStatement) &&
-        !statement.thenStatement.expression) ||
-        (ts.isBlock(statement.thenStatement) &&
-          statement.thenStatement.statements.length === 1 &&
-          ts.isReturnStatement(statement.thenStatement.statements[0]) &&
-          !statement.thenStatement.statements[0].expression))
+  expect(prepares).toHaveLength(1);
+  const guards = walk(
+    paymentHandler.body,
+    node =>
+      ts.isIfStatement(node) &&
+      walk(
+        node.expression,
+        expression =>
+          ts.isPrefixUnaryExpression(expression) &&
+          expression.operator === ts.SyntaxKind.ExclamationToken &&
+          expression.operand.getText(page) === "preparedPayment"
+      ).length > 0 &&
+      walk(
+        node.thenStatement,
+        statement => ts.isReturnStatement(statement) && !statement.expression
+      ).length > 0
   );
-  const mutationIndex = statements.findIndex(
-    statement =>
-      statement.getStart(page) <= mutation.getStart(page) &&
-      statement.end >= mutation.end
-  );
-  expect(prepareIndex).toBeGreaterThanOrEqual(0);
-  expect(guardIndex).toBeGreaterThan(prepareIndex);
-  expect(mutationIndex).toBeGreaterThan(guardIndex);
+  expect(
+    guards.some(
+      guard =>
+        guard.getStart(page) > prepares[0].getStart(page) &&
+        guard.end < mutation.getStart(page)
+    )
+  ).toBe(true);
 }
 
 beforeEach(() => {
@@ -441,6 +560,11 @@ beforeEach(() => {
   boundary.pending = false;
   boundary.authenticated = true;
   boundary.quote = fixtureQuote();
+  boundary.invoiceRouteAvailable = true;
+  boundary.invoiceSupport
+    .mockReset()
+    .mockResolvedValue({ supported: true, version: 1 });
+  boundary.invoiceAccess.mockReset();
   boundary.freshQuote = fixtureQuote("isolated-fresh-signature");
   boundary.addresses = [
     {
@@ -459,6 +583,7 @@ beforeEach(() => {
   boundary.navigate.mockReset();
   boundary.toastError.mockReset();
   boundary.toastSuccess.mockReset();
+  boundary.toastInfo.mockReset();
   boundary.refetch.mockReset().mockImplementation(async () => ({
     data: boundary.freshQuote,
     isError: false,
@@ -574,7 +699,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       confirmation,
       node =>
         typeof node.type === "function" &&
-        node.type.name === "MibanMixedPaymentAllocation"
+        node.type.name === "MibanWalletAvailableSummary"
     );
     expect(allocation.props.payment.selectedDigitalCode).toBe("ETH");
     allocation.props.payment.useOnlyAsset("USDT");
@@ -587,13 +712,14 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(markup).toContain("统一付款，按精选生成2张订单");
     expect(markup).not.toContain("已生成");
     expect(markup.match(/收货地址<\/div>/g)).toHaveLength(1);
-    expect(markup.match(/钱包单币 \/ 组合支付/g)).toHaveLength(1);
-    expect(markup).toContain('aria-label="选择支付数字币"');
-    expect(markup).toContain('value="ETH"');
+    expect(markup.match(/钱包可用余额<\/h3>/g)).toHaveLength(1);
+    expect(markup).toContain('data-payment-selection-heading="true"');
+    expect(markup).toContain('aria-label="使用ETH支付"');
     expect(markup).toContain("统一应付");
     expect(markup).toContain("53.00");
     expect(markup).toContain("¥371.00");
-    expect(markup).toContain("可用 594.95 · 冻结 1.12");
+    expect(markup).toContain("594.95 U");
+    expect(markup).not.toContain("冻结 1.12");
     expect(boundary.mutate).not.toHaveBeenCalled();
   });
   it("captures one fresh signed payment input for all groups and never clears before success", async () => {
@@ -605,7 +731,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       confirmation,
       node =>
         typeof node.type === "function" &&
-        node.type.name === "MibanMixedPaymentAllocation"
+        node.type.name === "MibanWalletAvailableSummary"
     ).props.payment.useOnlyAsset("USDT");
     cart.render();
     await clickPay(cart);
@@ -654,19 +780,32 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
+    boundary.quote.assets.push({
+      assetCode: "BNB",
+      assetName: "BNB",
+      available: "0.1",
+      frozen: "0",
+      priceCny: "4200",
+      priceUsdt: "600",
+      priceUpdatedAt: new Date(NOW).toISOString(),
+    });
+    boundary.freshQuote.assets.push({ ...boundary.quote.assets.at(-1) });
     let element = cart.confirm();
     let allocationElement = findElement(
       element,
       node =>
         typeof node.type === "function" &&
-        node.type.name === "MibanMixedPaymentAllocation"
+        node.type.name === "MibanWalletAvailableSummary"
     );
     let payment = allocationElement.props.payment;
-    const allocation = hookHarness(() => allocationElement.type({ payment }));
+    const allocation = {
+      render: () =>
+        componentTree(React.createElement(allocationElement.type, { payment })),
+    };
     const select = findElement(
       allocation.render(),
       node =>
-        node.type === "select" && node.props["aria-label"] === "选择支付数字币"
+        node.type === "select" && node.props["aria-label"] === "选择支付币种"
     );
     select.props.onChange({ target: { value: "ETH" } });
     element = cart.render();
@@ -674,7 +813,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       element,
       node =>
         typeof node.type === "function" &&
-        node.type.name === "MibanMixedPaymentAllocation"
+        node.type.name === "MibanWalletAvailableSummary"
     );
     payment = allocationElement.props.payment;
     expect(payment.paymentAssets).toEqual([
@@ -696,47 +835,49 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     );
     expect(cart.context().items).toHaveLength(2);
   });
-  it("blocks missing address, invalid phone and pending duplicate clicks before refetch", async () => {
+  it("blocks missing address, invalid phone and pending duplicate clicks before opening wallet/refetch", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     boundary.addresses = [];
     cart.confirm();
-    await clickPay(cart);
-    expect(boundary.mutate).not.toHaveBeenCalled();
+    await goPayButton(cart).props.onClick();
+    expect(walletPopup(cart.render())).toBeUndefined();
     expect(boundary.toastError).toHaveBeenLastCalledWith("请先选择收货地址");
     boundary.addresses = [
       { id: 1, name: "单元测试", phone: "invalid", is_default: 1 },
     ];
     cart.render();
     cart.render();
-    await clickPay(cart);
-    expect(boundary.mutate).not.toHaveBeenCalled();
+    await goPayButton(cart).props.onClick();
+    expect(walletPopup(cart.render())).toBeUndefined();
+    expect(boundary.toastError).toHaveBeenCalled();
     boundary.addresses = [
       { id: 1, name: "单元测试", phone: "13800138000", is_default: 1 },
     ];
     cart.render();
     cart.render();
     boundary.pending = true;
-    const element = cart.render();
     const pay = findElement(
-      element,
+      cart.render(),
       node =>
         node.type === "button" &&
-        node.props.disabled === true &&
         String(node.props.className).includes("disabled:bg-gray-300")
     );
+    expect(pay.props.disabled).toBe(true);
     await pay.props.onClick();
+    expect(walletPopup(cart.render())).toBeUndefined();
     expect(boundary.mutate).not.toHaveBeenCalled();
     expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
     expect(cart.context().items).toHaveLength(2);
   });
-  it("keeps the reviewed snapshot fixed without polling or adopting shared query updates", async () => {
+  it("keeps the displayed snapshot fixed without polling or adopting shared query updates", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     cart.confirm();
-    reviewedPayButton(cart);
+    paymentConfirmButton(cart);
     const original = cartPayment(cart);
     boundary.quote = fixtureQuote("unreviewed-cache-signature", NOW + 60_001);
     boundary.quote.assets.find((row: any) => row.assetCode === "ETH").priceCny =
@@ -745,7 +886,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const payment = cartPayment(cart);
     expect(payment.paymentAssets).toEqual(original.paymentAssets);
     expect(payment.quotedAt).toBe(original.quotedAt);
-    expect(payment.reviewed).toBe(true);
+    expect(payment.reviewed).toBe(false);
     expect(payment.quoteExpired).toBe(true);
     expect(payment.paymentQuoteToken).toBe("");
     expect(payment.canPay).toBe(true); // only permission to start verification
@@ -765,13 +906,13 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     cart.confirm();
-    reviewedPayButton(cart);
+    paymentConfirmButton(cart);
     vi.setSystemTime(NOW + 60_001);
     boundary.freshQuote = fixtureQuote(
       "isolated-post-expiry-signature",
       Date.now()
     );
-    const { pay, payment } = reviewedPayButton(cart);
+    const { pay, payment } = paymentConfirmButton(cart);
     expect(payment.quoteExpired).toBe(true);
     expect(payment.paymentQuoteToken).toBe("");
     expect(payment.canPay).toBe(true);
@@ -798,7 +939,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     cart.context().addItem(aloe());
     cart.confirm();
     const finishRefetch = delayedRefetch();
-    const { pay, payment } = reviewedPayButton(cart);
+    const { pay, payment } = paymentConfirmButton(cart);
     const prepare = vi.spyOn(payment, "preparePayment");
     const request = pay.props.onClick();
     expect(boundary.refetch).toHaveBeenCalledOnce();
@@ -828,7 +969,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       boundary.freshQuote.assets.find(
         (row: any) => row.assetCode === code
       ).available = code === "ETH" ? "0.001" : "1";
-      const { pay, payment } = reviewedPayButton(cart);
+      const { pay, payment } = paymentConfirmButton(cart);
       const prepare = vi.spyOn(payment, "preparePayment");
       await pay.props.onClick();
       await expect(prepare.mock.results[0].value).resolves.toBeNull();
@@ -846,7 +987,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       expect(cart.context().items).toHaveLength(2);
     }
   );
-  it("requires re-review when raw USDT changes despite unchanged two-decimal display, then uses the same quote without a refresh loop", async () => {
+  it("requires a second explicit confirmation when raw USDT changes despite unchanged two-decimal display, then uses the same quote without a refresh loop", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
@@ -861,7 +1002,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     boundary.freshQuote.assets.find(
       (row: any) => row.assetCode === "USDT"
     ).priceCny = "7.0001";
-    const { pay, payment } = reviewedPayButton(cart);
+    const { pay, payment } = paymentConfirmButton(cart);
     const prepare = vi.spyOn(payment, "preparePayment");
     await pay.props.onClick();
     await expect(prepare.mock.results[0].value).resolves.toBeNull();
@@ -872,11 +1013,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(changed.paymentSummary).toBe(original.paymentSummary);
     expect(changed.paymentQuoteToken).toBe(boundary.freshQuote.quoteToken);
     expect(changed.reviewed).toBe(false);
-    expect(changed.canPay).toBe(false);
-    expect(changed.statusMessage).toContain("实际扣币有变化，请重新核对");
+    expect(changed.canPay).toBe(true);
+    expect(changed.statusMessage).toContain("报价已更新，请确认本次付款金额");
     expect(boundary.mutate).not.toHaveBeenCalled();
     expect(boundary.refetch).toHaveBeenCalledOnce();
-    expect(html(cart.render())).toContain("本次扣币 53.00 U");
+    expect(html(walletPopup(cart.render()))).toContain("52.99924287");
     // A newly issued but unreviewed cache response must not replace the staged quote.
     boundary.quote = fixtureQuote("must-not-replace-reviewed-fresh-signature");
     await clickPay(cart);
@@ -888,7 +1029,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     );
     expect(cart.context().items).toHaveLength(2);
   });
-  it("retains all 18 native ETH decimals after changed-quote re-review and submits just once", async () => {
+  it("retains all 18 native ETH decimals after changed-quote second confirmation and submits just once", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
@@ -925,7 +1066,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       cart.context().addItem(aloe());
       cart.confirm();
       const finishRefetch = delayedRefetch();
-      const { pay, payment } = reviewedPayButton(cart);
+      const { pay, payment } = paymentConfirmButton(cart);
       const prepare = vi.spyOn(payment, "preparePayment");
       const request = pay.props.onClick();
       const busyElement = cart.render();
@@ -940,9 +1081,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
         await findElement(
           busyElement,
           node =>
-            node.type === "button" && node.props["aria-label"] === "返回购物车"
+            node.type === "button" &&
+            node.props["aria-label"] === "返回确认订单"
         ).props.onClick();
-        expect(html(cart.render())).toContain("精选购物车");
+        expect(walletPopup(cart.render())).toBeUndefined();
+        expect(html(cart.render())).toContain("确认订单");
       } else {
         cart.context().closeCart();
         expect(cart.render()).toBeNull();
@@ -966,15 +1109,15 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     cart.context().addItem(aloe());
     cart.confirm();
     const finishRefetch = delayedRefetch();
-    const { pay } = reviewedPayButton(cart);
+    const { pay } = paymentConfirmButton(cart);
     const request = pay.props.onClick();
     await pay.props.onClick(); // same render closure must also be safe
     const busyElement = cart.render();
     const busyPay = findElement(
-      busyElement,
+      walletPopup(busyElement),
       node =>
         node.type === "button" &&
-        String(node.props.children).startsWith("确认支付")
+        String(node.props.className).includes("disabled:bg-gray-300")
     );
     expect(busyPay.props.disabled).toBe(true);
     await busyPay.props.onClick();
@@ -991,6 +1134,525 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toHaveLength(
       2
     );
+  });
+});
+
+describe("two-step checkout / invoice capability and async scope safety (isolated boundaries only)", () => {
+  function confirmedCart() {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    cart.confirm();
+    return cart;
+  }
+  function personalInvoice(cart: ReturnType<typeof setupCart>) {
+    setInvoiceEnabled(cart, true);
+    setInvoiceField(cart, "title", "  单元测试个人  ");
+  }
+  function deferredCapability() {
+    let resolve!: (support: unknown) => void;
+    const promise = new Promise<unknown>(done => {
+      resolve = done;
+    });
+    boundary.invoiceSupport.mockImplementationOnce(() => promise);
+    return resolve;
+  }
+  it("does not prepare from a stale confirmation button after returning to checkout", async () => {
+    const cart = confirmedCart();
+    const { pay, payment } = paymentConfirmButton(cart);
+    const prepare = vi.spyOn(payment, "preparePayment");
+    findElement(
+      walletPopup(cart.render()),
+      node => node.props["aria-label"] === "返回确认订单"
+    ).props.onClick();
+    cart.render();
+    await pay.props.onClick();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(walletPopup(cart.render())).toBeUndefined();
+  });
+  it("revalidates invoice on confirm, returns invalid company invoice to checkout without any requests", async () => {
+    const cart = confirmedCart();
+    personalInvoice(cart);
+    openWallet(cart);
+    // Isolated parent-state change simulates a stale invalid draft before final click.
+    invoiceForm(cart).props.onChange({
+      enabled: true,
+      type: "company",
+      title: "未完成公司",
+      taxNo: "",
+    });
+    cart.render();
+    const { pay, payment } = paymentConfirmButton(cart);
+    const prepare = vi.spyOn(payment, "preparePayment");
+    await pay.props.onClick();
+    cart.render();
+    expect(walletPopup(cart.render())).toBeUndefined();
+    expect(invoiceForm(cart).props.errors.taxNo).toBe("请填写公司税号");
+    expect(prepare).not.toHaveBeenCalled();
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it("retries invoice capability uncached after failure and only then prepares one payment", async () => {
+    const cart = confirmedCart();
+    personalInvoice(cart);
+    boundary.invoiceSupport.mockRejectedValueOnce(
+      new Error("isolated first capability failure")
+    );
+    await clickPay(cart);
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(invoiceForm(cart).props.draft.enabled).toBe(true);
+    await clickPay(cart);
+    expect(boundary.invoiceSupport).toHaveBeenCalledTimes(2);
+    for (const args of boundary.invoiceSupport.mock.calls)
+      expect(args).toEqual([undefined, { staleTime: 0, retry: false }]);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it("opens wallet only on 去支付 without fresh quote/prepare/mutate or review approval, and popup is read-only", async () => {
+    const cart = confirmedCart();
+    expect(invoiceForm(cart).props.draft).toEqual({
+      enabled: false,
+      type: "personal",
+      title: "个人",
+      taxNo: "",
+    });
+    expect(walletPopup(cart.render())).toBeUndefined();
+    expect(
+      findElement(
+        cart.render(),
+        node =>
+          typeof node.type === "function" &&
+          node.type.name === "MibanWalletAvailableSummary"
+      )
+    ).toBeDefined();
+    expect(
+      findElement(
+        cart.render(),
+        node =>
+          typeof node.type === "function" &&
+          node.type.name === "MibanPaymentConfirmation"
+      )
+    ).toBeUndefined();
+    const prepare = vi.spyOn(cartPayment(cart), "preparePayment");
+    const review = vi.spyOn(cartPayment(cart), "confirmPaymentReview");
+    openWallet(cart);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(review).not.toHaveBeenCalled();
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    const popup = walletPopup(cart.render());
+    expect(
+      findElement(
+        popup,
+        node =>
+          typeof node.type === "function" &&
+          node.type.name === "MibanPaymentConfirmation"
+      )
+    ).toBeDefined();
+    expect(
+      findElement(
+        popup,
+        node =>
+          typeof node.type === "function" &&
+          node.type.name === "MibanCheckoutConfirmationDetails"
+      )
+    ).toBeDefined();
+    expect(
+      findElement(
+        popup,
+        node =>
+          typeof node.type === "function" &&
+          ["MibanWalletAvailableSummary", "MibanInvoiceRequestForm"].includes(
+            node.type.name
+          )
+      )
+    ).toBeUndefined();
+    const markup = html(popup);
+    expect(markup).toContain("0.0265 ETH");
+    expect(markup).toContain("不索取发票");
+    expect(markup).toContain("北京市朝阳区单元测试地址");
+    expect(markup).toContain('aria-label="返回确认订单"');
+    expect(markup).not.toMatch(
+      /<select|<input|<textarea|<details|type="checkbox"|核对明细|选择币种|刷新钱包可用余额/
+    );
+    await clickPay(cart);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+    expect(boundary.invoiceAccess).not.toHaveBeenCalled();
+  });
+  it("uses real invoice Switch/type events, clears old company fields when changing type or disabling", async () => {
+    const cart = confirmedCart();
+    setInvoiceEnabled(cart, true);
+    expect(invoiceForm(cart).props.draft).toMatchObject({
+      enabled: true,
+      type: "personal",
+      title: "个人",
+      taxNo: "",
+    });
+    chooseInvoiceType(cart, "company");
+    expect(invoiceForm(cart).props.draft).toMatchObject({
+      type: "company",
+      title: "",
+      taxNo: "",
+    });
+    setInvoiceField(cart, "title", "历史公司");
+    setInvoiceField(cart, "taxNo", "OLD-TAX-123");
+    chooseInvoiceType(cart, "personal");
+    expect(invoiceForm(cart).props.draft).toEqual({
+      enabled: true,
+      type: "personal",
+      title: "个人",
+      taxNo: "",
+    });
+    expect(html(invoiceForm(cart))).not.toContain("请输入公司税号");
+    chooseInvoiceType(cart, "company");
+    setInvoiceField(cart, "title", "关闭的历史公司");
+    setInvoiceEnabled(cart, false);
+    expect(invoiceForm(cart).props.draft).toEqual({
+      enabled: false,
+      type: "personal",
+      title: "个人",
+      taxNo: "",
+    });
+    expect(html(invoiceForm(cart))).not.toContain("发票类型");
+    boundary.invoiceRouteAvailable = false;
+    await clickPay(cart);
+    expect(boundary.mutate.mock.calls[0][0]).not.toHaveProperty(
+      "invoiceRequest"
+    );
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+  });
+  it("does not open popup for company without tax number, and preserves draft on address updates", async () => {
+    const cart = confirmedCart();
+    setInvoiceEnabled(cart, true);
+    chooseInvoiceType(cart, "company");
+    setInvoiceField(cart, "title", "单元测试公司");
+    await goPayButton(cart).props.onClick();
+    expect(walletPopup(cart.render())).toBeUndefined();
+    expect(invoiceForm(cart).props.errors.taxNo).toBe("请填写公司税号");
+    expect(html(invoiceForm(cart))).toContain('aria-invalid="true"');
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    boundary.addresses = [{ ...boundary.addresses[0], detail: "更换后地址" }];
+    cart.render();
+    cart.render();
+    expect(invoiceForm(cart).props.draft).toMatchObject({
+      enabled: true,
+      type: "company",
+      title: "单元测试公司",
+    });
+  });
+  it.each([1, 2])(
+    "submits personal invoice after real-time supported capability v%i, stripping any old tax number",
+    async version => {
+      const cart = confirmedCart();
+      personalInvoice(cart);
+      boundary.invoiceSupport.mockResolvedValue({ supported: true, version });
+      // Legacy company tax values cannot enter a personal request, even at the boundary.
+      invoiceForm(cart).props.onChange({
+        ...invoiceForm(cart).props.draft,
+        taxNo: "STALE-COMPANY-TAX",
+      });
+      cart.render();
+      const popup = openWallet(cart);
+      expect(html(walletPopup(popup))).toContain("单元测试个人");
+      expect(html(walletPopup(popup))).not.toContain("STALE-COMPANY-TAX");
+      expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+      await clickPay(cart);
+      expect(boundary.invoiceSupport).toHaveBeenCalledOnce();
+      expect(boundary.invoiceSupport).toHaveBeenCalledWith(
+        undefined,
+        { staleTime: 0, retry: false }
+      );
+      expect(boundary.invoiceSupport.mock.invocationCallOrder[0]).toBeLessThan(
+        boundary.refetch.mock.invocationCallOrder[0]
+      );
+      expect(boundary.mutate).toHaveBeenCalledOnce();
+      expect(boundary.mutate.mock.calls[0][0].invoiceRequest).toEqual({
+        type: "personal",
+        title: "单元测试个人",
+      });
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it("submits trimmed company invoice and raw signed allocation together, then keeps cart on error", async () => {
+    const cart = confirmedCart();
+    setInvoiceEnabled(cart, true);
+    chooseInvoiceType(cart, "company");
+    setInvoiceField(cart, "title", "  隔离公司  ");
+    setInvoiceField(cart, "taxNo", "  TAX-CASE-Abc  ");
+    expect(html(walletPopup(openWallet(cart)))).toContain("TAX-CASE-Abc");
+    await clickPay(cart);
+    expect(boundary.mutate.mock.calls[0][0]).toMatchObject({
+      invoiceRequest: {
+        type: "company",
+        title: "隔离公司",
+        taxNo: "TAX-CASE-Abc",
+      },
+      paymentAssets: [{ assetCode: "ETH", amount: "0.0265" }],
+      paymentQuoteToken: boundary.freshQuote.quoteToken,
+    });
+    boundary.mutationOptions.onError({ message: "发票写入失败" });
+    boundary.mutationOptions.onSettled();
+    cart.render();
+    expect(cart.context().items).toHaveLength(2);
+    expect(invoiceForm(cart).props.draft.title).toBe("  隔离公司  ");
+  });
+  it.each([
+    { supported: false, version: 1 },
+    { supported: "true", version: 1 },
+    { supported: true, version: 0 },
+    { supported: true, version: "1" },
+    { supported: true },
+    null,
+    {},
+  ])(
+    "fails closed for invalid invoice capability %j without prepare/refetch/mutate",
+    async support => {
+      const cart = confirmedCart();
+      personalInvoice(cart);
+      boundary.invoiceSupport.mockResolvedValue(support);
+      openWallet(cart);
+      const { pay, payment } = paymentConfirmButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      await pay.props.onClick();
+      cart.render();
+      expect(prepare).not.toHaveBeenCalled();
+      expect(boundary.refetch).not.toHaveBeenCalled();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(boundary.toastInfo).toHaveBeenCalledWith(
+        "当前暂无法提交发票申请，请稍后重试；尚未下单或扣款。"
+      );
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it.each(["reject", "missing-route"])(
+    "blocks enabled invoice on capability %s without prepare/mutate",
+    async reason => {
+      const cart = confirmedCart();
+      personalInvoice(cart);
+      if (reason === "reject")
+        boundary.invoiceSupport.mockRejectedValue(
+          new Error("isolated capability error")
+        );
+      else boundary.invoiceRouteAvailable = false;
+      openWallet(cart);
+      const { pay, payment } = paymentConfirmButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      await pay.props.onClick();
+      expect(prepare).not.toHaveBeenCalled();
+      expect(boundary.refetch).not.toHaveBeenCalled();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(boundary.toastInfo).toHaveBeenCalled();
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it("serializes capability and fresh-quote verification; duplicate clicks cannot start either twice", async () => {
+    const cart = confirmedCart();
+    personalInvoice(cart);
+    const finishCapability = deferredCapability();
+    const finishQuote = delayedRefetch();
+    const { pay } = paymentConfirmButton(cart);
+    const request = pay.props.onClick();
+    await pay.props.onClick();
+    const busy = findElement(
+      walletPopup(cart.render()),
+      node =>
+        node.type === "button" &&
+        String(node.props.className).includes("disabled:bg-gray-300")
+    );
+    expect(busy.props.disabled).toBe(true);
+    await busy.props.onClick();
+    expect(boundary.invoiceSupport).toHaveBeenCalledOnce();
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    finishCapability({ supported: true, version: 1 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    await pay.props.onClick();
+    finishQuote();
+    await request;
+    expect(boundary.invoiceSupport).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it.each(["back", "close", "address", "items", "invoice"])(
+    "rejects late capability response after %s scope changes, including reopening",
+    async change => {
+      const cart = confirmedCart();
+      personalInvoice(cart);
+      const finishCapability = deferredCapability();
+      const { pay, payment } = paymentConfirmButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      const request = pay.props.onClick();
+      cart.render();
+      if (change === "close") {
+        cart.context().closeCart();
+        cart.render();
+        cart.open();
+        cart.confirm();
+      } else if (change === "address") {
+        boundary.addresses = [
+          {
+            ...boundary.addresses[0],
+            phone: "13900139000",
+            detail: "scope变更地址",
+          },
+        ];
+        cart.render();
+        cart.render();
+      } else if (change === "items") {
+        cart.context().setQuantity(`${rice().productKey}:${rice().skuId}`, 2);
+        cart.render();
+        cart.render();
+      } else {
+        findElement(
+          walletPopup(cart.render()),
+          node => node.props["aria-label"] === "返回确认订单"
+        ).props.onClick();
+        cart.render();
+        if (change === "invoice") {
+          setInvoiceEnabled(cart, false);
+          expect(invoiceForm(cart).props.draft.enabled).toBe(false);
+        }
+        // Reopen while old capability is still outstanding; old attempt must stay cancelled.
+        openWallet(cart);
+      }
+      finishCapability({ supported: true, version: 1 });
+      await request;
+      expect(prepare).not.toHaveBeenCalled();
+      expect(boundary.refetch).not.toHaveBeenCalled();
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(cart.context().items).toHaveLength(2);
+      expect(
+        JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)
+      ).toHaveLength(2);
+    }
+  );
+  it.each(["address", "items", "invoice"])(
+    "never submits prepared quote after %s changes while awaiting the quote",
+    async change => {
+      const cart = confirmedCart();
+      personalInvoice(cart);
+      const finishQuote = delayedRefetch();
+      const { pay } = paymentConfirmButton(cart);
+      const request = pay.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(boundary.refetch).toHaveBeenCalledOnce();
+      cart.render();
+      if (change === "address") {
+        boundary.addresses = [{ ...boundary.addresses[0], detail: "late地址" }];
+        cart.render();
+        cart.render();
+      } else if (change === "items") {
+        cart.context().setQuantity(`${rice().productKey}:${rice().skuId}`, 2);
+        cart.render();
+        cart.render();
+      } else {
+        findElement(
+          walletPopup(cart.render()),
+          node => node.props["aria-label"] === "返回确认订单"
+        ).props.onClick();
+        cart.render();
+        setInvoiceEnabled(cart, false);
+        expect(invoiceForm(cart).props.draft.enabled).toBe(false);
+        // 取消已作废旧请求；仍在返回的报价不能用于新确认，待其结束后可正常重入。
+        expect(goPayButton(cart).props.disabled).toBe(true);
+      }
+      finishQuote();
+      await request;
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      if (change === "invoice") expect(walletPopup(openWallet(cart))).toBeDefined();
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it("resets invoice only when leaving checkout, not when closing the wallet popup", () => {
+    const cart = confirmedCart();
+    personalInvoice(cart);
+    findElement(
+      walletPopup(openWallet(cart)),
+      node => node.props["aria-label"] === "返回确认订单"
+    ).props.onClick();
+    cart.render();
+    expect(invoiceForm(cart).props.draft).toMatchObject({
+      enabled: true,
+      title: "  单元测试个人  ",
+    });
+    findElement(
+      cart.render(),
+      node => node.props["aria-label"] === "返回购物车"
+    ).props.onClick();
+    cart.render();
+    cart.confirm();
+    expect(invoiceForm(cart).props.draft).toEqual({
+      enabled: false,
+      type: "personal",
+      title: "个人",
+      taxNo: "",
+    });
+  });
+  it.each([
+    "reject",
+    "is-error",
+    "missing-token",
+    "stale-signature",
+    "timeout",
+  ])(
+    "never submits when fresh payment verification fails: %s",
+    async failure => {
+      const cart = confirmedCart();
+      if (failure === "reject")
+        boundary.refetch.mockRejectedValueOnce(
+          new Error("isolated quote failure")
+        );
+      if (failure === "is-error")
+        boundary.refetch.mockResolvedValueOnce({
+          data: boundary.freshQuote,
+          isError: true,
+        });
+      if (failure === "missing-token") boundary.freshQuote.quoteToken = "";
+      if (failure === "stale-signature")
+        boundary.freshQuote.expiresAt = new Date(NOW - 1).toISOString();
+      if (failure === "timeout")
+        boundary.refetch.mockImplementationOnce(() => new Promise(() => {}));
+      const { pay, payment } = paymentConfirmButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      const request = pay.props.onClick();
+      if (failure === "timeout") await vi.advanceTimersByTimeAsync(15_001);
+      await request;
+      await expect(prepare.mock.results[0].value).resolves.toBeNull();
+      expect(cartPayment(cart).canPay).toBe(false);
+      expect(boundary.mutate).not.toHaveBeenCalled();
+      expect(cart.context().items).toHaveLength(2);
+    }
+  );
+  it("excludes frozen balance from payment even when frozen value could cover all groups", async () => {
+    const cart = confirmedCart();
+    const frozen = boundary.freshQuote.assets.find(
+      (row: any) => row.assetCode === "ETH"
+    );
+    frozen.available = "0";
+    frozen.frozen = "100";
+    await clickPay(cart);
+    const payment = cartPayment(cart);
+    expect(payment.selectedCodes).toEqual(["ETH"]);
+    expect(payment.canPay).toBe(false);
+    expect(Number(payment.remainingCny)).toBeGreaterThan(0);
+    expect(
+      payment.allAssetRows.find((row: any) => row.assetCode === "ETH")
+        .disabledReason
+    ).toContain("冻结");
+    expect(boundary.mutate).not.toHaveBeenCalled();
   });
 });
 
@@ -1149,25 +1811,34 @@ describe("AST contract / mobile layout guardrails", () => {
     ) as ts.CallExpression[];
     expect(mutationCalls).toHaveLength(1);
     const payload = mutationCalls[0].arguments[0] as ts.ObjectLiteralExpression;
-    const fields = payload.properties.filter(ts.isPropertyAssignment);
-    expect(fields.map(field => field.name.getText(file)).sort()).toEqual(
+    expect(ts.isObjectLiteralExpression(payload)).toBe(true);
+    expect(
+      payload.properties
+        .filter(ts.isSpreadAssignment)
+        .map(field => field.expression.getText(file))
+    ).toEqual(["orderInput", "preparedPayment"]);
+    const orderInputs = walk(
+      file,
+      node =>
+        ts.isVariableDeclaration(node) &&
+        node.name.getText(file) === "orderInput"
+    ) as ts.VariableDeclaration[];
+    expect(orderInputs).toHaveLength(1);
+    const orderFields = (
+      orderInputs[0].initializer as ts.ObjectLiteralExpression
+    ).properties.filter(ts.isPropertyAssignment);
+    expect(orderFields.map(field => field.name.getText(file)).sort()).toEqual(
       [
         "items",
         "receiverName",
         "receiverPhone",
         "receiverAddress",
         "userNote",
-        "cnyAmount",
-        "paymentAssets",
-        "paymentQuoteToken",
       ].sort()
     );
-    for (const key of ["cnyAmount", "paymentAssets", "paymentQuoteToken"])
-      expect(
-        fields
-          .find(field => field.name.getText(file) === key)!
-          .initializer.getText(file)
-      ).toBe(`preparedPayment.${key}`);
+    expect(orderInputs[0].initializer!.getText(file)).toContain(
+      "invoiceRequest"
+    );
     expectPreparedPaymentContract(file, mutationCalls[0], "payment");
     const options = mutationHooks[0].arguments[0] as ts.ObjectLiteralExpression;
     const onSuccess = options.properties.find(
@@ -1195,7 +1866,7 @@ describe("AST contract / mobile layout guardrails", () => {
       )
     ).toHaveLength(0);
     expect(source).not.toMatch(
-      /fetch\(|axios\.|quoteAPI|setSuccess\(\{|items\[0\]\.checkoutGroupKey\s*!==/
+      /(?<![.\w])fetch\(|axios\.|quoteAPI|setSuccess\(\{|items\[0\]\.checkoutGroupKey\s*!==/
     );
   });
   it.each([
@@ -1224,8 +1895,23 @@ describe("AST contract / mobile layout guardrails", () => {
           ts.isCallExpression(node) &&
           node.expression.getText(page) === "createOrder.mutate"
       ) as ts.CallExpression[];
-      expect(calls).toHaveLength(1);
-      expectPreparedPaymentContract(page, calls[0], paymentName);
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      const paymentCalls = calls.filter(call => {
+        let handler: ts.Node | undefined = call.parent;
+        while (
+          handler &&
+          !ts.isArrowFunction(handler) &&
+          !ts.isFunctionExpression(handler) &&
+          !ts.isFunctionDeclaration(handler)
+        )
+          handler = handler.parent;
+        return Boolean(
+          handler &&
+            handler.getText(page).includes(`${paymentName}.preparePayment`)
+        );
+      });
+      expect(paymentCalls).toHaveLength(1);
+      expectPreparedPaymentContract(page, paymentCalls[0], paymentName);
     }
   );
   it("keeps a single real signed quote wallet integration and no frontend order/amount fabrication", () => {

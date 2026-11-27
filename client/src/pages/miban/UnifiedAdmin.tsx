@@ -14,6 +14,7 @@ import FulfillmentPanel from "./FulfillmentPanel";
 import { fulfillmentCandidateFromOrder, type FulfillmentCandidate } from "./fulfillmentModel";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { formatMibanPaymentSummary, getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
+import { MibanOrderInvoiceDetails } from "./MibanOrderInvoiceDetails";
 import {
   Package,
   Wheat,
@@ -1089,6 +1090,8 @@ function OrdersPanel() {
                 </span>
               </div>
             </div>
+
+            <MibanOrderInvoiceDetails invoiceRequest={order.invoiceRequest} />
 
             <div className="mt-2 flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
               <div className="min-w-0 flex-1 space-y-1 text-[11px] leading-4">

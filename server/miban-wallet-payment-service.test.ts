@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 import { paymentDecimalUnits, paymentUnitsText, splitMibanPaymentDeductions, type MibanPaymentDeduction } from "../shared/miban-wallet-payment";
 const mocks = vi.hoisted(() => ({ connection: vi.fn(), transaction: vi.fn(), infrastructure: vi.fn(), verify: vi.fn() }));
 vi.mock("./db", () => ({ getDbConnection: mocks.connection, getDbTransactionConnection: mocks.transaction }));
@@ -196,10 +197,55 @@ describe("readonly compatibility and trusted plans", () => {
     expect(result).toEqual({ cny: 100, usdt: 10 });
     expect(mibanWalletPaymentSalesValue({ walletDeductCny: "50", walletDeductUsdt: "60" })).toEqual({ cny: 50, usdt: 60 });
   });
-  it("all three order mutations retain explicit native payment and legacy branches without importing router", () => {
+  it("exactly four released order mutations retain native payment; only the original three allow legacy", () => {
     const source = readFileSync(new URL("./miban.ts", import.meta.url), "utf8");
-    expect(source.match(/paymentAssets: z\.array/g)).toHaveLength(3);
-    expect(source.match(/prepareMibanWalletPayment\(\{ userId, totalCny/g)).toHaveLength(3);
+    const ast = ts.createSourceFile("miban.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const routes: Array<{ path: string; node: ts.PropertyAssignment }> = [];
+    for (const statement of ast.statements) if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!declaration.initializer || !ts.isCallExpression(declaration.initializer)) continue;
+        const object = declaration.initializer.arguments[0];
+        if (!object || !ts.isObjectLiteralExpression(object)) continue;
+        for (const property of object.properties) if (ts.isPropertyAssignment(property)) {
+          const paymentFields: ts.PropertyAssignment[] = [];
+          const visit = (node: ts.Node) => {
+            if (ts.isPropertyAssignment(node) && node.name.getText(ast) === "paymentAssets" && node.initializer.getText(ast).startsWith("z.array(")) {
+              paymentFields.push(node);
+            }
+            ts.forEachChild(node, visit);
+          };
+          visit(property.initializer);
+          if (paymentFields.length) {
+            expect(paymentFields).toHaveLength(1);
+            routes.push({ path: `${declaration.name.getText(ast)}.${property.name.getText(ast)}`, node: property });
+          }
+        }
+      }
+    }
+    expect(routes.map(route => route.path)).toEqual([
+      "mibanOrderRouter.create", "mibanLimitedProductRouter.createAnnualOrder",
+      "mibanLimitedProductRouter.createOrder", "mibanLimitedProductRouter.createCartOrder",
+    ]);
+    for (const { path, node } of routes) {
+      const expression = node.initializer.getText(ast);
+      expect(expression.match(/prepareMibanWalletPayment\(\{\s*userId, totalCny/g)).toHaveLength(1);
+      expect(expression.match(/await withGlobalWalletTransaction\(userId,/g)).toHaveLength(1);
+      expect(expression.match(/await debitMibanWalletPayment\(/g)).toHaveLength(1);
+      expect(expression).toContain("paymentAssets: input.paymentAssets, paymentQuoteToken: input.paymentQuoteToken");
+      if (path === "mibanLimitedProductRouter.createAnnualOrder") {
+        // 年单在正式HEAD已上线：必须签名支付，不新增或放开legacy回退。
+        expect(expression).toContain('message: "全年计划必须使用签名钱包报价支付"');
+        expect(expression).toMatch(/if \(!payment\)\s*\{\s*throw new TRPCError/);
+        expect(expression).not.toMatch(/\bdebitGlobalWallet\s*\(/);
+        expect(expression.match(/await debitMibanWalletPayment\(\{ transaction, userId, payment, orders: createdOrders \}\)/g)).toHaveLength(1);
+      } else {
+        expect(expression.match(/if \(payment\) await debitMibanWalletPayment/g)).toHaveLength(1);
+        expect(expression.match(/else await debitGlobalWallet/g)).toHaveLength(1);
+      }
+    }
+    expect(source.match(/paymentAssets: z\.array/g)).toHaveLength(4);
+    expect(source.match(/prepareMibanWalletPayment\(\{\s*userId, totalCny/g)).toHaveLength(4);
+    expect(source.match(/await debitMibanWalletPayment\(/g)).toHaveLength(4);
     expect(source.match(/if \(payment\) await debitMibanWalletPayment/g)).toHaveLength(3);
     expect(source.match(/else await debitGlobalWallet/g)).toHaveLength(3);
     expect(source).toContain("walletPaymentQuote: protectedProcedure.query");

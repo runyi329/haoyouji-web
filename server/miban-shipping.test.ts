@@ -41,9 +41,9 @@ describe("商城收货联系电话统一校验", () => {
     expect(getMibanReceiverPhoneError("1".repeat(21))).toBe("收货联系电话过长，请核对后重新填写");
   });
 
-  it("普通/精选/购物车订单、修改地址、地址簿新增修改七处使用同一schema", () => {
+  it("普通/精选/年付/购物车订单、修改地址、地址簿新增修改八处使用同一schema", () => {
     const source = readFileSync(new URL("./miban.ts", import.meta.url), "utf8");
-    expect(source.match(/receiverPhone:\s*mibanReceiverPhoneSchema/g)).toHaveLength(5);
+    expect(source.match(/receiverPhone:\s*mibanReceiverPhoneSchema/g)).toHaveLength(6);
     expect(source.match(/\bphone:\s*mibanReceiverPhoneSchema/g)).toHaveLength(2);
     expect(source).not.toMatch(/receiverPhone:\s*z\.string\(\).*\.min\(11/);
     expect(source).not.toMatch(/\bphone:\s*z\.string\(\)\.min\(7\)/);
