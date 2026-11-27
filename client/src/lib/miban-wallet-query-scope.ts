@@ -10,6 +10,7 @@ export function isMibanPersonalQuery({ queryKey }: QueryWithKey): boolean {
   return (
     route[0] === "auth" ||
     route[0] === "recharge" ||
+    route[0] === "order" ||
     route[0].startsWith("miban") ||
     (route[0] === "ledger" && route[1] === "afGetMyRechargeHistory")
   );

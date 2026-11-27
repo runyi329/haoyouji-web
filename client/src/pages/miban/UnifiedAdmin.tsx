@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import InventoryPanel from "./InventoryPanel";
@@ -5572,6 +5572,7 @@ export default function UnifiedAdmin() {
           <div className="flex-1 min-w-0"><h1 className="text-[17px] font-bold text-black">{isAdmin ? "管理中心" : "销售中心"}</h1><p className="text-[11px] text-gray-400">{isAdmin ? "米伴平台运营管理" : "我的销售数据"}</p></div>
           <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${isAdmin ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"}`}>{isAdmin ? "管理员" : "销售"}</span>
         </div>
+        {user?.role === "super_admin" && <Link href="/p/proj_hzxm2t/admin/logistics" className="mb-3 flex min-w-0 items-start gap-2 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5 text-xs leading-5 text-orange-700"><Truck className="mt-0.5 h-4 w-4 shrink-0" /><span className="min-w-0 break-words">物流服务状态<span className="block text-[11px] font-normal text-gray-500">查看额度不足与接口反馈；发货仍沿用 Excel 流程</span></span></Link>}
         <div className="flex gap-0 -mx-4 overflow-x-auto scrollbar-none">
           {adminTabs.map(tab => <button key={tab.key} onClick={() => changeTab(tab.key)} className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2" style={{ color: activeTab === tab.key ? "#FF6900" : "#888", borderBottomColor: activeTab === tab.key ? "#FF6900" : "transparent" }}>{tab.label}</button>)}
         </div>

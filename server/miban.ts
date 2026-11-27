@@ -65,6 +65,8 @@ import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } 
 import { resolveSupplierOrderScope } from "../shared/miban-supplier";
 import { snapshotMibanSupplierOrderScope } from "./miban-supplier";
 import { rejectLegacyFulfillment } from "./miban-fulfillment";
+import { getMyOrderLogistics } from "./miban-logistics-order";
+import { getShipmentLogistics, getLogisticsConfigurationStatus, getLogisticsServiceHealth } from "./miban-logistics";
 export { mibanSupplierRouter } from "./miban-supplier";
 import {
   getMibanLimitedProduct,
@@ -3389,6 +3391,20 @@ export const mibanOrderRouter = router({
       };
     }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
+  logistics: protectedProcedure
+    // trackingVersion only partitions the client cache after a carrier/waybill correction;
+    // lookup and external request always use the owned order's SERVER-side values.
+    .input(z.object({ orderId: z.number().int().positive().max(2147483647), trackingVersion: z.string().max(200).optional() }))
+    .query(({ ctx, input }) => getMyOrderLogistics(ctx.user!.id, input.orderId)),
+  logisticsConfiguration: mibanAdminProcedure.query(() => getLogisticsConfigurationStatus()),
+  logisticsHealth: mibanAdminProcedure.query(() => getLogisticsServiceHealth()),
+  logisticsTest: mibanAdminProcedure
+    .input(z.object({
+      trackingCompany: z.string().trim().min(1).max(32),
+      trackingNo: z.string().trim().regex(/^[A-Za-z0-9-]{6,32}$/),
+      phone: z.string().trim().max(30).regex(/^[0-9+\- ]*$/).optional(),
+    }))
+    .mutation(({ input }) => getShipmentLogistics({ ...input, phone: input.phone || undefined })),
   allOrders: mibanAdminProcedure.query(() => getAllOrders()),
   updateStatus: mibanAdminProcedure
     .input(

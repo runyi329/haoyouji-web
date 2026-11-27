@@ -22,7 +22,8 @@ import {
   Settings,
   MapPin,
   Truck,
-  ExternalLink,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Star,
   CheckCircle2,
@@ -32,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import AddressBook from "./AddressBook";
+import LogisticsDetails from "./LogisticsDetails";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import type { mibanOrders } from "../../../../drizzle/schema";
@@ -171,6 +173,7 @@ function OrdersTab() {
   >("refund");
   const [aftersaleReason, setAftersaleReason] = useState<string>("");
   // ⚠️ 必须在所有条件性 return 之前声明，否则违反 React hooks 规则
+  const [expandedLogistics, setExpandedLogistics] = useState<Set<number>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchText, setSearchText] = useState("");
@@ -326,29 +329,10 @@ function OrdersTab() {
         ? `${limitedProductLines[0].quantity}${limitedProductLines[0].unitLabel}`
         : `${limitedProductLines.length}款 · 共${limitedProductQuantity}件`
       : `${order.totalWeightJin} 斤`;
-    const hasTracking = !!(order.trackingNo || order.trackingNumber);
-    const trackingNo = order.trackingNo || order.trackingNumber || "";
+    const trackingNo = order.trackingNo?.trim() || order.trackingNumber?.trim() || "";
+    const hasTracking = !!trackingNo;
     const trackingCompany = order.trackingCompany || "";
-    const companyCodeMap: Record<string, string> = {
-      顺丰: "shunfeng",
-      SF: "shunfeng",
-      圆通: "yuantong",
-      中通: "zhongtong",
-      韵达: "yunda",
-      申通: "shentong",
-      邮政: "youzhengguonei",
-      EMS: "ems",
-      京东: "jd",
-      极兔: "jtexpress",
-      菜鸟: "cainiao",
-    };
-    const companyCode =
-      Object.entries(companyCodeMap).find(([k]) =>
-        trackingCompany.includes(k)
-      )?.[1] ?? "";
-    const trackingUrl = companyCode
-      ? `https://www.kuaidi100.com/chaxun?com=${companyCode}&nu=${trackingNo}`
-      : `https://www.kuaidi100.com/chaxun?nu=${trackingNo}`;
+    const logisticsExpanded = expandedLogistics.has(order.id);
 
     // 与管理员卡片使用同一成交快照口径，不用当前汇率重估历史订单。
     const orderTotalCny = Math.max(0, Number(order.totalPrice ?? 0));
@@ -684,37 +668,56 @@ function OrdersTab() {
 
           {/* ── 物流信息 ── */}
           {hasTracking ? (
-            <div data-card-export-hide="true" className="flex items-center justify-between pt-2 border-t border-gray-100">
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-green-500" />
-                <div>
-                  <span className="text-[12px] font-medium text-gray-700">
-                    {trackingCompany || "快递"}
-                  </span>
-                  <span className="text-[11px] text-gray-400 ml-1.5 font-mono">
-                    {trackingNo}
-                  </span>
+            <div data-card-export-hide="true" className="min-w-0 border-t border-gray-100 pt-2">
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                  <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF6900]" />
+                  <div className="min-w-0">
+                    <p className="break-words text-[12px] font-medium text-gray-700">
+                      {trackingCompany || "快递"}
+                    </p>
+                    <p className="break-all font-mono text-[11px] leading-4 text-gray-400">
+                      {trackingNo}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  aria-expanded={logisticsExpanded}
+                  aria-controls={`order-logistics-${order.id}`}
+                  onClick={() => setExpandedLogistics(current => {
+                    const next = new Set(current);
+                    if (next.has(order.id)) next.delete(order.id);
+                    else next.add(order.id);
+                    return next;
+                  })}
+                  className="flex shrink-0 items-center gap-1 rounded-[3px] bg-[#FF6900] px-2.5 py-1.5 text-[11px] font-semibold text-white active:opacity-80"
+                >
+                  {logisticsExpanded ? "收起物流" : "物流详情"}
+                  {logisticsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
               </div>
-              <a
-                href={trackingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
-                style={{ background: "#FF6900" }}
-              >
-                查物流 <ExternalLink className="w-3 h-3" />
-              </a>
+              {logisticsExpanded && (
+                <div id={`order-logistics-${order.id}`} className="mt-2 min-w-0">
+                  <LogisticsDetails
+                    orderId={order.id}
+                    trackingCompany={trackingCompany}
+                    trackingNo={trackingNo}
+                  />
+                </div>
+              )}
             </div>
           ) : (
             order.status !== "pending" &&
             order.status !== "cancelled" &&
             order.status !== "delivered" && (
-              <div data-card-export-hide="true" className="flex items-center justify-between pt-2 border-t border-gray-100">
-                <div className="flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5 text-gray-300" />
-                  <span className="text-[11px] text-gray-400">
-                    配货完成后将更新物流信息
+              <div data-card-export-hide="true" className="min-w-0 border-t border-gray-100 pt-2">
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-300" />
+                  <span className="min-w-0 break-words text-[11px] leading-4 text-gray-400">
+                    {order.status === "shipped"
+                      ? "商家尚未填写快递单号，请联系商家"
+                      : "配货完成后将更新物流信息"}
                   </span>
                 </div>
               </div>

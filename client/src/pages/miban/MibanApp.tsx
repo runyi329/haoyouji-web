@@ -23,6 +23,7 @@ const MyRecipes = lazy(() => import("./MyRecipes"));
 const MyOrders = lazy(() => import("./MyOrders"));
 const UnifiedAdmin = lazy(() => import("./UnifiedAdmin"));
 const SupplierCenter = lazy(() => import("./SupplierCenter"));
+const LogisticsSetup = lazy(() => import("./LogisticsSetup"));
 const MibanWallet = lazy(() => import("./MibanWallet"));
 const JoinPage = lazy(() => import("./JoinPage"));
 const BrandAssets = lazy(() => import("./BrandAssets"));
@@ -146,6 +147,7 @@ export default function MibanApp() {
             <Route path={`${BASE}/my-orders`} component={MyOrders} />
             <Route path={`${BASE}/wallet`} component={MibanWallet} />
             <Route path={`${BASE}/supplier`} component={SupplierCenter} />
+            <Route path={`${BASE}/admin/logistics`} component={LogisticsSetup} />
             <Route path={`${BASE}/admin/panel`} component={UnifiedAdmin} />
             <Route path={`${BASE}/admin`} component={UnifiedAdmin} />
             <Route path={`${BASE}/agent`} component={UnifiedAdmin} />

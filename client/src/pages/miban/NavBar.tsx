@@ -5,7 +5,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { toast } from "sonner";
-import { Home, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet, Store } from "lucide-react";
+import { Home, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check, Wallet, Store, Truck } from "lucide-react";
 import AnimatedWalletLogo from "@/components/AnimatedWalletLogo";
 import { clearLedgerViewAsState } from "@/lib/authIdentity";
 import { QRCodeSVG } from "qrcode.react";
@@ -299,6 +299,12 @@ function UserMenu({ user, isAuthenticated, onLogout, supplierAdmin, hasSupplierA
             <Link href="/p/proj_hzxm2t/admin?tab=suppliers" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
               <Settings className="w-4 h-4 text-[#FF6900]" />
               供货商管理
+            </Link>
+          )}
+          {user?.role === "super_admin" && (
+            <Link href="/p/proj_hzxm2t/admin/logistics" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
+              <Truck className="w-4 h-4 shrink-0 text-[#FF6900]" />
+              <span className="min-w-0 break-words">物流服务状态</span>
             </Link>
           )}
 

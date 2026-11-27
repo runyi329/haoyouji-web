@@ -86,6 +86,7 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          MIBAN_LOGISTICS_CONFIG: ${{ secrets.MIBAN_LOGISTICS_CONFIG }}
         run: |
           set -euo pipefail
           APP_DIR=/home/ubuntu/haoyouji-web
@@ -132,9 +133,12 @@ jobs:
           rsync -az -e "${SSH_CMD}" nginx.conf "${REMOTE}:${APP_DIR}/nginx.conf"
           rsync -az -e "${SSH_CMD}" scripts/configure-tushare-env.py "${REMOTE}:${RELEASE_DIR}/configure-tushare-env.py"
           rsync -az -e "${SSH_CMD}" scripts/prepare-miban-supplier-deploy.cjs "${REMOTE}:${RELEASE_DIR}/prepare-miban-supplier-deploy.cjs"
+          rsync -az -e "${SSH_CMD}" scripts/configure-miban-logistics-env.py scripts/prepare-miban-logistics-deploy.cjs "${REMOTE}:${RELEASE_DIR}/"
           # Secret只经标准输入进入配置器；不进入命令行、源码或部署日志。
           test -n "${TUSHARE_TOKEN}"
           printf '%s' "${TUSHARE_TOKEN}" | ${SSH_CMD} "${REMOTE}" "python3 '${RELEASE_DIR}/configure-tushare-env.py' '${APP_DIR}/.env'"
+          test -n "${MIBAN_LOGISTICS_CONFIG}"
+          printf '%s' "${MIBAN_LOGISTICS_CONFIG}" | ${SSH_CMD} "${REMOTE}" "python3 '${RELEASE_DIR}/configure-miban-logistics-env.py' '${APP_DIR}/.env'"
 
           # 只有锁文件变化时才同步 node_modules；本次锁文件未变化，不会引入大文件传输。
           if [ "${LOCAL_LOCK_HASH}" != "${REMOTE_LOCK_HASH}" ]; then
@@ -160,6 +164,7 @@ jobs:
           # 五表结构、实际PM2配置和共享物流密钥须在版本切换前就绪。
           # 不导入预览授权、历史归属或试验物流，也不改钱包或用户数据。
           sudo -u ubuntu env HOME=/home/ubuntu node "$RELEASE_DIR/prepare-miban-supplier-deploy.cjs" "$APP_DIR" "$RELEASE_DIR"
+          sudo -u ubuntu env HOME=/home/ubuntu node "$RELEASE_DIR/prepare-miban-logistics-deploy.cjs" "$APP_DIR"
           printf '%s\n' "$EXPECTED_SHA" > "$RELEASE_DIR/.deployed-commit"
           chown ubuntu:ubuntu "$RELEASE_DIR/.deployed-commit"
 

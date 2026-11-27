@@ -555,6 +555,7 @@ function Router() {
         <Route path="/p/proj_hzxm2t/limited/midaniang" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/limited/:productKey" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/pear/:id" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/admin/logistics" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/admin/panel" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/:rest*" component={MibanApp} />
         <Route path="/p/proj_hzxm2t" component={MibanApp} />

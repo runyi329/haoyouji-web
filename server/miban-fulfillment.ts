@@ -482,6 +482,14 @@ export function createFulfillmentService(
             );
           }, true);
           results.push({ index, orderNo: row.orderNo, success: true });
+          // Provider work happens AFTER the transaction and never changes its result.
+          // The runtime switch remains off in the sandbox preview; both admin and
+          // supplier fulfillment use this same post-commit hook when enabled.
+          if (process.env.KUAIDI100_SUBSCRIPTION_ENABLED === "true" && process.env.KUAIDI100_CALLBACK_URL) {
+            void import("./miban-logistics-order")
+              .then(module => module.subscribeFulfilledOrder(row.orderNo))
+              .catch(() => console.warn("[MibanLogistics] 发货已保存，物流订阅稍后重试"));
+          }
         } catch (error) {
           results.push({
             index,

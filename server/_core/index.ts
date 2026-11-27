@@ -23,6 +23,8 @@ import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
 import { ensureBeautyTables } from "../db-beauty-init";
 import { ensureZidingCommerceTables, runZidingOrderLifecycleSweep } from "../ziding-commerce-router";
+import { registerMibanLogisticsCallback } from "../miban-logistics-callback";
+import { registerMibanLogisticsPreviewGuard } from "../miban-logistics-preview";
 
 async function initFieldCategories() {
   try {
@@ -267,6 +269,8 @@ async function startServer() {
   
   const app = express();
   const server = createServer(app);
+  registerMibanLogisticsPreviewGuard(app);
+  registerMibanLogisticsCallback(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
