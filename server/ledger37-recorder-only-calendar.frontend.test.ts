@@ -50,7 +50,7 @@ function calendarSaveHarness(overrides: Record<string, any> = {}) {
   return { bindings, handleSave: actual(dialog, 'handleSave', bindings) };
 }
 
-describe('普通管理员与普通用户同版，只多双击日历余额与照片登记：真实前端执行', () => {
+describe('普通管理员与普通用户同版，只多单击日历余额与照片登记：真实前端执行', () => {
   it.each(['admin', 'member', 'owner', 'super_admin'])('非账本owner即使角色%s，首页不开放管理能力', (userRole) => {
     const permission = { ledgerId: 37, userId: 510025, ownerId: 870413, memberRole: userRole };
     const canManageLedger37 = actual(aa, 'canManageLedger37', { isLedger37FullManager, ledger37Permission: permission });
@@ -68,11 +68,11 @@ describe('普通管理员与普通用户同版，只多双击日历余额与照�
   it.each([36, 52, 59])('非37账本%s仍保留原admin编辑权限', (ledgerId) => {
     expect(actual(aa, 'canEdit', { ledgerId, canManageLedger37: false, userRole: 'admin' })).toBe(true);
   });
-  it('双击录入只打开余额与照片登记页，不打开股票管理或通用add', () => {
+  it('单击录入只打开余额与照片登记页，不打开股票管理或通用add', () => {
     const setCalendarNumberEditor = vi.fn();
     const setCalendarDateDetail = vi.fn();
     const setShowImagePreview = vi.fn();
-    const base = { getDateStr: () => '2020-01-01', canRecordCalendarNumber: true, selectedTagId: 7, isSelectedStockPortfolio: false, calendarNumberTapRef: { current: {} }, setCalendarDateDetail, setShowImagePreview, setCalendarNumberEditor };
+    const base = { getDateStr: () => '2020-01-01', canRecordCalendarNumber: true, selectedTagId: 7, isSelectedStockPortfolio: false, setCalendarDateDetail, setShowImagePreview, setCalendarNumberEditor };
     actual(aa, 'openCalendarNumberEditor', base)(1);
     const update = setCalendarNumberEditor.mock.calls[0][0];
     const current = { categoryId: 7, date: '2020-01-01' };
@@ -84,7 +84,7 @@ describe('普通管理员与普通用户同版，只多双击日历余额与照�
       setCalendarNumberEditor.mockClear(); actual(aa, 'openCalendarNumberEditor', { ...base, ...patch })(1); expect(setCalendarNumberEditor).not.toHaveBeenCalled();
     }
   });
-  it('普通管理员不能绕过双击调用旧完整编辑入口', () => {
+  it('普通管理员不能绕过单击调用旧完整编辑入口', () => {
     const setCalendarDateDetail = vi.fn();
     actual(aa, 'openCalendarRecordEditor', { ledgerId: 37, canManageLedger37: false, setCalendarDateDetail })('2026-11-01');
     expect(setCalendarDateDetail).not.toHaveBeenCalled();
@@ -159,10 +159,20 @@ describe('普通管理员与普通用户同版，只多双击日历余额与照�
     expect(bindings.onClose).not.toHaveBeenCalled();
     expect(bindings.operation.current).toBe(false);
   });
-  it('手机双点和桌面双击都存在，不把数字日历变成顶部设置或维护按钮', () => {
-    expect(aa).toContain('onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}');
-    expect(aa).toContain('consumeLedgerCalendarDoubleTap(calendarNumberTapRef');
-    expect(calendar).toContain('consumeLedgerCalendarDoubleTap(lastTap');
+  it('单击打开余额登记，普通用户只预览已有照片且无照片不响应', () => {
+    expect(aa).toContain('onClick={() => {');
+    expect(aa).toContain('if (canRecordCalendarCell && selectedTagId) {');
+    expect(aa).toContain('openCalendarNumberEditor(day);');
+    expect(aa).toContain('if (ledgerId === 37 && canRecordCalendarNumber && !isSelectedStockPortfolio) return;');
+    expect(aa).toContain('const hasImages = dayMap.get(date)?.records?.some');
+    expect(aa).toContain('if (hasImages) openCalendarDayAttachments(date);');
+    expect(aa).not.toContain('onDoubleClick=');
+    expect(aa).not.toContain('consumeLedgerCalendarDoubleTap');
+    expect(calendar).toContain('onClick={() => { if (enabled) openNumber(dayDate); }}');
+    expect(calendar).not.toContain('onDoubleClick');
+    expect(calendar).not.toContain('consumeLedgerCalendarDoubleTap');
+    expect(calendar).not.toContain('beginLedgerCalendarTouch');
+    expect(calendar).not.toContain('cancelLedgerCalendarTapOnScroll');
     expect(calendar).toContain("touchAction: 'manipulation'");
     expect(calendar).not.toMatch(/getTransactions|getTransactionDetail|getCalendarData|StockTagPortfolio|adminGetAllInitialBalances|Settings/);
     expect(dialog).toContain('trpc.ledger.getCalendarEntry.useQuery');

@@ -40,7 +40,6 @@ import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import { canRecordLedger37Calendar, isLedger37FullManager } from "@shared/ledger37-permissions";
 import { getBeijingLedgerRecordToday } from "@shared/ledger-record-date";
-import { beginLedgerCalendarTouch, cancelLedgerCalendarTapOnScroll, consumeLedgerCalendarDoubleTap, type LedgerCalendarTap, type LedgerCalendarTouchOrigin } from "@shared/ledger-calendar-double-tap";
 import Ledger37CalendarNumberDialog from "@/components/Ledger37CalendarNumberDialog";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import Ledger37AiHome from "@/components/Ledger37AiHome";
@@ -469,11 +468,9 @@ export default function LedgerDetailAA({
   const hideFloatingAddButton = ledgerId === 37;
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
-  // 37号普通标签：管理员只双击登记，在登记页用放大镜看照片；成员点击只预览附件。
+  // 37号普通标签：管理员单击登记；成员有照片时单击预览，无照片不响应。
   const [calendarDateDetail, setCalendarDateDetail] = useState<CalendarDateDetail | null>(null);
   const [calendarNumberEditor, setCalendarNumberEditor] = useState<{ categoryId: number; date: string } | null>(null);
-  const calendarNumberTapRef = useRef<LedgerCalendarTap | null>(null);
-  const calendarNumberTouchRef = useRef<LedgerCalendarTouchOrigin | null>(null);
   // 汇总日历（全部模式，概览下方）独立月份状态
   const [summaryCalendarDate, setSummaryCalendarDate] = useState(() => {
     const d = new Date();
@@ -527,10 +524,6 @@ export default function LedgerDetailAA({
   const viewAsMember = viewAsUserId ? (membersData || []).find((member: any) => member.userId === viewAsUserId) : null;
   // auth.me/user 是有效成员视角，不能用来判断真实资金操作者。目标只进入缓存键和资金操作。
   const marginTargetUserId = Number(viewAsUserId ?? user?.id ?? 0);
-  useEffect(() => {
-    calendarNumberTapRef.current = null;
-    calendarNumberTouchRef.current = null;
-  }, [ledgerId, selectedTagId, calendarDate.year, calendarDate.month, marginTargetUserId, canRecordCalendarNumber]);
   const marginActorPermission = trpc.ledger.getLedger37MarginActor.useQuery(
     { ledgerId: 37, targetUserId: marginTargetUserId },
     {
@@ -2464,7 +2457,7 @@ export default function LedgerDetailAA({
   }, [selectedTagPauseHistory]);
 
   // IE 股票标签是例外：普通成员点击交易日进入自己的持仓界面；其他标签仅能通过照片标记查看附件。
-  // 37号有登记权限的管理员不走单击预览，避免第一击遮罩抢走第二击。
+  // 37号有登记权限的管理员直接进入窄登记页，不走照片或通用明细预览。
   const handleDayClick = (day: number) => {
     const date = getDateStr(day);
     if (ledgerId === 37 && date > getBeijingLedgerRecordToday()) return;
@@ -2492,10 +2485,9 @@ export default function LedgerDetailAA({
     const date = getDateStr(day);
     if (!canRecordCalendarNumber || !selectedTagId || isSelectedStockPortfolio
       || date > new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)) return;
-    calendarNumberTapRef.current = null;
     setCalendarDateDetail(null);
     setShowImagePreview(false);
-    // click×2 后桌面可能再触发 dblclick；同一scope保持原state，不重新挂载/读取。
+    // 连续点击同一日期保持原state，不重复挂载/读取。
     setCalendarNumberEditor(current => current?.categoryId === selectedTagId && current.date === date
       ? current : { categoryId: selectedTagId, date });
   };
@@ -3177,18 +3169,11 @@ export default function LedgerDetailAA({
                           key={day}
                           onClick={() => {
                             if (canRecordCalendarCell && selectedTagId) {
-                              if (consumeLedgerCalendarDoubleTap(calendarNumberTapRef, `${marginTargetUserId}:${selectedTagId}:${dayDateStr}`)) {
-                                openCalendarNumberEditor(day);
-                              }
+                              openCalendarNumberEditor(day);
                               return;
                             }
                             if (canOpenCalendarCell) handleDayClick(day);
                           }}
-                          onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}
-                          onPointerCancel={() => { calendarNumberTapRef.current = null; calendarNumberTouchRef.current = null; }}
-                          onTouchStart={event => beginLedgerCalendarTouch(calendarNumberTouchRef, calendarNumberTapRef, event.touches)}
-                          onTouchMove={event => cancelLedgerCalendarTapOnScroll(calendarNumberTouchRef, calendarNumberTapRef, event.touches)}
-                          onTouchCancel={() => { calendarNumberTapRef.current = null; calendarNumberTouchRef.current = null; }}
                           disabled={!canOpenCalendarCell && !canRecordCalendarCell}
                           className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{

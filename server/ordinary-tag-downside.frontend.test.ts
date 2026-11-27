@@ -270,15 +270,15 @@ describe('前端source-contract安全边界', () => {
     expect(source).toContain('const divAmt = dividendByTag[tag.name] ?? 0');
     expect(source).toContain('const totalDividend = Object.values(dividendByTag).reduce');
   });
-  it('保留旧无规则算法/真实现金流/钱包/股票/照片双击权限，无普通管理入口', () => {
+  it('保留旧无规则算法/真实现金流/钱包/股票/照片窄登记权限，管理员改单击但无普通管理入口', () => {
     expect(source).toContain('const pnl = (effectiveInitial - d.balance - withdrawToDate) * ratio');
     expect(source).toContain('const rawPnl = currentCapital - latestBalance - totalWithdraw');
     expect(source).toContain('const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0)');
     expect(source).toContain('const referenceDeposit = currentPrincipal * (ratioPercent / 100) * 0.2');
     expect(source).toContain('normalizeStockCalendarPoints(stockOverview.points || [],');
     expect(source).toContain('stockOverviewSettlementDisplay({');
-    expect(source).toContain('consumeLedgerCalendarDoubleTap(calendarNumberTapRef');
-    expect(source).toContain('onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}');
+    expect(source).toMatch(/onClick=\{\(\) => \{\s*if \(canRecordCalendarCell && selectedTagId\) \{\s*openCalendarNumberEditor\(day\);/);
+    expect(source).not.toContain('consumeLedgerCalendarDoubleTap');
     expect(source).not.toMatch(/ordinaryDownside.*(?:save|useMutation|setRule|walletHold)/);
     expect(helperSource).not.toMatch(/(?:capitalChange|withdrawToDate|withdrawToday)\s*\*/);
   });
