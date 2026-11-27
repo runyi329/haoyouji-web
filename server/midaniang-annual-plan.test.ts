@@ -234,8 +234,14 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     };
     const current = getRouterProperties(source);
     expect(current.map(node => node.name.getText())).toEqual([
-      "invoiceSupport", ...Object.keys(baseline).slice(0, -2), "createAnnualOrder", "createOrder", "createCartOrder",
+      "invoiceFavorites", "rememberInvoice", "invoiceSupport", ...Object.keys(baseline).slice(0, -2), "createAnnualOrder", "createOrder", "createCartOrder",
     ]);
+    expect(current.find(node => node.name.getText() === "invoiceFavorites")?.initializer.getText()).toBe(
+      'protectedProcedure.query(({ ctx }) => readMibanInvoiceFavorites(ctx.user!.id))'
+    );
+    expect(current.find(node => node.name.getText() === "rememberInvoice")?.initializer.getText()).toBe(
+      'protectedProcedure\n    .input(mibanInvoiceRequestSchema)\n    .mutation(({ ctx, input }) => rememberMibanInvoice(ctx.user!.id, input))'
+    );
     expect(current.find(node => node.name.getText() === "invoiceSupport")?.initializer.getText()).toBe(
       'protectedProcedure.query(async () => {\n    await ensureMibanOrderInvoiceInfrastructure();\n    return { supported: true, version: 1 } as const;\n  })'
     );

@@ -34,6 +34,7 @@ import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 import { MibanWalletAvailableSummary, MibanPaymentConfirmation, useMibanMixedPayment } from "./MibanMixedPayment";
 import MibanInvoiceRequestForm, { createMibanInvoiceDraft, validateMibanInvoiceRequest, MIBAN_INVOICE_UNAVAILABLE_NOTICE, type MibanInvoiceDraft, type MibanInvoiceErrors } from "./MibanInvoiceRequestForm";
 import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
+import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
 import { normalizeMibanReceiverPhone, getMibanReceiverPhoneError, formatMibanCheckoutError } from "../../../../shared/miban-shipping";
 import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 
@@ -231,7 +232,7 @@ function freshnessLevel(days: number) {
 }
 
 export default function DiyWorkshop() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   // 收藏相关 hooks（组件顶层）
   const { data: myFavList, refetch: refetchFavs } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
   const favToggle = mtrpc.favorite.toggle.useMutation({ onSuccess: () => refetchFavs() });
@@ -278,6 +279,11 @@ export default function DiyWorkshop() {
   const [showWalletPayment, setShowWalletPayment] = useState(false);
   const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
   const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  // 发票资料按当前账号隔离；切换账号不得保留上一个用户的草稿。
+  useEffect(() => {
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
+  }, [user?.id]);
   const [preparingPayment, setPreparingPayment] = useState(false);
   const submitGuard = useRef(false);
   const paymentAttemptRef = useRef(0);
@@ -421,7 +427,7 @@ export default function DiyWorkshop() {
   const walletPayment = useMibanMixedPayment(checkoutTotalCny, isAuthenticated);
   const checkoutBusy = createOrder.isPending || preparingPayment;
   const walletVersion = JSON.stringify([walletPayment.selectedCodes, walletPayment.priorityCode, walletPayment.cnyInput, walletPayment.paymentAssets]);
-  const checkoutInputScope = JSON.stringify([showOrderDialog, isAuthenticated, selected, ratios, riceTypes, weight, recipeName, subscriptionPlan, shipDay, checkoutTotalCny, receiverName, receiverPhone, receiverAddress, userNote, saveToBook, selectedFromBook, invoiceDraft]);
+  const checkoutInputScope = JSON.stringify([showOrderDialog, isAuthenticated, user?.id, selected, ratios, riceTypes, weight, recipeName, subscriptionPlan, shipDay, checkoutTotalCny, receiverName, receiverPhone, receiverAddress, userNote, saveToBook, selectedFromBook, invoiceDraft]);
   const checkoutScope = JSON.stringify([checkoutInputScope, walletVersion]);
   const latestCheckoutScope = useRef(checkoutScope);
   latestCheckoutScope.current = checkoutScope;
@@ -1509,7 +1515,7 @@ export default function DiyWorkshop() {
                 </button>
               )}
             </div>
-            <MibanInvoiceRequestForm draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mb-5" />
+            <MibanInvoiceRequestForm userId={user?.id} draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mb-5" />
             <button disabled={checkoutBusy || !walletPayment.canPay} onClick={handleOpenWalletPayment} className="w-full rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">去支付</button>
           </div>
         </div>
@@ -1522,9 +1528,10 @@ export default function DiyWorkshop() {
               <h2 className="text-[17px] font-bold text-gray-900">钱包支付确认</h2>
               <button aria-label="返回修改订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="p-2 text-gray-500"><X size={18} /></button>
             </div>
-            <p className="mb-4 text-[13px] text-gray-600">{recipeName || "我的专属米"} · {weight}斤{subscriptionPlan ? ` × ${subscriptionPlan}期` : ""} · 应付 ¥{checkoutTotalCny.toFixed(2)}</p>
-            <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
-            <MibanCheckoutConfirmationDetails receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
+            <MibanCheckoutPaymentAmount totalCny={checkoutTotalCny} usdtCnyRate={walletPayment.usdtCnyRate} label={subscriptionPlan ? "一次支付订阅合计" : "本次应付"}>
+              <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
+            </MibanCheckoutPaymentAmount>
+            <MibanCheckoutConfirmationDetails items={[{ name: recipeName || "我的专属米", specification: `${weight}斤 / 份 · ${selected.map(id => `${riceTypes.find(rice => rice.id === id)?.name ?? "米种"} ${ratios[id] ?? 0}%`).join(" + ")}`, quantity: subscriptionPlan ? `${subscriptionPlan}期，每期1份` : "1份" }]} deliverySchedule={subscriptionPlan ? `每月配送，共 ${subscriptionPlan} 期${shipDay ? `，每月 ${shipDay} 日发货` : ""}` : undefined} receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
             <button disabled={createOrder.isPending} onClick={cancelWalletPayment} className="mt-4 w-full rounded-[4px] border border-gray-200 py-3 text-[13px] text-gray-600">返回修改订单</button>
             <button disabled={checkoutBusy || !walletPayment.canPay} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
               {checkoutBusy ? <><Loader2 size={16} className="animate-spin" />{preparingPayment ? "正在核验支付" : "提交中…"}</> : "确认支付"}

@@ -33,6 +33,7 @@ import {
 import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 import MibanInvoiceRequestForm, { createMibanInvoiceDraft, validateMibanInvoiceRequest, MIBAN_INVOICE_UNAVAILABLE_NOTICE, type MibanInvoiceDraft, type MibanInvoiceErrors } from "./MibanInvoiceRequestForm";
 import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
+import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
 
 const IMGS = {
   hero: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -237,7 +238,12 @@ export default function TianguiPearDetail() {
     walletPayments: MibanPaymentDeduction[];
   } | null>(null);
 
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  // 发票资料按当前账号隔离；切换账号不得保留上一个用户的草稿。
+  useEffect(() => {
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
+  }, [user?.id]);
 
   // 下架判断：截止北京时 2026-07-25 00:00:00
   const PEAR_DEADLINE = new Date("2026-07-25T00:00:00+08:00").getTime();
@@ -509,7 +515,7 @@ export default function TianguiPearDetail() {
   const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
   const checkoutBusy = createOrder.isPending || preparingPayment;
   const walletVersion = JSON.stringify([walletPayment.selectedCodes, walletPayment.priorityCode, walletPayment.cnyInput, walletPayment.paymentAssets]);
-  const checkoutInputScope = JSON.stringify([showOrderDialog, location, isAuthenticated, isPearExpired, spec, currentSpec, qty, totalPrice, totalWeightJin, receiverName, receiverPhone, receiverProvince, receiverCity, receiverDistrict, receiverDetail, receiverAddress, userNote, saveToBook, invoiceDraft]);
+  const checkoutInputScope = JSON.stringify([showOrderDialog, location, isAuthenticated, user?.id, isPearExpired, spec, currentSpec, qty, totalPrice, totalWeightJin, receiverName, receiverPhone, receiverProvince, receiverCity, receiverDistrict, receiverDetail, receiverAddress, userNote, saveToBook, invoiceDraft]);
   const checkoutScope = JSON.stringify([checkoutInputScope, walletVersion]);
   const latestCheckoutScope = useRef(checkoutScope);
   latestCheckoutScope.current = checkoutScope;
@@ -1490,7 +1496,7 @@ export default function TianguiPearDetail() {
                   </button>
                 </div>
               </div>
-              <MibanInvoiceRequestForm draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mt-4" />
+              <MibanInvoiceRequestForm userId={user?.id} draft={invoiceDraft} onChange={draft => { setInvoiceDraft(draft); setInvoiceErrors({}); }} errors={invoiceErrors} disabled={checkoutBusy} accent="#FF6900" className="mt-4" />
 
               {/* 去支付仅校验确认订单内容，不核验报价或下单。 */}
               <button
@@ -1512,9 +1518,10 @@ export default function TianguiPearDetail() {
               <h2 className="text-[17px] font-bold text-gray-900">钱包支付确认</h2>
               <button aria-label="返回修改订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="p-2 text-gray-500"><X size={18} /></button>
             </div>
-            <p className="mb-4 text-[13px] text-gray-600">天桂梨 · {currentSpec.name} × {qty} · 应付 ¥{totalPrice.toFixed(2)}</p>
-            <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
-            <MibanCheckoutConfirmationDetails receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
+            <MibanCheckoutPaymentAmount totalCny={totalPrice} usdtCnyRate={walletPayment.usdtCnyRate}>
+              <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} />
+            </MibanCheckoutPaymentAmount>
+            <MibanCheckoutConfirmationDetails items={[{ name: "天桂梨", specification: currentSpec.name, quantity: `${qty}份` }]} receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
             <button disabled={createOrder.isPending} onClick={cancelWalletPayment} className="mt-4 w-full rounded-[4px] border border-gray-200 py-3 text-[13px] text-gray-600">返回修改订单</button>
             <button disabled={checkoutBusy || !walletPayment.canPay || isPearExpired} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
               {checkoutBusy ? <><Loader2 size={16} className="animate-spin" />{preparingPayment ? "正在核验支付" : "提交中…"}</> : "确认支付"}

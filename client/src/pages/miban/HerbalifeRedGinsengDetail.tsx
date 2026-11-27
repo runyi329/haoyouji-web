@@ -26,6 +26,7 @@ import { getCities, getDistricts, provinces, withCurrentRegionOption } from "./r
 import { cnyToU } from "./useMibanUsdtCnyRate";
 import { MibanPaymentConfirmation, MibanWalletAvailableSummary, useMibanMixedPayment } from "./MibanMixedPayment";
 import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
+import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
 import { formatMibanPaymentSummary, formatMibanUsdtAmount, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
@@ -183,6 +184,11 @@ export default function HerbalifeRedGinsengDetail() {
   const [userNote, setUserNote] = useState("");
   const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
   const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  // 发票资料按当前账号隔离；切换账号不得保留上一个用户的草稿。
+  useEffect(() => {
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
+  }, [user?.id]);
   const [favoritePending, setFavoritePending] = useState(false);
   const [failedPosters, setFailedPosters] = useState<Set<string>>(() => new Set());
   const startXRef = useRef(0);
@@ -1553,7 +1559,7 @@ export default function HerbalifeRedGinsengDetail() {
                   </button>
                 )}
               </div>
-              <MibanInvoiceRequestForm
+              <MibanInvoiceRequestForm userId={user?.id}
                 draft={invoiceDraft}
                 onChange={next => {
                   if (checkoutBusy || submissionGuardRef.current) return;
@@ -1633,31 +1639,16 @@ export default function HerbalifeRedGinsengDetail() {
                 </button>
               </div>
 
-              <div
-                className="mt-4 rounded-2xl px-4 py-3"
-                style={{ background: theme.surfaceMuted }}
-              >
-                <div className="text-[11px] text-gray-500">{isAnnualPlan ? "一次支付全年合计" : "本次应付"}</div>
-                <div className="mt-1">
-                  <Price
-                    value={totalPrice}
-                    usdtCnyRate={usdtCnyRate}
-                    large
-                    color={theme.price}
-                  />
-                </div>
-                {isAnnualPlan && (
-                  <p className="mt-3 text-[12px] leading-5 text-gray-600">每月 {purchaseQuantity} 份 × 12 个月，共 {totalQuantity} 份；按月发货，非一次发完。</p>
-                )}
-              </div>
+              <MibanCheckoutPaymentAmount totalCny={totalPrice} usdtCnyRate={usdtCnyRate} accent={theme.price} background={theme.surfaceMuted} label={isAnnualPlan ? "一次支付全年合计" : "本次应付"}>
+                <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} accent={accent} />
+              </MibanCheckoutPaymentAmount>
 
               {annualPaymentBlocked && (
                 <p role="status" className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-[12px] font-bold leading-5 text-amber-800">{ANNUAL_PREVIEW_NOTICE}。本预览不会提交全年计划或普通付款订单。</p>
               )}
-              <div className="mt-5">
-                <MibanPaymentConfirmation payment={walletPayment} disabled={checkoutBusy} accent={accent} />
-              </div>
               <MibanCheckoutConfirmationDetails
+                items={[{ name: currentProduct.detail.title, specification: `${selectedSku.name} · ${selectedSku.netContentText}`, quantity: isAnnualPlan ? `每月 ${purchaseQuantity} 份，共 ${totalQuantity} 份` : `${purchaseQuantity}${selectedSku.unitLabel}` }]}
+                deliverySchedule={isAnnualPlan ? "每月发货，共 12 个月，非一次发完" : undefined}
                 receiverName={receiverName}
                 receiverPhone={normalizeMibanReceiverPhone(receiverPhone)}
                 receiverAddress={receiverAddress}

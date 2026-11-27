@@ -8,6 +8,7 @@ import {
   PAYMENT_SCALE,
   buildMibanPaymentPlan,
   paymentDecimalUnits,
+  formatMibanUsdtAmount,
   paymentUnitsText,
   type MibanPaymentAsset,
   type MibanWalletPaymentQuote,
@@ -869,11 +870,11 @@ describe("readonly payment confirmation and separate checkout selection", () => 
     expect(findElement(element, node => node.type === MibanWalletAvailableSummary)).toBeUndefined();
     expect(findElement(element, node => node.props["aria-expanded"] !== undefined)).toBeUndefined();
     const html = renderToStaticMarkup(element);
-    expect(html).toContain("已选币种：人民币 + SOL");
-    expect(html).toContain("本次预计扣币 14 人民币");
-    expect(html).toContain("本次预计扣币 0.08 SOL");
-    expect(html).toContain("本次人民币合计 ≈ ¥70.00");
-    expect(html).toContain("页面报价已固定，确认付款时核验最新报价");
+    expect(html).toContain("14 人民币");
+    expect(html).toContain("0.08 SOL");
+    expect(html).toContain("合计 ≈ 10.00 U · ¥70.00");
+    expect(html).not.toMatch(/本次付款方案|本次预计扣币|已选币种|剩余待付|服务端验签|页面报价已固定/);
+    expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("#8d292c");
     expect(html).not.toMatch(/核对扣币明细|优先使用|我已核对|选择币种/);
     expect(refresh).not.toHaveBeenCalled();
@@ -885,8 +886,8 @@ describe("readonly payment confirmation and separate checkout selection", () => 
     const payment = paymentHarness(228).render();
     expect(payment.paymentAssets).toEqual([{ assetCode: "USDT", amount: "34.17573523" }]);
     const confirmation = renderToStaticMarkup(MibanPaymentConfirmation({ payment }));
-    expect(confirmation).toContain("本次预计扣币 34.17573523 U / USDT");
-    expect(confirmation).toContain("本次人民币合计 ≈ ¥228.00");
+    expect(confirmation).toContain("34.17573523 USDT");
+    expect(confirmation).toContain(`合计 ≈ ${formatMibanUsdtAmount(228 / payment.usdtCnyRate)} U · ¥228.00`);
     const { harness } = summaryHarness(() => payment);
     const summary = renderToStaticMarkup(harness.render());
     expect(summary).toContain("594.95 U");
@@ -1180,7 +1181,8 @@ describe("stable readonly snapshots and fail-closed refresh eligibility", () => 
     expect(shape(confirmation)).toEqual(shape(MibanPaymentConfirmation({ payment: previous })));
     const status = findElement(confirmation, node => node.props["data-payment-allocation-status"] !== undefined);
     expect(status.props.role).toBe("status");
-    expect(visibleText(status)).toContain(payment.statusMessage);
+    if (state === "refresh" || state === "error") expect(visibleText(status)).toContain(payment.statusMessage);
+    else expect(visibleText(status)).toBe("");
     expect(visibleText(status)).not.toMatch(/倒计时|\d+ 秒/);
     expect(visibleText(confirmation)).toContain("0.08 SOL");
     if (state === "refresh") { request.resolve({ data: freshQuote() }); await flushQuoteRequest(); }

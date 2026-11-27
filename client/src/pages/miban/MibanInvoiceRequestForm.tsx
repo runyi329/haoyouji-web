@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { Switch } from "@/components/ui/switch";
+import { MibanInvoiceMemory } from "./MibanInvoiceMemory";
 import "./miban-checkout.css";
 import {
   mibanInvoiceRequestSchema,
@@ -71,6 +72,7 @@ export default function MibanInvoiceRequestForm({
   disabled = false,
   accent = "#0D7A3E",
   className = "",
+  userId,
 }: {
   draft: MibanInvoiceDraft;
   onChange: (draft: MibanInvoiceDraft) => void;
@@ -78,6 +80,7 @@ export default function MibanInvoiceRequestForm({
   disabled?: boolean;
   accent?: string;
   className?: string;
+  userId?: number;
 }) {
   const id = useId();
   const change = (next: MibanInvoiceDraft) => {
@@ -88,6 +91,76 @@ export default function MibanInvoiceRequestForm({
     // 不在两种抬头之间复用公司信息；切回个人立即清空公司税号。
     change({ enabled: true, type, title: type === "personal" ? "个人" : "", taxNo: "" });
   };
+  // 保持本组件仅有useId，静态表单/未登录/关闭开关均无需tRPC provider。
+  const fields = (
+    <fieldset disabled={disabled} className="mt-3 min-w-0 space-y-3 border-t border-gray-100 pt-3">
+      <legend className="sr-only">发票信息</legend>
+      <div role="group" aria-label="发票类型" className="grid grid-cols-2 gap-2">
+        {([
+          { type: "personal", label: "个人" },
+          { type: "company", label: "公司" },
+        ] as const).map(option => (
+          <button
+            key={option.type}
+            type="button"
+            data-invoice-type={option.type}
+            aria-pressed={draft.type === option.type}
+            disabled={disabled}
+            onClick={() => changeType(option.type)}
+            className="min-h-9 rounded-[4px] border px-3 py-2 text-[12px] font-semibold disabled:cursor-not-allowed"
+            style={{
+              color: draft.type === option.type ? accent : "#6b7280",
+              borderColor: draft.type === option.type ? accent : "#e5e7eb",
+              backgroundColor: draft.type === option.type ? `${accent}0D` : "#ffffff",
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div>
+        <label htmlFor={`${id}-title`} className="text-[12px] font-semibold text-gray-600">
+          发票抬头 <span className="font-normal text-gray-400">（必填）</span>
+        </label>
+        <input
+          id={`${id}-title`}
+          data-invoice-field="title"
+          value={draft.title}
+          onChange={event => change({ ...draft, title: event.target.value.slice(0, 200) })}
+          placeholder={draft.type === "personal" ? "个人或实际姓名" : "请输入公司全称"}
+          maxLength={200}
+          required
+          aria-invalid={Boolean(errors.title)}
+          aria-describedby={errors.title ? `${id}-title-error` : undefined}
+          className="mt-1.5 h-10 w-full min-w-0 rounded-[4px] border border-gray-200 bg-gray-50 px-3 text-[13px] outline-none focus:border-gray-400 disabled:text-gray-500"
+        />
+        {errors.title && <p id={`${id}-title-error`} role="alert" className="mt-1 text-[11px] text-red-500">{errors.title}</p>}
+      </div>
+      {draft.type === "company" && (
+        <div>
+          <label htmlFor={`${id}-tax-no`} className="text-[12px] font-semibold text-gray-600">
+            税号 <span className="font-normal text-gray-400">（必填）</span>
+          </label>
+          <input
+            id={`${id}-tax-no`}
+            data-invoice-field="taxNo"
+            value={draft.taxNo}
+            onChange={event => change({ ...draft, taxNo: event.target.value.slice(0, 100) })}
+            placeholder="请输入公司税号"
+            maxLength={100}
+            autoCapitalize="characters"
+            required
+            aria-invalid={Boolean(errors.taxNo)}
+            aria-describedby={errors.taxNo ? `${id}-tax-no-error` : undefined}
+            className="mt-1.5 h-10 w-full min-w-0 rounded-[4px] border border-gray-200 bg-gray-50 px-3 text-[13px] outline-none focus:border-gray-400 disabled:text-gray-500"
+          />
+          {errors.taxNo && <p id={`${id}-tax-no-error`} role="alert" className="mt-1 text-[11px] text-red-500">{errors.taxNo}</p>}
+        </div>
+      )}
+      {errors.form && <p role="alert" className="text-[11px] text-red-500">{errors.form}</p>}
+      <p className="text-[10px] leading-4 text-gray-400">请核对抬头；提交申请不代表已开票。</p>
+    </fieldset>
+  );
 
   return (
     <section
@@ -103,6 +176,7 @@ export default function MibanInvoiceRequestForm({
         </div>
         <Switch
           id={`${id}-enabled`}
+          data-invoice-toggle="true"
           aria-label="索取发票"
           checked={draft.enabled}
           disabled={disabled}
@@ -112,72 +186,11 @@ export default function MibanInvoiceRequestForm({
           style={{ backgroundColor: draft.enabled ? accent : undefined }}
         />
       </div>
-      {draft.enabled && (
-        <fieldset disabled={disabled} className="mt-3 min-w-0 space-y-3 border-t border-gray-100 pt-3">
-          <legend className="sr-only">发票信息</legend>
-          <div role="group" aria-label="发票类型" className="grid grid-cols-2 gap-2">
-            {([
-              { type: "personal", label: "个人" },
-              { type: "company", label: "公司" },
-            ] as const).map(option => (
-              <button
-                key={option.type}
-                type="button"
-                aria-pressed={draft.type === option.type}
-                disabled={disabled}
-                onClick={() => changeType(option.type)}
-                className="min-h-9 rounded-[4px] border px-3 py-2 text-[12px] font-semibold disabled:cursor-not-allowed"
-                style={{
-                  color: draft.type === option.type ? accent : "#6b7280",
-                  borderColor: draft.type === option.type ? accent : "#e5e7eb",
-                  backgroundColor: draft.type === option.type ? `${accent}0D` : "#ffffff",
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <div>
-            <label htmlFor={`${id}-title`} className="text-[12px] font-semibold text-gray-600">
-              发票抬头 <span className="font-normal text-gray-400">（必填）</span>
-            </label>
-            <input
-              id={`${id}-title`}
-              value={draft.title}
-              onChange={event => change({ ...draft, title: event.target.value.slice(0, 200) })}
-              placeholder={draft.type === "personal" ? "个人或实际姓名" : "请输入公司全称"}
-              maxLength={200}
-              required
-              aria-invalid={Boolean(errors.title)}
-              aria-describedby={errors.title ? `${id}-title-error` : undefined}
-              className="mt-1.5 h-10 w-full min-w-0 rounded-[4px] border border-gray-200 bg-gray-50 px-3 text-[13px] outline-none focus:border-gray-400 disabled:text-gray-500"
-            />
-            {errors.title && <p id={`${id}-title-error`} role="alert" className="mt-1 text-[11px] text-red-500">{errors.title}</p>}
-          </div>
-          {draft.type === "company" && (
-            <div>
-              <label htmlFor={`${id}-tax-no`} className="text-[12px] font-semibold text-gray-600">
-                税号 <span className="font-normal text-gray-400">（必填）</span>
-              </label>
-              <input
-                id={`${id}-tax-no`}
-                value={draft.taxNo}
-                onChange={event => change({ ...draft, taxNo: event.target.value.slice(0, 100) })}
-                placeholder="请输入公司税号"
-                maxLength={100}
-                autoCapitalize="characters"
-                required
-                aria-invalid={Boolean(errors.taxNo)}
-                aria-describedby={errors.taxNo ? `${id}-tax-no-error` : undefined}
-                className="mt-1.5 h-10 w-full min-w-0 rounded-[4px] border border-gray-200 bg-gray-50 px-3 text-[13px] outline-none focus:border-gray-400 disabled:text-gray-500"
-              />
-              {errors.taxNo && <p id={`${id}-tax-no-error`} role="alert" className="mt-1 text-[11px] text-red-500">{errors.taxNo}</p>}
-            </div>
-          )}
-          {errors.form && <p role="alert" className="text-[11px] text-red-500">{errors.form}</p>}
-          <p className="text-[10px] leading-4 text-gray-400">请核对抬头；提交申请不代表已开票。</p>
-        </fieldset>
-      )}
+      {draft.enabled && (typeof userId === "number" && Number.isSafeInteger(userId) && userId > 0 ? (
+        <MibanInvoiceMemory key={userId} userId={userId} draft={draft} onChange={change} disabled={disabled}>
+          {fields}
+        </MibanInvoiceMemory>
+      ) : fields)}
     </section>
   );
 }

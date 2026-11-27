@@ -38,6 +38,7 @@ import {
   useMibanMixedPayment,
 } from "./MibanMixedPayment";
 import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
+import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
 import {
   PAYMENT_SCALE,
   formatMibanPaymentSummary,
@@ -387,7 +388,7 @@ function LimitedProductCartOverlay() {
     clearCart,
   } = useLimitedProductCart();
   const [location, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [showAddressBook, setShowAddressBook] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
@@ -397,6 +398,11 @@ function LimitedProductCartOverlay() {
   const [userNote, setUserNote] = useState("");
   const [invoiceDraft, setInvoiceDraft] = useState<MibanInvoiceDraft>(createMibanInvoiceDraft);
   const [invoiceErrors, setInvoiceErrors] = useState<MibanInvoiceErrors>({});
+  // 发票资料按当前账号隔离；切换账号不得保留上一个用户的草稿。
+  useEffect(() => {
+    setInvoiceDraft(createMibanInvoiceDraft());
+    setInvoiceErrors({});
+  }, [user?.id]);
   const [preparingPayment, setPreparingPayment] = useState(false);
   const [showWalletPayment, setShowWalletPayment] = useState(false);
   const paymentAttemptRef = useRef(0);
@@ -456,7 +462,7 @@ function LimitedProductCartOverlay() {
   const paymentInitialized = useRef(false);
   const cartItemsScope = JSON.stringify(items.map(item => [item.productKey, item.skuId, item.quantity, item.priceCny]));
   const checkoutScope = JSON.stringify([
-    open, checkoutOpen, showWalletPayment, location, isAuthenticated, cartItemsScope, totalCny,
+    open, checkoutOpen, showWalletPayment, location, isAuthenticated, user?.id, cartItemsScope, totalCny,
     selectedAddress?.id, selectedAddress?.name, selectedAddress?.phone,
     formatAddress(selectedAddress), userNote, invoiceDraft,
   ]);
@@ -961,7 +967,7 @@ function LimitedProductCartOverlay() {
                 </div>
               </section>
 
-              <MibanInvoiceRequestForm
+              <MibanInvoiceRequestForm userId={user?.id}
                 draft={invoiceDraft}
                 onChange={next => {
                   if (checkoutBusy || submissionGuardRef.current) return;
@@ -1042,13 +1048,12 @@ function LimitedProductCartOverlay() {
                   </div>
                   <button type="button" aria-label="返回确认订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="shrink-0 rounded-[4px] px-2 py-1 text-[12px] text-gray-500 disabled:opacity-40">返回修改</button>
                 </div>
-                <div className="mt-4 rounded-[4px] bg-gray-50 p-3 text-[12px] leading-5 text-gray-600">
-                  共 {itemCount} 件，按精选生成 {groups.length} 张订单，统一付款后分开发货。
-                </div>
-                <div className="mt-4">
+                <MibanCheckoutPaymentAmount totalCny={totalCny} usdtCnyRate={usdtCnyRate} accent="#0D7A3E">
                   <MibanPaymentConfirmation payment={payment} disabled={checkoutBusy} accent="#0D7A3E" />
-                </div>
+                </MibanCheckoutPaymentAmount>
                 <MibanCheckoutConfirmationDetails
+                  items={items.map(item => ({ name: item.productName, specification: `${item.skuName} · ${item.netContentText}`, quantity: `${item.quantity}${item.unitLabel}` }))}
+                  deliverySchedule={groups.length > 1 ? `按精选生成 ${groups.length} 张订单，统一付款后分开发货` : undefined}
                   receiverName={selectedAddress.name}
                   receiverPhone={normalizeMibanReceiverPhone(selectedAddress.phone)}
                   receiverAddress={formatAddress(selectedAddress)}

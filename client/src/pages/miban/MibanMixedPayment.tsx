@@ -489,28 +489,19 @@ export function MibanWalletAvailableSummary({ payment, disabled = false, accent 
 export function MibanPaymentConfirmation({ payment, disabled = false, accent = "#FF6900" }: {
   payment: MibanMixedPayment; disabled?: boolean; accent?: string;
 }) {
-  const selectedCodes = Array.from(new Set([...payment.selectedCodes, ...payment.deductions.map(row => row.assetCode)]));
-  return <section data-payment-section data-payment-allocation data-payment-confirmation aria-busy={payment.refreshing || disabled} className="mb-5 min-w-0 space-y-3 rounded-2xl border border-gray-100 bg-white p-3.5">
-    <h3 className="text-[12px] font-semibold text-gray-800">本次付款方案</h3>
-    <p data-payment-selected-assets className="break-words text-[11px] leading-5 text-gray-600">{selectedCodes.length ? `已选币种：${selectedCodes.map(code => code === "CNY" ? "人民币" : code === "USDT" ? "U / USDT" : code).join(" + ")}` : "尚未选择付款币种"}</p>
-    <div data-payment-deduction-details className="space-y-2">
-      {selectedCodes.map(code => {
-        const deduction = payment.deductions.find(row => row.assetCode === code);
-        return <div key={code} data-payment-deduction-asset={code} className="min-w-0 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-          <p className="break-all text-[12px] font-bold tabular-nums" style={{ color: accent }}>本次预计扣币 {deduction?.amount ?? "0"} {code === "USDT" ? "U / USDT" : code === "CNY" ? "人民币" : code}</p>
-          <p className="break-all text-[10px] leading-5 text-gray-500">≈ ¥{deduction ? displayCny(deduction.cnyValue) : "0.00"}</p>
-        </div>;
-      })}
+  const deductions = payment.deductions.filter(row => positiveUnits(row.amount) > BigInt(0));
+  const hasNotice = payment.refreshing || !payment.ready || Number(payment.remainingCny) > 0 ||
+    /报价已更新|核验失败|读取失败|不足/.test(payment.statusMessage);
+  const totalUsdt = equivalentUsdt(payment.totalValueCny, String(payment.usdtCnyRate));
+  return <section aria-label="付款构成" data-payment-section data-payment-allocation data-payment-confirmation aria-busy={payment.refreshing || disabled} className="mt-3 min-w-0 space-y-1 text-[12px] leading-5">
+    <div data-payment-deduction-details className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 tabular-nums text-gray-700">
+      {deductions.length ? deductions.map((row, index) => <span key={row.assetCode} data-payment-deduction-asset={row.assetCode} className="min-w-0 break-all">
+        {index > 0 && <span aria-hidden="true" className="mr-1.5 text-gray-400">+</span>}
+        {row.amount} {row.assetCode === "CNY" ? "人民币" : row.assetCode}
+      </span>) : <span className="text-gray-500">付款信息待核验</span>}
     </div>
-    <div className="space-y-1 break-words text-[11px] leading-5 text-gray-600">
-      <p data-payment-total-cny className="font-bold tabular-nums" style={{ color: accent }}>本次人民币合计 ≈ ¥{displayCny(payment.totalValueCny)}</p>
-      <p data-payment-remaining-cny className="tabular-nums">剩余待付 ¥{displayCny(payment.remainingCny)}</p>
-    </div>
-    <div data-payment-allocation-status role="status" aria-live="polite" title={payment.statusMessage} className="min-h-10 text-[11px] leading-5 text-gray-500">
-      <p className="break-words">{payment.statusMessage}</p>
-      <p className="break-all tabular-nums">{Number.isFinite(payment.usdtCnyRate) ? `1 U ≈ ¥${payment.usdtCnyRate.toFixed(4)}` : "实时汇率待查询"} · 付款时核验</p>
-    </div>
-    <p className="text-[10px] leading-4 text-gray-400">冻结不参与支付；缺价、过时行情不可支付。服务端验签并核验最新余额。</p>
+    <p data-payment-total-cny className="break-words text-[11px] tabular-nums" style={{ color: accent }}>合计 ≈ {displayUsdt(totalUsdt)} U · ¥{displayCny(payment.totalValueCny)}</p>
+    <p data-payment-allocation-status role="status" aria-live="polite" className="break-words text-[11px] leading-5 text-gray-500 empty:hidden">{hasNotice ? payment.statusMessage : null}</p>
   </section>;
 }
 

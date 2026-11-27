@@ -66,6 +66,7 @@ import {
   insertMibanOrderInvoiceRequest,
   readMibanOrderInvoiceRequests,
 } from "./miban-order-invoice";
+import { readMibanInvoiceFavorites, rememberMibanInvoice } from "./miban-invoice-favorites";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
 import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
 import { resolveSupplierOrderScope } from "../shared/miban-supplier";
@@ -4208,6 +4209,11 @@ export const mibanOrderRouter = router({
 // 商品与 SKU 的名称、金额、图片和单位都从 shared/miban-limited-products.ts 读取。
 // 浏览器只提交 productKey、skuId、数量和收货信息，不能篡改成交金额或伪造成米种。
 export const mibanLimitedProductRouter = router({
+  invoiceFavorites: protectedProcedure.query(({ ctx }) => readMibanInvoiceFavorites(ctx.user!.id)),
+  rememberInvoice: protectedProcedure
+    .input(mibanInvoiceRequestSchema)
+    .mutation(({ ctx, input }) => rememberMibanInvoice(ctx.user!.id, input)),
+
   // 所有米伴可结算入口共用此能力探测；发票开启时前端必须实时验证。
   invoiceSupport: protectedProcedure.query(async () => {
     await ensureMibanOrderInvoiceInfrastructure();
