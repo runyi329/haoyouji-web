@@ -35,7 +35,7 @@ import { MibanImage } from "@/pages/miban/MibanImage";
 
 // 首屏海报与商城分类入口共用米伴首页地址，避免小入口退回商品分类弹窗。
 const MIBAN_HOME_PATH = '/p/proj_hzxm2t/';
-const CHONGBAN_ICON_PATH = '/icons/chongban-logo-3d-v2.webp';
+const CHONGBAN_ICON_PATH = '/icons/chongban-logo-symbol-v3.webp';
 
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
