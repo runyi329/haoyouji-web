@@ -34,6 +34,7 @@ import { getSmartAccountingRoute } from "@/lib/smartAccountingNavigation";
 
 // 首屏海报与商城分类入口共用米伴首页地址，避免小入口退回商品分类弹窗。
 const MIBAN_HOME_PATH = '/p/proj_hzxm2t/';
+const CHONGBAN_ICON_PATH = '/icons/chongban-icon-v1.webp';
 
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
@@ -1233,7 +1234,14 @@ export default function Home() {
     staleTime: 300000,
   });
   // 取所有活跃分类，按sortOrder排序，最多16个（企伴+更多各占一格）
-  const mainCategories = (productCategories || []).filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 16);
+  // 宠伴仅调整首页品牌展示，保留原分类编号、顺序和宠物平台数据。
+  const mainCategories = (productCategories || [])
+    .filter(c => c.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .slice(0, 16)
+    .map(c => ['宠物生活', '宠物伴侣', '宠伴'].includes(c.name)
+      ? { ...c, name: '宠伴', iconUrl: CHONGBAN_ICON_PATH }
+      : c);
   const { data: categoryProducts, isLoading: isLoadingCategoryProducts } = trpc.merchant.getProductsByCategory.useQuery(
     selectedCategoryId ? { categoryId: selectedCategoryId, limit: 50 } : undefined,
     { enabled: categorySheetOpen && selectedCategoryId !== null, staleTime: 60000 }
@@ -1898,7 +1906,7 @@ export default function Home() {
                         navigate('/eth-options');
                         return;
                       }
-                      if (cat.name === '宠物生活') {
+                      if (cat.name === '宠物生活' || cat.name === '宠物伴侣' || cat.name === '宠伴') {
                         navigate('/pet-platform');
                         return;
                       }
@@ -1934,10 +1942,10 @@ export default function Home() {
                       <img
                         src={cat.iconUrl}
                         alt={cat.name}
-                        className={`w-10 h-10 object-cover ${cat.name === '米伴' || cat.name === '米瓣' ? 'rounded-[8px]' : 'rounded-full'} drop-shadow-sm`}
+                        className={`w-10 h-10 object-cover ${cat.name === '米伴' || cat.name === '米瓣' || cat.name === '宠伴' ? 'rounded-[8px]' : 'rounded-full'} drop-shadow-sm`}
                       />
                     ) : (
-                      <div className={`w-10 h-10 ${cat.name === '米伴' || cat.name === '米瓣' ? 'rounded-[8px]' : 'rounded-full'} bg-gray-100 flex items-center justify-center`}>
+                      <div className={`w-10 h-10 ${cat.name === '米伴' || cat.name === '米瓣' || cat.name === '宠伴' ? 'rounded-[8px]' : 'rounded-full'} bg-gray-100 flex items-center justify-center`}>
                         <ShoppingBag className="w-5 h-5 text-gray-400" />
                       </div>
                     )}
