@@ -1,7 +1,7 @@
-import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "./ai-wallet-assets";
+import { LEGACY_WALLET_CRYPTO_ASSET_CODES } from "./crypto-asset-catalog";
 
-/** 仅限人民币、USDT和钱包目录中的数字币；股票、证券及商品不参与商城支付。 */
-export const MIBAN_PAYMENT_ASSETS = ["CNY", "USDT", ...AI_WALLET_CRYPTO_MARKET_ASSETS] as const;
+/** 保持既有34种数字币支付范围；钱包扩目录不自动开放新币商城支付。 */
+export const MIBAN_PAYMENT_ASSETS = ["CNY", "USDT", ...LEGACY_WALLET_CRYPTO_ASSET_CODES] as const;
 export type MibanPaymentAssetCode = (typeof MIBAN_PAYMENT_ASSETS)[number];
 export const PAYMENT_SCALE = 10n ** 18n;
 export const MIBAN_PAYMENT_QUOTE_TTL_MS = 60_000;

@@ -493,7 +493,8 @@ async function getCnyValue(assetCode: Ledger37WalletAsset, amount: string): Prom
   const quantity = Number(amount);
   if (!Number.isFinite(quantity)) throw new Error("资产数量无效");
   if (assetCode === "CNY") return quantity.toFixed(8);
-  const { getLatestPrice, getUsdtCnyRate } = await import("./price-scanner");
+  const { getLatestPrice, getUsdtCnyRate, ensureCryptoSpotPrices } = await import("./price-scanner");
+  if (assetCode !== "USDT") await ensureCryptoSpotPrices([assetCode]);
   const cnyRate = Number(getUsdtCnyRate?.() || 0);
   const priceUsdt = assetCode === "USDT" ? 1 : Number(getLatestPrice(assetCode) || 0);
   if (!(cnyRate > 0) || !(priceUsdt > 0)) throw new Error(`${assetCode} 暂无可靠人民币估值，不能创建该笔资金记录`);

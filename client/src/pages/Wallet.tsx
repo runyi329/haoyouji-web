@@ -1,4 +1,4 @@
-import { getWalletFxValuation } from '@shared/usdt-cny-display';
+import { getUsdtCnyRate, getWalletFxValuation } from '@shared/usdt-cny-display';
 import { useEffect, useState, type CSSProperties } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
@@ -28,6 +28,7 @@ import { getInternalTransferPresentation } from "../lib/walletTransferPresentati
 import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
 import { WalletDigitalAssetList } from "@/components/WalletDigitalAssetList";
 import { buildWalletDigitalAssets, formatDigitalAssetAmount } from "@/lib/walletDigitalAssets";
+import { useDemandCryptoQuotes } from "@/hooks/useDemandCryptoQuotes";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -887,11 +888,12 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
   const canWithdraw = !walletEntryLedgerId || walletPolicyQuery.data?.allowWithdrawal === true;
   // 配置仍在加载阶段先展示入口；档案明确关闭时才隐藏，服务端也会二次校验。
   const canTransfer = !walletEntryLedgerId || walletPolicyQuery.data?.allowTransfer !== false;
-  // 钱包估值始终直接读取统一行情内存缓存；余额查询只负责数量，不携带陈旧的估值快照。
-  const walletPricesQuery = trpc.getCryptoPrices.useQuery(undefined, {
+  // 人民币换算独立查询统一汇率，不能为了汇率下载整份币价目录。
+  const walletFxQuery = trpc.exchange.getRate.useQuery({ fromcoin: 'USDT', tocoin: 'CNY', money: 1 }, {
     enabled: isGlobalWalletView,
-    refetchInterval: 3000,
-    staleTime: 2500,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    refetchIntervalInBackground: false,
   });
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
@@ -930,6 +932,13 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
     staleTime: 15_000,
   });
 
+  // 只把真实总余额（含担保冻结）非零的币种交给报价服务，零余额目录不是持仓。
+  const walletDemandQuotes = useDemandCryptoQuotes(
+    ((multiAssetBalancesQuery.data ?? []) as any[])
+      .filter(asset => Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0)
+      .map(asset => asset.assetCode),
+    isGlobalWalletView && multiAssetBalancesQuery.data !== undefined,
+  );
   const balance = typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const usdtSummary = usdtBalanceSummaryQuery.data ?? { total: balance, frozen: 0, available: balance };
   const usdtTotalBalance = Number(usdtSummary.total ?? balance);
@@ -937,8 +946,10 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
   const cnyAvailableBalance = Number(cnySummary.available ?? cnyBalance);
-  const unifiedPrices = ((walletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
-  const walletFxValuation = getWalletFxValuation(usdtTotalBalance, cnyBalance, walletPricesQuery.data);
+  const unifiedPrices = walletDemandQuotes.prices;
+  const walletFxValuation = getWalletFxValuation(usdtTotalBalance, cnyBalance, {
+    usdtCnyRate: getUsdtCnyRate(walletFxQuery.data), usdtCnyFx: walletFxQuery.data,
+  });
   const usdtCnyRate = walletFxValuation.rate;
   const usdtToCny = walletFxValuation.usdtValueCny;
   const cnyToUsdt = walletFxValuation.cnyValueUsdt;
@@ -967,7 +978,6 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
   // 所有入口（含37/52/米伴）统一：未知行情不能被当成零或完整估值。
   const digitalValuationKnown = usdtBalanceSummaryQuery.data !== undefined
     && multiAssetBalancesQuery.data !== undefined
-    && walletPricesQuery.data !== undefined
     && visibleMultiAssetBalances.every((asset) => Number.isFinite(Number(asset.priceUsdt)) && Number(asset.priceUsdt) > 0);
   const cnyValuationKnown = digitalValuationKnown
     && usdtCnyRate !== null;
@@ -1104,6 +1114,8 @@ export default function Wallet({ appearance = "default" }: { appearance?: "defau
 
   const mask = (v: string) => hideBalance ? "••••••" : v;
   const refreshWalletData = () => {
+    void walletFxQuery.refetch();
+    if (walletDemandQuotes.symbols.length > 0) void walletDemandQuotes.refetch();
     void balanceQuery.refetch();
     void usdtBalanceSummaryQuery.refetch();
     void cnyBalanceQuery.refetch();

@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { CRYPTO_ASSET_CODES } from '../shared/crypto-asset-catalog';
+import { AI_WALLET_ASSETS, AI_WALLET_ASSET_COLORS, AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS } from '../shared/ai-wallet-assets';
 
 // 只读取生产源码，执行纯名单/枚举/交易对表达式；不导入 React、路由或扫描器，不连接数据库和网络。
 const NEW_COINS = ['TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK'];
@@ -29,7 +31,9 @@ function required<T>(value: T | undefined, name: string): T {
   return value;
 }
 function initializer(root: ts.Node, name: string): ts.Expression {
-  return required(nodes(root, ts.isVariableDeclaration).find(n => n.name.getText() === name)?.initializer, name);
+  const own = nodes(root, ts.isVariableDeclaration).find(n => n.name.getText() === name)?.initializer;
+  if (!own && root === finance && name === 'COIN_OPTIONS') return initializer(card, name);
+  return required(own, name);
 }
 function unwrap(expression: ts.Expression): ts.Expression {
   return ts.isAsExpression(expression) || ts.isParenthesizedExpression(expression)
@@ -37,10 +41,17 @@ function unwrap(expression: ts.Expression): ts.Expression {
 }
 function strings(expression: ts.Expression): string[] {
   const array = unwrap(expression);
+  if (ts.isIdentifier(array)) {
+    if (array.text === 'CRYPTO_ASSET_CODES') return [...CRYPTO_ASSET_CODES];
+    if (array.text === 'AI_WALLET_ASSETS') return [...AI_WALLET_ASSETS];
+    throw new Error('Unrecognized shared coin list');
+  }
   if (!ts.isArrayLiteralExpression(array)) throw new Error('Expected production literal coin list');
-  return array.elements.map(element => {
-    if (!ts.isStringLiteral(element)) throw new Error('Expected literal coin');
-    return element.text;
+  return array.elements.flatMap(element => {
+    if (ts.isSpreadElement(element) && element.expression.getText() === 'CRYPTO_ASSET_CODES') return [...CRYPTO_ASSET_CODES];
+    if (ts.isSpreadElement(element) && element.expression.getText() === 'AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS') return [...AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS];
+    if (!ts.isStringLiteral(element)) throw new Error('Expected literal or approved shared coin tuple');
+    return [element.text];
   });
 }
 function coversAllWithoutDuplicates(list: string[]) {
@@ -84,7 +95,7 @@ describe('52融资付息币种在新旧前端入口一致可选', () => {
     '%s为全部10币提供有效颜色且颜色键不重复', (_name, ast) => {
       const colors = unwrap(initializer(ast, 'COIN_COLORS'));
       if (!ts.isObjectLiteralExpression(colors)) throw new Error('Expected production color map');
-      const entries = colors.properties.map(property => {
+      const entries = colors.properties.filter(ts.isPropertyAssignment).map(property => {
         if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.initializer)) {
           throw new Error('Expected literal coin color');
         }
@@ -92,7 +103,8 @@ describe('52融资付息币种在新旧前端入口一致可选', () => {
         return [key, property.initializer.text] as const;
       });
       expect(new Set(entries.map(([key]) => key)).size).toBe(entries.length);
-      for (const coin of ALL_COINS) expect(entries.find(([key]) => key === coin)?.[1], coin).toMatch(/^#[\da-f]{6}$/i);
+      const resolved = new Function('AI_WALLET_ASSET_COLORS', 'FUNDER_COIN_COLORS', `return (${colors.getText()});`)(AI_WALLET_ASSET_COLORS, AI_WALLET_ASSET_COLORS);
+      for (const coin of [...ALL_COINS, 'FIL']) expect(resolved[coin], coin).toMatch(/^#[\da-f]{6}$/i);
     });
 });
 
@@ -102,14 +114,14 @@ describe('保存枚举与回包行情名单覆盖新增币种并保留旧币', (
       const expression = coinSchema(name);
       const enumCall = required(nodes(expression, ts.isCallExpression).find(n => n.expression.getText() === 'z.enum'), `${name}.coin z.enum`);
       coversAllWithoutDuplicates(strings(required(enumCall.arguments[0], `${name}.coin enum list`)));
-      const schema = new Function('z', `return (${expression.getText()});`)(z) as z.ZodType;
+      const schema = new Function('z', 'AI_WALLET_ASSETS', `return (${expression.getText()});`)(z, AI_WALLET_ASSETS) as z.ZodType;
       for (const coin of ALL_COINS) expect(schema.safeParse(coin).success, coin).toBe(true);
       expect(schema.safeParse('NOT_A_COIN').success).toBe(false);
     });
   it('financeUpdateOrder的coin仍为optional，支持不修改币种的更新', () => {
     const expression = coinSchema('financeUpdateOrder');
     expect(expression.getText()).toMatch(/\.optional\(\)$/);
-    const schema = new Function('z', `return (${expression.getText()});`)(z) as z.ZodType;
+    const schema = new Function('z', 'AI_WALLET_ASSETS', `return (${expression.getText()});`)(z, AI_WALLET_ASSETS) as z.ZodType;
     expect(schema.safeParse(undefined).success).toBe(true);
   });
   it.each(['funderGetAssetOrders', 'funderGetSharedCollateralPool', 'financeGetAssetSummary'])(
@@ -138,7 +150,7 @@ describe('新增币种沿用扫描器真实USDT现货链路', () => {
     const sources = nodes(quote, ts.isPropertyAssignment).filter(n => n.name.getText() === 'source');
     expect(sources.map(n => n.initializer.getText())).toEqual(["'Gate.io'", "'HTX'", "'OKX'"]);
     expect(nodes(quote, ts.isTryStatement)).toHaveLength(3);
-    expect(nodes(quote, ts.isAwaitExpression).map(n => n.expression.getText()))
+    expect(nodes(quote, ts.isAwaitExpression).filter(n => ts.isCallExpression(n.expression) && n.expression.expression.getText() === 'fetchCryptoJson').map(n => n.expression.getText()))
       .toEqual(quoteRequests.map(n => n.getText()));
   });
   it('通用现货函数不硬编码ETH或从ETH价格反推其他币种', () => {

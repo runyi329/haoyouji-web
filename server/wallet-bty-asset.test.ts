@@ -13,8 +13,13 @@ import { calculateMibanWalletValue } from '../shared/miban-wallet-value';
 import { getWalletFlowCategory } from '../client/src/lib/walletFlowPresentation';
 import { buildWalletDigitalAssets, formatDigitalAssetAmount } from '../client/src/lib/walletDigitalAssets';
 import { getCryptoAssetIconSrc } from '../client/src/lib/cryptoAssetIcons';
+import { CRYPTO_ASSET_CODES, isCryptoAssetCode } from '../shared/crypto-asset-catalog';
+import { CryptoQuoteDemandRegistry, LEGACY_CRYPTO_QUOTE_SYMBOLS } from './crypto-quote-demand';
+import type { UnifiedCryptoSpotQuote } from './crypto-spot-quote-cache';
+import { getWalletAssetCategory, getWalletAssetFilterCodes, matchesWalletAssetFilter } from '../shared/wallet-asset-filters';
 
-// 离线：只导入纯目录/helper；DB、路由和scanner模块不import、不启动。
+// 离线：只导入纯目录/helper及无启动I/O的需求registry；查询显式注入空行，不使用默认DB查询。
+// DB、路由、共享provider和scanner模块不import、不启动。
 // 在无process/require/import的VM里抽取真实函数/validator；fetch全部为本地公开接口夹具。
 // 身份：父任务核验 https://www.bityuan.com/ 为 Bityuan 比特元 BTY；不是 Bitcoin BTC。
 // 现货契约：父任务核验 MEXC /api/v3/ticker/24hr?symbol=BTYUSDT，Gate/HTX无该交易对。
@@ -83,13 +88,34 @@ function scannerHarness(response: unknown = ticker(), ok = true) {
   const network = vi.fn(async (url: string, _init?: RequestInit) => url.includes('hotcoinfin.com')
     ? ({ ok: false, status: 503, json: async () => ({}) })
     : ({ ok, status: ok ? 200 : 503, json: async () => response }));
-  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS', 'BTY_SPOT_QUOTE_MAX_AGE_MS', 'BTY_HOTCOIN_QUOTE_MAX_AGE_MS',
-    'CRYPTO_COINS', 'ETH_PERP_MARK_CACHE_KEY', 'KRW_COINS'];
+  const sharedQuotes = new Map<string, UnifiedCryptoSpotQuote>();
+  // BTY永远不能由共享provider提供；只有非BTY隔离夹具才能显式写入peek。
+  const getUnifiedCryptoSpotQuotes = vi.fn(async (codes: readonly string[]) => {
+    expect(codes).toEqual([]);
+    return {};
+  });
+  const peekUnifiedCryptoSpotQuote = vi.fn((code: string) => {
+    expect(code).not.toBe('BTY');
+    const quote = sharedQuotes.get(code);
+    const age = quote ? Date.now() - Date.parse(quote.updatedAt) : NaN;
+    return quote && age >= 0 && age <= 120_000 ? quote : null;
+  });
+  const getUnifiedCryptoSpotQuoteHealth = vi.fn(() => {
+    throw new Error('BTY must not consult shared provider health');
+  });
+  const touchCryptoQuoteDemand = vi.fn((_symbols: readonly string[]) => {});
+  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS', 'CRYPTO_SCAN_INTERVAL_MS',
+    'BTY_SPOT_QUOTE_MAX_AGE_MS', 'BTY_HOTCOIN_QUOTE_MAX_AGE_MS', 'CRYPTO_COINS', 'ETH_PERP_MARK_CACHE_KEY', 'KRW_COINS',
+    'legacyCryptoCodes', 'specialSpotFlights', 'legacySpotRetryAt'];
   const functions = ['nowIso', 'isValidPrice', 'setPrice', 'markFailure', 'entryFromPrice', 'fetchJson', 'fetchCryptoJson',
-    'fetchHotcoinBtySpotQuote', 'fetchMexcBtySpotQuote', 'fetchCryptoQuote', 'updateCryptoFast', 'isBtySpotQuoteFresh', 'getLatestPrice', 'getLatestTickerData', 'getMarketPriceHealth'];
+    'fetchHotcoinBtySpotQuote', 'fetchMexcBtySpotQuote', 'fetchCryptoQuote', 'fetchOkxSpotQuote',
+    'recordSharedCryptoSpotQuotes', 'refreshLegacySpecialSpot', 'refreshDemandCryptoSpotPrices', 'ensureCryptoSpotPrices',
+    'updateCryptoFast', 'isBtySpotQuoteFresh', 'freshPriceEntry', 'getLatestPrice', 'getLatestTickerData', 'getMarketPriceHealth'];
   const runtime = evaluate<{
     fetchCryptoQuote: (coin: string) => Promise<{ price: number; source: string; patch: Record<string, unknown> } | null>;
     updateCryptoFast: (coin: string) => Promise<void>;
+    ensureCryptoSpotPrices: (symbols: readonly string[]) => Promise<void>;
+    recordSharedCryptoSpotQuotes: (quotes: Record<string, UnifiedCryptoSpotQuote>) => void;
     getLatestPrice: (coin: string) => number | null;
     getLatestTickerData: (coin: string) => Record<string, unknown> | null;
     getMarketPriceHealth: () => Record<string, Record<string, unknown>>;
@@ -97,8 +123,19 @@ function scannerHarness(response: unknown = ticker(), ok = true) {
   }>(`${variables.map(name => `const ${name} = ${init(scanner, name).getText()};`).join('\n')}
 const latestPrices = {}; const priceHealth = {};
 ${functions.map(name => fn(scanner, name)).join('\n')}
-({${functions.join(',')}});`, { fetch: network, Date, AbortSignal, setTimeout, clearTimeout });
-  return { runtime, network };
+({${functions.join(',')}});`, {
+    fetch: network, Date, AbortSignal, setTimeout, clearTimeout, CRYPTO_ASSET_CODES, isCryptoAssetCode,
+    LEGACY_CRYPTO_QUOTE_SYMBOLS, getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotQuote,
+    getUnifiedCryptoSpotQuoteHealth, touchCryptoQuoteDemand,
+  });
+  const seedSharedSpotQuote = (code: string, price: number) => {
+    expect(code).not.toBe('BTY');
+    const quote: UnifiedCryptoSpotQuote = { code, price, currency: 'USDT', source: 'Gate.io', updatedAt: new Date().toISOString() };
+    sharedQuotes.set(code, quote);
+    runtime.recordSharedCryptoSpotQuotes({ [code]: quote });
+  };
+  return { runtime: { ...runtime, seedSharedSpotQuote }, network,
+    getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotQuote, getUnifiedCryptoSpotQuoteHealth, touchCryptoQuoteDemand };
 }
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -216,7 +253,7 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
   });
   it('快周期成功保存provider观察时刻和健康标签；BTC单独报价且不请求MEXC', async () => {
     const { runtime, network } = scannerHarness(ticker({ closeTime: NOW - 3_000 }));
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     await runtime.updateCryptoFast('BTY');
     expect(runtime.getLatestPrice('bty')).toBe(0.02179); expect(runtime.getLatestPrice('BTC')).toBe(90_000);
     expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source: 'MEXC BTY/USDT 现货',
@@ -230,13 +267,16 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
   });
   it('初始缺价为null，失败记录none/unknown健康、不生成0价/BTC别名，最后成功值只保留为旧缓存', async () => {
     const { runtime, network } = scannerHarness({}, false);
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     await runtime.updateCryptoFast('BTY');
     expect(runtime.getLatestPrice('BTY')).toBeNull(); expect(runtime.getLatestTickerData('BTY')).toBeNull();
     expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source: 'none', stale: true,
       consecutiveFailures: 1, lastSuccessAt: '', lastError: '未取得有效Hotcoin或MEXC BTY/USDT现货行情' });
+    // 新兼容路径有既有三秒重试节流，重试必须跨过实际生产边界。
+    vi.setSystemTime(NOW + 3_000);
     network.mockResolvedValue({ ok: true, status: 200, json: async () => ticker() });
     await runtime.updateCryptoFast('BTY');
+    vi.setSystemTime(NOW + 6_000);
     network.mockRejectedValue(new Error('offline timeout'));
     await runtime.updateCryptoFast('BTY');
     vi.setSystemTime(NOW + 360_001);
@@ -247,7 +287,7 @@ describe('BTY 真实MEXC现货解析与原扫描缓存隔离（fetch本地夹具
     // 只拦截过期估值，不删除最后成功缓存；回拨测试时钟可证明原记录仍在。
     vi.setSystemTime(NOW);
     expect(runtime.getLatestPrice('BTY')).toBe(0.02179);
-    expect(vi.getTimerCount()).toBe(0); // 快周期外层timer已释放，没有scanner或新增timer启动。
+    expect(vi.getTimerCount()).toBe(0); // 新兼容刷新不启动scanner或新增timer。
   });
 });
 
@@ -264,9 +304,15 @@ describe('BTY 无行情仍显示独立数量与unknown估值', () => {
       .map(asset => asset.assetCode)).toContain('BTY');
   });
   it('资金页实际估值expression保留BTY unpricedAssets及null，UI明确“未取得行情”', () => {
+    const adjBalanceAssetFilter = { category: 'all', assetCode: 'all' };
+    const adjWalletAssetFilterCodes = expression<string[]>(funds, 'adjWalletAssetFilterCodes', {
+      getWalletAssetFilterCodes, adjBalanceAssetFilter, adjGlobalAssetFilter: adjBalanceAssetFilter,
+      adjUserList: [{ multiAssetBalances: [{ assetCode: 'BTY' }] }], adjLogItems: [],
+    });
     const valuations = expression<Array<{ assetCode: string; valueU: number | null; priceU: number | null }>>(funds, 'adjMultiAssetValuations', {
       AI_WALLET_SETTLEMENT_ASSETS, adjMultiAssetTotals: { BTY: 1.12345678 }, adjMultiAssetFrozenTotals: { BTY: 0.00000001 },
-      adjBalancePrices: { BTC: 90_000 },
+      adjBalancePrices: { BTC: 90_000 }, adjWalletAssetFilterCodes, adjBalanceAssetFilter,
+      getWalletAssetCategory, matchesWalletAssetFilter,
     });
     expect(valuations.find(asset => asset.assetCode === 'BTY')).toMatchObject({ priceU: null, valueU: null });
     expect(expression(funds, 'adjBalanceUnpricedAssets', { adjMultiAssetValuations: valuations })).toEqual(['BTY']);
@@ -290,41 +336,56 @@ describe('BTY 慢源隔离，不改变普通数字币快周期', () => {
     expect(budgets).toEqual([7_000, 2_000]);
     expect(fn(scanner, 'fetchMexcBtySpotQuote')).toContain('await fetchJson(');
   });
-  it('真实三秒批量刷新保留BTC/ETH而排除独立后台BTY', async () => {
-    const updateCryptoFast = vi.fn(async (_coin: string) => {});
+  it('真实三秒批量刷新只取实际活跃BTC/ETH，活跃BTY仍排除到独立后台', async () => {
+    const demand = new CryptoQuoteDemandRegistry({ query: vi.fn(async () => []), pins: ['BTC', 'ETH'] });
+    await demand.refresh(); // 注入空行后退出39币保守fallback，无生产DB。
+    demand.touch(['BTY']);
+    const getActiveCryptoQuoteSymbols = vi.fn(() => demand.active());
+    const refreshDemandCryptoSpotPrices = vi.fn(async (_symbols: readonly string[]) => {});
     const refresh = evaluate<() => Promise<void>>(`${fn(scanner, 'updateAllCryptoFast')} updateAllCryptoFast;`, {
-      CRYPTO_COINS: expression(scanner, 'CRYPTO_COINS', {}), updateCryptoFast,
+      getActiveCryptoQuoteSymbols, refreshDemandCryptoSpotPrices,
     });
     await refresh();
-    const codes = updateCryptoFast.mock.calls.map(([coin]) => coin);
+    expect(getActiveCryptoQuoteSymbols).toHaveBeenCalledTimes(1);
+    expect(demand.active()).toContain('BTY');
+    const codes = refreshDemandCryptoSpotPrices.mock.calls[0][0];
     expect(codes).toContain('BTC'); expect(codes).toContain('ETH'); expect(codes).not.toContain('BTY');
+    expect(codes).toEqual(['BTC', 'ETH']); // 不因216币目录而急切请求闲置币。
   });
   it('BTY复用已有15秒后台任务，慢请求不阻塞主周期且未完成不重入', async () => {
     vi.useFakeTimers(); vi.setSystemTime(NOW);
     let finishBty!: () => void; let finishSecurities!: () => void;
     const pendingBty = new Promise<void>((resolve) => { finishBty = resolve; });
     const pendingSecurities = new Promise<void>((resolve) => { finishSecurities = resolve; });
-    const updateCrypto = vi.fn(async (_coin: string) => pendingBty);
+    const updateCryptoFast = vi.fn(async (_coin: string) => pendingBty);
     const updateSecuritiesAndCommodities = vi.fn(async () => pendingSecurities);
     const saveCacheToFile = vi.fn(); const updateAllCryptoFast = vi.fn(async () => {});
+    const demand = new CryptoQuoteDemandRegistry({ query: vi.fn(async () => []), pins: ['BTC', 'ETH'] });
+    await demand.refresh(); demand.touch(['BTY']);
+    const getActiveCryptoQuoteSymbols = vi.fn(() => demand.active());
+    const refreshPersistentCryptoQuoteDemand = vi.fn(() => demand.refresh());
     const scan = evaluate<() => Promise<void>>(`
       const SLOW_MARKET_SCAN_INTERVAL_MS = ${init(scanner, 'SLOW_MARKET_SCAN_INTERVAL_MS').getText()};
       let usdtCnyRefreshInProgress = true; let slowMarketScanInProgress = false; let lastSlowMarketScanAt = 0;
       ${fn(scanner, 'scanPricesInternal')} scanPricesInternal;`, {
-      Date, Promise, console, updateAllCryptoFast, updateSecuritiesAndCommodities, updateCrypto, saveCacheToFile,
+      Date, Promise, console, updateAllCryptoFast, updateSecuritiesAndCommodities, updateCryptoFast, saveCacheToFile,
+      getActiveCryptoQuoteSymbols, refreshPersistentCryptoQuoteDemand,
     });
     await scan();
-    expect(updateCrypto).toHaveBeenCalledWith('BTY');
+    expect(demand.active()).toContain('BTY');
+    expect(getActiveCryptoQuoteSymbols).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledWith('BTY');
     expect(updateSecuritiesAndCommodities).toHaveBeenCalledTimes(1);
     vi.setSystemTime(NOW + 30_000);
     await scan();
     expect(updateAllCryptoFast).toHaveBeenCalledTimes(2);
-    expect(updateCrypto).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledTimes(1);
     expect(updateSecuritiesAndCommodities).toHaveBeenCalledTimes(1);
     finishBty(); finishSecurities();
     for (let i = 0; i < 6; i += 1) await Promise.resolve();
     vi.setSystemTime(NOW + 60_000);
     await scan();
-    expect(updateCrypto).toHaveBeenCalledTimes(2);
+    expect(updateCryptoFast).toHaveBeenCalledTimes(2);
+    expect(refreshPersistentCryptoQuoteDemand).toHaveBeenCalledTimes(3);
   });
 });

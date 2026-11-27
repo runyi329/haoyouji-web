@@ -4,6 +4,10 @@ import { protectedProcedure, router } from "./_core/trpc";
 import { getDbConnection } from "./db";
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, AI_WALLET_CRYPTO_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
 
+import { LEGACY_WALLET_CRYPTO_ASSET_CODES } from '../shared/crypto-asset-catalog';
+import { AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS } from '../shared/ai-wallet-assets';
+import { expandCryptoCatalogProfileAssets } from './crypto-catalog-profile-expansion';
+
 const WALLET_ASSETS = AI_WALLET_ASSETS;
 const PROFILE_TEMPLATES = ["cny_simple", "stablecoin", "blockchain", "hybrid", "custom"] as const;
 const RATE_POLICIES = ["not_required", "live_market", "order_snapshot"] as const;
@@ -159,7 +163,9 @@ async function migrateLedger52SettlementVisibility(conn: any): Promise<void> {
   const legacySettlementAssets = ["BTC", "ETH", "SOL", "BNB", "SUI"] as const;
   const hasCompleteLegacySettlement = legacySettlementAssets.every((asset) => visibleAssets.includes(asset));
   if (!hasCompleteLegacySettlement) return;
-  const missingSettlementAssets = AI_WALLET_SETTLEMENT_ASSETS.filter((asset) => !visibleAssets.includes(asset));
+  // v3口径冻结在原33币+证券，避免重新跑旧迁移时覆盖本次新增目录隐藏设置。
+  const v3Assets = [...LEGACY_WALLET_CRYPTO_ASSET_CODES.filter(asset => asset !== 'BTY'), ...AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS];
+  const missingSettlementAssets = v3Assets.filter((asset) => !visibleAssets.includes(asset));
 
   if (missingSettlementAssets.length > 0) {
     await conn.execute(
@@ -173,6 +179,26 @@ async function migrateLedger52SettlementVisibility(conn: any): Promise<void> {
     `INSERT IGNORE INTO ai_wallet_profile_migrations (migration_key) VALUES (?)`,
     [migrationKey],
   );
+}
+
+/** 一次性追加本轮182个钱包缺项；不重写旧币隐藏、资金开关或用户余额。 */
+async function migrateUnifiedCryptoCatalogVisibility(conn: any): Promise<void> {
+  for (const targetKey of ['ledger:37', 'ledger:52']) {
+    const migrationKey = `unified_crypto_catalog_20261127_${targetKey.replace(':', '_')}`;
+    const [applied] = await conn.execute('SELECT migration_key FROM ai_wallet_profile_migrations WHERE migration_key = ? LIMIT 1', [migrationKey]);
+    if (applied?.[0]) continue;
+    const [rows] = await conn.execute('SELECT id, visible_assets, CAST(updated_at AS CHAR) AS last_update FROM ai_wallet_project_profiles WHERE target_key = ? LIMIT 1', [targetKey]);
+    const row = rows?.[0];
+    if (!row) continue;
+    const current = sanitizeAssets(row.visible_assets);
+    const expanded = expandCryptoCatalogProfileAssets(targetKey, current);
+    if (expanded.length > current.length) {
+      // 配置若在读取后被管理员编辑，放弃本次迁移，不覆盖他的设置或写成功标记。
+      const [result] = await conn.execute('UPDATE ai_wallet_project_profiles SET visible_assets = ?, updated_at = NOW() WHERE id = ? AND updated_at = ?', [JSON.stringify(expanded), Number(row.id), row.last_update]);
+      if (!result?.affectedRows) continue;
+    }
+    await conn.execute('INSERT IGNORE INTO ai_wallet_profile_migrations (migration_key) VALUES (?)', [migrationKey]);
+  }
 }
 
 async function ensureWalletProjectProfileTable(): Promise<void> {
@@ -244,7 +270,7 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
           (target_type, target_key, target_name, ledger_id, template_key, enabled, visible_assets, default_asset,
            allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
          VALUES ('ledger', 'ledger:52', '52号账本', 52, 'blockchain', 1, ?, 'USDT', 1, 1, 1, 1, 1, 1, 1, 'live_market')`,
-        [JSON.stringify(["USDT", "CNY"])]
+        [JSON.stringify(AI_WALLET_ASSETS)]
       );
       await (conn as any).execute(
         `INSERT IGNORE INTO ai_wallet_project_profiles
@@ -261,6 +287,7 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
         [JSON.stringify(["CNY", "USDT"])]
       );
       await migrateLedger52SettlementVisibility(conn);
+      await migrateUnifiedCryptoCatalogVisibility(conn);
     })().catch((error) => {
       walletProfileTableReady = null;
       throw error;
@@ -537,7 +564,7 @@ export const aiWalletRouter = router({
         templates: TEMPLATE_CATALOG,
         ratePolicies: [
           { key: "not_required", name: "不需要换算", description: "仅按原始币种展示与记账。" },
-          { key: "live_market", name: "系统实时估值", description: "使用现有多源汇率和数字资产行情服务；服务异常时回退缓存。" },
+          { key: "live_market", name: "系统实时估值", description: "使用统一按需现货与汇率服务；失效或缺价标记不可用，不编造零价或更新时间。" },
           { key: "order_snapshot", name: "业务订单快照", description: "订单创建时锁定换算值，适用于扣款、退款与订单追溯。" },
         ],
       },
@@ -552,7 +579,7 @@ export const aiWalletRouter = router({
             title: "统一钱包底座",
             lines: [
               "用户资产目前以全局钱包余额和流水为唯一口径，项目不复制独立余额。",
-              "当前已投入使用、可记账的资金资产为 CNY、USDT 与52号账本全部58种订单市场资产（33种数字币、25种证券及商品）；每种资产使用独立余额和不可变流水。",
+              `统一目录包含 CNY、USDT、${AI_WALLET_CRYPTO_MARKET_ASSETS.length}种数字币和${AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS.length}种证券及商品；目录不等于全部激活报价，独立余额和不可变流水口径保持不变。`,
               "全局流水、用户余额、手动调账、充值监控和站内转账在现有后台模块中统一核对。",
             ],
           },
@@ -569,7 +596,7 @@ export const aiWalletRouter = router({
             title: "行情与汇率服务",
             lines: [
               "USDT/CNY 展示汇率优先使用 CoinGecko Tether/CNY，其次 OKX C2C，再回退到其他汇率服务和进程缓存。",
-              "52号数字资产行情优先 Gate.io，备用 HTX 与 OKX；证券及商品通过新浪财经、Yahoo 与相关备用源获取。行情资产只有在用户存在实际仓位或进行中订单时才会在 52号首页显示。",
+              "钱包、37号和52号共享Gate.io/HTX现货缓存。选中即取价，实际非零余额（含担保）、持仓和未结束订单持续激活，闲置缓冲后停拉；原有币种保留兼容备用，BTY和T+0永续独立处理。证券及商品沿用原报价链路。",
               "展示估值与业务结算应分开保存：展示可使用实时价，订单结算应保存订单快照。",
             ],
           },

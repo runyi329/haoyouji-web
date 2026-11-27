@@ -9,6 +9,8 @@ import {
   type WalletBalanceSummary,
   type WalletDigitalAsset,
 } from '../client/src/lib/walletDigitalAssets';
+import { isCryptoAssetCode } from '../shared/crypto-asset-catalog';
+import { isLedger37FullManager, canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 
 // 只导入生产纯 helper；React、路由、数据库和价格服务均不加载。
 // AST 抽出的生产表达式/查询在限时 VM 中运行；SQL 只进入 SELECT-only fixture 拦截器。
@@ -81,6 +83,7 @@ const listAst = parse('../client/src/components/WalletDigitalAssetList.tsx');
 const treeAst = parse('../client/src/pages/AfInviteTreePage.tsx');
 const routerAst = parse('./routers.ts');
 const fundingAst = parse('./ledger37-wallet.ts');
+const permissionAst = parse('./ledger37-calendar-recorder.ts');
 const yjhId = value<number>(initializer(routerAst, 'YJH_USER_ID'), {});
 const ledger52 = value<number>(initializer(routerAst, 'LEDGER_52_ID'), {});
 const ledger37 = value<number>(initializer(fundingAst, 'LEDGER_37_ID'), {});
@@ -95,8 +98,9 @@ const holdings = Object.freeze([
 const originalFixtures = JSON.stringify([oceanSummary, cnySummary, holdings]);
 
 function pageAssets(ast: ts.SourceFile, snapshot: Record<string, unknown>): WalletDigitalAsset[] {
+  const freshPrices = Object.fromEntries(holdings.map(a => [a.assetCode, a.priceUsdt]));
   if (ast === snapshotAst) {
-    const bindings: Record<string, unknown> = { snapshot, unifiedPrices: {} };
+    const bindings: Record<string, unknown> = { snapshot, unifiedPrices: freshPrices, compatibilityPrices: {}, isCryptoAssetCode };
     bindings.usdtBalance = value(initializer(ast, 'usdtBalance'), bindings);
     bindings.multiAssets = value(initializer(ast, 'multiAssets'), bindings);
     bindings.buildWalletDigitalAssets = buildWalletDigitalAssets;
@@ -105,7 +109,7 @@ function pageAssets(ast: ts.SourceFile, snapshot: Record<string, unknown>): Wall
   const bindings: Record<string, unknown> = {
     usdtBalanceSummaryQuery: { data: snapshot.usdtBalanceSummary },
     multiAssetBalancesQuery: { data: snapshot.multiAssetBalances },
-    balance: snapshot.usdtBalance ?? 0, unifiedPrices: {}, usdtCnyRate: 7.25, isMibanWalletEntry: false,
+    balance: snapshot.usdtBalance ?? 0, unifiedPrices: freshPrices, usdtCnyRate: 7.25, isMibanWalletEntry: false,
     buildWalletDigitalAssets,
   };
   bindings.usdtSummary = value(initializer(ast, 'usdtSummary'), bindings);
@@ -202,7 +206,12 @@ describe('生产页面 AST：正式钱包与只读快照共同消费真实 helpe
       expect(tags).toHaveLength(1);
       const assetsProp = required(tags[0].attributes.properties.find(n => ts.isJsxAttribute(n)
         && n.name.getText() === 'assets'), 'shared asset list assets');
-      expect(assetsProp.getText()).toContain(ast === walletAst ? 'visibleDigitalAssetBalances' : 'digitalAssets');
+      if (ast === walletAst) {
+        expect(assetsProp.getText()).toBe('assets={assets}');
+        const wrappers = nodes(ast, ts.isJsxSelfClosingElement).filter(n => n.tagName.getText() === 'WalletFxAssetList');
+        expect(wrappers).toHaveLength(1);
+        expect(wrappers[0].attributes.getText()).toContain('assets={visibleDigitalAssetBalances}');
+      } else expect(assetsProp.getText()).toContain('digitalAssets');
       for (const visibleAssets of [[], ['BTC'], ['USDT']]) {
         const assets = pageAssets(ast, { usdtBalanceSummary: oceanSummary, usdtBalance: 999999, multiAssetBalances: holdings, visibleAssets });
         expect(assets).toEqual(buildWalletDigitalAssets(oceanSummary, holdings));
@@ -353,6 +362,7 @@ function isolatedRoute(name: RouteName, options: {
 } = {}) {
   const targetId = options.targetId ?? 77;
   const sqlCalls: Array<{ sql: string; args: unknown[] }> = [];
+  const permissionSqlCalls: Array<{ sql: string; args: unknown[] }> = [];
   const readCalls: ReadCall[] = [];
   const member = { id: targetId, name: 'Ocean', username: 'ocean' };
   const invitations = options.invitations ?? new Map([[targetId, yjhId]]);
@@ -386,14 +396,30 @@ function isolatedRoute(name: RouteName, options: {
     ['getUserUsdtBalanceSummary', oceanSummary], ['getUserCnyBalanceSummary', cnySummary],
     ['getUserRechargeOrders', []], ['getUserWithdrawHistory', []], ['getUserBalanceHistory', []], ['getUserCnyHistory', []],
   ].map(([method, result]) => [String(method), read(String(method), result)]));
+  const permissionConnection = { execute: async (sql: string, args: unknown[]) => {
+    expect(sql.trim()).toMatch(/^SELECT\b/i);
+    expect(sql).toContain('FROM ledgers l LEFT JOIN ledger_members m');
+    permissionSqlCalls.push({ sql, args });
+    return [[{ ownerId: operator37, memberUserId: args[0], memberRole: 'admin', initialBalances: {} }]];
+  } };
+  const assertLedger37Owner = evaluate<(ctx: QueryArgs['ctx'], ledgerId: number) => Promise<void>>([
+    ...['fail', 'realActor', 'getLedger37Access', 'assertLedger37Owner'].map(name => declaration(permissionAst, name).getText().replace(/^export\s+/, '')),
+    'assertLedger37Owner;',
+  ].join('\n'), { TRPCError: FixtureTRPCError, getDbConnection: async () => permissionConnection, isLedger37FullManager, canRecordLedger37Calendar });
+  const quoteDemands: unknown[][] = [];
   const fn = value<(args: QueryArgs) => Promise<SnapshotResult>>(routeQuery(name), {
     YJH_USER_ID: yjhId, LEDGER_52_ID: ledger52, LEDGER_37_ID: ledger37, LEDGER_37_WALLET_OPERATOR_ID: operator37,
     TRPCError: FixtureTRPCError, getDbConnection: async () => ({ execute }), dbRecharge,
+    assertLedger37Owner,
     dbMultiAssetWallet: { getUserMultiAssetBalances: read('getUserMultiAssetBalances', holdings), getUserMultiAssetHistory: read('getUserMultiAssetHistory', []) },
     dbLedger: { getUserMembership: read('getUserMembership', options.membership === undefined ? { memberType: 'real' } : options.membership) },
-    priceScannerFixture: { getLatestPrice: (code: string) => holdings.find(a => a.assetCode === code)?.priceUsdt ?? 0, getUsdtCnyRate: () => 7.25 },
+    priceScannerFixture: {
+      getLatestPrice: (code: string) => holdings.find(a => a.assetCode === code)?.priceUsdt ?? null,
+      refreshUsdtCnyRate: async () => 7.25,
+      ensureCryptoSpotPrices: async (symbols: unknown[]) => { quoteDemands.push(symbols); },
+    },
   });
-  return { fn, readCalls, sqlCalls, targetId };
+  return { fn, readCalls, sqlCalls, permissionSqlCalls, quoteDemands, targetId };
 }
 function queryArgs(name: RouteName, targetUserId = 77, overrides: Partial<QueryArgs['ctx']['user']> = {}): QueryArgs {
   return {
@@ -471,6 +497,8 @@ describe('两路专属只读快照：AST权限/输入范围及官方summary同�
       }
       expect(result.multiAssetBalances.map(a => a.assetCode)).toEqual(['ETH', 'SOL', 'AAVE']);
       expect(pageAssets(snapshotAst, result)).toEqual(buildWalletDigitalAssets(oceanSummary, holdings));
+      expect(run.quoteDemands).toEqual([holdings.map(a => a.assetCode)]);
+      if (name === routes[1]) expect(run.permissionSqlCalls.map(call => call.args)).toEqual([[operator37]]);
       assertDataOnly(result);
       expect(run.sqlCalls.length).toBeGreaterThan(0);
     }

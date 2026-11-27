@@ -2,8 +2,12 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CRYPTO_ASSET_CODES, isCryptoAssetCode } from '../shared/crypto-asset-catalog';
+import { CryptoQuoteDemandRegistry, LEGACY_CRYPTO_QUOTE_SYMBOLS } from './crypto-quote-demand';
+import type { UnifiedCryptoSpotQuote } from './crypto-spot-quote-cache';
 
 // 仅从真实源码抽取 AST 并在 VM 中执行：不 import 生产模块，不加载 DB、缓存文件或 scanner 后台。
+// 仅import纯目录和无启动I/O的需求registry；所有registry查询都显式注入离线空行。
 // fetch 只绑定离线夹具；官方响应 timestamp 是观察时点，行内 ts 是滚动窗口起点。
 const scanner = ts.createSourceFile('price-scanner.ts',
   readFileSync(new URL('./price-scanner.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -62,6 +66,10 @@ type Runtime = {
   fetchCryptoQuote: (coin: string) => Promise<Quote | null>;
   updateCrypto: (coin: string) => Promise<void>;
   updateCryptoFast: (coin: string) => Promise<void>;
+  refreshLegacySpecialSpot: (coin: string) => Promise<void>;
+  refreshDemandCryptoSpotPrices: (symbols: readonly string[]) => Promise<void>;
+  ensureCryptoSpotPrices: (symbols: readonly string[]) => Promise<void>;
+  recordSharedCryptoSpotQuotes: (quotes: Record<string, UnifiedCryptoSpotQuote>) => void;
   getLatestPrice: (coin: string) => number | null;
   getLatestChangePercent: (coin: string) => number | null;
   getLatestTickerData: (coin: string) => Record<string, unknown> | null;
@@ -69,6 +77,7 @@ type Runtime = {
   getRawLatestPrices: () => Record<string, Record<string, unknown>>;
   getMarketPriceHealth: () => Record<string, Health>;
   entryFromPrice: (coin: string, price: number, source: string, patch?: Record<string, unknown>) => void;
+  getT0EthPerpetualMark: () => { price: number | null; updatedAt: string | null; source: string; ageMilliseconds: number | null };
 };
 function response(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 503, json: async () => body };
@@ -83,18 +92,44 @@ function scannerHarness(primary: unknown = hotcoin(), backup: unknown = mexc()) 
   });
   // 记录真实 fetchJson 的超时预算，但不启动原生 AbortSignal timer 或任何外部请求。
   const timeout = vi.fn((milliseconds: number) => ({ offlineTimeoutMs: milliseconds }));
-  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS',
-    'BTY_SPOT_QUOTE_MAX_AGE_MS', 'BTY_HOTCOIN_QUOTE_MAX_AGE_MS', 'CRYPTO_COINS', 'ETH_PERP_MARK_CACHE_KEY', 'KRW_COINS'];
+  const sharedQuotes = new Map<string, UnifiedCryptoSpotQuote>();
+  const getUnifiedCryptoSpotQuotes = vi.fn(async (codes: readonly string[]) => {
+    expect(codes).toEqual([]); // BTY专用刷新只能给共享批量provider空数组，绝不提供BTY价。
+    return {};
+  });
+  const peekUnifiedCryptoSpotQuote = vi.fn((code: string) => {
+    expect(code).not.toBe('BTY'); // BTY读取只能用真实isBtySpotQuoteFresh。
+    const quote = sharedQuotes.get(code);
+    const age = quote ? Date.now() - Date.parse(quote.updatedAt) : NaN;
+    return quote && age >= 0 && age <= 120_000 ? quote : null;
+  });
+  const getUnifiedCryptoSpotQuoteHealth = vi.fn(() => {
+    throw new Error('BTY must not consult shared provider health');
+  });
+  const touchCryptoQuoteDemand = vi.fn((_symbols: readonly string[]) => {});
+  const variables = ['REQUEST_TIMEOUT_MS', 'CRYPTO_REQUEST_TIMEOUT_MS', 'FAST_CRYPTO_CYCLE_TIMEOUT_MS', 'CRYPTO_SCAN_INTERVAL_MS',
+    'BTY_SPOT_QUOTE_MAX_AGE_MS', 'BTY_HOTCOIN_QUOTE_MAX_AGE_MS', 'CRYPTO_COINS', 'ETH_PERP_MARK_CACHE_KEY', 'KRW_COINS',
+    'legacyCryptoCodes', 'specialSpotFlights', 'legacySpotRetryAt'];
   const functions = ['nowIso', 'isValidPrice', 'setPrice', 'markFailure', 'entryFromPrice', 'fetchJson', 'fetchCryptoJson',
     'fetchHotcoinBtySpotQuote', 'fetchMexcBtySpotQuote', 'fetchCryptoQuote', 'fetchTodayOpen', 'updateCrypto',
-    'updateCryptoFast', 'isBtySpotQuoteFresh', 'getLatestPrice', 'getLatestChangePercent', 'getLatestTickerData',
-    'getAllLatestPrices', 'getMarketPriceHealth'];
+    'fetchOkxSpotQuote', 'recordSharedCryptoSpotQuotes', 'refreshLegacySpecialSpot', 'refreshDemandCryptoSpotPrices', 'ensureCryptoSpotPrices',
+    'updateCryptoFast', 'isBtySpotQuoteFresh', 'freshPriceEntry', 'getLatestPrice', 'getLatestChangePercent', 'getLatestTickerData',
+    'getAllLatestPrices', 'getMarketPriceHealth', 'getT0EthPerpetualMark'];
   const runtime = evaluate<Runtime>(`${variables.map(name => `const ${name} = ${init(name)};`).join('\n')}
     const latestPrices = {}; const priceHealth = {};
     ${functions.map(fn).join('\n')}
     ({${functions.join(',')}, getRawLatestPrices: () => ({ ...latestPrices })});`,
-    { fetch: network, Date, AbortSignal: { timeout }, setTimeout, clearTimeout });
-  return { runtime, network, timeout };
+    { fetch: network, Date, AbortSignal: { timeout }, setTimeout, clearTimeout, CRYPTO_ASSET_CODES, isCryptoAssetCode,
+      LEGACY_CRYPTO_QUOTE_SYMBOLS, getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotQuote,
+      getUnifiedCryptoSpotQuoteHealth, touchCryptoQuoteDemand });
+  const seedSharedSpotQuote = (code: string, price: number) => {
+    expect(code).not.toBe('BTY');
+    const quote: UnifiedCryptoSpotQuote = { code, price, currency: 'USDT', source: 'Gate.io', updatedAt: iso(Date.now()) };
+    sharedQuotes.set(code, quote);
+    runtime.recordSharedCryptoSpotQuotes({ [code]: quote });
+  };
+  return { runtime: { ...runtime, seedSharedSpotQuote }, network, timeout,
+    getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotQuote, getUnifiedCryptoSpotQuoteHealth, touchCryptoQuoteDemand };
 }
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -243,7 +278,7 @@ describe('BTY Hotcoin → MEXC 串行回退，不混供应商字段和观察时�
 
   it('双方失败初始为null/unknown，不产生0价或BTC别名；错误信息列出两个现货源', async () => {
     const { runtime, network } = scannerHarness(hotcoin({ status: 'error' }), {});
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     await runtime.updateCrypto('BTY');
     expect(runtime.getLatestPrice('BTY')).toBeNull();
     expect(runtime.getLatestTickerData('BTY')).toBeNull();
@@ -260,9 +295,10 @@ describe('BTY Hotcoin → MEXC 串行回退，不混供应商字段和观察时�
       source === HOTCOIN_SOURCE ? hotcoin({ timestamp: observedAt }) : hotcoin({ status: 'error' }),
       mexc({ closeTime: observedAt }));
     await runtime.updateCrypto('BTY');
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     const previous = { ...runtime.getAllLatestPrices().BTY };
     vi.setSystemTime(NOW + 360_001);
+    runtime.seedSharedSpotQuote('BTC', 90_000); // BTC有独立的新鲜共享夹具，不能用过期镜像绕过共享资格。
     network.mockRejectedValue(new Error('both providers offline'));
     await runtime.updateCrypto('BTY');
     expect(runtime.getRawLatestPrices().BTY).toEqual(previous);
@@ -275,16 +311,110 @@ describe('BTY Hotcoin → MEXC 串行回退，不混供应商字段和观察时�
     expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source, lastSuccessAt: iso(observedAt),
       lastAttemptAt: iso(NOW + 360_001), stale: true, consecutiveFailures: 1, lastError: FAILURE });
     vi.setSystemTime(NOW);
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     expect(runtime.getAllLatestPrices().BTY).toEqual(previous); // 原缓存未删除，只限制估值读取。
     expect(runtime.getLatestPrice('BTY')).toBe(previous.price);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('旧快速更新接口的双方失败提示也完整且释放其既有外层timer', async () => {
+  it('快速兼容更新接口的双方失败提示也完整且不增加timer', async () => {
     const { runtime } = scannerHarness({}, {});
     await runtime.updateCryptoFast('BTY');
     expect(runtime.getMarketPriceHealth().BTY.lastError).toBe(FAILURE);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('BTY 新按需共用入口仍保留专源与同币singleflight', () => {
+  it.each([HOTCOIN_SOURCE, MEXC_SOURCE])('%s按需入口只把空数组交共享provider，保留原观察时刻和精确BTY身份', async source => {
+    const observedAt = NOW - 5_000;
+    const { runtime, network, getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotQuote,
+      getUnifiedCryptoSpotQuoteHealth, touchCryptoQuoteDemand } = scannerHarness(
+      source === HOTCOIN_SOURCE ? hotcoin({ timestamp: observedAt }) : hotcoin({ status: 'error' }),
+      mexc({ closeTime: observedAt }));
+    const symbols = [' bty ', 'BTY', 'BITYUAN', 'BTYUSDT', 'ETH_PERP'];
+    await runtime.ensureCryptoSpotPrices(symbols);
+    expect(touchCryptoQuoteDemand).toHaveBeenCalledTimes(1);
+    expect(touchCryptoQuoteDemand).toHaveBeenCalledWith(symbols);
+    expect(getUnifiedCryptoSpotQuotes).toHaveBeenCalledTimes(1);
+    expect(getUnifiedCryptoSpotQuotes).toHaveBeenCalledWith([]);
+    expect(runtime.getLatestPrice('bty')).toBe(source === HOTCOIN_SOURCE ? 0.02191 : 0.02179);
+    expect(runtime.getLatestTickerData('BTY')).not.toBeNull();
+    expect(runtime.getLatestChangePercent('BTY')).not.toBeNull();
+    expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source, lastSuccessAt: iso(observedAt), stale: false });
+    expect(peekUnifiedCryptoSpotQuote).not.toHaveBeenCalled();
+    expect(getUnifiedCryptoSpotQuoteHealth).not.toHaveBeenCalled();
+    expect(runtime.getRawLatestPrices()).toEqual({ BTY: expect.objectContaining({ updatedAt: iso(observedAt) }) });
+    expect(network.mock.calls.map(([url]) => url)).toEqual(source === HOTCOIN_SOURCE ? [HOTCOIN_URL] : [HOTCOIN_URL, MEXC_URL]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ensure、快速兼容和按需刷新重叠只发一笔Hotcoin→MEXC，同币三秒重试后才再次取价', async () => {
+    const { runtime, network, getUnifiedCryptoSpotQuotes, getUnifiedCryptoSpotQuoteHealth } = scannerHarness();
+    let release!: (value: ReturnType<typeof response>) => void;
+    network.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const pending = [runtime.ensureCryptoSpotPrices(['BTY']), runtime.updateCryptoFast('BTY'),
+      runtime.refreshDemandCryptoSpotPrices(['BTY', ' bty '])];
+    for (let index = 0; index < 8 && network.mock.calls.length === 0; index += 1) await Promise.resolve();
+    expect(network.mock.calls.map(([url]) => url)).toEqual([HOTCOIN_URL]);
+    release(response(hotcoin({ status: 'error' })));
+    await Promise.all(pending);
+    expect(network.mock.calls.map(([url]) => url)).toEqual([HOTCOIN_URL, MEXC_URL]);
+    expect(runtime.getRawLatestPrices().BTY).toMatchObject({ price: 0.02179, updatedAt: iso(NOW - 300_000) });
+    expect(getUnifiedCryptoSpotQuotes.mock.calls.map(([codes]) => codes)).toEqual([[], [], []]);
+    expect(getUnifiedCryptoSpotQuoteHealth).not.toHaveBeenCalled();
+    await runtime.refreshLegacySpecialSpot('BTY');
+    vi.setSystemTime(NOW + 2_999);
+    await runtime.updateCryptoFast('BTY');
+    expect(network).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(NOW + 3_000);
+    await runtime.updateCryptoFast('BTY');
+    expect(network.mock.calls.map(([url]) => url)).toEqual([HOTCOIN_URL, MEXC_URL, HOTCOIN_URL]);
+    expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source: HOTCOIN_SOURCE, lastSuccessAt: iso(NOW), stale: false });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([HOTCOIN_SOURCE, MEXC_SOURCE])('按需刷新从%s切换另一个现货源，统计、时间和freshness跟随新来源', async initialSource => {
+    const { runtime, network } = scannerHarness(
+      initialSource === HOTCOIN_SOURCE ? hotcoin() : hotcoin({ status: 'error' }), mexc({ closeTime: NOW }));
+    await runtime.ensureCryptoSpotPrices(['BTY']);
+    expect(runtime.getMarketPriceHealth().BTY.source).toBe(initialSource);
+    vi.setSystemTime(NOW + 3_000);
+    const observedAt = NOW + 2_000;
+    const nextSource = initialSource === HOTCOIN_SOURCE ? MEXC_SOURCE : HOTCOIN_SOURCE;
+    network.mockImplementation(async url => url === HOTCOIN_URL
+      ? response(nextSource === HOTCOIN_SOURCE ? hotcoin({ timestamp: observedAt }) : hotcoin({ status: 'error' }))
+      : response(mexc({ closeTime: observedAt })));
+    await runtime.ensureCryptoSpotPrices(['BTY']);
+    expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source: nextSource, lastSuccessAt: iso(observedAt),
+      ageSeconds: 1, stale: false, consecutiveFailures: 0 });
+    expect(runtime.getRawLatestPrices().BTY).toMatchObject({ updatedAt: iso(observedAt),
+      price: nextSource === HOTCOIN_SOURCE ? 0.02191 : 0.02179,
+      todayOpen: nextSource === HOTCOIN_SOURCE ? 0.02282 : 0.02286,
+      high24h: nextSource === HOTCOIN_SOURCE ? 0.0229 : 0.02293,
+      volume24h: nextSource === HOTCOIN_SOURCE ? 1960229.37 : 827643.16 });
+    const maximumAge = nextSource === HOTCOIN_SOURCE ? 120_000 : 360_000;
+    vi.setSystemTime(observedAt + maximumAge);
+    expect(runtime.getLatestPrice('BTY')).not.toBeNull();
+    vi.setSystemTime(observedAt + maximumAge + 1);
+    expect(runtime.getLatestPrice('BTY')).toBeNull();
+    expect(runtime.getMarketPriceHealth().BTY.stale).toBe(true);
+  });
+
+  it('BTY按需更新、ETH共享现货和ETH_PERP永续标记价三个键独立，永续读取不用共享peek', async () => {
+    const { runtime, network, peekUnifiedCryptoSpotQuote } = scannerHarness();
+    runtime.seedSharedSpotQuote('ETH', 3_000);
+    runtime.entryFromPrice('ETH_PERP', 3_050, 'Gate.io ETH/USDT 永续标记价', { updatedAt: iso(NOW - 1_000) });
+    const previous = runtime.getT0EthPerpetualMark();
+    expect(previous).toEqual({ price: 3_050, updatedAt: iso(NOW - 1_000), source: 'Gate.io ETH/USDT 永续标记价', ageMilliseconds: 1_000 });
+    await runtime.ensureCryptoSpotPrices(['BTY']);
+    expect(runtime.getLatestPrice('BTY')).toBe(0.02191);
+    expect(runtime.getLatestPrice('ETH')).toBe(3_000);
+    expect(runtime.getT0EthPerpetualMark()).toEqual(previous);
+    expect(runtime.getLatestPrice('ETH_PERP')).toBe(3_050);
+    expect(peekUnifiedCryptoSpotQuote.mock.calls.map(([code]) => code)).toEqual(['ETH']);
+    expect(runtime.getRawLatestPrices()).toMatchObject({ BTY: { price: 0.02191 }, ETH: { price: 3_000 }, ETH_PERP: { price: 3_050 } });
+    expect(network.mock.calls.map(([url]) => url)).toEqual([HOTCOIN_URL]);
   });
 });
 
@@ -296,7 +426,7 @@ describe('BTY 供应商freshness、BTC/ETH隔离与原后台节拍', () => {
         source === HOTCOIN_SOURCE ? hotcoin({ timestamp: observedAt }) : hotcoin({ status: 'error' }),
         mexc({ closeTime: observedAt }));
       await runtime.updateCrypto('BTY');
-      runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+      runtime.seedSharedSpotQuote('BTC', 90_000);
       const price = runtime.getLatestPrice('BTY');
       expect(price).not.toBeNull();
       expect(runtime.getMarketPriceHealth().BTY).toMatchObject({ source, lastSuccessAt: iso(observedAt),
@@ -324,7 +454,7 @@ describe('BTY 供应商freshness、BTC/ETH隔离与原后台节拍', () => {
   ] as const)('%s的helper同时控制价格/统计/涨跌/列表和health', (_label, source, updatedAt, stale) => {
     const { runtime } = scannerHarness();
     runtime.entryFromPrice('BTY', 0.02191, source, { updatedAt, changePercent: -3.98 });
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     expect(runtime.getMarketPriceHealth().BTY.stale).toBe(stale);
     expect(runtime.getLatestPrice('BTY')).toBe(stale ? null : 0.02191);
     expect(runtime.getLatestChangePercent('BTY')).toBe(stale ? null : -3.98);
@@ -356,7 +486,7 @@ describe('BTY 供应商freshness、BTC/ETH隔离与原后台节拍', () => {
 
   it('BTC与BTY缓存独立，BTY更新不覆盖BTC；BTC成功也不访问BTY源', async () => {
     const { runtime, network } = scannerHarness();
-    runtime.entryFromPrice('BTC', 90_000, 'Gate.io');
+    runtime.seedSharedSpotQuote('BTC', 90_000);
     await runtime.updateCrypto('BTY');
     expect(runtime.getLatestPrice('bty')).toBe(0.02191);
     expect(runtime.getLatestPrice('BTC')).toBe(90_000);
@@ -369,14 +499,20 @@ describe('BTY 供应商freshness、BTC/ETH隔离与原后台节拍', () => {
     expect(runtime.getMarketPriceHealth().BTY.source).toBe(HOTCOIN_SOURCE);
   });
 
-  it('三秒批量刷新仍含BTC/ETH、排除BTY；两个BTY解析器都调用既有fetchJson且无新增timer', async () => {
-    const updateCryptoFast = vi.fn(async (_coin: string) => {});
+  it('三秒批量刷新只含活跃BTC/ETH、排除BTY；两个BTY解析器都调用既有fetchJson且无新增timer', async () => {
+    const demand = new CryptoQuoteDemandRegistry({ query: vi.fn(async () => []), pins: ['BTC', 'ETH'] });
+    await demand.refresh(); demand.touch(['BTY']);
+    const getActiveCryptoQuoteSymbols = vi.fn(() => demand.active());
+    const refreshDemandCryptoSpotPrices = vi.fn(async (_symbols: readonly string[]) => {});
     const refresh = evaluate<() => Promise<void>>(`${fn('updateAllCryptoFast')} updateAllCryptoFast;`, {
-      CRYPTO_COINS: evaluate(`(${init('CRYPTO_COINS')});`), updateCryptoFast,
+      getActiveCryptoQuoteSymbols, refreshDemandCryptoSpotPrices,
     });
     await refresh();
-    const coins = updateCryptoFast.mock.calls.map(([coin]) => coin);
+    expect(getActiveCryptoQuoteSymbols).toHaveBeenCalledTimes(1);
+    expect(demand.active()).toContain('BTY');
+    const coins = refreshDemandCryptoSpotPrices.mock.calls[0][0];
     expect(coins).toContain('BTC'); expect(coins).toContain('ETH'); expect(coins).not.toContain('BTY');
+    expect(coins).toEqual(['BTC', 'ETH']);
     for (const name of ['fetchHotcoinBtySpotQuote', 'fetchMexcBtySpotQuote']) {
       expect(fn(name)).toContain('await fetchJson(');
     }
@@ -394,32 +530,82 @@ describe('BTY 供应商freshness、BTC/ETH隔离与原后台节拍', () => {
     let finishBty!: () => void; let finishSecurities!: () => void;
     const pendingBty = new Promise<void>(resolve => { finishBty = resolve; });
     const pendingSecurities = new Promise<void>(resolve => { finishSecurities = resolve; });
-    const updateCrypto = vi.fn(async (_coin: string) => pendingBty);
+    const updateCryptoFast = vi.fn(async (_coin: string) => pendingBty);
     const updateSecuritiesAndCommodities = vi.fn(async () => pendingSecurities);
     const updateAllCryptoFast = vi.fn(async () => {});
+    const demand = new CryptoQuoteDemandRegistry({ query: vi.fn(async () => []), pins: ['BTC', 'ETH'] });
+    await demand.refresh(); demand.touch(['BTY']);
+    const getActiveCryptoQuoteSymbols = vi.fn(() => demand.active());
+    const refreshPersistentCryptoQuoteDemand = vi.fn(() => demand.refresh());
     const scan = evaluate<() => Promise<void>>(`
       const SLOW_MARKET_SCAN_INTERVAL_MS = ${init('SLOW_MARKET_SCAN_INTERVAL_MS')};
       let usdtCnyRefreshInProgress = true; let slowMarketScanInProgress = false; let lastSlowMarketScanAt = 0;
       ${fn('scanPricesInternal')} scanPricesInternal;`, {
-      Date, Promise, console, updateCrypto, updateSecuritiesAndCommodities, updateAllCryptoFast,
+      Date, Promise, console, updateCryptoFast, updateSecuritiesAndCommodities, updateAllCryptoFast,
+      getActiveCryptoQuoteSymbols, refreshPersistentCryptoQuoteDemand,
       saveCacheToFile: vi.fn(),
     });
     expect(evaluate<number>(init('SLOW_MARKET_SCAN_INTERVAL_MS'))).toBe(15_000);
     await scan();
-    expect(updateCrypto).toHaveBeenCalledWith('BTY');
+    expect(demand.active()).toContain('BTY');
+    expect(getActiveCryptoQuoteSymbols).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledWith('BTY');
     vi.setSystemTime(NOW + 10_000);
     await scan();
     expect(updateAllCryptoFast).toHaveBeenCalledTimes(2);
-    expect(updateCrypto).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledTimes(1);
     expect(updateSecuritiesAndCommodities).toHaveBeenCalledTimes(1);
     finishBty(); finishSecurities();
     for (let index = 0; index < 6; index += 1) await Promise.resolve();
     vi.setSystemTime(NOW + 14_999);
     await scan();
-    expect(updateCrypto).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledTimes(1);
     vi.setSystemTime(NOW + 15_000);
     await scan();
-    expect(updateCrypto).toHaveBeenCalledTimes(2);
+    expect(updateCryptoFast).toHaveBeenCalledTimes(2);
+    expect(refreshPersistentCryptoQuoteDemand).toHaveBeenCalledTimes(4);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('实际需求集合没有BTY时后台不取价，加入后按15秒刷新，释放后再次跳过且扫描不续租', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(NOW);
+    const query = vi.fn(async () => []);
+    const demand = new CryptoQuoteDemandRegistry({ query, pins: ['BTC', 'ETH'] });
+    await demand.refresh();
+    const getActiveCryptoQuoteSymbols = vi.fn(() => demand.active());
+    const refreshPersistentCryptoQuoteDemand = vi.fn(() => demand.refresh());
+    const updateCryptoFast = vi.fn(async (_coin: string) => {});
+    const updateAllCryptoFast = vi.fn(async () => {});
+    const updateSecuritiesAndCommodities = vi.fn(async () => {});
+    const touchCryptoQuoteDemand = vi.fn(() => { throw new Error('scanner must not renew idle demand'); });
+    const scan = evaluate<() => Promise<void>>(`
+      const SLOW_MARKET_SCAN_INTERVAL_MS = ${init('SLOW_MARKET_SCAN_INTERVAL_MS')};
+      let usdtCnyRefreshInProgress = true; let slowMarketScanInProgress = false; let lastSlowMarketScanAt = 0;
+      ${fn('scanPricesInternal')} scanPricesInternal;`, {
+      Date, Promise, console, getActiveCryptoQuoteSymbols, refreshPersistentCryptoQuoteDemand, touchCryptoQuoteDemand,
+      updateCryptoFast, updateAllCryptoFast, updateSecuritiesAndCommodities, saveCacheToFile: vi.fn(),
+    });
+    expect(demand.active()).not.toContain('BTY');
+    await scan();
+    for (let index = 0; index < 6; index += 1) await Promise.resolve();
+    expect(updateCryptoFast).not.toHaveBeenCalled();
+    demand.replacePersistent('offline-wallet-balance', ['BTY']);
+    vi.setSystemTime(NOW + 15_000);
+    expect(demand.active()).toContain('BTY');
+    await scan();
+    for (let index = 0; index < 6; index += 1) await Promise.resolve();
+    expect(updateCryptoFast).toHaveBeenCalledTimes(1);
+    expect(updateCryptoFast).toHaveBeenCalledWith('BTY');
+    demand.replacePersistent('offline-wallet-balance', []);
+    vi.setSystemTime(NOW + 30_000);
+    expect(demand.active()).not.toContain('BTY');
+    await scan();
+    for (let index = 0; index < 6; index += 1) await Promise.resolve();
+    expect(updateCryptoFast).toHaveBeenCalledTimes(1);
+    expect(updateAllCryptoFast).toHaveBeenCalledTimes(3);
+    expect(updateSecuritiesAndCommodities).toHaveBeenCalledTimes(3);
+    expect(getActiveCryptoQuoteSymbols).toHaveBeenCalledTimes(3);
+    expect(touchCryptoQuoteDemand).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
 });

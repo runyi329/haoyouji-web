@@ -4,6 +4,8 @@ import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search, Pin, PinOff } from "lucide-react";
+import { CryptoAssetSelect } from "@/components/CryptoAssetSelect";
+import { mergeDemandCryptoPrices, useDemandCryptoQuotes } from "@/hooks/useDemandCryptoQuotes";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, formatFunderCollateralGap, refreshFunderSettlementQueries, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
@@ -1657,7 +1659,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ? collaboratorUserId
       : undefined;
   };
-  const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
+  // 目录与行情分离：仅打开非股票表单时续租当前选择，担保输入草稿不写入持仓。
+  const formDemandQuotes = useDemandCryptoQuotes(
+    [formData.coin, formData.amountCurrency, ...collateralAssets.map(asset => asset.coin)],
+    showForm && formData.assetType !== 'stock',
+  );
+  // 纯派生合并，不在 effect 中 setState；选中币种缺价时不能回退成订单旧价。
+  const formLivePrices = useMemo(() => mergeDemandCryptoPrices(
+    (assetOrdersData as any)?.livePrices ?? {}, formDemandQuotes.symbols, formDemandQuotes.prices,
+  ), [assetOrdersData, formDemandQuotes.symbols, formDemandQuotes.prices]);
   // 共享担保池数据按当前编辑视角隔离：参与者子订单使用参与者自己的池。
   const sharedCollateralUserId = getParticipantUserIdForOrder(editingOrder) ?? editingOrder?.user_id ?? (formData as any)?.userId;
   const { data: sharedPoolData } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
@@ -1789,12 +1799,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       const value = parseFloat(rawValue);
       if (!isFinite(value) || value <= 0) return rawValue;
       const usdtValue = toUsdtBase(value, previousCurrency);
-      if (usdtValue === null) return rawValue;
+      if (usdtValue === null) return '';
       const converted = fromUsdtBase(usdtValue, nextCurrency);
-      return converted === null ? rawValue : formatLinkedAmountValue(converted, field);
+      // 新币首次按需报价尚未返回时，旧单位的数字不能冒充新币的金额/买入价。
+      return converted === null ? '' : formatLinkedAmountValue(converted, field);
     };
 
     const nextAmount = convertQuoteValue(amountInputValue, 'amount');
+    if (amountInputValue && !nextAmount) resetLinkedAmountFields();
     setAmountInputValue(nextAmount);
     setFormData(current => ({
       ...current,
@@ -5261,16 +5273,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </div>
                   {formData.assetType !== 'stock' && <div style={{ width: '34%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">融资币种</label>
-                    <select
+                    <CryptoAssetSelect
                       value={formData.amountCurrency}
-                      onChange={e => handleAmountCurrencyChange(e.target.value as CoinType)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                      onValueChange={value => handleAmountCurrencyChange(value as CoinType)}
+                      options={COIN_OPTIONS}
+                      aria-label="融资币种"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
-                    >
-                      {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
-                        <option key={c} value={c}>{c === 'CNY' ? '人民币 CNY' : c}</option>
-                      ))}
-                    </select>
+                    />
                   </div>}
                 </div>
                 {formData.assetType !== 'stock' && amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
@@ -5325,16 +5334,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 {formData.assetType !== 'stock' && <div className="flex items-end gap-3">
                   <div style={{ width: '40%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种</label>
-                    <select
+                    <CryptoAssetSelect
                       value={formData.coin}
-                      onChange={e => handlePurchaseCoinChange(e.target.value as CoinType)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                      onValueChange={value => handlePurchaseCoinChange(value as CoinType)}
+                      options={COIN_OPTIONS}
+                      aria-label="购买币种"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
-                    >
-                      {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">币数（{formData.coin}）{derivedLinkedField === 'quantity' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>

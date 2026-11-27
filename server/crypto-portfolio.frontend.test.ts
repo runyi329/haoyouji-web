@@ -3,9 +3,15 @@ import React from 'react';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import * as instruments from '../shared/portfolio-instruments';
+import * as assetCatalog from '../shared/crypto-asset-catalog';
+import { isR1StockPresentationScope } from '../shared/r1-stock-presentation';
+import { mapStockTagDailySnapshots } from '../client/src/lib/stock-tag-daily-snapshots';
+import * as countedSummary from '../client/src/components/StockTagCountedSummary';
 
 // Only execute real frontend expressions/handlers with inert tRPC hooks; no HTTP, DB or accounting.
 const tradeSource = readFileSync(new URL('../client/src/components/StockTagTradeDialog.tsx', import.meta.url), 'utf8');
+const demandSource = readFileSync(new URL('../client/src/hooks/useDemandCryptoQuotes.ts', import.meta.url), 'utf8');
+const selectSource = readFileSync(new URL('../client/src/components/CryptoAssetSelect.tsx', import.meta.url), 'utf8');
 const pageSource = readFileSync(new URL('../client/src/pages/StockTagPortfolio.tsx', import.meta.url), 'utf8');
 const allocationSource = readFileSync(new URL('../client/src/pages/LedgerAAInitialBalance.tsx', import.meta.url), 'utf8');
 const astCache = new Map<string, ts.SourceFile>();
@@ -60,23 +66,39 @@ function tradeHarness(props: Record<string, any> = {}) {
   let results: any[] = [crypto];
   let searchState = { isFetching: false, error: null as Error | null };
   const searchRefetch = vi.fn();
-  let catalogResults = cryptoCatalog;
+  let catalogResults: any[] = cryptoCatalog;
   let catalogState = { isFetching: false, error: null as Error | null };
   const catalogArgs: any[] = [], selectionQuoteArgs: any[] = [], suggestionsArgs: any[] = [];
   const catalogRefetch = vi.fn(), selectionQuoteRefetch = vi.fn(), selectionQuoteRequest = vi.fn();
-  const selectionQuotes = new Map<string, { data: { results: any[] }; isFetching: boolean; error: Error | null }>();
-  const emptySelectionQuote = { data: { results: [] }, isFetching: false, error: null };
+  const selectionQuotes = new Map<string, { data: { quotes: Record<string, any> }; isFetching: boolean; error: Error | null }>();
+  const emptySelectionQuote = { data: { quotes: {} }, isFetching: false, error: null };
   let enabledSelectionQuoteKey: string | null = null;
   const add = { mutate: vi.fn(), isPending: false }, update = { mutate: vi.fn(), isPending: false };
   const pendingEffects: (() => void)[] = [];
+  const timers = new Map<number, () => void>();
+  let timerId = 0;
+  const window = {
+    setInterval: vi.fn((fn: () => void, _delay: number) => { const id = ++timerId; timers.set(id, fn); return id; }),
+    clearInterval: vi.fn((id: number) => { timers.delete(id); }),
+  };
   const same = (a: any[], b: any[]) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+  const getCryptoAssetSearchText = execute(selectSource, 'getCryptoAssetSearchText', { ASSET_NAMES: assetCatalog.CRYPTO_ASSET_NAMES });
   const scope: Record<string, any> = {
-    ...instruments, localInputTime, localInputDate, beijingTradeInputTime, parseTradeInputTime,
+    ...instruments, ...assetCatalog, localInputTime, localInputDate, beijingTradeInputTime, parseTradeInputTime,
+    window, getCryptoAssetSearchText,
+    DEMAND_CRYPTO_REFETCH_MS: execute(demandSource, 'DEMAND_CRYPTO_REFETCH_MS'),
+    MAX_QUOTE_AGE_MS: execute(demandSource, 'MAX_QUOTE_AGE_MS'),
     money: execute(tradeSource, 'money', instruments), formatQuantity: execute(tradeSource, 'formatQuantity'), STOCK_TRADE_FEE_RATE: 0.001,
     toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() },
     useState: (initial: any) => { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial; return [state[i], (v: any) => { state[i] = typeof v === 'function' ? v(state[i]) : v; }]; },
     useMemo: (fn: any, deps: any[]) => { const i = memoCursor++; if (!memos[i] || !same(memos[i].deps, deps)) memos[i] = { value: fn(), deps }; return memos[i].value; },
-    useEffect: (fn: any, deps: any[]) => { const i = effectCursor++; if (!effects[i] || !same(effects[i], deps)) { effects[i] = deps; pendingEffects.push(fn); } },
+    useEffect: (fn: any, deps: any[]) => {
+      const i = effectCursor++;
+      if (!effects[i] || !same(effects[i].deps, deps)) {
+        const previous = effects[i]; effects[i] = { deps };
+        pendingEffects.push(() => { previous?.cleanup?.(); effects[i].cleanup = fn(); });
+      }
+    },
     trpc: {
       useUtils: () => ({ ledger: { getStockTagPortfolio: { invalidate: vi.fn() }, getStockLotParticipationMatrix: { invalidate: vi.fn() }, getStockTagDailySnapshots: { invalidate: vi.fn() } } }),
       exchange: { getRate: { useQuery: (args: any) => ({ data: args.fromcoin === 'USD' ? { money: 7 } : { money: null } }) } },
@@ -84,47 +106,68 @@ function tradeHarness(props: Record<string, any> = {}) {
         getStockTagPortfolio: { useQuery: () => ({ data, isLoading: false }) },
         getStockLotParticipationMatrix: { useQuery: () => ({ data: { members: [], lots: [] }, isLoading: false }) },
         addStockTagEvent: { useMutation: () => add }, updateStockTagSale: { useMutation: () => update },
+        getCryptoSpotQuotes: { useQuery: (args: any, options: any) => {
+          selectionQuoteArgs.push({ args, options });
+          const key = options.enabled ? args.symbols.join('|') : null;
+          if (key && key !== enabledSelectionQuoteKey) selectionQuoteRequest(args);
+          enabledSelectionQuoteKey = key;
+          const quote = selectionQuotes.get(args.symbols.join('|')) ?? emptySelectionQuote;
+          return { ...quote, isFetching: !!options.enabled && quote.isFetching, refetch: selectionQuoteRefetch };
+        } },
       },
       searchManualStocks: { useQuery: (args: any, options: any) => {
-        // Keep hook calls in source order: searchArgs.at(-1) must remain suggestionsQuery.
+        // Actual source has only metadata directory + securities suggestions; coin quotes use ledger.getCryptoSpotQuotes.
         searchArgs.push(args);
         const slot = searchCursor++;
         if (slot === 0) {
           catalogArgs.push({ args, options });
           return { data: { results: catalogResults }, ...catalogState, isFetching: !!options.enabled && catalogState.isFetching, refetch: catalogRefetch };
         }
-        if (slot === 1) {
-          selectionQuoteArgs.push({ args, options });
-          const key = options.enabled ? `${args.market}:${args.query}` : null;
-          // Model an enabled query/key transition, not a request for every React render.
-          if (key && key !== enabledSelectionQuoteKey) selectionQuoteRequest(args);
-          enabledSelectionQuoteKey = key;
-          const quote = selectionQuotes.get(args.query) ?? emptySelectionQuote;
-          return { ...quote, isFetching: !!options.enabled && quote.isFetching, refetch: selectionQuoteRefetch };
-        }
-        if (slot !== 2) throw new Error('Unexpected extra searchManualStocks hook');
+        if (slot !== 1) throw new Error('Unexpected extra searchManualStocks hook');
         suggestionsArgs.push({ args, options });
         return { data: { results }, ...searchState, isFetching: !!options.enabled && searchState.isFetching, refetch: searchRefetch };
       } },
     },
   };
+  scope.normalizeDemandCryptoSymbols = execute(demandSource, 'normalizeDemandCryptoSymbols', scope);
+  scope.getFreshDemandCryptoPrices = execute(demandSource, 'getFreshDemandCryptoPrices', scope);
+  scope.useDemandCryptoQuotes = execute(demandSource, 'useDemandCryptoQuotes', scope);
+  const selectScope: Record<string, any> = { ...assetCatalog, ASSET_NAMES: assetCatalog.CRYPTO_ASSET_NAMES, getCryptoAssetSearchText,
+    useState: (initial: any) => [initial, vi.fn()], useMemo: (fn: () => any) => fn(), cn: (...items: any[]) => items.filter(Boolean).join(' ') };
+  for (const key of ['Check', 'ChevronDown', 'Popover', 'PopoverContent', 'PopoverTrigger', 'Command', 'CommandEmpty', 'CommandGroup', 'CommandInput', 'CommandItem', 'CommandList']) selectScope[key] = key;
+  scope.CryptoAssetSelect = execute(selectSource, 'CryptoAssetSelect', selectScope);
   for (const key of ['Loader2', 'Minus', 'Plus', 'Button', 'Input', 'Label', 'Dialog', 'DialogContent', 'DialogHeader', 'DialogTitle']) scope[key] = key;
   const parameters = { categoryId: 222, categoryName: '测试现货', open: true, type: 'buy', onOpenChange: vi.fn(), ...props };
   const component = execute(tradeSource, 'StockTagTradeDialog', scope);
   const renderOnce = () => { cursor = memoCursor = effectCursor = searchCursor = 0; return component(parameters); };
-  const render = () => { let tree = renderOnce(); for (let i = 0; pendingEffects.length && i < 5; i++) { pendingEffects.splice(0).forEach(fn => fn()); tree = renderOnce(); } return tree; };
+  const expandSelector = (tree: any): any => {
+    if (Array.isArray(tree)) return tree.map(expandSelector);
+    if (!tree || typeof tree !== 'object') return tree;
+    if (tree.type === scope.CryptoAssetSelect) return expandSelector(scope.CryptoAssetSelect(tree.props));
+    return { ...tree, props: { ...tree.props, children: expandSelector(tree.props?.children) } };
+  };
+  const render = () => { let tree = renderOnce(); for (let i = 0; pendingEffects.length && i < 5; i++) { pendingEffects.splice(0).forEach(fn => fn()); tree = renderOnce(); } return expandSelector(tree); };
   const button = (label: string) => nodes(render()).find(node => ['button', 'Button'].includes(node.type) && text(node).trim() === label);
   const input = (placeholder: string) => nodes(render()).find(node => node.type === 'Input' && node.props.placeholder === placeholder);
   const suggestion = (stockSymbol: string) => nodes(render()).find(node => node.type === 'button' && node.key === stockSymbol);
-  const cryptoSelect = () => nodes(render()).find(node => node.type === 'select' && node.props['aria-label'] === '下拉选择数字币');
-  const chooseCatalog = (stockSymbol: string) => { cryptoSelect().props.onChange({ target: { value: stockSymbol } }); return render(); };
-  const chooseCrypto = () => { button('数字币·USDT').props.onClick(); render(); input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'BTC' } }); suggestion(symbol).props.onClick(); render(); };
+  const cryptoSelect = () => nodes(render()).find(node => node.props?.role === 'combobox' && node.props['aria-label'] === '下拉选择数字币');
+  const catalogItems = () => nodes(render()).filter(node => node.type === 'CommandItem');
+  const chooseCatalog = (stockSymbol: string) => { catalogItems().find(node => node.props.value === instruments.cryptoPortfolioBase(stockSymbol))!.props.onSelect(); return render(); };
+  const setSpotQuotes = (query: string, quotes: Record<string, any>, isFetching = false) => {
+    selectionQuotes.set(query, { data: { quotes }, isFetching, error: null });
+  };
+  const setSelectionQuote = (query: string, next: any[], isFetching = false) => setSpotQuotes(query, Object.fromEntries(next.map(stock => [
+    instruments.cryptoPortfolioBase(stock.symbol) ?? stock.symbol,
+    { price: stock.latestPrice, currency: stock.currency, source: stock.source, updatedAt: new Date().toISOString(), stale: false },
+  ])), isFetching);
+  const chooseCrypto = () => { setSelectionQuote('BTC', [crypto]); button('数字币·USDT').props.onClick(); render(); input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'BTC' } }); suggestion(symbol).props.onClick(); render(); };
   return {
-    scope, parameters, data, state, render, button, input, suggestion, cryptoSelect, chooseCatalog, chooseCrypto, add, update,
+    scope, parameters, data, state, render, button, input, suggestion, cryptoSelect, catalogItems, chooseCatalog, chooseCrypto, add, update, window, timers,
     searchArgs, searchRefetch, catalogArgs, catalogRefetch, selectionQuoteArgs, selectionQuoteRequest, selectionQuoteRefetch, suggestionsArgs,
     setSearchState: (next: typeof searchState) => { searchState = next; }, setResults: (next: any[]) => { results = next; },
-    setCatalogResults: (next: typeof cryptoCatalog) => { catalogResults = next; }, setCatalogState: (next: typeof catalogState) => { catalogState = next; },
-    setSelectionQuote: (query: string, next: any[], isFetching = false) => { selectionQuotes.set(query, { data: { results: next }, isFetching, error: null }); },
+    setCatalogResults: (next: any[]) => { catalogResults = next; }, setCatalogState: (next: typeof catalogState) => { catalogState = next; },
+    setSelectionQuote, setSpotQuotes,
+    unmount: () => { effects.forEach(effect => effect.cleanup?.()); pendingEffects.length = 0; },
   };
 }
 
@@ -165,40 +208,71 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
     expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
     h.button('数字币·USDT').props.onClick(); const tree = h.render();
     expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe('');
-    const options = nodes(h.cryptoSelect()).filter(node => node.type === 'option' && node.props.value);
+    const options = h.catalogItems();
     expect(options).toHaveLength(38);
-    expect(options.map(node => text(node))).toEqual(cryptoCatalogBases);
-    expect(options.map(node => node.props.value)).toEqual(cryptoCatalogBases.map(base => `CRYPTO:${base}-USDT`));
+    expect(options.map(node => text(nodes(node).find(child => child.type === 'span' && child.props.className === 'shrink-0 font-medium')))).toEqual(cryptoCatalogBases);
+    expect(options.map(node => node.props.value)).toEqual(cryptoCatalogBases);
     expect(options.map(node => node.key)).toEqual(options.map(node => node.props.value));
     expect(h.catalogArgs.at(-1)).toEqual({ args: { query: '*', market: 'CRYPTO' }, options: { enabled: true, staleTime: 600_000 } });
     expect(h.suggestionsArgs.at(-1).options.enabled).toBe(false);
     expect(h.searchArgs.at(-1)).toEqual(h.suggestionsArgs.at(-1).args);
     expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
-    expect(text(tree)).not.toMatch(/比特币|以太坊|Solana|全名|(?:BTC|ETH)\/USDT/);
+    expect(text(h.cryptoSelect())).toBe('下拉选择');
+    expect(options.find(node => node.props.value === 'BTC').props.keywords).toEqual(['BTC 比特币']);
+    expect(text(tree)).not.toMatch(/(?:BTC|ETH)\/USDT|当前参考/);
+    expect(h.timers.size).toBe(0);
     expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.update.mutate).not.toHaveBeenCalled();
   });
-  it('下拉BTC通过真实selectStock启用一次精确query，等待报价并补价后仍以原始symbol提交', () => {
+  it('全静态目录包含历史币与新增币，中文或英文metadata本地可搜，但未选中不订阅任何币价', () => {
+    const h = tradeHarness();
+    h.setCatalogResults(assetCatalog.CRYPTO_ASSET_CODES.map(base => ({
+      ...crypto, symbol: `CRYPTO:${base}-USDT`, name: assetCatalog.CRYPTO_ASSET_NAMES[base], latestPrice: null,
+    })));
+    h.button('数字币·USDT').props.onClick(); h.render();
+    expect(h.catalogItems().map(node => node.props.value)).toEqual([...assetCatalog.CRYPTO_ASSET_CODES]);
+    expect(h.catalogItems()).toHaveLength(216);
+    for (const [query, base] of [['比特元', 'BTY'], ['filecoin', 'FIL'], ['Vaulta', 'A']]) {
+      h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: query } }); h.render();
+      expect(h.suggestion(`CRYPTO:${base}-USDT`)).toBeTruthy();
+      expect(h.suggestionsArgs.at(-1).options.enabled).toBe(false);
+      expect(h.catalogArgs.at(-1).args).toEqual({ query: '*', market: 'CRYPTO' });
+      expect(h.selectionQuoteArgs.at(-1).args).toEqual({ symbols: [] });
+      expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
+    }
+    expect(h.timers.size).toBe(0);
+    expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.update.mutate).not.toHaveBeenCalled();
+  });
+  it('下拉BTC通过真实selectStock只订阅选中币，每10s续租，补价后仍以原始symbol提交', () => {
     const h = tradeHarness(); h.setResults([ethCrypto]); h.setSelectionQuote('BTC', [], true);
     h.button('数字币·USDT').props.onClick(); h.render();
     expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
     h.chooseCatalog(symbol);
-    expect(h.selectionQuoteArgs.at(-1)).toEqual({ args: { query: 'BTC', market: 'CRYPTO' }, options: { enabled: true, staleTime: 0 } });
+    expect(h.selectionQuoteArgs.at(-1)).toEqual({ args: { symbols: ['BTC'] }, options: {
+      enabled: true, staleTime: 0, refetchInterval: 10_000, refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1,
+    } });
     expect(h.selectionQuoteRequest).toHaveBeenCalledOnce();
-    expect(h.selectionQuoteRequest).toHaveBeenCalledWith({ query: 'BTC', market: 'CRYPTO' });
+    expect(h.selectionQuoteRequest).toHaveBeenCalledWith({ symbols: ['BTC'] });
     expect(h.searchArgs.at(-1)).toEqual({ query: 'A', market: 'CRYPTO' });
     expect(h.suggestionsArgs.at(-1).options.enabled).toBe(false);
     expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe('BTC');
     expect(h.input('0.00').props.value).toBe('');
     expect(text(h.render())).toContain('正在读取 BTC 实时报价');
     h.render(); h.render(); expect(h.selectionQuoteRequest).toHaveBeenCalledOnce();
-    // Ignore other symbols and malformed market/currency results even in the exact query.
-    h.setSelectionQuote('BTC', [ethCrypto, { ...crypto, market: 'US', latestPrice: 999 }, { ...crypto, currency: 'USD', latestPrice: 888 }, crypto]);
+    // Real spot payload is keyed by base, not old search market fields; reject wrong currency and other bases.
+    h.setSelectionQuote('BTC', [ethCrypto, { ...crypto, currency: 'USD', latestPrice: 888 }]); h.render();
+    expect(h.input('0.00').props.value).toBe('');
+    h.setSelectionQuote('BTC', [ethCrypto, crypto]);
     const tree = h.render();
     expect(h.input('0.00').props.value).toBe('100');
     expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe('BTC');
     expect(text(tree)).toContain('已核验：BTC · USDT现货计价');
-    expect(text(tree)).not.toMatch(/比特币|BTC\/USDT|正在读取|参考价暂不可用/);
-    expect(h.selectionQuoteArgs.at(-1).options.enabled).toBe(false);
+    expect(text(tree)).not.toMatch(/BTC\/USDT|正在读取|参考价暂不可用/);
+    expect(text(tree)).toContain('当前参考 USDT 100.00');
+    expect(h.selectionQuoteArgs.at(-1).options.enabled).toBe(true);
+    expect(h.selectionQuoteArgs.at(-1).options.refetchInterval).toBe(10_000);
+    expect(h.window.setInterval).toHaveBeenCalledWith(expect.any(Function), 10_000);
+    expect(h.timers.size).toBe(1);
     expect(h.selectionQuoteRequest).toHaveBeenCalledOnce();
     h.input('币数量（最多8位小数）').props.onChange({ target: { value: '0.12345678' } });
     h.button('确认买入').props.onClick();
@@ -215,6 +289,53 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
     expect(h.selectionQuoteRequest).toHaveBeenCalledOnce();
     h.input('币数量（最多8位小数）').props.onChange({ target: { value: '1' } }); h.button('确认买入').props.onClick();
     expect(h.add.mutate).toHaveBeenCalledWith(expect.objectContaining({ symbol, executionPrice: 123.45 }));
+  });
+  it('首次有效报价只补空成交价，后续持续报价刷新只读参考不覆盖已补值或手填价', () => {
+    const h = tradeHarness(); h.setSelectionQuote('BTC', [], true);
+    h.button('数字币·USDT').props.onClick(); h.chooseCatalog(symbol);
+    h.setSelectionQuote('BTC', [crypto]); h.render(); expect(h.input('0.00').props.value).toBe('100');
+    h.setSelectionQuote('BTC', [{ ...crypto, latestPrice: 101 }]); h.render();
+    expect(h.input('0.00').props.value).toBe('100');
+    expect(text(h.render())).toContain('当前参考 USDT 101.00');
+    h.input('0.00').props.onChange({ target: { value: '123.45' } }); h.render();
+    h.setSelectionQuote('BTC', [{ ...crypto, latestPrice: 102 }]); h.render();
+    expect(h.input('0.00').props.value).toBe('123.45');
+    expect(text(h.render())).toContain('当前参考 USDT 102.00');
+    expect(h.selectionQuoteArgs.at(-1).options.refetchInterval).toBe(10_000);
+    expect(h.selectionQuoteArgs.at(-1).options.enabled).toBe(true);
+    h.input('币数量（最多8位小数）').props.onChange({ target: { value: '1' } }); h.button('确认买入').props.onClick();
+    expect(h.add.mutate).toHaveBeenCalledWith(expect.objectContaining({ symbol, executionPrice: 123.45 }));
+  });
+  it('已选中报价关闭对话框立即停订阅与时钟，重新打开未选中不续租，卸载清理时钟', () => {
+    const h = tradeHarness(); h.chooseCrypto(); expect(h.timers.size).toBe(1);
+    h.parameters.open = false; h.render();
+    expect(h.selectionQuoteArgs.at(-1)).toMatchObject({ args: { symbols: [] }, options: { enabled: false, refetchInterval: false } });
+    expect(h.timers.size).toBe(0); expect(h.window.clearInterval).toHaveBeenCalledOnce();
+    h.parameters.open = true; h.render();
+    expect(h.selectionQuoteArgs.at(-1).options.enabled).toBe(false); expect(h.timers.size).toBe(0);
+    h.chooseCrypto(); expect(h.timers.size).toBe(1);
+    h.unmount(); expect(h.timers.size).toBe(0);
+    expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.update.mutate).not.toHaveBeenCalled();
+  });
+  it('真实需求Hook拒绝缺价、陈旧、错币、无穷、非正及未来采样，不能补成0或目录旧价', () => {
+    const h = tradeHarness(); h.button('数字币·USDT').props.onClick(); h.chooseCatalog(symbol);
+    const fresh = { price: 100, currency: 'USDT', source: 'gate', updatedAt: new Date().toISOString(), stale: false };
+    for (const patch of [
+      { price: null }, { price: 0 }, { price: -1 }, { price: NaN }, { price: Infinity }, { price: '100' },
+      { stale: true }, { stale: undefined }, { currency: 'USD' }, { updatedAt: null }, { updatedAt: 'invalid' },
+      { updatedAt: new Date(Date.now() - 120_001).toISOString() }, { updatedAt: new Date(Date.now() + 60_000).toISOString() },
+    ]) {
+      h.setSpotQuotes('BTC', { BTC: { ...fresh, ...patch } }); h.render();
+      expect(h.input('0.00').props.value).toBe('');
+      expect(text(h.render())).toContain('参考价暂不可用');
+      expect(h.selectionQuoteArgs.at(-1).options.enabled).toBe(true);
+    }
+    h.input('币数量（最多8位小数）').props.onChange({ target: { value: '1' } }); h.button('确认买入').props.onClick();
+    expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.scope.toast.error).toHaveBeenCalledWith('请输入正确的实际成交价格');
+    h.setSpotQuotes('BTC', { BTC: fresh }); h.render(); expect(h.input('0.00').props.value).toBe('100');
+    h.setSpotQuotes('BTC', { BTC: { ...fresh, stale: true } }); h.render();
+    expect(h.input('0.00').props.value).toBe('100');
+    expect(text(h.render())).toContain('参考价暂不可用'); expect(text(h.render())).not.toContain('当前参考 USDT 100.00');
   });
   it('等待BTC报价时切换美股，晚报价不能恢复币种或覆盖美股手输价', () => {
     const h = tradeHarness(); h.setSelectionQuote('BTC', [], true);
@@ -249,32 +370,44 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
     h.setSelectionQuote('ETH', [crypto, ethCrypto]); const tree = h.render();
     expect(h.input('0.00').props.value).toBe('200');
     expect(text(tree)).toContain('已核验：ETH · USDT现货计价'); expect(text(tree)).not.toContain('已核验：BTC');
-    expect(h.selectionQuoteRequest.mock.calls.map(([args]) => args)).toEqual([{ query: 'BTC', market: 'CRYPTO' }, { query: 'ETH', market: 'CRYPTO' }]);
+    expect(h.selectionQuoteRequest.mock.calls.map(([args]) => args)).toEqual([{ symbols: ['BTC'] }, { symbols: ['ETH'] }]);
     h.input('币数量（最多8位小数）').props.onChange({ target: { value: '1' } }); h.button('确认买入').props.onClick();
     expect(h.add.mutate).toHaveBeenCalledWith(expect.objectContaining({ symbol: ethCrypto.symbol, executionPrice: 200 }));
   });
-  it.each([crypto, ethCrypto])('搜索和下拉的$symbol仅显示代码，选中不带全名或币对', stock => {
-    const h = tradeHarness(); h.setResults([crypto, ethCrypto]); h.button('数字币·USDT').props.onClick();
+  it.each([crypto, ethCrypto])('搜索和下拉的$symbol以代码为主标签，名称仅供metadata检索，选中不带全名或币对', stock => {
+    const h = tradeHarness(); h.setCatalogResults([crypto, ethCrypto]); h.button('数字币·USDT').props.onClick();
     h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: instruments.cryptoPortfolioBase(stock.symbol) } });
     const tree = h.render();
     for (const item of [crypto, ethCrypto]) {
-      const suggestion = h.suggestion(item.symbol);
-      const title = nodes(suggestion).find(node => node.type === 'span' && node.props.className === 'text-sm font-medium');
-      expect(text(title)).toBe(instruments.cryptoPortfolioBase(item.symbol));
-      expect(text(suggestion)).not.toMatch(/比特币|以太坊|(?:BTC|ETH)\/USDT|CRYPTO:/);
-      const option = nodes(h.cryptoSelect()).find(node => node.type === 'option' && node.key === item.symbol);
-      expect(text(option)).toBe(instruments.cryptoPortfolioBase(item.symbol));
+      const base = instruments.cryptoPortfolioBase(item.symbol);
+      if (item.symbol === stock.symbol) {
+        const suggestion = h.suggestion(item.symbol);
+        const title = nodes(suggestion).find(node => node.type === 'span' && node.props.className === 'text-sm font-medium');
+        expect(text(title)).toBe(base);
+        expect(text(suggestion)).toContain(item.name);
+        expect(text(suggestion)).not.toMatch(/(?:BTC|ETH)\/USDT|CRYPTO:|参考 USDT/);
+      } else expect(h.suggestion(item.symbol)).toBeUndefined();
+      const option = h.catalogItems().find(node => node.key === base);
+      expect(text(nodes(option).find(node => node.type === 'span' && node.props.className === 'shrink-0 font-medium'))).toBe(base);
+      expect(option.props.keywords[0]).toContain(item.name);
     }
-    expect(text(tree)).not.toMatch(/比特币|以太坊|(?:BTC|ETH)\/USDT/);
+    expect(text(tree)).not.toMatch(/(?:BTC|ETH)\/USDT/);
+    expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
+    expect(h.suggestionsArgs.at(-1).options.enabled).toBe(false);
     h.suggestion(stock.symbol).props.onClick();
     expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe(instruments.cryptoPortfolioBase(stock.symbol));
+    // A metadata latestPrice cannot seed a trade: only the selected fresh spot quote can.
+    expect(h.input('0.00').props.value).toBe('');
+    expect(h.selectionQuoteRequest).toHaveBeenCalledWith({ symbols: [instruments.cryptoPortfolioBase(stock.symbol)] });
+    h.setSelectionQuote(instruments.cryptoPortfolioBase(stock.symbol)!, [stock]); h.render();
     expect(h.input('0.00').props.value).toBe(String(stock.latestPrice));
-    expect(text(h.render())).not.toMatch(/比特币|以太坊|(?:BTC|ETH)\/USDT/);
-    expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
+    expect(text(h.cryptoSelect())).toBe(instruments.cryptoPortfolioBase(stock.symbol));
+    expect(text(h.render())).not.toMatch(/已核验：(?:比特币|以太坊)|(?:BTC|ETH)\/USDT/);
+    h.setSelectionQuote(instruments.cryptoPortfolioBase(stock.symbol)!, []); h.render();
     h.chooseCatalog(stock.symbol);
     expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe(instruments.cryptoPortfolioBase(stock.symbol));
     expect(h.input('0.00').props.value).toBe('');
-    expect(text(h.render())).not.toMatch(/比特币|以太坊|(?:BTC|ETH)\/USDT/);
+    expect(text(h.render())).not.toMatch(/已核验：(?:比特币|以太坊)|(?:BTC|ETH)\/USDT/);
   });
   it.each([
     { market: 'A', button: 'A 股 · 人民币', symbol: '600519.SH', name: '贵州茅台', currency: 'CNY', placeholder: '如 600519、贵州茅台或 gzm' },
@@ -295,34 +428,43 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
     h.button('数字币·USDT').props.onClick();
     expect(h.cryptoSelect().props.disabled).toBe(true); expect(text(h.cryptoSelect())).toBe('加载中');
     h.setCatalogState({ isFetching: false, error: new Error('catalog failed') });
-    expect(text(h.render())).toContain('币种下拉暂未加载，可输入代码搜索');
+    expect(text(h.render())).toContain('币种目录暂未加载');
     h.button('重载下拉').props.onClick(); expect(h.catalogRefetch).toHaveBeenCalledOnce();
     expect(h.searchRefetch).not.toHaveBeenCalled(); expect(h.selectionQuoteRefetch).not.toHaveBeenCalled();
     h.setCatalogResults(cryptoCatalog); h.setCatalogState({ isFetching: false, error: null });
     expect(h.cryptoSelect().props.disabled).toBe(false);
-    expect(nodes(h.cryptoSelect()).filter(node => node.type === 'option' && node.props.value)).toHaveLength(38);
+    expect(h.catalogItems()).toHaveLength(38);
+    expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
     expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.update.mutate).not.toHaveBeenCalled();
   });
-  it('输入字母走顶层检索，加载和失败有反馈，重试只重新查询而不写入', () => {
-    const h = tradeHarness(); h.button('数字币·USDT').props.onClick(); h.setResults([]);
+  it('输入字母本地metadata检索，目录加载和失败有反馈，重试只重新查询目录而不写入', () => {
+    const h = tradeHarness(); h.button('数字币·USDT').props.onClick(); h.setCatalogResults([]);
     h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'e' } });
-    h.setSearchState({ isFetching: true, error: null }); expect(text(h.render())).toContain('正在搜索币种');
+    h.setCatalogState({ isFetching: true, error: null }); expect(text(h.render())).toContain('正在加载币种目录，选中后才读取报价');
     expect(h.searchArgs.at(-1)).toEqual({ query: 'e', market: 'CRYPTO' });
-    h.setSearchState({ isFetching: false, error: new Error('read failed') }); expect(text(h.render())).toContain('搜索暂未完成');
-    h.button('重试').props.onClick(); expect(h.searchRefetch).toHaveBeenCalledOnce();
+    expect(h.suggestionsArgs.at(-1).options.enabled).toBe(false);
+    expect(h.catalogArgs.at(-1).args).toEqual({ query: '*', market: 'CRYPTO' });
+    h.setCatalogState({ isFetching: false, error: new Error('read failed') }); expect(text(h.render())).toContain('搜索暂未完成');
+    h.button('重试').props.onClick(); expect(h.catalogRefetch).toHaveBeenCalledOnce();
+    expect(h.searchRefetch).not.toHaveBeenCalled(); expect(h.selectionQuoteRequest).not.toHaveBeenCalled();
     expect(h.add.mutate).not.toHaveBeenCalled(); expect(h.update.mutate).not.toHaveBeenCalled();
   });
   it('空结果有提示，币种列表恢复后可选中参考价，选中后不残留空结果或搜索提示', () => {
-    const h = tradeHarness(); h.button('数字币·USDT').props.onClick(); h.setResults([]);
+    const h = tradeHarness(); h.button('数字币·USDT').props.onClick(); h.setCatalogResults([]);
     h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'BTC' } });
     expect(text(h.render())).toContain('暂未找到匹配币种');
-    h.setResults([crypto]); const item = h.suggestion(symbol);
-    item.props.onClick(); expect(h.input('0.00').props.value).toBe('100'); expect(text(h.render())).not.toContain('暂未找到匹配币种');
+    h.setCatalogResults([crypto]); const item = h.suggestion(symbol);
+    item.props.onClick(); expect(h.input('0.00').props.value).toBe('');
+    h.setSelectionQuote('BTC', [crypto]); h.render();
+    expect(h.input('0.00').props.value).toBe('100'); expect(text(h.render())).not.toContain('暂未找到匹配币种');
   });
-  it('数字币建议过滤裸ticker/非USDT，仅允许服务器核验现货；null不继承上一价格', () => {
-    const h = tradeHarness(); h.setResults([crypto, { ...crypto, symbol: 'ETH', name: '裸ETH' }, { ...crypto, symbol: 'CRYPTO:SOL-USDT', currency: 'USD', name: '错误币种' }]);
+  it('数字币目录建议过滤裸ticker/非USDT，仅允许规范现货身份；null不继承上一价格', () => {
+    const h = tradeHarness(); h.setCatalogResults([crypto, { ...crypto, symbol: 'ETH', name: '裸ETH' }, { ...crypto, symbol: 'CRYPTO:SOL-USDT', currency: 'USD', name: '错误币种' }]);
     h.chooseCrypto(); expect(h.input('如 BTC、ETH、比特币（仅USDT现货）').props.value).toBe('BTC'); expect(text(h.render())).not.toContain('BTC/USDT');
-    h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'SOL' } }); h.setResults([{ ...crypto, symbol: 'CRYPTO:SOL-USDT', name: 'Solana', latestPrice: null }]);
+    expect(h.catalogItems().map(node => node.props.value)).toEqual(['BTC']);
+    h.input('如 BTC、ETH、比特币（仅USDT现货）').props.onChange({ target: { value: 'SOL' } });
+    expect(h.suggestion('CRYPTO:SOL-USDT')).toBeUndefined();
+    h.setCatalogResults([{ ...crypto, symbol: 'CRYPTO:SOL-USDT', name: 'Solana', latestPrice: null }]);
     const tree = h.render(); expect(text(tree)).not.toContain('裸ETH'); expect(text(tree)).not.toContain('错误币种');
     expect(h.suggestion('ETH')).toBeUndefined(); expect(h.suggestion('CRYPTO:SOL-USDT')).toBeTruthy();
     h.suggestion('CRYPTO:SOL-USDT').props.onClick();
@@ -407,7 +549,7 @@ describe('37号CRYPTO现货前端（完全离线）', () => {
   it('真实组合整页离线渲染，未缺FX仍显示USDT原值和币、无初始化时序崩溃', () => {
     const data = { canEdit: false, history: [], summary: { costValue: 10, marketValue: 11, floatingPnl: 1, usdtCnyRate: 6.91 }, positions: [{ symbol, stockName: '比特币', currency: 'USDT', marketPrice: 110, lots: [{ id: 1, quantity: 0.12345678, unitCost: 100, openedAt: '2026-11-15T08:00:00Z' }] }] };
     const query = { data, isLoading: false, error: null };
-    const scope: Record<string, any> = { ...instruments, instrumentCurrency: instruments.portfolioCurrency, useState: (initial: any) => [initial, vi.fn()], useAuth: () => ({ user: { id: 901, name: '成员甲' } }), localInputTime, beijingTradeInputTime, parseTradeInputTime,
+    const scope: Record<string, any> = { ...instruments, ...countedSummary, mapStockTagDailySnapshots, isR1StockPresentationScope, instrumentCurrency: instruments.portfolioCurrency, useState: (initial: any) => [initial, vi.fn()], useAuth: () => ({ user: { id: 901, name: '成员甲' } }), localInputTime, beijingTradeInputTime, parseTradeInputTime,
       trpc: { useUtils: () => ({}), stock: { getUsdCnyRate: { useQuery: () => ({ data: { success: true, rate: 7 } }) } }, ledger: { getStockTagPortfolio: { useQuery: () => query }, getStockTagPublicPortfolio: { useQuery: () => query }, getMyStockTagParticipantPortfolio: { useQuery: () => query }, getStockTagDailySnapshots: { useQuery: () => ({ data: [] }) }, getStockLotParticipationMatrix: { useQuery: () => ({ data: { lots: [], members: [] } }) }, correctStockTagEvent: { useMutation: () => ({}) }, updateStockTagLotNote: { useMutation: () => ({}) } }, searchManualStocks: { useQuery: () => ({ data: { results: [] } }) } },
       eventLabels: { buy: '买入', sell: '卖出' }, eventTone: {}, summarizeStockCustomerPnl: () => ({}), hasStockCustomerActivity: () => false,
     };

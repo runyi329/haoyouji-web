@@ -87,7 +87,7 @@ describe('canonical null is unknown, not a zero guarantee or margin ratio', () =
     expect(value.extCollateralValueCny).toBeNull(); expect(value.extCollateralValueU).toBeNull();
     expect(external({ totalCny: 0, usdtCnyRate: null }).extCollateralValueCny).toBe(0);
   });
-  it.each([card, v2])('referenced margin %s executes the canonical null guard without FX', ast => {
+  it.each([['old', card], ['v2', v2]] as const)('referenced margin %s executes the canonical null guard without FX', (_name, ast) => {
     const isOld = ast === card;
     const bindings = isOld
       ? { hasExternalMarginRateReference: true, effectiveMarginRateValuation: { totalCny: null },
@@ -198,7 +198,7 @@ describe('only actual mixed-currency risk dependencies wait for FX', () => {
 });
 
 describe('same-currency interest and frozen history are independent of current FX', () => {
-  it.each([old, silver, lender])('actual interest conversion keeps same currency %s', root => {
+  it.each([['old', old], ['silver', silver], ['lender', lender]] as const)('actual interest conversion keeps same currency %s', (_name, root) => {
     for (const currency of ['USDT','CNY']) {
       expect(run(`(${expr(root, 'convertAccrued')})(25)`, { baseCur: currency, rateCur: currency, cnyRate: NaN })).toBe(25);
     }

@@ -3,6 +3,8 @@ import { createFunderDisplayFormatter, getFunderUnknownEstimateText, selectFunde
 import { getFunderSettlementDraftError, readFunderSettlementOptionMarkInput } from '@shared/funder-settlement-input';
 import { readLedgerTagHoldingValue } from '@/lib/ledgerTagHoldingValue';
 import { selectFunderWalletCollateralDisplay } from '@shared/funder-wallet-collateral-display';
+import { CRYPTO_ASSET_CODES } from '@shared/crypto-asset-catalog';
+import { AI_WALLET_ASSET_COLORS, AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS } from '@shared/ai-wallet-assets';
 import { getWalletCollateralDraftError, getWalletCollateralMaximum } from '@shared/funder-wallet-collateral-input';
 import type { Ledger37OrderReferenceScope } from '@shared/ledger37-order-reference';
 // ===== FunderOrderCard 共享组件 =====
@@ -96,8 +98,8 @@ export async function refreshFunderSettlementQueries(utils: any, ledgerId: numbe
   }
 }
 
-// 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK'] as const;
+// 统一静态币种选项；BTC/ETH 优先。目录可选不等于已取得行情，报价仅按实际需求获取。
+export const COIN_OPTIONS = [...CRYPTO_ASSET_CODES, 'USDT', 'CNY', ...AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 // 期权权利金统一保留四位小数：无论 U 本位还是币本位，都与期权精度一致。
@@ -321,6 +323,7 @@ export const INTEREST_PAYMENT_OPTIONS = [
 ];
 
 export const COIN_COLORS: Record<CoinType, string> = {
+  ...AI_WALLET_ASSET_COLORS,
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',

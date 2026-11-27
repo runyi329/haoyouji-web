@@ -32,7 +32,7 @@ export function buildWalletDigitalAssets(
     totalBalance?: number;
     availableBalance?: number;
     frozenBalance?: number;
-    priceUsdt?: number;
+    priceUsdt?: number | null;
   }>,
   fallbackUsdtTotal = 0,
 ): WalletDigitalAsset[] {

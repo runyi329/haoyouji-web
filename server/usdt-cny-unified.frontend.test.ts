@@ -114,7 +114,8 @@ describe('actual production TSX/AST input, wiring and execution', () => {
         seen.push(input.fromcoin);
       }
     }
-    expect(seen.filter(v => v === 'USDT')).toHaveLength(9);
+    // Wallet now subscribes to independent FX instead of requesting the full coin-price directory for conversion.
+    expect(seen.filter(v => v === 'USDT')).toHaveLength(10);
     expect(seen.filter(v => v === 'USD')).toHaveLength(1);
   });
   it('production live cnyRate extractors reject outage and valid 6.7 passes; frozen card strictly selects snapshot', () => {
@@ -192,8 +193,8 @@ describe('actual production TSX/AST input, wiring and execution', () => {
     fn(); expect(mutate).not.toHaveBeenCalled(); expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('汇率待更新'));
   });
   it('52 wallet absent FX is unknown but keeps original CNY/USDT totals and independent frozen-only coin quantities', () => {
-    const key = 'pages/Wallet'; const query = { data: prices(6.7, { stale: true }) };
-    const valuation = expression<any>('walletFxValuation', key, { usdtTotalBalance: 100, cnyBalance: 670, walletPricesQuery: query });
+    const key = 'pages/Wallet'; const query = { data: quote(6.7, { stale: true, pair: 'USDT/CNY', fromcoin: 'USDT' }) };
+    const valuation = expression<any>('walletFxValuation', key, { usdtTotalBalance: 100, cnyBalance: 670, walletFxQuery: query });
     expect(valuation).toMatchObject({ rate: null, usdtTotal: 100, cnyTotal: 670, usdtValueCny: null, cnyValueUsdt: null });
     const raw = [{ assetCode: 'ETH', totalBalance: 2, availableBalance: 0, frozenBalance: 2, priceUsdt: 99999 }];
     const mapped = expression<any[]>('multiAssetBalances', key, { multiAssetBalancesQuery: { data: raw }, unifiedPrices: {}, usdtCnyRate: null });

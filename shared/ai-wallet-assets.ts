@@ -1,22 +1,17 @@
+import { CRYPTO_ASSET_CODES, CRYPTO_ASSET_NAMES, type CryptoAssetCode } from "./crypto-asset-catalog";
+
 /**
  * AI 智能钱包的全局资产目录。
  *
- * 说明：`funding` 资产为历史兼容的 CNY / USDT 资金账户；52 号账本订单币种目录
- * 中的 `market` 市场资产及新增钱包资产（如 BTY 比特元）均具备独立钱包余额、不可变
- * 流水、后台手动加减、站内转账和钱包担保能力；钱包目录不代表融资订单新增选项。
- * 链上充值、提现地址仅适用于数字币，仍须按
- * 币种网络单独配置后才会开放。
+ * `funding` 为历史兼容的 CNY / USDT 资金账户；`market` 与 37 / 52 共用数字币目录，
+ * 并保留证券 / 商品。目录内资产具备独立余额、不可变流水、后台手动加减、站内转账
+ * 和钱包担保能力，但目录不代表已经取得实时行情，也不自动开放商城支付。
+ * 链上充值、提现地址仅适用于数字币，仍须按币种网络单独配置后才会开放。
  */
 export const AI_WALLET_FUNDING_ASSETS = ["CNY", "USDT"] as const;
 
-/** 独立钱包数字资产目录；包含 52 号原有数字币及 BTY 比特元，行情须分别核验。 */
-export const AI_WALLET_CRYPTO_MARKET_ASSETS = [
-  "BTC", "ETH", "SOL", "BNB",
-  "HYPE", "TRUMP", "PENGU", "XPL", "WLFI",
-  "AVAX", "DOGE", "XLM", "TIA", "EIGEN", "FET",
-  "AAVE", "SUI", "ONDO", "ASTER", "LDO", "ENA", "ARKM", "UNI", "SEI",
-  "PLUME", "ADA", "ZRO", "WLD", "LINK", "POL", "CRV", "PEPE", "B2", "BTY",
-] as const;
+/** 独立钱包数字资产的唯一共享 tuple；216 币不会因目录展开而自动请求报价。 */
+export const AI_WALLET_CRYPTO_MARKET_ASSETS = CRYPTO_ASSET_CODES;
 
 /**
  * 52 号账本融资付息订单下拉中可独立记账的证券与商品标的。
@@ -31,7 +26,7 @@ export const AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS = [
   "NFLX", "ORCL", "TSM", "AMD", "CL", "NG", "CRCL", "DRAM", "MU", "SKHYNIX", "BZ",
 ] as const;
 
-/** 可独立记账市场资产：覆盖 52 号原有订单目录，并包含新增钱包币种。 */
+/** 可独立记账市场资产：统一数字币与原有 52 号证券 / 商品。 */
 export const AI_WALLET_MARKET_ASSETS = [
   ...AI_WALLET_CRYPTO_MARKET_ASSETS,
   ...AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS,
@@ -55,42 +50,9 @@ export type AiWalletAssetDefinition = {
 };
 
 const ASSET_NAMES: Record<AiWalletAsset, string> = {
+  ...CRYPTO_ASSET_NAMES,
   CNY: "人民币",
   USDT: "泰达币",
-  BTC: "比特币",
-  ETH: "以太坊",
-  SOL: "Solana",
-  BNB: "BNB",
-  HYPE: "Hyperliquid",
-  TRUMP: "Official Trump",
-  PENGU: "Pudgy Penguins",
-  XPL: "Plasma",
-  WLFI: "World Liberty Financial",
-  AVAX: "Avalanche",
-  DOGE: "狗狗币",
-  XLM: "恒星币",
-  TIA: "Celestia",
-  EIGEN: "EigenLayer",
-  FET: "Fetch.ai",
-  AAVE: "Aave",
-  SUI: "Sui",
-  ONDO: "Ondo",
-  ASTER: "Aster",
-  LDO: "Lido DAO",
-  ENA: "Ethena",
-  ARKM: "Arkham",
-  UNI: "Uniswap",
-  SEI: "Sei",
-  PLUME: "Plume",
-  ADA: "艾达币",
-  ZRO: "LayerZero",
-  WLD: "Worldcoin",
-  LINK: "Chainlink",
-  POL: "Polygon",
-  CRV: "Curve DAO",
-  PEPE: "Pepe",
-  B2: "B² Network",
-  BTY: "比特元",
   MSTR: "Strategy",
   COIN: "Coinbase",
   AAOI: "Applied Optoelectronics",
@@ -130,13 +92,23 @@ export const AI_WALLET_ASSET_CATALOG: readonly AiWalletAssetDefinition[] = AI_WA
       ? (code === "CNY"
         ? "现有余额、后台调账与站内转账已支持；用户端法币充值/提现申请闭环尚未接入。"
         : "现有余额、充值订单、提现审核、站内转账与链网络能力已接入。")
-      : ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)
-        ? "52号市场资产钱包：已启用独立余额、不可变流水、后台手动加减、站内转账和担保冻结；数字币链上充提须完成网络配置后另行开放。"
-        : "已接入 52 号账本的实时行情与仓位展示；尚未纳入独立钱包资金账本。"),
+      : "37/52共享市场资产钱包：已启用独立余额、不可变流水、后台手动加减、站内转账和担保冻结；行情按需求获取，数字币链上充提须完成网络配置后另行开放。",
   };
 });
 
+// 新币使用按代码哈希的确定性色，不使用随机数或把默认色冒充官方品牌色。
+const DEFAULT_CRYPTO_COLOR_PALETTE = [
+  "#2563EB", "#7C3AED", "#059669", "#D97706", "#DB2777", "#0891B2",
+  "#4F46E5", "#0D9488", "#9333EA", "#C2410C", "#475569", "#BE123C",
+] as const;
+const DEFAULT_CRYPTO_COLORS = Object.fromEntries(CRYPTO_ASSET_CODES.map((code) => {
+  let hash = 0;
+  for (const char of code) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  return [code, DEFAULT_CRYPTO_COLOR_PALETTE[hash % DEFAULT_CRYPTO_COLOR_PALETTE.length]];
+})) as Record<CryptoAssetCode, string>;
+
 export const AI_WALLET_ASSET_COLORS: Record<AiWalletAsset, string> = {
+  ...DEFAULT_CRYPTO_COLORS,
   CNY: "#DE2910", USDT: "#26A17B", BTC: "#F7931A", ETH: "#627EEA", SOL: "#9945FF", BNB: "#F3BA2F",
   HYPE: "#5C6BC0", TRUMP: "#D71920", PENGU: "#66C5E0", XPL: "#6B5CFF", WLFI: "#1F2937",
   AVAX: "#E84142", DOGE: "#C2A633", XLM: "#14B8A6", TIA: "#7C3AED", EIGEN: "#8B5CF6", FET: "#1A73E8",
@@ -148,4 +120,5 @@ export const AI_WALLET_ASSET_COLORS: Record<AiWalletAsset, string> = {
   META: "#0866FF", AMZN: "#FF9900", SPY: "#1A56DB", QQQ: "#7C3AED", NFLX: "#E50914",
   ORCL: "#F80000", TSM: "#0070C0", AMD: "#ED1C24", CL: "#8B4513", NG: "#4A90D9",
   CRCL: "#1E88D6", DRAM: "#E040FB", MU: "#0097A7", SKHYNIX: "#EB1C24", BZ: "#8B4513",
+  INJ: "#0096FF", NEAR: "#00A67D", TAO: "#111827", PENDLE: "#2563EB", STRK: "#EC796B",
 };

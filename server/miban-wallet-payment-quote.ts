@@ -144,7 +144,7 @@ export function verifyMibanPaymentQuoteToken(token: string, userId: number, key 
 
 /** 查询路径不执行DDL，不创建余额，不在客户端缺数据时虚构零余额。 */
 export async function getMibanWalletPaymentQuote(userId: number): Promise<MibanWalletPaymentQuote> {
-  const [{ getGlobalWalletFundingBalance }, { getDbConnection }, { getAllLatestPrices, getMarketPriceHealth }, { getLiveUsdtCnyQuote }] = await Promise.all([
+  const [{ getGlobalWalletFundingBalance }, { getDbConnection }, { getAllLatestPrices, getMarketPriceHealth, ensureCryptoSpotPrices }, { getLiveUsdtCnyQuote }] = await Promise.all([
     import("./wallet-funding-guard"), import("./db"), import("./price-scanner"), import("./usdt-cny-rate"),
   ]);
   const connection = await getDbConnection();
@@ -155,6 +155,9 @@ export async function getMibanWalletPaymentQuote(userId: number): Promise<MibanW
     (connection as any).execute("SELECT asset_code, available_balance, frozen_balance FROM ai_wallet_asset_balances WHERE user_id = ?", [userId]),
     getLiveUsdtCnyQuote(),
   ]);
+  await ensureCryptoSpotPrices((balanceResult[0] as any[])
+    .filter(row => Number(row.available_balance) !== 0 && (MIBAN_PAYMENT_ASSETS as readonly string[]).includes(String(row.asset_code)))
+    .map(row => String(row.asset_code)));
   const allPrices = getAllLatestPrices();
   const prices: Record<string, number> = {};
   const updatedAt: Record<string, string> = {};

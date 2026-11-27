@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEGACY_WALLET_CRYPTO_ASSET_CODES } from "../shared/crypto-asset-catalog";
 import {
   AI_WALLET_CRYPTO_MARKET_ASSETS,
   AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS,
@@ -162,9 +163,13 @@ describe("miban payment decimal units: independent 18-digit BigInt oracle", () =
 });
 
 describe("miban payment asset whitelist and funding request normalization", () => {
-  it("contains exactly CNY + USDT + independent-wallet crypto, without duplicates", () => {
-    expect(MIBAN_PAYMENT_ASSETS).toEqual(["CNY", "USDT", ...AI_WALLET_CRYPTO_MARKET_ASSETS]);
+  it("contains exactly CNY + USDT + original34 crypto; wallet expansion does not widen payment", () => {
+    expect(MIBAN_PAYMENT_ASSETS).toEqual(["CNY", "USDT", ...LEGACY_WALLET_CRYPTO_ASSET_CODES]);
     expect(new Set(MIBAN_PAYMENT_ASSETS).size).toBe(MIBAN_PAYMENT_ASSETS.length);
+  });
+
+  it.each(AI_WALLET_CRYPTO_MARKET_ASSETS.filter(code => !(LEGACY_WALLET_CRYPTO_ASSET_CODES as readonly string[]).includes(code)))("new catalog coin %s is not silently enabled for payment", code => {
+    expect(() => normalizeMibanPaymentAssets([{assetCode:code,amount:"1"}])).toThrow(/不支持/);
   });
 
   it.each(AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS)("rejects security/commodity %s even when a price fixture exists", (code) => {
@@ -174,7 +179,7 @@ describe("miban payment asset whitelist and funding request normalization", () =
     expect(() => validateMibanPaymentDeductions("1", [{ assetCode: code, amount: "1" }], [asset(code)])).toThrow(/不支持/);
   });
 
-  it.each(AI_WALLET_CRYPTO_MARKET_ASSETS)("allows the independent-wallet 18th decimal place for %s", (code) => {
+  it.each(LEGACY_WALLET_CRYPTO_ASSET_CODES)("allows the independent-wallet 18th decimal place for %s", (code) => {
     expect(paymentAssetDecimals(code)).toBe(18);
     expect(normalizeMibanPaymentAssets([{ assetCode: code, amount: "0.000000000000000001" }])).toEqual([
       { assetCode: code, amount: exactText(1n) },

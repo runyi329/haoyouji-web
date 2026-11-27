@@ -1,7 +1,7 @@
 import { finitePositive, getUsdtCnyRate, formatFxEstimate } from '@shared/usdt-cny-display';
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
-import { FunderOrderCard } from "@/components/FunderOrderCard";
+import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS as FUNDER_COIN_COLORS, type CoinType } from "@/components/FunderOrderCard";
 import { trpc } from "@/lib/trpc";
 import { formatFunderPendingInterest, resolveFunderInterestEndDate, usesFunderContractInterestPrepayment } from "@shared/funder-interest-period";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
@@ -68,8 +68,7 @@ export function financeCardExposure(values: { collateral: number | null; floatPn
   return values.collateral! + values.floatPnl! - values.accrued! + values.paid! - values.lentOut! - values.principal!;
 }
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK', 'DOGE'] as const;
-type CoinType = typeof COIN_OPTIONS[number];
+// 与 FunderOrderCard 共用严格币单及类型，旧入口不再维护另一个数字币目录。
 // 整数型币种（单价较低，通常以整数计量）
 const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 
@@ -199,6 +198,7 @@ const STATUS_OPTIONS = [
 ];
 
 const COIN_COLORS: Record<CoinType, string> = {
+  ...FUNDER_COIN_COLORS,
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',

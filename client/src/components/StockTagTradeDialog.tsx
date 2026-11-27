@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cryptoPortfolioBase, parsePortfolioInstrument, portfolioCurrency, portfolioDisplaySymbol, portfolioQuantityUnit, portfolioQuotePrefix, portfolioCashMultiplier, isValidCryptoPortfolioQuantity, type PortfolioCurrency, type PortfolioMarket } from "@shared/portfolio-instruments";
+import { CryptoAssetSelect, getCryptoAssetSearchText } from "@/components/CryptoAssetSelect";
+import { useDemandCryptoQuotes } from "@/hooks/useDemandCryptoQuotes";
 
 type TradeType = "buy" | "sell";
 
@@ -89,7 +91,6 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
   const [note, setNote] = useState("");
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
   const [profitSharePercentages, setProfitSharePercentages] = useState<Record<string, string>>({});
-  const [cryptoSelectionSymbol, setCryptoSelectionSymbol] = useState<string | null>(null);
 
   const portfolioQuery = trpc.ledger.getStockTagPortfolio.useQuery(
     { ledgerId: 37, categoryId },
@@ -218,36 +219,39 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
     { enabled: open && type === 'buy' && stockMarket === 'CRYPTO', staleTime: 600_000 },
   );
   const cryptoOptions = ((cryptoCatalogQuery.data as any)?.results || []).filter((stock: any) => stock.market === 'CRYPTO' && stock.currency === 'USDT' && cryptoPortfolioBase(stock.symbol));
-  const cryptoSelectionQuoteQuery = trpc.searchManualStocks.useQuery(
-    { query: cryptoPortfolioBase(cryptoSelectionSymbol) || 'BTC', market: 'CRYPTO' },
-    { enabled: open && type === 'buy' && stockMarket === 'CRYPTO' && !!cryptoSelectionSymbol, staleTime: 0 },
+  const selectedCryptoBase = cryptoPortfolioBase(type === 'buy' ? selectedStock?.symbol : selectedSaleLot?.symbol);
+  const cryptoSelectionQuoteQuery = useDemandCryptoQuotes(
+    [selectedCryptoBase], open && !!selectedCryptoBase && (type === 'sell' || stockMarket === 'CRYPTO'),
   );
+  const selectedCryptoPrice = selectedCryptoBase ? cryptoSelectionQuoteQuery.prices[selectedCryptoBase] ?? null : null;
   const shouldSearchStock = open && type === "buy" && symbolQuery.trim().length >= (stockMarket === 'A' ? 2 : 1) && !selectedStock;
   const suggestionsQuery = trpc.searchManualStocks.useQuery(
     { query: symbolQuery.trim() || 'A', market: stockMarket },
-    { enabled: shouldSearchStock, staleTime: 3_000 },
+    { enabled: shouldSearchStock && stockMarket !== 'CRYPTO', staleTime: 3_000 },
   );
-  const suggestions = ((suggestionsQuery.data as any)?.results || []).filter((stock: any) => stockMarket !== 'CRYPTO' || (stock.market === 'CRYPTO' && stock.currency === 'USDT' && parsePortfolioInstrument(stock.symbol)?.market === 'CRYPTO'));
+  // 数字币名称/代码在无价目录本地过滤，模糊命中的20个币不会产生报价租约。
+  const suggestions = stockMarket === 'CRYPTO'
+    ? cryptoOptions.filter((stock: any) => `${getCryptoAssetSearchText(cryptoPortfolioBase(stock.symbol) || '')} ${stock.name || ''}`.toLowerCase().includes(symbolQuery.trim().toLowerCase()))
+    : ((suggestionsQuery.data as any)?.results || []);
+  const searchIsFetching = stockMarket === 'CRYPTO' ? cryptoCatalogQuery.isFetching : suggestionsQuery.isFetching;
+  const searchError = stockMarket === 'CRYPTO' ? cryptoCatalogQuery.error : suggestionsQuery.error;
+  const searchData = stockMarket === 'CRYPTO' ? cryptoCatalogQuery.data : suggestionsQuery.data;
 
   const selectStock = (stock: any) => {
     setSelectedStock(stock);
     setSymbolQuery('');
-    setExecutionPrice(stock.latestPrice == null ? '' : String(stock.latestPrice));
-    setCryptoSelectionSymbol(stock.market === 'CRYPTO' && stock.latestPrice == null ? stock.symbol : null);
+    // 目录中的旧参考价不充当当前选中价；切币后先清空，再等待这个币的有效报价。
+    setExecutionPrice(stock.market === 'CRYPTO' || stock.latestPrice == null ? '' : String(stock.latestPrice));
   };
   useEffect(() => {
-    if (!open || type !== 'buy' || stockMarket !== 'CRYPTO' || !cryptoSelectionSymbol || cryptoSelectionQuoteQuery.isFetching) return;
-    const quote = ((cryptoSelectionQuoteQuery.data as any)?.results || []).find((stock: any) => stock.symbol === cryptoSelectionSymbol && stock.market === 'CRYPTO' && stock.currency === 'USDT');
-    if (!quote) return;
-    setSelectedStock((previous: any) => previous?.symbol === cryptoSelectionSymbol ? quote : previous);
-    if (quote.latestPrice != null) setExecutionPrice(previous => previous.trim() ? previous : String(quote.latestPrice));
-    setCryptoSelectionSymbol(null);
-  }, [open, type, stockMarket, cryptoSelectionSymbol, cryptoSelectionQuoteQuery.data, cryptoSelectionQuoteQuery.isFetching]);
+    if (!open || type !== 'buy' || stockMarket !== 'CRYPTO' || selectedCryptoPrice === null) return;
+    // 首次补价后继续续租供只读参考，不覆盖手工实际成交价。
+    setExecutionPrice(previous => previous.trim() ? previous : String(selectedCryptoPrice));
+  }, [open, type, stockMarket, selectedCryptoBase, selectedCryptoPrice]);
 
   const changeMarket = (market: PortfolioMarket) => {
     setStockMarket(market);
     setSelectedStock(null);
-    setCryptoSelectionSymbol(null);
     setSymbolQuery('');
     setExecutionPrice('');
     setQuantity('');
@@ -257,7 +261,6 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
   const resetForm = () => {
     setSymbolQuery("");
     setSelectedStock(null);
-    setCryptoSelectionSymbol(null);
     setStockMarket('A');
     setQuantity("");
     setExecutionPrice("");
@@ -400,21 +403,23 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
                 <Label>{stockMarket === 'CRYPTO' ? '数字币现货代码或名称' : stockMarket === 'US' ? '美股代码或名称' : '股票代码、名称或拼音'}</Label>
                 <div className="mt-1 flex min-w-0 gap-2">
                   <div className="relative min-w-0 flex-1">
-                    <Input value={selectedStock ? (stockMarket === 'CRYPTO' ? cryptoPortfolioBase(selectedStock.symbol) || '' : `${selectedStock.name} ${portfolioDisplaySymbol(selectedStock.symbol)}`) : symbolQuery} onChange={(event) => { setSelectedStock(null); setCryptoSelectionSymbol(null); setExecutionPrice(''); setSymbolQuery(event.target.value); }} placeholder={stockMarket === 'CRYPTO' ? '如 BTC、ETH、比特币（仅USDT现货）' : stockMarket === 'US' ? '如 CRCL、Circle、AAPL 或 BRK.B' : '如 600519、贵州茅台或 gzm'} autoCapitalize={stockMarket === 'US' ? 'characters' : 'none'} />
-                    {(suggestionsQuery.isFetching || (cryptoSelectionSymbol && cryptoSelectionQuoteQuery.isFetching)) && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
+                    <Input value={selectedStock ? (stockMarket === 'CRYPTO' ? cryptoPortfolioBase(selectedStock.symbol) || '' : `${selectedStock.name} ${portfolioDisplaySymbol(selectedStock.symbol)}`) : symbolQuery} onChange={(event) => { setSelectedStock(null); setExecutionPrice(''); setSymbolQuery(event.target.value); }} placeholder={stockMarket === 'CRYPTO' ? '如 BTC、ETH、比特币（仅USDT现货）' : stockMarket === 'US' ? '如 CRCL、Circle、AAPL 或 BRK.B' : '如 600519、贵州茅台或 gzm'} autoCapitalize={stockMarket === 'US' ? 'characters' : 'none'} />
+                    {(searchIsFetching || (selectedCryptoBase && cryptoSelectionQuoteQuery.isFetching)) && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
                   </div>
-                  {stockMarket === 'CRYPTO' && <select aria-label="下拉选择数字币" value="" disabled={cryptoCatalogQuery.isFetching && cryptoOptions.length === 0} onChange={event => { const stock = cryptoOptions.find((option: any) => option.symbol === event.target.value); if (stock) selectStock(stock); }} className="h-10 w-24 shrink-0 rounded-md border border-input bg-background px-2 text-sm">
-                    <option value="" disabled>{cryptoCatalogQuery.isFetching && cryptoOptions.length === 0 ? '加载中' : '下拉选择'}</option>
-                    {cryptoOptions.map((stock: any) => <option key={stock.symbol} value={stock.symbol}>{cryptoPortfolioBase(stock.symbol)}</option>)}
-                  </select>}
+                  {stockMarket === 'CRYPTO' && <CryptoAssetSelect aria-label="下拉选择数字币" value={selectedCryptoBase || ''}
+                    includeCny={false} includeUsdt={false} options={cryptoOptions.map((stock: any) => cryptoPortfolioBase(stock.symbol)!)}
+                    disabled={cryptoCatalogQuery.isFetching && cryptoOptions.length === 0}
+                    placeholder={cryptoCatalogQuery.isFetching && cryptoOptions.length === 0 ? '加载中' : '下拉选择'}
+                    onValueChange={base => { const stock = cryptoOptions.find((option: any) => cryptoPortfolioBase(option.symbol) === base); if (stock) selectStock(stock); }}
+                    className="h-10 w-28 shrink-0 px-2" />}
                 </div>
-                {stockMarket === 'CRYPTO' && cryptoCatalogQuery.error && <div role="alert" className="mt-1 text-[11px] text-amber-700">币种下拉暂未加载，可输入代码搜索。<button type="button" className="ml-2 underline" onClick={() => { void cryptoCatalogQuery.refetch(); }}>重载下拉</button></div>}
-                {cryptoSelectionSymbol && cryptoSelectionQuoteQuery.isFetching && <div role="status" className="mt-1 text-[11px] text-gray-500">正在读取 {cryptoPortfolioBase(cryptoSelectionSymbol)} 实时报价…</div>}
-                {shouldSearchStock && suggestionsQuery.isFetching && <div role="status" className="mt-1 text-[11px] text-gray-500">{stockMarket === 'CRYPTO' ? '正在搜索币种并读取真实报价，首次加载可能需要几秒…' : '正在搜索…'}</div>}
-                {shouldSearchStock && suggestionsQuery.error && <div role="alert" className="mt-1 flex items-center justify-between gap-2 text-[11px] text-amber-700"><span>搜索暂未完成，请重试。</span><button type="button" className="shrink-0 underline" onClick={() => { void suggestionsQuery.refetch(); }}>重试</button></div>}
-                {shouldSearchStock && !suggestionsQuery.isFetching && !suggestionsQuery.error && suggestionsQuery.data && suggestions.length === 0 && <div role="status" className="mt-1 text-[11px] text-gray-500">{stockMarket === 'CRYPTO' ? '暂未找到匹配币种，请检查代码或稍后重试，例如 BTC、ETH。' : '暂未找到匹配标的，请检查名称或代码。'}</div>}
-                {!selectedStock && shouldSearchStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => selectStock(stock)} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stockMarket === 'CRYPTO' ? cryptoPortfolioBase(stock.symbol) : stock.name}</span>{stockMarket !== 'CRYPTO' && <span className="ml-2 text-xs text-gray-500">{portfolioDisplaySymbol(stock.symbol)}</span>}{stock.market === 'US' && stock.exchange && <span className="ml-1.5 rounded bg-[#EAF2FF] px-1 py-0.5 text-[10px] font-medium text-[#1565C0]">{stock.exchange}</span>}{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, portfolioCurrency(stock.symbol))}</span> : stock.market === 'CRYPTO' ? <span className="block text-[10px] text-amber-700">参考价暂不可用，请填写实际成交价</span> : null}</button>)}</div>}
-                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{stockMarket === 'CRYPTO' ? cryptoPortfolioBase(selectedStock.symbol) : `${selectedStock.name} · ${portfolioDisplaySymbol(selectedStock.symbol)}`}{selectedStock.market === 'US' && selectedStock.exchange ? ` · ${selectedStock.exchange}` : ''} · {portfolioCurrency(selectedStock.symbol) === 'USDT' ? 'USDT现货计价' : selectedStock.currency === 'USD' ? '美元计价' : '人民币计价'}；登记时参考价由服务器留档。{isCryptoTrade && selectedStock.latestPrice == null && !cryptoSelectionQuoteQuery.isFetching ? '参考价暂不可用，请填写实际成交价。' : ''}</div>}
+                {stockMarket === 'CRYPTO' && cryptoCatalogQuery.error && <div role="alert" className="mt-1 text-[11px] text-amber-700">币种目录暂未加载。<button type="button" className="ml-2 underline" onClick={() => { void cryptoCatalogQuery.refetch(); }}>重载下拉</button></div>}
+                {selectedCryptoBase && cryptoSelectionQuoteQuery.isFetching && selectedCryptoPrice === null && <div role="status" className="mt-1 text-[11px] text-gray-500">正在读取 {selectedCryptoBase} 实时报价…</div>}
+                {shouldSearchStock && searchIsFetching && <div role="status" className="mt-1 text-[11px] text-gray-500">{stockMarket === 'CRYPTO' ? '正在加载币种目录，选中后才读取报价…' : '正在搜索…'}</div>}
+                {shouldSearchStock && searchError && <div role="alert" className="mt-1 flex items-center justify-between gap-2 text-[11px] text-amber-700"><span>搜索暂未完成，请重试。</span><button type="button" className="shrink-0 underline" onClick={() => { void (stockMarket === 'CRYPTO' ? cryptoCatalogQuery : suggestionsQuery).refetch(); }}>重试</button></div>}
+                {shouldSearchStock && !searchIsFetching && !searchError && searchData && suggestions.length === 0 && <div role="status" className="mt-1 text-[11px] text-gray-500">{stockMarket === 'CRYPTO' ? '暂未找到匹配币种，请检查代码或稍后重试，例如 BTC、ETH。' : '暂未找到匹配标的，请检查名称或代码。'}</div>}
+                {!selectedStock && shouldSearchStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-[3px] border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => selectStock(stock)} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stockMarket === 'CRYPTO' ? cryptoPortfolioBase(stock.symbol) : stock.name}</span><span className="ml-2 text-xs text-gray-500">{stockMarket === 'CRYPTO' ? stock.name : portfolioDisplaySymbol(stock.symbol)}</span>{stock.market === 'US' && stock.exchange && <span className="ml-1.5 rounded bg-[#EAF2FF] px-1 py-0.5 text-[10px] font-medium text-[#1565C0]">{stock.exchange}</span>}{stockMarket !== 'CRYPTO' && stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, portfolioCurrency(stock.symbol))}</span> : stock.market === 'CRYPTO' ? <span className="block text-[10px] text-gray-400">选中后读取USDT实时报价</span> : null}</button>)}</div>}
+                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{stockMarket === 'CRYPTO' ? cryptoPortfolioBase(selectedStock.symbol) : `${selectedStock.name} · ${portfolioDisplaySymbol(selectedStock.symbol)}`}{selectedStock.market === 'US' && selectedStock.exchange ? ` · ${selectedStock.exchange}` : ''} · {portfolioCurrency(selectedStock.symbol) === 'USDT' ? 'USDT现货计价' : selectedStock.currency === 'USD' ? '美元计价' : '人民币计价'}；登记时参考价由服务器留档。{isCryptoTrade ? selectedCryptoPrice !== null ? `当前参考 ${money(selectedCryptoPrice, 'USDT')}。` : !cryptoSelectionQuoteQuery.isFetching ? '参考价暂不可用，请填写实际成交价。' : '' : ''}</div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>{tradeCurrency === 'USDT' ? '实际买入价格（USDT）' : tradeCurrency === 'USD' ? '实际买入价格（美元）' : '实际买入价格（人民币）'}</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
@@ -433,7 +438,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
                 </select>
               </div>}
               {portfolioQuery.isLoading && !isEditingSale && <div className="text-xs text-gray-400">正在载入可卖持仓编号…</div>}
-              {selectedSaleLot && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-xs leading-5 text-gray-600">{(initialLotId || isEditingSale) && <div className="mb-0.5 text-[10px] text-gray-500">{isEditingSale ? '正在修改的已卖出订单' : '本次卖出持仓'}</div>}<div className="font-semibold text-[#333333]">{isEditingSale ? '' : `#${selectedSaleLot.positionNumber} · `}{selectedSaleLot.stockName} {portfolioDisplaySymbol(selectedSaleLot.symbol)}</div><div className="mt-1 flex justify-between gap-3"><span>买入价 {money(selectedSaleLot.unitCost, selectedSaleLot.currency)}</span><span>{isEditingSale ? '原卖出价' : '当前价'} {money(isEditingSale ? editingSale?.sellPrice : selectedSaleLot.marketPrice, selectedSaleLot.currency)}</span></div><div className="mt-1 font-medium text-[#C62828]">{isEditingSale ? `本单已卖出 ${formatQuantity(selectedSaleLot.quantity)} ${tradeQuantityUnit}` : `本次将卖出全部剩余 ${formatQuantity(selectedSaleLot.quantity)} ${tradeQuantityUnit}`}</div></div>}
+              {selectedSaleLot && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-xs leading-5 text-gray-600">{(initialLotId || isEditingSale) && <div className="mb-0.5 text-[10px] text-gray-500">{isEditingSale ? '正在修改的已卖出订单' : '本次卖出持仓'}</div>}<div className="font-semibold text-[#333333]">{isEditingSale ? '' : `#${selectedSaleLot.positionNumber} · `}{selectedSaleLot.stockName} {portfolioDisplaySymbol(selectedSaleLot.symbol)}</div><div className="mt-1 flex justify-between gap-3"><span>买入价 {money(selectedSaleLot.unitCost, selectedSaleLot.currency)}</span><span>{isEditingSale ? '原卖出价' : '当前价'} {money(isEditingSale ? editingSale?.sellPrice : selectedCryptoBase ? selectedCryptoPrice : selectedSaleLot.marketPrice, selectedSaleLot.currency)}</span></div><div className="mt-1 font-medium text-[#C62828]">{isEditingSale ? `本单已卖出 ${formatQuantity(selectedSaleLot.quantity)} ${tradeQuantityUnit}` : `本次将卖出全部剩余 ${formatQuantity(selectedSaleLot.quantity)} ${tradeQuantityUnit}`}</div></div>}
               <div><Label>{tradeCurrency === 'USDT' ? '实际卖出价格（USDT）' : tradeCurrency === 'USD' ? '实际卖出价格（美元）' : '实际卖出价格（人民币）'}</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
               {saleSettlementPreview && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2 text-xs leading-5 text-gray-600"><div className="flex justify-between gap-3"><span>买入金额</span><span>{money(saleSettlementPreview.buyAmount, tradeCurrency)}</span></div><div className="flex justify-between gap-3"><span>买入手续费（千分之一）</span><span>−{money(saleSettlementPreview.buyFee, tradeCurrency)}</span></div><div className="mt-0.5 flex justify-between gap-3"><span>卖出金额</span><span>{money(saleSettlementPreview.sellAmount, tradeCurrency)}</span></div><div className="flex justify-between gap-3"><span>卖出手续费（千分之一）</span><span>−{money(saleSettlementPreview.sellFee, tradeCurrency)}</span></div><div className={`mt-1 flex justify-between border-t border-[#EBCFCF] pt-1 font-semibold ${saleSettlementPreview.netProfit >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]'}`}><span>账户长仓净盈亏</span><span>{saleSettlementPreview.netProfit >= 0 ? '+' : '−'}{money(Math.abs(saleSettlementPreview.netProfit), tradeCurrency)}</span></div><div className="mt-1 text-[10px] text-gray-500">买入、卖出手续费均按成交金额千分之一计算，确认后由服务器固定留档。</div></div>}
               {selectedSaleLot && <section className="rounded-lg border border-[#DDE5EA] bg-[#FAFCFD] px-3 py-2.5 text-xs">

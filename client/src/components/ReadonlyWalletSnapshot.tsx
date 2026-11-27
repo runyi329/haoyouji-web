@@ -5,8 +5,10 @@ import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { selectWalletAccountByLatestFlow } from "@/lib/walletAccountSelection";
 import { WalletDigitalAssetList } from "@/components/WalletDigitalAssetList";
-import { buildWalletDigitalAssets } from "@/lib/walletDigitalAssets";
+import { buildWalletDigitalAssets, formatDigitalAssetAmount } from "@/lib/walletDigitalAssets";
 import { isWalletFlowCurrency } from "@shared/wallet-flow-currency";
+import { useDemandCryptoQuotes } from "@/hooks/useDemandCryptoQuotes";
+import { isCryptoAssetCode } from "@shared/crypto-asset-catalog";
 
 // MySQL timestamp strings are stored as Beijing wall-clock values; format with UTC accessors.
 const fmtBJTime = (d: any, withTime = true): string => {
@@ -49,11 +51,22 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   snapshot: any;
   onClose: () => void;
 }) {
-  // 余额快照负责数量与权限；当前估值统一按同一份三秒行情缓存重算。
+  // 快照只提供数量与权限；旧缓存仅兼容证券和汇率，不作为数字币报价兜底。
   const { data: unifiedPriceData } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: Boolean(snapshot),
     refetchInterval: 3000,
     staleTime: 2500,
   });
+  const demandQuotes = useDemandCryptoQuotes(
+    (snapshot?.multiAssetBalances || [])
+      .filter((asset: any) => {
+        const code = String(asset.assetCode || '').trim().toUpperCase();
+        const total = Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0)));
+        return code !== 'USDT' && isCryptoAssetCode(code) && Number.isFinite(total) && total !== 0;
+      })
+      .map((asset: any) => asset.assetCode),
+    Array.isArray(snapshot?.multiAssetBalances),
+  );
   const [account, setAccount] = useState<'CRYPTO' | 'CNY'>(() => selectWalletAccountByLatestFlow(
     [
       ...(snapshot?.balanceHistory || []).filter((entry: any) => isWalletFlowCurrency(entry, 'USDT')),
@@ -65,7 +78,8 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   const autoFlowFilterRef = useRef(true);
   const usdtBalance = Number(snapshot?.usdtBalanceSummary?.total ?? snapshot?.usdtBalance ?? 0);
   const cnyBalance = Number(snapshot?.cnyBalanceSummary?.total ?? snapshot?.cnyBalance ?? 0);
-  const unifiedPrices = ((unifiedPriceData as any)?.prices ?? {}) as Record<string, number>;
+  const unifiedPrices = demandQuotes.prices;
+  const compatibilityPrices = ((unifiedPriceData as any)?.prices ?? {}) as Record<string, number>;
   const liveUsdtCnyRate = Number((unifiedPriceData as any)?.usdtCnyRate ?? 0);
   const hasUsdtCnyRate = Number.isFinite(liveUsdtCnyRate) && liveUsdtCnyRate > 0
     && (unifiedPriceData as any)?.usdtCnyFx?.stale !== true;
@@ -73,12 +87,16 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   // 成员快照与正式钱包都展示全局真实持仓，不因项目可交易币种配置隐藏已持有或担保的币。
   const multiAssets = (snapshot?.multiAssetBalances || [])
     .map((asset: any) => {
-      const assetCode = String(asset.assetCode || '').toUpperCase();
-      const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
-      return { ...asset, priceUsdt: livePriceUsdt > 0 ? livePriceUsdt : Number(asset.priceUsdt || 0) };
+      const assetCode = String(asset.assetCode || '').trim().toUpperCase();
+      const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(
+        (isCryptoAssetCode(assetCode) ? unifiedPrices : compatibilityPrices)[assetCode] ?? 0,
+      );
+      return { ...asset, priceUsdt: Number.isFinite(livePriceUsdt) && livePriceUsdt > 0 ? livePriceUsdt : 0 };
     });
   const digitalAssets = buildWalletDigitalAssets(snapshot?.usdtBalanceSummary, multiAssets, usdtBalance);
   const digitalTotalUsdt = digitalAssets.reduce((sum, asset) => sum + asset.totalBalance * asset.priceUsdt, 0);
+  const digitalValuationKnown = Array.isArray(snapshot?.multiAssetBalances)
+    && digitalAssets.every(asset => Number.isFinite(asset.priceUsdt) && asset.priceUsdt > 0);
   const multiHistory = (snapshot?.multiAssetHistory || [])
     .filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release');
   const usdtFlows = (snapshot?.balanceHistory || [])
@@ -156,14 +174,21 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
           {account === 'CRYPTO' ? <>
             <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}>
               <div className="text-[10px] tracking-[.08em] text-[#a88942]">数字资产总估值</div>
-              <div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(digitalTotalUsdt)}</span><span className="text-sm font-semibold text-[#a88942]">USDT</span></div>
-              <div className="mt-1 text-[11px] text-white/45">{hasUsdtCnyRate ? `≈ ¥${money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值` : '人民币汇率暂不可用'}</div>
+              <div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{digitalValuationKnown ? money(digitalTotalUsdt) : '估值待更新'}</span><span className="text-sm font-semibold text-[#a88942]">USDT</span></div>
+              <div className="mt-1 text-[11px] text-white/45">{!hasUsdtCnyRate ? '人民币汇率暂不可用' : digitalValuationKnown ? `≈ ¥${money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值` : '人民币估值待更新'}</div>
             </div>
             <div className="mb-2 flex items-center justify-between px-1 text-xs">
               <span className="font-semibold text-white/85">我的数字资产</span>
               <span className="text-white/45">{digitalAssets.length ? '数量 / 估值' : '暂无持仓'}</span>
             </div>
-            {digitalAssets.length ? <WalletDigitalAssetList assets={digitalAssets} usdtCnyRate={usdtCnyRate} /> : <div className="rounded-xl border border-white/10 px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
+            {digitalAssets.length ? hasUsdtCnyRate ? <WalletDigitalAssetList assets={digitalAssets} usdtCnyRate={usdtCnyRate} /> : <div className="overflow-hidden rounded-xl border border-white/10">
+              {digitalAssets.map(asset => <div key={asset.assetCode} className="border-b border-white/10 px-3 py-3">
+                <div className="flex justify-between gap-3 text-sm text-white/85"><span>{asset.assetCode}</span><strong>{formatDigitalAssetAmount(asset.assetCode, asset.totalBalance)} {asset.assetCode}</strong></div>
+                <div className="mt-1 text-[11px] text-white/45">可用 {asset.availableBalance === null ? '—' : formatDigitalAssetAmount(asset.assetCode, asset.availableBalance)} · 担保 {asset.frozenBalance === null ? '—' : formatDigitalAssetAmount(asset.assetCode, asset.frozenBalance)}</div>
+                {asset.assetCode !== 'USDT' && <div className="mt-1 text-[11px] text-white/45">{asset.priceUsdt > 0 ? `≈ ${money(asset.totalBalance * asset.priceUsdt)} USDT` : '行情待更新'}</div>}
+                <div className="mt-1 text-[11px] text-white/45">人民币汇率暂不可用</div>
+              </div>)}
+            </div> : <div className="rounded-xl border border-white/10 px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
             <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}>
               <div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">优先最近变动币种</span></div>
               <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">

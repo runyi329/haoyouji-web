@@ -6,7 +6,8 @@
  * Gate 返回 [timestamp, quoteVolume, close, high, low, open, baseVolume, closed]。
  */
 import { parsePortfolioInstrument } from '../shared/portfolio-instruments';
-import { getAllLatestPrices, getMarketPriceHealth } from './price-scanner';
+import { getUnifiedCryptoSpotDirectory, getUnifiedCryptoSpotQuotes, peekUnifiedCryptoSpotInstrument, peekUnifiedCryptoSpotQuote } from './crypto-spot-quote-cache';
+import { touchCryptoQuoteDemand } from './crypto-quote-demand';
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_CRYPTO_MARKET_ASSETS } from '../shared/ai-wallet-assets';
 
 const walletCryptoNames = new Map(AI_WALLET_ASSET_CATALOG.filter(asset => (AI_WALLET_CRYPTO_MARKET_ASSETS as readonly string[]).includes(asset.code)).map(asset => [asset.code as string, asset.name]));
@@ -41,29 +42,14 @@ type SpotInstrument = { symbol: string; base: string; pair: string; name: string
 type CachedQuote = { quote: CryptoPortfolioQuote; expiresAt: number };
 const GATE = 'https://api.gateio.ws/api/v4/spot';
 const HTX = 'https://api.huobi.pro';
-const DIRECTORY_TTL_MS = 10 * 60_000;
 const RETRY_MS = 15_000;
-const QUOTE_TTL_MS = 15_000;
 const SCANNER_FRESH_MS = 120_000;
 const REQUEST_TIMEOUT_MS = 6_000;
-const MAX_SYMBOLS = 100;
+const MAX_SYMBOLS = 216;
 const MAX_SEARCH_RESULTS = 20;
 const MAX_CACHE = 256;
 const MAX_CONCURRENT_REQUESTS = 4;
 const MAX_PENDING_REQUESTS = 256;
-const SCANNER_BASES = new Set([
-  'BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX',
-  'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO',
-  'ENA', 'ARKM', 'UNI', 'SEI', 'PLUME', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL',
-  'CRV', 'PEPE', 'B2', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK',
-]);
-let directory = new Map<string, SpotInstrument>();
-let directoryExpiresAt = 0;
-let directoryRetryAt = 0;
-let directoryFlight: Promise<Map<string, SpotInstrument> | null> | null = null;
-const quoteCache = new Map<string, CachedQuote>();
-const quoteMisses = new Map<string, number>();
-const quoteFlights = new Map<string, Promise<CryptoPortfolioQuote | null>>();
 const closeCache = new Map<string, CachedQuote>();
 const closeMisses = new Map<string, number>();
 const closeFlights = new Map<string, Promise<CryptoPortfolioQuote | null>>();
@@ -112,41 +98,6 @@ function cryptoSymbol(raw: unknown): string | null {
   return instrument?.market === 'CRYPTO' ? instrument.symbol : null;
 }
 
-function isLeveraged(base: string, name: string, row: any): boolean {
-  return /(?:[2-9]|10)(?:L|S|LONG|SHORT|BULL|BEAR|X)$/.test(base)
-    || /\bleveraged\b|\bETF\b|\b[2-9](?:x|\s+times)\s+(?:long|short)\b|杠杆|倍做[多空]/i.test(name)
-    || row?.is_leveraged === true || row?.leveraged === true;
-}
-
-function parseSpot(row: any): SpotInstrument | null {
-  const base = typeof row?.base === 'string' ? row.base : '';
-  const name = typeof row?.base_name === 'string' && row.base_name.trim() ? row.base_name.trim() : base;
-  if (!/^[A-Z0-9][A-Z0-9_]{0,29}$/.test(base) || base === 'USDT'
-    || row.quote !== 'USDT' || row.id !== `${base}_USDT`
-    || row.type !== 'normal' || row.trade_status !== 'tradable'
-    || isLeveraged(base, name, row)) return null;
-  for (const start of Array.from([row.buy_start, row.sell_start])) {
-    if (start != null && (!Number.isFinite(Number(start)) || Number(start) * 1_000 > Date.now())) return null;
-  }
-  const delisting = row.delisting_time == null || Number(row.delisting_time) === 0 ? null : Number(row.delisting_time) * 1_000;
-  if (delisting !== null && (!Number.isFinite(delisting) || delisting <= Date.now())) return null;
-  return { symbol: `CRYPTO:${base}-USDT`, base, pair: row.id, name, gate: { delistingAt: delisting } };
-}
-
-function parseHtxSpot(row: any): SpotInstrument | null {
-  // 官方V1目录仍可用；不能把支持保证金的普通BTC（leverage-ratio=5）误判为ETP。
-  const rawBase = typeof row?.['base-currency'] === 'string' ? row['base-currency'] : '';
-  const base = rawBase.toUpperCase();
-  if (!/^[a-z0-9][a-z0-9_]{0,29}$/.test(rawBase) || base === 'USDT'
-    || row['quote-currency'] !== 'usdt' || row.symbol !== `${rawBase}usdt`
-    || row.state !== 'online' || row['api-trading'] !== 'enabled'
-    || row['ca-state'] != null || isLeveraged(base, base, row)
-    || /(?:^|,)\s*(?:etp|etf)\s*(?:,|$)/i.test(String(row.tags ?? ''))
-    || ['underlying', 'mgmt-fee-rate', 'charge-time', 'rebal-time', 'rebal-threshold', 'init-nav']
-      .some(key => row[key] != null)) return null;
-  return { symbol: `CRYPTO:${base}-USDT`, base, pair: `${base}_USDT`, name: base, htxPair: row.symbol };
-}
-
 function eligibleSource(instrument: SpotInstrument, source: string): boolean {
   if (source === 'Gate.io' || source === 'crypto_close_gate_1505') {
     return !!instrument.gate && (instrument.gate.delistingAt === null || instrument.gate.delistingAt > Date.now());
@@ -160,87 +111,36 @@ function verifiedQuote(symbol: string, quote: CryptoPortfolioQuote): boolean {
 }
 
 function liveInstrument(symbol: string): SpotInstrument | null {
-  if (Date.now() >= directoryExpiresAt) return null;
-  const instrument = directory.get(symbol);
-  return instrument && (eligibleSource(instrument, 'Gate.io') || eligibleSource(instrument, 'HTX')) ? instrument : null;
+  const parsed = parsePortfolioInstrument(symbol);
+  if (parsed?.market !== 'CRYPTO') return null;
+  const base = symbol.replace(/^CRYPTO:/, '').replace(/-USDT$/, '');
+  const instrument = peekUnifiedCryptoSpotInstrument(base);
+  return instrument ? { symbol, base, pair: instrument.pair, name: instrument.name,
+    ...(instrument.gatePair ? { gate: { delistingAt: instrument.gateDelistingAt ?? null } } : {}),
+    ...(instrument.htxPair ? { htxPair: instrument.htxPair } : {}) } : null;
 }
 
+/** 共享活动现货目录，加载列表只获取身份，不取任何币价。 */
 async function getDirectory(): Promise<Map<string, SpotInstrument> | null> {
-  if (Date.now() < directoryExpiresAt) return directory;
-  if (directoryFlight) return directoryFlight;
-  if (Date.now() < directoryRetryAt) return null;
-  directoryFlight = (async () => {
-    try {
-      // 同次刷新独立核验两家，不让Gate目录失败阻断HTX，也不继承过期供应商资格。
-      // 完整目录允许12秒；仍共用并发上限与single-flight，不重试或启动后台扫描。
-      const [gate, htx] = await Promise.allSettled([
-        fetchJson(`${GATE}/currency_pairs`, 12_000), fetchJson(`${HTX}/v1/common/symbols`, 12_000),
-      ]);
-      const next = new Map<string, SpotInstrument>();
-      const gateRows = gate.status === 'fulfilled' && Array.isArray(gate.value) ? gate.value : [];
-      for (const row of Array.from(gateRows)) {
-        const instrument = parseSpot(row);
-        if (instrument) next.set(instrument.symbol, instrument);
-      }
-      const htxRows = htx.status === 'fulfilled' && htx.value?.status === 'ok' && Array.isArray(htx.value.data) ? htx.value.data : [];
-      for (const row of Array.from(htxRows)) {
-        const instrument = parseHtxSpot(row);
-        if (!instrument) continue;
-        const primary = next.get(instrument.symbol);
-        next.set(instrument.symbol, primary ? { ...primary, htxPair: instrument.htxPair } : instrument);
-      }
-      if (next.size === 0) throw new Error('empty active spot directory');
-      directory = next;
-      directoryExpiresAt = Date.now() + DIRECTORY_TTL_MS;
-      directoryRetryAt = 0;
-      // 下架/改产品类型/失去该报价来源资格时不保留可返回的缓存。
-      for (const [key, cached] of Array.from(quoteCache)) if (!verifiedQuote(key, cached.quote)) quoteCache.delete(key);
-      for (const [key, cached] of Array.from(closeCache)) if (!verifiedQuote(cached.quote.symbol, cached.quote)) closeCache.delete(key);
-      quoteMisses.clear(); closeMisses.clear();
-      return directory;
-    } catch {
-      directoryRetryAt = Date.now() + RETRY_MS;
-      return null; // 过期目录不可充当仍可交易的证据。
-    } finally {
-      directoryFlight = null;
-    }
-  })();
-  return directoryFlight;
-}
-
-function scannerQuote(instrument: SpotInstrument): CryptoPortfolioQuote | null {
-  if (!SCANNER_BASES.has(instrument.base)) return null;
-  try {
-    const entry = getAllLatestPrices()[instrument.base];
-    const health = getMarketPriceHealth()[instrument.base];
-    const price = positive(entry?.price);
-    const sampledAt = Date.parse(entry?.updatedAt ?? '');
-    const age = Date.now() - sampledAt;
-    if (price === null || !health || health.stale !== false
-      || !['Gate.io', 'HTX'].includes(health.source)
-      || !eligibleSource(instrument, health.source)
-      || health.lastSuccessAt !== entry.updatedAt
-      || !Number.isFinite(sampledAt) || age < 0 || age > SCANNER_FRESH_MS) return null;
-    return { symbol: instrument.symbol, price, currency: 'USDT', source: health.source,
-      updatedAt: new Date(sampledAt).toISOString(), priceDate: beijingDate(sampledAt) };
-  } catch {
-    return null;
+  const rows = await getUnifiedCryptoSpotDirectory();
+  const result = new Map<string, SpotInstrument>();
+  for (const row of rows) {
+    const symbol = `CRYPTO:${row.code}-USDT`;
+    const instrument = liveInstrument(symbol);
+    if (instrument) result.set(symbol, instrument);
   }
+  return result.size ? result : null;
 }
 
-/** 同步只读：不触发目录或报价请求；过期/无目录证据返回null。 */
+/** 同步只读共享缓存：无资格/失败/过期不返回旧价，也不触发网络。 */
 export function getCachedCryptoPortfolioQuote(symbol: string): CryptoPortfolioQuote | null {
   const normalized = cryptoSymbol(symbol);
   if (!normalized) return null;
   const instrument = liveInstrument(normalized);
   if (!instrument) return null;
-  const shared = scannerQuote(instrument);
-  const cached = quoteCache.get(normalized);
-  if (cached && cached.expiresAt > Date.now() && eligibleSource(instrument, cached.quote.source)) {
-    // 本模块有更新的真实采样时优先它；否则复用扫描器，不改造稳定币固定价接口。
-    if (!shared || Date.parse(cached.quote.updatedAt) > Date.parse(shared.updatedAt)) return { ...cached.quote };
-  }
-  return shared ? { ...shared } : null;
+  const quote = peekUnifiedCryptoSpotQuote(instrument.base);
+  return quote ? { symbol: normalized, price: quote.price, currency: 'USDT', source: quote.source,
+    updatedAt: quote.updatedAt, priceDate: beijingDate(Date.parse(quote.updatedAt)) } : null;
 }
 
 function makeQuote(instrument: SpotInstrument, price: number, source: string): CryptoPortfolioQuote {
@@ -255,43 +155,13 @@ function freshHtxResponse(data: any, channel: string, notBefore = 0): boolean {
     && timestamp >= notBefore && timestamp <= Date.now() && Date.now() - timestamp <= SCANNER_FRESH_MS;
 }
 
-async function fetchSpotQuote(instrument: SpotInstrument): Promise<CryptoPortfolioQuote | null> {
-  if (eligibleSource(instrument, 'Gate.io')) try {
-    const rows = await fetchJson(`${GATE}/tickers?currency_pair=${encodeURIComponent(instrument.pair)}`);
-    const row = Array.isArray(rows) ? rows.find((item) => item?.currency_pair === instrument.pair) : null;
-    const price = positive(row?.last); // 绝不读取 mark_price。
-    if (price !== null) return makeQuote(instrument, price, 'Gate.io');
-  } catch { /* HTX备用 */ }
-  if (eligibleSource(instrument, 'HTX')) try {
-    const htxPair = instrument.htxPair!;
-    const data = await fetchJson(`${HTX}/market/detail/merged?symbol=${encodeURIComponent(htxPair)}`);
-    const price = positive(data?.tick?.close);
-    if (price !== null && freshHtxResponse(data, `market.${htxPair}.detail.merged`)) {
-      return makeQuote(instrument, price, 'HTX');
-    }
-  } catch { /* 缺证据返回缺项 */ }
-  return null;
-}
-
 async function quoteFor(instrument: SpotInstrument): Promise<CryptoPortfolioQuote | null> {
-  const cached = getCachedCryptoPortfolioQuote(instrument.symbol);
-  if (cached) return cached;
-  const flight = quoteFlights.get(instrument.symbol);
-  if (flight) return flight;
-  if ((quoteMisses.get(instrument.symbol) ?? 0) > Date.now() || quoteFlights.size >= MAX_CACHE) return null;
-  const pending = (async () => {
-    try {
-      const quote = await fetchSpotQuote(instrument);
-      if (!liveInstrument(instrument.symbol) || (quote && !verifiedQuote(instrument.symbol, quote))) return null;
-      if (quote) {
-        boundedSet(quoteCache, instrument.symbol, { quote, expiresAt: Date.now() + QUOTE_TTL_MS });
-        quoteMisses.delete(instrument.symbol);
-      } else boundedSet(quoteMisses, instrument.symbol, Date.now() + RETRY_MS);
-      return quote;
-    } finally { quoteFlights.delete(instrument.symbol); }
-  })();
-  quoteFlights.set(instrument.symbol, pending);
-  return pending;
+  touchCryptoQuoteDemand([instrument.base]);
+  const quotes = await getUnifiedCryptoSpotQuotes([instrument.base]);
+  const quote = quotes[instrument.base];
+  if (!quote || !liveInstrument(instrument.symbol) || !eligibleSource(instrument, quote.source)) return null;
+  return { symbol: instrument.symbol, price: quote.price, currency: 'USDT', source: quote.source,
+    updatedAt: quote.updatedAt, priceDate: beijingDate(Date.parse(quote.updatedAt)) };
 }
 
 function normalizeSymbols(symbols: string[]): string[] {
@@ -315,14 +185,16 @@ export async function fetchCryptoPortfolioQuotes(rawSymbols: string[]): Promise<
 export async function searchCryptoPortfolio(query: string): Promise<{ results: CryptoPortfolioSearchResult[] }> {
   const text = String(query ?? '').trim().toUpperCase();
   if (!text || text.length > 80) return { results: [] };
-  const catalog = await getDirectory();
-  if (!catalog) return { results: [] };
+  // 可搜目录与可报价身份分离：静态目录不冒充活动现货，取价/保存仍核验共享provider。
+  const catalog = new Map<string, SpotInstrument>((AI_WALLET_CRYPTO_MARKET_ASSETS as readonly string[]).map(base => {
+    const symbol = `CRYPTO:${base}-USDT`;
+    return [symbol, { symbol, base, pair: `${base}_USDT`, name: walletCryptoNames.get(base) || base }];
+  }));
   if (text === '*') {
-    // 下拉沿用钱包/52号数字币顺序并补充已支持品种；仅活动现货目录能提供可选身份。
-    // 打开下拉不请求38个币的报价，选中后由同一搜索接口核验并取得该币实时价格。
-    const bases = Array.from(new Set<string>([...AI_WALLET_CRYPTO_MARKET_ASSETS, ...Array.from(SCANNER_BASES)]));
+    // 下拉完全共用钱包/52号目录，零上游请求；没有价格时不可据此判定可交易。
+    const bases: readonly string[] = AI_WALLET_CRYPTO_MARKET_ASSETS;
     return { results: bases.map(base => catalog.get(`CRYPTO:${base}-USDT`))
-      .filter((instrument): instrument is SpotInstrument => !!instrument && !!liveInstrument(instrument.symbol))
+      .filter((instrument): instrument is SpotInstrument => !!instrument)
       .map(instrument => ({ symbol: instrument.symbol, name: instrument.name, market: 'CRYPTO' as const,
         currency: 'USDT' as const, latestPrice: null, updatedAt: null, source: null,
         displaySymbol: instrument.base, available: false })) };
@@ -331,12 +203,14 @@ export async function searchCryptoPortfolio(query: string): Promise<{ results: C
   const score = (i: SpotInstrument) => i.base === compact || `${i.base}-USDT` === compact ? 0
     : i.base.startsWith(compact) ? 1 : i.name.toUpperCase().startsWith(text) ? 2 : 3;
   const candidates = Array.from(catalog.values())
-    .filter((i) => liveInstrument(i.symbol) && (i.base.includes(text) || `${i.base}-USDT`.includes(compact) || i.name.toUpperCase().includes(text) || walletCryptoNames.get(i.base)?.toUpperCase().includes(text)))
+    .filter((i) => i.base.includes(text) || `${i.base}-USDT`.includes(compact) || i.name.toUpperCase().includes(text))
     .sort((a, b) => score(a) - score(b) || a.pair.localeCompare(b.pair))
     .slice(0, MAX_SEARCH_RESULTS);
-  const quotes = await fetchCryptoPortfolioQuotes(candidates.map((i) => i.symbol));
+  // 模糊搜索不激活全部命中；明确代码/pair只为该币取价，选中后前端续租。
+  const exact = candidates.find(i => i.base === compact || `${i.base}-USDT` === compact);
+  const quotes = exact ? await fetchCryptoPortfolioQuotes([exact.symbol]) : {};
   return { results: candidates.map((i) => {
-    const quote = quotes[i.symbol];
+    const quote = quotes[i.symbol] ?? getCachedCryptoPortfolioQuote(i.symbol);
     return { symbol: i.symbol, name: i.name, market: 'CRYPTO', currency: 'USDT',
       latestPrice: quote?.price ?? null, updatedAt: quote?.updatedAt ?? null, source: quote?.source ?? null,
       displaySymbol: `${i.base}/USDT`, available: !!quote };

@@ -23,10 +23,12 @@ const mocks = vi.hoisted(() => {
     cny: query(),
     assets: query(),
     prices: query(),
+    spot: query(),
     useUsdt: vi.fn(),
     useCny: vi.fn(),
     useAssets: vi.fn(),
     usePrices: vi.fn(),
+    useSpot: vi.fn(),
   };
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => mocks.auth }));
@@ -37,6 +39,7 @@ vi.mock("@/lib/trpc", () => ({
       getCnyBalanceSummary: { useQuery: mocks.useCny },
       getMultiAssetBalances: { useQuery: mocks.useAssets },
     },
+    ledger: { getCryptoSpotQuotes: { useQuery: mocks.useSpot } },
     getCryptoPrices: { useQuery: mocks.usePrices },
   },
 }));
@@ -349,7 +352,10 @@ function provideData() {
   mocks.cny.data = input.cny;
   mocks.assets.data = input.assets;
   mocks.prices.data = { prices: input.prices, usdtCnyRate: input.usdtCnyRate };
-  for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices])
+  mocks.spot.data = { quotes: Object.fromEntries(Object.entries(input.prices).map(([symbol, price]) => [symbol, {
+    price, currency: "USDT", source: "same-provider spot", updatedAt: new Date().toISOString(), stale: false,
+  }])) };
+  for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices, mocks.spot])
     query.isLoading = false;
 }
 
@@ -359,7 +365,7 @@ describe("useMibanWalletValue API contract (mocked queries, no database)", () =>
     mocks.auth.isAuthenticated = true;
     mocks.auth.loading = false;
     mocks.auth.error = null;
-    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices]) {
+    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices, mocks.spot]) {
       query.data = undefined;
       query.error = null;
       query.isLoading = true;
@@ -368,6 +374,7 @@ describe("useMibanWalletValue API contract (mocked queries, no database)", () =>
     mocks.useCny.mockReturnValue(mocks.cny);
     mocks.useAssets.mockReturnValue(mocks.assets);
     mocks.usePrices.mockReturnValue(mocks.prices);
+    mocks.useSpot.mockReturnValue(mocks.spot);
   });
 
   it("keeps initial/incomplete data unknown rather than creating zero balances", () => {
@@ -396,9 +403,14 @@ describe("useMibanWalletValue API contract (mocked queries, no database)", () =>
       undefined,
       expect.objectContaining({ enabled: true, refetchInterval: 10_000 })
     );
+    expect(mocks.useSpot).toHaveBeenCalledWith(
+      { symbols: ["ETH", "SOL"] },
+      expect.objectContaining({ enabled: true, staleTime: 0, refetchInterval: 10_000 }),
+    );
   });
 
   it("disables all queries and refresh when unauthenticated", async () => {
+    provideData(); // 已有本人缓存也不能绕过登录保护继续持仓租约。
     mocks.auth.isAuthenticated = false;
     const result = renderHook();
     expect(result).toMatchObject({
@@ -417,8 +429,9 @@ describe("useMibanWalletValue API contract (mocked queries, no database)", () =>
         expect.objectContaining({ enabled: false })
       );
     }
+    expect(mocks.useSpot).toHaveBeenCalledWith({ symbols: [] }, expect.objectContaining({ enabled: false }));
     await result.refresh();
-    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices])
+    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices, mocks.spot])
       expect(query.refetch).not.toHaveBeenCalled();
   });
 
@@ -438,17 +451,94 @@ describe("useMibanWalletValue API contract (mocked queries, no database)", () =>
 
   it("keeps completed-but-unpriced valuation rows with null aggregates, not a query error", () => {
     provideData();
-    mocks.prices.data = { prices: { SOL: 100 }, usdtCnyRate: 7 };
+    delete (mocks.spot.data as any).quotes.ETH;
     const result = renderHook();
     expect(result).toMatchObject({ isLoading: false, error: null });
     expect(result.value?.availableCny).toBeNull();
     expect(result.value?.missingPrices).toEqual(["ETH"]);
   });
 
-  it("refreshes all four queries together", async () => {
+  it("refreshes all four original queries and the current nonempty demand together", async () => {
     provideData();
     await renderHook().refresh();
-    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices])
+    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices, mocks.spot])
       expect(query.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("cold-start crypto quotes never revive common cache or balance snapshot prices", () => {
+    provideData();
+    Object.assign((mocks.assets.data as any[])[0], { priceUsdt: 99999 });
+    mocks.spot.data = undefined;
+    mocks.spot.isLoading = true;
+    const result = renderHook();
+    expect(result.isLoading).toBe(true);
+    expect(result.value?.totalCny).toBeNull();
+    expect(result.value?.missingPrices).toEqual(["ETH", "SOL"]);
+    expect(result.value?.rows[2].priceUsdt).toBeNull();
+  });
+
+  it.each(["stale", "expired", "zero", "nonfinite", "no-metadata"])(
+    "%s fresh quote is unavailable despite common cache and snapshot prices", reason => {
+      provideData();
+      const quote = (mocks.spot.data as any).quotes.ETH;
+      if (reason === "stale") quote.stale = true;
+      if (reason === "expired") quote.updatedAt = new Date(Date.now() - 121_000).toISOString();
+      if (reason === "zero") quote.price = 0;
+      if (reason === "nonfinite") quote.price = Infinity;
+      if (reason === "no-metadata") delete quote.updatedAt;
+      Object.assign((mocks.assets.data as any[])[0], { priceUsdt: 99999 });
+      const result = renderHook();
+      expect(result.error).toBeNull();
+      expect(result.value?.totalCny).toBeNull();
+      expect(result.value?.missingPrices).toEqual(["ETH"]);
+      expect(result.value?.rows[2].priceUsdt).toBeNull();
+    },
+  );
+
+  it("quotes nonzero total including frozen-only, excludes zero directory and securities, and values securities separately", () => {
+    provideData();
+    mocks.assets.data = [
+      { assetCode: "ETH", totalBalance: 2, availableBalance: 0, frozenBalance: 2 },
+      { assetCode: "SOL", availableBalance: 0, frozenBalance: 3 },
+      { assetCode: "BTC", totalBalance: 0, availableBalance: 0, frozenBalance: 0 },
+      { assetCode: "AAPL", totalBalance: 4, availableBalance: 3, frozenBalance: 1 },
+      { assetCode: "CRYPTO:BTC-USD", totalBalance: 0, availableBalance: 0, frozenBalance: 0 },
+      { assetCode: "USDT", totalBalance: 9, availableBalance: 9, frozenBalance: 0 },
+    ];
+    mocks.prices.data = { prices: { ETH: 99999, SOL: 99999, AAPL: 200 }, usdtCnyRate: 7 };
+    const result = renderHook();
+    expect(mocks.useSpot).toHaveBeenCalledWith({ symbols: ["ETH", "SOL"] }, expect.objectContaining({ enabled: true }));
+    expect(result.value?.availableCny).toBe(100 * 7 + 70 + 3 * 200 * 7);
+    expect(result.value?.frozenCny).toBe(20 * 7 + 70 + (2 * 2000 + 3 * 100 + 200) * 7);
+    expect(result.value?.rows.find(row => row.assetCode === "AAPL")?.priceUsdt).toBe(200);
+    expect(result.value?.rows.find(row => row.assetCode === "ETH")?.priceUsdt).toBe(2000);
+  });
+
+  it("a negative actual balance still requests a fresh quote, not the directory", () => {
+    provideData();
+    mocks.assets.data = [{ assetCode: "ETH", totalBalance: -2, availableBalance: -2, frozenBalance: 0 }];
+    expect(renderHook().value?.rows[2]).toMatchObject({ total: -2, priceUsdt: 2000 });
+    expect(mocks.useSpot).toHaveBeenCalledWith({ symbols: ["ETH"] }, expect.objectContaining({ enabled: true }));
+  });
+
+  it.each([undefined, []])("manual refresh never forces an empty or unready crypto demand (%j)", async assets => {
+    provideData();
+    mocks.assets.data = assets;
+    await renderHook().refresh();
+    expect(mocks.useSpot).toHaveBeenCalledWith({ symbols: [] }, expect.objectContaining({ enabled: false }));
+    expect(mocks.spot.refetch).not.toHaveBeenCalled();
+    for (const query of [mocks.usdt, mocks.cny, mocks.assets, mocks.prices]) expect(query.refetch).toHaveBeenCalledOnce();
+  });
+
+  it("spot query failure clears the rendered value even when cached quotes remain", () => {
+    provideData();
+    mocks.spot.error = new Error("数字币报价读取失败");
+    expect(renderHook()).toMatchObject({ value: null, error: "数字币报价读取失败" });
+  });
+
+  it("stale CNY FX cannot be used even with a positive cached rate", () => {
+    provideData();
+    mocks.prices.data = { prices: fixture().prices, usdtCnyRate: 7, usdtCnyFx: { stale: true } };
+    expect(renderHook()).toMatchObject({ value: null, error: "人民币汇率暂不可用" });
   });
 });

@@ -31,6 +31,8 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { compactT0JournalResponse } from "./t0-journal-response";
 import { projectLedger37OrdinaryReturnDto } from './ledger37-return-dto';
 import { z } from "zod";
+import { CRYPTO_ASSET_CODES } from "../shared/crypto-asset-catalog";
+import { getOrderCryptoQuoteSymbols } from "./crypto-order-quote-symbols";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
 import { createNewMemberInitialBalances, readTagVisible } from "../shared/tag-visibility";
@@ -123,7 +125,7 @@ import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
 import { zidingCommerceRouter } from "./ziding-commerce-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
-import { AI_WALLET_ASSET_CATALOG, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import { AI_WALLET_ASSETS, AI_WALLET_ASSET_CATALOG, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 import {
   LEDGER_37_ID,
@@ -271,10 +273,11 @@ async function getLedger52WalletValuationSummaries(userIds: number[]): Promise<M
     ),
   ]);
 
-  const { getLatestPrice, getUsdtCnyRate } = await import("./price-scanner");
+  const { getLatestPrice, getUsdtCnyRate, ensureCryptoSpotPrices } = await import("./price-scanner");
+  await ensureCryptoSpotPrices(((marketResult as any)[0] || []).map((row: any) => row.asset_code));
   const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
   const cnyPriceUsdt = usdtCnyRate > 0 ? 1 / usdtCnyRate : null;
-  const assetNameByCode = new Map(AI_WALLET_ASSET_CATALOG.map((asset) => [asset.code, asset.name]));
+  const assetNameByCode = new Map<string, string>(AI_WALLET_ASSET_CATALOG.map((asset) => [asset.code, asset.name]));
   const assetsByUser = new Map<number, Ledger52WalletValuationAsset[]>();
   const toNumber = (value: unknown) => {
     const parsed = Number(value ?? 0);
@@ -4496,14 +4499,16 @@ ${klinesSummary}
           targetUserId = input.viewAsUserId;
         }
         const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId);
-        const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+        const { getLatestPrice, refreshUsdtCnyRate, ensureCryptoSpotPrices } = await import('./price-scanner');
+        await ensureCryptoSpotPrices(balances.filter(b => Number(b.totalBalance) !== 0 || Number(b.frozenBalance) !== 0).map(b => b.assetCode));
         const usdtCnyRate = await refreshUsdtCnyRate();
         return balances.map((balance) => {
-          const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+          const priceUsdt = getLatestPrice(balance.assetCode);
+          const priceStale = priceUsdt === null;
           return {
             ...balance,
-            priceUsdt,
-            priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+            priceUsdt, priceStale,
+            priceCny: priceUsdt !== null && priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
           };
         });
       }),
@@ -12140,6 +12145,23 @@ ${klinesSummary}
 
   // 账本管理
   ledger: router({
+    /** 只读公共现货行情；不返回任何用户、余额或订单，目录展开不会自动调用。 */
+    getCryptoSpotQuotes: protectedProcedure
+      .input(z.object({ symbols: z.array(z.enum(CRYPTO_ASSET_CODES)).max(CRYPTO_ASSET_CODES.length) }))
+      .query(async ({ input }) => {
+        const { ensureCryptoSpotPrices, getLatestPrice, getMarketPriceHealth } = await import('./price-scanner');
+        const symbols = Array.from(new Set(input.symbols));
+        await ensureCryptoSpotPrices(symbols);
+        const health = getMarketPriceHealth();
+        const quotes: Record<string, {price: number | null; currency: 'USDT'; source: string | null; updatedAt: string | null; stale: boolean}> = {};
+        for (const code of symbols) {
+          const price = getLatestPrice(code);
+          quotes[code] = { price, currency: 'USDT', source: price ? health[code]?.source ?? null : null,
+            updatedAt: price ? health[code]?.lastSuccessAt ?? null : null, stale: price === null };
+        }
+        return { quotes };
+      }),
+
     // 获取全站最近活动动态（公开API，用于首页滚动排行榜）
     recentActivity: publicProcedure
       .query(async () => {
@@ -24765,11 +24787,12 @@ ${klinesSummary}
           return result;
         });
         // 附带实时价格
-        const { getLatestPrice } = await import('./price-scanner');
+        const { getLatestPrice, ensureCryptoSpotPrices } = await import('./price-scanner');
+        await ensureCryptoSpotPrices(getOrderCryptoQuoteSymbols(orders));
         const livePrices: Record<string, number> = {};
         // 此列表是订单模式传给卡片的价格白名单，必须与 52 号账本可选币种同步。
         // 否则扫描器虽已有报价，担保物的“约等于”仍会被前端误判为无实时价格。
-        for (const coin of ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']) {
+        for (const coin of AI_WALLET_ASSETS) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -25391,7 +25414,8 @@ ${klinesSummary}
 
           // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价。
           // 共享池中的人民币担保物必须按同一 USDT/CNY 汇率折算，不能将 1 元误当成 1 U。
-          const { getLatestPrice, getMarketPriceHealth, refreshUsdtCnyRate } = await import('./price-scanner');
+          const { getLatestPrice, getMarketPriceHealth, refreshUsdtCnyRate, ensureCryptoSpotPrices } = await import('./price-scanner');
+          await ensureCryptoSpotPrices(getOrderCryptoQuoteSymbols(allOwnerOrders));
           const marketPriceHealth = getMarketPriceHealth();
           const usdtCnyRate = await refreshUsdtCnyRate();
           if (!Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) {
@@ -25400,7 +25424,7 @@ ${klinesSummary}
 
           // 构建实时价格映射（供前端弹窗计算缺口使用）
           const livePrices: Record<string, number> = {};
-          for (const coin of ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']) {
+          for (const coin of AI_WALLET_ASSETS) {
             const p = getLatestPrice(coin);
             if (p) livePrices[coin] = p;
           }
@@ -26558,7 +26582,8 @@ ${klinesSummary}
             if (Array.isArray(assets)) assets.forEach((asset: any) => addCoin(asset?.coin));
           } catch {}
         }
-        const { getLatestPrice } = await import('./price-scanner');
+        const { getLatestPrice, ensureCryptoSpotPrices } = await import('./price-scanner');
+        await ensureCryptoSpotPrices(getOrderCryptoQuoteSymbols(orderViews));
         const livePrices: Record<string, number> = {};
         for (const coin of Array.from(priceCoins)) {
           const price = getLatestPrice(coin);
@@ -26635,7 +26660,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']),
+        coin: z.enum(AI_WALLET_ASSETS),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -28236,7 +28261,7 @@ ${klinesSummary}
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         const coinBreakdown: Record<string, { quantity: number; totalAmount: number; avgCost: number }> = {};
-        for (const coin of ['BTC','ETH','SOL']) {
+        for (const coin of Array.from(new Set<string>(orders.map((order: any) => String(order.coin))))) {
           const coinOrders = orders.filter((o: any) => o.coin === coin);
           let totalQty = 0;
           let totalCost = 0;
@@ -28252,10 +28277,11 @@ ${klinesSummary}
             avgCost: totalQty > 0 ? totalCost / totalQty : 0,
           };
         }
-        // 附带实时价格（全部10种币）
-        const { getLatestPrice } = await import('./price-scanner');
+        // 目录只读缓存；实际进行中订单才激活报价。
+        const { getLatestPrice, ensureCryptoSpotPrices } = await import('./price-scanner');
+        await ensureCryptoSpotPrices(getOrderCryptoQuoteSymbols(orders));
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']) {
+        for (const coin of AI_WALLET_ASSETS) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -28267,7 +28293,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']),
+        coin: z.enum(AI_WALLET_ASSETS),
         amount: z.string(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
@@ -28424,7 +28450,7 @@ ${klinesSummary}
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'USDT', 'CNY', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SEI', 'SKHYNIX', 'BZ', 'TAO', 'PENDLE', 'NEAR', 'INJ', 'STRK']).optional(),
+        coin: z.enum(AI_WALLET_ASSETS).optional(),
         amount: z.string().optional(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
@@ -33323,14 +33349,16 @@ ${klinesSummary}
           dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
           dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
         ]);
-        const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+        const { getLatestPrice, refreshUsdtCnyRate, ensureCryptoSpotPrices } = await import('./price-scanner');
+        await ensureCryptoSpotPrices(multiAssetBalances.filter(b => Number(b.totalBalance) !== 0 || Number(b.frozenBalance) !== 0).map(b => b.assetCode));
         const usdtCnyRate = await refreshUsdtCnyRate();
         const pricedMultiAssets = multiAssetBalances.map((balance) => {
-          const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+          const priceUsdt = getLatestPrice(balance.assetCode);
+          const priceStale = priceUsdt === null;
           return {
             ...balance,
-            priceUsdt,
-            priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+            priceUsdt, priceStale,
+            priceCny: priceUsdt !== null && priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
           };
         });
 
@@ -37877,14 +37905,16 @@ insights 数组每项包含：
         dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
         dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
       ]);
-      const { getLatestPrice, refreshUsdtCnyRate } = await import('./price-scanner');
+      const { getLatestPrice, refreshUsdtCnyRate, ensureCryptoSpotPrices } = await import('./price-scanner');
+      await ensureCryptoSpotPrices(multiAssetBalances.filter(b => Number(b.totalBalance) !== 0 || Number(b.frozenBalance) !== 0).map(b => b.assetCode));
       const usdtCnyRate = await refreshUsdtCnyRate();
       const pricedMultiAssets = multiAssetBalances.map((balance) => {
-        const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+        const priceUsdt = getLatestPrice(balance.assetCode);
+          const priceStale = priceUsdt === null;
         return {
           ...balance,
-          priceUsdt,
-          priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+          priceUsdt, priceStale,
+          priceCny: priceUsdt !== null && priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
         };
       });
 
