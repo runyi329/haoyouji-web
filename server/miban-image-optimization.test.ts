@@ -55,6 +55,7 @@ vi.mock("cos-nodejs-sdk-v5", () => ({
 import { MibanImage, getMibanImageSource, getMibanPosterParts, type MibanImageProps } from "../client/src/pages/miban/MibanImage";
 import LimitedSale from "../client/src/pages/miban/LimitedSale";
 import MidaniangSelection from "../client/src/pages/miban/MidaniangSelection";
+import { WangkaBrandCard } from "../client/src/pages/miban/WangkaBrandCard";
 
 const COS_ORIGIN = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
 const VARIANTS = ["icon", "thumbnail", "card", "hero", "poster"] as const;
@@ -98,6 +99,8 @@ function findElements(node: unknown, predicate: (element: ReactElement<any>) => 
   if (Array.isArray(node)) return node.flatMap(child => findElements(child, predicate));
   if (!React.isValidElement(node)) return [];
   const element = node as ReactElement<any>;
+  // This extracted presentation-only card has no hooks; expand it at the unit boundary.
+  if (element.type === WangkaBrandCard) return findElements(WangkaBrandCard(element.props), predicate);
   return [...(predicate(element) ? [element] : []), ...findElements(element.props.children, predicate)];
 }
 const errorEvent = (): SyntheticEvent<HTMLImageElement> => ({
@@ -421,14 +424,14 @@ describe("page image migration and first-screen policy", () => {
     }
     expect(images(parse("MibanImage"), "img")).toHaveLength(1);
   });
-  it.each(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang"])("actually prioritizes %s when real ranking data puts it first, rather than a fixed brand", slug => {
-    boundary.attention = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang"].map(brandSlug => ({ brandSlug, viewCount: brandSlug === slug ? 100 : 0 }));
+  it.each(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka"])("actually prioritizes %s when real ranking data puts it first, rather than a fixed brand", slug => {
+    boundary.attention = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka"].map(brandSlug => ({ brandSlug, viewCount: brandSlug === slug ? 100 : 0 }));
     const tree = LimitedSale();
     const cards = findElements(tree, node => Boolean(node.props["data-brand-slug"]));
     expect(cards[0].props["data-brand-slug"]).toBe(slug);
     const priority = findElements(tree, node => node.type === MibanImage && node.props.priority === true);
     expect(priority).toHaveLength(1);
-    expect(findElements(cards[0], node => node.type === MibanImage)).toContain(priority[0]);
+    expect(findElements(cards[0], node => node.type === MibanImage).some(image => image.props.src === priority[0].props.src && image.props.priority === true)).toBe(true);
     const markup = renderToStaticMarkup(React.createElement(Router, { ssrPath: "/p/proj_hzxm2t/limited" }, tree));
     // React 19 may also emit a preload link; count the actual image, not that hint.
     const imgTags = markup.match(/<img\b[^>]*>/g) ?? [];
@@ -439,7 +442,7 @@ describe("page image migration and first-screen policy", () => {
   it("preserves deterministic brand-order ties and does not count SSR mounts as clicks", () => {
     boundary.attention = [];
     const cards = findElements(LimitedSale(), node => Boolean(node.props["data-brand-slug"]));
-    expect(cards.map(node => node.props["data-brand-slug"])).toEqual(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang"]);
+    expect(cards.map(node => node.props["data-brand-slug"])).toEqual(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka"]);
     expect(boundary.mutateAsync).not.toHaveBeenCalled();
   });
   it("uses identical thumbnail URLs for actual midaniang blurred backgrounds and foreground images", () => {

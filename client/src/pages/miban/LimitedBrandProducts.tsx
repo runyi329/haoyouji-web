@@ -34,7 +34,7 @@ export default function LimitedBrandProducts() {
   const { data: availability, isLoading: availabilityLoading } =
     mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
       // 本地热预览不触发真实数据库的SKU初始化；生产始终读取运营库存状态。
-      enabled: !localPreviewMode,
+      enabled: !localPreviewMode && mibanLimitedProducts.some(product => product.brand === brand?.brand),
     });
   const availabilityBySku = useMemo(
     () =>
@@ -241,6 +241,11 @@ export default function LimitedBrandProducts() {
             {brandSlug === "midaniang" && (
               <p className="mt-2 px-5 text-[11px] leading-5" style={{ color: theme.muted }}>
                 先看品牌新形象，商品与规格确认后再开放购买。
+              </p>
+            )}
+            {brandSlug === "wangka" && (
+              <p className="mt-2 px-5 text-[11px] leading-5" style={{ color: theme.muted }}>
+                图片为精选陈列展示，具体商品与规格确认后开放购买。
               </p>
             )}
           </div>

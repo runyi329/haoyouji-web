@@ -52,6 +52,19 @@ export const MIDANIANG_THEME = {
   subtle: "#B3A391",
 } as const;
 
+export const WANGKA_THEME = {
+  primary: "#B83367",
+  price: "#B83367",
+  navy: "#653A49",
+  canvas: "#FFF9F3",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F9EDF0",
+  border: "#EEDCE0",
+  text: "#653A49",
+  muted: "#9C6A74",
+  subtle: "#B4969E",
+} as const;
+
 export const TUOQUETANG_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/tuoquetang/v1";
 
@@ -109,6 +122,16 @@ export const mibanLimitedBrands = [
     // This opens the brand entrance only; there are no new sellable SKUs.
     status: "on_sale" as const,
     theme: MIDANIANG_THEME,
+  },
+  {
+    slug: "wangka",
+    brand: "旺咔",
+    eyebrow: "全球采购 · 专注进口",
+    title: "旺咔宠物口粮精选",
+    description: "甄选海外优质口粮，关注营养与健康，守护猫狗的每一餐。",
+    // Public brand entrance only; reference packaging does not create sellable SKUs.
+    status: "on_sale" as const,
+    theme: WANGKA_THEME,
   },
 ] as const;
 

@@ -221,10 +221,10 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expectTypeOf<Connection>().toMatchTypeOf<BrandAttentionConnection>();
   });
 
-  it("starts at real zero for five configured brands, in original order, with integer counts", async () => {
+  it("starts at real zero for six configured brands, in original order, with integer counts", async () => {
     const { db, connection } = await fixture();
     const values = await readBrandAttention(connection);
-    expect(slugs).toEqual(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang"]);
+    expect(slugs).toEqual(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka"]);
     expect(values).toEqual(
       slugs.map(brandSlug => ({ brandSlug, viewCount: 0 }))
     );
@@ -364,23 +364,24 @@ describe("miban brand attention: offline transaction fixtures", () => {
       { brandSlug: "fruits", viewCount: 5 },
       { brandSlug: "tuoquetang", viewCount: 0 },
       { brandSlug: "midaniang", viewCount: 0 },
+      { brandSlug: "wangka", viewCount: 0 },
     ]);
     expect(values.every(row => Number.isSafeInteger(row.viewCount))).toBe(true);
     expect(connection.statements[0].params).toEqual(slugs);
   });
 
-  it("counts the new midaniang entrance and deduplicates a retried click", async () => {
+  it.each(["midaniang", "wangka"])("counts the %s entrance and deduplicates a retried click", async brandSlug => {
     const { connection } = await fixture();
-    const input = click("midaniang", 1);
+    const input = click(brandSlug, 1);
     expect(await recordBrandAttention(connection, input)).toEqual({
-      brandSlug: "midaniang", viewCount: 1, counted: true,
+      brandSlug, viewCount: 1, counted: true,
     });
     expect(await recordBrandAttention(connection, input)).toEqual({
-      brandSlug: "midaniang", viewCount: 1, counted: false,
+      brandSlug, viewCount: 1, counted: false,
     });
     const values = await readBrandAttention(connection);
-    expect(values[0]).toEqual({ brandSlug: "midaniang", viewCount: 1 });
-    expect(values).toHaveLength(5);
+    expect(values[0]).toEqual({ brandSlug, viewCount: 1 });
+    expect(values).toHaveLength(6);
     expect(values.slice(1).every(row => row.viewCount === 0)).toBe(true);
   });
 

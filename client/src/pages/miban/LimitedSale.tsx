@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "./mibanTrpc";
 import { MibanImage } from "./MibanImage";
+import { WangkaBrandCard } from "./WangkaBrandCard";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import {
   LINGCHUANG_THEME,
@@ -661,6 +662,14 @@ export default function LimitedSale() {
           <AttentionCount brandSlug="midaniang" viewCount={viewCountFor("midaniang")} />
         </article>
       </Link>
+    ),
+    wangka: (
+      <WangkaBrandCard
+        key="wangka"
+        priority={sortedBrands[0] === "wangka"}
+        onClick={() => recordBrandClick("wangka")}
+        viewCount={viewCountFor("wangka")}
+      />
     ),
   };
 
