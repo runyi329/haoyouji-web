@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import * as instruments from '../shared/portfolio-instruments';
 import * as observations from '../shared/stock-observation-portfolio';
+import { selectStockLotDownsideRule } from '../shared/stock-lot-downside';
 import { readTagVisible } from '../shared/tag-visibility';
 import { CRYPTO_PORTFOLIO_POLICY_VERSION as POLICY } from '../shared/crypto-portfolio-policy';
 import { guardCryptoPortfolioAllocationWrite, CRYPTO_ALLOCATION_HISTORY_PENDING as PENDING } from './crypto-portfolio-allocation-write-guard';
@@ -30,6 +31,22 @@ function proof(date = DAY, activation = DAY) {
   return { ledger_id: 37, category_id: 81, policy_version: POLICY, snapshot_date: date, activation_date: activation,
     payload: JSON.stringify({ ledgerId: 37, categoryId: 81, policyVersion: POLICY, activationDate: activation, snapshotDate: date,
       total: { ...snap, scope: 'tag-total' }, members: { '99': snap }, observations: { '99': snap } }) };
+}
+// Offline evidence fixtures only: metadata, no fabricated production balances.
+const HISTORY = ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', OLD, PREV, DAY];
+const LAST_FIXTURE_MEMBER = '2098';
+function largeProof(date = DAY, activation = HISTORY[0]) {
+  const row = proof(date, activation), payload = JSON.parse(row.payload);
+  const entries = () => Object.fromEntries(Array.from({ length: 2000 }, (_, i) =>
+    [String(99 + i), { ...payload.members['99'] }]));
+  payload.members = entries(); payload.observations = entries();
+  row.payload = JSON.stringify(payload);
+  expect(Buffer.byteLength(row.payload, 'utf8')).toBeGreaterThan(256 * 1024);
+  return row;
+}
+function changeLargePayload(row: ReturnType<typeof proof>, change: (payload: any) => void) {
+  const payload = JSON.parse(row.payload); change(payload); row.payload = JSON.stringify(payload);
+  expect(Buffer.byteLength(row.payload, 'utf8')).toBeGreaterThan(256 * 1024);
 }
 function setup(options: { symbol?: string; activation?: string; existing?: boolean; observation?: boolean; missingTable?: boolean;
   noSource?: boolean; role?: string; hidden?: boolean; failAt?: string; crossAt?: string } = {}) {
@@ -60,6 +77,8 @@ function setup(options: { symbol?: string; activation?: string; existing?: boole
     if (sql.includes('FROM ledger_crypto_portfolio_daily_snapshots')) {
       expect(params.slice(0, 3)).toEqual([37, 81, POLICY]);
       if (options.missingTable) throw Object.assign(new Error('missing'), { code: 'ER_NO_SUCH_TABLE' });
+      if (options.failAt === 'proof') throw Object.assign(new Error('Out of sort memory, consider increasing server sort buffer size'),
+        { code: 'ER_OUT_OF_SORTMEMORY', errno: 1038, sqlState: 'HY001' });
       const result = saved.filter(r => r.snapshot_date <= params[3]);
       if (options.crossAt === 'proof') now('15:05:00.000');
       return [result];
@@ -92,6 +111,10 @@ function setup(options: { symbol?: string; activation?: string; existing?: boole
   const handlers = actualHandlers({ ...instruments, ...observations, guardCryptoPortfolioAllocationWrite, readTagVisible, isLedger37FullManager,
     STOCK_LEDGER_ID: 37, EPSILON: 1e-8, ensureLedgerStockPortfolioTables: vi.fn(),
     getDbConnection: vi.fn(async () => { if (active) throw new Error('extra connection under lock'); return read; }),
+    selectStockLotDownsideRule, readStockLotDownsideRules: vi.fn(async (conn: any, ledgerId: number, categoryId: number, fresh: boolean) => {
+      expect(conn).toBe(tx); expect(active).toBe(true); expect([ledgerId, categoryId, fresh]).toEqual([37, 81, true]);
+      return []; // Offline fixture: no active downside rule; never import the DB-backed rule reader.
+    }),
     getDbTransactionConnection: vi.fn(async () => tx), invalidateMemberStockReadCaches: invalidate });
   return { state, saved, source, tx, sqls, invalidate, read,
     allocation: (patch: any = {}) => handlers.setStockLotParticipation({ ...input, quantity: 0.5, ...patch }),
@@ -200,6 +223,89 @@ describe('真实handler写前数字币历史证据保护（完全离线，普通
       if (mode === 'category') s.read.execute.mockResolvedValueOnce([[]]);
       await expect(s[method](patch)).rejects.toThrow(); expect(s.tx.beginTransaction).not.toHaveBeenCalled();
       expect(s.sqls.some(q => q.sql.includes('FROM ledger_crypto'))).toBe(false);
+    }
+  });
+});
+
+describe('排序内存修复专项：真实guard/handler离线证据完整性', () => {
+  it('真实guard按限定基础日期字段排序，完整读取payload且不限制行数或绕过校验', async () => {
+    const s = setup(); s.saved.push(proof()); await s.tx.beginTransaction();
+    const recheck = await guardCryptoPortfolioAllocationWrite(s.tx, {
+      ledgerId: 37, categoryId: 81, lotId: 1, symbol: BTC, hasExistingConfiguration: true,
+    });
+    await recheck();
+    const queries = s.sqls.filter(q => q.sql.includes('FROM ledger_crypto_portfolio_daily_snapshots'));
+    expect(queries).toHaveLength(1);
+    const sql = queries[0].sql.replace(/\s+/g, ' ').trim();
+    expect(sql).toMatch(/ORDER BY ledger_crypto_portfolio_daily_snapshots\.snapshot_date ASC\b/i);
+    expect(sql).not.toMatch(/ORDER BY\s+(?:`?snapshot_date`?|DATE_FORMAT\s*\()/i);
+    expect(sql.split(/\bFROM\b/i)[0]).toMatch(/\bpayload\b/);
+    expect(sql).toMatch(/DATE_FORMAT\(snapshot_date,'%Y-%m-%d'\) AS snapshot_date/);
+    expect(sql).not.toMatch(/\b(?:LIMIT|SET|DROP|DELETE|UPDATE|INSERT|REPLACE)\b|sort_buffer|skip_?check/i);
+    expect(queries[0].params).toEqual([37, 81, POLICY, DAY]);
+    expect(s.sqls.every(q => q.tx && q.sql.trimStart().startsWith('SELECT'))).toBe(true);
+    expect(writes(s)).toHaveLength(0);
+    await s.tx.rollback(); s.tx.release();
+  });
+  it('七个自然日每行大于256KB的完整证据允许分配/观察，全部payload字节不变', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ activation: HISTORY[0] }); s.saved.push(...HISTORY.map(date => largeProof(date)));
+      const frozen = JSON.stringify(s.saved);
+      await s[method]();
+      expect(s.tx.commit).toHaveBeenCalledTimes(1); expect(s.tx.rollback).not.toHaveBeenCalled();
+      expect(s.saved).toHaveLength(7); expect(JSON.stringify(s.saved)).toBe(frozen);
+      expect(s.sqls.filter(q => q.sql.includes('FROM ledger_crypto_portfolio_daily_snapshots'))).toHaveLength(1);
+    }
+  });
+  it('大payload即使其余六日ready，最早旧日缺失仍拒绝两种写操作', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ activation: HISTORY[0] }); s.saved.push(...HISTORY.slice(1).map(date => largeProof(date)));
+      await denied(s, () => s[method]());
+    }
+  });
+  it('大payload最后一日末尾成员日期损坏仍被完整校验并拒绝', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ activation: HISTORY[0] }); s.saved.push(...HISTORY.map(date => largeProof(date)));
+      changeLargePayload(s.saved[6], payload => { payload.members[LAST_FIXTURE_MEMBER].snapshotDate = PREV; });
+      await denied(s, () => s[method]());
+    }
+  });
+  it('大payload旧日末尾观察成员非ready仍拒绝且不修改历史证据', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ activation: HISTORY[0] }); s.saved.push(...HISTORY.map(date => largeProof(date)));
+      changeLargePayload(s.saved[0], payload => { payload.observations[LAST_FIXTURE_MEMBER].ready = false; });
+      await denied(s, () => s[method]());
+    }
+  });
+  it('新future lot仅豁免旧日空洞，仍先完整读取有效大payload再进行分配/观察写入', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ existing: false, activation: NEXT }); s.saved.push(largeProof(PREV, OLD));
+      const frozen = JSON.stringify(s.saved);
+      await s[method]();
+      const proofRead = s.sqls.findIndex(q => q.sql.includes('FROM ledger_crypto_portfolio_daily_snapshots'));
+      const firstWrite = s.sqls.findIndex(q => !q.sql.trimStart().startsWith('SELECT'));
+      expect(proofRead).toBeGreaterThanOrEqual(0); expect(firstWrite).toBeGreaterThan(proofRead);
+      expect(s.tx.commit).toHaveBeenCalledTimes(1); expect(JSON.stringify(s.saved)).toBe(frozen);
+    }
+  });
+  it('新future lot不能绕过已有saved大payload成员损坏校验', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ existing: false, activation: NEXT }); s.saved.push(largeProof(PREV, OLD));
+      changeLargePayload(s.saved[0], payload => { payload.members[LAST_FIXTURE_MEMBER].policyVersion = 'damaged-policy'; });
+      await denied(s, () => s[method]());
+      expect(s.sqls.filter(q => q.sql.includes('FROM ledger_crypto_portfolio_daily_snapshots'))).toHaveLength(1);
+    }
+  });
+  it('proof SELECT模拟真实errno1038，分配与观察均在任何DML前回滚并保留原异常', async () => {
+    for (const method of ['allocation', 'observation'] as const) {
+      const s = setup({ failAt: 'proof' }); s.saved.push(largeProof());
+      const before = JSON.stringify(s.state), frozen = JSON.stringify(s.saved);
+      await expect(s[method]()).rejects.toMatchObject({ code: 'ER_OUT_OF_SORTMEMORY', errno: 1038, sqlState: 'HY001',
+        message: 'Out of sort memory, consider increasing server sort buffer size' });
+      expect(s.sqls.filter(q => q.sql.includes('FROM ledger_crypto_portfolio_daily_snapshots'))).toHaveLength(1);
+      expect(writes(s)).toHaveLength(0); expect(JSON.stringify(s.state)).toBe(before); expect(JSON.stringify(s.saved)).toBe(frozen);
+      expect(s.tx.rollback).toHaveBeenCalledTimes(1); expect(s.tx.commit).not.toHaveBeenCalled();
+      expect(s.tx.release).toHaveBeenCalledTimes(1); expect(s.invalidate).not.toHaveBeenCalled();
     }
   });
 });

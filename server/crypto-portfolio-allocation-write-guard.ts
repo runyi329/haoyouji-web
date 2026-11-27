@@ -57,12 +57,13 @@ export async function guardCryptoPortfolioAllocationWrite(conn: any, scope: Writ
       if (latest === checkedLatest) return;
       let saved: any[];
       try {
+        // Qualify the indexed DATE column: the formatted alias would filesort the wide JSON payload.
         [saved] = await conn.execute(`SELECT ledger_id,category_id,policy_version,
           DATE_FORMAT(snapshot_date,'%Y-%m-%d') AS snapshot_date,
           DATE_FORMAT(activation_date,'%Y-%m-%d') AS activation_date,payload
           FROM ledger_crypto_portfolio_daily_snapshots
           WHERE ledger_id=? AND category_id=? AND policy_version=? AND snapshot_date<=?
-          ORDER BY snapshot_date ASC`, [scope.ledgerId, scope.categoryId, CRYPTO_PORTFOLIO_POLICY_VERSION, latest]);
+          ORDER BY ledger_crypto_portfolio_daily_snapshots.snapshot_date ASC`, [scope.ledgerId, scope.categoryId, CRYPTO_PORTFOLIO_POLICY_VERSION, latest]);
       } catch (error) {
         // Optional new table: pure stocks stay compatible; any crypto source fails closed.
         if (!missingTable(error)) throw error;
