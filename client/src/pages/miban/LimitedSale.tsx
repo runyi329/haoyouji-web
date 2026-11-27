@@ -613,12 +613,12 @@ export default function LimitedSale() {
         aria-label="精选系列"
         data-testid="limited-brand-list"
       >
-        {import.meta.env.DEV && <Link href="/p/proj_hzxm2t/limited/guizhou" className="block overflow-hidden rounded-[18px] border border-[#DACBB8] bg-[#F4EBDD]">
+        <Link href="/p/proj_hzxm2t/limited/guizhou" data-testid="brand-card-guizhou" className="block overflow-hidden rounded-[18px] border border-[#DACBB8] bg-[#F4EBDD]">
           <div className="grid grid-cols-[112px_1fr] items-center gap-3">
             <img src={MOUTAI_THUMB} alt="贵州精选飞天茅台主视觉" className="h-[158px] w-[112px] object-cover" />
             <div className="py-4 pr-4"><p className="text-[10px] tracking-[0.15em] text-[#A1834F]">大曲酱香 · 审核预览</p><h3 className="mt-2 text-[22px] font-semibold text-[#9E2528]">贵州精选</h3><p className="mt-1.5 text-[11px] leading-relaxed text-[#7A6B5A]">飞天茅台 53度500mL<br />生产年份可选，每单1—6瓶</p><span className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-[#9E2528]">查看商品长页<ChevronRight className="h-3 w-3" /></span></div>
           </div>
-        </Link>}
+        </Link>
         {sortedBrands.map(brandSlug => brandCards[brandSlug])}
         <AmwayDailyPreviewCard />
         <MaryKayBeautyPreviewCard />
