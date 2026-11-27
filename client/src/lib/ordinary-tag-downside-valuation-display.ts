@@ -52,6 +52,34 @@ export function ordinaryOverviewDailyReturn(scope: OrdinaryDownsideScope, today:
   return { amount, date: amount === null ? null : point.date };
 }
 
+/** Registration display only; caller must restrict it to an authorized administrator view.
+ * A visible, unassigned tag can have real balances without a personal return reference.
+ * Never fills pending returns, invents an entry reference or bypasses damaged participant data.
+ */
+export function ordinaryOverviewRecordedBalance(
+  scope: OrdinaryDownsideScope,
+  today: string,
+  balances?: Record<string, unknown>,
+): { amount: number; date: string } | null {
+  if (scope.status !== 'pending' || !balances) return null;
+  const name = scope.categoryName;
+  const absent = (value: unknown) => value === undefined || value === null || value === '';
+  if (!absent(balances[name]) || !absent(balances[`${name}__startDate`])) return null;
+  const zeroOrAbsent = (value: unknown) => absent(value) || value === 0 || value === '0';
+  if (!zeroOrAbsent(balances[`${name}__ratio`]) || !zeroOrAbsent(balances[`${name}__margin`])) return null;
+  const margins = balances[`${name}__margins`];
+  if (!absent(margins)) {
+    try {
+      const entries: unknown = typeof margins === 'string' ? JSON.parse(margins) : margins;
+      if (!Array.isArray(entries) || entries.length > 0) return null;
+    } catch { return null; }
+  }
+  const point = scope.latestPoint;
+  const amount = nullableOrdinaryNumber(point?.balance);
+  if (!point || !/^\d{4}-\d{2}-\d{2}$/.test(point.date) || point.date > today || amount === null || amount < 0) return null;
+  return { amount, date: point.date };
+}
+
 export function formatOverviewDailyReturn(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return '--';
   const absolute = Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });

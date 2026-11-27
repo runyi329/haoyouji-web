@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { buildOrdinaryDownsideScopes, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryCalendarBalanceColor, ordinaryDownsideChartPoints, ordinaryDownsideIdentityQueryKey, ordinaryOverviewDailyReturn, sumOrdinaryDownsideDailyPnl, type OrdinaryDownsideResponse, type OrdinaryDownsideScope } from "@/lib/ordinary-tag-downside-valuation-display";
+import { buildOrdinaryDownsideScopes, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryCalendarBalanceColor, ordinaryDownsideChartPoints, ordinaryDownsideIdentityQueryKey, ordinaryOverviewDailyReturn, ordinaryOverviewRecordedBalance, sumOrdinaryDownsideDailyPnl, type OrdinaryDownsideResponse, type OrdinaryDownsideScope } from "@/lib/ordinary-tag-downside-valuation-display";
 import { aggregateOverviewPnl, formatOverviewPnl, shortSettlementDate, stockOverviewSettlementDisplay } from "@/lib/stock-overview-settlement-display";
 import { expectedStockSettlementDate, isCryptoPortfolioCalendarPoint, normalizeStockCalendarPoints, nullableStockNumber, stockCalendarScope, sumKnownStockDailyPnl } from "@/lib/ledger-stock-calendar";
 import { millisecondsUntilStockCalendarWake, stockCalendarExpectedVersion, stockCalendarHasExpectedClose, stockCalendarPrefetchBlocked, stockCalendarQueryOptions, stockCalendarRetryWindowFor, stockCalendarUsesCryptoPolicy } from "@/lib/ledger-stock-calendar-cache";
@@ -3675,9 +3675,13 @@ export default function LedgerDetailAA({
               const ordinaryDailyDisplay = ordinaryDownside ? ordinaryOverviewDailyReturn(ordinaryDownside, today2) : null;
               const overviewDailyPnl = ordinaryDownside ? ordinaryDailyDisplay!.amount : todayPnl;
               const overviewDailyDate = ordinaryDownside ? ordinaryDailyDisplay!.date : stockDisplay?.dailyDate ?? latestDate;
+              // 仅有效管理角色查看未参与收益的标签时展示已登记余额；不将余额纳入任何收益字段。
+              const overviewRecordedBalance = ledgerId === 37 && ['owner', 'admin'].includes(String(ledgerData?.userRole)) && ordinaryDownside
+                ? ordinaryOverviewRecordedBalance(ordinaryDownside, today2, initialBalancesData?.balances)
+                : null;
               const annualized = latestPnl !== null && tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, latestDate, todayPnl, overviewDailyPnl, overviewDailyDate, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
+              return { tag, days, latestPnl, latestDate, todayPnl, overviewDailyPnl, overviewDailyDate, overviewRecordedBalance, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
             // 排序逻辑：默认（无手动排序）时暂停的排最下面；用户手动排序时参与全局排序
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
@@ -3994,7 +3998,7 @@ export default function LedgerDetailAA({
                 <div style={{ position: 'relative', zIndex: 0, flex: '0 0 auto', width: rightGridWidth, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', width: rightGridWidth }}>
                     {/* 数据行右侧各列 */}
-                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, overviewDailyPnl, overviewDailyDate, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
+                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, overviewDailyPnl, overviewDailyDate, overviewRecordedBalance, stockDisplay, tagSettlementDate, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
                       const _todayBJ = _nowBJ.toISOString().slice(0, 10);
@@ -4016,17 +4020,23 @@ export default function LedgerDetailAA({
                           : overviewDailyPnl === 0 ? '#1A1A1A'
                           : overviewDailyPnl > 0 ? '#D32F2F' : '#388E3C';
                         const _todayPnlText = formatOverviewDailyReturn(overviewDailyPnl);
+                        const recordedBalance = nullableOrdinaryNumber(overviewRecordedBalance?.amount);
+                        const recordedBalanceColor = recordedBalance !== null && overviewRecordedBalance && (tag as any).ordinaryDownside
+                          ? overviewRecordedBalance.date === _latestDataDate
+                            ? ordinaryCalendarBalanceColor((tag as any).ordinaryDownside, overviewRecordedBalance.date)
+                            : '#BDBDBD'
+                          : _todayPnlColor;
                         const _ratioNum = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
                         const _prevDate = tag.isStockPortfolio
                           ? ((tag.points[tag.points.length - 1] as any)?.stockPreviousDate ?? '')
                           : tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.date ?? '') : '';
                         const _isFirstStockSettlement = !!tag.isStockPortfolio && tag.points.length === 1;
-                        const _canShowDetail = _showTodayPnl && overviewDailyPnl !== null;
+                        const _canShowDetail = recordedBalance === null && _showTodayPnl && overviewDailyPnl !== null;
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, height: rowHeight }}>
                             <span
-                              title={(tag as any).ordinaryDownside && overviewDailyDate ? `${overviewDailyDate}日度回报` : stockDisplay?.dailyTitle}
-                              style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowDetail ? 'pointer' : 'default',
+                              title={overviewRecordedBalance ? `${overviewRecordedBalance.date}已登记余额` : (tag as any).ordinaryDownside && overviewDailyDate ? `${overviewDailyDate}日度回报` : stockDisplay?.dailyTitle}
+                              style={{ fontSize: 13, color: recordedBalanceColor, cursor: _canShowDetail ? 'pointer' : 'default',
                                 textDecoration: _canShowDetail ? 'underline' : 'none', textDecorationStyle: 'dashed',
                                 textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'normal', wordBreak: 'break-all', textAlign: 'center' }}
                               onClick={(e) => {
@@ -4049,7 +4059,9 @@ export default function LedgerDetailAA({
                                   latestPnl: Number(latestPnl ?? 0),
                                 });
                               }}
-                            >{_todayPnlText}{overviewDailyPnl === null && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>待更新</span>}</span>
+                            >{recordedBalance !== null ? formatOverviewDailyReturn(recordedBalance) : _todayPnlText}{recordedBalance !== null
+                              ? <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>余额</span>
+                              : overviewDailyPnl === null && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>待更新</span>}</span>
                           </div>
                         );
                       })()}
