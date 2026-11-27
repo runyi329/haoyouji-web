@@ -221,7 +221,8 @@ export default defineConfig(({ command }) => {
     hmr: stablePreview ? false : true,
     proxy: {
       "/api": {
-        target: "http://124.223.54.69:80",
+        // 生产HTTP已强制跳HTTPS；预览直接代理HTTPS，避免301跳出预览域导致跨域失败。
+        target: "https://124.223.54.69:443",
         changeOrigin: true,
         secure: false,
       },

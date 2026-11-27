@@ -32,6 +32,7 @@ import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
 import { getSmartAccountingRoute } from "@/lib/smartAccountingNavigation";
 import { MibanImage } from "@/pages/miban/MibanImage";
+import { CHONGBAN_SHOP_PATH } from "@/lib/chongban-navigation";
 
 // 首屏海报与商城分类入口共用米伴首页地址，避免小入口退回商品分类弹窗。
 const MIBAN_HOME_PATH = '/p/proj_hzxm2t/';
@@ -1912,7 +1913,7 @@ export default function Home() {
                         return;
                       }
                       if (cat.name === '宠物生活' || cat.name === '宠物伴侣' || cat.name === '宠伴') {
-                        navigate('/pet-platform');
+                        navigate(CHONGBAN_SHOP_PATH);
                         return;
                       }
                       if (cat.name === '牙伴') {

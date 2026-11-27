@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, ChevronRight } from "lucide-react";
 import { centerToast } from "@/components/ui/center-toast";
+import ChongbanSectionTabs from "@/components/ChongbanSectionTabs";
 
 // 插画资源 CDN URL
 const BANNER_IMG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/banner-teddy-cat-h2.webp";
@@ -449,6 +450,16 @@ function MachineDetail({ machine, userRole, onBack }: { machine: any; userRole: 
 
 // 主页面
 export default function PetPlatform() {
+  return (
+    <>
+      <ChongbanSectionTabs active="services" />
+      <PetPlatformContent />
+    </>
+  );
+}
+
+// 原健康舱业务独立保留，包含机器详情和录入弹窗；Tab不改变业务查询与权限。
+function PetPlatformContent() {
   const [, navigate] = useLocation();
   const [recordingMachine, setRecordingMachine] = useState<any>(null);
   const [detailMachine, setDetailMachine] = useState<any>(null);

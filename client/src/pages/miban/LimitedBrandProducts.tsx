@@ -11,6 +11,7 @@ import { getMibanLimitedBrandBySlug } from "../../../../shared/miban-limited-bra
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { mtrpc } from "./mibanTrpc";
 import { LimitedCartButton } from "./LimitedProductCart";
+import ChongbanSectionTabs from "@/components/ChongbanSectionTabs";
 
 function getActiveSku(
   product: LimitedProduct,
@@ -99,6 +100,8 @@ export default function LimitedBrandProducts() {
         </h1>
         <LimitedCartButton compact accent={theme.primary} />
       </header>
+
+      {brandSlug === "wangka" && <ChongbanSectionTabs active="shop" />}
 
       <section
         className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-[480px]"
