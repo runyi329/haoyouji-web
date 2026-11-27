@@ -6,8 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import {
-  buildOrdinaryDownsideScopes, nullableOrdinaryNumber, ordinaryDownsideChartPoints,
-  ordinaryDownsideIdentityQueryKey, sumOrdinaryDownsideDailyPnl,
+  buildOrdinaryDownsideScopes, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryDownsideChartPoints,
+  ordinaryDownsideIdentityQueryKey, ordinaryOverviewDailyReturn, sumOrdinaryDownsideDailyPnl,
   type OrdinaryDownsideCategory, type OrdinaryDownsidePoint,
 } from '../client/src/lib/ordinary-tag-downside-valuation-display';
 
@@ -57,7 +57,7 @@ function context(result = ready()) {
     selectedTag: categories[0], selectedTagId: 7, isSelectedStockPortfolio: false, stockCalendarPoints: [],
     capitalHistory: [], withdrawRecords: [], totalWithdraw: 0, capitalByTag: {}, withdrawByTag: {}, tagCashFlows: {},
     ledgerId: 37, ledgerData: {}, cumulativeMap: new Map(), dayMap: new Map(),
-    nullableOrdinaryNumber, ordinaryDownsideChartPoints, sumOrdinaryDownsideDailyPnl,
+    nullableOrdinaryNumber, ordinaryDownsideChartPoints, ordinaryOverviewDailyReturn, formatOverviewDailyReturn, sumOrdinaryDownsideDailyPnl,
     resolveMarginEntries: () => [{ coin: 'CNY', amount: 100, cnyValue: 100 }],
     readTagPauseHistory: () => [], isDateInTagPausePeriod: () => false, isR1Tag: () => false,
     getPrevTradingDay: () => { throw new Error('Configured path must not run legacy date/records calculation'); },
@@ -122,6 +122,59 @@ describe('普通强平估值前端：完整服务端结果、真实金额和隔�
     await client.invalidateQueries({ queryKey: base });
     expect(client.getQueryState(a)?.isInvalidated).toBe(true); expect(client.getQueryState(b)?.isInvalidated).toBe(true); expect(client.getQueryState(c)?.isInvalidated).toBe(true);
     client.clear();
+  });
+});
+
+describe('概览最近已更新日灰显，不替代真实今日收益', () => {
+  it('昨日有效收益可显示，真实今日仍为null，实际行颜色、文字和日期正确', () => {
+    const result = { ...ready(), todayPnl: null };
+    const scope = scopes(result).get(7)!;
+    expect(ordinaryOverviewDailyReturn(scope, '2026-11-04')).toEqual({ amount: 125, date: '2026-11-03' });
+    expect(scope.todayPnl).toBeNull();
+    const init = declaration('tagData').initializer as ts.CallExpression;
+    const code = ts.transpileModule(`(${init.arguments[0].getText(ast)})`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+    }).outputText;
+    const ctx = context(result);
+    const tag = actualFunction('allTagsChartData', ctx)()[0];
+    const row = vm.runInNewContext(code, { ...ctx, visibleTags: [tag] }, { timeout: 1000 })(tag, 0);
+    expect(row.todayPnl).toBeNull(); expect(row.overviewDailyPnl).toBe(125);
+    expect(row.overviewDailyDate).toBe('2026-11-03');
+    expect(actualFunction('_todayPnlColor', { _showTodayPnl: true, overviewDailyPnl: 125, _isTagUpdatedToday: false }, false)).toBe('#BDBDBD');
+    expect(actualFunction('_todayPnlText', { formatOverviewDailyReturn, overviewDailyPnl: 125 }, false)).toBe('125');
+    expect(source).toContain('latestDate: overviewDailyDate ?? latestDate');
+    expect(source).toContain('todayPnl: Number(overviewDailyPnl)');
+    expect(source).toContain('tagData.filter(td => td.todayPnl !== null');
+  });
+  it('今日正负及真实零值沿用确认结果，不重复乘占比', () => {
+    for (const amount of [-125, 0, 125]) {
+      const scope = scopes(ready([point('2026-11-03', 900, 25, amount)])).get(7)!;
+      expect(ordinaryOverviewDailyReturn(scope, '2026-11-03')).toEqual({ amount, date: '2026-11-03' });
+    }
+  });
+  it('最新坏点、pending/no_data、未知前日或未来数据均不跳过坏点找旧金额', () => {
+    for (const status of ['pending', 'no_data'] as const) {
+      expect(ordinaryOverviewDailyReturn(scopes({ ...ready(), status }).get(7)!, '2026-11-04')).toEqual({ amount: null, date: null });
+    }
+    for (const extra of [{ balance: null }, { pnl: null }, { dailyPnl: null }, { dailyPnl: NaN }, { dailyPnl: Infinity }]) {
+      const scope = scopes(ready([point('2026-11-02', 900, 25, 25), point('2026-11-03', 800, 30, 5, extra)])).get(7)!;
+      expect(ordinaryOverviewDailyReturn(scope, '2026-11-04')).toEqual({ amount: null, date: null });
+    }
+    expect(ordinaryOverviewDailyReturn(scopes({ ...ready(), todayPnl: null }).get(7)!, '2026-11-03')).toEqual({ amount: null, date: null });
+    expect(ordinaryOverviewDailyReturn(scopes().get(7)!, '2026-11-02')).toEqual({ amount: null, date: null });
+  });
+  it('暂停裁剪后仅展示最后可见日，保留裁剪后的今日null及日历原值', () => {
+    const scope = buildOrdinaryDownsideScopes(37, categories, { ledgerId: 37, categories: [ready()] }, (_name, date) => date <= '2026-11-02').get(7)!;
+    expect(ordinaryOverviewDailyReturn(scope, '2026-11-04')).toEqual({ amount: -100, date: '2026-11-02' });
+    expect(scope.todayPnl).toBeNull(); expect(scope.totalPnl).toBe(-100);
+    expect(scope.points.map(item => item.date)).toEqual(['2026-11-02']);
+  });
+  it('金额仅按原概览整数精度显示，浮点残差不显示负零，空值不填0', () => {
+    expect(formatOverviewDailyReturn(-7.275957614183426e-12)).toBe('0');
+    expect(formatOverviewDailyReturn(-1080.8320000000022)).toBe('-1,081');
+    expect(formatOverviewDailyReturn(0)).toBe('0');
+    expect(formatOverviewDailyReturn(null)).toBe('--');
+    expect(formatOverviewDailyReturn(NaN)).toBe('--');
   });
 });
 

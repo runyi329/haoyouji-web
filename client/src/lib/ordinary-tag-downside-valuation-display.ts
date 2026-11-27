@@ -28,6 +28,23 @@ export function nullableOrdinaryNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/** Overview-only historical display. Never fills today's return or skips an invalid latest point. */
+export function ordinaryOverviewDailyReturn(scope: OrdinaryDownsideScope, today: string): { amount: number | null; date: string | null } {
+  const point = scope.latestPoint;
+  if (scope.status !== 'ready' || !point || point.date > today
+    || nullableOrdinaryNumber(point.balance) === null || nullableOrdinaryNumber(point.pnl) === null) {
+    return { amount: null, date: null };
+  }
+  const amount = nullableOrdinaryNumber(point.date === today ? scope.todayPnl : point.dailyPnl);
+  return { amount, date: amount === null ? null : point.date };
+}
+
+export function formatOverviewDailyReturn(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '--';
+  const absolute = Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+  return `${value < 0 && absolute !== '0' ? '-' : ''}${absolute}`;
+}
+
 // Keep the native tRPC key prefix: centralized endpoint.invalidate({ ledgerId: 37 })
 // matches every identity, while effective user and viewAs never share cached data.
 export function ordinaryDownsideIdentityQueryKey(baseKey: readonly unknown[], userId: number, effectiveUserId: number, viewAs: number | null) {
