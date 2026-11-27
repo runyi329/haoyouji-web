@@ -11,9 +11,15 @@ import {
   formatMibanPaymentSummary,
   type MibanWalletPaymentQuote,
 } from "../shared/miban-wallet-payment";
+import {
+  calculateBenefits,
+  MIBAN_BENEFITS_STOREFRONT,
+  type BenefitQuote,
+} from "../shared/miban-benefits";
+import type { BenefitsQuoteInput } from "../client/src/pages/miban/useMibanBenefitsQuote";
 
 // Only React scheduling/context and external tRPC/auth/router hooks are isolated.
-// Catalogs, payment maths, allocation component and checkout page are real modules.
+// Catalogs, both quote hooks, payment maths and checkout page are real modules.
 // mutate is a capture-only unit boundary: no application/router/DB/network starts.
 const boundary = vi.hoisted(() => ({
   active: null as any,
@@ -21,10 +27,18 @@ const boundary = vi.hoisted(() => ({
   mutationOptions: null as any,
   pending: false,
   authenticated: true,
+  userId: 28 as number | undefined,
+  authLoading: false,
   addresses: [] as any[],
   quote: null as any,
   freshQuote: null as any,
   refetch: vi.fn(),
+  benefitsInput: null as BenefitsQuoteInput | null,
+  benefitsData: null as BenefitQuote | null,
+  benefitsFetching: false,
+  benefitsError: false,
+  benefitsQuoteQuery: vi.fn(),
+  benefitsRefetch: vi.fn(),
   invoiceSupport: vi.fn(),
   invoiceAccess: vi.fn(),
   invoiceRouteAvailable: true,
@@ -92,6 +106,7 @@ vi.mock("../client/src/pages/miban/mibanTrpc", () => ({
 }));
 vi.mock("../client/src/lib/trpc", () => ({
   trpc: {
+    benefits: { quote: { useQuery: boundary.benefitsQuoteQuery } },
     auth: {
       me: {
         useQuery: () => ({ data: { name: "隔离测试用户", avatar: null } }),
@@ -111,7 +126,11 @@ vi.mock("../client/src/lib/trpc", () => ({
   },
 }));
 vi.mock("../client/src/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ isAuthenticated: boundary.authenticated, loading: false }),
+  useAuth: () => ({
+    isAuthenticated: boundary.authenticated,
+    loading: boundary.authLoading,
+    user: boundary.authenticated && boundary.userId != null ? { id: boundary.userId } : null,
+  }),
 }));
 vi.mock("wouter", async () => ({
   ...(await vi.importActual<typeof import("wouter")>("wouter")),
@@ -135,6 +154,33 @@ import {
 
 const STORAGE_KEY = "miban-limited-product-cart-v1";
 const NOW = Date.parse("2026-11-22T04:00:00.000Z");
+function fixtureBenefitsQuote(
+  input: BenefitsQuoteInput = boundary.benefitsInput!,
+  quoteToken = "isolated-fresh-benefits-signature",
+  expiresAt = Date.now() + 300_000
+): BenefitQuote {
+  return {
+    storefront: MIBAN_BENEFITS_STOREFRONT,
+    quoteToken,
+    expiresAt,
+    result: calculateBenefits([], input.items.map(item => {
+      const product = getMibanLimitedProduct(item.productKey)!;
+      const sku = getMibanLimitedProductSku(product, item.skuId)!;
+      return {
+        ...item,
+        quantity: item.quantity * (input.mode === "annual" ? 12 : 1),
+        priceCny: sku.priceCny,
+        category: product.brand,
+        series: product.checkoutGroupKey ?? product.key,
+      };
+    })),
+  };
+}
+// A real quote hook adds an awaited benefits request before invoice/wallet checks.
+// Drain only microtasks: never advance expiry timers or resolve deferred requests.
+async function flushQuoteMicrotasks() {
+  for (let step = 0; step < 12; step++) await Promise.resolve();
+}
 function fixtureQuote(
   quoteToken = "isolated-snapshot-signature",
   quotedAt = NOW
@@ -291,13 +337,17 @@ function setupCart() {
     render();
     return render();
   };
-  const confirm = () => {
+  const confirm = async () => {
     const element = open();
     findElement(
       element,
       node => node.type === "button" && node.props.children === "统一买单"
     ).props.onClick();
-    render();
+    // Settle the real entry quote and wallet-total/reset effects in this scheduler.
+    for (let step = 0; step < 4; step++) {
+      render();
+      await flushQuoteMicrotasks();
+    }
     return render();
   };
   return { render, open, confirm, context: () => boundary.context };
@@ -452,22 +502,36 @@ function walk(node: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
   return found;
 }
 
+// Resolve the mutation argument itself, never the first descendant object (which
+// may just be the conditional invoice/token spread). Prefer its lexical scope.
+function paymentPayloadObject(page: ts.SourceFile, expression: ts.Expression): ts.ObjectLiteralExpression {
+  if (ts.isParenthesizedExpression(expression)) return paymentPayloadObject(page, expression.expression);
+  if (ts.isObjectLiteralExpression(expression)) return expression;
+  if (ts.isIdentifier(expression)) {
+    const name = expression.text;
+    for (let scope: ts.Node | undefined = expression.parent; scope; scope = scope.parent) {
+      if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
+      const declarations = walk(scope, node => {
+        if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || node.name.text !== name || !node.initializer) return false;
+        let owner: ts.Node | undefined = node.parent;
+        while (owner && !ts.isBlock(owner) && !ts.isSourceFile(owner)) owner = owner.parent;
+        return owner === scope && node.getStart(page) < expression.getStart(page);
+      }) as ts.VariableDeclaration[];
+      if (declarations.length) {
+        expect(declarations).toHaveLength(1);
+        return paymentPayloadObject(page, declarations[0].initializer!);
+      }
+    }
+  }
+  throw new Error(`Payment DTO is not a resolvable object: ${expression.getText(page)}`);
+}
+
 function expectPreparedPaymentContract(
   page: ts.SourceFile,
   mutation: ts.CallExpression,
   paymentName: string
 ) {
-  let payload: ts.Expression = mutation.arguments[0];
-  if (ts.isIdentifier(payload)) {
-    const declaration = walk(
-      page,
-      node =>
-        ts.isVariableDeclaration(node) &&
-        node.name.getText(page) === payload.getText(page)
-    ) as ts.VariableDeclaration[];
-    expect(declaration).toHaveLength(1);
-    payload = declaration[0].initializer as ts.ObjectLiteralExpression;
-  }
+  const payload = paymentPayloadObject(page, mutation.arguments[0]);
   expect(ts.isObjectLiteralExpression(payload)).toBe(true);
   if (!ts.isObjectLiteralExpression(payload))
     throw new Error("Payment DTO must be an object");
@@ -538,6 +602,26 @@ function expectPreparedPaymentContract(
         guard.end < mutation.getStart(page)
     )
   ).toBe(true);
+  if (["LimitedProductCart.tsx", "HerbalifeRedGinsengDetail.tsx"].includes(page.fileName)) {
+    expect(fields.find(field => field.name.getText(page) === "benefitsQuoteToken")?.initializer.getText(page))
+      .toBe("benefitsQuote.quoteToken");
+    const benefitPrepares = walk(paymentHandler.body, node =>
+      ts.isVariableDeclaration(node) && node.name.getText(page) === "benefitsQuote" &&
+      !!node.initializer && ts.isAwaitExpression(node.initializer) &&
+      ts.isCallExpression(node.initializer.expression) &&
+      node.initializer.expression.expression.getText(page) === "benefits.refreshForConfirmation" &&
+      node.initializer.expression.arguments.length === 0
+    );
+    expect(benefitPrepares).toHaveLength(1);
+    expect(benefitPrepares[0].getStart(page)).toBeLessThan(prepares[0].getStart(page));
+    expect(paymentHandler.getText(page)).toContain("!benefits.isCurrent(benefitsQuote)");
+    const benefitGuards = walk(paymentHandler.body, node =>
+      ts.isIfStatement(node) && node.expression.getText(page).includes("!benefitsQuote") &&
+      walk(node.thenStatement, statement => ts.isReturnStatement(statement) && !statement.expression).length > 0
+    );
+    expect(benefitGuards.some(guard => guard.getStart(page) > benefitPrepares[0].getStart(page) && guard.end < prepares[0].getStart(page)))
+      .toBe(true);
+  }
 }
 
 beforeEach(() => {
@@ -559,6 +643,25 @@ beforeEach(() => {
   boundary.context = null;
   boundary.pending = false;
   boundary.authenticated = true;
+  boundary.userId = 28;
+  boundary.authLoading = false;
+  boundary.benefitsInput = null;
+  boundary.benefitsData = null;
+  boundary.benefitsFetching = false;
+  boundary.benefitsError = false;
+  boundary.benefitsRefetch.mockReset().mockImplementation(async () => ({
+    data: fixtureBenefitsQuote(),
+    isError: false,
+  }));
+  boundary.benefitsQuoteQuery.mockReset().mockImplementation((input: BenefitsQuoteInput) => {
+    boundary.benefitsInput = input;
+    return {
+      data: boundary.benefitsData ?? (input.items.length ? fixtureBenefitsQuote(input, "isolated-cached-benefits-signature") : undefined),
+      isFetching: boundary.benefitsFetching,
+      isError: boundary.benefitsError,
+      refetch: boundary.benefitsRefetch,
+    };
+  });
   boundary.quote = fixtureQuote();
   boundary.invoiceRouteAvailable = true;
   boundary.invoiceSupport
@@ -680,7 +783,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(markup).toContain("¥0.63");
     expect(markup).toContain("¥1.50");
   });
-  it("shows two groups/subtotals/accents in cart and confirmation with one address and wallet", () => {
+  it("shows two groups/subtotals/accents in cart and confirmation with one address and wallet", async () => {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
@@ -694,7 +797,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       expect(cartMarkup).toContain(`¥${item.priceCny.toFixed(2)}`);
     }
     expect(cartMarkup).toContain('data-testid="cart-split-order-notice"');
-    const confirmation = cart.confirm();
+    const confirmation = await cart.confirm();
     const allocation = findElement(
       confirmation,
       node =>
@@ -726,7 +829,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    const confirmation = cart.confirm();
+    const confirmation = await cart.confirm();
     findElement(
       confirmation,
       node =>
@@ -750,6 +853,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     expect(input.cnyAmount).toBe(0);
     expect(input.paymentQuoteToken).toBe(boundary.freshQuote.quoteToken);
     expect(input.paymentQuoteToken).not.toBe(boundary.quote.quoteToken);
+    expect(input.benefitsQuoteToken).toBe("isolated-fresh-benefits-signature");
     expect(Object.keys(input).sort()).toEqual(
       [
         "items",
@@ -760,6 +864,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
         "cnyAmount",
         "paymentAssets",
         "paymentQuoteToken",
+        "benefitsQuoteToken",
       ].sort()
     );
     expect(input.receiverPhone).toBe("13800138000");
@@ -790,7 +895,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       priceUpdatedAt: new Date(NOW).toISOString(),
     });
     boundary.freshQuote.assets.push({ ...boundary.quote.assets.at(-1) });
-    let element = cart.confirm();
+    let element = await cart.confirm();
     let allocationElement = findElement(
       element,
       node =>
@@ -840,7 +945,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
     boundary.addresses = [];
-    cart.confirm();
+    await cart.confirm();
     await goPayButton(cart).props.onClick();
     expect(walletPopup(cart.render())).toBeUndefined();
     expect(boundary.toastError).toHaveBeenLastCalledWith("请先选择收货地址");
@@ -876,7 +981,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     paymentConfirmButton(cart);
     const original = cartPayment(cart);
     boundary.quote = fixtureQuote("unreviewed-cache-signature", NOW + 60_001);
@@ -905,7 +1010,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     paymentConfirmButton(cart);
     vi.setSystemTime(NOW + 60_001);
     boundary.freshQuote = fixtureQuote(
@@ -937,11 +1042,12 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     const finishRefetch = delayedRefetch();
     const { pay, payment } = paymentConfirmButton(cart);
     const prepare = vi.spyOn(payment, "preparePayment");
     const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
     expect(boundary.refetch).toHaveBeenCalledOnce();
     expect(boundary.mutate).not.toHaveBeenCalled();
     vi.setSystemTime(NOW + 60_001);
@@ -964,7 +1070,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       const cart = setupCart();
       cart.context().addItem(rice());
       cart.context().addItem(aloe());
-      cart.confirm();
+      await cart.confirm();
       cartPayment(cart).useOnlyAsset(code);
       boundary.freshQuote.assets.find(
         (row: any) => row.assetCode === code
@@ -991,7 +1097,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     cartPayment(cart).useOnlyAsset("USDT");
     const original = cartPayment(cart);
     expect(original.paymentAssets).toEqual([
@@ -1033,7 +1139,7 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     expect(cartPayment(cart).selectedDigitalCode).toBe("ETH");
     boundary.freshQuote.assets.find(
       (row: any) => row.assetCode === "ETH"
@@ -1064,11 +1170,12 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
       const cart = setupCart();
       cart.context().addItem(rice());
       cart.context().addItem(aloe());
-      cart.confirm();
+      await cart.confirm();
       const finishRefetch = delayedRefetch();
       const { pay, payment } = paymentConfirmButton(cart);
       const prepare = vi.spyOn(payment, "preparePayment");
       const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
       const busyElement = cart.render();
       expect(cartPayment(cart, busyElement).refreshing).toBe(true);
       expect(cartPayment(cart, busyElement).canPay).toBe(false);
@@ -1107,10 +1214,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     const finishRefetch = delayedRefetch();
     const { pay } = paymentConfirmButton(cart);
     const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
     await pay.props.onClick(); // same render closure must also be safe
     const busyElement = cart.render();
     const busyPay = findElement(
@@ -1138,11 +1246,11 @@ describe("cross-brand cart provider and grouped confirmation (no network)", () =
 });
 
 describe("two-step checkout / invoice capability and async scope safety (isolated boundaries only)", () => {
-  function confirmedCart() {
+  async function confirmedCart() {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     return cart;
   }
   function personalInvoice(cart: ReturnType<typeof setupCart>) {
@@ -1158,7 +1266,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     return resolve;
   }
   it("does not prepare from a stale confirmation button after returning to checkout", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     const { pay, payment } = paymentConfirmButton(cart);
     const prepare = vi.spyOn(payment, "preparePayment");
     findElement(
@@ -1173,7 +1281,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(walletPopup(cart.render())).toBeUndefined();
   });
   it("revalidates invoice on confirm, returns invalid company invoice to checkout without any requests", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     personalInvoice(cart);
     openWallet(cart);
     // Isolated parent-state change simulates a stale invalid draft before final click.
@@ -1197,7 +1305,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(cart.context().items).toHaveLength(2);
   });
   it("retries invoice capability uncached after failure and only then prepares one payment", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     personalInvoice(cart);
     boundary.invoiceSupport.mockRejectedValueOnce(
       new Error("isolated first capability failure")
@@ -1215,7 +1323,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(cart.context().items).toHaveLength(2);
   });
   it("opens wallet only on 去支付 without fresh quote/prepare/mutate or review approval, and popup is read-only", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     expect(invoiceForm(cart).props.draft).toEqual({
       enabled: false,
       type: "personal",
@@ -1289,7 +1397,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(boundary.invoiceAccess).not.toHaveBeenCalled();
   });
   it("uses real invoice Switch/type events, clears old company fields when changing type or disabling", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     setInvoiceEnabled(cart, true);
     expect(invoiceForm(cart).props.draft).toMatchObject({
       enabled: true,
@@ -1331,7 +1439,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(boundary.invoiceSupport).not.toHaveBeenCalled();
   });
   it("does not open popup for company without tax number, and preserves draft on address updates", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     setInvoiceEnabled(cart, true);
     chooseInvoiceType(cart, "company");
     setInvoiceField(cart, "title", "单元测试公司");
@@ -1354,7 +1462,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   it.each([1, 2])(
     "submits personal invoice after real-time supported capability v%i, stripping any old tax number",
     async version => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       personalInvoice(cart);
       boundary.invoiceSupport.mockResolvedValue({ supported: true, version });
       // Legacy company tax values cannot enter a personal request, even at the boundary.
@@ -1385,7 +1493,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     }
   );
   it("submits trimmed company invoice and raw signed allocation together, then keeps cart on error", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     setInvoiceEnabled(cart, true);
     chooseInvoiceType(cart, "company");
     setInvoiceField(cart, "title", "  隔离公司  ");
@@ -1418,7 +1526,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   ])(
     "fails closed for invalid invoice capability %j without prepare/refetch/mutate",
     async support => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       personalInvoice(cart);
       boundary.invoiceSupport.mockResolvedValue(support);
       openWallet(cart);
@@ -1438,7 +1546,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   it.each(["reject", "missing-route"])(
     "blocks enabled invoice on capability %s without prepare/mutate",
     async reason => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       personalInvoice(cart);
       if (reason === "reject")
         boundary.invoiceSupport.mockRejectedValue(
@@ -1457,12 +1565,13 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     }
   );
   it("serializes capability and fresh-quote verification; duplicate clicks cannot start either twice", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     personalInvoice(cart);
     const finishCapability = deferredCapability();
     const finishQuote = delayedRefetch();
     const { pay } = paymentConfirmButton(cart);
     const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
     await pay.props.onClick();
     const busy = findElement(
       walletPopup(cart.render()),
@@ -1475,8 +1584,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     expect(boundary.invoiceSupport).toHaveBeenCalledOnce();
     expect(boundary.refetch).not.toHaveBeenCalled();
     finishCapability({ supported: true, version: 1 });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushQuoteMicrotasks();
     expect(boundary.refetch).toHaveBeenCalledOnce();
     await pay.props.onClick();
     finishQuote();
@@ -1488,18 +1596,19 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   it.each(["back", "close", "address", "items", "invoice"])(
     "rejects late capability response after %s scope changes, including reopening",
     async change => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       personalInvoice(cart);
       const finishCapability = deferredCapability();
       const { pay, payment } = paymentConfirmButton(cart);
       const prepare = vi.spyOn(payment, "preparePayment");
       const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
       cart.render();
       if (change === "close") {
         cart.context().closeCart();
         cart.render();
         cart.open();
-        cart.confirm();
+        await cart.confirm();
       } else if (change === "address") {
         boundary.addresses = [
           {
@@ -1541,13 +1650,13 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   it.each(["address", "items", "invoice"])(
     "never submits prepared quote after %s changes while awaiting the quote",
     async change => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       personalInvoice(cart);
       const finishQuote = delayedRefetch();
       const { pay } = paymentConfirmButton(cart);
       const request = pay.props.onClick();
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushQuoteMicrotasks();
+      await flushQuoteMicrotasks();
       expect(boundary.refetch).toHaveBeenCalledOnce();
       cart.render();
       if (change === "address") {
@@ -1576,8 +1685,8 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
       expect(cart.context().items).toHaveLength(2);
     }
   );
-  it("resets invoice only when leaving checkout, not when closing the wallet popup", () => {
-    const cart = confirmedCart();
+  it("resets invoice only when leaving checkout, not when closing the wallet popup", async () => {
+    const cart = await confirmedCart();
     personalInvoice(cart);
     findElement(
       walletPopup(openWallet(cart)),
@@ -1593,7 +1702,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
       node => node.props["aria-label"] === "返回购物车"
     ).props.onClick();
     cart.render();
-    cart.confirm();
+    await cart.confirm();
     expect(invoiceForm(cart).props.draft).toEqual({
       enabled: false,
       type: "personal",
@@ -1610,7 +1719,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   ])(
     "never submits when fresh payment verification fails: %s",
     async failure => {
-      const cart = confirmedCart();
+      const cart = await confirmedCart();
       if (failure === "reject")
         boundary.refetch.mockRejectedValueOnce(
           new Error("isolated quote failure")
@@ -1628,6 +1737,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
       const { pay, payment } = paymentConfirmButton(cart);
       const prepare = vi.spyOn(payment, "preparePayment");
       const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
       if (failure === "timeout") await vi.advanceTimersByTimeAsync(15_001);
       await request;
       await expect(prepare.mock.results[0].value).resolves.toBeNull();
@@ -1637,7 +1747,7 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
     }
   );
   it("excludes frozen balance from payment even when frozen value could cover all groups", async () => {
-    const cart = confirmedCart();
+    const cart = await confirmedCart();
     const frozen = boundary.freshQuote.assets.find(
       (row: any) => row.assetCode === "ETH"
     );
@@ -1656,12 +1766,186 @@ describe("two-step checkout / invoice capability and async scope safety (isolate
   });
 });
 
+describe("real benefits quote contract / fail-closed cart payment (no network)", () => {
+  async function confirmedCart() {
+    const cart = setupCart();
+    cart.context().addItem(rice());
+    cart.context().addItem(aloe());
+    await cart.confirm();
+    return cart;
+  }
+  function benefitsState(cart: ReturnType<typeof setupCart>) {
+    return findElement(cart.render(), node =>
+      typeof node.type === "function" && node.type.name === "MibanBenefitsQuoteSummary"
+    ).props.benefits;
+  }
+  function expectCartPreserved(cart: ReturnType<typeof setupCart>) {
+    expect(boundary.mutate).not.toHaveBeenCalled();
+    expect(cart.context().items).toHaveLength(2);
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toHaveLength(2);
+  }
+  it("quotes the actual cart/SKU quantities at normal catalog cents and sends both fresh tokens", async () => {
+    const cart = setupCart();
+    cart.context().addItem({ ...rice(), quantity: 2 });
+    cart.context().addItem({ ...aloe(), quantity: 3 });
+    await cart.confirm();
+    const quote = fixtureBenefitsQuote();
+    expect(quote.result.originalCents).toBe(cart.context().totalCny * 100);
+    expect(quote.result.totalCents).toBe(quote.result.originalCents);
+    expect(quote.result.savedCents).toBe(0);
+    expect(quote.result.consumedRuleIds).toEqual([]);
+    expect(quote.result.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ productKey: rice().productKey, skuId: rice().skuId, quantity: 2, originalCents: rice().priceCny * 200 }),
+      expect.objectContaining({ productKey: aloe().productKey, skuId: aloe().skuId, quantity: 3, originalCents: aloe().priceCny * 300 }),
+    ]));
+    expect(boundary.benefitsQuoteQuery).toHaveBeenLastCalledWith({
+      storefront: MIBAN_BENEFITS_STOREFRONT,
+      mode: "once",
+      items: cart.context().items.map(({ productKey, skuId, quantity }: LimitedCartItem) => ({ productKey, skuId, quantity })),
+    }, expect.objectContaining({ enabled: true, retry: false, staleTime: 0, refetchInterval: false, refetchOnWindowFocus: true }));
+    expect(benefitsState(cart).displayQuote.result.totalCents / 100).toBe(cart.context().totalCny);
+    await clickPay(cart);
+    expect(boundary.benefitsRefetch).toHaveBeenCalledTimes(2); // entry + final explicit verification
+    expect(boundary.benefitsRefetch).toHaveBeenLastCalledWith({ cancelRefetch: false });
+    expect(boundary.benefitsRefetch.mock.invocationCallOrder[1]).toBeLessThan(boundary.refetch.mock.invocationCallOrder[0]);
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0]).toMatchObject({
+      benefitsQuoteToken: quote.quoteToken,
+      paymentQuoteToken: boundary.freshQuote.quoteToken,
+    });
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it.each(["reject", "is-error", "missing-token", "expired", "wrong-storefront", "wrong-items", "bad-cents", "timeout"])(
+    "does not prepare wallet, request invoice, submit or clear cart when benefits verification fails: %s",
+    async failure => {
+      const cart = await confirmedCart();
+      setInvoiceEnabled(cart, true);
+      const fresh = fixtureBenefitsQuote();
+      if (failure === "reject") boundary.benefitsRefetch.mockRejectedValueOnce(new Error("isolated benefits request failure"));
+      else if (failure === "timeout") boundary.benefitsRefetch.mockImplementationOnce(() => new Promise(() => {}));
+      else {
+        if (failure === "missing-token") fresh.quoteToken = "";
+        if (failure === "expired") fresh.expiresAt = NOW;
+        if (failure === "wrong-storefront") (fresh as any).storefront = "other-storefront";
+        if (failure === "wrong-items") fresh.result.lines[0].quantity++;
+        if (failure === "bad-cents") fresh.result.totalCents--;
+        boundary.benefitsRefetch.mockResolvedValueOnce({ data: fresh, isError: failure === "is-error" });
+      }
+      const { pay, payment } = paymentConfirmButton(cart);
+      const prepare = vi.spyOn(payment, "preparePayment");
+      const request = pay.props.onClick();
+      if (failure === "timeout") await vi.advanceTimersByTimeAsync(15_001);
+      await request;
+      cart.render();
+      expect(prepare).not.toHaveBeenCalled();
+      expect(boundary.refetch).not.toHaveBeenCalled();
+      expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+      expect(boundary.benefitsRefetch).toHaveBeenCalledTimes(2);
+      expect(benefitsState(cart).error).toContain(failure === "reject" ? "isolated benefits request failure" : "未提交订单");
+      expect(benefitsState(cart).displayQuote.result.totalCents).toBe(37100);
+      expect(goPayButton(cart).props.disabled).toBe(true);
+      expectCartPreserved(cart);
+    }
+  );
+  it("an expired displayed benefit quote only refreshes on first click; a second explicit click alone can pay", async () => {
+    const cart = await confirmedCart();
+    paymentConfirmButton(cart);
+    vi.setSystemTime(NOW + 300_001);
+    boundary.freshQuote = fixtureQuote("wallet-after-benefits-expiry", Date.now());
+    await clickPay(cart);
+    expect(boundary.refetch).not.toHaveBeenCalled();
+    expect(benefitsState(cart).notice).toContain("再次确认支付");
+    expectCartPreserved(cart);
+    await clickPay(cart);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(boundary.mutate.mock.calls[0][0].benefitsQuoteToken).toBe("isolated-fresh-benefits-signature");
+    expect(cart.context().items).toHaveLength(2);
+  });
+  it("a benefits token expiring while awaiting fresh wallet quote cannot submit or debit", async () => {
+    const cart = await confirmedCart();
+    const fresh = fixtureBenefitsQuote(undefined, "short-lived-benefits-signature", NOW + 1_000);
+    boundary.benefitsData = fresh;
+    boundary.benefitsRefetch.mockResolvedValueOnce({ data: fresh, isError: false });
+    const finishWallet = delayedRefetch();
+    const { pay } = paymentConfirmButton(cart);
+    const request = pay.props.onClick();
+    await flushQuoteMicrotasks();
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    vi.setSystemTime(NOW + 1_001);
+    finishWallet();
+    await request;
+    expectCartPreserved(cart);
+  });
+  it.each(["fetching", "error", "rule-change"])(
+    "blocks a previously verified benefit token when focus quote becomes %s during wallet refetch",
+    async change => {
+      const cart = await confirmedCart();
+      const finishWallet = delayedRefetch();
+      const { pay } = paymentConfirmButton(cart);
+      const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
+      expect(boundary.refetch).toHaveBeenCalledOnce();
+      if (change === "fetching") boundary.benefitsFetching = true;
+      else if (change === "error") boundary.benefitsError = true;
+      else {
+        const changed = fixtureBenefitsQuote(undefined, "focus-changed-benefits-signature");
+        changed.result.consumedRuleIds = ["changed-rule"];
+        changed.result.summary = "同价不同优惠规则";
+        boundary.benefitsData = changed;
+      }
+      cart.render();
+      cart.render();
+      expect(benefitsState(cart).displayQuote.result.totalCents).toBe(37100);
+      finishWallet();
+      await request;
+      expectCartPreserved(cart);
+    }
+  );
+  it.each(["logout", "switch-owner"])(
+    "discards late benefits confirmation after %s without invoice or wallet request",
+    async change => {
+      const cart = await confirmedCart();
+      let finish!: (value: unknown) => void;
+      boundary.benefitsRefetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      const fresh = fixtureBenefitsQuote();
+      const { pay } = paymentConfirmButton(cart);
+      const request = pay.props.onClick();
+      await flushQuoteMicrotasks();
+      if (change === "logout") boundary.authenticated = false;
+      else boundary.userId = 29;
+      cart.render();
+      expect(benefitsState(cart).displayQuote).toBeNull();
+      finish({ data: fresh, isError: false });
+      await request;
+      expect(boundary.invoiceSupport).not.toHaveBeenCalled();
+      expect(boundary.refetch).not.toHaveBeenCalled();
+      expectCartPreserved(cart);
+    }
+  );
+  it("backend benefits rejection refreshes quote only and never retries an order or clears cart", async () => {
+    const cart = await confirmedCart();
+    await clickPay(cart);
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    boundary.mutationOptions.onError({ message: "优惠报价过期，请重新确认" });
+    boundary.mutationOptions.onSettled();
+    await flushQuoteMicrotasks();
+    cart.render();
+    expect(boundary.benefitsRefetch).toHaveBeenCalledTimes(3);
+    expect(boundary.refetch).toHaveBeenCalledOnce();
+    expect(boundary.mutate).toHaveBeenCalledOnce();
+    expect(benefitsState(cart).notice).toContain("再次确认支付");
+    expect(cart.context().items).toHaveLength(2);
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toHaveLength(2);
+  });
+});
+
 describe("truthful aggregate success / native per-order snapshots", () => {
   async function paidCart() {
     const cart = setupCart();
     cart.context().addItem(rice());
     cart.context().addItem(aloe());
-    cart.confirm();
+    await cart.confirm();
     await clickPay(cart);
     return cart;
   }
@@ -1794,7 +2078,29 @@ describe("truthful aggregate success / native per-order snapshots", () => {
 });
 
 describe("AST contract / mobile layout guardrails", () => {
-  it("retains exactly one createCartOrder mutation and the unchanged aggregate input DTO", () => {
+  it("resolves the lexical payment DTO rather than a same-name outer variable or conditional spread object", () => {
+    const fixture = ts.createSourceFile("PayloadFixture.tsx", `
+      const input = { wrongOuterPayload: true };
+      const handlePay = async () => {
+        const preparedPayment = await payment.preparePayment();
+        if (!preparedPayment) return;
+        const input = {
+          items: [],
+          ...preparedPayment,
+          benefitsQuoteToken: benefitsQuote.quoteToken,
+          ...(invoice.invoiceRequest ? { invoiceRequest: invoice.invoiceRequest } : {}),
+        };
+        createOrder.mutate(input);
+      };
+    `, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const calls = walk(fixture, node => ts.isCallExpression(node) && node.expression.getText(fixture) === "createOrder.mutate") as ts.CallExpression[];
+    expect(calls).toHaveLength(1);
+    const payload = paymentPayloadObject(fixture, calls[0].arguments[0]);
+    expect(payload.properties.filter(ts.isPropertyAssignment).map(field => field.name.getText(fixture)))
+      .toEqual(["items", "benefitsQuoteToken"]);
+    expectPreparedPaymentContract(fixture, calls[0], "payment");
+  });
+  it("retains exactly one createCartOrder mutation and aggregate DTO with a fresh benefits token", () => {
     const mutationHooks = walk(
       file,
       node =>
@@ -1817,6 +2123,8 @@ describe("AST contract / mobile layout guardrails", () => {
         .filter(ts.isSpreadAssignment)
         .map(field => field.expression.getText(file))
     ).toEqual(["orderInput", "preparedPayment"]);
+    expect(payload.properties.filter(ts.isPropertyAssignment).map(field => [field.name.getText(file), field.initializer.getText(file)]))
+      .toEqual([["benefitsQuoteToken", "benefitsQuote.quoteToken"]]);
     const orderInputs = walk(
       file,
       node =>
@@ -1933,13 +2241,13 @@ describe("AST contract / mobile layout guardrails", () => {
   });
   it.each([320, 375, 390, 430])(
     "retains width-adaptive wrapping for %ipx cart/confirmation/receipt",
-    width => {
+    async width => {
       // Structural CSS guard only; real WebKit screenshot/layout verification is a separate read-only task.
       const cart = setupCart();
       cart.context().addItem(rice());
       cart.context().addItem(aloe());
       const cartMarkup = html(cart.open());
-      const confirmationMarkup = html(cart.confirm());
+      const confirmationMarkup = html(await cart.confirm());
       expect(width).toBeLessThanOrEqual(480);
       for (const markup of [cartMarkup, confirmationMarkup]) {
         expect(markup).toContain("max-w-[480px]");

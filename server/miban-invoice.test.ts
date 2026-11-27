@@ -9,6 +9,8 @@ import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import { PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPaymentDeductions } from "../shared/miban-wallet-payment";
 import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
+import { calculateBenefits, type BenefitCartItem } from "../shared/miban-benefits";
+import { splitMibanBenefitPeriodCents, mibanBenefitLineSnapshot } from "./miban-benefits-order";
 
 // Never import miban, app routers, SDK or real DB. Only isolated primitives use mocked connections.
 const mocks = vi.hoisted(() => ({ connection: vi.fn(), transaction: vi.fn() }));
@@ -116,6 +118,17 @@ class Harness {
       z, protectedProcedure: procedureBuilder, TRPCError, mibanReceiverPhoneSchema, mibanInvoiceRequestSchema,
       PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPaymentDeductions, splitMibanPaymentDeductionsByTotals,
       MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates,
+      splitMibanBenefitPeriodCents, mibanBenefitLineSnapshot,
+      getMibanBenefitQuote: async (_userId: number, items: BenefitCartItem[], mode = "once") => ({
+        quoteToken: "test-only-benefits-quote", expiresAt: Date.now() + 120000, storefront: "miban-limited",
+        result: calculateBenefits([], items.map(item => ({ ...item,
+          quantity: item.quantity * (mode === "annual" ? 12 : 1), priceCny: sku.priceCny,
+          category: products[item.productKey as keyof typeof products].category,
+          series: products[item.productKey as keyof typeof products].brand,
+        }))),
+      }),
+      assertMibanBenefitQuote: async (_transaction: unknown, _userId: number, _items: unknown, _mode: string, _token: unknown, result: unknown) => result,
+      recordMibanBenefitUse: async () => {},
       randomUUID: () => "11111111-2222-3333-4444-555555555555", console: { log() {}, warn() {} },
       assertAiWalletOperationEnabled: async () => {},
       getMibanLimitedProduct: (key: keyof typeof products) => products[key],

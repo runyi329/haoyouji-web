@@ -15,6 +15,7 @@ import { fulfillmentCandidateFromOrder, type FulfillmentCandidate } from "./fulf
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { formatMibanPaymentSummary, getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import { MibanOrderInvoiceDetails } from "./MibanOrderInvoiceDetails";
+import { MibanOrderBenefitsDetails } from "./MibanOrderBenefitsDetails";
 import {
   Package,
   Wheat,
@@ -51,6 +52,7 @@ import {
 } from "lucide-react";
 
 const AdminFulfillmentCenter = lazy(() => import("./AdminFulfillmentCenter"));
+const BenefitsAdmin = lazy(() => import("../../benefits/BenefitsAdmin"));
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
 function CommissionPreviewBadge({ orderId }: { orderId: number }) {
@@ -1092,6 +1094,7 @@ function OrdersPanel() {
             </div>
 
             <MibanOrderInvoiceDetails invoiceRequest={order.invoiceRequest} />
+            <MibanOrderBenefitsDetails order={order} />
 
             <div className="mt-2 flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
               <div className="min-w-0 flex-1 space-y-1 text-[11px] leading-4">
@@ -4973,6 +4976,7 @@ type AdminTabKey =
   | "pending"
   | "aftersale"
   | "teamOrders"
+  | "benefits"
   | "suppliers";
 
 // ─── 待结算佣金面板 ─────────────────────────────────────────────────────
@@ -5524,6 +5528,8 @@ export default function UnifiedAdmin() {
   const mibanRole = ((user as any)?.mibanRole as string) ?? "baby";
   const isMibanAdmin = username === "jiang";
   const isMibanAgent = mibanRole === "parent";
+  const isBenefitsAdmin = validIdentity && user?.role === "super_admin";
+  const [benefitsLocked, setBenefitsLocked] = useState(false);
   // Supplier capability must never grant access to unrelated legacy administration.
   const adminTabs: Array<{ key: AdminTabKey; label: string }> = isMibanAdmin
     ? [
@@ -5534,10 +5540,12 @@ export default function UnifiedAdmin() {
         { key: "inventory", label: "库存管理" },
         { key: "limitedProducts", label: "限时商品" },
         { key: "users", label: "用户管理" },
+        ...(isBenefitsAdmin ? [{ key: "benefits" as const, label: "优惠设置" }] : []),
         { key: "teamManage", label: "团队管理" },
         ...(isSupplierAdmin ? [{ key: "fulfillment" as const, label: "全订单物流" }, { key: "suppliers" as const, label: "供货商管理" }] : []),
       ]
     : [
+        ...(isBenefitsAdmin ? [{ key: "benefits" as const, label: "优惠设置" }] : []),
         ...(isMibanAgent ? [
           { key: "team" as const, label: "团队业绩" },
           { key: "teamOrders" as const, label: "团队订单" },
@@ -5549,8 +5557,9 @@ export default function UnifiedAdmin() {
   const [requestedTab, setRequestedTab] = useState<string>(() => new URLSearchParams(search).get("tab") ?? "");
   useEffect(() => { setRequestedTab(new URLSearchParams(search).get("tab") ?? ""); }, [search]);
   const activeTab = requestedTab === "suppliers" ? "suppliers" : adminTabs.find(tab => tab.key === requestedTab)?.key ?? adminTabs[0]?.key;
-  const isAdmin = isMibanAdmin || isSupplierAdmin;
+  const isAdmin = isMibanAdmin || isSupplierAdmin || isBenefitsAdmin;
   function changeTab(tab: AdminTabKey) {
+    if (benefitsLocked) { toast.info("请先保存或取消当前优惠设置，再切换管理页面。"); return; }
     setRequestedTab(tab);
     const params = new URLSearchParams(search);
     params.set("tab", tab);
@@ -5563,7 +5572,7 @@ export default function UnifiedAdmin() {
   if (!isMibanAdmin && !isMibanAgent && (identity.isLoading || supplierAccess.isLoading)) {
     return <div role="status" className="py-12 text-center text-sm text-gray-400">正在读取管理权限…</div>;
   }
-  if (!isMibanAdmin && !isMibanAgent && !isSupplierAdmin) {
+  if (!isMibanAdmin && !isMibanAgent && !isSupplierAdmin && !isBenefitsAdmin) {
     return <div className="bg-white min-h-screen flex items-center justify-center"><div className="text-center px-6"><ShieldCheck className="w-12 h-12 mx-auto mb-4 text-gray-200" /><p className="text-[14px] text-gray-400 mb-4">{supplierAccess.error ? "供货商管理权限读取失败，请重试" : "此页面仅限管理员或销售团队访问"}</p>{supplierAccess.error && <button type="button" onClick={() => void supplierAccess.refetch()} className="mb-4 block w-full text-sm text-orange-600">重新读取授权</button>}<button onClick={() => setLocation("/p/proj_hzxm2t")} className="text-[13px] font-semibold text-[#FF6900]">返回首页</button></div></div>;
   }
 
@@ -5571,7 +5580,7 @@ export default function UnifiedAdmin() {
     <div className="bg-[#F8F6F3] min-h-screen mx-auto w-full max-w-[480px] min-w-0">
       <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-0">
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => setLocation("/p/proj_hzxm2t")} aria-label="返回米伴首页" className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:scale-95 transition-transform flex-shrink-0"><ChevronLeft className="w-4 h-4" /></button>
+          <button disabled={benefitsLocked} onClick={() => setLocation("/p/proj_hzxm2t")} aria-label="返回米伴首页" className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:scale-95 transition-transform flex-shrink-0"><ChevronLeft className="w-4 h-4" /></button>
           <div className="flex-1 min-w-0"><h1 className="text-[17px] font-bold text-black">{isAdmin ? "管理中心" : "销售中心"}</h1><p className="text-[11px] text-gray-400">{isAdmin ? "米伴平台运营管理" : "我的销售数据"}</p></div>
           <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${isAdmin ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"}`}>{isAdmin ? "管理员" : "销售"}</span>
         </div>
@@ -5593,6 +5602,7 @@ export default function UnifiedAdmin() {
         {activeTab === "limitedProducts" && <LimitedProductsPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users" && <UsersPanel />}
+        {activeTab === "benefits" && isBenefitsAdmin && <Suspense fallback={<p role="status" className="py-6 text-xs text-gray-400">加载优惠设置…</p>}><BenefitsAdmin embedded onLockChange={setBenefitsLocked} /></Suspense>}
         {activeTab === "teamManage" && <SalesPanel />}
         {activeTab === "suppliers" && isSupplierAdmin && <SupplierAdminPanel />}
         {(activeTab === "team" || activeTab === "commission" || activeTab === "referrals") && <AgentTeamPanel />}

@@ -10,7 +10,7 @@ describe("supplier UI keeps narrow authority and mobile image loading", () => {
     expect(source).toContain('lazy(() => import("./SupplierCenter"))');
     expect(source).toContain('path={`${BASE}/supplier`} component={SupplierCenter}');
     expect(source).toContain("prepareMibanPersonalQueries");
-    expect(source).toContain('Array.isArray(route) && route[0] === "supplier"');
+    expect(source).toContain('Array.isArray(route) && (route[0] === "supplier" || route[0] === "benefits")');
     expect(source).toContain("cancelQueries({ predicate: isSupplierQuery })");
     expect(source).toContain("removeQueries({ predicate: isSupplierQuery })");
   });

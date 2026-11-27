@@ -1039,7 +1039,7 @@ describe("all six authorized files: real payload references and regression prote
     expect(aliases[0].initializer!.getText(file)).toBe("walletPayment.paymentSummary");
     expect(buttons[0].getText(file)).not.toContain("orderAmountUsdt");
     expect(buttons[0].getText(file)).not.toContain("totalPriceU");
-    expect(text).toContain("const totalPriceU = cnyToU(totalPrice, usdtCnyRate)");
+    expect(text).toContain("const totalPriceU = cnyToU(payableTotalCny, usdtCnyRate)");
     expect(text).toContain('Number.isFinite(usdtCnyRate) ? totalPriceU.toFixed(2) : "--"');
     const summaryCalls = walk(file, node => ts.isJsxSelfClosingElement(node) && node.tagName.getText(file) === "MibanWalletAvailableSummary") as ts.JsxSelfClosingElement[];
     expect(summaryCalls).toHaveLength(1);

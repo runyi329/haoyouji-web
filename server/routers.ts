@@ -23,6 +23,7 @@ import { getBeijingLedgerRecordToday, getLedgerRecordDateError } from "@shared/l
 import { validateStockLotDownsideAutoDropPercent } from "@shared/stock-lot-downside";
 import { mibanSupplierRouter, mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanLimitedProductRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
+import { mibanBenefitsRouter } from "./miban-benefits-router";
 import { createHash, createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -41318,6 +41319,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       await dbConn.execute(`DELETE FROM grid_sim_logs WHERE id = ?`, [input.id]);
       return { success: true };
     }),
+  benefits: mibanBenefitsRouter,
   supplier: mibanSupplierRouter,
   rice: mibanRiceRouter,
   preset: mibanPresetRouter,

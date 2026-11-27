@@ -38,7 +38,8 @@ import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { getMibanOrderWalletPaymentSummary } from "@shared/miban-wallet-payment";
 import type { mibanOrders } from "../../../../drizzle/schema";
 import { MibanOrderInvoiceDetails, type MibanInvoiceRequest } from "./MibanOrderInvoiceDetails";
-
+import { MibanOrderBenefitsDetails } from "./MibanOrderBenefitsDetails";
+import MyBenefits from "./MyBenefits";
 type OrderItem = Omit<typeof mibanOrders.$inferSelect, "ingredients"> & {
   ingredients: (typeof mibanOrders.$inferSelect)["ingredients"] | string | null;
   trackingNumber?: string | null;
@@ -631,6 +632,7 @@ function OrdersTab() {
             </div>
           </div>
 
+          <MibanOrderBenefitsDetails order={order} />
           <MibanOrderInvoiceDetails invoiceRequest={order.invoiceRequest} />
 
           <div className="flex items-stretch justify-between gap-2 border-t border-gray-100 pt-2.5">
@@ -2049,6 +2051,7 @@ export default function MyOrders() {
 
       {/* Tab 内容 */}
       <div className="px-4 py-4 pb-24">
+        <MyBenefits />
         {activeTab === "orders" && <OrdersTab />}
         {activeTab === "favorites" && <FavoritesTab />}
         {activeTab === "team" && showTeamTab && <TeamTab />}

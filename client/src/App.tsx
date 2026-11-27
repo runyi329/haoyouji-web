@@ -557,6 +557,7 @@ function Router() {
         <Route path="/p/proj_hzxm2t/pear/:id" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/admin/logistics" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/admin/panel" component={MibanApp} />
+        <Route path="/p/proj_hzxm2t/admin/benefits" component={MibanApp} />
         <Route path="/p/proj_hzxm2t/:rest*" component={MibanApp} />
         <Route path="/p/proj_hzxm2t" component={MibanApp} />
         {/* 紫金商业联盟：项目级商城，后台入口由项目角色控制 */}

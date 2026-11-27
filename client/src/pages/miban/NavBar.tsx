@@ -222,12 +222,11 @@ function LogoWithVersionSwitch() {
 }
 
 // ─── 用户菜单（角色感知） ─────────────────────────────────────────────────────
-function UserMenu({ user, isAuthenticated, onLogout, supplierAdmin, hasSupplierAccess }: {
+function UserMenu({ user, isAuthenticated, onLogout, hasSupplierAccess }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user: any;
   isAuthenticated: boolean;
   onLogout: () => void;
-  supplierAdmin: boolean;
   hasSupplierAccess: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -293,12 +292,6 @@ function UserMenu({ user, isAuthenticated, onLogout, supplierAdmin, hasSupplierA
             <Link href="/p/proj_hzxm2t/supplier" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
               <Store className="w-4 h-4 text-[#FF6900]" />
               供货商中心
-            </Link>
-          )}
-          {supplierAdmin && (
-            <Link href="/p/proj_hzxm2t/admin?tab=suppliers" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors">
-              <Settings className="w-4 h-4 text-[#FF6900]" />
-              供货商管理
             </Link>
           )}
           {user?.role === "super_admin" && (
@@ -462,7 +455,7 @@ export default function NavBar() {
           >
             <PersonalWalletEntry />
             <span aria-hidden="true" className="h-5 w-px shrink-0 bg-orange-100" />
-            <UserMenu user={user} isAuthenticated={isAuthenticated} supplierAdmin={supplierAdmin} hasSupplierAccess={hasSupplierAccess} onLogout={() => logout.mutate()} />
+            <UserMenu user={user} isAuthenticated={isAuthenticated} hasSupplierAccess={hasSupplierAccess} onLogout={() => logout.mutate()} />
           </div>
         </div>
       </header>

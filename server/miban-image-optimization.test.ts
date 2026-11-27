@@ -477,15 +477,16 @@ describe("page image migration and first-screen policy", () => {
 });
 
 describe("lazy routes keep identity, wallet and cart business protections", () => {
-  it("declares exactly 21 lazy page modules, including supplier center, with no eager imports for those pages", () => {
+  it("declares all storefront, logistics and benefits pages lazily, with no eager imports for those pages", () => {
     const file = parse("MibanApp");
     const declarations = walk(file, node => ts.isVariableDeclaration(node) && Boolean(node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(file) === "lazy")) as ts.VariableDeclaration[];
-    const expected = ["Home", "RiceEncyclopedia", "RiceDetail", "DiyWorkshop", "LimitedSale", "AiHealth", "PresetRecipes", "MyRecipes", "MyOrders", "UnifiedAdmin", "MibanWallet", "JoinPage", "BrandAssets", "TianguiPearDetail", "ReviewPage", "HerbalifeRedGinsengDetail", "LimitedBrandProducts", "SeasonalFruitSelection", "MidaniangSelection", "MidaniangSelectionDetail", "SupplierCenter"];
+    const expected = ["Home", "RiceEncyclopedia", "RiceDetail", "DiyWorkshop", "LimitedSale", "AiHealth", "PresetRecipes", "MyRecipes", "MyOrders", "UnifiedAdmin", "MibanWallet", "JoinPage", "BrandAssets", "TianguiPearDetail", "ReviewPage", "HerbalifeRedGinsengDetail", "LimitedBrandProducts", "SeasonalFruitSelection", "MidaniangSelection", "MidaniangSelectionDetail", "SupplierCenter", "LogisticsSetup", "MoutaiFeitianDetail", "BenefitsAdmin"];
     expect(declarations.map(node => node.name.getText(file)).sort()).toEqual([...expected].sort());
     for (const declaration of declarations) {
       const calls = walk(declaration, node => ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) as ts.CallExpression[];
       expect(calls).toHaveLength(1);
-      expect((calls[0].arguments[0] as ts.StringLiteral).text).toBe(`./${declaration.name.getText(file)}`);
+      const name = declaration.name.getText(file);
+      expect((calls[0].arguments[0] as ts.StringLiteral).text).toBe(name === "BenefitsAdmin" ? "../../benefits/BenefitsAdmin" : `./${name}`);
     }
     const eager = file.statements.filter(ts.isImportDeclaration).map(node => (node.moduleSpecifier as ts.StringLiteral).text);
     for (const name of expected) expect(eager).not.toContain(`./${name}`);
@@ -528,23 +529,28 @@ describe("lazy routes keep identity, wallet and cart business protections", () =
     expect(calls).toHaveLength(1);
     const payload = calls[0].arguments[0] as ts.ObjectLiteralExpression;
     const fields = payload.properties.filter(ts.isPropertyAssignment);
-    expect(fields.map(node => node.name.getText(file)).sort()).toEqual(["items", "receiverName", "receiverPhone", "receiverAddress", "userNote", "cnyAmount", "paymentAssets", "paymentQuoteToken"].sort());
-    for (const name of ["cnyAmount", "paymentAssets", "paymentQuoteToken"]) {
-      expect(fields.find(node => node.name.getText(file) === name)?.initializer.getText(file)).toBe(`preparedPayment.${name}`);
-    }
+    expect(fields.map(node => node.name.getText(file))).toEqual(["benefitsQuoteToken"]);
+    expect(fields[0].initializer.getText(file)).toBe("benefitsQuote.quoteToken");
+    expect(payload.properties.filter(ts.isSpreadAssignment).map(node => node.expression.getText(file))).toEqual(["orderInput", "preparedPayment"]);
+    const input = walk(file, node => ts.isVariableDeclaration(node) && node.name.getText(file) === "orderInput")[0] as ts.VariableDeclaration;
+    const inputFields = (input.initializer as ts.ObjectLiteralExpression).properties.filter(ts.isPropertyAssignment);
+    expect(inputFields.map(node => node.name.getText(file)).sort()).toEqual(["items", "receiverName", "receiverPhone", "receiverAddress", "userNote"].sort());
     const handlePay = walk(file, node => ts.isVariableDeclaration(node) && node.name.getText(file) === "handlePay")[0];
     const pay = handlePay.getText(file);
     expect(pay).toContain("await payment.preparePayment()");
-    expect(pay).toContain("if (!preparedPayment) return");
-    expect(pay.indexOf("await payment.preparePayment()")).toBeLessThan(pay.indexOf("if (!preparedPayment) return"));
-    expect(pay.indexOf("if (!preparedPayment) return")).toBeLessThan(pay.indexOf("createOrder.mutate"));
-    for (const guard of ["if (createOrder.isPending) return", "if (!selectedAddress)", "if (receiverPhoneError)", "if (!payment.canPay)"]) {
+    expect(pay).toContain("if (!preparedPayment || !benefits.isCurrent(benefitsQuote)");
+    expect(pay.indexOf("await benefits.refreshForConfirmation()")).toBeLessThan(pay.indexOf("await payment.preparePayment()"));
+    expect(pay.indexOf("await payment.preparePayment()")).toBeLessThan(pay.indexOf("if (!preparedPayment ||"));
+    expect(pay.indexOf("if (!preparedPayment ||")).toBeLessThan(pay.indexOf("createOrder.mutate"));
+    expect(source).toContain("const checkoutBusy = createOrder.isPending || preparingPayment");
+    for (const guard of ["if (checkoutBusy || submissionGuardRef.current || !benefits.ready", "if (!selectedAddress)", "if (receiverPhoneError)", "if (!payment.canPay)"]) {
       expect(pay).toContain(guard);
       expect(pay.indexOf(guard)).toBeLessThan(pay.indexOf("createOrder.mutate"));
     }
-    expect(source).toContain("if (authLoading) return");
+    expect(source).toContain("if (authLoading || checkoutBusy || submissionGuardRef.current) return");
     expect(source).toContain("if (!isAuthenticated)");
-    expect(source).toContain("useMibanMixedPayment(totalCny, open && isAuthenticated)");
+    expect(source).toContain("const payableTotalCny = benefits.totalCny");
+    expect(source).toContain("useMibanMixedPayment(payableTotalCny, open && isAuthenticated)");
     const hooks = walk(file, node => ts.isCallExpression(node) && node.expression.getText(file) === "mtrpc.limitedProduct.createCartOrder.useMutation") as ts.CallExpression[];
     expect(hooks).toHaveLength(1);
     const options = hooks[0].arguments[0] as ts.ObjectLiteralExpression;
@@ -554,11 +560,12 @@ describe("lazy routes keep identity, wallet and cart business protections", () =
     }
     expect(source).toContain("setSuccess(data)");
     const payment = pageSource("MibanMixedPayment");
-    expect(payment).toContain("const canPay = ready && plan.canPay && reviewed");
+    expect(payment).toContain("const canPay = ready && plan.canPay");
+    expect(payment).toContain("get canPay() { return canPay && renderedVersion === inputVersion.current && !busy.current && !blocked.current && mounted.current && scope.current.enabled;");
     expect(payment).toContain("at < Date.parse(candidate.expiresAt)");
     expect(payment).toContain('paymentQuoteToken: ready && quote && Date.now() < Date.parse(quote.expiresAt) ? quote.quoteToken : ""');
     expect(payment).toContain("quoteQuery.refetch({ cancelRefetch: false })");
-    expect(payment).toContain("JSON.stringify(next.paymentAssets) === approvedAssets");
+    expect(payment).toContain("JSON.stringify(next.paymentAssets) === displayedAssets");
     expect(payment).toContain("version !== inputVersion.current");
   });
 });

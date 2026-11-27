@@ -22,6 +22,7 @@ const PresetRecipes = lazy(() => import("./PresetRecipes"));
 const MyRecipes = lazy(() => import("./MyRecipes"));
 const MyOrders = lazy(() => import("./MyOrders"));
 const UnifiedAdmin = lazy(() => import("./UnifiedAdmin"));
+const BenefitsAdmin = lazy(() => import("../../benefits/BenefitsAdmin"));
 const SupplierCenter = lazy(() => import("./SupplierCenter"));
 const LogisticsSetup = lazy(() => import("./LogisticsSetup"));
 const MibanWallet = lazy(() => import("./MibanWallet"));
@@ -55,7 +56,7 @@ export default function MibanApp() {
     // not match it. Clear its actual keys before exposing the next identity.
     const isSupplierQuery = ({ queryKey }: { queryKey: readonly unknown[] }) => {
       const route = queryKey[0];
-      return Array.isArray(route) && route[0] === "supplier";
+      return Array.isArray(route) && (route[0] === "supplier" || route[0] === "benefits");
     };
     void (async () => {
       await queryClient.cancelQueries({ predicate: isSupplierQuery });
@@ -80,6 +81,13 @@ export default function MibanApp() {
   // 贵州精选直接进入飞天详情；旧贵州入口同样兼容详情，不叠加商城底部Tab。
   // 精确商品路由必须在通用 /limited/:productKey 之前匹配。
   const cleanPath = location.split("?")[0];
+  // 优惠页与统一后台保留自身导航，不重复叠加商城顶部与底部导航。
+  if (cleanPath === `${BASE}/admin/benefits`) {
+    return <Suspense fallback={<MibanPageLoading />}><BenefitsAdmin /></Suspense>;
+  }
+  if ([`${BASE}/admin`, `${BASE}/admin/panel`, `${BASE}/agent`].includes(cleanPath)) {
+    return <Suspense fallback={<MibanPageLoading />}><UnifiedAdmin /></Suspense>;
+  }
   if (cleanPath === `${BASE}/limited/guizhou` || cleanPath === `${BASE}/limited/moutai-feitian`) {
     return <Suspense fallback={<MibanPageLoading />}><Switch>
       <Route path={`${BASE}/limited/guizhou`} component={MoutaiFeitianDetail} />

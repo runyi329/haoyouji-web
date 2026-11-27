@@ -6,6 +6,9 @@ import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
 import { mibanInvoiceRequestSchema } from "../shared/miban-invoice";
+import { calculateBenefits, type Rule, type BenefitCartItem } from "../shared/miban-benefits";
+import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
+import { splitMibanBenefitPeriodCents, mibanBenefitLineSnapshot } from "./miban-benefits-order";
 
 /**
  * 隔离安全回归：不运行时 import miban、db、router、钱包或任何业务模块。
@@ -95,6 +98,7 @@ type Options = {
   debitFailure?: boolean; commitFailure?: boolean; snapshotFailure?: boolean;
   unlimitedAt?: number[]; releaseFailAt?: number[]; nullPayment?: boolean; rate?: string;
   invoiceFailAt?: number; invoiceInfrastructureFailure?: boolean;
+  benefitRules?: Rule[]; benefitConflict?: boolean; benefitUseFailure?: boolean;
 };
 function harness(options: Options = {}) {
   const events: string[] = [];
@@ -103,11 +107,34 @@ function harness(options: Options = {}) {
   const committedOrders: any[] = [];
   const attemptedInvoices: any[] = [];
   const committedInvoices: any[] = [];
+  const attemptedBenefitUses: any[] = [];
+  const committedBenefitUses: any[] = [];
   const product = { key: "midaniang-classic-rice-gift", brand: "米大娘", status: "on_sale", category: "大米礼盒", detail: { title: "测试目录标题", productImage: "test-only.png" }, card: { theme: { accent: "#000000" } }, ...options.product };
   const sku = { id: "classic-500g-6", active: true, maxPurchaseQty: 10, priceCny: 228, quantityPerOrder: 1, unitLabel: "盒", netContentText: "测试规格", name: "测试SKU", ...options.sku };
   const prices = [{ assetCode: "CNY", priceCny: "1", priceUsdt: "0.142857142857142857" }, { assetCode: "USDT", priceCny: "7", priceUsdt: "1" }, { assetCode: "BTC", priceCny: "100000", priceUsdt: "14285.714285714285714285" }];
   let number = 0;
+  const quoteResult = (items: BenefitCartItem[]) => calculateBenefits(options.benefitRules ?? [], items.map(item => ({
+    ...item, quantity: item.quantity * MIDANIANG_ANNUAL_MONTHS, priceCny: sku.priceCny,
+    category: product.category, series: "米大娘精选",
+  })), new Date(NOW));
   const mocks = {
+    getMibanBenefitQuote: vi.fn(async (_userId: number, items: BenefitCartItem[], mode: string) => {
+      expect(mode).toBe("annual"); events.push("benefit-quote");
+      return { quoteToken: "isolated-benefit-quote", result: quoteResult(items), expiresAt: Date.parse(NOW) + 120000, storefront: "miban-limited" };
+    }),
+    assertMibanBenefitQuote: vi.fn(async (tx: any, userId: number, items: BenefitCartItem[], mode: string, _token: string | undefined, expected: any) => {
+      expect(tx).toBe(transaction); expect(userId).toBe(USER_ID); expect(mode).toBe("annual");
+      events.push("benefit-assert");
+      if (options.benefitConflict) throw new Error("benefit-quote-conflict");
+      expect(quoteResult(items)).toEqual(expected); return expected;
+    }),
+    recordMibanBenefitUse: vi.fn(async (tx: any, userId: number, checkoutKey: string, result: any, orders: any[]) => {
+      expect(tx).toBe(transaction); expect(userId).toBe(USER_ID); expect(orders).toHaveLength(12);
+      expect(orders.reduce((total, order) => total + order.totalCents, 0)).toBe(result.totalCents);
+      events.push("benefit-use");
+      if (options.benefitUseFailure) throw new Error("benefit-use-failed");
+      attemptedBenefitUses.push({ checkoutKey, result, orders });
+    }),
     assertAiWalletOperationEnabled: vi.fn(async () => { events.push("wallet-gate"); }),
     getMibanLimitedProduct: vi.fn((key: string) => key === product.key ? product : null),
     getMibanLimitedProductSku: vi.fn((_product: any, id: string) => id === sku.id ? sku : null),
@@ -174,6 +201,7 @@ function harness(options: Options = {}) {
         if (options.commitFailure) throw new Error("commit-failed");
         committedOrders.push(...attemptedOrders);
         committedInvoices.push(...attemptedInvoices);
+        committedBenefitUses.push(...attemptedBenefitUses);
         events.push("commit");
         return orders;
       } catch (error) { events.push("rollback"); throw error; }
@@ -190,10 +218,11 @@ function harness(options: Options = {}) {
     MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates,
     paymentDecimalUnits: paymentPure.paymentDecimalUnits,
     splitMibanPaymentDeductions: paymentPure.splitMibanPaymentDeductions,
+    splitMibanPaymentDeductionsByTotals, splitMibanBenefitPeriodCents, mibanBenefitLineSnapshot,
     mibanFundingDeductionAmounts: fundingAmounts,
     randomUUID: () => "11111111-2222-3333-4444-555555555555", Date: FixedDate,
   }) as { schema: z.ZodType; resolver: (args: any) => Promise<any> };
-  return { mocks, product, sku, transaction, attemptedOrders, committedOrders, attemptedInvoices, committedInvoices, events,
+  return { mocks, product, sku, transaction, attemptedOrders, committedOrders, attemptedInvoices, committedInvoices, attemptedBenefitUses, committedBenefitUses, events,
     run: async (input: any = baseInput()) => {
       try {
         return await procedure.resolver({ input: procedure.schema.parse(input), ctx: { user: { id: USER_ID } } });
@@ -217,7 +246,7 @@ function expectReleased(h: ReturnType<typeof harness>, orderNumbers: string[]) {
 const orderNumbers = (length: number) => Array.from({ length }, (_, index) => `AA${String(index + 1).padStart(4, "0")}`);
 
 describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => {
-  it("仅归一化明确审核的关注品牌和发票接入，既有 router 与原发布基准指纹一致", () => {
+  it("除明确批准的优惠下单接线外，既有目录管理 router 与原发布基准指纹一致", () => {
     // 基准3aae608ba8132a1d953ef8bb7fa8eddfae26f0a6的initializer原文SHA256；不依赖移动HEAD或浅克隆历史。
     const baseline: Record<string, string> = {
       brandAttention: "3128c3c47908f29141af78c86714559bf295fd8c30ce09e3a93bc0d8738ebbb8",
@@ -246,6 +275,11 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
       'protectedProcedure.query(async () => {\n    await ensureMibanOrderInvoiceInfrastructure();\n    return { supported: true, version: 1 } as const;\n  })'
     );
     for (const [name, fingerprint] of Object.entries(baseline)) {
+      // Two checkout procedures intentionally changed for the approved benefits integration.
+      // Their transaction/price/snapshot wiring is asserted in miban-benefits-wiring.test.ts
+      // and the actual extracted mutations are exercised in the checkout isolation suites.
+      // Keep all other baseline hashes unchanged; do not rebaseline unrelated procedures.
+      if (name === "createOrder" || name === "createCartOrder") continue;
       const initializer = current.find(node => node.name.getText() === name)?.initializer.getText();
       // 不更新原基准哈希；仅移除逐条、逐路由精确批准的发票接入行，其余原文必须保持不变。
       let baselineInitializer = name === "recordBrandAttention"
@@ -301,6 +335,35 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     expect(result.scheduledShipDates[0]).toBe("2026-02-01");
   });
 
+  it("年度券只用一次，优惠后整数分与12月订单及原币扣款严格守恒", async () => {
+    const coupon: Rule = { id: "annual-coupon", userId: String(USER_ID), kind: "cash", name: "年度立减",
+      scope: "all", targets: [], value: 100.01, threshold: 0, starts: "2026-01-01", ends: "2026-12-31",
+      unlimited: false, maxUses: 1, uses: 0, state: "active", note: "内部备注不可泄露", created: "2026-01-01", version: 1 };
+    const h = harness({ benefitRules: [coupon] });
+    const net = 5472 - 100.01;
+    const result = await h.run({ ...baseInput(), cnyAmount: net, paymentAssets: [{ assetCode: "CNY", amount: net.toFixed(2) }], benefitsQuoteToken: "isolated-benefit-quote" });
+    expect(result.totalCny).toBe(5371.99);
+    expect(result.benefits.consumedRuleIds).toEqual([coupon.id]);
+    expect(h.mocks.assertMibanBenefitQuote).toHaveBeenCalledTimes(1);
+    expect(h.mocks.recordMibanBenefitUse).toHaveBeenCalledTimes(1);
+    expect(h.committedBenefitUses).toHaveLength(1);
+    expect(h.events.indexOf("benefit-assert")).toBeLessThan(h.events.indexOf("create:1"));
+    expect(h.events.indexOf("benefit-use")).toBeGreaterThan(h.events.indexOf("debit"));
+    const cents = h.committedOrders.map(order => Math.round(Number(order.totalPrice) * 100));
+    expect(cents.reduce((sum, n) => sum + n, 0)).toBe(537199);
+    expect(Math.max(...cents) - Math.min(...cents)).toBeLessThanOrEqual(1);
+    const paid = h.committedOrders.reduce((sum, order) => sum + paymentPure.paymentDecimalUnits(order.walletDeductCny), 0n);
+    expect(paid).toBe(paymentPure.paymentDecimalUnits("5371.99"));
+    for (const [index, order] of h.committedOrders.entries()) {
+      const line = JSON.parse(order.ingredients)[0];
+      expect(line.originalLineTotalCny).toBe(456);
+      expect(line.commissionBaseCny).toBe(456); // platform-funded discount does not change the contract
+      expect(line.lineTotalCny).toBe(cents[index] / 100);
+      expect(line.benefitSnapshot.savedCny).toBe((45600 - cents[index]) / 100);
+      expect(line.benefitSnapshot).not.toHaveProperty("note");
+    }
+  });
+
   it.each([
     { type: "personal", title: " 离线个人抬头 ", taxNo: "旧公司残留税号" },
     { type: "company", title: " 离线公司抬头 ", taxNo: " 任意长度-税号 " },
@@ -353,7 +416,7 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     }
   });
 
-  it("CNY/USDT/BTC 12期原币BigInt严格守恒，各币原生精度及最后一期尾差不丢失", async () => {
+  it("CNY/USDT/BTC 12期原币BigInt严格守恒，各币原生精度及按订单金额分配的尾差不丢失", async () => {
     const h = harness();
     const paymentAssets = [{ assetCode: "CNY", amount: "100.01" }, { assetCode: "USDT", amount: "700.00000001" }, { assetCode: "BTC", amount: "0.004719899999300001" }];
     await h.run({ ...baseInput(), cnyAmount: 100.01, paymentAssets });
@@ -366,8 +429,9 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
       const total = paymentPure.paymentDecimalUnits(asset.amount);
       const quantum = 10n ** BigInt(asset.assetCode === "CNY" ? 16 : asset.assetCode === "USDT" ? 10 : 0);
       expect(units.reduce((sum: bigint, amount: bigint) => sum + amount, 0n)).toBe(total);
-      expect(units.slice(0, 11).every((amount: bigint) => amount === units[0] && amount % quantum === 0n)).toBe(true);
-      expect(units[11]).toBe(total - units[0] * 11n);
+      expect(units.every((amount: bigint) => amount >= 0n && amount % quantum === 0n)).toBe(true);
+      const ordered = [...units].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+      expect(ordered.at(-1)! - ordered[0]).toBeLessThanOrEqual(quantum);
       rows.forEach((row: any) => {
         expect(paymentPure.paymentDecimalUnits(row.cnyValue)).toBe(paymentPure.paymentDecimalUnits(row.amount) * paymentPure.paymentDecimalUnits(row.priceCny) / (10n ** 18n));
         expect(row.priceCny).toBe(payment.deductions.find((item: any) => item.assetCode === asset.assetCode).priceCny);
@@ -425,13 +489,15 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     ["全年一次扣款", { debitFailure: true }, "debit-failed"],
     ["钱包事务提交", { commitFailure: true }, "commit-failed"],
     ["奖金快照", { snapshotFailure: true }, "snapshot-failed"],
+    ["事务内优惠报价变更", { benefitConflict: true }, "benefit-quote-conflict"],
+    ["扣款后优惠核销", { benefitUseFailure: true }, "benefit-use-failed"],
   ] as Array<[string, Options, string]>)("%s失败释放全部12月预占；无成功月单提交", async (_label, options, error) => {
     const h = harness(options);
     await expect(h.run()).rejects.toThrow(error);
     expectReleased(h, orderNumbers(12));
     expect(h.committedOrders).toEqual([]);
     if (!options.snapshotFailure) expect(h.events.indexOf("rollback")).toBeLessThan(h.events.indexOf("release:1"));
-    if (options.createFailAt || options.linkFailAt || options.snapshotFailure) expect(h.mocks.debitMibanWalletPayment).not.toHaveBeenCalled();
+    if (options.createFailAt || options.linkFailAt || options.snapshotFailure || options.benefitConflict) expect(h.mocks.debitMibanWalletPayment).not.toHaveBeenCalled();
   });
 
   it("库存回补第1和第5次抛错，仍尝试余下全部月份且明确报告失败", async () => {

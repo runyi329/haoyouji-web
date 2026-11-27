@@ -27,6 +27,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { mtrpc } from "./mibanTrpc";
 import AddressBook from "./AddressBook";
 import { cnyToU } from "./useMibanUsdtCnyRate";
+import { MibanBenefitsQuoteSummary, useMibanBenefitsQuote } from "./useMibanBenefitsQuote";
 import {
   normalizeMibanReceiverPhone,
   getMibanReceiverPhoneError,
@@ -361,16 +362,17 @@ function UsdtPrimaryPrice({
   color?: string;
   mainClassName?: string;
 }) {
+  const validAmount = Number.isFinite(cnyAmount) && cnyAmount > 0;
   return (
     <span className="flex min-w-0 max-w-full flex-col items-end break-all leading-none tabular-nums">
       <span className={mainClassName} style={{ color }}>
-        {Number.isFinite(usdtCnyRate) && usdtCnyRate > 0
+        {validAmount && Number.isFinite(usdtCnyRate) && usdtCnyRate > 0
           ? cnyToU(cnyAmount, usdtCnyRate).toFixed(2)
           : "--"}
         <span className="ml-0.5 text-[9px] font-bold">USDT</span>
       </span>
       <span className="mt-1 text-[10px] font-medium text-gray-400">
-        ≈ ¥{cnyAmount.toFixed(2)}
+        ≈ ¥{validAmount ? cnyAmount.toFixed(2) : "--"}
       </span>
     </span>
   );
@@ -452,7 +454,19 @@ function LimitedProductCartOverlay() {
     }
     return success.orderNo ? [success] : [];
   }, [success]);
-  const payment = useMibanMixedPayment(totalCny, open && isAuthenticated);
+  const validBenefitCart = items.length > 0 && items.every(item => {
+    const product = getMibanLimitedProduct(item.productKey);
+    const sku = product ? getMibanLimitedProductSku(product, item.skuId) : undefined;
+    return product?.status === "on_sale" && sku?.active && item.quantity <= sku.maxPurchaseQty;
+  });
+  const benefits = useMibanBenefitsQuote({
+    items: items.map(item => ({ productKey: item.productKey, skuId: item.skuId, quantity: item.quantity })),
+    mode: "once",
+    enabled: open && checkoutOpen && isAuthenticated && !authLoading && validBenefitCart && !success,
+    userId: user?.id,
+  });
+  const payableTotalCny = benefits.totalCny;
+  const payment = useMibanMixedPayment(payableTotalCny, open && isAuthenticated);
   const usdtCnyRate = payment.usdtCnyRate;
   const { data: addresses } = mtrpc.address.list.useQuery(undefined, {
     enabled: open && checkoutOpen && isAuthenticated,
@@ -462,7 +476,7 @@ function LimitedProductCartOverlay() {
   const paymentInitialized = useRef(false);
   const cartItemsScope = JSON.stringify(items.map(item => [item.productKey, item.skuId, item.quantity, item.priceCny]));
   const checkoutScope = JSON.stringify([
-    open, checkoutOpen, showWalletPayment, location, isAuthenticated, user?.id, cartItemsScope, totalCny,
+    open, checkoutOpen, showWalletPayment, location, isAuthenticated, user?.id, cartItemsScope, totalCny, payableTotalCny,
     selectedAddress?.id, selectedAddress?.name, selectedAddress?.phone,
     formatAddress(selectedAddress), userNote, invoiceDraft,
   ]);
@@ -537,7 +551,12 @@ function LimitedProductCartOverlay() {
       setSuccess(data);
     },
     onError: (error: { message?: string }) => {
-      toast.error(formatMibanCheckoutError(error));
+      const message = formatMibanCheckoutError(error);
+      toast.error(message);
+      if (/优惠.*(变更|过期|失效|次数)|商品报价已变更/.test(message)) {
+        payment.cancelPendingPayment();
+        benefits.refreshAfterRejection();
+      }
     },
     onSettled: () => { submissionGuardRef.current = false; },
   });
@@ -567,7 +586,7 @@ function LimitedProductCartOverlay() {
   };
 
   const handleOpenWalletPayment = () => {
-    if (checkoutBusy || submissionGuardRef.current || !open || !checkoutOpen || !items.length) return;
+    if (checkoutBusy || submissionGuardRef.current || !benefits.ready || !open || !checkoutOpen || !items.length) return;
     if (!selectedAddress) {
       toast.error("请先选择收货地址");
       return;
@@ -590,7 +609,7 @@ function LimitedProductCartOverlay() {
   };
 
   const handlePay = async () => {
-    if (checkoutBusy || submissionGuardRef.current || !open || !checkoutOpen || !showWalletPayment || !isAuthenticated || !items.length) return;
+    if (checkoutBusy || submissionGuardRef.current || !benefits.ready || !open || !checkoutOpen || !showWalletPayment || !isAuthenticated || !items.length) return;
     if (!selectedAddress) {
       toast.error("请先选择收货地址");
       return;
@@ -629,6 +648,8 @@ function LimitedProductCartOverlay() {
     setPreparingPayment(true);
     let submitted = false;
     try {
+      const benefitsQuote = await benefits.refreshForConfirmation();
+      if (!benefitsQuote || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
       if (invoice.invoiceRequest) {
         let support: unknown;
         try {
@@ -647,9 +668,9 @@ function LimitedProductCartOverlay() {
         }
       }
       const preparedPayment = await payment.preparePayment();
-      if (!preparedPayment || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
+      if (!preparedPayment || !benefits.isCurrent(benefitsQuote) || attempt !== paymentAttemptRef.current || scope !== latestCheckoutScope.current || !submissionGuardRef.current) return;
       submittedGroups.current = groups;
-      createOrder.mutate({ ...orderInput, ...preparedPayment });
+      createOrder.mutate({ ...orderInput, ...preparedPayment, benefitsQuoteToken: benefitsQuote.quoteToken });
       submitted = true;
     } catch (error) {
       toast.error(formatMibanCheckoutError(error));
@@ -1002,16 +1023,18 @@ function LimitedProductCartOverlay() {
                 <span className="flex min-w-0 max-w-full items-center gap-1">
                   <span className="shrink-0">统一应付</span>
                   <UsdtPrimaryPrice
-                    cnyAmount={totalCny}
+                    cnyAmount={benefits.displayQuote ? payableTotalCny : NaN}
                     usdtCnyRate={usdtCnyRate}
                     mainClassName="text-[20px] font-extrabold"
                   />
                 </span>
               </div>
+              <MibanBenefitsQuoteSummary benefits={benefits} originalCny={totalCny} />
+              {!validBenefitCart && <p role="alert" className="mb-2 text-[11px] text-red-500">购物车含不可售商品或规格，请返回调整后结算</p>}
               <button
                 type="button"
                 onClick={handleOpenWalletPayment}
-                disabled={!payment.canPay || checkoutBusy}
+                disabled={!benefits.ready || !payment.canPay || checkoutBusy}
                 className="flex min-h-13 w-full items-center justify-center break-all rounded-[4px] bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
               >
                 {checkoutBusy ? (
@@ -1048,7 +1071,8 @@ function LimitedProductCartOverlay() {
                   </div>
                   <button type="button" aria-label="返回确认订单" disabled={createOrder.isPending} onClick={cancelWalletPayment} className="shrink-0 rounded-[4px] px-2 py-1 text-[12px] text-gray-500 disabled:opacity-40">返回修改</button>
                 </div>
-                <MibanCheckoutPaymentAmount totalCny={totalCny} usdtCnyRate={usdtCnyRate} accent="#0D7A3E">
+                <MibanCheckoutPaymentAmount totalCny={payableTotalCny} usdtCnyRate={usdtCnyRate} accent="#0D7A3E">
+                  <MibanBenefitsQuoteSummary benefits={benefits} originalCny={totalCny} />
                   <MibanPaymentConfirmation payment={payment} disabled={checkoutBusy} accent="#0D7A3E" />
                 </MibanCheckoutPaymentAmount>
                 <MibanCheckoutConfirmationDetails
@@ -1063,7 +1087,7 @@ function LimitedProductCartOverlay() {
                 <button
                   type="button"
                   onClick={handlePay}
-                  disabled={!payment.canPay || checkoutBusy}
+                  disabled={!benefits.ready || !payment.canPay || checkoutBusy}
                   className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 break-all rounded-[4px] bg-[#0D7A3E] px-3 py-3 text-[13px] font-extrabold text-white disabled:bg-gray-300"
                 >
                   {checkoutBusy ? <><Loader2 className="h-4 w-4 animate-spin" />{preparingPayment ? "正在核验付款信息…" : "正在提交订单…"}</> : `确认支付 · ${payment.paymentSummary.replace(" U", " USDT")}`}

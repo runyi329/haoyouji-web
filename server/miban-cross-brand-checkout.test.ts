@@ -6,6 +6,8 @@ import {
   PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, type MibanPaymentDeduction,
 } from "../shared/miban-wallet-payment";
 import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
+import { calculateBenefits, status, type BenefitCartItem, type BenefitResult, type Rule } from "../shared/miban-benefits";
+import { mibanBenefitLineSnapshot } from "./miban-benefits-order";
 
 // Only safe payment primitives are imported. No miban module, routers, SDK, real DB or DDL.
 const mocks = vi.hoisted(() => ({ connection: vi.fn(), transaction: vi.fn(), infrastructure: vi.fn(), verify: vi.fn() }));
@@ -50,11 +52,19 @@ const fixture = (key: string, price: number, group: string | undefined, brand: s
   skus: [{ id: "sku", name: `${brand}规格`, active: true, priceCny: price, maxPurchaseQty: 10, unitLabel: "件", netContentText: "1件" }],
 });
 
+const benefitRule = (id: string, overrides: Partial<Rule> = {}): Rule => ({
+  id, userId: "1", kind: "rate", name: `隔离优惠${id}`, scope: "all", targets: [],
+  value: 8, threshold: 0, starts: "2020-01-01", ends: "", unlimited: false,
+  maxUses: 10, uses: 0, state: "active", note: "仅内存测试", created: "2020-01-01", version: 1,
+  ...overrides,
+});
+
 class Harness {
   state: any = {
     user: { id: 1, balance: "1000", cny_balance: "1000" },
     balances: { ETH: { available_balance: "10", frozen_balance: "8" }, BTC: { available_balance: "10", frozen_balance: "4" } },
     manual: [], holds: [], uses: [], snapshots: [], entries: [], history: [], orders: [], commissions: [],
+    benefitRules: [], benefitUses: [],
     stock: { "a:sku": 100, "b:sku": 100, "c:sku": 100 }, movements: [],
   };
   products: any = { a: fixture("a", 228, "group-a", "品牌甲"), b: fixture("b", 59, "group-b", "品牌乙", false), c: fixture("c", 45, "group-a", "品牌甲") };
@@ -147,6 +157,16 @@ class Harness {
     return tx;
   }
 
+  benefitResult(items: BenefitCartItem[], book = this.state): BenefitResult {
+    return calculateBenefits(book.benefitRules, items.map(item => {
+      const product = this.products[item.productKey];
+      const sku = product?.skus.find((row: any) => row.id === item.skuId);
+      if (!product || !sku || !sku.active || product.status !== "on_sale") throw new Error("商品规格不可购买");
+      return { ...item, priceCny: sku.priceCny, activityPriceCny: sku.priceCny,
+        category: product.category, series: product.brand };
+    }));
+  }
+
   targets() {
     mocks.transaction.mockImplementation(async () => this.connection());
     mocks.verify.mockImplementation(() => {
@@ -158,6 +178,37 @@ class Harness {
       assertAiWalletOperationEnabled: vi.fn().mockResolvedValue(undefined),
       getMibanLimitedProduct: (key: string) => this.products[key],
       getMibanLimitedProductSku: (product: any, id: string) => product.skus.find((sku: any) => sku.id === id),
+      getMibanBenefitQuote: async (userId: number, items: BenefitCartItem[], mode = "once") => {
+        expect(userId).toBe(1); expect(mode).toBe("once");
+        return { result: this.benefitResult(items), quoteToken: "isolated-benefits-not-for-production",
+          expiresAt: Date.now() + 60_000, storefront: "miban-limited" };
+      },
+      assertMibanBenefitQuote: async (tx: any, userId: number, items: BenefitCartItem[], mode: string, _token: string | undefined, expected: BenefitResult) => {
+        expect(userId).toBe(1); expect(mode).toBe("once");
+        expect(this.trace).toContain("SELECT id, COALESCE(balance, 0) AS balance, COALESCE(cny_balance, 0) AS cny_balance FROM users WHERE id = ? LIMIT 1 FOR UPDATE");
+        const current = this.benefitResult(items, tx.book);
+        if (JSON.stringify(current) !== JSON.stringify(expected)) throw new Error("优惠报价已变更");
+        return current;
+      },
+      recordMibanBenefitUse: async (tx: any, userId: number, checkoutKey: string, result: BenefitResult, orders: Array<{ orderId: number; totalCents: number }>) => {
+        expect(userId).toBe(1);
+        expect(orders.reduce((sum, order) => sum + order.totalCents, 0)).toBe(result.totalCents);
+        for (const order of orders) {
+          const actual = tx.book.orders.find((row: any) => row.id === order.orderId);
+          expect(actual.userId).toBe(userId); expect(Math.round(Number(actual.totalPrice) * 100)).toBe(order.totalCents);
+        }
+        for (const ruleId of result.consumedRuleIds) {
+          const rule = tx.book.benefitRules.find((row: Rule) => row.id === ruleId);
+          if (!rule || status(rule) !== "生效中") throw new Error("优惠次数不足");
+          if (tx.book.benefitUses.some((row: any) => row.checkoutKey === checkoutKey && row.ruleId === ruleId)) throw new Error("优惠重复核销");
+          rule.uses++; rule.version++;
+          if (rule.kind === "cash" || rule.kind === "threshold" || (!rule.unlimited && rule.uses >= rule.maxUses)) rule.state = "used";
+          tx.book.benefitUses.push({ checkoutKey, ruleId, result: structuredClone(result), orders: structuredClone(orders) });
+        }
+        // Fail AFTER writes so transaction rollback, not an early stub rejection, is verified.
+        if (this.fail === "benefit-consume") throw new Error("benefit consume failure");
+      },
+      mibanBenefitLineSnapshot,
       prepareMibanWalletPayment, mibanFundingDeductionAmounts,
       ensureMibanWalletPaymentInfrastructure: async (crypto: boolean) => { this.infrastructureCalls.push(crypto); },
       getGlobalWalletFundingBalance: async (_id: number, code: string) => ({ available: Number(code === "CNY" ? this.state.user.cny_balance : this.state.user.balance) }),
@@ -171,6 +222,7 @@ class Harness {
       getCommissionTriggerSnapshotForBuyer: async () => "order_confirmed",
       withGlobalWalletTransaction: async (userId: number, work: any) => withGlobalWalletTransaction(userId, async tx => {
         if (this.expireInTransaction) this.quote.expiresAt = new Date(Date.now() - 1).toISOString();
+        if (this.fail === "benefit-quote-change") { tx.book.benefitRules[0].value = 7; tx.book.benefitRules[0].version++; }
         return work(tx);
       }),
       createOrder: async (order: any, tx: any) => {
@@ -377,6 +429,82 @@ describe("AST-isolated cross-brand shared checkout", () => {
     await expect(h.checkout()).rejects.toThrow("暂未上架"); expect(h.reserveCalls).toBe(0);
     h.products.b.status = "on_sale"; h.products.b.skus[0].priceCny = 60;
     await expect(h.checkout()).rejects.toThrow("支付金额不足"); expect(h.reserveCalls).toBe(0);
+  });
+
+  it("discounts the whole cart once, uses actual discounted group prices for native splits, and preserves immutable original amounts", async () => {
+    const h = new Harness(); h.state.benefitRules = [benefitRule("rate")];
+    const result = await h.checkout(h.input([
+      deduction("CNY", "7", "1", "0.142857142857142857"),
+      deduction("USDT", "10", "7"), deduction("ETH", "1.526", "100", "14.285714285714285714"),
+    ]));
+    expect(result.totalCny).toBe(229.6); expect(result.orders.map((order: any) => order.totalCny)).toEqual([182.4, 47.2]);
+    expect(result.benefits).toMatchObject({ originalCents: 28700, totalCents: 22960, savedCents: 5740, consumedRuleIds: ["rate"] });
+    expect(h.state.benefitRules[0].uses).toBe(1); expect(h.state.benefitUses).toHaveLength(1);
+    expect(h.state.benefitUses[0].orders).toEqual(result.orders.map((order: any) => ({ orderId: order.orderId, totalCents: Math.round(order.totalCny * 100) })));
+    expect(h.debitCalls).toBe(1); expect(h.state.entries).toHaveLength(1); expect(h.state.manual).toHaveLength(2);
+    for (const order of h.state.orders) {
+      const line = JSON.parse(order.ingredients)[0]; const original = line.productKey === "a" ? 228 : 59;
+      expect(line.originalLineTotalCny).toBe(original);
+      expect(line.benefitSnapshot).toMatchObject({ storefront: "miban-limited", originalCny: original, paidCny: Number(order.totalPrice), ruleId: "rate" });
+      expect(line.commissionBaseCny).toBe(line.productKey === "a" ? 228 : 0);
+    }
+    for (const asset of result.walletPayments) {
+      const shares = result.orders.flatMap((order: any) => order.walletPayments).filter((row: any) => row.assetCode === asset.assetCode);
+      expect(paymentUnitsText(shares.reduce((sum: bigint, row: any) => sum + paymentDecimalUnits(row.amount), 0n))).toBe(asset.amount);
+    }
+    for (const order of result.orders) {
+      const value = order.walletPayments.reduce((sum: bigint, row: any) => sum + paymentDecimalUnits(row.cnyValue), 0n);
+      const difference = value - paymentDecimalUnits(order.totalCny);
+      expect(difference < 0n ? -difference : difference).toBeLessThan(paymentDecimalUnits("0.01"));
+    }
+  });
+
+  it("a better whole-cart coupon replaces covered discounts rather than stacking, and only the selected coupon is consumed", async () => {
+    const h = new Harness(); h.state.benefitRules = [
+      benefitRule("rate-a", { scope: "product", targets: ["limited:a"] }),
+      benefitRule("cash", { kind: "cash", value: 50, maxUses: 1 }),
+      benefitRule("cash-worse", { kind: "cash", value: 20, maxUses: 1 }),
+    ];
+    const result = await h.checkout(h.input([deduction("CNY", "237", "1")]));
+    expect(result.totalCny).toBe(237); // 287 - 50, NOT (228 * .8 + 59) - 50
+    expect(result.benefits.consumedRuleIds).toEqual(["cash"]);
+    expect(result.benefits.lines.every((line: any) => line.ruleId === "cash")).toBe(true);
+    expect(h.state.benefitRules.map((rule: Rule) => [rule.id, rule.uses])).toEqual([["rate-a", 0], ["cash", 1], ["cash-worse", 0]]);
+    expect(h.state.benefitUses).toHaveLength(1);
+  });
+
+  it("a weaker coupon is not stacked on a better discount and is not consumed", async () => {
+    const h = new Harness(); h.state.benefitRules = [benefitRule("rate"), benefitRule("cash", { kind: "cash", value: 20, maxUses: 1 })];
+    const result = await h.checkout(h.input([deduction("CNY", "229.6", "1")]));
+    expect(result.totalCny).toBe(229.6); expect(result.benefits.consumedRuleIds).toEqual(["rate"]);
+    expect(h.state.benefitRules[1].uses).toBe(0); expect(h.state.benefitRules[1].state).toBe("active");
+  });
+
+  it("a late benefit consumption failure rolls back native payment, quote use, orders, snapshots and benefit use, then releases stock", async () => {
+    const h = new Harness(); h.state.benefitRules = [benefitRule("rate")]; h.fail = "benefit-consume";
+    const before = structuredClone(h.state.benefitRules);
+    await expect(h.checkout(h.input([deduction("ETH", "2.296", "100")]))).rejects.toThrow("benefit consume failure");
+    expect(h.debitCalls).toBe(1); expect(h.state.orders).toEqual([]); expect(h.state.snapshots).toEqual([]);
+    expect(h.state.entries).toEqual([]); expect(h.state.manual).toEqual([]); expect(h.state.uses).toEqual([]);
+    expect(h.state.benefitUses).toEqual([]); expect(h.state.benefitRules).toEqual(before);
+    expect(h.state.balances.ETH).toEqual({ available_balance: "10", frozen_balance: "8" });
+    expect(h.state.stock).toMatchObject({ "a:sku": 100, "b:sku": 100 });
+    expect(h.state.movements.filter((row: any) => row.event_type === "order_rollback")).toHaveLength(2);
+  });
+
+  it("recalculates benefits under the user lock and rejects changed rules before creating or charging orders", async () => {
+    const h = new Harness(); h.state.benefitRules = [benefitRule("rate")]; h.fail = "benefit-quote-change";
+    await expect(h.checkout(h.input([deduction("CNY", "229.6", "1")]))).rejects.toThrow("优惠报价已变更");
+    expect(h.debitCalls).toBe(0); expect(h.state.orders).toEqual([]); expect(h.state.benefitUses).toEqual([]);
+    expect(h.state.manual).toEqual([]); expect(h.state.uses).toEqual([]);
+    expect(h.state.stock).toMatchObject({ "a:sku": 100, "b:sku": 100 });
+  });
+
+  it("does not reject its own successful last-unit stock reservations when asserting benefits", async () => {
+    const h = new Harness(); h.state.benefitRules = [benefitRule("rate")]; h.state.stock["a:sku"] = 1; h.state.stock["b:sku"] = 1;
+    const result = await h.checkout(h.input([deduction("CNY", "229.6", "1")]));
+    expect(result.orders).toHaveLength(2); expect(h.state.stock).toMatchObject({ "a:sku": 0, "b:sku": 0 });
+    expect(h.state.benefitRules[0].uses).toBe(1);
   });
 
   it("rejects fractional legacy CNY cents in cross-group input rather than silently changing the requested quantity", async () => {
