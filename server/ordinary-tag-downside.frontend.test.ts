@@ -145,6 +145,10 @@ describe('概览最近已更新日灰显，不替代真实今日收益', () => {
     expect(source).toContain('latestDate: overviewDailyDate ?? latestDate');
     expect(source).toContain('todayPnl: Number(overviewDailyPnl)');
     expect(source).toContain('tagData.filter(td => td.todayPnl !== null');
+    expect(actualFunction('todayColTitle', { shortSettlementDate: (date: string) => date.slice(5).replace('-', '/'), _latestDataDate: '2026-11-04' }, false)).toBe('11/04');
+    expect(actualFunction('_isTagUpdatedToday', { overviewDailyDate: '2026-11-03', _latestDataDate: '2026-11-04' }, false)).toBe(false);
+    expect(actualFunction('_isTagUpdatedToday', { overviewDailyDate: '2026-11-04', _latestDataDate: '2026-11-04' }, false)).toBe(true);
+    expect(source).not.toContain('shortSettlementDate(overviewDailyDate!)');
   });
   it('今日正负及真实零值沿用确认结果，不重复乘占比', () => {
     for (const amount of [-125, 0, 125]) {

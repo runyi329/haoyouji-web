@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as display from './stock-overview-settlement-display';
+import { formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryOverviewDailyReturn } from './ordinary-tag-downside-valuation-display';
 import { expectedStockSettlementDate, nullableStockNumber, normalizeStockCalendarPoints, isCryptoPortfolioCalendarPoint } from './ledger-stock-calendar';
 import { latestCryptoPortfolioSnapshotDate, CRYPTO_PORTFOLIO_POLICY_VERSION } from '../../../shared/crypto-portfolio-policy';
 
@@ -38,12 +39,13 @@ function tag(data = dto(), name = 'R1') {
   const scope = { useMemo: (fn: any) => fn(), initialBalancesData: { balances: {} }, categories: [{ id: 1, name, accountingMode: 'stock_portfolio' }],
     stockTagOverviewById: new Map([[1, data]]), aaCryptoPrices: {}, readTagPauseHistory: () => [], resolveMarginEntries: () => [],
     isR1Tag: (name: string) => name === 'R1', isMemberFacingLedgerView: true, isDateInTagPausePeriod: () => false,
-    activeMemberTransactions: [], tagCashFlows: {}, stockParticipantView: true,
+    activeMemberTransactions: [], tagCashFlows: {}, stockParticipantView: true, ordinaryDownsideById: new Map(),
     normalizeStockCalendarPoints, nullableStockNumber, isCryptoPortfolioCalendarPoint, getPrevStockTradingDay: () => '2026-11-19' };
   return initializer('allTagsChartData', scope)[0];
 }
 function tree(tags: any[], patch: Record<string, any> = {}) {
-  const scope = { ...display, expectedStockSettlementDate, latestCryptoPortfolioSnapshotDate, nullableStockNumber,
+  const scope = { ...display, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryOverviewDailyReturn,
+    expectedStockSettlementDate, latestCryptoPortfolioSnapshotDate, nullableStockNumber,
     allTagsChartData: tags, initialBalancesData: { balances: {} }, isNonTradingDateStr: (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() % 6 === 0,
     overviewSort: null, dividendByTag: {}, overviewTotalPnlRef: { current: 0 }, isR1Tag: (name: string) => name === 'R1',
     overviewFocusMetric: 'today', showPausedTagDetails: false, OVERVIEW_FOCUS_OPTIONS: [
@@ -71,15 +73,17 @@ describe('ordinary R1 overview: actual production AST/JSX and nullable settlemen
     const html = renderToStaticMarkup(view); expect(html).not.toMatch(/NaN|Infinity/);
   });
   it('explicit personal stock policy wins even old points contain crypto; latest trading day is not Saturday today', () => {
-    freeze(); const data = dto('stock-trading-day'); data.points[0].policyVersion = CRYPTO_PORTFOLIO_POLICY_VERSION;
-    const view = tree([tag(data)]); expect(text(titled(view, '个人股票最近交易日日结 2026-11-20'))).toBe('8,41211/20日结');
+    freeze(); const data = dto('stock-trading-day'); (data.points[0] as Record<string, unknown>).policyVersion = CRYPTO_PORTFOLIO_POLICY_VERSION;
+    const view = tree([tag(data)]); expect(text(titled(view, '个人股票最近交易日日结 2026-11-20'))).toBe('8,412');
     expect(text(view)).toContain('股票最近交易日日结 11/20'); expect(text(view)).not.toContain('股票最近交易日日结 11/21');
     const daily = titled(view, '个人股票最近交易日日结 2026-11-20'); expect(daily.props.title).not.toContain('今日');
+    expect(daily.props.style.color).toBe('#BDBDBD');
+    expect(nodes(daily).filter(node => node.type === 'span')).toHaveLength(1);
   });
   it('real zero cumulative and daily render 0, null/nonfinite remain pending, never zero', () => {
     freeze(); const zero = dto('stock-trading-day', { confirmedTotalPnl: 0, lastConfirmedSnapshot: ready({ totalPnl: 0, pnl: 0, dailyPnl: 0 }), priorSnapshot: null });
     zero.points = [ready({ totalPnl: 0, pnl: 0, dailyPnl: 0 })];
-    const view = tree([tag(zero)]); expect(text(rowPnl(view))).toBe('0截至11/20'); expect(text(titled(view, '个人股票最近交易日日结'))).toBe('011/20日结');
+    const view = tree([tag(zero)]); expect(text(rowPnl(view))).toBe('0截至11/20'); expect(text(titled(view, '个人股票最近交易日日结'))).toBe('0');
     const unknown = dto('stock-trading-day', { confirmedTotalPnl: null, confirmedAsOf: null, lastConfirmedSnapshot: null, priorSnapshot: null }); unknown.points = [pending()];
     expect(text(rowPnl(tree([tag(unknown)])))).toBe('--待更新');
     for (const value of [null, NaN, Infinity]) expect(display.formatOverviewPnl(value)).toBe('--');
@@ -102,7 +106,8 @@ describe('ordinary R1 overview: actual production AST/JSX and nullable settlemen
   });
   it('stock/mixed coexist: no fake same-day title or incomplete daily full amount, cumulative cutoff remains accurate', () => {
     freeze(); const view = tree([tag(dto('stock-trading-day')), tag(dto(), 'Mixed')]);
-    expect(text(view)).toContain('日结/当日');
+    const heading = nodes(view).find(node => node.type === 'div' && node.props?.title?.includes('R1：'));
+    expect(text(heading)).toContain('11/21');
     expect(text(titled(view, '个人股票最近交易日日结 2026-11-20'))).toContain('8,412');
     expect(text(titled(view, '个人混合组合自然日日结 2026-11-21'))).toBe('--待更新');
     expect(text(titled(view, '各行展示口径累计合计'))).toBe('153,815已确认11/20');
@@ -113,6 +118,7 @@ describe('ordinary R1 overview: actual production AST/JSX and nullable settlemen
     const next = ready({ date: '2026-11-21', snapshotDate: '2026-11-21', totalPnl: 80000, pnl: 80000, dailyPnl: 3092.384 });
     const data = dto('mixed-crypto-natural-day', { latestSnapshot: next, confirmedTotalPnl: 80000, confirmedAsOf: '2026-11-21', lastConfirmedSnapshot: next }); data.points = [ready(), next];
     const after = tree([tag(data)]); expect(text(rowPnl(after))).toBe('80,000截至11/21'); expect(text(titled(after, '个人混合组合自然日日结 2026-11-21'))).toBe('3,092');
+    expect(titled(after, '个人混合组合自然日日结 2026-11-21').props.style.color).toBe('#D32F2F');
   });
   it('paused unknown stays unknown in folded aggregate, unrelated ordinary dividend and focus buttons unchanged', () => {
     freeze(); const unknown = dto('stock-trading-day', { confirmedTotalPnl: null, confirmedAsOf: null, lastConfirmedSnapshot: null, priorSnapshot: null }); unknown.points = [pending()];

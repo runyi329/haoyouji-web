@@ -3742,12 +3742,11 @@ export default function LedgerDetailAA({
             // 所有轨道基础和为 462px；年化焦点时把额外空间并入末列“占比”，避免产生右侧白边。
             const rightGridWidth = `${462 + annualizedFocusTail}px`;
             const overviewTableWidth = `${566 + annualizedFocusTail}px`;
-            // 纯股票可显示共同预期日；混合行日期不同则不把昨日股票收益称为今天。
+            // 日期只在列标题显示当天；各行用颜色区分当天与历史数据。
             const _nowBeijing = new Date(Date.now() + 8 * 3600 * 1000);
             const _latestDataDate = _nowBeijing.toISOString().slice(0, 10);
             const settlementDates = Array.from(new Set(tagData.map(td => td.tagSettlementDate)));
-            const todayColTitle = settlementDates.length === 1
-              ? shortSettlementDate(settlementDates[0]) : '日结/当日';
+            const todayColTitle = shortSettlementDate(_latestDataDate);
             const todayColTooltip = tagData.map(td => `${td.tag.name}：${td.stockDisplay?.dailyTitle ?? `${_latestDataDate}当日回报`}`).join('；');
             const stockSettlementCaption = Array.from(new Set(tagData.filter(td => td.stockDisplay).map(td =>
               `${td.stockDisplay!.usesCryptoPolicy ? '混合组合自然日日结' : '股票最近交易日日结'} ${shortSettlementDate(td.tagSettlementDate)}`))).join(' · ');
@@ -4012,7 +4011,7 @@ export default function LedgerDetailAA({
                       const _isStale = !tag.isStockPortfolio && _isTradeDay && _hourBJ >= 15 && latestDate !== _todayBJ;
                       // 是否当天已更新：该用户最新数据日期 = 全局最新日期
                       const _isTodayNonTradeDay = false; // 已废弃交易日判断
-                      const _isTagUpdatedToday = tag.isStockPortfolio ? stockDisplay?.dailyDate === tagSettlementDate : overviewDailyDate === _latestDataDate;
+                      const _isTagUpdatedToday = overviewDailyDate === _latestDataDate;
                       const _showTodayPnl = overviewDailyPnl !== null;
                   const rowBorder = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                   return (
@@ -4057,7 +4056,7 @@ export default function LedgerDetailAA({
                                   latestPnl: Number(latestPnl ?? 0),
                                 });
                               }}
-                            >{_todayPnlText}{(overviewDailyPnl === null || (overviewDailyDate && overviewDailyDate !== _todayBJ)) && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>{overviewDailyPnl === null ? '待更新' : `${shortSettlementDate(overviewDailyDate!)}日结`}</span>}</span>
+                            >{_todayPnlText}{overviewDailyPnl === null && <span className="block text-[9px] font-normal" style={{ color: '#9E9E9E' }}>待更新</span>}</span>
                           </div>
                         );
                       })()}
