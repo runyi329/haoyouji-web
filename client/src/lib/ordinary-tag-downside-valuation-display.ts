@@ -28,6 +28,19 @@ export function nullableOrdinaryNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/** 值模式比较真实账户余额，不使用个人收益、强平折算值或格式化后的万元数。 */
+export function ordinaryCalendarBalanceColor(scope: OrdinaryDownsideScope, date: string, startDate = ''): string {
+  const balance = nullableOrdinaryNumber(scope.pointByDate.get(date)?.balance);
+  if (balance === null) return '#9E9E9E';
+  const dates = Array.from(scope.pointByDate.keys()).sort();
+  const index = dates.indexOf(date);
+  if (index === 0 || date === startDate) return '#222222';
+  if (index < 0) return '#9E9E9E';
+  const previous = nullableOrdinaryNumber(scope.pointByDate.get(dates[index - 1])?.balance);
+  if (previous === null) return '#9E9E9E';
+  return balance > previous ? '#D32F2F' : balance < previous ? '#4CAF50' : '#9E9E9E';
+}
+
 /** Overview-only historical display. Never fills today's return or skips an invalid latest point. */
 export function ordinaryOverviewDailyReturn(scope: OrdinaryDownsideScope, today: string): { amount: number | null; date: string | null } {
   const point = scope.latestPoint;

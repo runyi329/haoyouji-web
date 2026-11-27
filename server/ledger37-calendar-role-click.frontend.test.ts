@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { consumeLedgerCalendarDoubleTap, type LedgerCalendarTap } from '../shared/ledger-calendar-double-tap';
+import { beginLedgerCalendarTouch, cancelLedgerCalendarTapOnScroll, consumeLedgerCalendarDoubleTap, type LedgerCalendarTap } from '../shared/ledger-calendar-double-tap';
 import { canRecordLedger37Calendar } from '../shared/ledger37-permissions';
 import { getBeijingLedgerRecordToday } from '../shared/ledger-record-date';
 
@@ -53,6 +53,7 @@ function harness(overrides: Record<string, any> = {}) {
     getBeijingLedgerRecordToday, selectedTagId: 7, marginTargetUserId: 510025,
     isSelectedStockPortfolio: false, selectedTag: { name: '余额' }, selectedStockCalendarTag: null,
     calendarNumberTapRef: { current: null }, consumeLedgerCalendarDoubleTap,
+    calendarNumberTouchRef: { current: null }, beginLedgerCalendarTouch, cancelLedgerCalendarTapOnScroll,
     dayMap: new Map([['2026-11-24', { records: [{ images: ['offline-test.jpg'] }] }]]),
     openCalendarDayAttachments: vi.fn(), setCalendarDateDetail: vi.fn(), setShowImagePreview: vi.fn(),
     setShowStockPortfolio: vi.fn(),
@@ -99,9 +100,41 @@ describe('管理员只双击登记，普通用户点击仅放大照片：执行�
     expect(h.editor()).toBeNull(); h.events.onClick(); expect(h.editor()).toBeNull();
     expect(h.bindings.openCalendarDayAttachments).not.toHaveBeenCalled();
   });
-  it.each(['onPointerCancel', 'onTouchMove'])('%s之后点击不会与取消前第一次点击配对', (event) => {
-    const h = harness(); h.events.onClick(); h.events[event]();
+  it.each(['onPointerCancel', 'onTouchMove', 'onTouchCancel'])('%s之后点击不会与取消前第一次点击配对', (event) => {
+    const h = harness();
+    h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+    h.events.onClick(); h.events[event]({ touches: [{ clientX: 112, clientY: 100 }] });
     vi.advanceTimersByTime(200); h.events.onClick(); expect(h.editor()).toBeNull();
+  });
+  it.each([0, 3, 8])('手机第二击移动%s像素仍可进入登记，不提前把touchstart算成点击', (move) => {
+    const h = harness();
+    h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+    expect(h.editor()).toBeNull(); h.events.onClick(); expect(h.editor()).toBeNull();
+    vi.advanceTimersByTime(200);
+    h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+    h.events.onTouchMove({ touches: [{ clientX: 100 + move, clientY: 100 }] });
+    expect(h.editor()).toBeNull(); h.events.onClick();
+    expect(h.editor()).toEqual({ categoryId: 7, date: '2026-11-24' });
+    expect(h.mounts()).toBe(1);
+  });
+  it('真实滑动后即使手指回到起点，或者开始双指缩放，也不会与此前点击配对', () => {
+    for (const touches of [[{ clientX: 109, clientY: 100 }], [{ clientX: 100, clientY: 100 }, { clientX: 101, clientY: 100 }]]) {
+      const h = harness();
+      h.events.onClick(); vi.advanceTimersByTime(200);
+      h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+      h.events.onTouchMove({ touches });
+      h.events.onTouchMove({ touches: [{ clientX: 100, clientY: 100 }] });
+      h.events.onClick(); expect(h.editor()).toBeNull();
+    }
+  });
+  it('今天无登记也可双击打开完整窄登记页，轻微移动不依赖照片或收益', () => {
+    vi.setSystemTime(new Date('2026-11-27T08:00:00Z'));
+    const h = harness({ day: 27, dayDateStr: '2026-11-27', getDateStr: () => '2026-11-27', dayMap: new Map() });
+    h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] }); h.events.onClick();
+    vi.advanceTimersByTime(250);
+    h.events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+    h.events.onTouchMove({ touches: [{ clientX: 102, clientY: 101 }] }); h.events.onClick();
+    expect(h.editor()).toEqual({ categoryId: 7, date: '2026-11-27' });
   });
   it.each([
     { memberRole: 'member', userId: 510025 },
@@ -163,11 +196,23 @@ describe('两个入口统一click双击且不串scope', () => {
     expect(events.onPointerUp).toBeUndefined(); expect(events.onTouchEnd).toBeUndefined();
     expect(handlers(aa, 'consumeLedgerCalendarDoubleTap(calendarNumberTapRef', harness().bindings).onPointerUp).toBeUndefined();
   });
+  it('AI登记入口同样容忍轻微移动，滑动仍阻止配对，click仍是唯一计数来源', () => {
+    for (const move of [3, 9]) {
+      const bindings = { enabled: true, selectedId: 7, viewerUserId: 510025, dayDate: '2026-11-24', lastTap: { current: null }, touchOrigin: { current: null }, consumeLedgerCalendarDoubleTap, beginLedgerCalendarTouch, cancelLedgerCalendarTapOnScroll, openNumber: vi.fn() };
+      const events = handlers(recorder, 'consumeLedgerCalendarDoubleTap(lastTap', bindings);
+      events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] }); events.onClick();
+      expect(bindings.openNumber).not.toHaveBeenCalled(); vi.advanceTimersByTime(200);
+      events.onTouchStart({ touches: [{ clientX: 100, clientY: 100 }] });
+      events.onTouchMove({ touches: [{ clientX: 100 + move, clientY: 100 }] }); events.onClick();
+      expect(bindings.openNumber).toHaveBeenCalledTimes(move <= 8 ? 1 : 0);
+      expect(events.onTouchEnd).toBeUndefined(); expect(events.onPointerUp).toBeUndefined();
+    }
+  });
   it('AI未来日不登记，换标签月份身份时清理待配对点击', () => {
     const bindings = { enabled: false, selectedId: 7, viewerUserId: 510025, dayDate: '2999-01-01', lastTap: { current: null }, consumeLedgerCalendarDoubleTap, openNumber: vi.fn() };
     const events = handlers(recorder, 'consumeLedgerCalendarDoubleTap(lastTap', bindings);
     events.onClick(); events.onClick(); events.onDoubleClick(); expect(bindings.openNumber).not.toHaveBeenCalled();
-    expect(recorder).toContain('useEffect(() => { lastTap.current = null; }, [month, selectedId, viewerUserId])');
+    expect(recorder).toContain('useEffect(() => { lastTap.current = null; touchOrigin.current = null; }, [month, selectedId, viewerUserId])');
     expect(aa).toContain('[ledgerId, selectedTagId, calendarDate.year, calendarDate.month, marginTargetUserId, canRecordCalendarNumber]');
   });
 });

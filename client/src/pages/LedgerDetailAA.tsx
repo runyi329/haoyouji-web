@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { buildOrdinaryDownsideScopes, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryDownsideChartPoints, ordinaryDownsideIdentityQueryKey, ordinaryOverviewDailyReturn, sumOrdinaryDownsideDailyPnl, type OrdinaryDownsideResponse, type OrdinaryDownsideScope } from "@/lib/ordinary-tag-downside-valuation-display";
+import { buildOrdinaryDownsideScopes, formatOverviewDailyReturn, nullableOrdinaryNumber, ordinaryCalendarBalanceColor, ordinaryDownsideChartPoints, ordinaryDownsideIdentityQueryKey, ordinaryOverviewDailyReturn, sumOrdinaryDownsideDailyPnl, type OrdinaryDownsideResponse, type OrdinaryDownsideScope } from "@/lib/ordinary-tag-downside-valuation-display";
 import { aggregateOverviewPnl, formatOverviewPnl, shortSettlementDate, stockOverviewSettlementDisplay } from "@/lib/stock-overview-settlement-display";
 import { expectedStockSettlementDate, isCryptoPortfolioCalendarPoint, normalizeStockCalendarPoints, nullableStockNumber, stockCalendarScope, sumKnownStockDailyPnl } from "@/lib/ledger-stock-calendar";
 import { millisecondsUntilStockCalendarWake, stockCalendarExpectedVersion, stockCalendarHasExpectedClose, stockCalendarPrefetchBlocked, stockCalendarQueryOptions, stockCalendarRetryWindowFor, stockCalendarUsesCryptoPolicy } from "@/lib/ledger-stock-calendar-cache";
@@ -40,7 +40,7 @@ import { trpc } from "@/lib/trpc";
 import { readTagVisible } from "@shared/tag-visibility";
 import { canRecordLedger37Calendar, isLedger37FullManager } from "@shared/ledger37-permissions";
 import { getBeijingLedgerRecordToday } from "@shared/ledger-record-date";
-import { consumeLedgerCalendarDoubleTap, type LedgerCalendarTap } from "@shared/ledger-calendar-double-tap";
+import { beginLedgerCalendarTouch, cancelLedgerCalendarTapOnScroll, consumeLedgerCalendarDoubleTap, type LedgerCalendarTap, type LedgerCalendarTouchOrigin } from "@shared/ledger-calendar-double-tap";
 import Ledger37CalendarNumberDialog from "@/components/Ledger37CalendarNumberDialog";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import Ledger37AiHome from "@/components/Ledger37AiHome";
@@ -473,6 +473,7 @@ export default function LedgerDetailAA({
   const [calendarDateDetail, setCalendarDateDetail] = useState<CalendarDateDetail | null>(null);
   const [calendarNumberEditor, setCalendarNumberEditor] = useState<{ categoryId: number; date: string } | null>(null);
   const calendarNumberTapRef = useRef<LedgerCalendarTap | null>(null);
+  const calendarNumberTouchRef = useRef<LedgerCalendarTouchOrigin | null>(null);
   // 汇总日历（全部模式，概览下方）独立月份状态
   const [summaryCalendarDate, setSummaryCalendarDate] = useState(() => {
     const d = new Date();
@@ -528,6 +529,7 @@ export default function LedgerDetailAA({
   const marginTargetUserId = Number(viewAsUserId ?? user?.id ?? 0);
   useEffect(() => {
     calendarNumberTapRef.current = null;
+    calendarNumberTouchRef.current = null;
   }, [ledgerId, selectedTagId, calendarDate.year, calendarDate.month, marginTargetUserId, canRecordCalendarNumber]);
   const marginActorPermission = trpc.ledger.getLedger37MarginActor.useQuery(
     { ledgerId: 37, targetUserId: marginTargetUserId },
@@ -3103,7 +3105,11 @@ export default function LedgerDetailAA({
                           }
                         } else if (selectedOrdinaryDownside) {
                           const value = selectedOrdinaryDownside.pointByDate.get(dateStr)?.dailyPnl;
-                          valueColor = calendarMode === 'balance' ? '#222222' : value == null || value === 0 ? '#9E9E9E' : value > 0 ? '#D32F2F' : '#4CAF50';
+                          const tagStartDate = selectedTag?.name && initialBalancesData?.balances
+                            ? String(initialBalancesData.balances[`${selectedTag.name}__startDate`] ?? '') : '';
+                          valueColor = calendarMode === 'balance'
+                            ? ordinaryCalendarBalanceColor(selectedOrdinaryDownside, dateStr, tagStartDate)
+                            : value == null || value === 0 ? '#9E9E9E' : value > 0 ? '#D32F2F' : '#4CAF50';
                         } else if (calendarMode === "daily") {
                           const diff = getDailyDiff(dateStr);
                           valueColor = diff === null ? "#9E9E9E" : diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
@@ -3179,8 +3185,10 @@ export default function LedgerDetailAA({
                             if (canOpenCalendarCell) handleDayClick(day);
                           }}
                           onDoubleClick={() => { if (canRecordCalendarCell) openCalendarNumberEditor(day); }}
-                          onPointerCancel={() => { calendarNumberTapRef.current = null; }}
-                          onTouchMove={() => { calendarNumberTapRef.current = null; }}
+                          onPointerCancel={() => { calendarNumberTapRef.current = null; calendarNumberTouchRef.current = null; }}
+                          onTouchStart={event => beginLedgerCalendarTouch(calendarNumberTouchRef, calendarNumberTapRef, event.touches)}
+                          onTouchMove={event => cancelLedgerCalendarTapOnScroll(calendarNumberTouchRef, calendarNumberTapRef, event.touches)}
+                          onTouchCancel={() => { calendarNumberTapRef.current = null; calendarNumberTouchRef.current = null; }}
                           disabled={!canOpenCalendarCell && !canRecordCalendarCell}
                           className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
