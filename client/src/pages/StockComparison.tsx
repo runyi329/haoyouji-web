@@ -64,8 +64,8 @@ type StreakData = {
 };
 type StreakQueryHandle = { refetch: () => void };
 
-const RED = "#D32F2F";
-const GREEN = "#15803D";
+const RED = AI_STOCK_THEME.rise;
+const GREEN = AI_STOCK_THEME.fall;
 const PAGE_SIZE = 50;
 // 其他指标先不展示；保留实现，后续按需要再接入横向下拉。
 const SHOW_LEGACY_COMPARISON_METRICS = false;
@@ -125,14 +125,14 @@ function colorFor(metric: OrdinaryMetric) {
   return metric === "upRate" || metric === "upDays"
     ? RED
     : metric === "downRate" || metric === "downDays"
-      ? "#15803D"
+      ? GREEN
       : "#64748B";
 }
 function trackFor(metric: OrdinaryMetric) {
   return metric === "upRate" || metric === "upDays"
-    ? "#FCE7E5"
+    ? AI_STOCK_THEME.riseBackground
     : metric === "downRate" || metric === "downDays"
-      ? "#E5F3EA"
+      ? AI_STOCK_THEME.fallBackground
       : "#EDF0F4";
 }
 

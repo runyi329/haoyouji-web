@@ -7,6 +7,7 @@ import { getStockReturnRanking } from "./stock-return-ranking";
 import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
+import { getAiFearGreedIndex } from "./ai-fear-greed-service";
 import { captureFunderOptionEvidence, getFunderOptionSettlementEvidenceError, buildFunderRegisteredSettlementEvidence, readFunderEvidenceNumber, type FunderSettlementEvidenceScope } from "./shared/funder-settlement-evidence";
 import { assertFunderPersonalCollateralReleaseScope, assertFunderJointCollateralReleaseScope } from "./funder-personal-collateral-scope";
 import { getDeribitOptionOrderBook, getDeribitOptionInstruments } from "./deribit-public-transport";
@@ -38425,6 +38426,9 @@ insights 数组每项包含：
         };
       } finally { /* pool auto-manages connections */ }
     }),
+  /** 脉动自研A股情绪四因子试算：只读真实日行情，不改原行情及既有统计。 */
+  aiDashboardFearGreed: publicProcedure
+    .query(() => getAiFearGreedIndex()),
   /** 宏观经济指标据：M2/CPI/LPR/北向资金/指数趋势 */
   aiDashboardMacro: publicProcedure
     .query(async () => {

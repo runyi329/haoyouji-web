@@ -36,7 +36,7 @@ const BORDER = AI_STOCK_THEME.border;
 const TEXT = AI_STOCK_THEME.text;
 const MUTED = AI_STOCK_THEME.muted;
 const ACCENT = AI_STOCK_THEME.accent;
-const STOCK_GREEN = "#00B050";
+const STOCK_GREEN = AI_STOCK_THEME.fall;
 const STOCK_FLAT = "#A1ADB8";
 
 // ─── 板块 Tab 配置 ────────────────────────────────────────────────────────

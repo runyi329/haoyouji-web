@@ -1,4 +1,5 @@
 import type { StockMAMonitorCandle, StockMAMonitorPeriod } from "@shared/stock-ma-monitor";
+import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 
 const VIEWBOX_WIDTH = 240;
 const VIEWBOX_HEIGHT = 100;
@@ -163,7 +164,7 @@ export default function StockMiniCandlestick({ candles, name }: StockMiniCandles
         })}
         {model.candleGeometry.length === 0 && <text x={PLOT_RIGHT / 2} y={46} textAnchor="middle" fill="#87919a" fontSize="9">日K暂不可用</text>}
         {model.candleGeometry.map(item => {
-          const color = item.candle.close >= item.candle.open ? "#d84a4a" : "#2e9b69";
+          const color = item.candle.close >= item.candle.open ? AI_STOCK_THEME.rise : AI_STOCK_THEME.fall;
           return <g key={item.candle.date} data-stock-mini-candle={item.candle.date}>
             <line x1={item.x} x2={item.x} y1={item.highY} y2={item.lowY} stroke={color} strokeWidth="0.9" />
             <rect x={item.x - item.bodyWidth / 2} y={item.bodyTop} width={item.bodyWidth} height={item.bodyHeight}

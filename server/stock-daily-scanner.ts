@@ -13,6 +13,9 @@
  */
 
 import mysql from 'mysql2/promise';
+import { createHash } from 'node:crypto';
+import { aggregateAiFearGreedMarketDay } from '../shared/ai-fear-greed-market';
+import { AI_FEAR_GREED_MARKET_SCHEMA_SQL, writeAiFearGreedMarketDay } from './ai-fear-greed-market-store';
 
 const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
 const TUSHARE_URL = 'http://api.tushare.pro';
@@ -304,23 +307,24 @@ export async function runDailyScan(tradeDate: string): Promise<boolean> {
 
   let allItems: any[] = [];
   let fields: string[] = [];
-  const PAGE_SIZE = 8000;
+  const PAGE_SIZE = 6000;
   let offset = 0;
 
   while (true) {
-    const resp = await fetch(TUSHARE_URL, {
+    const resp = await fetch('https://api.tushare.pro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_name: 'daily',
         token: TUSHARE_TOKEN,
         params: { trade_date: tradeDate, limit: PAGE_SIZE, offset },
-        fields: 'ts_code,trade_date,open,high,low,close,pre_close,chg,pct_chg,vol,amount',
+        fields: 'ts_code,trade_date,open,high,low,close,pre_close,change,pct_chg,vol,amount',
       }),
       signal: AbortSignal.timeout(30000),
     });
     const json = await resp.json() as any;
-    if (json.code !== 0 || !json.data?.items?.length) break;
+    if (json.code !== 0) throw new Error('股票日线供应商返回错误，拒绝把部分分页标为完整');
+    if (!json.data?.items?.length) break;
     if (fields.length === 0) fields = json.data.fields;
     allItems = allItems.concat(json.data.items);
     if (json.data.items.length < PAGE_SIZE) break;
@@ -342,7 +346,7 @@ export async function runDailyScan(tradeDate: string): Promise<boolean> {
   const lowIdx = fi('low');
   const closeIdx = fi('close');
   const preCloseIdx = fi('pre_close');
-  const chgIdx = fi('chg');
+  const chgIdx = fi('change');
   const pctChgIdx = fi('pct_chg');
   const volIdx = fi('vol');
   const amountIdx = fi('amount');
@@ -394,6 +398,15 @@ export async function runDailyScan(tradeDate: string): Promise<boolean> {
       } else {
         throw err;
       }
+    }
+
+    // 独立市场汇总只写一行；失败不能中断原有行情/趋势业务。
+    try {
+      const marketDay = aggregateAiFearGreedMarketDay(fields, allItems, tradeDate);
+      await conn.execute(AI_FEAR_GREED_MARKET_SCHEMA_SQL);
+      await writeAiFearGreedMarketDay(conn, marketDay, createHash('sha256').update(JSON.stringify({ fields, items: allItems })).digest('hex'), allItems.length);
+    } catch {
+      console.warn('[股票扫描] 当日情绪汇总未完成，未生成替代指数');
     }
 
     // 更新 ts_trend_cache（AA页面趋势折线图）

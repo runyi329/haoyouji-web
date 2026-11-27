@@ -20,7 +20,8 @@ const BORDER = AI_STOCK_THEME.border;
 const TEXT = AI_STOCK_THEME.text;
 const MUTED = AI_STOCK_THEME.muted;
 const ACCENT = AI_STOCK_THEME.accent;
-const GREEN_A = "#00B050";
+const GREEN_A = AI_STOCK_THEME.fall;
+const LISTED_STATUS_GREEN = "#00B050";
 const CARD_SHADOW = AI_STOCK_THEME.shadow;
 
 // ─── 工具函数 ────────────────────────────────────────────
@@ -44,7 +45,7 @@ function marketLabel(tsCode: string) {
   return "其他";
 }
 function listStatusLabel(status: string) {
-  if (status === "L") return { text: "上市", color: GREEN_A };
+  if (status === "L") return { text: "上市", color: LISTED_STATUS_GREEN };
   if (status === "D") return { text: "退市", color: MUTED };
   if (status === "P") return { text: "暂停", color: "#FF9800" };
   return { text: status, color: MUTED };
@@ -321,9 +322,9 @@ function ZhuLuScrollArea({
             </div>
             {/* 涨 */}
             <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr", borderBottom: "1px solid #F0F0F0" }}>
-              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: "#C62828" }}>涨</div>
+              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: RED }}>涨</div>
               <div style={{ padding: "10px 6px", fontSize: 13, color: "#333", textAlign: "center" }}>{Math.round(nextDayProb.total * nextDayProb.upPct / 100)}</div>
-              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: "#C62828", textAlign: "center" }}>{nextDayProb.upPct}%</div>
+              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: RED, textAlign: "center" }}>{nextDayProb.upPct}%</div>
               <div style={{ padding: "10px 6px", fontSize: 11, color: "#888", textAlign: "center" }}>转向或延续</div>
             </div>
             {/* 平 */}
@@ -337,9 +338,9 @@ function ZhuLuScrollArea({
             )}
             {/* 跌 */}
             <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr" }}>
-              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>跌</div>
+              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: GREEN_A }}>跌</div>
               <div style={{ padding: "10px 6px", fontSize: 13, color: "#333", textAlign: "center" }}>{Math.round(nextDayProb.total * nextDayProb.downPct / 100)}</div>
-              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: "#2E7D32", textAlign: "center" }}>{nextDayProb.downPct}%</div>
+              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: GREEN_A, textAlign: "center" }}>{nextDayProb.downPct}%</div>
               <div style={{ padding: "10px 6px", fontSize: 11, color: "#888", textAlign: "center" }}>转向或延续</div>
             </div>
           </div>
@@ -415,20 +416,20 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   const LABELS = THRESHOLDS.map((t, i) => i === 0 ? `<${t}%` : `${THRESHOLDS[i-1]}-${t}%`).concat([`>${STEP * 5}%`]);
 
   const UP_COLORS = [
-    "#FFCDD2", // 最浅红
-    "#EF9A9A",
-    "#E57373",
-    "#EF5350",
-    "#E53935",
-    "#B71C1C", // 最深红
+    "#E5C6C6", // 最浅红
+    AI_STOCK_THEME.riseSoft,
+    "#C67272",
+    "#C15555",
+    "#BC3838",
+    RED, // 最深红
   ];
   const DOWN_COLORS = [
-    "#C8E6C9", // 最浅绿
-    "#A5D6A7",
-    "#66BB6A",
-    "#43A047",
-    "#2E7D32",
-    "#1B5E20", // 最深绿
+    "#C7D4C8", // 最浅绿
+    AI_STOCK_THEME.fallSoft,
+    "#729675",
+    "#558458",
+    "#38713C",
+    GREEN_A, // 最深绿
   ];
 
   function getColorAndText(pct: number): { bg: string; fg: string; label: string } {
@@ -438,7 +439,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
     const colorIdx = idx === -1 ? 5 : idx;
     const bg = pct > 0 ? UP_COLORS[colorIdx] : DOWN_COLORS[colorIdx];
     // 深色格子用白字，浅色格子用深色字
-    const fg = colorIdx >= 3 ? "#fff" : (pct > 0 ? "#8B0000" : "#1B5E20");
+    const fg = colorIdx >= 3 ? "#fff" : (pct > 0 ? RED : GREEN_A);
     // 数字显示：一位小数，去掉小数点前的负号（用颜色区分涨跌）
     const label = abs.toFixed(1);
     return { bg, fg, label };
@@ -740,8 +741,8 @@ function VolSignal({
   const latestSignalColor =
     latest.signal === 'vol_up_rise' ? RED :
     latest.signal === 'vol_up_fall' ? GREEN_A :
-    latest.signal === 'shrink_up_rise' ? '#FF8C00' :
-    latest.signal === 'shrink_up_fall' ? '#888' : MUTED;
+    latest.signal === 'shrink_up_rise' ? RED :
+    latest.signal === 'shrink_up_fall' ? GREEN_A : MUTED;
 
   // 统计各信号次数
   const countMap: Record<string, number> = {
@@ -757,8 +758,8 @@ function VolSignal({
   const barColor = (item: VolItem) => {
     if (item.signal === 'vol_up_rise') return RED;
     if (item.signal === 'vol_up_fall') return GREEN_A;
-    if (item.signal === 'shrink_up_rise') return '#FF8C00';
-    if (item.signal === 'shrink_up_fall') return '#90CAF9';
+    if (item.signal === 'shrink_up_rise') return RED;
+    if (item.signal === 'shrink_up_fall') return GREEN_A;
     if (item.volRatio >= 1.5) return '#FFAB40';
     if (item.volRatio <= 0.7) return '#CFD8DC';
     return '#BDBDBD';
@@ -819,8 +820,8 @@ function VolSignal({
         {[
           { label: '放量上涨', count: countMap.vol_up_rise, color: RED },
           { label: '放量下跌', count: countMap.vol_up_fall, color: GREEN_A },
-          { label: '缩量上涨', count: countMap.shrink_up_rise, color: '#FF8C00' },
-          { label: '缩量下跌', count: countMap.shrink_up_fall, color: '#90CAF9' },
+          { label: '缩量上涨', count: countMap.shrink_up_rise, color: RED },
+          { label: '缩量下跌', count: countMap.shrink_up_fall, color: GREEN_A },
         ].map((item, i) => (
           <div key={i} className="flex flex-col items-center py-2" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}>
             <span className="text-sm font-bold" style={{ color: item.color }}>{item.count}</span>
@@ -834,8 +835,8 @@ function VolSignal({
         {[
           { color: RED, label: '放量上涨（强势）' },
           { color: GREEN_A, label: '放量下跌（恐慌）' },
-          { color: '#FF8C00', label: '缩量上涨（弱势）' },
-          { color: '#90CAF9', label: '缩量下跌（弱势）' },
+          { color: RED, label: '缩量上涨（弱势）' },
+          { color: GREEN_A, label: '缩量下跌（弱势）' },
         ].map((item, i) => (
           <div key={i} className="flex items-center gap-1">
             <div style={{ width: 8, height: 8, borderRadius: 2, background: item.color }} />
@@ -863,13 +864,13 @@ function calcStrength(open: number, high: number, low: number, close: number): S
 }
 
 const STRENGTH_CONFIG: Record<StrengthType, { label: string; color: string; bg: string }> = {
-  strong_up:   { label: '强阳', color: '#C62828', bg: '#FFEBEE' },
-  mid_up:      { label: '中阳', color: '#E53935', bg: '#FFF3F3' },
-  weak_up:     { label: '弱阳', color: '#EF9A9A', bg: '#FFF8F8' },
+  strong_up:   { label: '强阳', color: RED, bg: '#F9EDED' },
+  mid_up:      { label: '中阳', color: '#C15555', bg: '#FBF4F4' },
+  weak_up:     { label: '弱阳', color: AI_STOCK_THEME.riseSoft, bg: '#FDF9F9' },
   doji:        { label: '十字', color: '#9E9E9E', bg: '#F5F5F5' },
-  weak_down:   { label: '弱阴', color: '#A5D6A7', bg: '#F8FFF8' },
-  mid_down:    { label: '中阴', color: '#43A047', bg: '#F1F8F1' },
-  strong_down: { label: '强阴', color: '#1B5E20', bg: '#E8F5E9' },
+  weak_down:   { label: '弱阴', color: AI_STOCK_THEME.fallSoft, bg: '#F9FBF9' },
+  mid_down:    { label: '中阴', color: '#558458', bg: '#F4F7F4' },
+  strong_down: { label: '强阴', color: GREEN_A, bg: '#EDF2ED' },
 };
 
 const STRENGTH_ORDER: StrengthType[] = ['strong_up','mid_up','weak_up','doji','weak_down','mid_down','strong_down'];
@@ -1412,14 +1413,14 @@ interface StateConfig {
 }
 
 const STATE_CONFIG: Record<MarketState, StateConfig> = {
-  strong_bull:  { label: '强势上攻', color: '#D32F2F', textColor: '#fff',    desc: '连涨+放量+强阳+看涨形态' },
-  mild_bull:    { label: '温和上行', color: '#FF7043', textColor: '#fff',    desc: '涨多跌少，量能平稳' },
+  strong_bull:  { label: '强势上攻', color: RED, textColor: '#fff',    desc: '连涨+放量+强阳+看涨形态' },
+  mild_bull:    { label: '温和上行', color: RED, textColor: '#fff',    desc: '涨多跌少，量能平稳' },
   coil:         { label: '震荡蓄势', color: '#FFC107', textColor: '#333',    desc: '多空均衡，量能收缩' },
   sideways:     { label: '横盘整理', color: '#BDBDBD', textColor: '#555',    desc: '偏离值接近0，缩量' },
-  mild_bear:    { label: '温和下行', color: '#66BB6A', textColor: '#fff',    desc: '跌多涨少，量能平稳' },
-  strong_bear:  { label: '弱势下探', color: '#00B050', textColor: '#fff',    desc: '连跌+放量+强阴+看跌形态' },
+  mild_bear:    { label: '温和下行', color: GREEN_A, textColor: '#fff',    desc: '跌多涨少，量能平稳' },
+  strong_bear:  { label: '弱势下探', color: GREEN_A, textColor: '#fff',    desc: '连跌+放量+强阴+看跌形态' },
   surge_vol:    { label: '异常放量', color: '#7B1FA2', textColor: '#fff',    desc: '量比极高，方向待确认' },
-  rebound:      { label: '超跌反弹', color: '#1565C0', textColor: '#fff',    desc: '前期强阴后出现看涨信号' },
+  rebound:      { label: '超跌反弹', color: RED, textColor: '#fff',    desc: '前期强阴后出现看涨信号' },
 };
 
 function classifyDayState(
@@ -1930,7 +1931,7 @@ function ZhuPanLu({
                         <td className="px-4 py-2 text-right">
                           <span
                             className="px-1.5 py-0.5 rounded text-xs font-bold"
-                            style={{ background: isUp ? "#FFF0F0" : isDown ? "#F0FFF4" : "#F5F5F5", color: rowColor }}
+                            style={{ background: isUp ? AI_STOCK_THEME.riseBackground : isDown ? AI_STOCK_THEME.fallBackground : "#F5F5F5", color: rowColor }}
                           >
                             {isUp ? "涨" : isDown ? "跌" : "平"}
                           </span>
@@ -2107,7 +2108,7 @@ export default function StockDetail() {
                         <div
                           className="inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium"
                           style={{
-                            background: isUp ? 'rgba(211,47,47,0.08)' : isDown ? 'rgba(0,176,80,0.08)' : 'rgba(0,0,0,0.05)',
+                            background: isUp ? 'rgba(183,28,28,0.08)' : isDown ? 'rgba(27,94,32,0.08)' : 'rgba(0,0,0,0.05)',
                             color: priceColor
                           }}
                         >

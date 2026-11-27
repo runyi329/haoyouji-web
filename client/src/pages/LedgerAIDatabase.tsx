@@ -9,13 +9,14 @@ import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 import AIStockNavigation from "@/components/AIStockNavigation";
+import AiFearGreedSection from "@/components/AiFearGreedSection";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
 } from "recharts";
 
 // ─── 界面主题与行情语义分离 ──────────────────────────────────
-const RED = "#D32F2F";
+const RED = AI_STOCK_THEME.rise;
 const BG = AI_STOCK_THEME.background;
 const CARD = AI_STOCK_THEME.card;
 const SURFACE = AI_STOCK_THEME.surface;
@@ -26,12 +27,12 @@ const DIM = AI_STOCK_THEME.dim;
 const ACCENT = AI_STOCK_THEME.accent;
 const ACCENT_SOFT = AI_STOCK_THEME.accentSoft;
 const ACCENT_GRAD = AI_STOCK_THEME.accentGradient;
-const GREEN = "#4CAF50";
-const CHART_UP = "#D32F2F";
-const CHART_DOWN = "#4CAF50";
+const GREEN = AI_STOCK_THEME.fall;
+const CHART_UP = RED;
+const CHART_DOWN = GREEN;
 // 渐变色（立体感用）
-const GRAD_UP = "linear-gradient(135deg, #E53935 0%, #B71C1C 100%)";
-const GRAD_DOWN = "linear-gradient(135deg, #43A047 0%, #1B5E20 100%)";
+const GRAD_UP = AI_STOCK_THEME.riseGradient;
+const GRAD_DOWN = AI_STOCK_THEME.fallGradient;
 const GRAD_NEUTRAL = "linear-gradient(135deg, #97A8B8 0%, #61758A 100%)";
 // 卡片阴影
 const CARD_SHADOW = AI_STOCK_THEME.shadow;
@@ -230,8 +231,7 @@ function AnimatedSurvivalBar({
 // // 静态备用数据已删除，全部改为从后端 ts_daily 实时计算;
 
 // ─── 年份横向柱状图（自定义CSS动效） ──────────────────────────────────────
-const STOCK_GREEN = "#00B050"; // A股标准股票绿
-const STOCK_GREEN_GRAD = "linear-gradient(90deg, #00B050 0%, #00C853 100%)";
+const STOCK_GREEN_GRAD = GRAD_DOWN;
 
 function EraBarChart({
   data,
@@ -323,7 +323,7 @@ function EraBarChart({
                   background: STOCK_GREEN_GRAD,
                   borderRadius: '2px 3px 3px 2px',
                   transition: transitioning ? 'none' : undefined,
-                  boxShadow: '0 1px 3px rgba(0,176,80,0.25)',
+                  boxShadow: '0 1px 3px rgba(27,94,32,0.25)',
                 }}
               />
               {/* 百分比数字：内置在柱子内部靠右端，白色 */}
@@ -438,7 +438,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   return (
     <div>
       <SectionTitle
-        title="全生命周期"
+        title="A 股全生命周期"
         sub="上市首日至今现价相对首日开盘价的盈亏分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
@@ -721,12 +721,12 @@ function BunchingEffectSection() {
           ) : (
             <>
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: AI_STOCK_THEME.riseBackground, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>涨停聚集倍数</p>
                   <p className="text-lg font-bold" style={{ color: RED }}>{upRatio}x</p>
                   <p className="text-[10px]" style={{ color: DIM }}>+10% vs +9%</p>
                 </div>
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#F5FFF5", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: AI_STOCK_THEME.fallBackground, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>跌停聚集倍数</p>
                   <p className="text-lg font-bold" style={{ color: GREEN }}>{downRatio}x</p>
                   <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9%</p>
@@ -765,7 +765,7 @@ function BunchingEffectSection() {
                       const isAt20 = entry.bucket === 20;
                       const isAtMinus20 = entry.bucket === -20;
                       const isHighlight = isAt10 || isAtMinus10 || isAt20 || isAtMinus20;
-                      const color = isAt10 || isAt20 ? RED : isAtMinus10 || isAtMinus20 ? GREEN : entry.bucket > 0 ? "#EF9A9A" : entry.bucket < 0 ? "#A5D6A7" : "#BDBDBD";
+                      const color = isAt10 || isAt20 ? RED : isAtMinus10 || isAtMinus20 ? GREEN : entry.bucket > 0 ? AI_STOCK_THEME.riseSoft : entry.bucket < 0 ? AI_STOCK_THEME.fallSoft : "#BDBDBD";
                       return <Cell key={i} fill={color} opacity={isHighlight ? 1 : 0.75} />;
                     })}
                   </Bar>
@@ -782,11 +782,11 @@ function BunchingEffectSection() {
               </ResponsiveContainer>
               <div className="flex flex-wrap items-center gap-3 mt-2 mb-1 px-1">
                 <div className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#EF9A9A" }} />
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: AI_STOCK_THEME.riseSoft }} />
                   <span className="text-[10px]" style={{ color: DIM }}>上涨</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#A5D6A7" }} />
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: AI_STOCK_THEME.fallSoft }} />
                   <span className="text-[10px]" style={{ color: DIM }}>下跌</span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -892,7 +892,7 @@ function UpRateDistSection() {
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>样本股票数</p>
                   <p className="text-lg font-bold" style={{ color: ACCENT }}>{fmt(data.totalCount)}</p>
                 </div>
-                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: AI_STOCK_THEME.riseBackground, border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>平均涨天率</p>
                   <p className="text-lg font-bold" style={{ color: RED }}>{data.mean}%</p>
                 </div>
@@ -932,8 +932,8 @@ function UpRateDistSection() {
                       // 均值所在桶加深色加粗边框标注
                       const isMean = data.mean >= entry.min && data.mean < entry.max;
                       const isUp = entry.min >= 50;
-                      const baseColor = isUp ? "#EF9A9A" : "#A5D6A7";
-                      const deepColor = isUp ? RED : "#388E3C";
+                      const baseColor = isUp ? AI_STOCK_THEME.riseSoft : AI_STOCK_THEME.fallSoft;
+                      const deepColor = isUp ? RED : GREEN;
                       return (
                         <Cell
                           key={i}
@@ -972,11 +972,11 @@ function UpRateDistSection() {
               {/* 颜色图例 */}
               <div className="flex items-center gap-3 mt-2 mb-1 px-1">
                 <div className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#A5D6A7" }} />
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: AI_STOCK_THEME.fallSoft }} />
                   <span className="text-[10px]" style={{ color: DIM }}>涨天率 &lt; 50%（偏空）</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#EF9A9A" }} />
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: AI_STOCK_THEME.riseSoft }} />
                   <span className="text-[10px]" style={{ color: DIM }}>涨天率 ≥ 50%（偏多）</span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1025,7 +1025,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<MarketNoDelisted>("all");
   const [subTab, setSubTab] = useState<"pe" | "pb" | "mv">("pe");
   const { data, isLoading } = trpc.aiDashboardValuation.useQuery({ market });
-  const COLORS = [RED, "#F57C00", "#1976D2", "#388E3C", "#7B1FA2", "#00838F"];
+  const COLORS = [RED, "#F57C00", "#1976D2", GREEN, "#7B1FA2", "#00838F"];
 
   const chartData = data ? (subTab === "pe" ? data.peDistribution : subTab === "pb" ? data.pbDistribution : data.mvDistribution) : [];
 
@@ -1198,14 +1198,14 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                   <div className="flex rounded-full overflow-hidden h-4 mb-3">
                     <div
                       className="flex items-center justify-center text-[11px] font-bold text-white"
-                      style={{ width: `${pct(up, total)}%`, background: CHART_UP }}
+                      style={{ width: `${pct(up, total)}%`, background: GRAD_UP }}
                     >
                       {parseFloat(pct(up, total)) > 10 ? `${pct(up, total)}%` : ""}
                     </div>
                     <div style={{ width: `${pct(flat, total)}%`, background: "#E0E0E0" }} />
                     <div
                       className="flex items-center justify-center text-[11px] font-bold text-white"
-                      style={{ width: `${pct(down, total)}%`, background: CHART_DOWN }}
+                      style={{ width: `${pct(down, total)}%`, background: GRAD_DOWN }}
                     >
                       {parseFloat(pct(down, total)) > 10 ? `${pct(down, total)}%` : ""}
                     </div>
@@ -1223,21 +1223,21 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-3 pt-3 border-t" style={{ borderColor: BORDER }}>
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(200,0,0,0.05)' }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.riseBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>涨停</span>
                       <span className="text-sm font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</span>
                     </div>
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(200,0,0,0.05)' }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.riseBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>最大涨幅</span>
                       <span className="text-sm font-bold" style={{ color: CHART_UP }}>
                         {t?.max_rise != null ? `+${Number(t.max_rise).toFixed(2)}%` : "—"}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,150,0,0.05)' }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.fallBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>跌停</span>
                       <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</span>
                     </div>
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,150,0,0.05)' }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.fallBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>最大跌幅</span>
                       <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>
                         {t?.max_fall != null ? `${Number(t.max_fall).toFixed(2)}%` : "—"}
@@ -1758,7 +1758,7 @@ function TradingCostSection() {
               </div>
               <div>
                 <p className="text-[10px]" style={{ color: MUTED }}>成交额</p>
-                <p className="text-[13px] font-bold" style={{ color: "#2E7D32" }}>{(data2026.turnover/10000).toFixed(1)}万亿</p>
+                <p className="text-[13px] font-bold" style={{ color: GREEN }}>{(data2026.turnover/10000).toFixed(1)}万亿</p>
               </div>
             </div>
           </div>
@@ -1801,7 +1801,7 @@ function TradingCostSection() {
                   value={d.stamp}
                   maxValue={Math.max(...allData.map(x => x.stamp))}
                   color={BULL_YEARS.has(d.year)
-                    ? `linear-gradient(90deg, ${RED} 0%, #FF6B6B 100%)`
+                    ? GRAD_UP
                     : "linear-gradient(90deg, #64B5F6 0%, #90CAF9 100%)"}
                   delay={i * 18}
                   animated={animated}
@@ -1830,7 +1830,7 @@ function TradingCostSection() {
                   label={d.year}
                   value={d.turnover}
                   maxValue={Math.max(...allData.map(x => x.turnover))}
-                  color="linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)"
+                  color={GRAD_DOWN}
                   delay={i * 18}
                   animated={animated}
                   rowData={d}
@@ -1925,7 +1925,7 @@ function TradingCostSection() {
                 {[
                   { color: RED,       label: "印花税‰" },
                   { color: "#1976D2", label: "佣金‰" },
-                  { color: "#43A047", label: "总税费‰" },
+                  { color: GREEN, label: "总税费‰" },
                 ].map(({ color, label }) => (
                   <span key={label} className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <span className="w-3 h-2 inline-block rounded-sm" style={{ background: color }} />{label}
@@ -1952,7 +1952,7 @@ function TradingCostSection() {
                     formatter={(value: number, name: string) => [`${value}‰`, name]}
                     labelFormatter={(label) => `${label}年`}
                   />
-                  <Line type="monotone" dataKey="totalRatio" name="总税费" stroke="#43A047" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="totalRatio" name="总税费" stroke={GREEN} strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
                   <Line type="monotone" dataKey="stampRatio" name="印花税" stroke={RED} strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
                   <Line type="monotone" dataKey="commRatio"  name="佣金"   stroke="#1976D2" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
                 </LineChart>
@@ -1996,11 +1996,13 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
       <div className="flex-1 overflow-y-auto pb-8">
         <SurvivalSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <RisefallSection counts={counts} />
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <div className="mx-4"><AiFearGreedSection /></div>
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <BunchingEffectSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <UpRateDistSection />
-        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <RisefallSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <ValuationSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />

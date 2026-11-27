@@ -12,6 +12,13 @@ export const AI_STOCK_THEME = {
   accentGradient: "linear-gradient(135deg, #12556F 0%, #087987 100%)",
   headerGradient: "radial-gradient(ellipse at 92% 8%, rgba(34,211,238,0.14), transparent 58%), linear-gradient(118deg, #102439 0%, #163B54 100%)",
   shadow: "0 3px 14px rgba(21,53,77,0.06), 0 1px 3px rgba(21,53,77,0.04)",
-  rise: "#D32F2F",
-  fall: "#15803D",
+  // 涨跌统一沿用A股全生命周期色条；实色取渐变深色端，浅色保留图表分组层次。
+  rise: "#B71C1C",
+  fall: "#1B5E20",
+  riseGradient: "linear-gradient(135deg, #E53935 0%, #B71C1C 100%)",
+  fallGradient: "linear-gradient(135deg, #43A047 0%, #1B5E20 100%)",
+  riseSoft: "#CB8E8E",
+  fallSoft: "#8FA991",
+  riseBackground: "rgba(183,28,28,0.05)",
+  fallBackground: "rgba(27,94,32,0.05)",
 } as const;
