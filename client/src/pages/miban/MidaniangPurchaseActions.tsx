@@ -56,28 +56,20 @@ export default function MidaniangPurchaseActions({ item, usdtCnyRate }: { item: 
           ))}
         </div>
         <p className="mt-4 text-[12px] font-medium text-[#343a31]">{annual ? "每月发几份" : "购买份数"}</p>
-        <div className="mt-2 grid grid-cols-3 gap-2" role="group" aria-label={annual ? "每月发货份数" : "单月购买份数"}>
-          {[1, 2, 3].filter(count => count <= sku.maxPurchaseQty).map(count => (
-            <button
-              key={count}
-              type="button"
-              aria-pressed={quantity === count}
-              onClick={() => setQuantity(count)}
-              className={`min-h-11 rounded-lg border px-1 text-[12px] font-medium ${quantity === count ? "border-[#8d292c] bg-[#8d292c]/5 text-[#8d292c]" : "border-[#e5e0d5] text-[#676b60]"}`}
-            >
-              {annual ? `每月${count}份` : `${count}份`}
+        <div className="mt-2 flex items-center justify-between gap-3" data-testid="midaniang-quantity-row">
+          <div className="min-w-0 flex-1" data-testid="midaniang-box-specification">
+            <p className="text-[13px] font-medium leading-5 text-[#343a31]">1份 = 1盒</p>
+            {sku.netContentText.split(" · ").map((line, index) => (
+              <p key={line} className="mt-0.5 break-words text-[11px] leading-[18px] text-[#676b60]">{index === 0 ? line : `净含量${line}`}</p>
+            ))}
+          </div>
+          <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-[#8d292c]/25 bg-[#f7f4ee]" role="group" aria-label={annual ? "每月发货份数" : "单月购买份数"} data-testid="midaniang-quantity-stepper">
+            <button type="button" aria-label="减少份数" disabled={quantity <= 1} onClick={() => setQuantity(count => Math.max(1, count - 1))} className="flex h-14 w-12 items-center justify-center text-[#8d292c] transition-colors hover:bg-[#8d292c]/5 active:bg-[#8d292c]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#8d292c] disabled:text-[#ccc]">
+              <Minus className="h-[22px] w-[22px]" aria-hidden="true" />
             </button>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[#676b60]">
-          <span>1份 = 1盒 · {annual ? "每月份数" : "本次份数"}可调整</span>
-          <div className="flex shrink-0 items-center rounded-lg border border-[#e5e0d5]">
-            <button type="button" aria-label="减少份数" disabled={quantity <= 1} onClick={() => setQuantity(count => Math.max(1, count - 1))} className="flex h-9 w-9 items-center justify-center text-[#8d292c] disabled:text-[#ccc]">
-              <Minus className="h-4 w-4" />
-            </button>
-            <span className="min-w-7 text-center text-[13px] font-medium tabular-nums text-[#343a31]">{quantity}</span>
-            <button type="button" aria-label="增加份数" disabled={quantity >= sku.maxPurchaseQty} onClick={() => setQuantity(count => Math.min(sku.maxPurchaseQty, count + 1))} className="flex h-9 w-9 items-center justify-center text-[#8d292c] disabled:text-[#ccc]">
-              <Plus className="h-4 w-4" />
+            <span className="min-w-11 text-center text-[24px] font-semibold tabular-nums text-[#343a31]" aria-live="polite" aria-atomic="true" data-testid="midaniang-quantity-value">{quantity}</span>
+            <button type="button" aria-label="增加份数" disabled={quantity >= sku.maxPurchaseQty} onClick={() => setQuantity(count => Math.min(sku.maxPurchaseQty, count + 1))} className="flex h-14 w-12 items-center justify-center text-[#8d292c] transition-colors hover:bg-[#8d292c]/5 active:bg-[#8d292c]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#8d292c] disabled:text-[#ccc]">
+              <Plus className="h-[22px] w-[22px]" aria-hidden="true" />
             </button>
           </div>
         </div>
