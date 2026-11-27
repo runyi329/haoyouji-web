@@ -74,6 +74,9 @@ describe('AI dashboard actual frontend: ordering, daily limits and honest fear/g
     const html = render({ data: data(score) });
     expect(html).toContain(`贪婪恐惧指数 ${score}`); expect(html).toContain('data-testid="fear-greed-pointer"');
     expect(html).toContain('2026-11-26'); expect(html).toContain('贪婪恐惧指数');
+    expect(html).toContain('AI 股伴 · A 股市场情绪'); expect(html).not.toMatch(/脉动|自研/);
+    expect(html).toContain('aria-label="下载贪婪恐惧指数图片"');
+    expect(html).toContain('data-stock-export-section="true"');
   });
   it.each(['insufficient', 'unavailable'] as const)('does not disguise %s as a stale successful score or zero', status => {
     const html = render({ data: { ...data(27), status } });

@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { AI_STOCK_THEME } from "@/lib/ai-stock-theme";
 import AIStockNavigation from "@/components/AIStockNavigation";
 import AiFearGreedSection from "@/components/AiFearGreedSection";
+import { StockSectionImageDownload, StockSectionImageExportProvider } from "@/components/StockSectionImageDownload";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
@@ -39,6 +40,7 @@ const CARD_SHADOW = AI_STOCK_THEME.shadow;
 
 // ─── 市场 Tab ──────────────────────────────────────────────
 type Market = "all" | "SH" | "SZ" | "GEM" | "STAR" | "DELISTED";
+type MarketNoDelisted = Exclude<Market, "DELISTED">;
 const MARKET_KEYS: { key: Market; label: string }[] = [
   { key: "all", label: "全市场" },
   { key: "SH", label: "沪市" },
@@ -75,7 +77,7 @@ function EmptyState({ label }: { label: string }) {
 }
 
 /// ─── 分区标题（左侧青蓝竖条装饰） ──────────────────
-function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra?: React.ReactNode }) {
+function SectionTitle({ title, sub, extra, marketLabel }: { title: string; sub: string; extra?: React.ReactNode; marketLabel?: string }) {
   return (
     <div className="px-4 pt-5 pb-2 flex items-start gap-2.5">
       <div className="w-1 rounded-full mt-1 flex-shrink-0" style={{ height: '32px', background: ACCENT_GRAD }} />
@@ -83,7 +85,10 @@ function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra
         {/* 标题行：标题左对齐 + 截止时间右对齐，同一行 */}
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-base font-bold flex-shrink-0" style={{ color: TEXT }}>{title}</p>
-          {extra && <div className="flex-shrink-0">{extra}</div>}
+          <div className="flex shrink-0 items-start gap-1.5">
+            {extra && <div className="shrink-0">{extra}</div>}
+            <StockSectionImageDownload title={title} marketLabel={marketLabel} />
+          </div>
         </div>
         {/* 副标题行 */}
         <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
@@ -93,41 +98,23 @@ function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra
 }
 
 // ─── 市场 Tab 栏（带数量） ─────────────────────────────────
-function MarketTabs({
-  market,
-  onChange,
-  counts,
-}: {
-  market: Market;
-  onChange: (m: Market) => void;
-  counts: Record<Market, number>;
-}) {
+function MarketTabs({ market, onChange, counts }: { market: Market; onChange: (market: Market) => void; counts: Record<Market, number> }) {
   return (
-    <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
-      {MARKET_KEYS.map(m => {
-        const cnt = counts[m.key];
-        const active = market === m.key;
-        return (
-          <button
-            key={m.key}
-            onClick={() => onChange(m.key)}
-            className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[52px]"
-            style={{
-              background: active ? ACCENT_GRAD : ACCENT_SOFT,
-              color: active ? "#fff" : ACCENT,
-              boxShadow: active ? "0 3px 10px rgba(8,121,135,0.20)" : `inset 0 0 0 1px ${BORDER}`,
-              transform: active ? "translateY(-1px)" : "none",
-            }}
-          >
-            <span className="text-[13px] font-semibold leading-tight">{m.label}</span>
-            {cnt > 0 && (
-              <span className="text-[11px] leading-tight mt-0.5" style={{ opacity: active ? 0.9 : 0.7 }}>{cnt.toLocaleString()}</span>
-            )}
-          </button>
-        );
+    <div data-ai-market-filter aria-label="市场筛选" role="group" className="mx-4 grid grid-cols-6 overflow-hidden rounded-xl border" style={{ background: CARD, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      {MARKET_KEYS.map((item, index) => {
+        const active = market === item.key;
+        return <button key={item.key} type="button" aria-pressed={active} onClick={() => onChange(item.key)} className="relative flex min-w-0 flex-col items-center justify-center py-2.5 transition-colors" style={{ background: active ? ACCENT_SOFT : 'transparent', borderRight: index < MARKET_KEYS.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
+          <span className="whitespace-nowrap text-[12px] font-semibold leading-tight" style={{ color: active ? ACCENT : MUTED }}>{item.label}</span>
+          {counts[item.key] > 0 && <span className="mt-0.5 text-[10px] leading-tight tabular-nums" style={{ color: active ? ACCENT : DIM }}>{fmt(counts[item.key])}</span>}
+          {active && <span className="absolute inset-x-0 bottom-0 h-0.5" style={{ background: ACCENT }} />}
+        </button>;
       })}
     </div>
   );
+}
+
+function UnsupportedMarketSection({ title, sub }: { title: string; sub: string }) {
+  return <div><SectionTitle title={title} sub={sub} /><div className="mx-4 rounded-xl border" style={{ background: CARD, borderColor: BORDER }}><EmptyState label="退市股票暂无该项统计数据" /></div></div>;
 }
 
 // ─── 动画色条卡片组件 ────────────────────────────────────────────
@@ -378,8 +365,8 @@ function useCountUp(target: number, duration: number, active: boolean) {
   return count;
 }
 
-function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
-  const [market, setMarket] = useState<Market>("all");
+function SurvivalSection({ market }: { market: MarketNoDelisted }) {
+
   const [animated, setAnimated] = useState(false);
   const [transitioning, setTransitioning] = useState(false); // true时禁用transition，让宽度瞬间归零
 
@@ -425,16 +412,6 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const pctAbove = useCountUp(Math.round(abovePct * 10), 850, animated) / 10;
   const pctBelow = useCountUp(Math.round(belowPct * 10), 850, animated) / 10;
 
-  // 直接使用后端返回的实时股票数量
-  const displayCounts: Record<Market, number> = {
-    all: counts.all || 0,
-    SH: counts.SH || 0,
-    SZ: counts.SZ || 0,
-    GEM: counts.GEM || 0,
-    STAR: counts.STAR || 0,
-    DELISTED: (counts as any).DELISTED || 0,
-  };
-
   return (
     <div>
       <SectionTitle
@@ -447,48 +424,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         }
       />
 
-      {/* 合并卡片：Tab + 色条 + 分隔线 + 年代图 */}
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
-
-        {/* 顶部分段选择器：一整条，5等分，方正严谨 */}
-        <div
-          className="flex border-b"
-          style={{ borderColor: BORDER }}
-        >
-          {MARKET_KEYS.map((m, idx) => {
-            const cnt = displayCounts[m.key];
-            const active = market === m.key;
-            return (
-              <button
-                key={m.key}
-                onClick={() => setMarket(m.key)}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
-                style={{
-                  background: active ? ACCENT_SOFT : "transparent",
-                  borderRight: idx < MARKET_KEYS.length - 1 ? `1px solid ${BORDER}` : "none",
-                }}
-              >
-                {/* 选中指示线 */}
-                {active && (
-                  <span
-                    className="absolute bottom-0 left-0 right-0"
-                    style={{ height: '2px', background: ACCENT }}
-                  />
-                )}
-                <span
-                  className="text-[13px] font-semibold leading-tight"
-                  style={{ color: active ? ACCENT : MUTED }}
-                >{m.label}</span>
-                {cnt > 0 && (
-                  <span
-                    className="text-[11px] leading-tight mt-0.5"
-                    style={{ color: active ? ACCENT : DIM }}
-                  >{cnt.toLocaleString()}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
 
         {/* 双向展开色条 */}
         <div
@@ -664,17 +600,9 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 }
 
 // ─── 涨停聚集效应 ─────────────────────────────────────────────
-function BunchingEffectSection() {
-  const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
-  const { data, isLoading, error } = trpc.aiDashboardBunchingEffect.useQuery({ market });
+function BunchingEffectSection({ market }: { market: MarketNoDelisted }) {
 
-  const MARKET_TABS = [
-    { key: "all" as const, label: "全市场" },
-    { key: "SH" as const, label: "沪市" },
-    { key: "SZ" as const, label: "深市" },
-    { key: "GEM" as const, label: "创业板" },
-    { key: "STAR" as const, label: "科创板" },
-  ];
+  const { data, isLoading, error } = trpc.aiDashboardBunchingEffect.useQuery({ market });
 
   const upRatio = data?.upBunchRatio ?? 0;
   const downRatio = data?.downBunchRatio ?? 0;
@@ -692,25 +620,7 @@ function BunchingEffectSection() {
         }
       />
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
-        <div className="flex border-b" style={{ borderColor: BORDER }}>
-          {MARKET_TABS.map((m, idx) => {
-            const active = market === m.key;
-            return (
-              <button
-                key={m.key}
-                onClick={() => setMarket(m.key)}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
-                style={{
-                  background: active ? ACCENT_SOFT : "transparent",
-                  borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
-                }}
-              >
-                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />}
-                <span className="text-[13px] font-semibold" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
-              </button>
-            );
-          })}
-        </div>
+
         <div className="p-3">
           {isLoading ? (
             <><Skeleton /><Skeleton /></>
@@ -821,8 +731,8 @@ function BunchingEffectSection() {
 }
 
 // ─── 涨天率正态分布 ──────────────────────────────────────────
-function UpRateDistSection() {
-  const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
+function UpRateDistSection({ market }: { market: MarketNoDelisted }) {
+
   const { data, isLoading, error } = trpc.aiDashboardUpRateDist.useQuery({ market });
   // 调试日志
   if (error) console.error('[UpRateDistSection] 请求失败:', market, error.message);
@@ -838,17 +748,9 @@ function UpRateDistSection() {
     return { ...b, normalY };
   });
 
-  const MARKET_TABS = [
-    { key: "all" as const, label: "全市场" },
-    { key: "SH" as const, label: "沪市" },
-    { key: "SZ" as const, label: "深市" },
-    { key: "GEM" as const, label: "创业板" },
-    { key: "STAR" as const, label: "科创板" },
-  ];
-
   return (
     <div>
-      <SectionTitle title="涨天率分布" sub="全市场在市股票历史涨天率正态分布"
+      <SectionTitle title="涨天率分布" sub={`${MARKET_KEYS.find(item => item.key === market)!.label}在市股票历史涨天率正态分布`}
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
             {isLoading ? '' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
@@ -856,26 +758,7 @@ function UpRateDistSection() {
         }
       />
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
-        {/* Tab */}
-        <div className="flex border-b" style={{ borderColor: BORDER }}>
-          {MARKET_TABS.map((m, idx) => {
-            const active = market === m.key;
-            return (
-              <button
-                key={m.key}
-                onClick={() => setMarket(m.key)}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
-                style={{
-                  background: active ? ACCENT_SOFT : "transparent",
-                  borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
-                }}
-              >
-                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />}
-                <span className="text-[13px] font-semibold" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
-              </button>
-            );
-          })}
-        </div>
+
         {/* 内容 */}
         <div className="p-3">
           {isLoading ? (
@@ -988,10 +871,10 @@ function UpRateDistSection() {
               <div className="mt-1 px-2 py-2 rounded-lg" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
                   {data.mean > 50
-                    ? `全市场平均涨天率 ${data.mean}%，高于50%基准，说明A股整体偏多头市场结构。`
+                    ? `${MARKET_KEYS.find(item => item.key === market)!.label}平均涨天率 ${data.mean}%，高于50%基准，说明该市场偏多头市场结构。`
                     : data.mean < 50
-                    ? `全市场平均涨天率 ${data.mean}%，低于50%基准，说明A股整体偏空头市场结构。`
-                    : `全市场平均涨天率接近50%，多空力量基本均衡。`
+                    ? `${MARKET_KEYS.find(item => item.key === market)!.label}平均涨天率 ${data.mean}%，低于50%基准，说明该市场偏空头市场结构。`
+                    : `${MARKET_KEYS.find(item => item.key === market)!.label}平均涨天率接近50%，多空力量基本均衡。`
                   }
                   {` 标准差 ${data.stdDev}%，分布${data.stdDev < 5 ? '集中' : data.stdDev < 8 ? '适中' : '分散'}，个股涨天率差异${data.stdDev < 5 ? '较小' : data.stdDev < 8 ? '适中' : '较大'}。`}
                 </p>
@@ -1010,19 +893,9 @@ function UpRateDistSection() {
   );
 }
 
-// 估值分布和涨跌统计专用 Tab（不含退市）
-type MarketNoDelisted = "all" | "SH" | "SZ" | "GEM" | "STAR";
-const MARKET_KEYS_NO_DELISTED: { key: MarketNoDelisted; label: string }[] = [
-  { key: "all", label: "全市场" },
-  { key: "SH", label: "沪市" },
-  { key: "SZ", label: "深市" },
-  { key: "GEM", label: "创业板" },
-  { key: "STAR", label: "科创板" },
-];
-
 // ─── 估値分布 ──────────────────────────────────────────────
-function ValuationSection({ counts }: { counts: Record<Market, number> }) {
-  const [market, setMarket] = useState<MarketNoDelisted>("all");
+function ValuationSection({ market }: { market: MarketNoDelisted }) {
+
   const [subTab, setSubTab] = useState<"pe" | "pb" | "mv">("pe");
   const { data, isLoading } = trpc.aiDashboardValuation.useQuery({ market });
   const COLORS = [RED, "#F57C00", "#1976D2", GREEN, "#7B1FA2", "#00838F"];
@@ -1038,34 +911,9 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
           </p>
         }
       />
-      {/* 合并卡片：Tab + 内容 */}
+
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
-        {/* 顶部内嵌 Tab */}
-        <div className="flex border-b" style={{ borderColor: BORDER }}>
-          {MARKET_KEYS_NO_DELISTED.map((m, idx) => {
-            const cnt = counts[m.key];
-            const active = market === m.key;
-            return (
-              <button
-                key={m.key}
-                onClick={() => setMarket(m.key)}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
-                style={{
-                  background: active ? ACCENT_SOFT : "transparent",
-                  borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
-                }}
-              >
-                {active && (
-                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />
-                )}
-                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
-                {cnt > 0 && (
-                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? ACCENT : DIM }}>{cnt.toLocaleString()}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+
         {/* 内容区 */}
         <div className="p-3 space-y-3">
         {isLoading ? (
@@ -1131,8 +979,8 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
 }
 
 // ─── 涨跌统计 ──────────────────────────────────────────────
-function RisefallSection({ counts }: { counts: Record<Market, number> }) {
-  const [market, setMarket] = useState<MarketNoDelisted>("all");
+function RisefallSection({ market }: { market: MarketNoDelisted }) {
+
   const [periodIdx, setPeriodIdx] = useState(0);
   const { data, isLoading } = trpc.aiDashboardRisefall.useQuery({ market });
 
@@ -1154,34 +1002,9 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
           </p>
         }
       />
-      {/* 合并卡片：Tab + 内容 */}
+
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
-        {/* 顶部内嵌 Tab */}
-        <div className="flex border-b" style={{ borderColor: BORDER }}>
-          {MARKET_KEYS_NO_DELISTED.map((m, idx) => {
-            const cnt = counts[m.key];
-            const active = market === m.key;
-            return (
-              <button
-                key={m.key}
-                onClick={() => setMarket(m.key)}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
-                style={{
-                  background: active ? ACCENT_SOFT : "transparent",
-                  borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
-                }}
-              >
-                {active && (
-                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: ACCENT }} />
-                )}
-                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? ACCENT : MUTED }}>{m.label}</span>
-                {cnt > 0 && (
-                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? ACCENT : DIM }}>{cnt.toLocaleString()}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+
         {/* 内容区 */}
         <div className="p-3 space-y-3">
         {isLoading ? (
@@ -1313,7 +1136,7 @@ function MacroSection() {
 
   return (
     <div>
-      <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向"
+      <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向" marketLabel="全市场"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
             {isLoading ? '' : latestNorth?.trade_date ? `数据截至 ${latestNorth.trade_date}` : ''}
@@ -1701,6 +1524,7 @@ function TradingCostSection() {
     <div>
       <SectionTitle
         title="交易成本"
+        marketLabel="全市场"
         sub="印花税 / 券商佣金 / 总税费 · 1990-2026年"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
@@ -1970,6 +1794,8 @@ function TradingCostSection() {
 export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boolean }) {
   const params = useParams();
   const [, setLocation] = useLocation();
+  const [market, setMarket] = useState<Market>("all");
+  const marketLabel = MARKET_KEYS.find(item => item.key === market)!.label;
   const ledgerId = params?.id ? parseInt(params.id) : 0;
   // 各板块数量（全局共享，只请求一次）
   const { data: countData } = trpc.aiDashboardMarketCount.useQuery();
@@ -1983,6 +1809,7 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
   };
 
   return (
+    <StockSectionImageExportProvider stockName="AI 股伴" stockCode="" marketOverview marketLabel={marketLabel}>
     <div className="h-screen flex flex-col" style={{ background: BG }}>
       <AIStockNavigation
         active="overview"
@@ -1992,25 +1819,31 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
         onRefresh={() => window.location.reload()}
       />
 
+      <div className="shrink-0 pb-2 pt-3">
+        <MarketTabs market={market} onChange={setMarket} counts={counts} />
+        <p className="px-4 pt-2 text-[10px] leading-relaxed" style={{ color: DIM }}>贪婪恐惧指数、交易成本和宏观数据为全市场指标</p>
+      </div>
+
       {/* 全部内容单页展开，上下滚动 */}
       <div className="flex-1 overflow-y-auto pb-8">
-        <SurvivalSection counts={counts} />
+        <div data-stock-export-section>{market === "DELISTED" ? <UnsupportedMarketSection title="A 股全生命周期" sub="上市首日至今现价相对首日开盘价的盈亏分布" /> : <SurvivalSection market={market} />}</div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <RisefallSection counts={counts} />
+        <div data-stock-export-section>{market === "DELISTED" ? <UnsupportedMarketSection title="涨跌统计" sub="今日及近期涨跌分布" /> : <RisefallSection market={market} />}</div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <div className="mx-4"><AiFearGreedSection /></div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <BunchingEffectSection />
+        <div data-stock-export-section>{market === "DELISTED" ? <UnsupportedMarketSection title="涨停聚集效应" sub="全历史涨幅分布 · 涨跌停制度截断效应分析" /> : <BunchingEffectSection market={market} />}</div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <UpRateDistSection />
+        <div data-stock-export-section>{market === "DELISTED" ? <UnsupportedMarketSection title="涨天率分布" sub="历史涨天率正态分布" /> : <UpRateDistSection market={market} />}</div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <ValuationSection counts={counts} />
+        <div data-stock-export-section>{market === "DELISTED" ? <UnsupportedMarketSection title="估值分布" sub="PE / PB / 市值结构" /> : <ValuationSection market={market} />}</div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <TradingCostSection />
+        <div data-stock-export-section><TradingCostSection /></div>
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <MacroSection />
+        <div data-stock-export-section><MacroSection /></div>
       </div>
     </div>
+    </StockSectionImageExportProvider>
   );
 }
 

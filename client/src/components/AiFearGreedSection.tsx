@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { trpc } from "@/lib/trpc";
 import { AI_STOCK_THEME as theme } from "@/lib/ai-stock-theme";
 import { AI_FEAR_GREED_BAND_LABELS, aiFearGreedBand, type AiFearGreedResult } from "../../../shared/ai-fear-greed";
+import { StockSectionImageDownload } from "@/components/StockSectionImageDownload";
 
 type Period = "1m" | "3m" | "1y" | "all";
 export type AiFearGreedSectionViewProps = {
@@ -101,7 +102,7 @@ export function AiFearGreedSectionView({ data, isLoading = false, hasError = fal
     : AI_FEAR_GREED_BAND_LABELS[band!];
 
   return (
-    <section id="fear-greed-index" className="min-w-0 scroll-mt-20 overflow-hidden rounded-2xl border" style={{ background: theme.card, borderColor: theme.border, boxShadow: theme.shadow }} aria-label="贪婪恐惧指数" data-testid="ai-fear-greed-section" aria-busy={isLoading}>
+    <section id="fear-greed-index" data-stock-export-section className="min-w-0 scroll-mt-20 overflow-hidden rounded-2xl border" style={{ background: theme.card, borderColor: theme.border, boxShadow: theme.shadow }} aria-label="贪婪恐惧指数" data-testid="ai-fear-greed-section" aria-busy={isLoading}>
       <div className="flex items-start justify-between gap-2 px-4 pt-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -109,10 +110,13 @@ export function AiFearGreedSectionView({ data, isLoading = false, hasError = fal
             <h2 className="text-[15px] font-bold tracking-wide" style={{ color: theme.text }}>贪婪恐惧指数</h2>
             <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium" style={{ background: theme.accentSoft, color: theme.accent, borderColor: "#C2E4E8" }}>试算</span>
           </div>
-          <p className="mt-1 text-[11px]" style={{ color: theme.muted }}>脉动自研 · A 股市场情绪</p>
+          <p className="mt-1 text-[11px]" style={{ color: theme.muted }}>AI 股伴 · A 股市场情绪</p>
         </div>
-        <div className="shrink-0 pt-0.5 text-right text-[10px]" style={{ color: theme.dim }}>
-          <p>行情截止</p><p className="mt-1 tabular-nums">{dateText(data?.latestDate)}</p>
+        <div className="flex shrink-0 items-start gap-1.5">
+          <div className="pt-0.5 text-right text-[10px]" style={{ color: theme.dim }}>
+            <p>行情截止</p><p className="mt-1 tabular-nums">{dateText(data?.latestDate)}</p>
+          </div>
+          <StockSectionImageDownload title="贪婪恐惧指数" marketLabel="全市场" />
         </div>
       </div>
 

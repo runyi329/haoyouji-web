@@ -124,7 +124,11 @@ export function buildLegacyCryptoPublicationHistory(input: CryptoPublicationHist
       }
       return true;
     });
-    const ps = source.participations.filter(p => keptLots.has(p.lotId));
+    // A physical lot can predate publication while a member's first assignment is later.
+    // Immutable assignment registration proves absence even for a backdated business start.
+    // Unknown timestamps are retained for the fail-closed guards; publishedAt is inclusive.
+    const ps = source.participations.filter(p => keptLots.has(p.lotId)
+      && !(time(p.assignedAt) > published));
     const keptParticipationIds = new Set(ps.map(p => p.id));
     const unknownClosureIds = new Set<number>();
     const removedClosureIds = new Set<typeof source.closures[number]>();
