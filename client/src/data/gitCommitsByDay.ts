@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-11-26
+// 生成时间：2026-11-27
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -10053,5 +10053,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-11-26": [
     { date: "2026-11-25T16:34:39Z", type: "fix", cleanMessage: "bound downside reconstruction and restore member counted summaries" },
     { date: "2026-11-25T18:01:04Z", type: "fix", cleanMessage: "restore publication history for retroactive calendars" },
+    { date: "2026-11-26T01:11:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-11-26T02:40:39Z", type: "feat", cleanMessage: "enable owner-only centralized liquidation settings" },
+    { date: "2026-11-26T05:57:29Z", type: "feat", cleanMessage: "add CNY user liquidation controls and reconciled profits" },
+    { date: "2026-11-26T08:22:34Z", type: "feat", cleanMessage: "add monthly delivery annual rice plans and fit wallet balance" },
+    { date: "2026-11-26T10:18:51Z", type: "fix", cleanMessage: "soften product image transitions and clip rounded corners" },
+    { date: "2026-11-26T10:49:48Z", type: "feat", cleanMessage: "move rice encyclopedia entry from tabs to home footer" },
+    { date: "2026-11-26T11:10:48Z", type: "feat", cleanMessage: "add preset automatic downside trigger with precise quote audits" },
+    { date: "2026-11-26T12:45:32Z", type: "fix", cleanMessage: "prioritize configured ordinary principal and fallback to first balance" },
+  ],
+  "2026-11-27": [
+    { date: "2026-11-27T00:42:25Z", type: "fix", cleanMessage: "open Miban mall directly from category shortcut" },
+    { date: "2026-11-27T00:56:22Z", type: "style", cleanMessage: "use rounded-square Miban category icon" },
+    { date: "2026-11-27T01:05:04Z", type: "fix", cleanMessage: "pin Miban icon radius independently of theme" },
   ],
 };
