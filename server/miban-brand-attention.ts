@@ -1,4 +1,4 @@
-import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
+import { mibanLimitedAttentionSlugs, type MibanLimitedAttentionSlug } from "../shared/miban-limited-brand-config";
 
 /** A dedicated mysql2/promise connection; the caller owns its lifecycle. */
 export interface BrandAttentionConnection {
@@ -8,7 +8,7 @@ export interface BrandAttentionConnection {
   rollback(): Promise<void>;
 }
 
-export type BrandAttentionSlug = (typeof mibanLimitedBrands)[number]["slug"];
+export type BrandAttentionSlug = MibanLimitedAttentionSlug;
 export interface BrandAttention {
   brandSlug: BrandAttentionSlug;
   viewCount: number;
@@ -22,7 +22,7 @@ export interface RecordBrandAttentionResult extends BrandAttention {
   counted: boolean;
 }
 
-const brandSlugs = mibanLimitedBrands.map(brand => brand.slug);
+const brandSlugs = mibanLimitedAttentionSlugs;
 const brandWhitelist = new Set<string>(brandSlugs);
 // RFC UUID versions 1–8 and RFC variant; normalize case before deduplication.
 const eventUuidPattern =
@@ -97,7 +97,7 @@ export function assertBrandAttentionInput(
 
 /**
  * Return exactly the configured whitelisted brands, descending by cumulative clicks;
- * equal counts retain mibanLimitedBrands order. Missing rows in an existing
+ * equal counts retain mibanLimitedAttentionSlugs order. Missing rows in an existing
  * table genuinely mean zero; missing tables/errors propagate, never fake data.
  * This function neither creates tables nor writes rows.
  */

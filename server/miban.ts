@@ -59,7 +59,7 @@ import {
 import { PAYMENT_SCALE, paymentDecimalUnits, paymentUnitsText, splitMibanPaymentDeductions, type MibanPaymentDeduction } from "../shared/miban-wallet-payment";
 import { splitMibanPaymentDeductionsByTotals } from "../shared/miban-cart-checkout";
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
-import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
+import { mibanLimitedBrands, mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config";
 import { MIDANIANG_ANNUAL_MONTHS, getMidaniangAnnualShipDates } from "./midaniang-annual-plan";
 import { ensureBrandAttentionTables, readBrandAttention, recordBrandAttention } from "./miban-brand-attention";
 import { resolveSupplierOrderScope } from "../shared/miban-supplier";
@@ -4209,7 +4209,7 @@ export const mibanLimitedProductRouter = router({
   }),
   recordBrandAttention: publicProcedure
     .input(z.object({
-      brandSlug: z.string().refine(slug => mibanLimitedBrands.some(brand => brand.slug === slug && brand.status === "on_sale"), "品牌不存在"),
+      brandSlug: z.string().refine(slug => mibanLimitedAttentionSlugs.some(brandSlug => brandSlug === slug), "品牌不存在"),
       eventId: z.string().uuid(),
     }))
     .mutation(async ({ input }) => {

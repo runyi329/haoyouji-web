@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { type KeyboardEvent } from "react";
 import { mtrpc } from "./mibanTrpc";
 import { MibanImage } from "./MibanImage";
 import { WangkaBrandCard } from "./WangkaBrandCard";
@@ -10,7 +11,7 @@ import {
   MIDANIANG_THEME,
   TUOQUETANG_THEME,
   mibanLimitedBrands,
-  type MibanLimitedBrand,
+  type MibanLimitedAttentionSlug,
 } from "../../../../shared/miban-limited-brand-config";
 
 const BRAND_CARD_COS_BASE =
@@ -35,8 +36,10 @@ const MARYKAY_OFFICIAL_LOGO = "/miban-marykay/marykay-official-logo.png";
 const NUSKIN_BEAUTY_PRODUCTS_STAGE = "/miban-nuskin/nuskin-products-stage-v2-clear.webp";
 const NUSKIN_OFFICIAL_LOGO = "/miban-nuskin/nuskin-official-logo.png";
 
+const JIANGHAI_FRESH_SELECTION_STAGE = "/miban-jianghai/jianghai-fresh-selection-stage-v13.webp";
+
 const BRAND_CARD_FRAME_CLASS =
-  "relative min-h-[224px] overflow-hidden rounded-[22px] md:aspect-[16/9]";
+  "relative w-full min-w-0 min-h-[224px] overflow-hidden rounded-[22px] md:aspect-[16/9]";
 const BRAND_CARD_CONTENT_CLASS =
   "relative z-10 flex h-full min-h-[224px] max-w-[58%] flex-col justify-between px-4 py-4 min-[400px]:px-5";
 const BRAND_CARD_TITLE_CLASS = "whitespace-nowrap text-[clamp(18px,5.8vw,23px)] font-extrabold leading-tight";
@@ -48,14 +51,37 @@ const WINE_TASTING_PREVIEW = "https://haoyouji-images-1396946788.cos.ap-shanghai
 const MOUTAI_OFFICIAL_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guizhou/brand-card/v1/moutai-original-logo-6f22c1e6e462.webp";
 
 const BRAND_ORDER = mibanLimitedBrands.map(brand => brand.slug);
-type BrandSlug = MibanLimitedBrand["slug"];
+type BrandSlug = MibanLimitedAttentionSlug;
 type BrandAttention = { brandSlug: string; viewCount: number };
 
-function WineTastingPreviewCard() {
+type PreviewCardProps = {
+  onClick: () => void;
+  viewCount: number | undefined;
+};
+
+function previewCardInteraction(onClick: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick,
+    onKeyDown(event: KeyboardEvent<HTMLElement>) {
+      // Inner native buttons generate their own click; do not count it twice.
+      if (event.target !== event.currentTarget) return;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onClick();
+      }
+    },
+  };
+}
+
+function WineTastingPreviewCard({ onClick, viewCount }: PreviewCardProps) {
   return (
     <article
-      className="relative isolate min-h-[224px] overflow-hidden rounded-[22px]"
+      className={`${BRAND_CARD_FRAME_CLASS} isolate`}
       data-testid="brand-card-guizhou"
+      data-brand-slug="guizhou"
+      onClick={onClick}
       style={{
         background: "#F6ECDB",
         clipPath: "inset(0 round 22px)",
@@ -77,7 +103,7 @@ function WineTastingPreviewCard() {
             "linear-gradient(90deg,rgba(250,241,225,0.99) 0%,rgba(250,241,225,0.96) 27%,rgba(250,241,225,0.84) 40%,rgba(250,241,225,0.44) 53%,rgba(250,241,225,0.10) 67%,rgba(250,241,225,0) 78%)",
         }}
       />
-      <div className="relative z-10 flex min-h-[224px] max-w-[60%] flex-col justify-between px-5 py-4">
+      <div className={BRAND_CARD_CONTENT_CLASS}>
         <div>
           <div className="flex items-center gap-2">
             <MibanImage
@@ -91,7 +117,7 @@ function WineTastingPreviewCard() {
               贵州仁怀<br />茅台镇
             </p>
           </div>
-          <h3 className="mt-1.5 whitespace-nowrap text-[23px] font-extrabold leading-tight text-[#5A331B]">
+          <h3 className={`mt-1.5 ${BRAND_CARD_TITLE_CLASS} text-[#5A331B]`}>
             贵州精选
           </h3>
           <p className="mt-1.5 text-[11px] leading-[18px] text-[#8C6B50]">
@@ -100,21 +126,24 @@ function WineTastingPreviewCard() {
         </div>
         <Link
           href="/p/proj_hzxm2t/limited/guizhou"
-          className="mt-3 inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-[#8A5835] px-3 py-2 text-[11px] font-bold text-[#FFF9F0] transition-colors hover:bg-[#794A2B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8A5835] active:scale-[0.985]"
+          className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#8A5835] text-[#FFF9F0] transition-colors hover:bg-[#794A2B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8A5835] active:scale-[0.985]`}
         >
           查看贵州精选
-          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
         </Link>
       </div>
+      <AttentionCount brandSlug="guizhou" viewCount={viewCount} />
     </article>
   );
 }
 
-function AmwayDailyPreviewCard() {
+function AmwayDailyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
   return (
     <article
+      {...previewCardInteraction(onClick)}
       className={`${BRAND_CARD_FRAME_CLASS} isolate`}
       data-testid="brand-card-amway"
+      data-brand-slug="amway"
       style={{
         background: "#243B72",
         clipPath: "inset(0 round 22px)",
@@ -161,22 +190,24 @@ function AmwayDailyPreviewCard() {
         </div>
         <button
           type="button"
-          onClick={() => toast.info("安利日用精选商品尚未上架，敬请期待。")}
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-white text-[#243B72] transition-colors hover:bg-[#EDF2FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.985]`}
         >
           查看日用精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
         </button>
       </div>
+      <AttentionCount brandSlug="amway" viewCount={viewCount} />
     </article>
   );
 }
 
-function MaryKayBeautyPreviewCard() {
+function MaryKayBeautyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
   return (
     <article
+      {...previewCardInteraction(onClick)}
       className={`${BRAND_CARD_FRAME_CLASS} isolate`}
       data-testid="brand-card-marykay"
+      data-brand-slug="marykay"
       style={{
         background: "#F6E6E5",
         clipPath: "inset(0 round 22px)",
@@ -220,22 +251,24 @@ function MaryKayBeautyPreviewCard() {
         </div>
         <button
           type="button"
-          onClick={() => toast.info("玫琳凯美肤精选商品尚未上架，敬请期待。")}
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#9C5867] text-white transition-colors hover:bg-[#874A58] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9C5867] active:scale-[0.985]`}
         >
           查看美肤精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
         </button>
       </div>
+      <AttentionCount brandSlug="marykay" viewCount={viewCount} />
     </article>
   );
 }
 
-function NuSkinBeautyPreviewCard() {
+function NuSkinBeautyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
   return (
     <article
+      {...previewCardInteraction(onClick)}
       className={`${BRAND_CARD_FRAME_CLASS} isolate`}
       data-testid="brand-card-nuskin"
+      data-brand-slug="nuskin"
       style={{
         background: "#EDF5F6",
         clipPath: "inset(0 round 22px)",
@@ -279,13 +312,66 @@ function NuSkinBeautyPreviewCard() {
         </div>
         <button
           type="button"
-          onClick={() => toast.info("如新美肤精选商品尚未上架，敬请期待。")}
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#198E9E] text-white transition-colors hover:bg-[#137D8C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#198E9E] active:scale-[0.985]`}
         >
           查看美肤精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
         </button>
       </div>
+      <AttentionCount brandSlug="nuskin" viewCount={viewCount} />
+    </article>
+  );
+}
+
+function JianghaiFreshPreviewCard({ onClick, viewCount }: PreviewCardProps) {
+  return (
+    <article
+      {...previewCardInteraction(onClick)}
+      className={`${BRAND_CARD_FRAME_CLASS} isolate`}
+      data-testid="brand-card-jianghai"
+      data-brand-slug="jianghai"
+      style={{
+        background: "#2A555A",
+        clipPath: "inset(0 round 22px)",
+        boxShadow: "0 14px 32px rgba(22,63,72,0.16)",
+      }}
+      aria-label="江海鲜选，江海鲜货与日料刺身场景预览"
+    >
+      <MibanImage
+        variant="card"
+        src={JIANGHAI_FRESH_SELECTION_STAGE}
+        alt="上层澳洲岩龙虾、帝王蟹、东星斑与虾贝鲜货，下层整鱼日料、海胆和黑鱼子酱错落陈列"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right"
+        loading="lazy"
+      />
+      <div
+        className="pointer-events-none absolute inset-0 md:hidden"
+        style={{
+          background:
+            "linear-gradient(90deg,rgba(42,85,90,0.98) 0%,rgba(42,85,90,0.96) 26%,rgba(42,85,90,0.86) 43%,rgba(42,85,90,0.42) 58%,rgba(42,85,90,0.04) 76%,rgba(42,85,90,0) 86%)",
+        }}
+      />
+      <div className={`${BRAND_CARD_CONTENT_CLASS} text-white`}>
+        <div>
+          <div className="flex min-h-[34px] items-center">
+            <p className="min-w-0 text-[11px] font-medium leading-[17px] text-white/80">
+              鱼虾蟹贝 · 江海风味
+            </p>
+          </div>
+          <h3 className={`mt-2 ${BRAND_CARD_TITLE_CLASS}`}>江海鲜选</h3>
+          <p className="mt-2 text-[11px] leading-[18px] text-white/80">
+            甄选江海好味，<br />丰富日常餐桌。
+          </p>
+        </div>
+        <button
+          type="button"
+          className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#163F48] text-white transition-colors hover:bg-[#12363E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.985]`}
+        >
+          查看江海鲜选
+          <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
+        </button>
+      </div>
+      <AttentionCount brandSlug="jianghai" viewCount={viewCount} />
     </article>
   );
 }
@@ -683,11 +769,39 @@ export default function LimitedSale() {
         aria-label="精选系列"
         data-testid="limited-brand-list"
       >
-        <WineTastingPreviewCard />
+        <WineTastingPreviewCard
+          onClick={() => recordBrandClick("guizhou")}
+          viewCount={viewCountFor("guizhou")}
+        />
         {sortedBrands.map(brandSlug => brandCards[brandSlug])}
-        <AmwayDailyPreviewCard />
-        <MaryKayBeautyPreviewCard />
-        <NuSkinBeautyPreviewCard />
+        <AmwayDailyPreviewCard
+          onClick={() => {
+            recordBrandClick("amway");
+            toast.info("安利日用精选商品尚未上架，敬请期待。");
+          }}
+          viewCount={viewCountFor("amway")}
+        />
+        <MaryKayBeautyPreviewCard
+          onClick={() => {
+            recordBrandClick("marykay");
+            toast.info("玫琳凯美肤精选商品尚未上架，敬请期待。");
+          }}
+          viewCount={viewCountFor("marykay")}
+        />
+        <NuSkinBeautyPreviewCard
+          onClick={() => {
+            recordBrandClick("nuskin");
+            toast.info("如新美肤精选商品尚未上架，敬请期待。");
+          }}
+          viewCount={viewCountFor("nuskin")}
+        />
+        <JianghaiFreshPreviewCard
+          onClick={() => {
+            recordBrandClick("jianghai");
+            toast.info("江海鲜选商品尚未上架，敬请期待。");
+          }}
+          viewCount={viewCountFor("jianghai")}
+        />
       </section>
 
       <p className="px-5 pt-7 text-center text-[11px] text-[#C6C0BE]">

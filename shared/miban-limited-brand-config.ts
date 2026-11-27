@@ -148,3 +148,6 @@ export function getMibanLimitedBrandByName(
 ): MibanLimitedBrand | undefined {
   return mibanLimitedBrands.find(brand => brand.brand === name);
 }
+
+export const mibanLimitedAttentionSlugs = [...mibanLimitedBrands.map(brand => brand.slug), 'guizhou', 'amway', 'marykay', 'nuskin', 'jianghai'] as const;
+export type MibanLimitedAttentionSlug = (typeof mibanLimitedAttentionSlugs)[number];

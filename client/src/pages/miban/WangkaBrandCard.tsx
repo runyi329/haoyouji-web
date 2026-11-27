@@ -27,7 +27,7 @@ export function WangkaBrandCard({
       className="block active:scale-[0.985]"
     >
       <article
-        className="relative isolate min-h-[224px] overflow-hidden rounded-[22px] md:aspect-[16/9]"
+        className="relative isolate w-full min-w-0 min-h-[224px] overflow-hidden rounded-[22px] md:aspect-[16/9]"
         style={{
           background: "#FFF9F3",
           boxShadow: "0 14px 32px rgba(155,74,101,0.14)",

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Connection } from "mysql2/promise";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { mibanLimitedBrands } from "../shared/miban-limited-brand-config";
+import { mibanLimitedBrands, mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config";
 import {
   assertBrandAttentionInput,
   ensureBrandAttentionTables,
@@ -17,7 +17,8 @@ import {
 const normalizeSql = (sql: string) => sql.replace(/\s+/g, " ").trim();
 const uuid = (id: number) =>
   `00000000-0000-4000-8000-${id.toString(16).padStart(12, "0")}`;
-const slugs = mibanLimitedBrands.map(brand => brand.slug);
+const slugs = mibanLimitedAttentionSlugs;
+const previewSlugs = ["guizhou", "amway", "marykay", "nuskin", "jianghai"] as const;
 
 type Statement = { sql: string; params: unknown[]; inTransaction: boolean };
 class MemoryDatabase {
@@ -221,10 +222,24 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expectTypeOf<Connection>().toMatchTypeOf<BrandAttentionConnection>();
   });
 
-  it("starts at real zero for six configured brands, in original order, with integer counts", async () => {
+  it("keeps the six sales entrances unchanged and registers previews only for attention", () => {
+    expect(mibanLimitedBrands.map(brand => brand.slug)).toEqual([
+      "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
+    ]);
+    expect(mibanLimitedBrands.every(brand => brand.status === "on_sale")).toBe(true);
+    expect(slugs).toEqual([
+      ...mibanLimitedBrands.map(brand => brand.slug), ...previewSlugs,
+    ]);
+    expect(new Set(slugs).size).toBe(slugs.length);
+  });
+
+  it("starts at real zero for eleven attention brands, in registry order, with integer counts", async () => {
     const { db, connection } = await fixture();
     const values = await readBrandAttention(connection);
-    expect(slugs).toEqual(["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka"]);
+    expect(slugs).toEqual([
+      "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
+      "guizhou", "amway", "marykay", "nuskin", "jianghai",
+    ]);
     expect(values).toEqual(
       slugs.map(brandSlug => ({ brandSlug, viewCount: 0 }))
     );
@@ -233,6 +248,50 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expect(db.events.size).toBe(0);
     expect(connection.statements).toHaveLength(1);
     expect(connection.statements[0].sql).toMatch(/^SELECT /);
+  });
+
+  it.each(previewSlugs)("first reads %s as zero without creating historical totals or events", async brandSlug => {
+    const { db, connection } = await fixture();
+    db.totals.set("wangka", "7");
+    const values = await readBrandAttention(connection);
+    expect(values.find(value => value.brandSlug === brandSlug)).toEqual({
+      brandSlug, viewCount: 0,
+    });
+    expect(values[0]).toEqual({ brandSlug: "wangka", viewCount: 7 });
+    expect(values).toHaveLength(slugs.length);
+    expect(db.totals.has(brandSlug)).toBe(false);
+    expect(db.events.size).toBe(0);
+    expect(connection.statements).toHaveLength(1);
+    expect(connection.statements[0].sql).toMatch(/^SELECT /);
+    expect(connection.statements[0].params).toEqual(slugs);
+  });
+
+  it.each(previewSlugs)("counts a real %s click once, deduplicates retries and accumulates fresh events", async brandSlug => {
+    const { db, connection } = await fixture();
+    const firstClick = click(brandSlug, 1);
+    expect(() => assertBrandAttentionInput(firstClick)).not.toThrow();
+    expect(await recordBrandAttention(connection, firstClick)).toEqual({
+      brandSlug, viewCount: 1, counted: true,
+    });
+    expect(await recordBrandAttention(connection, firstClick)).toEqual({
+      brandSlug, viewCount: 1, counted: false,
+    });
+    for (let id = 2; id <= 4; id += 1) {
+      expect(await recordBrandAttention(connection, click(brandSlug, id))).toEqual({
+        brandSlug, viewCount: id, counted: true,
+      });
+    }
+    expect(await recordBrandAttention(connection, firstClick)).toEqual({
+      brandSlug, viewCount: 4, counted: false,
+    });
+    expect(db.events.size).toBe(4);
+    expect(db.totals.size).toBe(1);
+    expect(db.totals.get(brandSlug)).toBe(4n);
+    expect(connection.statements.filter(statement => statement.sql.includes("total_views + 1"))).toHaveLength(4);
+    const values = await readBrandAttention(connection);
+    expect(values[0]).toEqual({ brandSlug, viewCount: 4 });
+    expect(values).toHaveLength(slugs.length);
+    expect(values.slice(1).every(value => value.viewCount === 0)).toBe(true);
   });
 
   it("counts repeated real clicks by the same person using fresh per-click UUIDs", async () => {
@@ -352,7 +411,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
 
   it("reads descending counts with deterministic original-order ties, excluding unknown rows", async () => {
     const { db, connection } = await fixture();
-    // Deliberately different insertion order than mibanLimitedBrands.
+    // Deliberately different insertion order than mibanLimitedAttentionSlugs.
     db.totals.set("fruits", "5");
     db.totals.set("lingchuang", "9");
     db.totals.set("herbalife", "5");
@@ -365,6 +424,11 @@ describe("miban brand attention: offline transaction fixtures", () => {
       { brandSlug: "tuoquetang", viewCount: 0 },
       { brandSlug: "midaniang", viewCount: 0 },
       { brandSlug: "wangka", viewCount: 0 },
+      { brandSlug: "guizhou", viewCount: 0 },
+      { brandSlug: "amway", viewCount: 0 },
+      { brandSlug: "marykay", viewCount: 0 },
+      { brandSlug: "nuskin", viewCount: 0 },
+      { brandSlug: "jianghai", viewCount: 0 },
     ]);
     expect(values.every(row => Number.isSafeInteger(row.viewCount))).toBe(true);
     expect(connection.statements[0].params).toEqual(slugs);
@@ -381,7 +445,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
     });
     const values = await readBrandAttention(connection);
     expect(values[0]).toEqual({ brandSlug, viewCount: 1 });
-    expect(values).toHaveLength(6);
+    expect(values).toHaveLength(slugs.length);
     expect(values.slice(1).every(row => row.viewCount === 0)).toBe(true);
   });
 
