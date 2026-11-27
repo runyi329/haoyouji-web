@@ -1,0 +1,19 @@
+.moutai-page, .moutai-modal {
+  --mt-paper: #f4ebdd;
+  --mt-red: #9e2528;
+  --mt-red-soft: #efe0d3;
+  --mt-gold: #a1834f;
+  --mt-ink: #352d26;
+  --mt-muted: #7a6b5a;
+  --mt-line: #dacbb8;
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.moutai-page { background: var(--mt-paper); }
+.moutai-page .font-serif, .moutai-modal .font-serif {
+  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+}
+.moutai-page button, .moutai-modal button { -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  .moutai-page button, .moutai-modal button { transition: transform 160ms cubic-bezier(0.23,1,0.32,1), opacity 160ms cubic-bezier(0.23,1,0.32,1); }
+  .moutai-page button:active:not(:disabled), .moutai-modal button:active:not(:disabled) { transform: scale(0.97); }
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronDown, RefreshCw } from "lucide-react";
+import { MibanWalletUserAvatar } from "./MibanWalletUserAvatar";
 import { mtrpc } from "./mibanTrpc";
 import {
   MIBAN_PAYMENT_ASSETS,
@@ -386,128 +387,132 @@ function combinationHint(payment: MibanMixedPayment): string {
     : `可用余额不足，还差 ¥${displayCny(payment.remainingCny)}，请充值或调整购买数量。`;
 }
 
-/** 确认页直接提供人民币与数字币两分类，冻结/无余额/缺价数字币不进入下拉。 */
+/** 统一紧凑付款区：余额在前、可用币种在后；只显示真实可用数量。 */
 export function MibanWalletAvailableSummary({ payment, disabled = false, accent = "#FF6900" }: { payment: MibanMixedPayment; disabled?: boolean; accent?: string }) {
+  const jointMode = payment.selectedCodes.length > 1;
+  const [secondaryCode, setSecondaryCode] = useState<string | null>(null);
   const locked = disabled || !payment.ready || payment.refreshing;
-  const rows = usablePaymentRows(payment);
-  const cny = rows.find(row => row.assetCode === "CNY");
-  const digitalRows = rows.filter(row => row.assetCode !== "CNY");
-  const digital = digitalRows.find(row => row.assetCode === payment.selectedDigitalCode) ?? digitalRows[0];
-  const selectedRows = rows.filter(row => row.selected);
-  const selectedStyle = (selected: boolean) => ({ borderColor: selected ? accent : "#e5e7eb", backgroundColor: selected ? `${accent}0D` : "#ffffff" });
-  const selectionBadge = (selected: boolean) => <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold" style={{ color: selected ? accent : "#9ca3af" }}>{selected && <Check size={12} aria-hidden="true" />}{selected ? "已选" : "点选"}</span>;
-  const chooseAsset = (code: string) => { if (!locked) payment.useOnlyAsset(code); };
-  return <div data-payment-summary aria-busy={payment.refreshing} className="min-w-0 space-y-2 text-[11px]">
-    <p className="break-words font-bold text-gray-700">可用价值 ≈ ¥{payment.quotedAt ? displayCny(payment.availableValueCny) : "--"} / {displayUsdt(payment.availableValueUsdt)} U</p>
-    <p data-payment-summary-status role="status" title={payment.ready ? payment.statusMessage : `${payment.statusMessage}；下列为上次真实快照（如有）`} className="h-4 whitespace-nowrap text-gray-500 leading-4">
-      {compactPaymentStatus(payment)}
-    </p>
-    {(cny || digital) ? <div data-payment-categories className={`grid gap-2 ${cny && digital ? "grid-cols-2" : "grid-cols-1"}`}>
-      {cny && <div data-payment-asset="CNY" data-payment-selected={cny.selected} className="min-h-24 min-w-0 rounded-lg border px-2.5 py-2" style={selectedStyle(cny.selected)}>
-        <button type="button" aria-label="使用人民币支付" aria-pressed={cny.selected} disabled={locked} onClick={() => chooseAsset("CNY")} className="block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-orange-300">
-          <div className="flex h-8 items-center justify-between gap-1 font-bold text-gray-700"><span>人民币</span>{selectionBadge(cny.selected)}</div>
-          <div className="mt-1 break-all font-semibold text-gray-600">可用 ¥{displayCny(cny.available)}</div>
-          <div className="mt-1 break-words text-gray-400">≈ {displayUsdt(equivalentUsdt(cny.availableValueCny!, String(payment.usdtCnyRate)))} U</div>
-        </button>
-      </div>}
-      {digital && <div data-payment-asset={digital.assetCode} data-payment-selected={digital.selected} className="min-h-24 min-w-0 rounded-lg border px-2.5 py-2" style={selectedStyle(digital.selected)}>
-        <label className="flex min-h-8 min-w-0 flex-wrap items-center justify-between gap-1 font-bold text-gray-700">
-          <span>数字币</span>
-          <select aria-label="选择支付数字币" value={digital.assetCode} disabled={locked} onChange={event => chooseAsset(event.target.value)} className="h-8 min-w-0 max-w-full rounded-md border border-gray-200 bg-white px-1 text-[11px]" style={{ color: accent }}>
-            {digitalRows.map(row => <option key={row.assetCode} value={row.assetCode}>{row.assetCode}</option>)}
-          </select>
-        </label>
-        <button type="button" aria-label={`使用${digital.assetCode}支付`} aria-pressed={digital.selected} disabled={locked} onClick={() => chooseAsset(digital.assetCode)} className="mt-1 block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-orange-300">
-          <div className="flex min-w-0 items-center justify-between gap-1 font-bold text-gray-700"><span>{digital.assetCode === "USDT" ? "U / USDT" : digital.assetCode}</span>{selectionBadge(digital.selected)}</div>
-          <div className="mt-1 break-all font-semibold text-gray-600">可用 {displayCoinAmount(digital.assetCode, digital.available)} {digital.assetCode === "USDT" ? "U" : digital.assetCode}</div>
-          <div className="mt-1 break-words text-gray-400">≈ ¥{displayCny(digital.availableValueCny!)}</div>
-        </button>
-      </div>}
-    </div> : <p data-payment-empty className="min-h-10 leading-5 text-gray-500">{payment.quotedAt ? "暂无可用于本次付款的余额，请先充值。" : payment.refreshing ? "正在读取真实可用余额…" : "钱包报价暂不可用，请刷新后再选择。"}</p>}
-    <div data-payment-selected-assets className="min-h-10 break-words leading-5">
-      <p className="font-semibold text-gray-700">{selectedRows.length ? `已选币种：${selectedRows.map(row => row.assetCode === "CNY" ? "人民币" : row.assetCode).join(" + ")}` : "尚未选择付款币种"}</p>
-      <p className="break-all font-bold" style={{ color: accent }}>本次付款：{payment.deductions.length ? payment.paymentSummary : "尚未分配扣币"}</p>
+  // 新挂载Hook自行查询；已有快照的长期挂载Hook在进入确认区时只刷新一次。
+  const entryQuote = useRef({ initialQuotedAt: payment.quotedAt, checked: false });
+  useEffect(() => {
+    if (entryQuote.current.checked) return;
+    if (!entryQuote.current.initialQuotedAt) {
+      if (payment.quotedAt) entryQuote.current.checked = true;
+      return;
+    }
+    if (disabled || payment.refreshing || !payment.ready) return;
+    entryQuote.current.checked = true;
+    payment.refresh();
+  }, [payment.quotedAt, payment.ready, payment.refreshing, payment.refresh, disabled]);
+  const hasBalance = Boolean(payment.quotedAt);
+  const usableRows = usablePaymentRows(payment);
+  const primary = usableRows.find(row => row.assetCode === "CNY") ?? usableRows.find(row => row.assetCode === "USDT") ?? usableRows[0];
+  const alternatives = usableRows.filter(row => row.assetCode !== primary?.assetCode);
+  const rows = primary ? [primary, ...alternatives] : [];
+  const secondary = alternatives.find(row => row.assetCode === secondaryCode)
+    ?? alternatives.find(row => row.assetCode === payment.selectedDigitalCode)
+    ?? alternatives.find(row => row.selected)
+    ?? alternatives[0];
+  const visibleRows = rows.length > 2 ? [primary, secondary].filter((row): row is MibanPaymentAssetRow => Boolean(row)) : rows;
+  const assetLabel = (code: string) => code === "CNY" ? "人民币" : code === "USDT" ? "U / USDT" : code;
+  const assetAmount = (row: MibanPaymentAssetRow) => row.assetCode === "CNY"
+    ? `¥${displayCny(row.available)}`
+    : `${displayCoinAmount(row.assetCode, row.available)} ${row.assetCode === "USDT" ? "U" : row.assetCode}`;
+  const chooseAsset = (code: string) => {
+    if (locked) return;
+    if (jointMode) payment.toggleAsset(code);
+    else payment.useOnlyAsset(code);
+  };
+  const chooseSecondary = (code: string) => {
+    if (locked || !alternatives.some(row => row.assetCode === code)) return;
+    setSecondaryCode(code);
+    if (jointMode) {
+      // 两项陈列中的切换是替换第二项，不把已隐藏的旧第二币继续用于扣款。
+      payment.useOnlyAsset(primary.assetCode);
+      payment.prioritizeAsset(code);
+    }
+    else payment.useOnlyAsset(code);
+  };
+  const toggleJoint = () => {
+    if (locked || visibleRows.length < 2) return;
+    if (!jointMode) {
+      // 仅加入明确陈列的两项；其他币种只有用户主动选下拉时才加入。
+      payment.useOnlyAsset(visibleRows[0].assetCode);
+      payment.prioritizeAsset(visibleRows[1].assetCode);
+    }
+    else payment.useOnlyAsset(secondary?.selected ? secondary.assetCode : visibleRows[0].assetCode);
+  };
+  return <div data-payment-summary aria-busy={payment.refreshing} className="min-w-0 space-y-3 text-[11px]">
+    <div data-payment-wallet-total data-balance-quoted-at={payment.quotedAt ?? ""} aria-live="polite" className="flex min-w-0 items-center gap-2 border-b border-gray-100 pb-3">
+      <span data-payment-wallet-avatar aria-label="当前用户头像" className="flex h-7 w-7 shrink-0 items-center justify-center"><MibanWalletUserAvatar /></span>
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <h3 className="shrink-0 text-[12px] font-semibold text-gray-800">钱包可用余额</h3>
+        <div className="min-w-0 text-right tabular-nums">
+          <p data-payment-wallet-total-usdt className="break-all text-[14px] font-bold leading-5" style={{ color: accent }}>≈ {hasBalance ? displayUsdt(payment.availableValueUsdt) : "--"} U</p>
+          <p data-payment-wallet-total-cny className="break-all text-[10px] leading-4 text-gray-400">≈ ¥{hasBalance ? displayCny(payment.availableValueCny) : "--"}</p>
+        </div>
+      </div>
+      <button type="button" aria-label="刷新钱包可用余额" title="刷新余额" disabled={disabled || payment.refreshing} onClick={payment.refresh} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 disabled:opacity-40"><RefreshCw size={12} aria-hidden="true" /></button>
+      <span data-payment-balance-status role="status" className="sr-only">{payment.refreshing ? "正在更新可用余额" : hasBalance ? "钱包可用余额已更新" : "余额待查询"}</span>
     </div>
-    <div data-payment-combination-hint className="min-h-10 break-words leading-5 text-gray-500">{combinationHint(payment)}</div>
-    <button type="button" aria-pressed={selectedRows.length > 1} disabled={locked || rows.length < 2} onClick={() => { if (!locked && rows.length >= 2) payment.useCombinedAssets(); }} className="rounded-lg border bg-white px-3 py-2 font-semibold disabled:text-gray-400" style={{ color: accent, borderColor: selectedRows.length > 1 ? accent : "#ffedd5" }}>多币种联合支付</button>
-    <p className="text-gray-400">仅显示真实可用余额；冻结、无余额或无有效行情的数字币已过滤。</p>
+    <h3 data-payment-selection-heading className="text-[12px] font-semibold leading-5 text-gray-800">选择币种</h3>
+    {visibleRows.length ? <div data-payment-categories className="space-y-2">
+      {visibleRows.map((row, index) => <div key={row.assetCode} data-payment-category={row.assetCode === "CNY" ? "CNY" : "digital"} data-payment-asset={row.assetCode} data-payment-selected={row.selected} className="flex min-w-0 items-center gap-2 rounded-lg border bg-white px-2.5 py-2" style={{ borderColor: row.selected ? accent : "#e5e7eb" }}>
+        {jointMode && <input type="checkbox" aria-label={`参与支付 ${row.assetCode}`} checked={row.selected} disabled={locked} onChange={() => payment.toggleAsset(row.assetCode)} className="h-3.5 w-3.5 shrink-0" style={{ accentColor: accent }} />}
+        {rows.length > 2 && index === 1
+          ? <select aria-label="选择支付币种" value={row.assetCode} disabled={locked} onChange={event => chooseSecondary(event.target.value)} className="h-7 w-[112px] min-w-0 max-w-[45%] shrink-0 rounded-md border-0 bg-transparent pl-0 pr-1 text-[12px] font-semibold" style={{ color: accent }}>
+              {alternatives.map(asset => <option key={asset.assetCode} value={asset.assetCode}>{assetLabel(asset.assetCode)} · {assetAmount(asset)}</option>)}
+            </select>
+          : null}
+        <button type="button" aria-label={`使用${row.assetCode === "CNY" ? "人民币" : row.assetCode}支付`} aria-pressed={row.selected} disabled={locked} onClick={() => chooseAsset(row.assetCode)} className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded text-right outline-none focus-visible:ring-2 focus-visible:ring-gray-300">
+          {!(rows.length > 2 && index === 1) && <span className="shrink-0 text-[12px] font-semibold text-gray-700">{assetLabel(row.assetCode)}</span>}
+          <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5"><span className="min-w-0 break-all text-[12px] font-semibold tabular-nums text-gray-800">{assetAmount(row)}</span>{row.selected && <Check size={12} aria-hidden="true" className="shrink-0" style={{ color: accent }} />}</span>
+        </button>
+      </div>)}
+    </div> : <p data-payment-empty className="text-[11px] leading-5 text-gray-500">{hasBalance ? "暂无可用币种" : payment.refreshing ? "正在读取可用币种…" : "币种待查询"}</p>}
+    {rows.length > 1 && <button type="button" data-payment-joint-toggle aria-pressed={jointMode} disabled={locked} onClick={toggleJoint} className="rounded-md border px-2.5 py-1.5 text-[11px] font-semibold disabled:text-gray-400" style={{ color: accent, borderColor: jointMode ? accent : "#e5e7eb" }}>{jointMode ? "关闭联合支付" : "多币种联合支付"}</button>}
+    {hasBalance && (!payment.ready || payment.statusMessage.includes("扣币有变化") || payment.statusMessage.includes("核验失败")) && <p data-payment-summary-status role="status" className="break-words text-[11px] leading-5 text-gray-500">{compactPaymentStatus(payment)}</p>}
   </div>;
 }
-
+/** 所有商品确认付款共用此入口；内容顺序固定，仅主题色由商品传入。
+ * 兼容既有调用名，避免逐页复制付款功能和遗漏购物车入口。 */
 export function MibanMixedPaymentAllocation({ payment, disabled = false, accent = "#FF6900" }: {
   payment: MibanMixedPayment; disabled?: boolean; accent?: string;
 }) {
-  const locked = disabled || !payment.ready;
-  // 只有用户主动核验时短暂锁止，静置不轮询、不倒计时、不切换透明度。
-  const dimmed = disabled || !payment.quotedAt || (!payment.ready && !payment.refreshing);
-  const [showCombinedAssets, setShowCombinedAssets] = useState(false);
-  const usableRows = usablePaymentRows(payment);
-  const digitalRows = usableRows.filter(row => row.assetCode !== "CNY");
-  const selectedDigitalCode = payment.selectedDigitalCode ?? "";
-  const visibleRows = showCombinedAssets ? usableRows : usableRows.filter(row =>
-    row.assetCode === "CNY" || row.assetCode === selectedDigitalCode || positiveUnits(row.deductionAmount) > 0n);
-  const changeDigitalAsset = (code: string) => {
-    const row = digitalRows.find(asset => asset.assetCode === code);
-    if (locked || !row || row.disabledReason) return;
-    payment.useOnlyAsset(code);
-  };
-  return <div data-payment-allocation aria-busy={payment.refreshing} className="mb-5 min-w-0 rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
-    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-bold text-gray-900">钱包单币 / 组合支付</div>
-        <div className="mt-1 text-[11px] leading-4 text-gray-500">仅列出有可用余额的币种；单币不足可选多币种联合支付，取消勾选即不扣该币。</div>
-      </div>
-      <button type="button" disabled={disabled || payment.refreshing} onClick={payment.refresh} className={`shrink-0 rounded-lg bg-white px-2 py-1.5 text-[11px] font-bold ${disabled ? "opacity-40" : ""}`} style={{ color: accent }}>刷新报价</button>
-    </div>
-    <div data-payment-allocation-status role="status" title={payment.statusMessage} className="mb-3 h-10 text-[11px] leading-5 text-gray-500">
-      <p className="whitespace-nowrap">{compactPaymentStatus(payment)}</p>
-      <p className="whitespace-nowrap tabular-nums">
-        {Number.isFinite(payment.usdtCnyRate) ? `1 U ≈ ¥${payment.usdtCnyRate.toFixed(4)}` : "实时汇率待查询"}
-        {payment.quotedAt && " · 付款时核验"}
-      </p>
-    </div>
-    <div data-payment-combination-hint className="mb-2 min-h-10 break-words text-[11px] leading-5 text-gray-500">{combinationHint(payment)}</div>
-    <button type="button" aria-expanded={showCombinedAssets} disabled={locked || usableRows.length < 2} onClick={() => { if (locked) return; if (!showCombinedAssets) payment.useCombinedAssets(); setShowCombinedAssets(value => !value); }} className="mb-3 rounded-lg bg-white px-2.5 py-2 text-[11px] font-bold disabled:text-gray-400" style={{ color: accent }}>{showCombinedAssets ? "收起联合币种" : "多币种联合支付"}</button>
-    <div className="space-y-2.5">
-      {visibleRows.map(row => <div key={row.assetCode} data-payment-asset={row.assetCode} data-payment-selected={row.selected} className={`min-w-0 rounded-xl border bg-white p-3 ${row.disabledReason ? "border-gray-100 text-gray-400" : "border-gray-200"}`} style={{ borderColor: row.selected ? accent : undefined }}>
-        <div className="flex min-w-0 items-start gap-2">
-          <input type="checkbox" aria-label={`参与支付 ${row.assetCode}`} checked={row.selected && !row.disabledReason} disabled={locked || Boolean(row.disabledReason)} onChange={() => payment.toggleAsset(row.assetCode)} className="mt-1 h-4 w-4 shrink-0" style={{ accentColor: accent }} />
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0 break-words text-[13px] font-bold">{row.assetCode === "CNY" ? "人民币" : row.assetCode === "USDT" ? "U / USDT" : row.assetCode} · {row.assetName}{row.selected && <span className="ml-1.5 whitespace-nowrap text-[10px]" style={{ color: accent }}>已选</span>}</div>
-              {row.assetCode === selectedDigitalCode && <label className="flex min-w-0 items-center gap-1 text-[10px] font-semibold" style={{ color: accent }}>
-                <span className="shrink-0">数字币</span>
-                <select aria-label="选择支付数字币" value={selectedDigitalCode} disabled={locked} onChange={event => changeDigitalAsset(event.target.value)} className={`max-w-[112px] min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-[11px] outline-none ${dimmed ? "opacity-40" : ""}`}>
-                  {digitalRows.map(asset => <option key={asset.assetCode} value={asset.assetCode}>{asset.assetCode}</option>)}
-                </select>
-              </label>}
-            </div>
-            <div className="mt-1 break-all text-[11px] leading-5 text-gray-500">可用 {displayCoinAmount(row.assetCode, row.available)} · 冻结 {displayCoinAmount(row.assetCode, row.frozen)}</div>
-            <div className="break-all text-[10px] leading-4 text-gray-400">每币 ≈ ¥{row.priceCny ?? "--"} / {displayUsdt(row.priceUsdt)} U</div>
-            {row.disabledReason && <div className="mt-1 break-words text-[10px] text-gray-400">{row.disabledReason}</div>}
-            {row.priceUpdatedAt && <div className="mt-0.5 break-words text-[10px] text-gray-400">行情更新 {new Date(row.priceUpdatedAt).toLocaleTimeString("zh-CN", { hour12: false })}</div>}
-          </div>
+  const [showDetails, setShowDetails] = useState(false);
+  const locked = disabled || !payment.ready || payment.refreshing;
+  const selectedRows = usablePaymentRows(payment).filter(row => row.selected || positiveUnits(row.deductionAmount) > 0n);
+  return <section data-payment-section data-payment-allocation aria-busy={payment.refreshing} className="mb-5 min-w-0 rounded-2xl border border-gray-100 bg-white p-3.5">
+    <MibanWalletAvailableSummary payment={payment} disabled={disabled} accent={accent} />
+    {selectedRows.length > 0 && <button type="button" data-testid="wallet-detail-toggle" aria-expanded={showDetails} disabled={locked || selectedRows.length === 0} onClick={() => setShowDetails(value => !value)} className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-[12px] font-semibold text-gray-700 disabled:text-gray-400">
+      <span>{showDetails ? "收起扣币明细" : "核对扣币明细"}</span><ChevronDown size={14} aria-hidden="true" className={showDetails ? "rotate-180" : ""} />
+    </button>}
+    {showDetails && <div data-payment-deduction-details className="mt-3 space-y-2.5 border-t border-gray-100 pt-3">
+      <p className="break-words text-[11px] leading-5 text-gray-500">{Number.isFinite(payment.usdtCnyRate) ? `1 U ≈ ¥${payment.usdtCnyRate.toFixed(4)}` : "实时汇率待查询"} · 付款时核验最新报价</p>
+      {selectedRows.map(row => <div key={row.assetCode} data-payment-deduction-asset={row.assetCode} className="min-w-0 rounded-xl border border-gray-100 bg-gray-50 p-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <span className="break-words text-[12px] font-bold text-gray-800">{row.assetCode === "CNY" ? "人民币" : row.assetCode === "USDT" ? "U / USDT" : row.assetCode}</span>
+          <button type="button" disabled={locked} onClick={() => payment.prioritizeAsset(row.assetCode)} className="rounded-lg bg-white px-2 py-1.5 text-[10px] font-semibold disabled:text-gray-400" style={{ color: accent }}>{payment.priorityCode === row.assetCode ? "已优先" : "优先使用"}</button>
         </div>
-        {!row.disabledReason && <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" disabled={locked} onClick={() => payment.prioritizeAsset(row.assetCode)} className={`rounded-lg bg-gray-50 px-2 py-1.5 text-[10px] font-bold ${dimmed ? "opacity-40" : ""}`} style={{ color: accent }}>{payment.priorityCode === row.assetCode ? "已优先" : "优先使用"}</button>
-          <button type="button" disabled={locked} onClick={() => payment.useOnlyAsset(row.assetCode)} className={`rounded-lg bg-gray-50 px-2 py-1.5 text-[10px] font-bold ${dimmed ? "opacity-40" : ""}`} style={{ color: accent }}>仅用此币</button>
-        </div>}
-        {row.assetCode === "CNY" && <label className="mt-2 flex min-w-0 items-center gap-2 rounded-lg border border-gray-200 px-2">
-          <span className="text-[11px] text-gray-500">本次人民币上限 ¥</span>
-          <input aria-label="本次使用的人民币金额" value={payment.cnyInput} onChange={event => payment.setCnyInput(event.target.value)} onBlur={payment.normalizeCnyInput} inputMode="decimal" disabled={locked || !row.selected || Boolean(row.disabledReason)} className={`h-9 min-w-0 flex-1 bg-transparent text-right text-[13px] font-bold outline-none ${dimmed || !row.selected || row.disabledReason ? "opacity-40" : ""}`} />
+        <p className="mt-1 break-all text-[10px] leading-5 text-gray-500">可用 {displayCoinAmount(row.assetCode, row.available)} · 冻结 {displayCoinAmount(row.assetCode, row.frozen)}</p>
+        <p className="break-all text-[10px] leading-5 text-gray-400">每币 ≈ ¥{row.priceCny ?? "--"} / {displayUsdt(row.priceUsdt)} U</p>
+        {row.priceUpdatedAt && <p className="break-words text-[10px] leading-5 text-gray-400">行情更新 {new Date(row.priceUpdatedAt).toLocaleTimeString("zh-CN", { hour12: false })}</p>}
+        {row.assetCode === "CNY" && <label className="mt-2 flex min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2">
+          <span className="shrink-0 text-[11px] text-gray-500">本次人民币上限 ¥</span>
+          <input aria-label="本次使用的人民币金额" value={payment.cnyInput} onChange={event => payment.setCnyInput(event.target.value)} onBlur={payment.normalizeCnyInput} inputMode="decimal" disabled={locked} className="h-9 min-w-0 flex-1 bg-transparent text-right text-[13px] font-bold outline-none" />
         </label>}
-        <div className="mt-2 break-all rounded-lg bg-gray-50 px-2 py-2 text-[12px] font-bold" style={{ color: row.disabledReason ? undefined : accent }}>本次扣币 {displayCoinAmount(row.assetCode, row.deductionAmount)} {row.assetCode === "USDT" ? "U" : row.assetCode}</div>
+        <p className="mt-2 break-all text-[12px] font-bold" style={{ color: accent }}>本次扣币 {displayCoinAmount(row.assetCode, row.deductionAmount)} {row.assetCode === "USDT" ? "U" : row.assetCode}</p>
       </div>)}
-    </div>
-    <div className="mt-3 space-y-1 break-words text-[11px] leading-5 text-gray-600">
-      <p>钱包可用价值 ≈ ¥{payment.quotedAt ? displayCny(payment.availableValueCny) : "--"} / {displayUsdt(payment.availableValueUsdt)} U</p>
-      <p>本次已分配 ≈ ¥{displayCny(payment.totalValueCny)}；剩余待付 ¥{displayCny(payment.remainingCny)} / {displayUsdt(payment.remainingUsdt)} U</p>
-      <p className="break-all font-bold" style={{ color: accent }}>实际付款：{payment.paymentSummary}</p>
-    </div>
-    <label className="mt-3 flex items-start gap-2 rounded-xl border border-gray-200 bg-white p-3 text-[11px] leading-5 text-gray-700">
-      <input type="checkbox" aria-label="确认本次实际扣币明细" checked={payment.reviewed} disabled={locked || Number(payment.remainingCny) > 0 || payment.deductions.length === 0} onChange={event => payment.confirmPaymentReview(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" style={{ accentColor: accent }} />
-      <span className="min-w-0 break-words">我已核对上述实际扣币数量，同意按已选币种支付。付款时核验最新报价；扣币变化需重新确认。</span>
-    </label>
-    <p className="mt-2.5 text-[10px] leading-4 text-gray-400">冻结不参与支付；缺价、过时行情不可支付；不支持股票、证券或商品资产。提交仅携带币种、币量与签名token，服务端重新核验。</p>
-  </div>;
+      <div className="space-y-1 break-words text-[11px] leading-5 text-gray-600">
+        <p>本次已分配 ≈ ¥{displayCny(payment.totalValueCny)}</p>
+        <p>剩余待付 ¥{displayCny(payment.remainingCny)} / {displayUsdt(payment.remainingUsdt)} U</p>
+        <p className="break-all font-bold" style={{ color: accent }}>实际付款：{payment.paymentSummary}</p>
+      </div>
+      <label className="flex items-start gap-2 rounded-xl border border-gray-200 bg-white p-3 text-[11px] leading-5 text-gray-700">
+        <input type="checkbox" aria-label="确认本次实际扣币明细" checked={payment.reviewed} disabled={locked || Number(payment.remainingCny) > 0 || payment.deductions.length === 0} onChange={event => payment.confirmPaymentReview(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" style={{ accentColor: accent }} />
+        <span className="min-w-0 break-words">我已核对上述实际扣币数量，同意按已选币种支付。付款时核验最新报价；扣币变化需重新确认。</span>
+      </label>
+      <p className="text-[10px] leading-4 text-gray-400">冻结不参与支付；缺价、过时行情不可支付；不支持股票、证券或商品资产。提交仅携带币种、币量与签名token，服务端重新核验。</p>
+    </div>}
+  </section>;
 }

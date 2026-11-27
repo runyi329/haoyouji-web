@@ -1335,9 +1335,6 @@ export default function HerbalifeRedGinsengDetail() {
                   </div>
                 </div>
                 <div className="pt-3">
-                  <div className="mb-2 text-[12px] font-semibold text-gray-600">
-                    钱包可用余额
-                  </div>
                   <MibanWalletAvailableSummary payment={walletPayment} disabled={checkoutBusy} accent={accent} />
                 </div>
               </div>
