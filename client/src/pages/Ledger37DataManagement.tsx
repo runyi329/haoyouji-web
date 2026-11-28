@@ -5,9 +5,8 @@ import { trpc } from '@/lib/trpc';
 import { UserAvatar } from '@/components/UserAvatar';
 import Ledger37MemberCalendar from '@/components/Ledger37MemberCalendar';
 import { ledger37DataDailyRows, ledger37MemberConfigPath, type Ledger37DataManagementResult, type Ledger37DataMember } from '@shared/ledger37-data-management';
+import { ledger37MoneyText as money, ledger37MoneyColor as color } from '@/lib/ledger37-money-display';
 
-const money = (value: number | null) => value === null || !Number.isFinite(value) ? '待更新' : `${value > 0 ? '+' : ''}${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const color = (value: number | null) => value === null ? '#9E9E9E' : value > 0 ? '#D32F2F' : value < 0 ? '#388E3C' : '#555';
 const shortDate = (date: string | null) => date ? date.slice(2).replaceAll('-', '/') : '未设置';
 const memberReturn = (member: Ledger37DataMember) => member.totalPnl ?? member.verifiedSubtotal;
 const memberDaily = (member: Ledger37DataMember) => member.latestDailyPnl ?? member.dailyVerifiedSubtotal ?? null;
@@ -33,7 +32,7 @@ function MemberDetails({ member, canEdit, onClose, onSettings }: { member: Ledge
       <div><div className="text-[10px] text-gray-500">{member.totalPnl === null && member.verifiedSubtotal !== null ? '已确认累计小计' : '累计回报'} · 元</div><div className="mt-1 font-mono text-lg font-semibold" style={{ color: color(memberReturn(member)) }}>{money(memberReturn(member))}</div><div className="mt-1 text-[10px] leading-4 text-gray-400">{member.asOfDates.length === 1 ? `截至 ${member.asOfDates[0]}` : member.asOfDates.length ? '各标签截至各自已确认日期' : '暂无已确认回报'}</div></div>
       <div><div className="text-[10px] text-gray-500">{member.latestDailyPnl === null && member.dailyVerifiedSubtotal != null ? '已更新日回报小计' : '最近日回报'} · 元</div><div className="mt-1 font-mono text-lg font-semibold" style={{ color: color(memberDaily(member)) }}>{money(memberDaily(member))}</div><div className="mt-1 text-[10px] leading-4 text-gray-400">{member.dailyDate ?? member.dailyAsOf ?? (member.dailyPendingCount ? '部分标签尚未更新' : '暂无日回报')}{member.latestDailyPnl === null && member.dailyPendingCount > 0 ? ` · ${member.dailyPendingCount} 个标签未计入` : ''}</div></div>
     </div>
-    {member.pendingTagNames.length > 0 && <div className="mx-3 mb-3 rounded-md bg-[#F1EDE7] px-2.5 py-2 text-[11px] leading-5 text-[#826D57]">已确认标签小计 {money(member.verifiedSubtotal)} 元；完整累计暂不可用。未计入：{member.pendingTagNames.join('、')}。</div>}
+    {member.pendingTagNames.length > 0 && <div className="mx-3 mb-3 rounded-md bg-[#F1EDE7] px-2.5 py-2 text-[11px] leading-5 text-[#826D57]">已确认标签小计 <span style={{ color: color(member.verifiedSubtotal) }}>{money(member.verifiedSubtotal)}</span> 元；完整累计暂不可用。未计入：{member.pendingTagNames.join('、')}。</div>}
     <div className="flex border-b border-[#E5E1DD] px-3">{([['tags', `标签回报（${member.tagCount}）`], ['daily', '每日回报'], ['calendar', '日历模式']] as const).map(([key, title]) => <button key={key} onClick={() => setTab(key)} className={`flex-1 py-2 text-xs ${tab === key ? 'border-b-2 border-[#B45E4F] font-semibold text-[#A74D40]' : 'text-gray-400'}`}>{title}</button>)}</div>
     {tab === 'calendar' ? <Ledger37MemberCalendar member={member} /> : tab === 'tags' ? <div className="px-3 pb-3">
       <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-2 py-2 text-[10px] text-gray-400"><span>标签 / 开始日期</span><span className="text-right">累计回报</span><span className="text-right">最近日回报</span></div>

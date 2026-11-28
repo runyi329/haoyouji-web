@@ -3,10 +3,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ledger37DataDailyRows, type Ledger37DataMember } from '@shared/ledger37-data-management';
 import { ledger37CalendarMonth, ledger37MemberReturnCurve } from '@shared/ledger37-data-calendar';
+import { ledger37MoneyText as amountText, ledger37MoneyColor as amountColor, ledger37CompactMoneyText as compact, ledger37CompactMoneyColor as compactColor } from '@/lib/ledger37-money-display';
 
-const amountText = (value: number | null) => value === null || !Number.isFinite(value) ? '待更新' : `${value > 0 ? '+' : ''}${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const amountColor = (value: number | null) => value === null ? '#AAA29A' : value > 0 ? '#D32F2F' : value < 0 ? '#388E3C' : '#666';
-const compact = (value: number) => Math.abs(value) >= 10000 ? `${(value / 10000).toFixed(2)}万` : `${value > 0 ? '+' : ''}${Math.round(value).toLocaleString('zh-CN', { useGrouping: false })}`;
 const todayKey = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 
 export default function Ledger37MemberCalendar({ member }: { member: Ledger37DataMember }) {
@@ -48,7 +46,7 @@ export default function Ledger37MemberCalendar({ member }: { member: Ledger37Dat
           const active = selectedDate === day.date;
           return <button key={day.date} data-calendar-date={day.date} disabled={future || !row} onClick={() => setSelectedDate(active ? null : day.date)} aria-label={`${day.date} 收益${amountText(amount)}元${partial ? '，已确认小计' : ''}`} className={`flex min-h-[60px] min-w-0 flex-col items-center justify-center rounded-md border px-0.5 py-1 ${active ? 'border-[#BC7964] bg-[#F8EEE5]' : 'border-transparent hover:bg-[#FAF7F2]'} disabled:cursor-default disabled:hover:bg-transparent`}>
             <span className={`text-[11px] ${future ? 'text-gray-300' : day.date === todayKey() ? 'font-semibold text-[#A74D40]' : 'text-[#6C625A]'}`}>{day.day}</span>
-            <span className="mt-1 w-full truncate text-center font-mono text-[9px]" style={{ color: amountColor(amount) }}>{amount === null ? '—' : compact(amount)}</span>
+            <span className="mt-1 w-full truncate text-center font-mono text-[9px]" style={{ color: compactColor(amount) }}>{amount === null ? '—' : compact(amount)}</span>
             <span className="h-3 text-[8px] text-[#AA9683]">{partial ? '小计' : ''}</span>
           </button>;
         })}
