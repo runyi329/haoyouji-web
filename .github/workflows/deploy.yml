@@ -26,8 +26,9 @@ jobs:
     name: 云端构建并同步到生产服务器
     runs-on: ubuntu-latest
     # 首次部署或网络波动时，传输重试与服务器校验仍需有足够时间完成；
-    # rsync 自身有90秒无数据超时，不会再像旧流程一样无输出占满整个任务。
-    timeout-minutes: 35
+    # 官方产品原图首次跨网约20–30KB/s时，35分钟不足以完成；仍保留有限总时限。
+    # rsync自身90秒无数据超时及三次重试不变，不放宽校验或提前切换生产版本。
+    timeout-minutes: 120
     env:
       EXPECTED_SHA: ${{ github.sha }}
 
@@ -108,6 +109,16 @@ jobs:
             RSYNC_DIST_ARGS+=("--link-dest=${REMOTE_CURRENT_DIST}")
             echo "复用当前发布目录：${REMOTE_CURRENT_DIST}"
           fi
+          # 取消的首次大图发布已传完的文件也可复用，避免新SHA从零重传。
+          # 仅候选源目录、最多四个；-c校验内容且不写源目录，未完成文件不会被误采纳。
+          # rsync成功和全部既有检查通过前仍不会切换dist或重启PM2。
+          REMOTE_RESUME_DIRS=$(${SSH_CMD} "${REMOTE}" "find '${RELEASES_DIR}' -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\\n' 2>/dev/null | sort -nr | cut -d' ' -f2- | head -n 4" || true)
+          while IFS= read -r resume_dir; do
+            if [ -n "${resume_dir}" ] && [ "${resume_dir}" != "${REMOTE_CURRENT_DIST}" ] && [ "${resume_dir}" != "${RELEASE_DIR}" ]; then
+              RSYNC_DIST_ARGS+=("--link-dest=${resume_dir}")
+              echo "校验后复用既有传输目录：${resume_dir}"
+            fi
+          done <<< "${REMOTE_RESUME_DIRS}"
 
           sync_dist_with_retry() {
             local attempt status
