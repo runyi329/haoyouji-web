@@ -35,6 +35,7 @@ import { isR1StockSaleFxScope, ensureStockSaleFxLocksTable, readStockSaleFxLocks
   aggregateFrozenStockSaleAmounts, type StockSaleFxQuote, type StockSaleFxLock } from './stock-sale-fx-locks';
 
 import { type R1AiParticipationPortfolio, type R1AiParticipationRow } from '../shared/r1-stock-presentation';
+import { R1_STOCK_CATEGORY_ID } from '../shared/r1-stock-presentation';
 import type { Ledger37AiProject, Ledger37AiStockPool, StockPoolRow } from '../shared/ledger37-ai-presentation';
 import { getLedger37PresentationContext, readLedger37PresentationState, type Ledger37PresentationInput } from './ledger37-ai-presentation';
 import { readR1StockPresentationState, assertR1RawReadAllowed, projectR1AiPortfolio, readR1RecordedMargins, r1PnlSummary, type R1StockPresentationInput } from './r1-stock-presentation';
@@ -2875,6 +2876,7 @@ export async function getMyLedger37AiStockPool(input: Ledger37PresentationInput)
      WHERE c.ledgerId=? AND c.parentId IS NULL AND c.accounting_mode='stock_portfolio'
      ORDER BY c.id`, [input.userId, 37]);
   const parts: Ledger37StockPoolPart[] = [];
+  let requiredCapitalCny: number | null = null;
   for (const category of categories as any[]) {
     const categoryId = Number(category.id);
     let state: Awaited<ReturnType<typeof readR1StockPresentationState>>;
@@ -2916,6 +2918,14 @@ export async function getMyLedger37AiStockPool(input: Ledger37PresentationInput)
     const portfolio = await getCachedMemberStockPortfolio(categoryId, input.userId);
     const participations = r1MemberPresentationRows.get(portfolio);
     if (!participations) throw new Error('R1参与展示计算不可用');
+    if (categoryId === R1_STOCK_CATEGORY_ID) {
+      // Exactly the existing personal R1 top-summary basis. Do not substitute
+      // source-wide/raw snapshot values, P/L, observations or recorded deposits.
+      const marketValue = portfolio.summary.marketValue;
+      const amount = typeof marketValue === 'number' && Number.isFinite(marketValue) && marketValue >= 0
+        ? marketValue * 0.2 : null;
+      requiredCapitalCny = amount !== null && Number.isFinite(amount) ? amount : null;
+    }
     parts.push({ lots: metadata, participations, usdCnyRate: null, usdtCnyRate: null });
   }
   const symbols = parts.flatMap(part => part.lots.map(lot => lot.symbol));
@@ -2935,7 +2945,10 @@ export async function getMyLedger37AiStockPool(input: Ledger37PresentationInput)
     typeof stock.pnlCny === 'number' && Number.isFinite(stock.pnlCny)) ? new Date().toISOString() : null;
   // Display conversion only; keep the personal CNY P/L and disclosure accounting unchanged.
   const disclosureUsdCnyRate = disclosedAt ? usdCnyRate ?? await readLedger37StockPoolUsdCnyRate() : null;
-  return { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, stocks, disclosedAt, disclosureUsdCnyRate };
+  const capitalUsdCnyRate = requiredCapitalCny !== null
+    ? disclosureUsdCnyRate ?? usdCnyRate ?? await readLedger37StockPoolUsdCnyRate() : null;
+  return { viewerUserId: input.userId, aiEnabled: viewer.context.aiEnabled, stocks, disclosedAt, disclosureUsdCnyRate,
+    requiredCapitalCny, capitalUsdCnyRate };
 }
 
 /** Current market valuation only; never a 15:05 historical calendar reconstruction.

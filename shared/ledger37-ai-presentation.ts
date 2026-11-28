@@ -51,5 +51,9 @@ export type Ledger37AiStockPool = {
   disclosedAt?: string | null;
   /** Verified live USD/CNY for display only; never a fixed fallback or a new P/L calculation. */
   disclosureUsdCnyRate?: number | null;
+  /** Personal R1 current required amount in CNY; safe scalar, independent of cumulative P/L. */
+  requiredCapitalCny?: number | null;
+  /** Verified live USD/CNY for the current amount display, including when P/L is unavailable. */
+  capitalUsdCnyRate?: number | null;
 };
 export type Ledger37AiDisplayResult = { success: true; aiEnabled: boolean };
