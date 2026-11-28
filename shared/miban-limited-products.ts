@@ -16,6 +16,7 @@ import {
 } from "./miban-limited-brand-config";
 import { midaniangSelectionAssets } from "./midaniang-selection-assets";
 import { mibanSpanishWineProducts } from "./miban-spanish-wines";
+import { mibanSpanishHamProduct } from "./miban-spanish-ham";
 
 export type LimitedProductSku = {
   id: string;
@@ -25,7 +26,7 @@ export type LimitedProductSku = {
   marketPriceCny?: number;
   featured?: boolean;
   quantityPerOrder: number;
-  unitLabel: "盒" | "瓶" | "套" | "箱";
+  unitLabel: "盒" | "瓶" | "套" | "箱" | "包" | "只";
   netContentText: string;
   /** 鲜果每个售卖单位的准确颗数，下单时快照保存，不由价格/重量反推。 */
   fruitCountPerUnit?: number;
@@ -71,6 +72,8 @@ export type LimitedProduct = {
     detailImages?: string[];
     /** 商品详情图区域的来源说明；未设置时沿用官方资料的通用说明。 */
     detailImagesCaption?: string;
+    /** 多张独立竖图通过透明异形素材跨接缝连接，不裁切正文图片。 */
+    posterPresentation?: { background: string; connectorImage: string };
     /** 将准确参数以可读文字呈现，不把年份、规格等仅烘焙进宣传图。 */
     factSheet?: { title: string; items: Array<{ label: string; value: string }> };
     /** 商品品鉴/保存建议；与酒庄官方参数分开标注来源性质。 */
@@ -1343,6 +1346,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
   },
   ...midaniangRiceGiftProducts,
   ...mibanSpanishWineProducts,
+  mibanSpanishHamProduct,
 ];
 
 export function getMibanLimitedProduct(

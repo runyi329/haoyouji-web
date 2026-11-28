@@ -118,7 +118,8 @@ describe("Spain selection: three real original wines in the shared catalog (offl
   });
 
   it("contains exactly the three selected wines with globally unique product keys and Spain SKU IDs", () => {
-    const products = mibanLimitedProducts.filter(product => product.brand === "西班牙" || product.key.startsWith("spain-"));
+    const products = mibanLimitedProducts.filter(product =>
+      (product.brand === "西班牙" || product.key.startsWith("spain-")) && product.checkoutGroupKey === "spain-wines");
     expect(products.map(product => product.key).sort()).toEqual(wines.map(wine => wine.key).sort());
     for (const wine of wines) {
       expect(mibanLimitedProducts.filter(product => product.key === wine.key)).toHaveLength(1);

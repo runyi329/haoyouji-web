@@ -151,7 +151,7 @@ export const mibanLimitedBrands = [
     brand: "西班牙",
     eyebrow: "西班牙原产 · 伊比利亚风味",
     title: "西班牙精选",
-    description: "甄选托罗、里奥哈与拉曼恰产区红酒，品味西班牙风土。",
+    description: "甄选西班牙红酒与伊比利亚火腿，品味从产地到餐桌的风味。",
     status: "on_sale" as const,
     theme: SPAIN_THEME,
   },

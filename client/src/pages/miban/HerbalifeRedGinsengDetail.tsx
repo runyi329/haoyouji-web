@@ -30,6 +30,7 @@ import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDet
 import { MibanWineInformation } from "./MibanWineInformation";
 import { MibanWinePurchaseSheet, type WinePurchaseAction } from "./MibanWinePurchaseSheet";
 import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
+import { MibanConnectedPosters } from "./MibanConnectedPosters";
 import { formatMibanPaymentSummary, formatMibanUsdtAmount, type MibanPaymentDeduction } from "../../../../shared/miban-wallet-payment";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { LimitedCartButton, useLimitedProductCart } from "./LimitedProductCart";
@@ -162,6 +163,8 @@ export default function HerbalifeRedGinsengDetail() {
   const currentBrand = getMibanLimitedBrandByName(currentProduct?.brand ?? "");
   const theme = currentBrand?.theme ?? HERBALIFE_THEME;
   const isSpainProduct = currentBrand?.slug === "spain";
+  const isSpainWineProduct = isSpainProduct && currentProduct?.checkoutGroupKey === "spain-wines";
+  const isSpainHamProduct = currentProduct?.key === "spain-iberian-ham";
   const brandPagePath = `/p/proj_hzxm2t/limited/${currentBrand?.slug ?? "herbalife"}${localPreviewMode ? "?preview=1" : ""}`;
   const isPreviewProduct = Boolean(
     currentProduct?.status === "draft" &&
@@ -927,9 +930,11 @@ export default function HerbalifeRedGinsengDetail() {
                   ? "不同箱装规格对应不同价格"
                   : isPreviewProduct
                     ? "以下为资料核验规格，暂未开放下单"
-                    : isSpainProduct
+                    : isSpainWineProduct
                       ? "每瓶750ml，按所选瓶数下单"
-                      : "当前商品提供的现货规格"}
+                      : isSpainHamProduct
+                        ? "切片单包或整只装，按所选数量下单"
+                        : "当前商品提供的现货规格"}
             </p>
           </div>
           <span className="text-[11px] font-semibold" style={{ color: accent }}>
@@ -991,7 +996,7 @@ export default function HerbalifeRedGinsengDetail() {
       <section className="border-b border-gray-100 bg-white">
         <div className="px-5 pb-3 pt-5">
           <h2 className="text-[17px] font-extrabold text-gray-900">商品详情</h2>
-          <p className="mt-1 text-[11px] text-gray-400">
+          {!currentProduct.detail.posterPresentation && <p className="mt-1 text-[11px] text-gray-400">
             {isPreviewProduct
               ? currentProduct.detail.detailImagesCaption ||
                 "以下为基于真实包装的二次视觉设计，仅供本地设计与信息核验"
@@ -999,9 +1004,16 @@ export default function HerbalifeRedGinsengDetail() {
                 (detailImages.length > 0
                   ? "以下图文按官方公开商品资料顺序展示"
                   : "以下商品信息整理自品牌公开资料")}
-          </p>
+          </p>}
         </div>
-        {detailImages.length > 0 && (
+        {detailImages.length > 0 && (currentProduct.detail.posterPresentation ? (
+          <MibanConnectedPosters
+            images={detailImages}
+            title={currentProduct.detail.title}
+            background={currentProduct.detail.posterPresentation.background}
+            connectorImage={currentProduct.detail.posterPresentation.connectorImage}
+          />
+        ) : (
           <div
             className={
               isContinuousDetailPoster
@@ -1040,7 +1052,7 @@ export default function HerbalifeRedGinsengDetail() {
               );
             })}
           </div>
-        )}
+        ))}
         <MibanWineInformation detail={currentProduct.detail} theme={theme} />
         {currentProduct.detail.storySections?.length ? (
           <div className="bg-[#F8F7F2]">
@@ -1188,7 +1200,7 @@ export default function HerbalifeRedGinsengDetail() {
         </section>
       )}
 
-      <section className="border-b border-gray-100 bg-white px-5 py-5">
+      {(currentProduct.detail.logistics.length > 0 || currentProduct.detail.notices.length > 0) && <section className="border-b border-gray-100 bg-white px-5 py-5">
         <h2 className="text-[17px] font-extrabold text-gray-900">
           订单与售后说明
         </h2>
@@ -1230,7 +1242,7 @@ export default function HerbalifeRedGinsengDetail() {
             </p>
           ))}
         </div>
-      </section>
+      </section>}
 
       <div
         className="fixed left-0 right-0 z-[60] mx-auto flex gap-2.5 border-t border-gray-100 px-4 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
