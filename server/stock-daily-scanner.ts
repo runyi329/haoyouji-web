@@ -13,11 +13,12 @@
  */
 
 import mysql from 'mysql2/promise';
+import { LEGACY_TUSHARE_MARKET_TOKEN } from './tushare-market-config';
 import { createHash } from 'node:crypto';
 import { aggregateAiFearGreedMarketDay } from '../shared/ai-fear-greed-market';
 import { AI_FEAR_GREED_MARKET_SCHEMA_SQL, writeAiFearGreedMarketDay } from './ai-fear-greed-market-store';
 
-const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+const TUSHARE_TOKEN = LEGACY_TUSHARE_MARKET_TOKEN;
 const TUSHARE_URL = 'http://api.tushare.pro';
 const DB_URL = process.env.ORIGINAL_DATABASE_URL ?? 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
 

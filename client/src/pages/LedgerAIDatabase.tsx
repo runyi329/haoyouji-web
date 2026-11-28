@@ -982,15 +982,23 @@ function ValuationSection({ market }: { market: MarketNoDelisted }) {
 function RisefallSection({ market }: { market: MarketNoDelisted }) {
 
   const [periodIdx, setPeriodIdx] = useState(0);
-  const { data, isLoading } = trpc.aiDashboardRisefall.useQuery({ market });
+  const { data, isLoading, isError, isFetching, refetch } = trpc.aiDashboardRisefall.useQuery({ market });
 
   const t = data?.today;
-  const total = Number(t?.total ?? 0);
-  const up = Number(t?.up ?? 0);
-  const down = Number(t?.down ?? 0);
-  const flat = Number(t?.flat ?? 0);
-  const limitUp = Number(t?.limit_up ?? 0);
-  const limitDown = Number(t?.limit_down ?? 0);
+  const total = t?.total ?? NaN;
+  const up = t?.up ?? NaN;
+  const down = t?.down ?? NaN;
+  const flat = t?.flat ?? NaN;
+  const usable = data?.source === 'daily' && Boolean(data.latestDate) && total > 0
+    && [total, up, down, flat].every(value => Number.isSafeInteger(value) && value >= 0)
+    && up + down + flat === total;
+  const limitsComplete = data?.status === 'available' && t?.limitEvaluated === total && t?.limitUnknown === 0;
+  const limitUp = limitsComplete && typeof t?.limit_up === 'number' && Number.isSafeInteger(t.limit_up)
+    && t.limit_up >= 0 && t.limit_up <= up ? t.limit_up : null;
+  const limitDown = limitsComplete && typeof t?.limit_down === 'number' && Number.isSafeInteger(t.limit_down)
+    && t.limit_down >= 0 && t.limit_down <= down ? t.limit_down : null;
+  const maxRise = typeof t?.max_rise === 'number' && Number.isFinite(t.max_rise) && t.max_rise > 0 ? t.max_rise : null;
+  const maxFall = typeof t?.max_fall === 'number' && Number.isFinite(t.max_fall) && t.max_fall < 0 ? t.max_fall : null;
   const period = data?.periods[periodIdx];
 
   return (
@@ -1007,15 +1015,19 @@ function RisefallSection({ market }: { market: MarketNoDelisted }) {
 
         {/* 内容区 */}
         <div className="p-3 space-y-3">
-        {isLoading ? (
+        {isLoading && !usable ? (
           <><Skeleton /><Skeleton /></>
-        ) : !data || !data.latestDate ? (
-          <EmptyState label="数据同步中，请稍后刷新" />
+        ) : !usable ? (
+          <div role={isError ? 'alert' : 'status'}>
+            <EmptyState label={isError ? '行情读取失败，请重试' : data?.status === 'insufficient' ? '有效行情样本不足，暂不计算' : data?.latestDate && !t ? '该交易日暂无可用行情明细' : '暂未取得已完成日行情'} />
+            <button type="button" onClick={() => refetch?.()} disabled={isFetching} className="mx-auto block min-h-9 rounded-lg px-4 text-xs disabled:opacity-50" style={{ color: ACCENT, background: ACCENT_SOFT }}>重新读取</button>
+          </div>
         ) : (
           <>
             <p className="text-[12px]" style={{ color: DIM }}>最新交易日 {fmtDate(data.latestDate)}</p>
+            {isError && <div role="alert" className="flex items-center justify-between gap-2 text-[11px]" style={{ color: MUTED }}><span>更新失败，保留上次成功数据</span><button type="button" onClick={() => refetch?.()} disabled={isFetching} className="min-h-9 px-2 disabled:opacity-50" style={{ color: ACCENT }}>重试</button></div>}
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-              <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>今日涨跌分布</p>
+              <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>最新交易日涨跌分布</p>
               {total > 0 ? (
                 <>
                   <div className="flex rounded-full overflow-hidden h-4 mb-3">
@@ -1040,36 +1052,38 @@ function RisefallSection({ market }: { market: MarketNoDelisted }) {
                       { label: "下跌", value: down, color: CHART_DOWN },
                     ].map(item => (
                       <div key={item.label} className="text-center">
-                        <p className="text-lg font-bold" style={{ color: item.color }}>{fmt(item.value)}</p>
+                        <p className="text-lg font-bold" style={{ color: item.value === 0 ? TEXT : item.color }}>{fmt(item.value)}</p>
                         <p className="text-[12px]" style={{ color: MUTED }}>{item.label}</p>
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-3 pt-3 border-t" style={{ borderColor: BORDER }}>
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.riseBackground }}>
-                      <span className="text-[12px]" style={{ color: DIM }}>涨停</span>
-                      <span className="text-sm font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</span>
+                      <span className="text-[12px]" style={{ color: DIM }}>收盘涨停</span>
+                      <span className="text-sm font-bold" style={{ color: limitUp === null ? DIM : limitUp === 0 ? TEXT : CHART_UP }}>{fmt(limitUp)}</span>
                     </div>
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.riseBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>最大涨幅</span>
-                      <span className="text-sm font-bold" style={{ color: CHART_UP }}>
-                        {t?.max_rise != null ? `+${Number(t.max_rise).toFixed(2)}%` : "—"}
+                      <span className="text-sm font-bold" style={{ color: maxRise === null ? DIM : CHART_UP }}>
+                        {maxRise !== null ? `+${maxRise.toFixed(2)}%` : "—"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.fallBackground }}>
-                      <span className="text-[12px]" style={{ color: DIM }}>跌停</span>
-                      <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</span>
+                      <span className="text-[12px]" style={{ color: DIM }}>收盘跌停</span>
+                      <span className="text-sm font-bold" style={{ color: limitDown === null ? DIM : limitDown === 0 ? TEXT : CHART_DOWN }}>{fmt(limitDown)}</span>
                     </div>
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: AI_STOCK_THEME.fallBackground }}>
                       <span className="text-[12px]" style={{ color: DIM }}>最大跌幅</span>
-                      <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>
-                        {t?.max_fall != null ? `${Number(t.max_fall).toFixed(2)}%` : "—"}
+                      <span className="text-sm font-bold" style={{ color: maxFall === null ? DIM : CHART_DOWN }}>
+                        {maxFall !== null ? `${maxFall.toFixed(2)}%` : "—"}
                       </span>
                     </div>
                   </div>
+                  <p className="mt-3 text-[10px] leading-relaxed" style={{ color: MUTED }}>日线有效样本 {fmt(total)} 只{t && t.excluded > 0 ? ` · ${fmt(t.excluded)} 只缺少有效价格，未计入` : ''} · 停牌或缺行情不计作平盘。</p>
+                  {(limitUp === null || limitDown === null) && <p role="status" className="mt-1 text-[10px] leading-relaxed" style={{ color: MUTED }}>同日涨跌停价仅核验 {fmt(t?.limitEvaluated ?? null)} / {fmt(total)} 只，暂不显示完整涨跌停总数。</p>}
                 </>
               ) : (
-                <p className="text-sm text-center py-4" style={{ color: DIM }}>今日无数据（非交易日）</p>
+                <p className="text-sm text-center py-4" style={{ color: DIM }}>有效行情样本不足，暂不计算</p>
               )}
             </div>
             {data.periods.length > 0 && period && (
@@ -1090,6 +1104,8 @@ function RisefallSection({ market }: { market: MarketNoDelisted }) {
                     ))}
                   </div>
                 </div>
+                <p className="mb-2 text-[10px] leading-relaxed" style={{ color: MUTED }}>横轴：每日上涨股票占比 · 纵轴：交易日数{period.windowStart && period.windowEnd ? ` · ${fmtDate(period.windowStart)} 至 ${fmtDate(period.windowEnd)}` : ''}</p>
+                {period.total < period.requestedDays && <p className="mb-2 text-[10px]" style={{ color: MUTED }}>实际仅 {period.total} 个有效交易日，不足 {period.requestedDays} 日。</p>}
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={period.distribution} margin={{ top: 14, right: 4, left: -24, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -1097,7 +1113,7 @@ function RisefallSection({ market }: { market: MarketNoDelisted }) {
                     <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                      formatter={(v: any) => [fmt(v), "只数"]}
+                      formatter={(v: any) => [fmt(v), "交易日数"]}
                     />
                     <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                       {period.distribution.map((entry: any, i: number) => (

@@ -7,6 +7,8 @@ import { getStockReturnRanking } from "./stock-return-ranking";
 import { getStockLatestQuotes } from "./stock-latest-quotes";
 import { getStockMAMonitor } from "./stock-ma-monitor";
 import { getStockMAMonitorChart } from "./stock-monitor-chart";
+import { getAiRisefall } from "./ai-risefall-service";
+import { getTushareMarketToken } from "./tushare-market-config";
 import { getAiFearGreedIndex } from "./ai-fear-greed-service";
 import { captureFunderOptionEvidence, getFunderOptionSettlementEvidenceError, buildFunderRegisteredSettlementEvidence, readFunderEvidenceNumber, type FunderSettlementEvidenceScope } from "./shared/funder-settlement-evidence";
 import { assertFunderPersonalCollateralReleaseScope, assertFunderJointCollateralReleaseScope } from "./funder-personal-collateral-scope";
@@ -38294,95 +38296,11 @@ insights 数组每项包含：
     .query(async ({ input }) => {
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        const marketKey = input.market;
-        // 从 ts_trend_cache 取最新 60 个交易日的数据
-        const [cacheRows] = await dbConn.execute(
-          `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = ? ORDER BY trade_date DESC LIMIT 61`,
-          [marketKey]
-        ) as any[];
-        const rows = (cacheRows as any[]);
-        if (rows.length === 0) return { latestDate: null, today: null, periods: [] };
-        const latestRow = rows[0];
-        const latestDate = latestRow.trade_date;
-        const latestDateFormatted = latestDate.length === 8
-          ? `${latestDate.slice(0,4)}-${latestDate.slice(4,6)}-${latestDate.slice(6,8)}`
-          : latestDate;
-        // 今日数据
-        const aboveN = Number(latestRow.above);
-        const belowN = Number(latestRow.below);
-        const equalN = Number(latestRow.equal_cnt);
-        const totalN = aboveN + belowN + equalN;
-        // 从 ts_daily 表查询真实涨停/跌停数和最大涨跌幅（支持创业板/科创板20%涨停）
-        let limitUp: number | null = null;
-        let limitDown: number | null = null;
-        let maxRise: number | null = null;
-        let maxFall: number | null = null;
-        try {
-          // 市场过滤条件（ts_daily 用 ts_code 前缀区分板块）
-          const marketFilterMap: Record<string, string> = {
-            all:  '',
-            SH:   "AND ts_code LIKE '6%' AND ts_code NOT LIKE '688%'",
-            SZ:   "AND ts_code LIKE '0%'",
-            GEM:  "AND ts_code LIKE '3%'",
-            STAR: "AND ts_code LIKE '688%'",
-          };
-          const mf = marketFilterMap[marketKey] ?? '';
-          const [dailyRows] = await dbConn.execute(
-            `SELECT
-               MAX(pct_chg) AS max_rise,
-               MIN(pct_chg) AS max_fall,
-               SUM(CASE WHEN pct_chg >= 9.9 THEN 1 ELSE 0 END) AS limit_up,
-               SUM(CASE WHEN pct_chg <= -9.9 THEN 1 ELSE 0 END) AS limit_down
-             FROM ts_daily
-             WHERE trade_date = ? ${mf}`,
-            [latestDate]
-          ) as any[];
-          const dr = (dailyRows as any[])[0];
-          if (dr) {
-            limitUp = dr.limit_up != null ? Number(dr.limit_up) : null;
-            limitDown = dr.limit_down != null ? Number(dr.limit_down) : null;
-            maxRise = dr.max_rise != null ? parseFloat(Number(dr.max_rise).toFixed(2)) : null;
-            maxFall = dr.max_fall != null ? parseFloat(Number(dr.max_fall).toFixed(2)) : null;
-          }
-        } catch {}
-        const today = {
-          total: totalN,
-          up: aboveN,
-          down: belowN,
-          flat: equalN,
-          limit_up: limitUp,
-          limit_down: limitDown,
-          max_rise: maxRise,
-          max_fall: maxFall,
-        };
-        // 近5/20/60日分布：统计每天 above 比例，分成6个桶
-        const periodDefs = [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }];
-        const periodResults = [];
-        for (const p of periodDefs) {
-          const periodRows = rows.slice(0, p.days);
-          if (periodRows.length === 0) continue;
-          // 计算每天的 above 比例，分成6个桶
-          const buckets = [
-            { label: '<30%', count: 0 }, { label: '30~40%', count: 0 }, { label: '40~50%', count: 0 },
-            { label: '50~60%', count: 0 }, { label: '60~70%', count: 0 }, { label: '>70%', count: 0 },
-          ];
-          for (const r of periodRows) {
-            const a = Number(r.above), b = Number(r.below), e = Number(r.equal_cnt);
-            const t = a + b + e;
-            if (t === 0) continue;
-            const pct = a / t * 100;
-            if (pct < 30) buckets[0].count++;
-            else if (pct < 40) buckets[1].count++;
-            else if (pct < 50) buckets[2].count++;
-            else if (pct < 60) buckets[3].count++;
-            else if (pct < 70) buckets[4].count++;
-            else buckets[5].count++;
-          }
-          periodResults.push({ label: p.label, total: periodRows.length, distribution: buckets });
-        }
-        return { latestDate: latestDateFormatted, today, periods: periodResults };
-      } finally { /* pool auto-manages connections */ }
+      return getAiRisefall(dbConn, {
+        market: input.market,
+        token: getTushareMarketToken(),
+        fetchImpl: fetch,
+      });
     }),
   /**
    * 涨停聚集效应：从 ts_bunching_stats 聚合全历史涨幅分布

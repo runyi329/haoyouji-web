@@ -47,7 +47,7 @@ describe('AI dashboard actual frontend: ordering, daily limits and honest fear/g
       .toEqual(['SurvivalSection', 'RisefallSection', 'AiFearGreedSection', 'BunchingEffectSection']);
     expect(pageSource).toContain('title="A 股全生命周期"');
     const daily = pageAst.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === 'RisefallSection')!.getText(pageAst);
-    expect(daily).toContain('今日涨跌分布'); expect(daily).toContain('limit_up'); expect(daily).toContain('limit_down');
+    expect(daily).toContain('最新交易日涨跌分布'); expect(daily).toContain('limit_up'); expect(daily).toContain('limit_down');
   });
   it('uses the original lifecycle deep red/green palette across AI pages without modifying ordinary overview', () => {
     expect(AI_STOCK_THEME.rise).toBe('#B71C1C'); expect(AI_STOCK_THEME.fall).toBe('#1B5E20');
