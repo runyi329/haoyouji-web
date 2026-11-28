@@ -65,6 +65,19 @@ export const WANGKA_THEME = {
   subtle: "#B4969E",
 } as const;
 
+export const SPAIN_THEME = {
+  primary: "#831C25",
+  price: "#A12432",
+  navy: "#522A25",
+  canvas: "#FAF7F0",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F7EFE3",
+  border: "#EADDD0",
+  text: "#522A25",
+  muted: "#806858",
+  subtle: "#B39B88",
+} as const;
+
 export const TUOQUETANG_COS_BASE =
   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/tuoquetang/v1";
 
@@ -132,6 +145,15 @@ export const mibanLimitedBrands = [
     // Public brand entrance only; reference packaging does not create sellable SKUs.
     status: "on_sale" as const,
     theme: WANGKA_THEME,
+  },
+  {
+    slug: "spain",
+    brand: "西班牙",
+    eyebrow: "西班牙原产 · 伊比利亚风味",
+    title: "西班牙精选",
+    description: "甄选托罗、里奥哈与拉曼恰产区红酒，品味西班牙风土。",
+    status: "on_sale" as const,
+    theme: SPAIN_THEME,
   },
 ] as const;
 

@@ -143,6 +143,10 @@ export default function MibanApp() {
               component={LimitedBrandProducts}
             />
             <Route
+              path={`${BASE}/limited/spain`}
+              component={LimitedBrandProducts}
+            />
+            <Route
               path={`${BASE}/limited/:productKey`}
               component={HerbalifeRedGinsengDetail}
             />

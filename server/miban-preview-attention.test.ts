@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import React, { type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Link, Router } from "wouter";
@@ -29,9 +30,9 @@ import { mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config
 
 const expectedSlugs = [
   "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
-  "guizhou", "amway", "marykay", "nuskin", "jianghai",
+  "spain", "guizhou", "amway", "marykay", "nuskin", "jianghai",
 ];
-const navigationSlugs = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka", "guizhou"];
+const navigationSlugs = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka", "spain", "guizhou"];
 const navigationHref = (slug: string) => `/p/proj_hzxm2t/limited/${slug === "guizhou" ? "moutai-feitian" : slug}`;
 const previewMessages: Record<string, string> = {
   amway: "安利日用精选商品尚未上架，敬请期待。",
@@ -80,7 +81,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("all limited brand cards record attention only through their CTA", () => {
-  it("renders all 11 series with one right-bottom counter and one CTA each, without counting renders", () => {
+  it("renders all 12 series with one right-bottom counter and one CTA each, without counting renders", () => {
     expect([...mibanLimitedAttentionSlugs]).toEqual(expectedSlugs);
     const html = markupFor(React.createElement(LimitedSale));
     for (const slug of expectedSlugs) {
@@ -94,6 +95,58 @@ describe("all limited brand cards record attention only through their CTA", () =
     expect(html).toContain("关注 +0");
     expect(html).toContain("查看江海鲜选");
     expect(html).toContain("jianghai-fresh-selection-stage-v13.webp");
+    expect(html).toContain("spain-bodega-stage-v1.webp");
+    expect(html).toContain("查看西班牙精选");
+  });
+
+  it("keeps SpainSelectionPreviewCard once, fixed immediately after Guizhou even when attention changes", () => {
+    const source = readFileSync(new URL("../client/src/pages/miban/LimitedSale.tsx", import.meta.url), "utf8");
+    expect(source).toContain("function SpainSelectionPreviewCard(");
+    expect(source.match(/<SpainSelectionPreviewCard\b/g)).toHaveLength(1);
+    expect(source).not.toContain("西班牙精选商品尚未上架，敬请期待。");
+    for (const counts of [{ spain: 999, guizhou: 1 }, { spain: 1, guizhou: 999 }]) {
+      boundary.cache = expectedSlugs.map(brandSlug => ({
+        brandSlug, viewCount: brandSlug === "spain" ? counts.spain : brandSlug === "guizhou" ? counts.guizhou : 50,
+      }));
+      const cards = expand(LimitedSale()).filter(el => el.props["data-brand-slug"]);
+      const order = cards.map(el => el.props["data-brand-slug"]);
+      expect(order).toHaveLength(expectedSlugs.length);
+      expect(new Set(order).size).toBe(expectedSlugs.length);
+      expect(order.slice(0, 2)).toEqual(["guizhou", "spain"]);
+      expect(boundary.mutateAsync).not.toHaveBeenCalled();
+      expect(boundary.toast).not.toHaveBeenCalled();
+    }
+  });
+
+  it("spainLink navigates to the real series and counts only its CTA, never the old unlisted toast", async () => {
+    const spainLink = ctaFor("spain");
+    expect(spainLink.type).toBe(Link);
+    expect(spainLink.props.href).toBe("/p/proj_hzxm2t/limited/spain");
+    const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    spainLink.props.onClick(event);
+    await flush();
+    expect(boundary.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(boundary.mutateAsync).toHaveBeenCalledWith({
+      brandSlug: "spain", eventId: "11111111-1111-4111-8111-000000000001",
+    });
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(boundary.toast).not.toHaveBeenCalled();
+  });
+
+  it("uses the same 68px icon and layout classes as Midaniang, with a separate photo background", () => {
+    const spain = cardFor("spain");
+    const flag = expand(spain).find(node => node.props["data-testid"] === "spain-selection-flag")!;
+    const stage = expand(spain).find(node => node.props["data-testid"] === "spain-selection-stage")!;
+    expect(flag.props.className).toBe("h-[68px] w-[68px] shrink-0 object-contain");
+    expect(flag.props.src).toBe("/miban-spain/spain-flag-r1.webp");
+    expect(stage.props.src).toBe("/miban-spain/spain-bodega-stage-v1.webp");
+    const spainTitle = expand(spain).find(node => node.type === "h3")!;
+    const riceTitle = expand(cardFor("midaniang")).find(node => node.type === "h3")!;
+    for (const token of ["mt-1.5", "text-[clamp(18px,5.8vw,23px)]", "font-extrabold", "leading-tight"]) {
+      expect(spainTitle.props.className).toContain(token);
+      expect(riceTitle.props.className).toContain(token);
+    }
   });
 
   it.each(expectedSlugs)("a missing %s row remains unknown while other real values are displayed", slug => {
@@ -107,7 +160,7 @@ describe("all limited brand cards record attention only through their CTA", () =
     expect(boundary.mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("an empty completed GET never fabricates eleven zero values", () => {
+  it("an empty completed GET never fabricates twelve zero values", () => {
     boundary.cache = [];
     const html = markupFor(React.createElement(LimitedSale));
     expect(html.match(/关注 --/g)).toHaveLength(expectedSlugs.length);
@@ -198,7 +251,7 @@ describe("all limited brand cards record attention only through their CTA", () =
   it("unknown data stays unavailable, even when a CTA event succeeds before the GET", async () => {
     boundary.cache = undefined;
     const html = markupFor(React.createElement(LimitedSale));
-    expect(html.match(/关注 --/g)).toHaveLength(11);
+    expect(html.match(/关注 --/g)).toHaveLength(expectedSlugs.length);
     expect(html).not.toContain("关注 +0");
     for (const slug of expectedSlugs) {
       const counter = expand(cardFor(slug)).find(el => el.props["data-testid"] === `${slug}-attention`)!;
@@ -210,7 +263,7 @@ describe("all limited brand cards record attention only through their CTA", () =
     expect(boundary.mutateAsync).toHaveBeenCalledTimes(1);
     expect(boundary.toast).toHaveBeenCalledWith(previewMessages.jianghai);
     expect(boundary.cache).toBeUndefined();
-    expect(markupFor(React.createElement(LimitedSale)).match(/关注 --/g)).toHaveLength(11);
+    expect(markupFor(React.createElement(LimitedSale)).match(/关注 --/g)).toHaveLength(expectedSlugs.length);
   });
 
   it.each(expectedSlugs)("failed %s statistics neither intercept navigation nor suppress the preview hint", async slug => {
@@ -236,7 +289,7 @@ describe("all limited brand cards record attention only through their CTA", () =
     }
   });
 
-  it.each(["herbalife", "guizhou", "jianghai"])("unavailable crypto for %s does not block navigation or the preview hint", slug => {
+  it.each(["herbalife", "guizhou", "spain", "jianghai"])("unavailable crypto for %s does not block navigation or the preview hint", slug => {
     vi.stubGlobal("crypto", { randomUUID: () => { throw new Error("offline crypto"); } });
     const cta = ctaFor(slug);
     const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };

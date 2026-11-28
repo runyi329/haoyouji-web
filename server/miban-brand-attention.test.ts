@@ -19,7 +19,8 @@ const uuid = (id: number) =>
   `00000000-0000-4000-8000-${id.toString(16).padStart(12, "0")}`;
 const slugs = mibanLimitedAttentionSlugs;
 const previewSlugs = ["guizhou", "amway", "marykay", "nuskin", "jianghai"] as const;
-
+// Spain is now an on-sale entrance, but keeps the same real attention contract.
+const newlyTrackedSlugs = ["spain", ...previewSlugs] as const;
 type Statement = { sql: string; params: unknown[]; inTransaction: boolean };
 class MemoryDatabase {
   totalsExist = false;
@@ -222,23 +223,29 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expectTypeOf<Connection>().toMatchTypeOf<BrandAttentionConnection>();
   });
 
-  it("keeps the six sales entrances unchanged and registers previews only for attention", () => {
+  it("keeps the six entrances and adds Spain once before attention-only previews", () => {
     expect(mibanLimitedBrands.map(brand => brand.slug)).toEqual([
       "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
+      "spain",
     ]);
     expect(mibanLimitedBrands.every(brand => brand.status === "on_sale")).toBe(true);
+    expect(mibanLimitedBrands.filter(brand => String(brand.slug) === "spain")).toHaveLength(1);
+    expect(mibanLimitedBrands.find(brand => String(brand.slug) === "spain")).toMatchObject({
+      slug: "spain", brand: "西班牙", status: "on_sale",
+    });
     expect(slugs).toEqual([
       ...mibanLimitedBrands.map(brand => brand.slug), ...previewSlugs,
     ]);
+    expect(slugs.filter(slug => slug === "spain")).toHaveLength(1);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it("starts at real zero for eleven attention brands, in registry order, with integer counts", async () => {
+  it("starts at real zero for twelve attention brands, in registry order, with integer counts", async () => {
     const { db, connection } = await fixture();
     const values = await readBrandAttention(connection);
     expect(slugs).toEqual([
       "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
-      "guizhou", "amway", "marykay", "nuskin", "jianghai",
+      "spain", "guizhou", "amway", "marykay", "nuskin", "jianghai",
     ]);
     expect(values).toEqual(
       slugs.map(brandSlug => ({ brandSlug, viewCount: 0 }))
@@ -250,7 +257,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expect(connection.statements[0].sql).toMatch(/^SELECT /);
   });
 
-  it.each(previewSlugs)("first reads %s as zero without creating historical totals or events", async brandSlug => {
+  it.each(newlyTrackedSlugs)("first reads %s as zero without creating historical totals or events", async brandSlug => {
     const { db, connection } = await fixture();
     db.totals.set("wangka", "7");
     const values = await readBrandAttention(connection);
@@ -266,7 +273,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
     expect(connection.statements[0].params).toEqual(slugs);
   });
 
-  it.each(previewSlugs)("counts a real %s click once, deduplicates retries and accumulates fresh events", async brandSlug => {
+  it.each(newlyTrackedSlugs)("counts a real %s click once, deduplicates retries and accumulates fresh events", async brandSlug => {
     const { db, connection } = await fixture();
     const firstClick = click(brandSlug, 1);
     expect(() => assertBrandAttentionInput(firstClick)).not.toThrow();
@@ -424,6 +431,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
       { brandSlug: "tuoquetang", viewCount: 0 },
       { brandSlug: "midaniang", viewCount: 0 },
       { brandSlug: "wangka", viewCount: 0 },
+      { brandSlug: "spain", viewCount: 0 },
       { brandSlug: "guizhou", viewCount: 0 },
       { brandSlug: "amway", viewCount: 0 },
       { brandSlug: "marykay", viewCount: 0 },

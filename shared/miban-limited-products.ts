@@ -15,6 +15,7 @@ import {
   tuoquetangImage,
 } from "./miban-limited-brand-config";
 import { midaniangSelectionAssets } from "./midaniang-selection-assets";
+import { mibanSpanishWineProducts } from "./miban-spanish-wines";
 
 export type LimitedProductSku = {
   id: string;
@@ -70,6 +71,14 @@ export type LimitedProduct = {
     detailImages?: string[];
     /** 商品详情图区域的来源说明；未设置时沿用官方资料的通用说明。 */
     detailImagesCaption?: string;
+    /** 将准确参数以可读文字呈现，不把年份、规格等仅烘焙进宣传图。 */
+    factSheet?: { title: string; items: Array<{ label: string; value: string }> };
+    /** 商品品鉴/保存建议；与酒庄官方参数分开标注来源性质。 */
+    servingGuide?: {
+      title: string;
+      note?: string;
+      items: Array<{ title: string; description: string }>;
+    };
     /** 无缝衔接的手机端商品故事海报分段，用于承载产地、时令、风味等图文资料。 */
     storySections?: Array<{
       eyebrow: string;
@@ -1333,6 +1342,7 @@ export const mibanLimitedProducts: LimitedProduct[] = [
     orderPolicy: domesticOrderPolicy,
   },
   ...midaniangRiceGiftProducts,
+  ...mibanSpanishWineProducts,
 ];
 
 export function getMibanLimitedProduct(

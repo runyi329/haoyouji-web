@@ -37,6 +37,9 @@ const NUSKIN_OFFICIAL_LOGO = "/miban-nuskin/nuskin-official-logo.png";
 
 const JIANGHAI_FRESH_SELECTION_STAGE = "/miban-jianghai/jianghai-fresh-selection-stage-v13.webp";
 
+const SPAIN_SELECTION_STAGE = "/miban-spain/spain-bodega-stage-v1.webp";
+const SPAIN_SELECTION_FLAG = "/miban-spain/spain-flag-r1.webp";
+
 const BRAND_CARD_FRAME_CLASS =
   "relative w-full min-w-0 min-h-[224px] overflow-hidden rounded-[22px] md:aspect-[16/9]";
 const BRAND_CARD_CONTENT_CLASS =
@@ -49,7 +52,8 @@ const BRAND_CARD_CTA_ICON_CLASS = "h-3.5 w-3.5";
 const WINE_TASTING_PREVIEW = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guizhou/brand-card/v1/guizhou-original-stage-bd73885a1d59.webp";
 const MOUTAI_OFFICIAL_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-shebei/guizhou/brand-card/v1/moutai-original-logo-6f22c1e6e462.webp";
 
-const BRAND_ORDER = mibanLimitedBrands.map(brand => brand.slug);
+// 西班牙沿用已确认的国别卡片，固定在贵州后；不再进入常规品牌排序重复渲染。
+const BRAND_ORDER = mibanLimitedBrands.filter(brand => brand.slug !== "spain").map(brand => brand.slug);
 type BrandSlug = MibanLimitedAttentionSlug;
 type BrandAttention = { brandSlug: string; viewCount: number };
 
@@ -117,6 +121,72 @@ function WineTastingPreviewCard({ onClick, viewCount }: PreviewCardProps) {
         </Link>
       </div>
       <AttentionCount brandSlug="guizhou" viewCount={viewCount} />
+    </article>
+  );
+}
+
+function SpainSelectionPreviewCard({ onClick, viewCount }: PreviewCardProps) {
+  return (
+    <article
+      id="brand-spain"
+      className={`${BRAND_CARD_FRAME_CLASS} isolate scroll-mt-[68px]`}
+      data-testid="brand-card-spain"
+      data-brand-slug="spain"
+      style={{
+        background: "#F7EFE3",
+        clipPath: "inset(0 round 22px)",
+        boxShadow: "0 14px 32px rgba(111,31,36,0.14)",
+      }}
+      aria-label="西班牙精选，红酒与伊比利亚火腿酒窖品鉴场景"
+    >
+      <MibanImage
+        variant="card"
+        src={SPAIN_SELECTION_STAGE}
+        alt="西班牙红酒、整条伊比利亚火腿与ALJOMAR包装错落置于暖阳酒窖品鉴台"
+        data-testid="spain-selection-stage"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right"
+        loading="lazy"
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(90deg,rgba(250,244,233,0.99) 0%,rgba(250,244,233,0.96) 26%,rgba(250,244,233,0.84) 39%,rgba(250,244,233,0.32) 52%,rgba(250,244,233,0) 65%)",
+        }}
+      />
+      <div className={BRAND_CARD_CONTENT_CLASS}>
+        <div>
+          <div className="flex items-center gap-2">
+            <MibanImage
+              variant="icon"
+              src={SPAIN_SELECTION_FLAG}
+              alt="圆形西班牙国旗，右上角红金R1标记"
+              data-testid="spain-selection-flag"
+              className="h-[68px] w-[68px] shrink-0 object-contain"
+              loading="lazy"
+            />
+            <p className="text-[11px] font-medium leading-[18px] tracking-[0.04em] text-[#806858]">
+              伊比利亚风味<br />地中海好物
+            </p>
+          </div>
+          <h3 className={`mt-1.5 ${BRAND_CARD_TITLE_CLASS} text-[#831C25]`}>
+            西班牙精选
+          </h3>
+          <p className="mt-1.5 text-[11px] leading-[18px] text-[#806858]">
+            火腿与红酒为主，<br />甄选西班牙风味好物。
+          </p>
+        </div>
+        <Link
+          href="/p/proj_hzxm2t/limited/spain"
+          onClick={onClick}
+          data-testid="brand-cta-spain"
+          className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#831C25] text-white transition-colors hover:bg-[#701720] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#831C25]`}
+        >
+          查看西班牙精选
+          <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
+        </Link>
+      </div>
+      <AttentionCount brandSlug="spain" viewCount={viewCount} />
     </article>
   );
 }
@@ -745,6 +815,10 @@ export default function LimitedSale() {
         <WineTastingPreviewCard
           onClick={() => recordBrandClick("guizhou")}
           viewCount={viewCountFor("guizhou")}
+        />
+        <SpainSelectionPreviewCard
+          onClick={() => recordBrandClick("spain")}
+          viewCount={viewCountFor("spain")}
         />
         {sortedBrands.map(brandSlug => brandCards[brandSlug])}
         <AmwayDailyPreviewCard

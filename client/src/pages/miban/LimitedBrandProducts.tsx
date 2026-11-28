@@ -123,6 +123,7 @@ export default function LimitedBrandProducts() {
               // 右侧文字、金额与按钮采用独立栅格，不在不同手机宽度下争抢同一行。
               const useAdaptiveProductCard =
                 brandSlug === "tuoquetang" || brandSlug === "lingchuang";
+              const useBlendedWineCard = brandSlug === "spain";
               return (
                 <Link
                   key={product.key}
@@ -133,19 +134,29 @@ export default function LimitedBrandProducts() {
                   <article className="grid h-[165px] grid-cols-[132px_minmax(0,1fr)] max-[360px]:grid-cols-[118px_minmax(0,1fr)]">
                     <div
                       className="relative flex min-w-0 items-center justify-center overflow-hidden"
-                      style={{ background: product.card.theme.background }}
+                      style={{ background: useBlendedWineCard ? "#FFFFFF" : product.card.theme.background }}
                     >
-                      <div
+                      {!useBlendedWineCard && <div
                         className="absolute left-0 top-3 z-10 rounded-r-full px-2.5 py-1 text-[9px] font-bold text-white"
                         style={{ background: product.card.theme.accent }}
                       >
                         {product.card.badge}
-                      </div>
+                      </div>}
                       <MibanImage variant="thumbnail" priority={imageIndex === 0}
                         src={product.card.image}
                         alt={product.card.title}
-                        className={`h-full w-full ${useAdaptiveProductCard ? "object-cover object-center" : "object-contain p-3"}`}
+                        className={`h-full w-full ${useAdaptiveProductCard || useBlendedWineCard ? "object-cover object-center" : "object-contain p-3"}`}
                       />
+                      {useBlendedWineCard && (
+                        <div
+                          aria-hidden="true"
+                          data-testid="spain-list-image-blend"
+                          className="pointer-events-none absolute inset-0"
+                          style={{ background: product.key === "spain-marthu"
+                            ? "linear-gradient(180deg,#FFFFFF 0%,rgba(255,255,255,0) 18%,rgba(255,255,255,0) 80%,#FFFFFF 100%),linear-gradient(90deg,rgba(255,255,255,0) 76%,#FFFFFF 100%)"
+                            : "linear-gradient(180deg,rgba(255,255,255,0.35) 0%,rgba(255,255,255,0) 6%,rgba(255,255,255,0) 94%,rgba(255,255,255,0.35) 100%),linear-gradient(90deg,rgba(255,255,255,0) 76%,#FFFFFF 100%)" }}
+                        />
+                      )}
                       {useAdaptiveProductCard && (
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/20 to-transparent" />
                       )}
