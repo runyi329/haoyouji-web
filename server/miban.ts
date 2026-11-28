@@ -67,6 +67,14 @@ import { splitMibanBenefitPeriodCents, mibanBenefitLineSnapshot } from "./miban-
 import { mibanReceiverPhoneSchema } from "../shared/miban-shipping";
 import { mibanLimitedBrands, mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config";
 import { mibanInvoiceRequestSchema } from "../shared/miban-invoice";
+import { getMibanLimitedProductCollectionSlug } from "../shared/miban-limited-collections";
+import {
+  ensureMibanLimitedCollectionTables, readMibanLimitedCollections,
+  readMibanLimitedCollectionStates, updateMibanLimitedCollectionState,
+  assertMibanLimitedCollectionActive, isMibanLimitedProductCollectionActive,
+  mibanLimitedPreviewInputSchema, isMibanLimitedPreviewAdministrator,
+  buildMibanLimitedPublicAvailability,
+} from "./miban-limited-collections";
 import {
   ensureMibanOrderInvoiceInfrastructure,
   insertMibanOrderInvoiceRequest,
@@ -429,6 +437,7 @@ async function ensureLimitedProductManagementTables() {
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (brand, category)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await ensureMibanLimitedCollectionTables(conn as any);
         await (conn as any)
           .execute(`CREATE TABLE IF NOT EXISTS miban_limited_stock_movements (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -688,6 +697,7 @@ async function reserveLimitedSkuStock(
   const conn = await getLimitedStockTransactionConnection();
   try {
     await (conn as any).beginTransaction();
+    await assertMibanLimitedCollectionActive(conn as any, getMibanLimitedProductCollectionSlug(getMibanLimitedProduct(productKey)), true);
     const [rows] = await (conn as any).execute(
       `SELECT is_active, stock_qty FROM miban_limited_sku_state WHERE product_key = ? AND sku_id = ? LIMIT 1 FOR UPDATE`,
       [productKey, skuId]
@@ -788,6 +798,10 @@ async function reserveLimitedSkuStocks(
   );
   try {
     await (conn as any).beginTransaction();
+    const collectionStates = await readMibanLimitedCollectionStates(conn as any, true);
+    if (sortedLines.some(line => !isMibanLimitedProductCollectionActive(getMibanLimitedProduct(line.productKey), collectionStates))) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "购物车中有精选分类已下架，请刷新后重试" });
+    }
     for (const line of sortedLines) {
       const [rows] = await (conn as any).execute(
         `SELECT is_active, stock_qty FROM miban_limited_sku_state
@@ -3236,6 +3250,16 @@ export const mibanOrderRouter = router({
       );
       const userId = ctx.user!.id;
       const singleCny = input.totalPrice; // 单期金额（人民币）
+      // 旧梨页仍走通用订单接口，不能仅依赖前端 fruits 门禁。
+      const containsLegacyPear = input.ingredients.some(ingredient => ingredient.riceId === 47);
+      if (containsLegacyPear) {
+        const collectionConn = await getDbConnection();
+        if (!collectionConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "精选分类暂不可用" });
+        try {
+          await ensureMibanLimitedCollectionTables(collectionConn as any);
+          await assertMibanLimitedCollectionActive(collectionConn as any, "fruits");
+        } finally { await (collectionConn as any).end(); }
+      }
       const subMonths = input.subscriptionMonths ?? null; // 订阅期数（null=单次）
       const totalCny = Number(
         (subMonths !== null ? singleCny * subMonths : singleCny).toFixed(2)
@@ -3329,6 +3353,7 @@ export const mibanOrderRouter = router({
 
       // 所有订阅期订单与两币扣款共用一个事务，任一步失败均整体回滚。
       await withGlobalWalletTransaction(userId, async transaction => {
+        if (containsLegacyPear) await assertMibanLimitedCollectionActive(transaction, "fruits", true);
         for (let i = 0; i < totalPeriods; i++) {
           const letters = Array.from({ length: 2 }, () =>
             String.fromCharCode(65 + Math.floor(Math.random() * 26))
@@ -4237,6 +4262,41 @@ export const mibanLimitedProductRouter = router({
     .input(mibanInvoiceRequestSchema)
     .mutation(({ ctx, input }) => rememberMibanInvoice(ctx.user!.id, input)),
 
+  // 精选分类上下架与商品/SKU状态独立，空分类也可管理。
+  publicCollections: publicProcedure
+    .input(mibanLimitedPreviewInputSchema)
+    .query(async ({ ctx }) => {
+      const canPreviewInactive = isMibanLimitedPreviewAdministrator(ctx.user);
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "精选分类暂不可用" });
+      try {
+        await ensureMibanLimitedCollectionTables(conn as any);
+        return {
+          viewerUserId: ctx.user?.id ?? null,
+          canPreviewInactive,
+          collections: await readMibanLimitedCollections(conn as any, !canPreviewInactive),
+        };
+      } finally { await (conn as any).end(); }
+    }),
+  adminCollections: mibanAdminProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "精选分类暂不可用" });
+    try {
+      await ensureMibanLimitedCollectionTables(conn as any);
+      return await readMibanLimitedCollections(conn as any, false);
+    } finally { await (conn as any).end(); }
+  }),
+  adminUpdateCollectionState: mibanAdminProcedure
+    .input(z.object({ slug: z.string().trim().min(1).max(80), isActive: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "精选分类暂不可用" });
+      try {
+        await ensureMibanLimitedCollectionTables(conn as any);
+        return await updateMibanLimitedCollectionState(conn as any, input, ctx.user!.id);
+      } finally { await (conn as any).end(); }
+    }),
+
   // 所有米伴可结算入口共用此能力探测；发票开启时前端必须实时验证。
   invoiceSupport: protectedProcedure.query(async () => {
     await ensureMibanOrderInvoiceInfrastructure();
@@ -4273,45 +4333,33 @@ export const mibanLimitedProductRouter = router({
     }),
 
   // 前台只读取运营覆盖层，商品内容、价格与规格始终以静态目录为准。
-  publicAvailability: publicProcedure.query(async () => {
-    const conn = await ensureLimitedProductManagementTables();
-    try {
-      const [rows] = await (conn as any).execute(
-        `SELECT product_key, sku_id, is_active, stock_qty FROM miban_limited_sku_state`
-      );
-      const states = new Map(
-        (Array.isArray(rows) ? rows : []).map((row: any) => [
-          `${row.product_key}:${row.sku_id}`,
-          {
-            isActive: Number(row.is_active) === 1,
-            stockQty: Number(row.stock_qty),
-          },
-        ])
-      );
-      return mibanLimitedProducts.flatMap(product =>
-        product.skus.map(sku => {
-          const state = states.get(`${product.key}:${sku.id}`) ?? {
-            isActive: false,
-            stockQty: 0,
-          };
-          return {
-            productKey: product.key,
-            skuId: sku.id,
-            isOnSale:
-              product.status === "on_sale" &&
-              sku.active &&
-              state.isActive &&
-              (state.stockQty < 0 || state.stockQty > 0),
-            stockQty: state.stockQty,
-          };
-        })
-      );
-    } finally {
+  publicAvailability: publicProcedure
+    .input(mibanLimitedPreviewInputSchema)
+    .query(async ({ ctx }) => {
+      const conn = await ensureLimitedProductManagementTables();
       try {
-        await (conn as any).end();
-      } catch {}
-    }
-  }),
+        const [rows] = await (conn as any).execute(
+          `SELECT product_key, sku_id, is_active, stock_qty FROM miban_limited_sku_state`
+        );
+        const states = new Map<string, { isActive: boolean; stockQty: number }>(
+          (Array.isArray(rows) ? rows : []).map((row: any) => [
+            `${row.product_key}:${row.sku_id}`,
+            {
+              isActive: Number(row.is_active) === 1,
+              stockQty: Number(row.stock_qty),
+            },
+          ])
+        );
+        const collectionStates = await readMibanLimitedCollectionStates(conn as any);
+        return buildMibanLimitedPublicAvailability(
+          mibanLimitedProducts, states, collectionStates, ctx.user,
+        );
+      } finally {
+        try {
+          await (conn as any).end();
+        } catch {}
+      }
+    }),
 
   // 只统计 ingredients 中明确标记为 limited_product 的订单，避免混入普通米伴订单。
   // 按下单创建日（中国时间）归集；已取消订单单列，不能当成有效销售额。

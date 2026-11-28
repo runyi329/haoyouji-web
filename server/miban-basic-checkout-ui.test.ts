@@ -5,7 +5,7 @@ import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Only component boundaries are replaced. No app/server/network/database is started.
-const boundary = vi.hoisted(() => ({ active: null as any, payment: null as any, cart: [] as any[], catalog: undefined as any, pending: false, mutations: {} as Record<string, any>, support: vi.fn(), create: vi.fn(), address: vi.fn(), authenticated: true }));
+const boundary = vi.hoisted(() => ({ active: null as any, payment: null as any, cart: [] as any[], catalog: undefined as any, pending: false, mutations: {} as Record<string, any>, support: vi.fn(), create: vi.fn(), address: vi.fn(), authenticated: true, collectionActive: true }));
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return { ...actual,
@@ -27,7 +27,7 @@ vi.mock("@/lib/trpc", () => {
   const utils = new Proxy({}, { get: (_, key) => key === "limitedProduct" ? { invoiceSupport: { fetch: boundary.support } } : new Proxy({}, { get: () => ({ invalidate: vi.fn() }) }) });
   const router = (path: string[] = []): any => new Proxy({}, { get: (_, key: string) => {
     if (key === "useUtils") return () => utils;
-    if (key === "useQuery") return () => ({ data: path.join(".") === "cart.list" ? boundary.cart : path.join(".") === "rice.catalogList" ? boundary.catalog : undefined, refetch: vi.fn(), isLoading: false });
+    if (key === "useQuery") return () => ({ data: path.join(".") === "limitedProduct.publicCollections" ? { viewerUserId: null, canPreviewInactive: false, collections: [{ slug: "fruits", isActive: boundary.collectionActive }] } : path.join(".") === "cart.list" ? boundary.cart : path.join(".") === "rice.catalogList" ? boundary.catalog : undefined, refetch: vi.fn(), isLoading: false, isFetchedAfterMount: true });
     if (key === "useMutation") return (options: any = {}) => {
       const name = path.join("."); boundary.mutations[name] = options;
       return { isPending: name === "order.create" && boundary.pending, mutate: name === "order.create" ? boundary.create : name === "address.add" ? boundary.address : vi.fn() };
@@ -97,7 +97,7 @@ function checkout(name: string, component: () => any) {
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-07-10T12:00:00+08:00")); vi.stubGlobal("React", React);
   vi.stubGlobal("localStorage", { getItem: () => "isolated-ui-session", setItem: vi.fn() });
-  boundary.authenticated = true; boundary.pending = false; boundary.mutations = {}; boundary.catalog = undefined;
+  boundary.authenticated = true; boundary.pending = false; boundary.mutations = {}; boundary.catalog = undefined; boundary.collectionActive = true;
   boundary.cart = [{ id: 1, riceId: "db_2", riceName: "白米", weightJin: "10", pricePerJin: "4.8", ratio: 100, recipeId: "recipe-1", recipeName: "测试配方" }];
   boundary.create.mockReset(); boundary.address.mockReset(); boundary.support.mockReset().mockResolvedValue({ supported: true, version: 1 });
   boundary.payment = { canPay: true, ready: true, refreshing: false, selectedCodes: ["CNY"], priorityCode: "CNY", cnyInput: "48.00", paymentAssets: [{ assetCode: "CNY", amount: "48" }], deductions: [{ assetCode: "CNY", amount: "48", cnyValue: "48" }], totalValueCny: "48", remainingCny: "0", usdtCnyRate: 7, paymentSummary: "¥48", statusMessage: "页面报价已固定", resetToCnyFirst: vi.fn(), cancelPendingPayment: vi.fn(), preparePayment: vi.fn().mockResolvedValue({ cnyAmount: 48, paymentAssets: [{ assetCode: "CNY", amount: "48" }], paymentQuoteToken: "fresh-signed-unit-fixture" }) };
@@ -195,6 +195,24 @@ describe("basic checkout inventory/address compatibility and Moutai preview", ()
   it("keeps expired pear unavailable without creating a SKU or alternate order", () => {
     vi.setSystemTime(new Date("2026-11-27T12:00:00+08:00")); const tree = harness(TianguiPearDetail).render();
     expect(button(tree, "已下架，暂停购买").props.disabled).toBe(true); expect(boundary.create).not.toHaveBeenCalled();
+  });
+  it("a category-off pear stays read-only even before its original deadline", () => {
+    boundary.collectionActive = false;
+    const tree = harness(TianguiPearDetail).render();
+    expect(button(tree, "已下架，暂停购买").props.disabled).toBe(true);
+    expect(nodes(tree, n => n.type === MibanInvoiceRequestForm)).toHaveLength(0);
+    expect(boundary.payment.preparePayment).not.toHaveBeenCalled();
+    expect(boundary.create).not.toHaveBeenCalled();
+  });
+  it("category off while pear invoice support is pending cancels the checkout", async () => {
+    const c = checkout("TianguiPearDetail", TianguiPearDetail);
+    c.invoice({ enabled: true, type: "personal", title: "个人", taxNo: "" });
+    const pending = deferred<any>(); boundary.support.mockReturnValue(pending.promise);
+    const submit = button(c.open(), "确认支付").props.onClick();
+    boundary.collectionActive = false; c.h.render();
+    pending.resolve({ supported: true, version: 1 }); await submit;
+    expect(boundary.payment.preparePayment).not.toHaveBeenCalled();
+    expect(boundary.create).not.toHaveBeenCalled();
   });
   it("Moutai keeps selection preview and read-only amount, no invoice or checkout", () => {
     const tree = MoutaiWalletPayment({ totalCny: 1499 });

@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { mtrpc } from "./mibanTrpc";
+import { useMibanLimitedCollections } from "./useMibanLimitedCollections";
+import { getMibanLimitedProductCollectionSlug } from "@shared/miban-limited-collections";
 import AddressBook from "./AddressBook";
 import { cnyToU } from "./useMibanUsdtCnyRate";
 import { MibanBenefitsQuoteSummary, useMibanBenefitsQuote } from "./useMibanBenefitsQuote";
@@ -204,6 +206,21 @@ export function LimitedProductCartProvider({
 }) {
   const [items, setItems] = useState<LimitedCartItem[]>(readStoredCart);
   const [open, setOpen] = useState(false);
+  const { activeSlugs, viewerUserId } = useMibanLimitedCollections();
+  const availabilityQuery = mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
+    enabled: activeSlugs.size > 0,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: true, refetchInterval: 15_000,
+  });
+  const availabilityBySku = useMemo(() => new Map<string, { isOffShelf: boolean; isOnSale: boolean }>(
+    (availabilityQuery.isError || availabilityQuery.isFetchedAfterMount === false ? [] : availabilityQuery.data ?? [])
+      .map((row: { productKey: string; skuId: string; isOffShelf: boolean; isOnSale: boolean }) => [`${row.productKey}:${row.skuId}`, row] as const),
+  ), [availabilityQuery.data, availabilityQuery.isError, availabilityQuery.isFetchedAfterMount]);
+  const visibleItems = useMemo(() => items.filter(item => {
+    const slug = getMibanLimitedProductCollectionSlug(getMibanLimitedProduct(item.productKey));
+    const state = availabilityBySku.get(cartKey(item));
+    // 缺货保留可见；下架不展示，即使当前查看者为管理员也不进入购物车。
+    return Boolean(slug && activeSlugs.has(slug) && state?.isOffShelf === false);
+  }), [items, activeSlugs, availabilityBySku]);
 
   useEffect(() => {
     try {
@@ -214,12 +231,18 @@ export function LimitedProductCartProvider({
   }, [items]);
 
   const itemCount = useMemo(
-    () => items.reduce((sum, item) => sum + item.quantity, 0),
-    [items]
+    () => visibleItems.reduce((sum, item) => sum + item.quantity, 0),
+    [visibleItems]
   );
-  const totalCny = useMemo(() => cartTotalCny(items), [items]);
+  const totalCny = useMemo(() => cartTotalCny(visibleItems), [visibleItems]);
 
   const addItem = useCallback((nextItem: AddCartItem) => {
+    const slug = getMibanLimitedProductCollectionSlug(getMibanLimitedProduct(nextItem.productKey));
+    const state = availabilityBySku.get(cartKey(nextItem));
+    if (!slug || !activeSlugs.has(slug) || state?.isOffShelf !== false || state.isOnSale !== true) {
+      toast.error("该精选暂不可用，无法加入购物车");
+      return false;
+    }
     const quantity = Math.max(
       1,
       Math.min(nextItem.quantity ?? 1, nextItem.maxPurchaseQty)
@@ -251,7 +274,7 @@ export function LimitedProductCartProvider({
         : `${nextItem.skuName} 已加入购物车`
     );
     return true;
-  }, []);
+  }, [activeSlugs, availabilityBySku]);
 
   const setQuantity = useCallback((key: string, quantity: number) => {
     setItems(current =>
@@ -279,7 +302,7 @@ export function LimitedProductCartProvider({
 
   const value = useMemo<LimitedCartContextValue>(
     () => ({
-      items,
+      items: visibleItems,
       itemCount,
       totalCny,
       open,
@@ -294,7 +317,7 @@ export function LimitedProductCartProvider({
       addItem,
       clearCart,
       itemCount,
-      items,
+      visibleItems,
       open,
       removeItem,
       setQuantity,

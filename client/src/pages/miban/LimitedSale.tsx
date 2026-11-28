@@ -1,10 +1,13 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "./mibanTrpc";
 import { MibanImage } from "./MibanImage";
+import { LimitedCollectionCard, useMibanLimitedCollections } from "./useMibanLimitedCollections";
 import { WangkaBrandCard } from "./WangkaBrandCard";
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
+import { mibanCountryCollections, getMibanCountryCardImage, type MibanCountryCollection } from "../../../../shared/miban-country-collections";
 import {
   LINGCHUANG_THEME,
   MIDANIANG_THEME,
@@ -189,6 +192,28 @@ function SpainSelectionPreviewCard({ onClick, viewCount }: PreviewCardProps) {
       <AttentionCount brandSlug="spain" viewCount={viewCount} />
     </article>
   );
+}
+
+/** 完整的已批准3:2国别卡片不裁切；只有图中胶囊入口对应的真实Link能导航和计数。 */
+function CountrySelectionCard({ country, onClick, viewCount }: PreviewCardProps & { country: MibanCountryCollection }) {
+  return <article
+    id={`brand-${country.slug}`}
+    data-testid={`brand-card-${country.slug}`}
+    data-brand-slug={country.slug}
+    aria-label={`${country.title}，${country.description}`}
+    className="relative isolate aspect-[3/2] w-full min-w-0 scroll-mt-[68px] overflow-hidden rounded-[22px]"
+    style={{ background: country.background, boxShadow: "0 14px 32px rgba(80,60,40,0.12)" }}
+  >
+    <MibanImage variant="card" src={getMibanCountryCardImage(country.slug)} alt={`${country.title}，圆形国旗右上角红金R1标记；${country.description}`}
+      className="pointer-events-none absolute inset-0 h-full w-full object-contain" loading="lazy" />
+    <h3 className="sr-only">{country.title}</h3>
+    <Link href={`/p/proj_hzxm2t/limited/${country.slug}`}
+      onClick={onClick} data-testid={`brand-cta-${country.slug}`} aria-label={`查看${country.title}`}
+      className="absolute z-10 cursor-pointer rounded-full active:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ left: "4.8%", top: "77%", width: country.ctaWidth, height: "15.5%", outlineColor: country.accent }}
+    ><span className="sr-only">查看{country.title}</span></Link>
+    <AttentionCount brandSlug={country.slug} viewCount={viewCount} />
+  </article>;
 }
 
 function AmwayDailyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
@@ -457,6 +482,16 @@ function AttentionCount({
 
 export default function LimitedSale() {
   const utils = mtrpc.useUtils();
+  const collectionsQuery = useMibanLimitedCollections();
+  const { visibleSlugs, inactiveSlugs } = collectionsQuery;
+  const [, navigate] = useLocation();
+  const collectionCard = (slug: string, card: ReactNode) => visibleSlugs.has(slug)
+    ? <LimitedCollectionCard key={slug} slug={slug} isInactive={inactiveSlugs.has(slug)}>{card}</LimitedCollectionCard> : null;
+  const emptyCollectionClick = (slug: BrandSlug, message: string) => {
+    recordBrandClick(slug);
+    if (inactiveSlugs.has(slug)) navigate(`/p/proj_hzxm2t/limited/${slug}`);
+    else toast.info(message);
+  };
   const { data: attentionData } = mtrpc.limitedProduct.brandAttention.useQuery(
     undefined,
     {
@@ -812,34 +847,36 @@ export default function LimitedSale() {
         aria-label="精选系列"
         data-testid="limited-brand-list"
       >
-        <WineTastingPreviewCard
+        {collectionsQuery.isLoading && <p role="status" className="py-8 text-center text-sm text-gray-400">正在加载精选…</p>}
+        {collectionsQuery.isError && <button type="button" onClick={() => collectionsQuery.refetch()} className="py-8 text-center text-sm text-gray-400">精选暂时无法读取，点击重试</button>}
+        {collectionCard("guizhou", <WineTastingPreviewCard
           onClick={() => recordBrandClick("guizhou")}
           viewCount={viewCountFor("guizhou")}
-        />
-        <SpainSelectionPreviewCard
+        />)}
+        {collectionCard("spain", <SpainSelectionPreviewCard
           onClick={() => recordBrandClick("spain")}
           viewCount={viewCountFor("spain")}
-        />
-        {sortedBrands.map(brandSlug => brandCards[brandSlug])}
-        <AmwayDailyPreviewCard
+        />)}
+        {mibanCountryCollections.map(country => collectionCard(country.slug,
+          <CountrySelectionCard country={country} onClick={() => recordBrandClick(country.slug)} viewCount={viewCountFor(country.slug)} />
+        ))}
+        {sortedBrands.map(brandSlug => collectionCard(brandSlug, brandCards[brandSlug]))}
+        {collectionCard("amway", <AmwayDailyPreviewCard
           onClick={() => recordBrandClick("amway")}
           viewCount={viewCountFor("amway")}
-        />
-        <MaryKayBeautyPreviewCard
+        />)}
+        {collectionCard("marykay", <MaryKayBeautyPreviewCard
           onClick={() => recordBrandClick("marykay")}
           viewCount={viewCountFor("marykay")}
-        />
-        <NuSkinBeautyPreviewCard
+        />)}
+        {collectionCard("nuskin", <NuSkinBeautyPreviewCard
           onClick={() => recordBrandClick("nuskin")}
           viewCount={viewCountFor("nuskin")}
-        />
-        <JianghaiFreshPreviewCard
-          onClick={() => {
-            recordBrandClick("jianghai");
-            toast.info("江海鲜选商品尚未上架，敬请期待。");
-          }}
+        />)}
+        {collectionCard("jianghai", <JianghaiFreshPreviewCard
+          onClick={() => emptyCollectionClick("jianghai", "江海鲜选商品尚未上架，敬请期待。")}
           viewCount={viewCountFor("jianghai")}
-        />
+        />)}
       </section>
 
       <p className="px-5 pt-7 text-center text-[11px] text-[#C6C0BE]">

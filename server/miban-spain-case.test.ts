@@ -188,7 +188,7 @@ describe("Spain wine cases: selected quantities stay in cases while bottle count
 describe("Spain wine cases: existing buy URL, real selection state and cart preserve case SKU and case quantity", () => {
   it.each(wines)("$id round-trips both original bottle and case SKUs at quantities one/two via the unchanged buy route", wine => {
     const product = productFor(wine.id);
-    const activeSkus = evaluate(initializer("activeSkus"), { currentProduct: product, localPreviewMode: true, availabilityLoading: true, availabilityBySku: new Map() });
+    const activeSkus = evaluate(initializer("activeSkus"), { canPreviewInactive: false, currentProduct: product, localPreviewMode: true, availabilityLoading: true, availabilityBySku: new Map() });
     expect(activeSkus).toEqual(product.skus);
     for (const sku of product.skus) {
       for (const quantity of [1, 2]) {
@@ -213,7 +213,7 @@ describe("Spain wine cases: existing buy URL, real selection state and cart pres
     const currentProduct = productFor(wine.id);
     const selectedSku = caseFor(wine.id);
     const key = `${currentProduct.key}:${selectedSku.id}`;
-    const bindings = { currentProduct, selectedSku, isSpainProduct: true, localPreviewMode: false, availabilityLoading: false };
+    const bindings = { isCollectionActive: true, isOffShelf: false, canPreviewInactive: false, currentProduct, selectedSku, isSpainProduct: true, localPreviewMode: false, availabilityLoading: false };
     for (const availabilityBySku of [new Map(), new Map([[key, { isOnSale: false }]]), new Map([[key, { isOnSale: "true" }]])]) {
       expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityBySku })).toBe(false);
     }

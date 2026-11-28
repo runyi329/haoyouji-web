@@ -12,6 +12,7 @@ import { ENV } from "./_core/env";
 import { MIBAN_BENEFITS_DDL } from "./miban-benefits-schema";
 import { mibanLimitedProducts } from "../shared/miban-limited-products";
 import { getMibanLimitedBrandByName } from "../shared/miban-limited-brand-config";
+import { readMibanLimitedCollectionStates, isMibanLimitedProductCollectionActive } from "./miban-limited-collections";
 import {
   MIBAN_BENEFITS_STOREFRONT as STORE,
   beijingDate,
@@ -134,6 +135,7 @@ export async function readMibanBenefitsCatalog(
   db: BenefitSqlExecutor,
   locking = false
 ): Promise<CatalogProduct[]> {
+  const collectionStates = await readMibanLimitedCollectionStates(db, locking);
   let states: any[];
   try {
     states = await rows(
@@ -147,6 +149,7 @@ export async function readMibanBenefitsCatalog(
   const byId = new Map(states.map(s => [`${s.product_key}:${s.sku_id}`, s]));
   return mibanLimitedProducts
     .filter(p => p.status !== "draft" || p.publicPreview)
+    .filter(p => isMibanLimitedProductCollectionActive(p, collectionStates))
     .map(p => ({
       id: `limited:${p.key}`,
       productKey: p.key,

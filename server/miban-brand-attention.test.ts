@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Connection } from "mysql2/promise";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { mibanLimitedBrands, mibanLimitedAttentionSlugs } from "../shared/miban-limited-brand-config";
+import { mibanCountryCollections } from "../shared/miban-country-collections";
 import {
   assertBrandAttentionInput,
   ensureBrandAttentionTables,
@@ -20,7 +21,8 @@ const uuid = (id: number) =>
 const slugs = mibanLimitedAttentionSlugs;
 const previewSlugs = ["guizhou", "amway", "marykay", "nuskin", "jianghai"] as const;
 // Spain is now an on-sale entrance, but keeps the same real attention contract.
-const newlyTrackedSlugs = ["spain", ...previewSlugs] as const;
+const countrySlugs = mibanCountryCollections.map(c => c.slug);
+const newlyTrackedSlugs = ["spain", ...previewSlugs, ...countrySlugs] as const;
 type Statement = { sql: string; params: unknown[]; inTransaction: boolean };
 class MemoryDatabase {
   totalsExist = false;
@@ -234,18 +236,19 @@ describe("miban brand attention: offline transaction fixtures", () => {
       slug: "spain", brand: "西班牙", status: "on_sale",
     });
     expect(slugs).toEqual([
-      ...mibanLimitedBrands.map(brand => brand.slug), ...previewSlugs,
+      ...mibanLimitedBrands.map(brand => brand.slug), ...previewSlugs, ...countrySlugs,
     ]);
     expect(slugs.filter(slug => slug === "spain")).toHaveLength(1);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it("starts at real zero for twelve attention brands, in registry order, with integer counts", async () => {
+  it("starts at real zero for nineteen attention categories, in registry order, with integer counts", async () => {
     const { db, connection } = await fixture();
     const values = await readBrandAttention(connection);
     expect(slugs).toEqual([
       "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
       "spain", "guizhou", "amway", "marykay", "nuskin", "jianghai",
+      "france", "germany", "belgium", "netherlands", "italy", "switzerland", "norway",
     ]);
     expect(values).toEqual(
       slugs.map(brandSlug => ({ brandSlug, viewCount: 0 }))
@@ -437,6 +440,7 @@ describe("miban brand attention: offline transaction fixtures", () => {
       { brandSlug: "marykay", viewCount: 0 },
       { brandSlug: "nuskin", viewCount: 0 },
       { brandSlug: "jianghai", viewCount: 0 },
+      ...countrySlugs.map(brandSlug => ({ brandSlug, viewCount: 0 })),
     ]);
     expect(values.every(row => Number.isSafeInteger(row.viewCount))).toBe(true);
     expect(connection.statements[0].params).toEqual(slugs);

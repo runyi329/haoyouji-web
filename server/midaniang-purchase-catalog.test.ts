@@ -163,7 +163,9 @@ describe("midaniang production purchase catalog", () => {
   }
 
   it("does not change any existing product, SKU, fruit count or prior aloe asset replacement", () => {
-    const existingProducts = mibanLimitedProducts.filter((product) => !riceGiftCases.some((item) => item.productKey === product.key));
+    // The subsequently approved Spain wine/ham releases have their own full catalog tests.
+    // Keep every original product fingerprint unchanged, rather than rebaseline the catalog.
+    const existingProducts = mibanLimitedProducts.filter((product) => product.brand !== "西班牙" && !riceGiftCases.some((item) => item.productKey === product.key));
     expect(existingProducts.map((product) => product.key)).toEqual(Object.keys(existingProductFingerprints));
     for (const product of existingProducts) {
       const fingerprint = createHash("sha256").update(JSON.stringify(product)).digest("hex");

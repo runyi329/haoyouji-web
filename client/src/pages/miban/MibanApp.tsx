@@ -10,6 +10,10 @@ import { trpc } from "@/lib/trpc";
 import { prepareMibanPersonalQueries } from "@/lib/miban-wallet-query-scope";
 import NavBar from "./NavBar";
 import { LimitedProductCartProvider } from "./LimitedProductCart";
+import { getMibanLimitedProduct } from "@shared/miban-limited-products";
+import { getMibanLimitedCollectionSlugForPath } from "@shared/miban-limited-collections";
+import { mibanCountryCollections } from "@shared/miban-country-collections";
+import { LimitedCategoryGate } from "./useMibanLimitedCollections";
 
 // Public product pages do not download admin/editor and unrelated detail pages.
 const Home = lazy(() => import("./Home"));
@@ -42,6 +46,12 @@ const MoutaiFeitianDetail = lazy(() => import("./MoutaiFeitianDetail"));
 const BASE = "/p/proj_hzxm2t";
 
 export default function MibanApp() {
+  const [location] = useLocation();
+  const collectionSlug = getMibanLimitedCollectionSlugForPath(location, getMibanLimitedProduct);
+  return <LimitedCategoryGate slug={collectionSlug}><MibanAppContent /></LimitedCategoryGate>;
+}
+
+function MibanAppContent() {
   const [location] = useLocation();
   const queryClient = useQueryClient();
   const utils = trpc.useUtils();
@@ -152,6 +162,10 @@ export default function MibanApp() {
               path={`${BASE}/limited/spain`}
               component={LimitedBrandProducts}
             />
+            <Route path={`${BASE}/limited/jianghai`} component={LimitedBrandProducts} />
+            {mibanCountryCollections.map(collection => (
+              <Route key={collection.slug} path={`${BASE}/limited/${collection.slug}`} component={LimitedBrandProducts} />
+            ))}
             <Route
               path={`${BASE}/limited/:productKey`}
               component={HerbalifeRedGinsengDetail}

@@ -1,4 +1,5 @@
 import { HERBALIFE_THEME } from "./herbalife-theme";
+import { mibanCountryCollections } from "./miban-country-collections";
 
 export const TUOQUETANG_THEME = {
   primary: "#0E5A50",
@@ -171,5 +172,5 @@ export function getMibanLimitedBrandByName(
   return mibanLimitedBrands.find(brand => brand.brand === name);
 }
 
-export const mibanLimitedAttentionSlugs = [...mibanLimitedBrands.map(brand => brand.slug), 'guizhou', 'amway', 'marykay', 'nuskin', 'jianghai'] as const;
+export const mibanLimitedAttentionSlugs = [...mibanLimitedBrands.map(brand => brand.slug), 'guizhou', 'amway', 'marykay', 'nuskin', 'jianghai', ...mibanCountryCollections.map(collection => collection.slug)] as const;
 export type MibanLimitedAttentionSlug = (typeof mibanLimitedAttentionSlugs)[number];

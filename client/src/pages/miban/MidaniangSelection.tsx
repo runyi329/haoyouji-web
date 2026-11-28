@@ -6,6 +6,9 @@ import { midaniangSelectionAssets } from "@shared/midaniang-selection-assets";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import MidaniangOrganicMark from "./MidaniangOrganicMark";
 import { MibanImage, getMibanImageSource } from "./MibanImage";
+import { getMibanLimitedProduct } from "@shared/miban-limited-products";
+import { mtrpc } from "./mibanTrpc";
+import { LimitedOffShelfBadge, useMibanLimitedCollections } from "./useMibanLimitedCollections";
 
 export const MIDANIANG_SELECTION_PATH = "/p/proj_hzxm2t/limited/midaniang";
 
@@ -13,6 +16,28 @@ export default function MidaniangSelection() {
   const [merchantIntroductionOpen, setMerchantIntroductionOpen] =
     useState(false);
   const usdtCnyRate = useMibanUsdtCnyRate();
+  const collectionsQuery = useMibanLimitedCollections();
+  const { canPreviewInactive, viewerUserId, activeSlugs, inactiveSlugs, visibleSlugs } = collectionsQuery;
+  const categoryVisible = visibleSlugs.has("midaniang");
+  const categoryOffShelf = inactiveSlugs.has("midaniang");
+  const availabilityQuery = mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
+    enabled: !collectionsQuery.isLoading && categoryVisible,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+  });
+  const availabilityReady = availabilityQuery.data !== undefined && !availabilityQuery.isError && availabilityQuery.isFetchedAfterMount !== false;
+  const isItemOffShelf = (item: (typeof midaniangSelectionCatalog)[number]) => {
+    const product = getMibanLimitedProduct(item.productKey);
+    const sku = product?.skus.find(sku => sku.id === item.skuId);
+    const runtime = availabilityQuery.data?.find((row: { productKey: string; skuId: string; isOffShelf: boolean }) => row.productKey === item.productKey && row.skuId === item.skuId);
+    return categoryOffShelf || product?.status !== "on_sale" || !sku?.active || runtime?.isOffShelf !== false;
+  };
+  // 不把加载中、接口失败或缺少SKU行当成上架；缺货但未下架的商品仍可展示。
+  const visibleItems = categoryVisible && availabilityReady ? midaniangSelectionCatalog.filter(item =>
+    canPreviewInactive || (activeSlugs.has("midaniang") && !isItemOffShelf(item))
+  ) : [];
 
   return (
     <main
@@ -90,8 +115,9 @@ export default function MidaniangSelection() {
 
       <section aria-label="米大娘精选资料列表" className="px-4">
         <div className="space-y-3" data-testid="midaniang-product-list">
-          {midaniangSelectionCatalog.map((item, index) => {
+          {visibleItems.map((item, index) => {
             const priceU = cnyToU(item.priceCny, usdtCnyRate);
+            const isOffShelf = canPreviewInactive && isItemOffShelf(item);
             return (
               <div
                 key={item.key}
@@ -104,6 +130,7 @@ export default function MidaniangSelection() {
                   aria-label={`查看${item.title}详情`}
                   className="relative isolate block overflow-hidden rounded-[20px] border border-[#e5e0d5] bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#8d292c]"
                   data-selection-key={item.key}
+                  data-product-key={item.productKey}
                 >
                   <article
                     className="grid min-h-[165px] grid-cols-[132px_minmax(0,1fr)_24px] max-[360px]:grid-cols-[106px_minmax(0,1fr)_20px]"
@@ -167,6 +194,7 @@ export default function MidaniangSelection() {
                         >
                           {item.title}
                         </h2>
+                        {isOffShelf && <LimitedOffShelfBadge className="mt-1" />}
                         <p
                           className="mt-1 text-[11px] leading-[18px] text-[#676b60]"
                           data-testid="midaniang-product-specification"

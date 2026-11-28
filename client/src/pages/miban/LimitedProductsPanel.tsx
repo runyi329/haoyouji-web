@@ -74,6 +74,8 @@ function shortSalesDate(dateKey: string) {
 
 export default function LimitedProductsPanel() {
   const catalogQuery = mtrpc.limitedProduct.adminCatalog.useQuery();
+  const utils = mtrpc.useUtils();
+  const collectionsQuery = mtrpc.limitedProduct.adminCollections.useQuery();
   const [salesRange, setSalesRange] = useState<"today" | "7d" | "30d">("7d");
   const salesStatsQuery = mtrpc.limitedProduct.adminSalesStats.useQuery({
     range: salesRange,
@@ -155,10 +157,23 @@ export default function LimitedProductsPanel() {
 
   const refreshAll = () => {
     catalogQuery.refetch();
+    collectionsQuery.refetch();
     salesStatsQuery.refetch();
     ordersQuery.refetch();
     movementsQuery.refetch();
   };
+
+  const updateCollectionMutation = mtrpc.limitedProduct.adminUpdateCollectionState.useMutation({
+    onSuccess: async (_result: any, variables: any) => {
+      toast.success(variables.isActive ? "精选分类已上架" : "精选分类已下架");
+      await Promise.all([
+        utils.limitedProduct.adminCollections.invalidate(),
+        utils.limitedProduct.publicCollections.invalidate(),
+        utils.limitedProduct.publicAvailability.invalidate(),
+      ]);
+    },
+    onError: (error: any) => toast.error(error.message || "分类状态保存失败"),
+  });
 
   const updateSkuMutation =
     mtrpc.limitedProduct.adminUpdateSkuState.useMutation({
@@ -303,8 +318,7 @@ export default function LimitedProductsPanel() {
               限时商品管理
             </div>
             <p className="mt-1 text-[11px] leading-5 text-gray-500">
-              管理 SKU
-              上下架、库存与订单。商品图文、规格和售价仍由上架配置维护。
+              管理精选分类与商品规格上下架、库存和订单。商品图文、规格和售价仍由上架配置维护。
             </p>
           </div>
           <button
@@ -318,6 +332,27 @@ export default function LimitedProductsPanel() {
           库存填“<strong>不限</strong>”表示暂不限制；填 0
           则售罄。设置具体库存后，用户下单会自动扣减；未发货订单取消退款会自动回补。
         </div>
+      </section>
+
+      <section data-testid="limited-collection-management" className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-100">
+        <h3 className="text-[14px] font-bold text-gray-900">精选分类上下架</h3>
+        <p className="mt-1 text-[11px] leading-5 text-gray-500">分类下架后，前台不显示该分类及其中商品。商品原有上下架和库存保持不变。</p>
+        {collectionsQuery.isLoading ? <p className="py-5 text-center text-[12px] text-gray-400">正在加载分类…</p>
+          : collectionsQuery.isError ? <button type="button" onClick={() => collectionsQuery.refetch()} className="w-full py-5 text-[12px] text-gray-400">分类加载失败，点击重试</button>
+          : <div className="mt-2 grid grid-cols-1 gap-2 min-[600px]:grid-cols-2">
+            {(collectionsQuery.data ?? []).map((collection: any) => <div key={collection.slug} className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-semibold text-gray-800">{collection.title}</p>
+                <p className={`mt-0.5 text-[10px] ${collection.isActive ? "text-emerald-600" : "text-gray-400"}`}>{collection.isActive ? "已上架" : "已下架"}</p>
+              </div>
+              <button type="button" data-testid={`collection-toggle-${collection.slug}`} aria-label={`${collection.isActive ? "下架" : "上架"}${collection.title}`}
+                disabled={updateCollectionMutation.isPending}
+                onClick={() => updateCollectionMutation.mutate({ slug: collection.slug, isActive: !collection.isActive })}
+                className={`min-h-10 shrink-0 rounded-lg px-3 text-[11px] font-semibold disabled:opacity-50 ${collection.isActive ? "border border-red-100 bg-red-50 text-red-600" : "bg-emerald-500 text-white"}`}>
+                {updateCollectionMutation.isPending && updateCollectionMutation.variables?.slug === collection.slug ? "保存中…" : collection.isActive ? "下架" : "上架"}
+              </button>
+            </div>)}
+          </div>}
       </section>
 
       <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-100">

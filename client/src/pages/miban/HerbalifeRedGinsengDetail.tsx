@@ -21,6 +21,7 @@ import { midaniangSelectionCatalog } from "../../../../shared/midaniang-selectio
 import { HERBALIFE_THEME } from "../../../../shared/herbalife-theme";
 import { getMibanLimitedBrandByName } from "../../../../shared/miban-limited-brand-config";
 import { mtrpc } from "./mibanTrpc";
+import { LimitedOffShelfBadge, useMibanLimitedCollections } from "./useMibanLimitedCollections";
 import AddressBook from "./AddressBook";
 import { getCities, getDistricts, provinces, withCurrentRegionOption } from "./regionData";
 import { MibanBenefitsQuoteSummary, useMibanBenefitsQuote } from "./useMibanBenefitsQuote";
@@ -171,6 +172,9 @@ export default function HerbalifeRedGinsengDetail() {
       (localPreviewMode || currentProduct?.publicPreview === true)
   );
   const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const collectionsQuery = useMibanLimitedCollections();
+  const { canPreviewInactive, viewerUserId } = collectionsQuery;
+  const isCollectionActive = collectionsQuery.activeSlugs.has(currentBrand?.slug ?? "");
   const { addItem: addCartItem } = useLimitedProductCart();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedSkuId, setSelectedSkuId] = useState(() => checkoutSkuId ?? "");
@@ -207,9 +211,10 @@ export default function HerbalifeRedGinsengDetail() {
   const submissionGuardRef = useRef(false);
 
   const { data: availability, isLoading: availabilityLoading } =
-    mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
+    mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
       // 本地上架预览不访问真实库存状态，也不会触发SKU运行时初始化。
-      enabled: !localPreviewMode,
+      enabled: !localPreviewMode || canPreviewInactive,
+      staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: true, refetchInterval: 15_000,
     });
   const availabilityBySku = new Map<string, any>(
     (availability ?? []).map((item: any) => [
@@ -220,14 +225,14 @@ export default function HerbalifeRedGinsengDetail() {
   const activeSkus =
     currentProduct?.skus.filter(
       sku =>
-        sku.active &&
+        canPreviewInactive || (sku.active &&
         (localPreviewMode ||
-          currentProduct.publicPreview === true ||
-          availabilityLoading ||
           availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOnSale ===
-            true)
+            true))
     ) ?? [];
-  const defaultSku = activeSkus.find(sku => sku.featured) ?? activeSkus[0];
+  const defaultSku = activeSkus.find(sku => sku.featured && (!canPreviewInactive || availabilityBySku.get(`${currentProduct?.key}:${sku.id}`)?.isOnSale === true))
+    ?? activeSkus.find(sku => availabilityBySku.get(`${currentProduct?.key}:${sku.id}`)?.isOnSale === true)
+    ?? activeSkus.find(sku => sku.featured) ?? activeSkus[0];
   const activeSkuId = selectedSkuId || defaultSku?.id || "";
   const selectedSku = currentProduct
     ? activeSkus.find(sku => sku.id === activeSkuId)
@@ -265,8 +270,10 @@ export default function HerbalifeRedGinsengDetail() {
   const checkoutProductImage =
     selectedSku?.image ?? currentProduct?.detail.productImage;
   // 正式红酒报价须等待SKU运行状态就绪；不让首次上架的公开初始化与优惠报价抢跑。
-  const isOnSale = currentProduct?.status === "on_sale" && !!selectedSku &&
-    (!isSpainProduct || localPreviewMode ||
+  const isOffShelf = collectionsQuery.inactiveSlugs.has(currentBrand?.slug ?? "") ||
+    (canPreviewInactive && (currentProduct?.status !== "on_sale" || selectedSku?.active === false || availabilityBySku.get(`${currentProduct?.key}:${selectedSku?.id}`)?.isOffShelf === true));
+  const isOnSale = isCollectionActive && !isOffShelf && currentProduct?.status === "on_sale" && !!selectedSku &&
+    ((localPreviewMode && !canPreviewInactive) ||
       (!availabilityLoading && availabilityBySku.get(`${currentProduct.key}:${selectedSku.id}`)?.isOnSale === true));
   const monthlyPrice = selectedSku ? selectedSku.priceCny * purchaseQuantity : 0;
   const totalQuantity = purchaseQuantity * (isAnnualPlan ? ANNUAL_SUBSCRIPTION_MONTHS : 1);
@@ -324,7 +331,7 @@ export default function HerbalifeRedGinsengDetail() {
     onSuccess: () => refetchFavorite(),
     onSettled: () => setFavoritePending(false),
   });
-  const walletPayment = useMibanMixedPayment(payableTotalCny, isAuthenticated);
+  const walletPayment = useMibanMixedPayment(payableTotalCny, isAuthenticated && isOnSale);
   const publicDisplayRate = useMibanUsdtCnyRate();
   // 资料页与专区使用同一公开汇率，未登录也能看U价；结算绝不以公开行情代替钱包报价。
   const usdtCnyRate = isCheckoutPage ? walletPayment.usdtCnyRate : publicDisplayRate;
@@ -466,7 +473,10 @@ export default function HerbalifeRedGinsengDetail() {
     setCurrentSlide(0);
   }, [activeSkuId]);
 
-  if (!currentProduct || !selectedSku) {
+  if (availabilityLoading && (!localPreviewMode || canPreviewInactive)) {
+    return <div role="status" className="flex min-h-screen items-center justify-center gap-2 bg-white text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" />商品加载中…</div>;
+  }
+  if (!currentProduct || !selectedSku || (!canPreviewInactive && currentProduct.status !== "on_sale")) {
     return (
       <div className="min-h-screen bg-white px-5 pt-10 text-center text-sm text-gray-400">
         商品暂不可用
@@ -780,6 +790,7 @@ export default function HerbalifeRedGinsengDetail() {
         <div className="w-9" />
       </div>
 
+      {isOffShelf && <div data-testid="limited-product-off-shelf" className="flex items-center gap-2 border-y border-gray-200 bg-gray-50 px-4 py-2 text-[12px] text-gray-500"><LimitedOffShelfBadge />仅供查看，不可购买或加购</div>}
       <div
         className="relative overflow-hidden"
         style={{ background: theme.canvas }}
@@ -962,6 +973,7 @@ export default function HerbalifeRedGinsengDetail() {
                     <span className="text-[14px] font-bold text-gray-900">
                       {sku.name}
                     </span>
+                    {canPreviewInactive && (!sku.active || availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOffShelf === true) && <LimitedOffShelfBadge />}
                     {sku.featured && (
                       <span
                         className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold text-white"
@@ -1304,7 +1316,7 @@ export default function HerbalifeRedGinsengDetail() {
             background: isOnSale ? accent : undefined,
           }}
         >
-          {isPreviewProduct ? "资料核验中" : isOnSale ? "立即购买" : "暂未开售"}
+          {isOffShelf ? "已下架" : isPreviewProduct ? "资料核验中" : isOnSale ? "立即购买" : "暂未开售"}
         </button>
       </div>
 
@@ -1319,6 +1331,8 @@ export default function HerbalifeRedGinsengDetail() {
           usdtCnyRate={publicDisplayRate}
           accent={accent}
           surface={theme.surfaceMuted}
+          purchaseDisabled={!isOnSale}
+          offShelfSkuIds={canPreviewInactive ? activeSkus.filter(sku => !sku.active || availabilityBySku.get(`${currentProduct.key}:${sku.id}`)?.isOffShelf === true).map(sku => sku.id) : []}
           busy={checkoutBusy}
           onClose={() => setWinePurchaseAction(null)}
           onSelectSku={sku => {
@@ -1330,7 +1344,7 @@ export default function HerbalifeRedGinsengDetail() {
         />
       )}
 
-      {isCheckoutPage && !orderSuccess && !isPreviewProduct && (
+      {isCheckoutPage && !orderSuccess && !isPreviewProduct && !isOffShelf && (
         <div data-miban-checkout="true" className="fixed inset-0 z-[70] bg-white">
           <div className="mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">

@@ -13,6 +13,9 @@ import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import MidaniangOrganicMark from "./MidaniangOrganicMark";
 import MidaniangPurchaseActions from "./MidaniangPurchaseActions";
 import { MibanImage } from "./MibanImage";
+import { getMibanLimitedProduct } from "@shared/miban-limited-products";
+import { mtrpc } from "./mibanTrpc";
+import { LimitedOffShelfBadge, useMibanLimitedCollections } from "./useMibanLimitedCollections";
 
 const POSTER_KEYS = {
   "classic-rice-gift": [
@@ -58,6 +61,23 @@ export default function MidaniangSelectionDetail() {
   const usdtCnyRate = useMibanUsdtCnyRate();
   const listHref = MIDANIANG_SELECTION_PATH;
   const item = getMidaniangSelection(params.selectionKey);
+  const collectionsQuery = useMibanLimitedCollections();
+  const { canPreviewInactive, viewerUserId, activeSlugs, inactiveSlugs, visibleSlugs } = collectionsQuery;
+  const categoryVisible = visibleSlugs.has("midaniang");
+  const categoryOffShelf = inactiveSlugs.has("midaniang");
+  const availabilityQuery = mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
+    enabled: Boolean(item) && !collectionsQuery.isLoading && categoryVisible,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+  });
+  const availabilityReady = availabilityQuery.data !== undefined && !availabilityQuery.isError && availabilityQuery.isFetchedAfterMount !== false;
+  const product = getMibanLimitedProduct(item?.productKey ?? "");
+  const sku = product?.skus.find(sku => sku.id === item?.skuId);
+  const runtime = availabilityQuery.data?.find((row: { productKey: string; skuId: string; isOffShelf: boolean; isOnSale: boolean }) => row.productKey === item?.productKey && row.skuId === item?.skuId);
+  const isOffShelf = categoryOffShelf || product?.status !== "on_sale" || !sku?.active || runtime?.isOffShelf !== false;
+  const canPurchase = availabilityReady && activeSlugs.has("midaniang") && !isOffShelf && runtime?.isOnSale === true;
 
   if (!item) {
     return (
@@ -77,6 +97,15 @@ export default function MidaniangSelectionDetail() {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           返回列表
         </Link>
+      </main>
+    );
+  }
+
+  if (!categoryVisible || !availabilityReady || (!canPreviewInactive && isOffShelf)) {
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-[480px] bg-[#f7f4ee] px-5 py-12 text-center text-[#676b60]" data-testid="midaniang-product-unavailable">
+        <p>{collectionsQuery.isLoading || availabilityQuery.isLoading || availabilityQuery.isFetchedAfterMount === false ? "商品加载中…" : "商品暂不可用"}</p>
+        <Link href={listHref} className="mt-6 inline-flex min-h-11 items-center text-[13px] text-[#8d292c]">返回米大娘精选列表</Link>
       </main>
     );
   }
@@ -205,7 +234,14 @@ export default function MidaniangSelectionDetail() {
         <p className="mt-1 text-[11px] text-[#676b60]">
           人民币为商家原始推荐零售价 · USDT参考价按实时汇率折算
         </p>
-        <MidaniangPurchaseActions key={item.key} item={item} usdtCnyRate={usdtCnyRate} />
+        {canPreviewInactive && isOffShelf && !categoryOffShelf && <LimitedOffShelfBadge className="mt-3" />}
+        {canPurchase ? (
+          <MidaniangPurchaseActions key={item.key} item={item} usdtCnyRate={usdtCnyRate} />
+        ) : (
+          <p className="mt-5 text-[12px] text-[#777b70]" data-testid="midaniang-purchase-unavailable">
+            {isOffShelf ? "仅供查看，不可购买或加购" : "暂不可购买或加购"}
+          </p>
+        )}
         <p className="mt-3 text-[11px] leading-6 text-[#777b70]">
           图片为设计展示，商品规格、批次与日期以实物包装标签为准。
         </p>

@@ -12,6 +12,9 @@ import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { mtrpc } from "./mibanTrpc";
 import { LimitedCartButton } from "./LimitedProductCart";
 import ChongbanSectionTabs from "@/components/ChongbanSectionTabs";
+import { getMibanLimitedCollection } from "../../../../shared/miban-limited-collections";
+import { LimitedOffShelfBadge, useMibanLimitedCollections } from "./useMibanLimitedCollections";
+import { getMibanCountryCollection } from "../../../../shared/miban-country-collections";
 
 function getActiveSku(
   product: LimitedProduct,
@@ -32,10 +35,16 @@ export default function LimitedBrandProducts() {
   const localPreviewMode = import.meta.env.DEV;
   const brandSlug = path.split("/").filter(Boolean).pop() ?? "";
   const brand = getMibanLimitedBrandBySlug(brandSlug);
+  const collection = getMibanLimitedCollection(brandSlug);
+  const country = getMibanCountryCollection(brandSlug);
+  const collectionsQuery = useMibanLimitedCollections();
+  const { canPreviewInactive, viewerUserId } = collectionsQuery;
+  const categoryOffShelf = collectionsQuery.inactiveSlugs.has(brandSlug);
   const { data: availability, isLoading: availabilityLoading } =
-    mtrpc.limitedProduct.publicAvailability.useQuery(undefined, {
+    mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
       // 本地热预览不触发真实数据库的SKU初始化；生产始终读取运营库存状态。
-      enabled: !localPreviewMode && mibanLimitedProducts.some(product => product.brand === brand?.brand),
+      enabled: (!localPreviewMode || canPreviewInactive) && mibanLimitedProducts.some(product => product.brand === brand?.brand),
+      staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: true, refetchInterval: 15_000,
     });
   const availabilityBySku = useMemo(
     () =>
@@ -48,29 +57,27 @@ export default function LimitedBrandProducts() {
     [availability]
   );
 
-  const theme = brand?.theme ?? HERBALIFE_THEME;
+  const theme = brand?.theme ?? (country
+    ? { ...HERBALIFE_THEME, primary: country.accent, navy: country.accent, canvas: country.background }
+    : HERBALIFE_THEME);
   const brandProducts = useMemo(
     () =>
       mibanLimitedProducts.filter(
         product =>
           product.brand === brand?.brand &&
-          (product.status === "on_sale" ||
-            (product.status === "draft" &&
-              (localPreviewMode || product.publicPreview === true))) &&
+          (canPreviewInactive || product.status === "on_sale") &&
           Boolean(
-            getActiveSku(
+            canPreviewInactive ? (!availabilityLoading && product.skus[0]) : getActiveSku(
               product,
               availabilityBySku,
-              localPreviewMode ||
-                availabilityLoading ||
-                product.publicPreview === true
+              localPreviewMode
             )
           )
       ),
-    [availabilityBySku, availabilityLoading, brand?.brand, localPreviewMode]
+    [availabilityBySku, availabilityLoading, brand?.brand, localPreviewMode, canPreviewInactive]
   );
 
-  if (!brand || (brand.status !== "on_sale" && !localPreviewMode)) {
+  if ((!brand && !collection) || (brand && brand.status !== "on_sale" && !localPreviewMode && !canPreviewInactive)) {
     return (
       <div className="min-h-screen bg-white px-5 pt-10 text-center text-sm text-gray-400">
         品牌资料暂不可用
@@ -96,16 +103,16 @@ export default function LimitedBrandProducts() {
           className="min-w-0 truncate text-center text-[17px] font-extrabold tracking-tight"
           style={{ color: theme.navy }}
         >
-          {brand.title}
+          {brand?.title ?? collection?.title}
         </h1>
-        <LimitedCartButton compact accent={theme.primary} />
+        {country ? <span aria-hidden="true" className="w-8" /> : <LimitedCartButton compact accent={theme.primary} />}
       </header>
 
       {brandSlug === "wangka" && <ChongbanSectionTabs active="shop" />}
 
       <section
         className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-[480px]"
-        aria-label={`${brand.title}商品`}
+        aria-label={`${brand?.title ?? collection?.title}商品`}
       >
         {brandProducts.length > 0 ? (
           <div className="space-y-3">
@@ -113,11 +120,11 @@ export default function LimitedBrandProducts() {
               const sku = getActiveSku(
                 product,
                 availabilityBySku,
-                localPreviewMode ||
-                  availabilityLoading ||
-                  product.publicPreview === true
-              );
+                localPreviewMode
+              ) ?? (canPreviewInactive ? product.skus.find(sku => sku.featured) ?? product.skus[0] : undefined);
               const isDraftPreview = product.status === "draft";
+              const isOffShelf = canPreviewInactive && (categoryOffShelf || product.status !== "on_sale" || product.skus.every(item => !item.active || availabilityBySku.get(`${product.key}:${item.id}`)?.isOffShelf === true));
+              const hasInactiveSku = canPreviewInactive && !isOffShelf && product.skus.some(item => !item.active || availabilityBySku.get(`${product.key}:${item.id}`)?.isOffShelf === true);
               const priceU = sku ? cnyToU(sku.priceCny, usdtCnyRate) : null;
               // 图片按钮自适应融合方案：佗鹊堂商品使用为4:5图槽制作的静物图；
               // 右侧文字、金额与按钮采用独立栅格，不在不同手机宽度下争抢同一行。
@@ -127,6 +134,7 @@ export default function LimitedBrandProducts() {
               return (
                 <Link
                   key={product.key}
+                  data-product-key={product.key}
                   href={`/p/proj_hzxm2t/limited/${product.key}${localPreviewMode ? "?preview=1" : ""}`}
                   className="block overflow-hidden rounded-[20px] border bg-white shadow-[0_6px_16px_rgba(0,0,0,0.05)] active:scale-[0.99]"
                   style={{ borderColor: theme.border }}
@@ -170,6 +178,8 @@ export default function LimitedBrandProducts() {
                         >
                           {product.category}
                         </span>
+                        {isOffShelf && <LimitedOffShelfBadge className="ml-2" />}
+                        {hasInactiveSku && <span className="ml-2 text-[10px] text-gray-500">部分规格已下架</span>}
                         <h2
                           className="mt-1 line-clamp-1 text-[16px] font-extrabold leading-5"
                           style={{ color: theme.navy }}
@@ -224,7 +234,7 @@ export default function LimitedBrandProducts() {
                             background: theme.surfaceMuted,
                           }}
                         >
-                          {isDraftPreview ? "资料预览" : "购买"}
+                          {isOffShelf ? "查看" : isDraftPreview ? "资料预览" : "购买"}
                           <ChevronRight
                             className="h-3.5 w-3.5"
                             strokeWidth={2.4}
@@ -248,10 +258,13 @@ export default function LimitedBrandProducts() {
               strokeWidth={1.6}
             />
             <p className="mt-2 text-[12px]" style={{ color: theme.subtle }}>
-              {brandSlug === "midaniang"
+              {country ? "该专区暂未添加商品" : brandSlug === "midaniang"
                 ? "首批两款大米资料整理中"
                 : "该系列商品正在上新"}
             </p>
+            {country && <p className="mt-2 px-5 text-[11px] leading-5" style={{ color: theme.muted }}>
+              商品、规格和价格确认后再添加。
+            </p>}
             {brandSlug === "midaniang" && (
               <p className="mt-2 px-5 text-[11px] leading-5" style={{ color: theme.muted }}>
                 先看品牌新形象，商品与规格确认后再开放购买。

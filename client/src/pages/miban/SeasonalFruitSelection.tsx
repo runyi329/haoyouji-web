@@ -4,6 +4,8 @@ import { ArrowLeft, ChevronRight, MapPin } from "lucide-react";
 import { mtrpc } from "./mibanTrpc";
 import { cnyToU, useMibanUsdtCnyRate } from "./useMibanUsdtCnyRate";
 import { LimitedCartButton } from "./LimitedProductCart";
+import { getMibanLimitedProduct } from "@shared/miban-limited-products";
+import { LimitedOffShelfBadge, useMibanLimitedCollections } from "./useMibanLimitedCollections";
 
 const PEAR_DEADLINE = new Date("2026-07-25T00:00:00+08:00").getTime();
 const TIANGUI_PEAR_IMAGE =
@@ -37,6 +39,24 @@ function FruitSalesLabel({
 }
 
 export default function SeasonalFruitSelection() {
+  const collectionsQuery = useMibanLimitedCollections();
+  const { canPreviewInactive, viewerUserId, activeSlugs, inactiveSlugs, visibleSlugs } = collectionsQuery;
+  const categoryVisible = visibleSlugs.has("fruits");
+  const categoryOffShelf = inactiveSlugs.has("fruits");
+  const availabilityQuery = mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }, {
+    enabled: !collectionsQuery.isLoading && categoryVisible,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+  });
+  // 不使用静态/DEV回退：普通用户在运营状态未确认时不能看到下架商品。
+  const availabilityReady = availabilityQuery.data !== undefined && !availabilityQuery.isError && availabilityQuery.isFetchedAfterMount !== false;
+  const majiayou = getMibanLimitedProduct("guangfeng-majiayou");
+  const majiayouOffShelf = categoryOffShelf || majiayou?.status !== "on_sale" || !majiayou.skus.some(sku =>
+    sku.active && availabilityQuery.data?.some((row: { productKey: string; skuId: string; isOffShelf: boolean }) => row.productKey === majiayou.key && row.skuId === sku.id && row.isOffShelf === false)
+  );
+  const showMajiayou = categoryVisible && availabilityReady && (canPreviewInactive || (activeSlugs.has("fruits") && !majiayouOffShelf));
   const { data: pearSpecs } = mtrpc.pear.getSpecs.useQuery({
     productKey: "tiangui-pear",
   });
@@ -77,7 +97,9 @@ export default function SeasonalFruitSelection() {
         aria-label="四季水果精选商品"
       >
         <div className="space-y-3">
+          {showMajiayou && (
           <Link
+            data-product-key="guangfeng-majiayou"
             href="/p/proj_hzxm2t/limited/guangfeng-majiayou"
             className="block overflow-hidden rounded-[20px] border border-[#DFE7CA] bg-white shadow-[0_6px_16px_rgba(73,91,38,0.09)] active:scale-[0.99]"
           >
@@ -99,6 +121,7 @@ export default function SeasonalFruitSelection() {
                     <span className="shrink-0 text-[10px] font-bold text-[#647B35]">
                       产地鲜果
                     </span>
+                    {canPreviewInactive && majiayouOffShelf && <LimitedOffShelfBadge />}
                     <FruitSalesLabel
                       sales={fruitSales?.["guangfeng-majiayou"]}
                       initialSoldPieces={MAJIAYOU_INITIAL_SOLD_PIECES}
@@ -139,8 +162,12 @@ export default function SeasonalFruitSelection() {
               </div>
             </article>
           </Link>
+          )}
 
+          {/* 旧梨规格来自独立getSpecs接口，没有限定商品SKU运营模型。 */}
+          {categoryVisible && (
           <Link
+            data-product-key="tiangui-pear"
             href="/p/proj_hzxm2t/pear/tiangui"
             className="block overflow-hidden rounded-[20px] border border-[#EAE5D6] bg-white shadow-[0_6px_16px_rgba(77,65,34,0.07)] active:scale-[0.99]"
           >
@@ -165,6 +192,7 @@ export default function SeasonalFruitSelection() {
                     <span className="shrink-0 text-[10px] font-bold text-[#9B8552]">
                       产地鲜果
                     </span>
+                    {categoryOffShelf && <LimitedOffShelfBadge />}
                     <FruitSalesLabel sales={fruitSales?.["tiangui-pear"]} />
                   </div>
                   <h3 className="mt-1 text-[17px] font-extrabold leading-5 text-[#2E3C30]">
@@ -207,6 +235,7 @@ export default function SeasonalFruitSelection() {
               </div>
             </article>
           </Link>
+          )}
         </div>
       </section>
     </div>

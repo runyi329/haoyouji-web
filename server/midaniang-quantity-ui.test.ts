@@ -34,6 +34,8 @@ const boundary = vi.hoisted(() => ({
   rate: 7.2,
   addItem: vi.fn((_payload: unknown) => true),
   query: vi.fn(() => ({ data: { usdtCnyRate: 7.2 } })),
+  user: null as any,
+  offShelf: false,
 }));
 const hookSlots = vi.hoisted(() => ({
   enabled: false,
@@ -61,6 +63,20 @@ vi.mock("react", async () => {
 vi.mock("@/lib/trpc", () => ({
   trpc: { getCryptoPrices: { useQuery: boundary.query } },
 }));
+vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: boundary.user, loading: false }) }));
+vi.mock("../client/src/pages/miban/mibanTrpc", () => ({
+  cosImg: (url: string) => url,
+  mtrpc: { limitedProduct: {
+    publicCollections: { useQuery: () => ({
+      data: { viewerUserId: boundary.user?.id ?? null, canPreviewInactive: boundary.user?.role === "super_admin", collections: [{ slug: "midaniang", isActive: true }] },
+      isLoading: false, isError: false, isFetchedAfterMount: true,
+    }) },
+    publicAvailability: { useQuery: () => ({
+      data: midaniangSelectionCatalog.flatMap(item => boundary.offShelf && boundary.user?.role !== "super_admin" ? [] : [{ productKey: item.productKey, skuId: item.skuId, isOffShelf: boundary.offShelf, isOnSale: !boundary.offShelf, stockQty: 10 }]),
+      isLoading: false, isError: false, isFetchedAfterMount: true,
+    }) },
+  } },
+}));
 vi.mock("../client/src/pages/miban/LimitedProductCart", () => ({
   useLimitedProductCart: () => ({ addItem: boundary.addItem }),
   LimitedCartButton: () => null,
@@ -75,6 +91,8 @@ beforeEach(() => {
   boundary.addItem.mockClear();
   boundary.query.mockClear();
   boundary.query.mockImplementation(() => ({ data: { usdtCnyRate: boundary.rate } }));
+  boundary.user = null;
+  boundary.offShelf = false;
   network.mockClear();
   hookSlots.enabled = false;
   hookSlots.cursor = 0;
@@ -237,6 +255,18 @@ describe("米大娘列表真实 SSR / 删除冗余计划说明", () => {
       expect(html).toContain(`data-testid="midaniang-list-organic-mark-${item.key}"`);
     }
     expect(boundary.query).toHaveBeenCalledTimes(1);
+    expect(boundary.addItem).not.toHaveBeenCalled();
+  });
+
+  it("运营下架商品普通用户隐藏，真实管理员可见但列表没有购买或加购", () => {
+    boundary.offShelf = true;
+    const publicHtml = renderWithRouter(React.createElement(MidaniangSelection));
+    expect(publicHtml).not.toContain('data-testid="midaniang-product-card"');
+    boundary.user = { id: 28, role: "super_admin" };
+    const adminHtml = renderWithRouter(React.createElement(MidaniangSelection));
+    expect(adminHtml.match(/data-testid="midaniang-product-card"/g)).toHaveLength(2);
+    expect(adminHtml.match(/limited-off-shelf-badge/g)).toHaveLength(2);
+    expect(adminHtml).not.toMatch(/midaniang-add-to-cart|midaniang-buy-now|\/buy\?/);
     expect(boundary.addItem).not.toHaveBeenCalled();
   });
 

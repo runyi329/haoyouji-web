@@ -34,6 +34,7 @@ import { formatMibanPaymentSummary, type MibanPaymentDeduction } from "../../../
 import MibanInvoiceRequestForm, { createMibanInvoiceDraft, validateMibanInvoiceRequest, MIBAN_INVOICE_UNAVAILABLE_NOTICE, type MibanInvoiceDraft, type MibanInvoiceErrors } from "./MibanInvoiceRequestForm";
 import { MibanCheckoutConfirmationDetails } from "./MibanCheckoutConfirmationDetails";
 import { MibanCheckoutPaymentAmount } from "./MibanCheckoutPaymentAmount";
+import { useMibanLimitedCollections } from "./useMibanLimitedCollections";
 
 const IMGS = {
   hero: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -248,6 +249,11 @@ export default function TianguiPearDetail() {
   // 下架判断：截止北京时 2026-07-25 00:00:00
   const PEAR_DEADLINE = new Date("2026-07-25T00:00:00+08:00").getTime();
   const isPearExpired = Date.now() >= PEAR_DEADLINE;
+  const collectionsQuery = useMibanLimitedCollections();
+  // 旧梨仅有独立getSpecs，不添加限定SKU状态模型；真实分类上架才能购买。
+  // 不设置DEV例外，管理员预览下架分类也只读，权限未确认同样关闭付款。
+  const isCollectionActive = collectionsQuery.activeSlugs.has("fruits");
+  const purchaseBlocked = isPearExpired || !isCollectionActive;
 
   // 收藏功能
   const { data: favData, refetch: refetchFav } =
@@ -335,7 +341,7 @@ export default function TianguiPearDetail() {
   const handleBuy = () => {
     // Bug修复：登录状态加载中时 isAuthenticated=false，不能跳转登录页
     // 应等待 auth 加载完成后再判断
-    if (authLoading || isPearExpired || createOrder.isPending) return;
+    if (authLoading || purchaseBlocked || createOrder.isPending) return;
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -358,14 +364,14 @@ export default function TianguiPearDetail() {
     return invoice;
   };
   const handleOpenWalletPayment = () => {
-    if (checkoutBusy || submitGuard.current || !showOrderDialog || !isAuthenticated || isPearExpired) return;
+    if (checkoutBusy || submitGuard.current || !showOrderDialog || !isAuthenticated || purchaseBlocked) return;
     if (!validateCheckout()) return;
     if (!walletPayment.canPay) { toast.error(walletPayment.statusMessage); return; }
     walletOpenRef.current = true;
     setShowWalletPayment(true);
   };
   const handleConfirmWalletPayment = async () => {
-    if (checkoutBusy || submitGuard.current || !walletOpenRef.current || !showOrderDialog || !isAuthenticated || isPearExpired || !walletPayment.canPay) return;
+    if (checkoutBusy || submitGuard.current || !walletOpenRef.current || !showOrderDialog || !isAuthenticated || purchaseBlocked || !walletPayment.canPay) return;
     const invoice = validateCheckout();
     if (!invoice) { cancelWalletPayment(); return; }
     const attempt = ++paymentAttemptRef.current;
@@ -512,10 +518,10 @@ export default function TianguiPearDetail() {
 
   const totalPrice = currentSpec.price * qty;
   const totalWeightJin = currentSpec.weightJin * qty;
-  const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated);
+  const walletPayment = useMibanMixedPayment(totalPrice, isAuthenticated && !purchaseBlocked);
   const checkoutBusy = createOrder.isPending || preparingPayment;
   const walletVersion = JSON.stringify([walletPayment.selectedCodes, walletPayment.priorityCode, walletPayment.cnyInput, walletPayment.paymentAssets]);
-  const checkoutInputScope = JSON.stringify([showOrderDialog, location, isAuthenticated, user?.id, isPearExpired, spec, currentSpec, qty, totalPrice, totalWeightJin, receiverName, receiverPhone, receiverProvince, receiverCity, receiverDistrict, receiverDetail, receiverAddress, userNote, saveToBook, invoiceDraft]);
+  const checkoutInputScope = JSON.stringify([showOrderDialog, location, isAuthenticated, user?.id, purchaseBlocked, spec, currentSpec, qty, totalPrice, totalWeightJin, receiverName, receiverPhone, receiverProvince, receiverCity, receiverDistrict, receiverDetail, receiverAddress, userNote, saveToBook, invoiceDraft]);
   const checkoutScope = JSON.stringify([checkoutInputScope, walletVersion]);
   const latestCheckoutScope = useRef(checkoutScope);
   latestCheckoutScope.current = checkoutScope;
@@ -537,6 +543,9 @@ export default function TianguiPearDetail() {
   useEffect(() => {
     if (!createOrder.isPending && (walletOpenRef.current || submitGuard.current)) cancelWalletPayment();
   }, [checkoutInputScope]);
+  useEffect(() => {
+    if (purchaseBlocked && !createOrder.isPending) closeOrderDialog();
+  }, [purchaseBlocked, createOrder.isPending]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -1150,21 +1159,21 @@ export default function TianguiPearDetail() {
         <button
           className="flex-1 h-14 rounded-xl border-none text-base font-extrabold tracking-wide transition-transform"
           style={{
-            background: isPearExpired
+            background: purchaseBlocked
               ? "#ccc"
               : "linear-gradient(90deg,#FF8C00 0%,#FF6900 100%)",
             color: "#fff",
-            cursor: isPearExpired ? "not-allowed" : "pointer",
+            cursor: purchaseBlocked ? "not-allowed" : "pointer",
           }}
-          onClick={isPearExpired ? undefined : handleBuy}
-          disabled={isPearExpired}
+          onClick={purchaseBlocked ? undefined : handleBuy}
+          disabled={purchaseBlocked || authLoading || checkoutBusy}
         >
-          {isPearExpired ? "已下架，暂停购买" : "立即购买"}
+          {purchaseBlocked ? "已下架，暂停购买" : "立即购买"}
         </button>
       </div>
 
       {/* ── 下单对话框 ── */}
-      {showOrderDialog && !showWalletPayment && (
+      {showOrderDialog && !showWalletPayment && !purchaseBlocked && (
         <div
           data-miban-checkout="true"
           role="dialog"
@@ -1500,7 +1509,7 @@ export default function TianguiPearDetail() {
 
               {/* 去支付仅校验确认订单内容，不核验报价或下单。 */}
               <button
-                disabled={checkoutBusy || !walletPayment.canPay || isPearExpired}
+                disabled={checkoutBusy || !walletPayment.canPay || purchaseBlocked}
                 onClick={handleOpenWalletPayment}
                 className="w-full px-3 py-4 break-all rounded-2xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform mt-5"
                 style={{ background: "#FF6900" }}
@@ -1511,7 +1520,7 @@ export default function TianguiPearDetail() {
           </div>
         </div>
       )}
-      {showWalletPayment && (
+      {showWalletPayment && !purchaseBlocked && (
         <div data-miban-checkout="true" role="dialog" aria-modal="true" aria-label="钱包支付确认" className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={cancelWalletPayment}>
           <div className="max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-[4px] bg-white p-6 pb-10" onClick={event => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -1523,7 +1532,7 @@ export default function TianguiPearDetail() {
             </MibanCheckoutPaymentAmount>
             <MibanCheckoutConfirmationDetails items={[{ name: "天桂梨", specification: currentSpec.name, quantity: `${qty}份` }]} receiverName={receiverName} receiverPhone={normalizeMibanReceiverPhone(receiverPhone)} receiverAddress={receiverAddress} invoiceDraft={invoiceDraft} userNote={userNote} />
             <button disabled={createOrder.isPending} onClick={cancelWalletPayment} className="mt-4 w-full rounded-[4px] border border-gray-200 py-3 text-[13px] text-gray-600">返回修改订单</button>
-            <button disabled={checkoutBusy || !walletPayment.canPay || isPearExpired} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
+            <button disabled={checkoutBusy || !walletPayment.canPay || purchaseBlocked} onClick={handleConfirmWalletPayment} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#FF6900] px-3 py-4 text-[13px] font-bold text-white disabled:opacity-50">
               {checkoutBusy ? <><Loader2 size={16} className="animate-spin" />{preparingPayment ? "正在核验支付" : "提交中…"}</> : "确认支付"}
             </button>
           </div>

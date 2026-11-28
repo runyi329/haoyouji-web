@@ -3,6 +3,7 @@ import { Check, Minus, Plus, X } from "lucide-react";
 import type { LimitedProductSku } from "../../../../shared/miban-limited-products";
 import { cnyToU } from "./useMibanUsdtCnyRate";
 import { MibanImage } from "./MibanImage";
+import { LimitedOffShelfBadge } from "./useMibanLimitedCollections";
 
 export type WinePurchaseAction = "buy" | "cart";
 
@@ -17,6 +18,8 @@ type Props = {
   accent: string;
   surface: string;
   busy?: boolean;
+  purchaseDisabled?: boolean;
+  offShelfSkuIds?: string[];
   onClose: () => void;
   onSelectSku: (sku: LimitedProductSku) => void;
   onQuantityChange: (quantity: number) => void;
@@ -47,6 +50,7 @@ export function winePurchaseQuantityText(sku: LimitedProductSku, quantity: numbe
 export function MibanWinePurchaseSheet({
   action, title, skus, selectedSku, quantity, maxQuantity, usdtCnyRate,
   accent, surface, busy = false, onClose, onSelectSku, onQuantityChange, onConfirm,
+  purchaseDisabled = false, offShelfSkuIds = [],
 }: Props) {
   return (
     <Dialog.Root open={action !== null} onOpenChange={open => { if (!open && !busy) onClose(); }}>
@@ -80,6 +84,7 @@ export function MibanWinePurchaseSheet({
                   style={{ borderColor: sku.id === selectedSku.id ? accent : "#e5e7eb", background: sku.id === selectedSku.id ? surface : "#fff" }}
                 >
                   <span className="min-w-0"><span className="block text-[13px] font-bold text-gray-800">{sku.name}</span><span className="mt-1 block text-[11px] text-gray-500">{sku.netContentText} · {sku.subtitle}</span></span>
+                  {offShelfSkuIds.includes(sku.id) && <LimitedOffShelfBadge />}
                   {sku.id === selectedSku.id && <Check size={17} className="shrink-0" style={{ color: accent }} />}
                 </button>
               ))}
@@ -98,7 +103,7 @@ export function MibanWinePurchaseSheet({
             <div data-testid="wine-selection-subtotal"><WineSelectionPrice cny={selectedSku.priceCny * quantity} rate={usdtCnyRate} accent={accent} /></div>
           </div>
           <p className="mt-3 text-[10px] leading-4 text-gray-400">优惠及最终扣款金额以支付确认页的有效报价为准。</p>
-          <button type="button" disabled={busy || !selectedSku.active} onClick={onConfirm} className="mt-4 h-12 shrink-0 rounded-[4px] text-[14px] font-extrabold text-white disabled:opacity-40" style={{ background: accent }}>{action === "cart" ? "确认加入购物车" : "确认规格，下一步"}</button>
+          <button type="button" disabled={busy || purchaseDisabled || !selectedSku.active || offShelfSkuIds.includes(selectedSku.id)} onClick={onConfirm} className="mt-4 h-12 shrink-0 rounded-[4px] text-[14px] font-extrabold text-white disabled:opacity-40" style={{ background: accent }}>{offShelfSkuIds.includes(selectedSku.id) ? "已下架" : action === "cart" ? "确认加入购物车" : "确认规格，下一步"}</button>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

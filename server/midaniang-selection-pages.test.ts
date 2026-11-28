@@ -29,7 +29,26 @@ import {
 // Unit/SSR boundary only: mock the live query hook and cart context/button,
 // never the selection/official catalogs, assets or cnyToU function.
 const testRate = vi.hoisted(() => ({ value: 7.2 }));
-const testCart = vi.hoisted(() => ({ addItem: vi.fn(() => true) }));
+const testCart = vi.hoisted(() => ({ addItem: vi.fn(() => true), leafEnabled: false }));
+const viewer = vi.hoisted(() => ({ user: null as any, categoryActive: true, offShelf: false, loading: false, error: false, fetched: true }));
+vi.mock("react", async importOriginal => {
+  const actual = await importOriginal<typeof import("react")>();
+  return { ...actual, useState: (value: any) => testCart.leafEnabled ? [typeof value === "function" ? value() : value, vi.fn()] : actual.useState(value) };
+});
+vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: viewer.user, loading: false }) }));
+vi.mock("../client/src/pages/miban/mibanTrpc", () => ({
+  cosImg: (url: string) => url,
+  mtrpc: { limitedProduct: {
+    publicCollections: { useQuery: () => ({
+      data: { viewerUserId: viewer.user?.id ?? null, canPreviewInactive: viewer.user?.role === "super_admin", collections: [{ slug: "midaniang", isActive: viewer.categoryActive }] },
+      isLoading: viewer.loading, isError: viewer.error, isFetchedAfterMount: viewer.fetched && !viewer.loading,
+    }) },
+    publicAvailability: { useQuery: () => ({
+      data: midaniangSelectionCatalog.flatMap(item => viewer.offShelf && viewer.user?.role !== "super_admin" ? [] : [{ productKey: item.productKey, skuId: item.skuId, isOffShelf: viewer.offShelf, isOnSale: !viewer.offShelf, stockQty: 10 }]),
+      isLoading: viewer.loading, isError: viewer.error, isFetchedAfterMount: viewer.fetched && !viewer.loading,
+    }) },
+  } },
+}));
 vi.mock("../client/src/pages/miban/LimitedProductCart", async () => {
   const actual = await vi.importActual<
     typeof import("../client/src/pages/miban/LimitedProductCart")
@@ -62,6 +81,8 @@ beforeEach(() => {
   testRate.value = 7.2;
   vi.mocked(useMibanUsdtCnyRate).mockClear();
   testCart.addItem.mockClear();
+  testCart.leafEnabled = false;
+  Object.assign(viewer, { user: null, categoryActive: true, offShelf: false, loading: false, error: false, fetched: true });
 });
 
 // Vitest's standalone config does not load the Vite React plugin.
@@ -214,11 +235,14 @@ describe("midaniang selection route safety", () => {
       organicSource,
     ]) {
       expect(source).not.toMatch(
-        /\b(?:mutate|mutateAsync|createOrder|createCartOrder|useMutation|mtrpc|trpc|fetch|axios|localStorage)\b/
+        /\b(?:mutate|mutateAsync|createOrder|createCartOrder|useMutation|fetch|axios|localStorage)\b/
       );
       expect(source).not.toMatch(/(?:立即支付|提交订单)|\/api\//);
     }
-    expect(detailSource).toContain("<MidaniangPurchaseActions item={item} />");
+    expect(detailSource).toContain("{canPurchase ? (");
+    expect(detailSource).toContain("<MidaniangPurchaseActions key={item.key} item={item} usdtCnyRate={usdtCnyRate} />");
+    expect(listSource).toContain("mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }");
+    expect(detailSource).toContain("mtrpc.limitedProduct.publicAvailability.useQuery({ viewerUserId }");
     expect(purchaseSource).toContain('from "./LimitedProductCart"');
     expect(purchaseSource).toContain('from "@shared/miban-limited-products"');
     expect(purchaseSource).toContain("getMibanLimitedProduct(item.productKey)");
@@ -253,14 +277,14 @@ describe("midaniang official purchase actions", () => {
       expect(vi.isMockFunction(getMibanLimitedProductSku)).toBe(false);
       const summary =
         html.match(
-          /<section\b[^>]*aria-label="商品信息摘要"[^>]*>([\s\S]*?)<\/section>/
+          /<section\b[^>]*aria-label="商品信息摘要"[^>]*>([\s\S]*?)<\/section><nav\b/
         )?.[1] ?? "";
       const buyLink =
         summary.match(
           /<a\b[^>]*data-testid="midaniang-buy-now"[^>]*>[\s\S]*?<\/a>/
         )?.[0] ?? "";
       expect(buyLink).toContain(
-        `href="/p/proj_hzxm2t/limited/${productKey}/buy?sku=${skuId}"`
+        `href="/p/proj_hzxm2t/limited/${productKey}/buy?sku=${skuId}&amp;quantity=1"`
       );
       expect(buyLink).toContain("立即购买");
       expect(summary).toContain('data-testid="midaniang-purchase-actions"');
@@ -269,7 +293,7 @@ describe("midaniang official purchase actions", () => {
         /<button\b[^>]*type="button"[^>]*data-testid="midaniang-add-to-cart"[^>]*>加入购物车<\/button>/
       );
       expect(summary).toContain("已获有机认证");
-      expect(html).toContain("通过米伴钱包完成支付");
+      expect(html).toContain("通过米伴钱包支付");
       expect(html).toContain("加入购物车合单结算");
       expect(html).not.toMatch(
         /未开放购买|资料预览|待核验|foreign-sku|evil\.example/
@@ -286,15 +310,19 @@ describe("midaniang official purchase actions", () => {
       const sku = getMibanLimitedProductSku(product, item.skuId)!;
       // The mocked context makes the leaf component directly callable; no real cart,
       // network, wallet or DB writes occur. Deliberately vary display-only fields.
+      testCart.leafEnabled = true;
       const actions = MidaniangPurchaseActions({
         item: {
           ...item,
           title: midaniangSelectionCatalog[item.rank === 0 ? 1 : 0].title,
           specification: "展示规格不作为成交信息",
         },
+        usdtCnyRate: testRate.value,
       });
+      testCart.leafEnabled = false;
       expect(actions).not.toBeNull();
-      const children = React.Children.toArray(actions!.props.children);
+      const descendants = (node: any): any[] => React.Children.toArray(node).flatMap(child => React.isValidElement(child) ? [child, ...descendants((child.props as any).children)] : []);
+      const children = descendants(actions!.props.children);
       const button = children.find(
         child =>
           React.isValidElement<{ "data-testid"?: string }>(child) &&
@@ -340,7 +368,7 @@ describe("midaniang selection horizontal list and accessibility", () => {
     expect(listSource).toContain("rounded-[20px]");
     expect(listSource).toContain("line-clamp-2 break-words");
     expect(listSource).not.toMatch(
-      /line-clamp-1|truncate|grid-cols-2|aspect-square/
+      /line-clamp-1|truncate|grid-cols-2/
     );
     expect(listSource).toContain("max-w-[480px]");
     const images = html.match(/<img\b[^>]*包装示意[^>]*>/g) ?? [];
@@ -554,8 +582,8 @@ describe("midaniang selection horizontal list and accessibility", () => {
       expect(overlay).toContain('aria-hidden="true"');
       expect(overlay).toContain("pointer-events-none absolute inset-0");
       expect(overlay).toContain("linear-gradient(180deg, #fff 0%");
-      expect(overlay).toContain("rgba(255,255,255,0) 22%");
-      expect(overlay).toContain("rgba(255,255,255,0) 78%");
+      expect(overlay).toContain("rgba(255,255,255,0) 35%");
+      expect(overlay).toContain("rgba(255,255,255,0) 65%");
       expect(overlay).toContain("#fff 100%");
     }
     expect(
@@ -639,7 +667,7 @@ describe("midaniang merchant-confirmed organic certification and transparent pub
       )
     ).toHaveLength(2);
     expect(
-      html.match(/class="relative" data-testid="midaniang-product-card"/g)
+      html.match(/data-testid="midaniang-product-card"/g)
     ).toHaveLength(2);
     expect(listSource).toContain('className="min-w-0 pr-6"');
     expect(listSource).toContain("line-clamp-2 break-words");
@@ -1060,7 +1088,7 @@ describe("midaniang detail image and document structure", () => {
         "场景图片为AI重设计示意，不作为产地溯源或检测证明",
       ])
         expect(html).toContain(label);
-      expect(html.match(/<details\b/g)).toHaveLength(7);
+      expect(html.match(/<details\b/g)).toHaveLength(8);
       for (const question of [
         "两款礼盒有什么区别？",
         "净含量是多少？",
@@ -1102,4 +1130,45 @@ describe("midaniang detail image and document structure", () => {
       );
     }
   );
+});
+
+
+describe("midaniang offline availability and administrator read-only preview", () => {
+  it("ordinary users cannot see off-shelf cards or directly linked details", () => {
+    viewer.offShelf = true;
+    expect(renderList()).not.toContain('data-testid="midaniang-product-card"');
+    for (const item of midaniangSelectionCatalog) {
+      const html = renderDetail(item.key);
+      expect(html).toContain("midaniang-product-unavailable");
+      expect(html).not.toMatch(/midaniang-purchase-actions|midaniang-buy-now|midaniang-add-to-cart|data-poster-key/);
+    }
+    expect(testCart.addItem).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("administrator previews %s off-shelf category without cart, buy or pay controls", categoryActive => {
+    viewer.user = { id: 28, role: "super_admin" };
+    viewer.categoryActive = categoryActive;
+    // Keep product rows on sale when the category is off, proving the category veto.
+    viewer.offShelf = categoryActive;
+    const list = renderList();
+    expect(list.match(/limited-off-shelf-badge/g)).toHaveLength(2);
+    for (const item of midaniangSelectionCatalog) {
+      const detail = renderDetail(item.key);
+      expect(detail).toContain('data-testid="midaniang-selection-detail"');
+      expect(detail).toContain("仅供查看，不可购买或加购");
+      expect(detail).not.toMatch(/midaniang-purchase-actions|midaniang-buy-now|midaniang-add-to-cart|\/buy\?sku=|>去支付<|>确认支付</);
+      expect(detail.match(/data-poster-key=/g)).toHaveLength(5);
+      if (categoryActive) expect(detail).toContain("limited-off-shelf-badge");
+      else expect(detail).not.toContain("limited-off-shelf-badge"); // Outer gate owns category banner.
+    }
+    expect(testCart.addItem).not.toHaveBeenCalled();
+  });
+
+  it.each(["loading", "error", "fetched"] as const)("unconfirmed %s state never flashes cards or purchase actions", state => {
+    viewer.user = { id: 28, role: "super_admin" };
+    viewer[state] = state === "fetched" ? false : true;
+    expect(renderList()).not.toContain('data-testid="midaniang-product-card"');
+    expect(renderDetail("classic-rice-gift")).not.toMatch(/midaniang-purchase-actions|midaniang-buy-now|midaniang-add-to-cart/);
+    expect(testCart.addItem).not.toHaveBeenCalled();
+  });
 });

@@ -117,16 +117,19 @@ describe("Spain purchase selection on real single-bottle catalog", () => {
     expect(sheetSource).toContain('selectedSku.priceCny * quantity');
   });
 
-  it("requires confirmed runtime availability for production wine checkout quotes, but preserves other brands", () => {
+  it("requires confirmed runtime availability for production wine checkout quotes, and applies the same rule to other brands", () => {
     const currentProduct = getMibanLimitedProduct("spain-romanico")!;
     const selectedSku = currentProduct.skus[0];
     const key = `${currentProduct.key}:${selectedSku.id}`;
-    const bindings = { currentProduct, selectedSku, isSpainProduct: true, localPreviewMode: false };
+    const bindings = { isCollectionActive: true, isOffShelf: false, canPreviewInactive: false, currentProduct, selectedSku, isSpainProduct: true, localPreviewMode: false };
     expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityLoading: true, availabilityBySku: new Map() })).toBe(false);
     expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityLoading: false, availabilityBySku: new Map() })).toBe(false);
     expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityLoading: false, availabilityBySku: new Map([[key, { isOnSale: false }]]) })).toBe(false);
     expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityLoading: false, availabilityBySku: new Map([[key, { isOnSale: true }]]) })).toBe(true);
     expect(evaluate(initializer("isOnSale"), { ...bindings, localPreviewMode: true, availabilityLoading: true, availabilityBySku: new Map() })).toBe(true);
-    expect(evaluate(initializer("isOnSale"), { ...bindings, isSpainProduct: false, availabilityLoading: true, availabilityBySku: new Map() })).toBe(true);
+    expect(evaluate(initializer("isOnSale"), { ...bindings, isSpainProduct: false, availabilityLoading: true, availabilityBySku: new Map() })).toBe(false);
+    for (const guard of [{ isCollectionActive: false }, { isOffShelf: true }, { canPreviewInactive: true, localPreviewMode: true }]) {
+      expect(evaluate(initializer("isOnSale"), { ...bindings, localPreviewMode: true, availabilityLoading: true, availabilityBySku: new Map(), ...guard })).toBe(false);
+    }
   });
 });

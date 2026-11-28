@@ -92,6 +92,7 @@ class FakeDB {
       stock_qty: 1000,
     }))
   );
+  collectionStates: Array<{ slug: string; is_active: number }> = [];
   snapshot: any;
   releases = 0;
   commits = 0;
@@ -132,6 +133,8 @@ class FakeDB {
           .filter(r => r.user_id === values[1] && values[0] === STORE)
           .map(r => ({ ...r })),
       ];
+    if (sql.includes("FROM miban_limited_collection_state"))
+      return [this.collectionStates.map(s => ({ ...s }))];
     if (sql.includes("FROM miban_limited_sku_state"))
       return [this.states.map(s => ({ ...s }))];
     if (sql.includes("SELECT * FROM miban_benefit_requests"))
@@ -336,9 +339,11 @@ describe("miban benefits transaction safety (no real DB)", () => {
     expect(
       await assertMibanBenefitQuote(db, 7, cart, "once", quote.quoteToken)
     ).toEqual(quote.result);
-    expect(db.calls.slice(-2).every(c => c.sql.includes("FOR UPDATE"))).toBe(
+    expect(db.calls.slice(-3).every(c => /FOR (UPDATE|SHARE)/.test(c.sql))).toBe(
       true
     );
+    expect(db.calls.some(c => c.sql.includes("miban_limited_sku_state") && c.sql.includes("FOR UPDATE"))).toBe(true);
+    expect(db.calls.some(c => c.sql.includes("miban_limited_collection_state") && c.sql.includes("FOR SHARE"))).toBe(true);
     await expect(
       assertMibanBenefitQuote(db, 8, cart, "once", quote.quoteToken)
     ).rejects.toMatchObject({ code: "CONFLICT" });
@@ -774,5 +779,17 @@ describe("miban benefits transaction safety (no real DB)", () => {
     expect(db.calls.filter(c => c.sql.startsWith("CREATE TABLE"))).toHaveLength(
       5
     );
+  });
+});
+
+describe("limited collection visibility in benefit quotes", () => {
+  it("hidden collection products cannot be selected or quoted; SKU state remains unchanged", async () => {
+    const before = JSON.stringify(db.states);
+    db.collectionStates = [{ slug: "midaniang", is_active: 0 }];
+    const catalog = await readMibanBenefitsCatalog(db);
+    expect(catalog.some(p => p.brand === "米大娘")).toBe(false);
+    expect(catalog.some(p => p.brand === "康宝莱")).toBe(true);
+    await expect(getMibanBenefitQuote(7, cart)).rejects.toThrow();
+    expect(JSON.stringify(db.states)).toBe(before);
   });
 });

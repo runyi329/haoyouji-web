@@ -263,7 +263,7 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
     };
     const current = getRouterProperties(source);
     expect(current.map(node => node.name.getText())).toEqual([
-      "invoiceFavorites", "rememberInvoice", "invoiceSupport", ...Object.keys(baseline).slice(0, -2), "createAnnualOrder", "createOrder", "createCartOrder",
+      "invoiceFavorites", "rememberInvoice", "publicCollections", "adminCollections", "adminUpdateCollectionState", "invoiceSupport", ...Object.keys(baseline).slice(0, -2), "createAnnualOrder", "createOrder", "createCartOrder",
     ]);
     expect(current.find(node => node.name.getText() === "invoiceFavorites")?.initializer.getText()).toBe(
       'protectedProcedure.query(({ ctx }) => readMibanInvoiceFavorites(ctx.user!.id))'
@@ -279,7 +279,9 @@ describe("米大娘年单：真实 AST mutation / 无生产服务隔离", () => 
       // Their transaction/price/snapshot wiring is asserted in miban-benefits-wiring.test.ts
       // and the actual extracted mutations are exercised in the checkout isolation suites.
       // Keep all other baseline hashes unchanged; do not rebaseline unrelated procedures.
-      if (name === "createOrder" || name === "createCartOrder") continue;
+      // publicAvailability intentionally changed for category status/admin read-only preview;
+      // its trusted-role, off-shelf and stock guards are exercised in miban-limited-admin-preview.test.ts.
+      if (name === "createOrder" || name === "createCartOrder" || name === "publicAvailability") continue;
       const initializer = current.find(node => node.name.getText() === name)?.initializer.getText();
       // 不更新原基准哈希；仅移除逐条、逐路由精确批准的发票接入行，其余原文必须保持不变。
       let baselineInitializer = name === "recordBrandAttention"

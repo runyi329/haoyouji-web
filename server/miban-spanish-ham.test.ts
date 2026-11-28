@@ -236,7 +236,7 @@ describe("Spanish ham: real pure pricing, query/state and production sale gates"
     const currentProduct = ham();
     const selectedSku = getMibanLimitedProductSku(currentProduct, fixture.id)!;
     const key = `${currentProduct.key}:${selectedSku.id}`;
-    const bindings = { currentProduct, selectedSku, ...flags(currentProduct), localPreviewMode: false };
+    const bindings = { isCollectionActive: true, isOffShelf: false, canPreviewInactive: false, currentProduct, selectedSku, ...flags(currentProduct), localPreviewMode: false };
     for (const availabilityLoading of [true, false]) {
       for (const availabilityBySku of [new Map(), new Map([[key, { isOnSale: false }]]), new Map([[key, { isOnSale: "true" }]])]) {
         expect(evaluate(initializer("isOnSale"), { ...bindings, availabilityLoading, availabilityBySku })).toBe(false);
@@ -248,7 +248,7 @@ describe("Spanish ham: real pure pricing, query/state and production sale gates"
     expect(evaluate(initializer("isOnSale"), { ...bindings, selectedSku: undefined, availabilityLoading: false, availabilityBySku: available })).toBe(false);
     expect(evaluate(initializer("isOnSale"), { ...bindings, currentProduct: { ...currentProduct, status: "draft" }, availabilityLoading: false, availabilityBySku: available })).toBe(false);
     expect(evaluate(initializer("isOnSale"), { ...bindings, localPreviewMode: true, availabilityLoading: true, availabilityBySku: new Map() })).toBe(true);
-    expect(evaluate(initializer("activeSkus"), { currentProduct, localPreviewMode: false, availabilityLoading: false, availabilityBySku: available })).toEqual([selectedSku]);
+    expect(evaluate(initializer("activeSkus"), { canPreviewInactive: false, currentProduct, localPreviewMode: false, availabilityLoading: false, availabilityBySku: available })).toEqual([selectedSku]);
   });
 
   it("two ham specifications group together but remain separate from all three wines using the actual cart helper", () => {
