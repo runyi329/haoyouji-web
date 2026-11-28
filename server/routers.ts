@@ -14409,6 +14409,33 @@ ${klinesSummary}
         const { updateStockTagBuy } = await import('./ledger-stock-portfolio');
         return updateStockTagBuy({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role, isViewingAs: Boolean(ctx.isViewingAs) });
       }),
+    adminGetLedger37DataManagement: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(20).default(10),
+        keyword: z.string().trim().max(80).default(''),
+        allMembers: z.boolean().optional(),
+        targetUserId: z.number().int().positive().optional(),
+      }).strict())
+      .query(async ({ ctx, input }) => {
+        const { readLedger37DataManagement } = await import('./ledger37-data-management');
+        const { readAllOrdinaryTagDownsideRules } = await import('./ordinary-tag-downside-rules');
+        const { readUserTagDownsideOverrides } = await import('./user-tag-downside-overrides');
+        const connection = await getDbConnection();
+        if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
+        return readLedger37DataManagement(ctx, input, {
+          connection,
+          readOrdinaryRules: (conn: any) => readAllOrdinaryTagDownsideRules(conn, 37),
+          readOverrides: (conn: any) => readUserTagDownsideOverrides(conn, 37),
+          loadStockOverview: async (targetUserId: number) => {
+            const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
+            // The new service authorizes the real administrator before calling this member-scoped reader.
+            // Always use personal scope, including when the selected member is the actual owner.
+            return getMyStockTagOverview({ ledgerId: 37, userId: targetUserId, isViewingAs: true });
+          },
+        });
+      }),
     getForcedLiquidationSettings: protectedProcedure
       .input(z.object({ ledgerId: z.literal(37) }).strict())
       .query(async ({ ctx, input }) => {

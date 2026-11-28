@@ -509,6 +509,15 @@ export default function LedgerSettings() {
            onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
          />
        )}
+       {!_urlSearchParams.has('viewAs') && !['1', 'true'].includes(_urlSearchParams.get('readonly') ?? '') && (() => {
+         try { return window.sessionStorage.getItem('view-as-user-id') === null; } catch { return false; }
+       })() && (
+         <SettingItem
+           label="数据管理"
+           showIcon
+           onClick={() => setLocation(`/ledger/${ledgerId}/data-management`)}
+         />
+       )}
      </>
    );
  })()}

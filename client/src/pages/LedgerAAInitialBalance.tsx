@@ -23,6 +23,7 @@ import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "rea
 import { useParams, useLocation, useSearch } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users, Bot, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { ledger37DataManagementPath } from "@shared/ledger37-data-management";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
@@ -3062,8 +3063,12 @@ function LedgerAAInitialBalanceEditor({ ledgerIdOverride, stockAllocationFocus, 
   // 视角切换："user"=用户视角（原有），"tag"=标签视角
   const [viewMode, setViewMode] = useState<"user" | "tag">(() => ledgerId === 37 && new URLSearchParams(window.location.search).get('view') === 'user' ? 'user' : 'tag');
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
-  const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
-  // 用户视图：每个用户下展开的标签，key = `${userId}__${catName}`
+  const dataManagementParams = new URLSearchParams(window.location.search);
+  const requestedDataUserId = Number(dataManagementParams.get('userId'));
+  const dataManagementUserId = ledgerId === 37 && dataManagementParams.get('from') === 'data-management'
+    && Number.isSafeInteger(requestedDataUserId) && requestedDataUserId > 0 ? requestedDataUserId : null;
+  const [expandedUsers, setExpandedUsers] = useState<Set<number>>(() => new Set(dataManagementUserId ? [dataManagementUserId] : []));
+  // 用户视图：每个用户下展开的标签，key = `${userId}__catName`
   const [expandedUserTags, setExpandedUserTags] = useState<Set<string>>(new Set());
   // 用户视图：已关闭可见标签默认汇总，按用户按需展开。
   const [expandedHiddenTagGroups, setExpandedHiddenTagGroups] = useState<Set<number>>(new Set());
@@ -3507,6 +3512,7 @@ function LedgerAAInitialBalanceEditor({ ledgerIdOverride, stockAllocationFocus, 
   }, [allBalancesData, categories, ledgerId, editState, ordinaryObservationDrafts, ordinaryObservationSaved, ordinaryActualSaved, ordinaryActualDirty, ordinaryPreviewVersion]);
 
   const members = (allBalancesData as any)?.members ?? [];
+  const focusedDataMembers = dataManagementUserId ? members.filter((member: any) => Number(member.userId) === dataManagementUserId) : members;
   const closeStockAllocation = () => {
     if (savingStockLots.size > 0 || visibilitySavingScopes.size > 0 || savingUsers.size > 0) {
       toast.info('正在保存，请完成后再关闭分配'); return;
@@ -3556,7 +3562,7 @@ function LedgerAAInitialBalanceEditor({ ledgerIdOverride, stockAllocationFocus, 
         style={{ backgroundColor: "#D32F2F" }}
       >
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+          onClick={() => setLocation(dataManagementUserId ? ledger37DataManagementPath(dataManagementUserId) : `/ledger/${ledgerId}/settings`)}
           className="mr-3 text-white"
         >
           <ChevronLeft size={22} />
@@ -4562,12 +4568,12 @@ function LedgerAAInitialBalanceEditor({ ledgerIdOverride, stockAllocationFocus, 
       ) : (
         /* ===== 用户视角（原有） ===== */
         <div className="pb-8">
-          {members.length === 0 ? (
+          {focusedDataMembers.length === 0 ? (
             <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
               暂无成员
             </div>
           ) : (
-            members.map((member: any) => {
+            focusedDataMembers.map((member: any) => {
               const userId = member.userId;
               const userEdit = editState[userId] ?? {};
               const isDirty = dirtyUsers.has(userId);
