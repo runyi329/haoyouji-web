@@ -30,6 +30,8 @@ export type LimitedProductSku = {
   netContentText: string;
   /** 鲜果每个售卖单位的准确颗数，下单时快照保存，不由价格/重量反推。 */
   fruitCountPerUnit?: number;
+  /** 酒类每个售卖单位包含的瓶数；购买数量仍以unitLabel为计价与库存单位。 */
+  bottleCountPerUnit?: number;
   maxPurchaseQty: number;
   active: boolean;
   /** 多口味商品在选择规格后展示对应包装图。 */

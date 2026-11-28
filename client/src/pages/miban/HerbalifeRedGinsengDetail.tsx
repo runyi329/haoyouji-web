@@ -917,6 +917,7 @@ export default function HerbalifeRedGinsengDetail() {
         </div>
       </section>
 
+      {!isSpainWineProduct && (
       <section className="border-b border-gray-100 px-5 py-5">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -930,11 +931,9 @@ export default function HerbalifeRedGinsengDetail() {
                   ? "不同箱装规格对应不同价格"
                   : isPreviewProduct
                     ? "以下为资料核验规格，暂未开放下单"
-                    : isSpainWineProduct
-                      ? "每瓶750ml，按所选瓶数下单"
-                      : isSpainHamProduct
-                        ? "切片单包或整只装，按所选数量下单"
-                        : "当前商品提供的现货规格"}
+                    : isSpainHamProduct
+                      ? "切片单包或整只装，按所选数量下单"
+                      : "当前商品提供的现货规格"}
             </p>
           </div>
           <span className="text-[11px] font-semibold" style={{ color: accent }}>
@@ -992,6 +991,7 @@ export default function HerbalifeRedGinsengDetail() {
           </button>
         )}
       </section>
+      )}
 
       <section className="border-b border-gray-100 bg-white">
         <div className="px-5 pb-3 pt-5">

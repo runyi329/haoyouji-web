@@ -36,6 +36,13 @@ function WineSelectionPrice({ cny, rate, accent }: { cny: number; rate: number; 
   );
 }
 
+export function winePurchaseQuantityText(sku: LimitedProductSku, quantity: number) {
+  const bottles = sku.bottleCountPerUnit;
+  return sku.unitLabel === "箱" && bottles && bottles > 1
+    ? `${quantity}箱 · 共${quantity * bottles}瓶`
+    : `${quantity}${sku.unitLabel}`;
+}
+
 /** Purchase selection only: no order creation, wallet requests or quote tokens. */
 export function MibanWinePurchaseSheet({
   action, title, skus, selectedSku, quantity, maxQuantity, usdtCnyRate,
@@ -87,7 +94,7 @@ export function MibanWinePurchaseSheet({
             </div>
           </fieldset>
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-            <div><div className="text-[12px] font-bold text-gray-800">商品小计 · {quantity}{selectedSku.unitLabel}</div><p className="mt-1 text-[10px] text-gray-400">按平台汇率折算</p></div>
+            <div><div className="text-[12px] font-bold text-gray-800">商品小计 · {winePurchaseQuantityText(selectedSku, quantity)}</div><p className="mt-1 text-[10px] text-gray-400">按平台汇率折算</p></div>
             <div data-testid="wine-selection-subtotal"><WineSelectionPrice cny={selectedSku.priceCny * quantity} rate={usdtCnyRate} accent={accent} /></div>
           </div>
           <p className="mt-3 text-[10px] leading-4 text-gray-400">优惠及最终扣款金额以支付确认页的有效报价为准。</p>

@@ -128,17 +128,17 @@ describe("Spanish ham: real one-product/two-SKU catalog, not preview data", () =
     expect(JSON.stringify(sku)).not.toMatch(/"(?:priceU|priceUsdt|usdtPrice|fixedUPrice|usdtCnyRate|stockQty|stockQuantity|inventory|remainingStock)"\s*:/i);
   });
 
-  it("contains four Spain products/five SKUs while the three original wines and prices remain unchanged", () => {
+  it("contains four Spain products/eight SKUs while the three original wines and prices remain unchanged", () => {
     const products = mibanLimitedProducts.filter(product => product.brand === "西班牙" || product.key.startsWith("spain-"));
     expect(products).toHaveLength(4);
-    expect(products.flatMap(product => product.skus)).toHaveLength(5);
-    expect(new Set(products.flatMap(product => product.skus.map(sku => sku.id))).size).toBe(5);
+    expect(products.flatMap(product => product.skus)).toHaveLength(8);
+    expect(new Set(products.flatMap(product => product.skus.map(sku => sku.id))).size).toBe(8);
     expect(products.map(product => product.key).sort()).toEqual([...wineFixtures.map(wine => wine.key), ham().key].sort());
     const wines = products.filter(product => product.checkoutGroupKey === "spain-wines");
     expect(wines.map(product => product.key)).toEqual(wineFixtures.map(wine => wine.key));
     for (const fixture of wineFixtures) {
       const product = getMibanLimitedProduct(fixture.key)!;
-      expect(product.skus).toHaveLength(1);
+      expect(product.skus).toHaveLength(2);
       expect(product.skus[0]).toMatchObject({ id: fixture.id, priceCny: fixture.priceCny, unitLabel: "瓶", active: true });
     }
   });
@@ -263,7 +263,7 @@ describe("Spanish ham: real pure pricing, query/state and production sale gates"
     expect(groups.map(group => group.checkoutGroupKey)).toEqual(["spain-ham", "spain-wines"]);
     expect(groups[0]).toMatchObject({ itemCount: 5, totalCny: 60 * 3 + 2400 * 2 });
     expect(groups[0].items).toEqual(items.slice(0, 2));
-    expect(groups[1]).toMatchObject({ itemCount: 3, totalCny: wineFixtures.reduce((sum, wine) => sum + wine.priceCny, 0) });
+    expect(groups[1]).toMatchObject({ itemCount: 6, totalCny: wineFixtures.reduce((sum, wine) => sum + wine.priceCny * 7, 0) });
     expect(groups[1].items).toEqual(items.slice(2));
     const source = read(detailPath);
     const cartAdd = source.match(/addCartItem\(\{([\s\S]*?)\}\);/)?.[1];
@@ -366,14 +366,22 @@ describe("Spanish ham: wine-only wording and existing invoice route are preserve
       expect(flags(product).isSpainHamProduct, product.key).toBe(product.key === "spain-iberian-ham");
     }
     const ast = detailAst();
-    const hints = jsxExpressions(ast, text => text.includes('"每瓶750ml，按所选瓶数下单"'));
+    const hints = jsxExpressions(ast, text => text.startsWith("skuSelectionLabel ===") && text.includes('"切片单包或整只装，按所选数量下单"'));
     expect(hints).toHaveLength(1);
     const bindings = { skuSelectionLabel: "规格", isPreviewProduct: false };
     const hamHint = evaluate(hints[0].getText(ast), { ...bindings, ...flags(ham()) });
     expect(hamHint).toBe("切片单包或整只装，按所选数量下单");
     expect(hamHint).not.toMatch(/750\s*ml|瓶/i);
-    const wineHint = evaluate(hints[0].getText(ast), { ...bindings, ...flags(getMibanLimitedProduct(wineFixtures[0].key)!) });
-    expect(wineHint).toBe("每瓶750ml，按所选瓶数下单");
+    const gates = jsxExpressions(ast, text => text.startsWith("!isSpainWineProduct &&"));
+    expect(gates).toHaveLength(1);
+    expect(ts.isBinaryExpression(gates[0])).toBe(true);
+    const visible = (gates[0] as ts.BinaryExpression).left.getText(ast);
+    expect(evaluate(visible, flags(ham()))).toBe(true);
+    for (const fixture of wineFixtures) {
+      const wine = getMibanLimitedProduct(fixture.key)!;
+      expect(evaluate(visible, flags(wine))).toBe(false);
+      expect(wine.detail.tags.join(" ")).not.toMatch(/单瓶|整箱|按需选择/);
+    }
     expect(JSON.stringify(ham())).not.toMatch(/750\s*ml|资料预览|仅供.*核验|尚未上架/i);
     const footer: ts.JsxElement[] = [];
     walk(ast, node => {

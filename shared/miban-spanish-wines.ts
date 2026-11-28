@@ -15,7 +15,7 @@ const wineVisual = (wine: string, type: "list" | "hero" | "detail") => `/miban-s
 
 const wineLogistics: LimitedProduct["detail"]["logistics"] = [
   { title: "商品资料", description: "商品资料沿用原红酒介绍，场景为视觉设计；包装及批次以实物酒标为准。" },
-  { title: "单瓶规格", description: "每瓶750ml，按所选瓶数下单；请核对收货信息。" },
+  { title: "净含量", description: "每瓶750ml，商品包装以所选规格及实物为准；请核对收货信息。" },
   { title: "配送安排", description: "配送范围与发货安排以订单确认及客服说明为准。" },
   { title: "签收与售后", description: "签收时请检查包装与瓶身，如遇破损或漏液请保留照片并联系客服。" },
 ];
@@ -64,7 +64,7 @@ function createWineProduct(wine: WineSource): LimitedProduct {
     detail: {
       title: wine.title,
       subtitle: `${wine.englishName} · ${wine.region}`,
-      tags: ["西班牙原产", "干红葡萄酒", "750ml单瓶"],
+      tags: ["西班牙原产", "干红葡萄酒", "750ml"],
       skuSelectionLabel: "规格",
       heroImages,
       productImage: image,
@@ -109,8 +109,24 @@ function createWineProduct(wine: WineSource): LimitedProduct {
         priceCny: wine.priceCny,
         quantityPerOrder: 1,
         unitLabel: "瓶",
+        bottleCountPerUnit: 1,
         netContentText: "750ml/瓶",
         // 仅为沿用精选系列的单次购买上限，不代表库存数量。
+        maxPurchaseQty: 10,
+        active: true,
+        image,
+        heroImages,
+      },
+      {
+        id: `${key}-case-6bottles`,
+        name: "整箱装（6瓶）",
+        subtitle: "每箱6瓶 · 按箱选数量",
+        priceCny: wine.priceCny * 6,
+        // 售卖、计价和库存单位均为箱；瓶数另记，不把2箱误算成12箱。
+        quantityPerOrder: 1,
+        unitLabel: "箱",
+        bottleCountPerUnit: 6,
+        netContentText: "750ml × 6瓶/箱",
         maxPurchaseQty: 10,
         active: true,
         image,

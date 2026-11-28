@@ -128,7 +128,8 @@ describe("Spain selection: three real original wines in the shared catalog (offl
     // Some unrelated historical products share a SKU ID; only new Spain IDs must
     // be globally unique, while catalog product keys are globally unique.
     expect(new Set(mibanLimitedProducts.map(product => product.key)).size).toBe(mibanLimitedProducts.length);
-    expect(new Set(products.flatMap(product => product.skus.map(sku => sku.id))).size).toBe(3);
+    expect(products.flatMap(product => product.skus)).toHaveLength(6);
+    expect(new Set(products.flatMap(product => product.skus.map(sku => sku.id))).size).toBe(6);
   });
 
   it.each(wines)("$key preserves its old actual sales price, never the old struck-through price", wine => {
@@ -144,7 +145,7 @@ describe("Spain selection: three real original wines in the shared catalog (offl
       orderPolicy: { commissionEligible: false, allowAddressBook: true, allowFavorite: true, enableReview: false },
     });
     expect(`${product.card.title} ${product.card.subtitle} ${product.detail.title} ${product.detail.subtitle}`.toUpperCase()).toContain(wine.name);
-    expect(product.skus).toHaveLength(1);
+    expect(product.skus).toHaveLength(2);
     expect(product.skus[0]).toMatchObject({
       id: wine.skuId, active: true, quantityPerOrder: 1, unitLabel: "瓶", priceCny: wine.priceCny,
     });

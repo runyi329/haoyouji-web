@@ -46,9 +46,12 @@ describe("Spain purchase selection on real single-bottle catalog", () => {
     expect(product.publicPreview).toBeUndefined();
     expect(sku.active).toBe(true);
     expect(sku.name).toBe("750ml 单瓶装");
+    expect(sku.id).toBe(`spain-${id}-750ml`);
+    expect(sku.quantityPerOrder).toBe(1);
+    expect(sku.unitLabel).toBe("瓶");
     expect(sku.maxPurchaseQty).toBe(10);
     expect(sku.priceCny).toBe({ romanico: 328, marthu: 198, fidencio: 168 }[id]);
-    for (const quantity of [1, 3, 10]) {
+    for (const quantity of [1, 2, 3, 10]) {
       const path = evaluate(initializer("checkoutPath"), { checkoutPathBase: `/p/proj_hzxm2t/limited/${product.key}/buy`, activeSkuId: sku.id, requestedAnnualPlan: false, isSpainProduct: true, purchaseQuantity: quantity });
       const url = new URL(path, "https://example.test");
       expect(url.searchParams.get("sku")).toBe(sku.id);
