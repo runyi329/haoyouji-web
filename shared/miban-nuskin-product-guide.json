@@ -1,0 +1,57 @@
+{
+  "source": {
+    "startY": 16270,
+    "endY": 18973,
+    "url": "https://img.cn.nuskin.com/supplychain-prod/undefined/6X4HW6iEpZ.jpg",
+    "width": 790,
+    "height": 18973,
+    "sourcePosterCount": 1
+  },
+  "usage": {
+    "frequency": "1次/天",
+    "time": "夜间使用",
+    "steps": ["洁面", "爽肤", "视黄醇精华乳", "润肤"]
+  },
+  "tolerance": {
+    "title": "A醇新手&极度脆皮肌 使用指南",
+    "subtitle": "密集补水+间隔使用 3周建立耐受",
+    "retinolName": "ageLOC活颜视黄醇精华乳",
+    "hydrationName": "荟萃善秀今日养颜活水面膜",
+    "weeks": [
+      { "label": "第一周", "retinolDays": "第1、4、7天", "hydrationDays": "第1、3、5、7天" },
+      { "label": "第二周", "retinolDays": "第2、4、6天", "hydrationDays": "第3、6天" },
+      { "label": "第三周", "retinolDays": "第1–7天（每日）", "hydrationDays": "第2、5天" }
+    ],
+    "officialSchedule": [
+      { "week": 1, "retinolDays": [1, 4, 7], "hydrationDays": [1, 3, 5, 7], "unmarkedDays": [2, 6] },
+      { "week": 2, "retinolDays": [2, 4, 6], "hydrationDays": [3, 6], "unmarkedDays": [1, 5, 7] },
+      { "week": 3, "retinolDays": [1, 2, 3, 4, 5, 6, 7], "hydrationDays": [2, 5], "unmarkedDays": [] }
+    ],
+    "sourceNote": "空白日期仅表示原图未标示，不能解释为停用；原图未说明同日精华乳与面膜先后顺序。"
+  },
+  "sunAdvice": {
+    "title": "建议夜间使用",
+    "text": "因使用产品后，肌肤对阳光敏感度会增加，请尽量避免日晒。如需在日间使用，请在使用后搭配带有SPF防晒功能的产品，避免肌肤受紫外线刺激伤害。"
+  },
+  "product": {
+    "name": "ageLOC活颜视黄醇精华乳",
+    "photo": {
+      "url": "/miban-official/nuskin/mobile-guide/retinol-product-original-lossless.webp",
+      "width": 103,
+      "height": 284,
+      "sourceBox": [343, 18270, 446, 18554]
+    },
+    "details": [
+      { "label": "规格", "value": "30ml/瓶" },
+      { "label": "包装", "value": "1瓶" },
+      { "label": "保质期", "value": "24个月" },
+      { "label": "产地", "value": "中国" }
+    ],
+    "originalSpecification": "30ml/瓶 *1瓶",
+    "notices": [
+      { "label": "注意事项", "text": "本产品已经检验合格，本品可能对少数人体有过敏反应，如有不适，请立即停用。" },
+      { "label": "储存条件", "text": "请勿置于极度高温、低温或是阳光直射的地方。" }
+    ]
+  },
+  "presentationNote": "米伴按中国官网原海报内容重新排版的手机使用指南与产品说明，不是新增官方海报。"
+}

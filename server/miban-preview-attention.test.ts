@@ -32,12 +32,9 @@ const expectedSlugs = [
   "herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka",
   "spain", "guizhou", "amway", "marykay", "nuskin", "jianghai",
 ];
-const navigationSlugs = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka", "spain", "guizhou"];
+const navigationSlugs = ["herbalife", "tuoquetang", "lingchuang", "fruits", "midaniang", "wangka", "spain", "guizhou", "amway", "marykay", "nuskin"];
 const navigationHref = (slug: string) => `/p/proj_hzxm2t/limited/${slug === "guizhou" ? "moutai-feitian" : slug}`;
 const previewMessages: Record<string, string> = {
-  amway: "安利日用精选商品尚未上架，敬请期待。",
-  marykay: "玫琳凯美肤精选商品尚未上架，敬请期待。",
-  nuskin: "如新美肤精选商品尚未上架，敬请期待。",
   jianghai: "江海鲜选商品尚未上架，敬请期待。",
 };
 function expand(node: unknown): ReactElement<any>[] {

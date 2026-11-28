@@ -1,0 +1,2589 @@
+{
+  "nuskin-official-2": {
+    "parts": {
+      "nuskin-official-2-part-01": {
+        "from": "#b6c2cf",
+        "to": "#d8e0e9",
+        "range": [
+          0,
+          1458
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-02": {
+        "from": "#dae1e9",
+        "to": "#f0f2f5",
+        "range": [
+          1458,
+          2290
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-02.webp",
+          "width": 1080,
+          "height": 832
+        }
+      },
+      "nuskin-official-2-part-03": {
+        "from": "#f0f2f5",
+        "to": "#cbdcf0",
+        "range": [
+          2290,
+          3650
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-03.webp",
+          "width": 1080,
+          "height": 1360
+        }
+      },
+      "nuskin-official-2-part-04": {
+        "from": "#cbdcf0",
+        "to": "#dbe7f5",
+        "range": [
+          3650,
+          4890
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-05": {
+        "from": "#dbe7f5",
+        "to": "#f9fef8",
+        "range": [
+          4890,
+          6270
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-05.webp",
+          "width": 1080,
+          "height": 1380
+        }
+      },
+      "nuskin-official-2-part-06": {
+        "from": "#fcfefe",
+        "to": "#f9fcfc",
+        "range": [
+          6270,
+          7655
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-06.webp",
+          "width": 1080,
+          "height": 1385
+        }
+      },
+      "nuskin-official-2-part-07": {
+        "from": "#f2f6fa",
+        "to": "#d2e0ee",
+        "range": [
+          7655,
+          9450
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-08": {
+        "from": "#d2e0ee",
+        "to": "#c9dbef",
+        "range": [
+          9450,
+          10980
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-09": {
+        "from": "#c9dbef",
+        "to": "#c9dbef",
+        "range": [
+          10980,
+          12000
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-10": {
+        "from": "#c9dbef",
+        "to": "#c9dbef",
+        "range": [
+          12000,
+          12880
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-11": {
+        "from": "#c9dbef",
+        "to": "#c9dbef",
+        "range": [
+          12880,
+          13700
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-12": {
+        "from": "#c9dbef",
+        "to": "#e2e4ef",
+        "range": [
+          13700,
+          14915
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-12.webp",
+          "width": 1080,
+          "height": 1215
+        }
+      },
+      "nuskin-official-2-part-13": {
+        "from": "#e5e6ee",
+        "to": "#ccd9e8",
+        "range": [
+          14915,
+          16004
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg"
+      },
+      "nuskin-official-2-part-14": {
+        "from": "#b4cce6",
+        "to": "#b0c8e2",
+        "range": [
+          16004,
+          17877
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/rZzEdwFjmw.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-2/immersive-v4/nuskin-official-2-part-14.webp",
+          "width": 1080,
+          "height": 1873
+        }
+      }
+    }
+  },
+  "nuskin-official-3": {
+    "parts": {
+      "nuskin-official-3-part-01": {
+        "from": "#f0e091",
+        "to": "#e6e6e2",
+        "range": [
+          0,
+          1790
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-02": {
+        "from": "#e6e6e2",
+        "to": "#fcfeee",
+        "range": [
+          1790,
+          2030
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-03": {
+        "from": "#fcfeee",
+        "to": "#fffef3",
+        "range": [
+          2030,
+          4300
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-3/immersive-v4/nuskin-official-3-part-03.webp",
+          "width": 1280,
+          "height": 2270
+        }
+      },
+      "nuskin-official-3-part-04": {
+        "from": "#fffef3",
+        "to": "#fff8cc",
+        "range": [
+          4300,
+          5280
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-3/immersive-v4/nuskin-official-3-part-04.webp",
+          "width": 1280,
+          "height": 980
+        }
+      },
+      "nuskin-official-3-part-05": {
+        "from": "#fff8cc",
+        "to": "#faf3c0",
+        "range": [
+          5280,
+          7170
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-06": {
+        "from": "#faf3c0",
+        "to": "#fefef8",
+        "range": [
+          7170,
+          9430
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-3/immersive-v4/nuskin-official-3-part-06.webp",
+          "width": 1280,
+          "height": 2260
+        }
+      },
+      "nuskin-official-3-part-07": {
+        "from": "#fefef8",
+        "to": "#fffce8",
+        "range": [
+          9430,
+          11330
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-08": {
+        "from": "#fffce8",
+        "to": "#fefcd6",
+        "range": [
+          11330,
+          12080
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-09": {
+        "from": "#fefcd6",
+        "to": "#fffce4",
+        "range": [
+          12080,
+          14000
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg"
+      },
+      "nuskin-official-3-part-10": {
+        "from": "#fffce4",
+        "to": "#fffcf2",
+        "range": [
+          14000,
+          16120
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/R7eJQEAPKa.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-3/immersive-v4/nuskin-official-3-part-10.webp",
+          "width": 1280,
+          "height": 2120
+        }
+      }
+    }
+  },
+  "nuskin-official-4": {
+    "parts": {
+      "nuskin-official-4-hero": {
+        "from": "#a2c8e2",
+        "to": "#c0def7",
+        "range": [
+          0,
+          1230
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg"
+      },
+      "nuskin-official-4-blemish-concerns": {
+        "from": "#c0def7",
+        "to": "#cde2f3",
+        "range": [
+          1230,
+          1930
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-4/immersive-v4/nuskin-official-4-blemish-concerns.webp",
+          "width": 750,
+          "height": 700
+        }
+      },
+      "nuskin-official-4-two-step-system": {
+        "from": "#cde2f3",
+        "to": "#acd1ea",
+        "range": [
+          1930,
+          3030
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-4/immersive-v4/nuskin-official-4-two-step-system.webp",
+          "width": 750,
+          "height": 1100
+        }
+      },
+      "nuskin-official-4-four-benefits": {
+        "from": "#acd1ea",
+        "to": "#c4e2f0",
+        "range": [
+          3030,
+          5330
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-4/immersive-v4/nuskin-official-4-four-benefits.webp",
+          "width": 750,
+          "height": 2300
+        }
+      },
+      "nuskin-official-4-core-ingredients": {
+        "from": "#c4e2f0",
+        "to": "#c9e0f1",
+        "range": [
+          5330,
+          7410
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-4/immersive-v4/nuskin-official-4-core-ingredients.webp",
+          "width": 750,
+          "height": 2080
+        }
+      },
+      "nuskin-official-4-two-week-study": {
+        "from": "#c9e0f1",
+        "to": "#cbe2f2",
+        "range": [
+          7410,
+          8690
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg"
+      },
+      "nuskin-official-4-spot-application": {
+        "from": "#cbe2f2",
+        "to": "#d2e1f5",
+        "range": [
+          8690,
+          9290
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg"
+      },
+      "nuskin-official-4-full-face-application": {
+        "from": "#d2e1f5",
+        "to": "#cadcf0",
+        "range": [
+          9290,
+          9720
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg"
+      },
+      "nuskin-official-4-warnings-and-order": {
+        "from": "#cadcf0",
+        "to": "#dae7f2",
+        "range": [
+          9720,
+          10134
+        ],
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg"
+      },
+      "nuskin-official-4-product-guide": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://img.cn.nuskin.com/supplychain-prod/undefined/kiXzDGtpKy.jpg",
+        "textLocation": "封面产品规格30ml、最底端水杨酸儿童警示；肌肤试用及过敏停用另见同款API常见问题。"
+      },
+      "nuskin-official-4-faq-irritation": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5、typeName=常见问题的propValues；问题“新动净痘清露会刺激我的肌肤吗？”"
+      },
+      "nuskin-official-4-faq-standalone": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5的propValues；同名问题。"
+      },
+      "nuskin-official-4-faq-salicylic-acid": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5的propValues；问题“水杨酸如何帮助祛痘？”"
+      },
+      "nuskin-official-4-faq-why-it-works": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5的propValues；问题“是什么让新动净痘清露发挥功效？”"
+      },
+      "nuskin-official-4-faq-silver-gray": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5的propValues；同名问题。"
+      },
+      "nuskin-official-4-faq-body": {
+        "from": "#dae7f2",
+        "to": "#dae7f2",
+        "source": "https://china.nuskin.com/nuskin-cn-service-search/api/v1/yundt/trade/item/detail/get?time=3&seoRef=29002539&itemId=1332665589389384730&itemType=SALE&provinceCode=SH&cityCode=SHSH&memberId=&showStandards=1",
+        "textLocation": "data.itemDetails中type=5的propValues；同名问题。"
+      }
+    }
+  },
+  "nuskin-official-5": {
+    "parts": {
+      "nuskin-official-5-hero": {
+        "from": "#f0d080",
+        "to": "#ffe0b3",
+        "range": [
+          0,
+          1265
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg"
+      },
+      "nuskin-official-5-benefits": {
+        "from": "#ffe0b3",
+        "to": "#feeccf",
+        "range": [
+          1265,
+          2275
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-5/immersive-v4/nuskin-official-5-benefits.webp",
+          "width": 790,
+          "height": 1010
+        }
+      },
+      "nuskin-official-5-ingredients": {
+        "from": "#feeccf",
+        "to": "#fce5bc",
+        "range": [
+          2275,
+          3950
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-5/immersive-v4/nuskin-official-5-ingredients.webp",
+          "width": 790,
+          "height": 1675
+        }
+      },
+      "nuskin-official-5-makeup": {
+        "from": "#fce6bd",
+        "to": "#feecc7",
+        "range": [
+          3950,
+          4885
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg",
+        "scene": {
+          "url": "/miban-official/nuskin/nuskin-official-5/immersive-v4/nuskin-official-5-makeup.webp",
+          "width": 790,
+          "height": 935
+        }
+      },
+      "nuskin-official-5-usage-daily": {
+        "from": "#ffecc8",
+        "to": "#ffeec8",
+        "range": [
+          4885,
+          5508
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg"
+      },
+      "nuskin-official-5-usage-lipstick-base": {
+        "from": "#ffeec8",
+        "to": "#ffedc8",
+        "range": [
+          5508,
+          6010
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg"
+      },
+      "nuskin-official-5-specification": {
+        "from": "#fdedc8",
+        "to": "#fedca2",
+        "range": [
+          6010,
+          6908
+        ],
+        "source": "https://imgstage.cn.nuskin.com/supplychain-prod/undefined/4WxNQNbG8w.jpg"
+      }
+    }
+  },
+  "marykay-official-1": {
+    "parts": {
+      "marykay-official-1-award": {
+        "from": "#E8C5C9",
+        "to": "#F3DAE0",
+        "ink": "#35282E",
+        "muted": "#35282E",
+        "accent": "#35282E",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20261027175908_93.jpg",
+        "range": [
+          0,
+          997
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-f2d8f92dec3b.webp",
+          "width": 750,
+          "height": 997
+        }
+      },
+      "marykay-official-1-cover": {
+        "from": "#10000B",
+        "to": "#0D0015",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171438_805.jpg",
+        "range": [
+          0,
+          1161
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-e74087dae5d0.webp",
+          "width": 750,
+          "height": 1161
+        }
+      },
+      "marykay-official-1-concerns": {
+        "from": "#543672",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171442_735.jpg",
+        "range": [
+          0,
+          1073
+        ]
+      },
+      "marykay-official-1-study": {
+        "from": "#492E65",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171446_501.jpg",
+        "range": [
+          0,
+          2000
+        ]
+      },
+      "marykay-official-1-double-core-heading": {
+        "from": "#492E65",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171450_771.jpg",
+        "range": [
+          0,
+          413
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-257032b284da.webp",
+          "width": 750,
+          "height": 413
+        }
+      },
+      "marykay-official-1-double-core-animation": {
+        "from": "#7C5A90",
+        "to": "#281832",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250327140333_486.gif",
+        "range": [
+          0,
+          458
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-6cd1a7ab848c.webp",
+          "width": 750,
+          "height": 458
+        }
+      },
+      "marykay-official-1-ingredients": {
+        "from": "#492E65",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171506_424.jpg",
+        "range": [
+          0,
+          1697
+        ]
+      },
+      "marykay-official-1-pure-oil-heading": {
+        "from": "#492E65",
+        "to": "#4D326C",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171511_114.jpg",
+        "range": [
+          0,
+          329
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-29c10f92b7fc.webp",
+          "width": 750,
+          "height": 329
+        }
+      },
+      "marykay-official-1-pure-oil-animation": {
+        "from": "#806598",
+        "to": "#8776AA",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171521_201.gif",
+        "range": [
+          0,
+          515
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-1/mobile-69b2e5016485.webp",
+          "width": 750,
+          "height": 515
+        }
+      },
+      "marykay-official-1-pure-oil-definition": {
+        "from": "#543B73",
+        "to": "#543B73",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171530_960.jpg",
+        "range": [
+          0,
+          70
+        ]
+      },
+      "marykay-official-1-sensory": {
+        "from": "#543B73",
+        "to": "#4E306C",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171530_960.jpg",
+        "range": [
+          70,
+          1442
+        ]
+      },
+      "marykay-official-1-usage": {
+        "from": "#50336B",
+        "to": "#4B2E66",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250414101842_375.jpg",
+        "range": [
+          0,
+          1659
+        ]
+      },
+      "marykay-official-1-routine": {
+        "from": "#4A2F66",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171540_782.jpg",
+        "range": [
+          0,
+          783
+        ]
+      },
+      "marykay-official-1-pairings": {
+        "from": "#492E65",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171545_144.jpg",
+        "range": [
+          0,
+          1483
+        ]
+      },
+      "marykay-official-1-faq-use": {
+        "from": "#492E65",
+        "to": "#493069",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171549_327.jpg",
+        "range": [
+          0,
+          1044
+        ]
+      },
+      "marykay-official-1-faq-skin": {
+        "from": "#4B3067",
+        "to": "#492E65",
+        "ink": "#FFF9FC",
+        "muted": "#EFE3F6",
+        "accent": "#ECD5FF",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250326171553_593.jpg",
+        "range": [
+          0,
+          612
+        ]
+      },
+      "marykay-official-1-product": {
+        "from": "#D2BBE7",
+        "to": "#D2BBE7",
+        "ink": "#352044",
+        "muted": "#352044",
+        "accent": "#352044",
+        "source": "https://www.marykay.com.cn/corporatesite/home/products/10226875",
+        "textLocation": "中国大陆单品PDP HTML：名称、英文名、30ml、＃10226875、￥568和价格说明；最后一幅详情图下方价格说明"
+      }
+    }
+  },
+  "marykay-official-2": {
+    "parts": {
+      "mk2-product-hero": {
+        "from": "#31154F",
+        "to": "#382054",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711153909_529.jpg",
+        "range": [
+          0,
+          1365
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-2/mobile-5154b9ce0d34.webp",
+          "width": 752,
+          "height": 1365
+        }
+      },
+      "mk2-profile": {
+        "from": "#5E407E",
+        "to": "#4D2F6F",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154141_252.jpg",
+        "range": [
+          0,
+          1363
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-2/mobile-e352bf420bbc.webp",
+          "width": 750,
+          "height": 1363
+        }
+      },
+      "mk2-support": {
+        "from": "#43285F",
+        "to": "#76559A",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154145_802.jpg",
+        "range": [
+          0,
+          1370
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-2/mobile-42a70aa5ea3b.webp",
+          "width": 750,
+          "height": 1370
+        }
+      },
+      "mk2-support-definition": {
+        "from": "#76559A",
+        "to": "#765298",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154145_802.jpg",
+        "range": [
+          1220,
+          1300
+        ]
+      },
+      "mk2-dual": {
+        "from": "#765298",
+        "to": "#664884",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154149_733.jpg",
+        "range": [
+          0,
+          1012
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-2/mobile-db151173abe1.webp",
+          "width": 750,
+          "height": 1012
+        }
+      },
+      "mk2-study": {
+        "from": "#664884",
+        "to": "#644588",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154218_903.jpg",
+        "range": [
+          0,
+          1759
+        ]
+      },
+      "mk2-ingredients": {
+        "from": "#644588",
+        "to": "#442662",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154222_925.jpg",
+        "range": [
+          0,
+          1347
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-2/mobile-9c7aa7bb3d82.webp",
+          "width": 750,
+          "height": 1347
+        }
+      },
+      "mk2-preparation": {
+        "from": "#462765",
+        "to": "#644588",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154238_870.mp4",
+        "textLocation": "官方正文08（20230711154226_769.jpg）完整标题“早晚两次塑颜操／侧颜雕刻不能少”；本款官方使用视频00:02–00:10：取适量、以双手温热、由内而外均匀按压至面部。"
+      },
+      "mk2-v-exercise": {
+        "from": "#654689",
+        "to": "#513871",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154238_870.mp4",
+        "textLocation": "官方使用视频：第一步00:12–00:24；第二步00:28–00:37；第三步00:40–00:50，已对实际原帧字幕人工核验"
+      },
+      "mk2-routine": {
+        "from": "#51356F",
+        "to": "#3D1E5B",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154250_428.jpg",
+        "range": [
+          0,
+          923
+        ]
+      },
+      "mk2-product": {
+        "from": "#3D1E5B",
+        "to": "#3D1E5B",
+        "ink": "#FFF9FC",
+        "muted": "#F1E8F7",
+        "accent": "#FFF9FC",
+        "source": "https://www.marykay.com.cn/corporatesite/home/products/10109827",
+        "textLocation": "中国官网本款PDP HTML产品名称、英文名、两条产品简介、￥568、30ml、＃10109827；配方/背标缺证说明依据本款研究limitations。"
+      },
+      "mk2-price-note": {
+        "from": "#D2BBE7",
+        "to": "#D2BBE7",
+        "ink": "#352044",
+        "muted": "#493251",
+        "accent": "#352044",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230711154254_912.jpg",
+        "range": [
+          0,
+          146
+        ]
+      }
+    }
+  },
+  "marykay-official-3": {
+    "parts": {
+      "marykay-official-3-hero-definition": {
+        "from": "#2C0F47",
+        "to": "#5F437E",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143338_917.jpg",
+        "range": [
+          0,
+          1366
+        ]
+      },
+      "marykay-official-3-skin-concerns": {
+        "from": "#5F437E",
+        "to": "#4C2E6E",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143342_411.jpg",
+        "range": [
+          0,
+          1352
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-3/mobile-9ad650c51948.webp",
+          "width": 752,
+          "height": 1352
+        }
+      },
+      "marykay-official-3-support-network": {
+        "from": "#4D2F6D",
+        "to": "#77579A",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143349_294.jpg",
+        "range": [
+          0,
+          1362
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-3/mobile-11b232f82406.webp",
+          "width": 750,
+          "height": 1362
+        }
+      },
+      "marykay-official-3-product-action": {
+        "from": "#76559A",
+        "to": "#492E68",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143352_474.jpg",
+        "range": [
+          0,
+          1046
+        ],
+        "textLocation": "正文第4幅全图产品作用文字；星号定义位于紧接的第5幅底部，本设计在第5幅场景后就近手机重排。"
+      },
+      "marykay-official-3-product-support-scene": {
+        "from": "#887F8C",
+        "to": "#573379",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143355_465.jpg",
+        "range": [
+          0,
+          509
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-3/mobile-6be08feb3d31.webp",
+          "width": 750,
+          "height": 509
+        }
+      },
+      "marykay-official-3-product-action-definition": {
+        "from": "#573379",
+        "to": "#58347A",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143355_465.jpg",
+        "range": [
+          405,
+          509
+        ]
+      },
+      "marykay-official-3-continuous-use-study": {
+        "from": "#58347A",
+        "to": "#6B4C8F",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143412_292.jpg",
+        "range": [
+          0,
+          1647
+        ]
+      },
+      "marykay-official-3-alpine-snow-lotus": {
+        "from": "#6A4B8E",
+        "to": "#41245E",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143415_627.jpg",
+        "range": [
+          0,
+          1117
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-3/mobile-b028934f4a00.webp",
+          "width": 750,
+          "height": 1117
+        }
+      },
+      "marykay-official-3-ingredient-scope": {
+        "from": "#41245E",
+        "to": "#41245E",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143415_627.jpg",
+        "range": [
+          0,
+          1117
+        ],
+        "textLocation": "正文第7幅“明星成分 高山雪莲”完整成分特色介绍；同款PDP HTML简介以“多重生物活性成分”概括，未列全成分表或浓度。"
+      },
+      "marykay-official-3-face-neck-method-01": {
+        "from": "#41245E",
+        "to": "#3F245B",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143419_108.jpg",
+        "range": [
+          460,
+          880
+        ],
+        "textLocation": "正文第8幅 STEP 01 教学区域，原图矩形 x=305..975、y=460..880；未裁人物、手部或箭头。 每日两次来自同款PDP HTML简介，不是本教学图片内额外给出的取用量。"
+      },
+      "marykay-official-3-face-neck-method-02": {
+        "from": "#41245E",
+        "to": "#3F245B",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143419_108.jpg",
+        "range": [
+          880,
+          1210
+        ],
+        "textLocation": "正文第8幅 STEP 02 教学区域，原图矩形 x=305..975、y=880..1210；未裁人物、手部或箭头。"
+      },
+      "marykay-official-3-face-neck-method-03": {
+        "from": "#41245E",
+        "to": "#3F245B",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143419_108.jpg",
+        "range": [
+          1210,
+          1635
+        ],
+        "textLocation": "正文第8幅 STEP 03 教学区域，原图矩形 x=305..975、y=1210..1635；未裁人物、手部或箭头。"
+      },
+      "marykay-official-3-routine-position": {
+        "from": "#3F235D",
+        "to": "#2B1343",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143422_540.jpg",
+        "range": [
+          0,
+          912
+        ]
+      },
+      "marykay-official-3-identity": {
+        "from": "#2B1343",
+        "to": "#3F245B",
+        "ink": "#FFF9FC",
+        "muted": "#F0E8F6",
+        "accent": "#FFF9FC",
+        "source": "https://www.marykay.com.cn/corporatesite/home/products/10109824",
+        "textLocation": "PDP HTML产品标题、英文名、简介、价格及规格区域；非图片像素来源"
+      },
+      "marykay-official-3-original-price-note": {
+        "from": "#D2BBE7",
+        "to": "#D2BBE7",
+        "ink": "#352347",
+        "muted": "#493455",
+        "accent": "#352347",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822143426_29.jpg",
+        "range": [
+          0,
+          146
+        ]
+      }
+    }
+  },
+  "marykay-official-4": {
+    "parts": {
+      "mk4-packaging-update": {
+        "from": "#D9DEF2",
+        "to": "#D5DAEF",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174848_348.jpg",
+        "range": [
+          0,
+          769
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-4/mobile-326327992ac5.webp",
+          "width": 750,
+          "height": 769
+        }
+      },
+      "mk4-rich-official-scene": {
+        "from": "#D8DAE6",
+        "to": "#C6BCCF",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3-website.marykay.com.cn/mybizcn/PROD/ProductResource/20250624154605_662.jpg",
+        "range": [
+          0,
+          1480
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-4/mobile-afb223795b2b.webp",
+          "width": 751,
+          "height": 1480
+        }
+      },
+      "mk4-human-study": {
+        "from": "#C5BCCF",
+        "to": "#F3F3F5",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174902_474.jpg",
+        "range": [
+          0,
+          1193
+        ]
+      },
+      "mk4-core-ingredients": {
+        "from": "#F3F3F5",
+        "to": "#F3F3F5",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174906_638.jpg",
+        "range": [
+          0,
+          600
+        ]
+      },
+      "mk4-two-pathways": {
+        "from": "#F3F3F5",
+        "to": "#CDC4D7",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174906_638.jpg",
+        "range": [
+          600,
+          855
+        ]
+      },
+      "mk4-laboratory-study": {
+        "from": "#CDC4D7",
+        "to": "#F0EFF5",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174906_638.jpg",
+        "range": [
+          855,
+          1330
+        ]
+      },
+      "mk4-model-atmosphere": {
+        "from": "#F0EFF5",
+        "to": "#F0EFF5",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174906_638.jpg",
+        "range": [
+          1360,
+          1900
+        ]
+      },
+      "mk4-two-to-twelve-weeks": {
+        "from": "#F0EFF5",
+        "to": "#F9F9FB",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174906_638.jpg",
+        "range": [
+          1330,
+          2411
+        ]
+      },
+      "mk4-usage-order": {
+        "from": "#F9F9FB",
+        "to": "#FAFAFC",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174910_740.jpg",
+        "range": [
+          0,
+          435
+        ],
+        "textLocation": "本图0–435px护理顺序；每日频次见同页原始正文5（20240222174906_638.jpg）1330–2411px“每天使用2次(早晚)”"
+      },
+      "mk4-series-pairings": {
+        "from": "#FDFDFD",
+        "to": "#ECEAF1",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174910_740.jpg",
+        "range": [
+          435,
+          1926
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-4/design-v2/series-pairings-scene.webp",
+          "width": 750,
+          "height": 1491
+        }
+      },
+      "mk4-series-background": {
+        "from": "#ECEAF1",
+        "to": "#BBB4C6",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174915_115.jpg",
+        "range": [
+          0,
+          803
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-4/mobile-9add4a3f6ea0.webp",
+          "width": 750,
+          "height": 803
+        }
+      },
+      "mk4-pairing-scope": {
+        "from": "#BCB3C6",
+        "to": "#F2F0F6",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20240222174915_115.jpg",
+        "range": [
+          0,
+          803
+        ],
+        "textLocation": "原始正文6四组搭配与原始正文7系列合照的相邻说明"
+      },
+      "mk4-price-note": {
+        "from": "#F2F0F6",
+        "to": "#F2F3FB",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230914150102_764.jpg",
+        "range": [
+          0,
+          175
+        ]
+      },
+      "mk4-product-intro": {
+        "from": "#F2F3FB",
+        "to": "#F2F3FB",
+        "ink": "#33283F",
+        "muted": "#564B62",
+        "accent": "#584266",
+        "source": "https://www.marykay.com.cn/corporatesite/home/products/10176596",
+        "textLocation": "PDP商品名称、英文名、规格30ml、编号10176596、￥428；同页原始正文1包装更新提示；正文2注册文号"
+      }
+    }
+  },
+  "marykay-official-5": {
+    "parts": {
+      "marykay-official-5-immersive-intro": {
+        "from": "#6B4E86",
+        "to": "#2F1344",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141135_72.jpg",
+        "range": [
+          0,
+          1366
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-5/mobile-b6bcd7ab518d.webp",
+          "width": 750,
+          "height": 1366
+        }
+      },
+      "marykay-official-5-intro-definition": {
+        "from": "#2F1344",
+        "to": "#5B447A",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141135_72.jpg",
+        "range": [
+          1280,
+          1366
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-eye-concerns": {
+        "from": "#5B447A",
+        "to": "#311747",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141138_817.jpg",
+        "range": [
+          0,
+          1362
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-daily-context": {
+        "from": "#3C1D59",
+        "to": "#512D73",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141142_304.jpg",
+        "range": [
+          0,
+          1465
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-5/mobile-95dd0f18ef69.webp",
+          "width": 750,
+          "height": 1465
+        }
+      },
+      "marykay-official-5-product-claim": {
+        "from": "#472968",
+        "to": "#886FA9",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141146_352.jpg",
+        "range": [
+          0,
+          1052
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-5/mobile-f5822b44b533.webp",
+          "width": 750,
+          "height": 1052
+        }
+      },
+      "marykay-official-5-consumer-study": {
+        "from": "#66428A",
+        "to": "#3E215B",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141204_693.jpg",
+        "range": [
+          0,
+          1930
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-featured-ingredients": {
+        "from": "#3E205C",
+        "to": "#3D205A",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141208_463.jpg",
+        "range": [
+          0,
+          1236
+        ],
+        "scene": {
+          "url": "/miban-official/marykay/marykay-official-5/mobile-dfcec29d61e9.webp",
+          "width": 750,
+          "height": 1236
+        }
+      },
+      "marykay-official-5-ingredients-scope": {
+        "from": "#3D205A",
+        "to": "#3D1F5B",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141208_463.jpg",
+        "range": [
+          260,
+          1170
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-eye-massage-01": {
+        "from": "#3D1F5B",
+        "to": "#3D1F5B",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141211_979.jpg",
+        "range": [
+          460,
+          878
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-eye-massage-02": {
+        "from": "#3D1F5B",
+        "to": "#3D1F5B",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141211_979.jpg",
+        "range": [
+          875,
+          1210
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-eye-massage-03": {
+        "from": "#3D1F5B",
+        "to": "#3D1F5C",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141211_979.jpg",
+        "range": [
+          1208,
+          1538
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-routine-position": {
+        "from": "#3E1E5D",
+        "to": "#2B1343",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141215_305.jpg",
+        "range": [
+          0,
+          751
+        ],
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-product-overview": {
+        "from": "#2B1343",
+        "to": "#2B1343",
+        "source": "https://www.marykay.com.cn/corporatesite/home/products/10243289",
+        "textLocation": "HTML div.detail-info：正式名称、英文名、三段产品概述、15g、＃10243289和￥388；包装背标未取得",
+        "ink": "#FFF9FC",
+        "muted": "#F0E5F7",
+        "accent": "#F0E5F7"
+      },
+      "marykay-official-5-official-price-note": {
+        "from": "#D2BBE7",
+        "to": "#D2BBE7",
+        "source": "https://community-s3.marykay.com.cn/PROD/MyBizIntouch_Content_Cms/ProductResource/20230822141218_608.jpg",
+        "range": [
+          0,
+          146
+        ],
+        "ink": "#2B1343",
+        "muted": "#452458",
+        "accent": "#452458"
+      }
+    }
+  },
+  "amway-official-1": {
+    "parts": {
+      "amway-official-1-oral-context": {
+        "from": "#D6D9E3",
+        "to": "#EEF7FE",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-08/20230508163504ehd6QCaGERHjQD4NDjxxpT3rFwEkZNcK.jpg",
+        "range": [
+          0,
+          1096
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-1/mobile-eb401fd285c6.webp",
+          "width": 750,
+          "height": 1096
+        }
+      },
+      "amway-official-1-launch-scene": {
+        "from": "#EDF6FD",
+        "to": "#F7FBFE",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-08/20230508163504bx3yp3SmM4HeHe6XhfRKzXbXbYz3mhbN.jpg",
+        "range": [
+          0,
+          1662
+        ],
+        "textLocation": "本图全幅；研究上标2–5的原脚注在同篇launch-6末段，紧接三场景后的研究canvas可读呈现。",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-1/mobile-f50934555ac9.webp",
+          "width": 750,
+          "height": 1662
+        }
+      },
+      "amway-official-1-three-scenes": {
+        "from": "#F7FBFE",
+        "to": "#F6FAFD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-08/20230508163504d7jjeh7zBSwMizZ4tNcdtEKEy5E8Wc8w.jpg",
+        "range": [
+          0,
+          2254
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-1/mobile-05bcb36f7f3e.webp",
+          "width": 750,
+          "height": 2254
+        }
+      },
+      "amway-official-1-cpc-study": {
+        "from": "#F6FAFD",
+        "to": "#EFF8FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-08/20230508163504bx3yp3SmM4HeHe6XhfRKzXbXbYz3mhbN.jpg",
+        "textLocation": "launch-2全幅卖点，CPC及研究脚注来自launch-6原图y=1630–1867；同款blue-2全幅与“蓝能可贵”HTML“一漱全口减菌”正文。"
+      },
+      "amway-official-1-peppermint": {
+        "from": "#F9FAFC",
+        "to": "#F0F9FE",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-24/20230524173603Q2cNNkkXxT2kN8nAKdtZShkEbAjh4Edm.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "textLocation": "blue-3全幅；同篇HTML“一漱即刻清新”段逐句保留于可访问正文。",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-1/mobile-e77e082c085e.webp",
+          "width": 1080,
+          "height": 1920
+        }
+      },
+      "amway-official-1-gentle-formula": {
+        "from": "#FFFFFF",
+        "to": "#F0F9FE",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-05-24/20230524173700Tm64SxHSCrJQkRt7Xh7N5GEG8HDYjWat.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "textLocation": "blue-4全幅；同篇HTML“一漱爽口回甘”段；0酒精定义来自launch-6原稿脚注5。",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-1/mobile-b2d36b24dd37.webp",
+          "width": 1080,
+          "height": 1920
+        }
+      },
+      "amway-official-1-use-time": {
+        "from": "#F0F9FE",
+        "to": "#EAF5FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-06-16/20230616174615fCwJMMR6nAEAPDsQ2CXWkfN6fzbc6WjZ.jpg",
+        "textLocation": "690×10350方法长图“口腔科普／使用时间”板块，原图约y=3820–4700；采用实际图文，不采用错误HTML alt。"
+      },
+      "amway-official-1-use-method": {
+        "from": "#EAF5FD",
+        "to": "#9DD0FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-06-16/20230616174615fCwJMMR6nAEAPDsQ2CXWkfN6fzbc6WjZ.jpg",
+        "textLocation": "690×10350方法长图“口腔科普／使用方法”板块，原图y=4820–5750；教学局部x=470,y=5095,width=215,height=185。"
+      },
+      "amway-official-1-faq-brush": {
+        "from": "#9DD0FD",
+        "to": "#9DD0FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-06-16/20230616174615fCwJMMR6nAEAPDsQ2CXWkfN6fzbc6WjZ.jpg",
+        "textLocation": "原方法长图“误区一：使用漱口水后可以不用刷牙”，以及原图末尾“刷·剔·漱”板块。"
+      },
+      "amway-official-1-faq-more": {
+        "from": "#9DD0FD",
+        "to": "#EFF8FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-06-16/20230616174615fCwJMMR6nAEAPDsQ2CXWkfN6fzbc6WjZ.jpg",
+        "textLocation": "原方法长图“误区二”“误区三”及500mL推荐段、末尾脚注1–5；通用科普列表和系列推荐明确分开。"
+      },
+      "amway-official-1-product-500": {
+        "from": "#EFF8FD",
+        "to": "#EFF8FD",
+        "ink": "#243B72",
+        "muted": "#445A7B",
+        "accent": "#24658C",
+        "source": "https://mall.amway.com.cn/productDetail?code=41637&skuCode=41637",
+        "textLocation": "同款中国大陆PDP编号41637、500ML及2026-11-28输入已核验参考零售价；配方特色见blue-4，完整用法见usage-1实际原图。"
+      }
+    }
+  },
+  "amway-official-2": {
+    "parts": {
+      "amway-official-2-detail-01-scene": {
+        "from": "#091603",
+        "to": "#C0A68F",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_01.jpg",
+        "range": [
+          0,
+          2093
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-2a9ca9f5561d.webp",
+          "width": 1100,
+          "height": 2093
+        }
+      },
+      "amway-official-2-detail-02-scene": {
+        "from": "#C0A68F",
+        "to": "#E0CEB9",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_02.jpg",
+        "range": [
+          0,
+          1611
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-e606a98041a3.webp",
+          "width": 1100,
+          "height": 1611
+        }
+      },
+      "amway-official-2-identity-conditions": {
+        "from": "#E0CEB9",
+        "to": "#DFCDB9",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_02.jpg",
+        "textLocation": "当前商城detail-02全文（原图y=0–1611）；跨图条件及原脚注1、2、3位于detail-14「注释」区（原图上部，产品展示标题之前）。"
+      },
+      "amway-official-2-detail-03-scene": {
+        "from": "#DFCDB9",
+        "to": "#DBCCB9",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_03.jpg",
+        "range": [
+          0,
+          1292
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-d6f9c1fd5fc8.webp",
+          "width": 1100,
+          "height": 1292
+        }
+      },
+      "amway-official-2-detail-04-scene": {
+        "from": "#DBCCB9",
+        "to": "#E6DFD7",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_04.jpg",
+        "range": [
+          0,
+          1614
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-a595fa2ba114.webp",
+          "width": 1100,
+          "height": 1614
+        }
+      },
+      "amway-official-2-moisture-notes": {
+        "from": "#E6DFD7",
+        "to": "#E6DFD7",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_14.jpg",
+        "textLocation": "detail-04「3倍乳木果油含量⁴」「48小时保湿滋润³」；detail-14上部注释3、4与瓶背成分对应说明。"
+      },
+      "amway-official-2-detail-05-scene": {
+        "from": "#E6DFD7",
+        "to": "#E1D5C7",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1755672323635/身体乳.jpg",
+        "range": [
+          0,
+          1479
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-25154f330e61.webp",
+          "width": 1100,
+          "height": 1479
+        }
+      },
+      "amway-official-2-barrier-conditions": {
+        "from": "#E1D5C7",
+        "to": "#E6DDD4",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1755672323635/身体乳.jpg",
+        "textLocation": "detail-05全文（原图y=0–1479）；跨图脚注1、5、6位于detail-14上部「注释」区。脚注5按原图可辨措辞保留，不据错字另作科学主张。"
+      },
+      "amway-official-2-detail-06-scene": {
+        "from": "#E6DDD4",
+        "to": "#E4DAD0",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_06.jpg",
+        "range": [
+          0,
+          1036
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-011db816d376.webp",
+          "width": 1100,
+          "height": 1036
+        }
+      },
+      "amway-official-2-nourish-conditions": {
+        "from": "#E4DAD0",
+        "to": "#E3D9CF",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_06.jpg",
+        "textLocation": "detail-06全文（原图y=0–1036）；跨图脚注1、2、7位于detail-14上部「注释」区。"
+      },
+      "amway-official-2-consumer-study": {
+        "from": "#E3D9CF",
+        "to": "#F0DBD3",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_07.jpg",
+        "textLocation": "detail-07全文（原图y=0–1492）；视觉仅取原图x=0–600,y=470–1180的推开乳液局部；跨图原脚注1、2位于detail-14上部「注释」区。"
+      },
+      "amway-official-2-detail-08-scene": {
+        "from": "#D7BBAC",
+        "to": "#ECE3DF",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_08.jpg",
+        "range": [
+          0,
+          1822
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-8218ed32e7c4.webp",
+          "width": 1100,
+          "height": 1822
+        }
+      },
+      "amway-official-2-detail-09-scene": {
+        "from": "#ECE2E0",
+        "to": "#BFAD8D",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_09.jpg",
+        "range": [
+          0,
+          2175
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-97ed511c1077.webp",
+          "width": 1100,
+          "height": 2175
+        }
+      },
+      "amway-official-2-traceability-notes": {
+        "from": "#BFAD8D",
+        "to": "#A59378",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_14.jpg",
+        "textLocation": "detail-09纯净配方与9步溯源正文及完整原流程图（原图y=0–2175）；detail-14上部「注释」8、9。"
+      },
+      "amway-official-2-detail-10-scene": {
+        "from": "#A59378",
+        "to": "#DCC0A8",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_10.jpg",
+        "range": [
+          0,
+          1959
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-4bdf5d543021.webp",
+          "width": 1100,
+          "height": 1959
+        }
+      },
+      "amway-official-2-daily-ritual": {
+        "from": "#DDC1A9",
+        "to": "#E1D4C4",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_11.jpg",
+        "textLocation": "detail-11四步护理全文（原图y=0–1789）；视觉取Step1右侧手心图x=480–1013,y=403–693及Step2左侧手臂图x=87–640,y=738–1030。实际取用、按摩至吸收和每天频次来自detail-14产品背面「使用方法」。"
+      },
+      "amway-official-2-detail-12-scene": {
+        "from": "#E0D3C3",
+        "to": "#EDD2B1",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_12.jpg",
+        "range": [
+          0,
+          1603
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-daf14b0d3788.webp",
+          "width": 1100,
+          "height": 1603
+        }
+      },
+      "amway-official-2-pairing-context": {
+        "from": "#EDD2B1",
+        "to": "#E0C29F",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_12.jpg",
+        "range": [
+          0,
+          1603
+        ]
+      },
+      "amway-official-2-detail-13-scene": {
+        "from": "#E0C29F",
+        "to": "#FDDCAD",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_13.jpg",
+        "range": [
+          0,
+          1295
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-2/mobile-767911bb86ef.webp",
+          "width": 1100,
+          "height": 1295
+        }
+      },
+      "amway-official-2-series-context": {
+        "from": "#FDDCAD",
+        "to": "#FEEAB9",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_13.jpg",
+        "textLocation": "detail-13全文（原图y=0–1295）；跨图注释2、10位于detail-14上部「注释」区。"
+      },
+      "amway-official-2-product-label": {
+        "from": "#FEEAB9",
+        "to": "#FEDEAE",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1735611780640/12.27雅蜜身体乳详情页_14.jpg",
+        "textLocation": "detail-14：上部「注释」保留原脚注1–10；下部产品背面包装的名称、功效说明、成分、其他微量成分、使用方法、注意、储存条件、备案及生产信息、批号日期、编号、400mL和安利公司定价。完整包装逐字稿见研究officialTextTranscript.packageBack。"
+      },
+      "amway-official-2-travel-faq": {
+        "from": "#D8BDA8",
+        "to": "#D8BDA8",
+        "ink": "#4F260A",
+        "muted": "#62432E",
+        "accent": "#73350B",
+        "source": "https://resources.amway.com.cn/product/1774234358011/问答-1100-1.jpg",
+        "range": [
+          0,
+          1247
+        ]
+      }
+    }
+  },
+  "amway-official-3": {
+    "parts": {
+      "amway-official-3-mouth-concerns": {
+        "to": "#F7FBFE",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142405NkjAtexTTGE2ZbZ2CB7AJbsKK7SxjEWi.jpg",
+        "range": [
+          0,
+          1210
+        ],
+        "from": "#DFEAEF",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-08b83ba49947.webp",
+          "width": 1100,
+          "height": 1210
+        }
+      },
+      "amway-official-3-white-tea-hero": {
+        "to": "#FEFFFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142405DhxchfhtAQAYAWRpZAHx7aDeGXHDWjA5.jpg",
+        "range": [
+          0,
+          1250
+        ],
+        "from": "#F7FBFE",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-ceae38778350.webp",
+          "width": 1100,
+          "height": 1250
+        }
+      },
+      "amway-official-3-hero-test-conditions": {
+        "to": "#FEFFFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142405DhxchfhtAQAYAWRpZAHx7aDeGXHDWjA5.jpg",
+        "range": [
+          0,
+          1250
+        ],
+        "from": "#FEFFFF",
+        "textLocation": "正文：2026.06.25主稿poster-02；相邻所列原注1、2和3、4来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-two-upgrades": {
+        "to": "#F3F8FC",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142405CJCWfpdQxndBFymnSmwG5NRQtn37ZEeS.jpg",
+        "range": [
+          0,
+          1047
+        ],
+        "from": "#FEFFFF",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-c508f26a0d01.webp",
+          "width": 1100,
+          "height": 1047
+        }
+      },
+      "amway-official-3-adp1": {
+        "to": "#D4EAF8",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406SzDXerF62ES5PkwyadxAPbKEM8K2dSem.jpg",
+        "range": [
+          0,
+          2474
+        ],
+        "from": "#F3F8FC",
+        "textLocation": "正文：2026.06.25主稿poster-04；相邻所列原注1、4、5、6来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-gum-care": {
+        "to": "#DDEFFB",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406kibDCytQceSy5pFMABj3mxw2Zaa5z3Mp.jpg",
+        "range": [
+          0,
+          2146
+        ],
+        "from": "#D4EAF8",
+        "textLocation": "正文：2026.06.25主稿poster-05；相邻所列原注1、2和3、5来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-enamel": {
+        "to": "#C8E3F5",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406Gp3GdyzdPPHii8rtfiiiRhFi3yrA4MjK.jpg",
+        "range": [
+          0,
+          1600
+        ],
+        "from": "#DDEFFB",
+        "textLocation": "正文：2026.06.25主稿poster-06原图y=0–1600；相邻所列原注7、8来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。氟添加量来源：https://www.amway.com.cn/Content/newsProduct/newsPersonalCare/Fight_Germs_Protect_Gums_Glister_Multi_Effect_White_Tea_Toothpaste/news?contentId=1814198032798396417（2024.07.22正文“独家REMINACTTM含氟配方”项）。"
+      },
+      "amway-official-3-silica": {
+        "to": "#D0E7F7",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406Gp3GdyzdPPHii8rtfiiiRhFi3yrA4MjK.jpg",
+        "range": [
+          1600,
+          2440
+        ],
+        "from": "#C8E3F5",
+        "textLocation": "正文：2026.06.25主稿poster-06原图y=1600–2440；相邻所列原注9、10来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-whitening": {
+        "to": "#D7EAF9",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406Gp3GdyzdPPHii8rtfiiiRhFi3yrA4MjK.jpg",
+        "range": [
+          2440,
+          3319
+        ],
+        "from": "#D0E7F7",
+        "textLocation": "正文：2026.06.25主稿poster-06原图y=2440–3319；相邻所列原注11、12来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-white-tea-scene": {
+        "to": "#F6FBFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406SQrb78BrYFwmzWpw524PfeGyPmEmyt7f.jpg",
+        "range": [
+          0,
+          1893
+        ],
+        "from": "#D8EBFA",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-9d1d6bab6989.webp",
+          "width": 1100,
+          "height": 1893
+        }
+      },
+      "amway-official-3-white-tea-study": {
+        "to": "#F6FBFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406SQrb78BrYFwmzWpw524PfeGyPmEmyt7f.jpg",
+        "range": [
+          0,
+          1893
+        ],
+        "from": "#F6FBFF",
+        "textLocation": "正文：2026.06.25主稿poster-07；相邻所列原注13、14来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-zero-additions": {
+        "to": "#F6FBFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142406SQrb78BrYFwmzWpw524PfeGyPmEmyt7f.jpg",
+        "range": [
+          1120,
+          1893
+        ],
+        "from": "#F6FBFF",
+        "textLocation": "正文：2026.06.25主稿poster-07下部“四项不添加”；相邻所列原注15、16、17、18来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-five-protections": {
+        "to": "#E0F2FF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142407sKAaiFhxYf2T88a3rNMCTMtaCeQBGDJi.jpg",
+        "range": [
+          0,
+          1462
+        ],
+        "from": "#F6FBFF",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-95db2477362c.webp",
+          "width": 1100,
+          "height": 1462
+        }
+      },
+      "amway-official-3-confidence": {
+        "to": "#F9FCFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142407A3nNFwzTBikAFJcfxPSetFe3NrASAXYh.jpg",
+        "range": [
+          0,
+          1020
+        ],
+        "from": "#E1F1FE",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/design-v2/confidence-lifestyle.webp",
+          "width": 1100,
+          "height": 1020
+        }
+      },
+      "amway-official-3-actual-usage": {
+        "to": "#F9FCFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142407A3nNFwzTBikAFJcfxPSetFe3NrASAXYh.jpg",
+        "range": [
+          1260,
+          1730
+        ],
+        "from": "#F9FCFF"
+      },
+      "amway-official-3-product-information": {
+        "to": "#E5F2FA",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142407A3nNFwzTBikAFJcfxPSetFe3NrASAXYh.jpg",
+        "range": [
+          1020,
+          2132
+        ],
+        "from": "#F9FCFF",
+        "textLocation": "2026.06.25主稿poster-09“产品信息”区（原图y=1020–2132）；大陆官网编号来自指定PDP URL：https://mall.amway.com.cn/productDetail?code=40860&skuCode=40860"
+      },
+      "amway-official-3-packaging": {
+        "to": "#FFFFFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/2026062514240768A2yM55JHSRZSzcmbhPtxBZGSrshbAS.jpg",
+        "range": [
+          0,
+          1404
+        ],
+        "from": "#E5F2FA",
+        "textLocation": "正文：2026.06.25主稿poster-10；价格证据原图矩形x=700,y=950,width=320,height=370，即y=950–1320；相邻所列原注19来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-series-routine": {
+        "to": "#F6F7F9",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142407CZ2ChifjJBZHeKpicncdmcZPxa7HThsr.jpg",
+        "range": [
+          0,
+          1652
+        ],
+        "from": "#FFFFFF"
+      },
+      "amway-official-3-series-lifestyle": {
+        "to": "#FCFDFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413XFzSbchCGNdx34Q6yBi46kb6KtiRNetM.jpg",
+        "range": [
+          0,
+          2238
+        ],
+        "from": "#F6F7F9",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-3/mobile-b4c8ad7a5a65.webp",
+          "width": 1100,
+          "height": 2238
+        }
+      },
+      "amway-official-3-series-scope": {
+        "to": "#F7FBFE",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg",
+        "range": [
+          0,
+          225
+        ],
+        "from": "#FCFDFF",
+        "textLocation": "正文：2026.06.25主稿poster-13顶部系列摘要（原图y=0–225）；相邻所列原注1、20、21来自https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg底部‘注释’区（原图y=1120–1981）。"
+      },
+      "amway-official-3-faq-notes": {
+        "to": "#FFFFFF",
+        "ink": "#234F6C",
+        "muted": "#365B72",
+        "accent": "#27618A",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2026-06-25/20260625142413FGmCfkX8ZcCGcKMcYwb2dCsCnJSSXA3W.jpg",
+        "range": [
+          225,
+          1981
+        ],
+        "from": "#F7FBFE",
+        "textLocation": "2026.06.25主稿poster-13两条“问答小贴士”及底部全部注释（原图y=225–1981）；注释区y=1120–1981，注2和3原文合并。"
+      }
+    }
+  },
+  "amway-official-4": {
+    "parts": {
+      "amway-official-4-problems": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/22.jpg",
+        "range": [
+          0,
+          1480
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-4/design-v2/problems.webp",
+          "width": 1100,
+          "height": 1480
+        }
+      },
+      "amway-official-4-ingredients": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/22.jpg",
+        "range": [
+          1480,
+          3691
+        ]
+      },
+      "amway-official-4-certificate": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          0,
+          1000
+        ]
+      },
+      "amway-official-4-scenes": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          1000,
+          1920
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-4/design-v2/scenes.webp",
+          "width": 1100,
+          "height": 920
+        }
+      },
+      "amway-official-4-usage-method-one": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          1920,
+          2990
+        ]
+      },
+      "amway-official-4-usage-method-two": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          2990,
+          3560
+        ]
+      },
+      "amway-official-4-accessories": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          3560,
+          4680
+        ]
+      },
+      "amway-official-4-poster-three-warnings": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/33_%E7%9C%8B%E5%9B%BE%E7%8E%8B.jpg",
+        "range": [
+          4680,
+          5007
+        ]
+      },
+      "amway-official-4-specification": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/44.jpg",
+        "range": [
+          0,
+          1000
+        ]
+      },
+      "amway-official-4-polar-background": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/44.jpg",
+        "range": [
+          1000,
+          1720
+        ]
+      },
+      "amway-official-4-packaging": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://resources.amway.com.cn/product/1769578267609/44.jpg",
+        "range": [
+          1720,
+          2810
+        ],
+        "scene": {
+          "url": "/miban-official/amway/amway-official-4/design-v2/packaging.webp",
+          "width": 1100,
+          "height": 1090
+        }
+      },
+      "amway-official-4-faq-tds": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://www.amway.com.cn/Content/newsProduct/Amway_Home_Concentrated_Dishwashing_Liquid_Introduction/news?contentId=1359148112739405826",
+        "textLocation": "官网文章.news-content内“产品知识问与答”：第1问及完整答复，问“TDS三元洗涤系统是什么”至“节省时间、水和人力”。"
+      },
+      "amway-official-4-faq-disinfection": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://www.amway.com.cn/Content/newsProduct/Amway_Home_Concentrated_Dishwashing_Liquid_Introduction/news?contentId=1359148112739405826",
+        "textLocation": "官网文章.news-content内“产品知识问与答”：第2问“公司为何不…添加杀菌消毒的成分”及完整答复。"
+      },
+      "amway-official-4-faq-plant": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://www.amway.com.cn/Content/newsProduct/Amway_Home_Concentrated_Dishwashing_Liquid_Introduction/news?contentId=1359148112739405826",
+        "textLocation": "官网文章.news-content内“产品知识问与答”：第3问“是纯植物的吗？洗完水果和蔬菜安全吗？”及完整答复。"
+      },
+      "amway-official-4-faq-cloths": {
+        "from": "#FFFAE7",
+        "to": "#FFFAE7",
+        "ink": "#075D3D",
+        "muted": "#505A42",
+        "accent": "#236D26",
+        "source": "https://www.amway.com.cn/Content/newsProduct/Amway_Home_Concentrated_Dishwashing_Liquid_Introduction/news?contentId=1359148112739405826",
+        "textLocation": "官网文章.news-content内“产品知识问与答”：第4问“应配合什么样的餐具洁布使用”、两类洁布说明及定期更换提醒。"
+      }
+    }
+  },
+  "amway-official-5": {
+    "parts": {
+      "amway-official-5-multi-benefit": {
+        "from": "#112001",
+        "to": "#070E02",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/20231208215905GH3WKK44pP7p6bSRTdA3wXNEMRFs48pp.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-5/mobile-26450e225d2e.webp",
+          "width": 1080,
+          "height": 1920
+        }
+      },
+      "amway-official-5-formula-and-series-note": {
+        "from": "#070E02",
+        "to": "#2D4818",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/20231208215905GH3WKK44pP7p6bSRTdA3wXNEMRFs48pp.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#FFF8E9",
+        "muted": "#FFF8E9",
+        "accent": "#FFB88B"
+      },
+      "amway-official-5-gentle-cleanse": {
+        "from": "#E7C3AF",
+        "to": "#EBE1D8",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/202312082159053Pjthc6zC4n2AZCQKZ83TGYdnCZmp7RJ.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-5/mobile-7fcba82282c3.webp",
+          "width": 1080,
+          "height": 1920
+        }
+      },
+      "amway-official-5-moisture-evaluation": {
+        "from": "#D5C4B2",
+        "to": "#EBE1D8",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/202312082159057zeksmZGQJzeei7T7BJ633sXjNRdWSf2.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017"
+      },
+      "amway-official-5-barrier-evaluation": {
+        "from": "#D3C2B0",
+        "to": "#EBE1D8",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/20231208215905kW7w6YhmXY4cCK3ysFDD5cSDEb3w4teF.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017"
+      },
+      "amway-official-5-consumer-self-assessment": {
+        "from": "#FEFEFE",
+        "to": "#EBE1D8",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2023-12-08/20231208215905MHsACWdG8yCa4bBfxfjkSZfkEidMTMPC.jpg",
+        "range": [
+          0,
+          1920
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017"
+      },
+      "amway-official-5-guide-scope": {
+        "from": "#EBE1D8",
+        "to": "#EFCC78",
+        "ink": "#163F2E",
+        "muted": "#254833",
+        "accent": "#553511",
+        "source": "https://www.amway.com.cn/Content/newsProduct/Artistry_Skincare_Guide_Learn_Skin_Care_Tips_with_Experts/news?contentId=1798907128762445825",
+        "textLocation": "2024.06.07官方指南文章标题、日期和前5幅“雅蜜身体护理 滋润系列”署名；第6幅身体乳用法排除。"
+      },
+      "amway-official-5-skin-barrier-context": {
+        "from": "#EFCC78",
+        "to": "#DDA216",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2024-06-07/20240607103615yraGeRb8TDGjzCxarzsizEMb3sbYpTHN.jpg",
+        "range": [
+          0,
+          8000
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-5/mobile-f9f452545015.webp",
+          "width": 1500,
+          "height": 2667
+        }
+      },
+      "amway-official-5-fragrance-experience": {
+        "from": "#FFFABA",
+        "to": "#CCC45F",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2024-06-07/20240607103615pX2FXPaDAdkSHTsRykdxY5XRnTrssht7.jpg",
+        "range": [
+          0,
+          8000
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-5/mobile-17506a86ebdb.webp",
+          "width": 1500,
+          "height": 2667
+        }
+      },
+      "amway-official-5-ingredients-and-selection": {
+        "from": "#FFE584",
+        "to": "#D4AA08",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2024-06-07/20240607103615wY4SfBfttXtAjDEQfsEnXGAFeE58R4ia.jpg",
+        "range": [
+          0,
+          8000
+        ],
+        "ink": "#163F2E",
+        "muted": "#254833",
+        "accent": "#553511"
+      },
+      "amway-official-5-winter-context": {
+        "from": "#F0C179",
+        "to": "#A18764",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2024-06-07/20240607103615SmBnkaRc8GkfENHi33bsXBpb5XdHkZwN.jpg",
+        "range": [
+          0,
+          8000
+        ],
+        "ink": "#4E2606",
+        "muted": "#65411F",
+        "accent": "#684017",
+        "scene": {
+          "url": "/miban-official/amway/amway-official-5/mobile-b1d51984195b.webp",
+          "width": 1500,
+          "height": 2667
+        }
+      },
+      "amway-official-5-bathing-faq": {
+        "from": "#FFF3D9",
+        "to": "#DDA73D",
+        "source": "https://cc-cdn.amway.com.cn/ContentCenter/prod/assets/2024-06-07/20240607103615PnCnAkGj4zNpQ6maEYmzP7iGGtsdBfe8.jpg",
+        "range": [
+          0,
+          8000
+        ],
+        "ink": "#163F2E",
+        "muted": "#254833",
+        "accent": "#553511"
+      },
+      "amway-official-5-specification-and-price": {
+        "from": "#DDA73D",
+        "to": "#FFF3D9",
+        "ink": "#163F2E",
+        "muted": "#254833",
+        "accent": "#553511",
+        "source": "https://mall.amway.com.cn/productDetail?code=41200&skuCode=41200",
+        "textLocation": "41200／skuCode=41200公共PDP：商品名称、产品简介、¥88.00和参数“编号”“产品执行的标准编号”。"
+      }
+    }
+  }
+}

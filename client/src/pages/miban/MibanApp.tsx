@@ -17,6 +17,8 @@ const RiceEncyclopedia = lazy(() => import("./RiceEncyclopedia"));
 const RiceDetail = lazy(() => import("./RiceDetail"));
 const DiyWorkshop = lazy(() => import("./DiyWorkshop"));
 const LimitedSale = lazy(() => import("./LimitedSale"));
+const OfficialBrandSelection = lazy(() => import("./OfficialBrandSelection"));
+const OfficialProductDetail = lazy(() => import("./OfficialProductDetail"));
 const AiHealth = lazy(() => import("./AiHealth"));
 const PresetRecipes = lazy(() => import("./PresetRecipes"));
 const MyRecipes = lazy(() => import("./MyRecipes"));
@@ -102,6 +104,10 @@ export default function MibanApp() {
         {/* 顶部 NavBar 占位 52px，底部 Tab 占位 64px */}
         <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
           <Suspense fallback={<MibanPageLoading />}><Switch>
+            <Route path={`${BASE}/limited/official/:productKey`} component={OfficialProductDetail} />
+            <Route path={`${BASE}/limited/nuskin`} component={OfficialBrandSelection} />
+            <Route path={`${BASE}/limited/marykay`} component={OfficialBrandSelection} />
+            <Route path={`${BASE}/limited/amway`} component={OfficialBrandSelection} />
             <Route
               path={`${BASE}/pear/tiangui`}
               component={TianguiPearDetail}

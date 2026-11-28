@@ -1,0 +1,350 @@
+{
+  "sourceUrl": "https://img.cn.nuskin.com/supplychain-prod/undefined/6X4HW6iEpZ.jpg",
+  "sourceWidth": 790,
+  "sourceHeight": 18973,
+  "sourcePosterCount": 1,
+  "parts": [
+    {
+      "kind": "image",
+      "id": "source-before-hpr-studies",
+      "startY": 0,
+      "endY": 3700,
+      "url": "/miban-official/nuskin/mobile-studies/source-before-hpr-studies.webp",
+      "width": 790,
+      "height": 3700
+    },
+    {
+      "kind": "study",
+      "id": "hpr-roughness",
+      "startY": 3700,
+      "endY": 4400,
+      "title": "0.1%含量HPR成分人体实验",
+      "finding": "14天改善表面粗糙近50%",
+      "chart": {
+        "url": "/miban-official/nuskin/mobile-studies/hpr-roughness-original-chart.webp",
+        "width": 668,
+        "height": 372
+      },
+      "citation": "数据来源：pilot-scale study，5位受试者使用含有0.1%的HPR配方，用Visioscan在第0天、第7天和第14天检测皮肤粗糙度。"
+    },
+    {
+      "kind": "study",
+      "id": "hpr-wrinkles",
+      "startY": 4400,
+      "endY": 5235,
+      "title": "0.2%含量HPR成分人体实验",
+      "note": "产品内含量为0.1%",
+      "finding": "14天减纹60%",
+      "comparisons": [
+        {
+          "label": "Day 0",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies/hpr-day0-skin.webp",
+              "width": 362,
+              "height": 183
+            },
+            {
+              "url": "/miban-official/nuskin/mobile-studies/hpr-day0-analysis.webp",
+              "width": 362,
+              "height": 184
+            }
+          ]
+        },
+        {
+          "label": "Day 14",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies/hpr-day14-skin.webp",
+              "width": 359,
+              "height": 183
+            },
+            {
+              "url": "/miban-official/nuskin/mobile-studies/hpr-day14-analysis.webp",
+              "width": 359,
+              "height": 184
+            }
+          ]
+        }
+      ],
+      "citation": "数据来源：case study，3位受试者（白人女性，年龄41–51岁），使用含有0.2%的HPR精华（产品内该成分配方为0.1%），每天使用两次，共使用14天。"
+    },
+    {
+      "kind": "image",
+      "id": "source-retinol-intro",
+      "startY": 5235,
+      "endY": 5720,
+      "url": "/miban-official/nuskin/mobile-studies/source-retinol-intro.webp",
+      "width": 790,
+      "height": 485
+    },
+    {
+      "kind": "study",
+      "id": "retinol-release",
+      "startY": 5720,
+      "endY": 6470,
+      "title": "微囊A醇成分体外实验",
+      "note": "对比普通视黄醇",
+      "finding": "缓慢释能 更好耐受",
+      "chart": {
+        "url": "/miban-official/nuskin/mobile-studies/retinol-release-original-chart.webp",
+        "width": 668,
+        "height": 386
+      },
+      "citation": ""
+    },
+    {
+      "kind": "study",
+      "id": "retinol-irritation",
+      "startY": 6470,
+      "endY": 7270,
+      "title": "0.17%高浓度微囊A醇成分人体实验",
+      "note": "产品内含量为0.1%；对比0.1%低浓度普通A醇",
+      "finding": "温和不刺激",
+      "chart": {
+        "url": "/miban-official/nuskin/mobile-studies/retinol-irritation-original-chart.webp",
+        "width": 668,
+        "height": 373
+      },
+      "citation": "数据来源：斑贴试验，双盲安慰剂对照试验，27位受试者分为3组，分别使用0.17%的微囊A醇（产品内该成分配方为0.1%）、0.1%的普通A醇和不含A醇的基质配方，并在第5天、第14天和第21天记录其刺激分数。"
+    },
+    {
+      "kind": "image",
+      "id": "source-peptide-intro",
+      "startY": 7270,
+      "endY": 7845,
+      "url": "/miban-official/nuskin/mobile-studies/source-peptide-intro.webp",
+      "width": 790,
+      "height": 575
+    },
+    {
+      "kind": "study",
+      "id": "peptide-study-1",
+      "startY": 7845,
+      "endY": 8650,
+      "title": "AI-寡肽成分离体实验",
+      "finding": "胶原蛋白新生提升4倍",
+      "citation": "数据来源：离体皮肤试验，样本取自一位48岁的白人女性，样本分别在含有普通A醇或A醇+AI寡肽的培养液中进行培养，并用荧光染色标记皮肤样本中的胶原蛋白，以检测其含量",
+      "comparisons": [
+        {
+          "label": "A醇组",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-1-before-photo-clean-v1.webp",
+              "width": 362,
+              "height": 243
+            }
+          ],
+          "originalLabel": "A醇作用下的胶原蛋白",
+          "detail": "胶原蛋白"
+        },
+        {
+          "label": "A醇＋AI寡肽组",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-1-after-photo-clean-v1.webp",
+              "width": 359,
+              "height": 243
+            }
+          ],
+          "originalLabel": "A醇+AI寡肽 胶原蛋白更丰富",
+          "detail": "胶原蛋白更丰富"
+        }
+      ],
+      "note": "对比不添加AI寡肽的A醇",
+      "findingChunks": [
+        "胶原蛋白新生",
+        "提升4倍"
+      ],
+      "studyNotes": [
+        {
+          "label": "试验",
+          "text": "离体皮肤试验。"
+        },
+        {
+          "label": "样本",
+          "text": "一位48岁的白人女性皮肤样本。"
+        },
+        {
+          "label": "方法",
+          "text": "样本分别在普通A醇或A醇＋AI寡肽培养液中培养。"
+        },
+        {
+          "label": "检测",
+          "text": "用荧光染色标记胶原蛋白，以检测其含量。"
+        }
+      ]
+    },
+    {
+      "kind": "study",
+      "id": "peptide-study-2",
+      "startY": 8650,
+      "endY": 9270,
+      "title": "AI-寡肽成分人体实验",
+      "finding": "皱纹有效改善",
+      "citation": "数据来源：基于年龄在45-65岁之间的98位女性，通过28天的持续使用，半边脸对比试验：蓝色部分越少，表明皱纹改善越显著。",
+      "comparisons": [
+        {
+          "label": "使用样品前",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-2-before-photo-clean-v1.webp",
+              "width": 362,
+              "height": 217
+            }
+          ],
+          "originalLabel": "使用样品前"
+        },
+        {
+          "label": "使用28天后",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-2-after-photo-clean-v1.webp",
+              "width": 359,
+              "height": 217
+            }
+          ],
+          "originalLabel": "使用28天后"
+        }
+      ],
+      "findingChunks": [
+        "皱纹有效改善"
+      ],
+      "studyNotes": [
+        {
+          "label": "样本",
+          "text": "98位45–65岁的女性。"
+        },
+        {
+          "label": "方法",
+          "text": "持续使用28天，采用半边脸对比试验。"
+        },
+        {
+          "label": "判读",
+          "text": "蓝色部分越少，表明皱纹改善越显著。"
+        }
+      ]
+    },
+    {
+      "kind": "study",
+      "id": "peptide-study-3",
+      "startY": 9270,
+      "endY": 9860,
+      "title": "AI-寡肽成分人体实验",
+      "finding": "毛孔数量明显可见减少",
+      "citation": "数据来源：10位年龄在45-71岁之间的男女受试者，通过8周的35ppm浓度的AI寡肽乳液持续使用，并以仪器拍照对比基础值和第8周的毛孔数量。",
+      "comparisons": [
+        {
+          "label": "使用样品前",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-3-before-photo-clean-v1.webp",
+              "width": 362,
+              "height": 217
+            }
+          ],
+          "originalLabel": "使用样品前"
+        },
+        {
+          "label": "使用28天后",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-3-after-photo-clean-v1.webp",
+              "width": 359,
+              "height": 217
+            }
+          ],
+          "originalLabel": "使用28天后"
+        }
+      ],
+      "findingChunks": [
+        "毛孔数量",
+        "明显可见减少"
+      ],
+      "studyNotes": [
+        {
+          "label": "样本",
+          "text": "10位45–71岁的男女受试者。"
+        },
+        {
+          "label": "方法",
+          "text": "持续使用35ppm浓度的AI寡肽乳液8周。"
+        },
+        {
+          "label": "检测",
+          "text": "仪器拍照，对比基础值和第8周的毛孔数量。"
+        },
+        {
+          "label": "图示",
+          "text": "官网图片标签为28天，研究说明为8周，均按原文保留。"
+        }
+      ]
+    },
+    {
+      "kind": "study",
+      "id": "peptide-study-4",
+      "startY": 9860,
+      "endY": 10435,
+      "title": "AI-寡肽成分人体实验",
+      "finding": "8周改善平滑度达16.1%",
+      "citation": "数据来源：10位年龄在45-71岁之间的男女受试者，通过8周的35ppm浓度的AI寡肽乳液持续使用，并以仪器拍照对比基础值和第8周的黑斑数量和皮肤光滑度。",
+      "comparisons": [
+        {
+          "label": "第1天",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-4-before-photo-clean-v1.webp",
+              "width": 360,
+              "height": 216
+            }
+          ],
+          "originalLabel": "第1天"
+        },
+        {
+          "label": "第56天",
+          "images": [
+            {
+              "url": "/miban-official/nuskin/mobile-studies-clean/peptide-4-after-photo-clean-v1.webp",
+              "width": 359,
+              "height": 216
+            }
+          ],
+          "originalLabel": "第56天"
+        }
+      ],
+      "findingChunks": [
+        "8周改善平滑度",
+        "达16.1%"
+      ],
+      "studyNotes": [
+        {
+          "label": "样本",
+          "text": "10位45–71岁的男女受试者。"
+        },
+        {
+          "label": "方法",
+          "text": "持续使用35ppm浓度的AI寡肽乳液8周。"
+        },
+        {
+          "label": "检测",
+          "text": "仪器拍照，对比基础值和第8周的黑斑数量及皮肤光滑度。"
+        }
+      ]
+    },
+    {
+      "kind": "image",
+      "id": "source-after-studies",
+      "startY": 10435,
+      "endY": 16270,
+      "url": "/miban-official/nuskin/mobile-guide/source-studies-to-guide-original.webp",
+      "width": 790,
+      "height": 5835
+    },
+    {
+      "kind": "guide",
+      "id": "mobile-product-guide",
+      "startY": 16270,
+      "endY": 18973
+    }
+  ]
+}

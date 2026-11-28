@@ -241,15 +241,15 @@ function AmwayDailyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
             洁净日常，<br />舒适相伴。
           </p>
         </div>
-        <button
-          type="button"
+        <Link
+          href="/p/proj_hzxm2t/limited/amway"
           onClick={onClick}
           data-testid="brand-cta-amway"
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-white text-[#243B72] transition-colors hover:bg-[#EDF2FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.985]`}
         >
           查看日用精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
-        </button>
+        </Link>
       </div>
       <AttentionCount brandSlug="amway" viewCount={viewCount} />
     </article>
@@ -303,15 +303,15 @@ function MaryKayBeautyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
             细致呵护，<br />绽放光采。
           </p>
         </div>
-        <button
-          type="button"
+        <Link
+          href="/p/proj_hzxm2t/limited/marykay"
           onClick={onClick}
           data-testid="brand-cta-marykay"
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#9C5867] text-white transition-colors hover:bg-[#874A58] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9C5867] active:scale-[0.985]`}
         >
           查看美肤精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
-        </button>
+        </Link>
       </div>
       <AttentionCount brandSlug="marykay" viewCount={viewCount} />
     </article>
@@ -365,15 +365,15 @@ function NuSkinBeautyPreviewCard({ onClick, viewCount }: PreviewCardProps) {
             洁净养护，<br />细致每一天。
           </p>
         </div>
-        <button
-          type="button"
+        <Link
+          href="/p/proj_hzxm2t/limited/nuskin"
           onClick={onClick}
           data-testid="brand-cta-nuskin"
           className={`mt-3 ${BRAND_CARD_CTA_CLASS} bg-[#198E9E] text-white transition-colors hover:bg-[#137D8C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#198E9E] active:scale-[0.985]`}
         >
           查看美肤精选
           <ChevronRight className={BRAND_CARD_CTA_ICON_CLASS} strokeWidth={2.5} />
-        </button>
+        </Link>
       </div>
       <AttentionCount brandSlug="nuskin" viewCount={viewCount} />
     </article>
@@ -822,24 +822,15 @@ export default function LimitedSale() {
         />
         {sortedBrands.map(brandSlug => brandCards[brandSlug])}
         <AmwayDailyPreviewCard
-          onClick={() => {
-            recordBrandClick("amway");
-            toast.info("安利日用精选商品尚未上架，敬请期待。");
-          }}
+          onClick={() => recordBrandClick("amway")}
           viewCount={viewCountFor("amway")}
         />
         <MaryKayBeautyPreviewCard
-          onClick={() => {
-            recordBrandClick("marykay");
-            toast.info("玫琳凯美肤精选商品尚未上架，敬请期待。");
-          }}
+          onClick={() => recordBrandClick("marykay")}
           viewCount={viewCountFor("marykay")}
         />
         <NuSkinBeautyPreviewCard
-          onClick={() => {
-            recordBrandClick("nuskin");
-            toast.info("如新美肤精选商品尚未上架，敬请期待。");
-          }}
+          onClick={() => recordBrandClick("nuskin")}
           viewCount={viewCountFor("nuskin")}
         />
         <JianghaiFreshPreviewCard
